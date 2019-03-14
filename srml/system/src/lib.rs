@@ -14,8 +14,48 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System manager: Handles lowest level stuff like depositing logs, basic set up and take down of
+//! # System module
+//! 
+//! The system module provides low-level access to core types and cross-cutting utilities.
+//! It acts as the base layer, for other SRML modules, to interact with the Substrate framework components.
+//! To use it in your module, you need to implement the system [`Trait`].
+//! 
+//! ## Overview
+//! 
+//! The system module defines the core data types used in Substrate runtime. 
+//! It also provides several utility functions ([`Module`]) for other modules.
+//! 
+//! In addition, it manages the storage items for extricsics data, indexes, event record and digest items, among other things, 
+//! which support the execution of the current block.
+//! 
+//! It also handles lowest level stuff like depositing logs, basic set up and take down of
 //! temporary storage entries, access to old block hashes.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable functions
+//! 
+//! The system module does not implement any dispatchable functions.
+//! 
+//! ### Public functions - [`Module`]
+//! 
+//! ## Usage
+//! 
+//! ### Prerequisites
+//! 
+//! Import the system module and derive your module configuration trait from the `system` trait.
+//! 
+//! ### Example - get random seed for the current block
+//! 
+//! ```ignore
+//! let rnd = <system::Module<T>>::random_seed();
+//! ```
+//! 
+//! ### Example - get extrinsic count for the current block
+//! 
+//! ```ignore
+//! let e_count = <system::Module<T>>::extrinsic_count();
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -72,36 +112,52 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
+	/// Represents the origin for an extrinsic call
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+
+	/// Represents account indexes and nonces for lookups
 	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+
+	/// The block number on the current block
 	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
+	
+	/// Represents the output of a hashing function
 	type Hash: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+	
+	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2)
 	type Hashing: Hash<Output = Self::Hash>;
+
+	/// Collection of DigestItems (logs) for a block
+	/// Relevant for light clients
+	/// Part of the block header
 	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+
+	/// The user account identifier type for the runtime
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+
+	/// Wrapper for converting other types to AccountId
+	/// Useful when resolving AccountId from predefined source types
+	/// For example: Index to AccountId lookup
 	type Lookup: StaticLookup<Target = Self::AccountId>;
+
+	/// The block header
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
+
+	/// The event type
 	type Event: Parameter + Member + From<Event>;
+
+	/// Represents a piece of information which can be part of the digest (as a digest item)
 	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Deposits an event onto this block's event record.
-		pub fn deposit_event(event: T::Event) {
-			let extrinsic_index = Self::extrinsic_index();
-			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-			let mut events = Self::events();
-			events.push(EventRecord { phase, event });
-			<Events<T>>::put(events);
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
 }
 
 /// A phase of a block's execution.
@@ -201,20 +257,27 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
-
+		/// Extrinsics nonce for accounts
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
-
+		/// Total extrinsics count for the current block
 		ExtrinsicCount: Option<u32>;
+		/// Total length in bytes for all extrinsics put together, for the current block
 		AllExtrinsicsLen: Option<u32>;
+		/// Maps block hashes to block numbers
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		/// Extrinsics data for the current block (maps extrinsic's index to it's data)
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
+		/// Random seed of the current block
 		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
+		/// Hash of the previous block
 		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
+		/// Extrinsics root of the current block, also part of the block header
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
+		/// Digest of the current block, also part of the block header
 		Digest get(digest): T::Digest;
-
+		/// Events deposited for the current block
 		Events get(events): Vec<EventRecord<T::Event>>;
 	}
 	add_extra_genesis {
@@ -274,6 +337,15 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposits an event onto this block's event record.
+	pub fn deposit_event(event: T::Event) {
+		let extrinsic_index = Self::extrinsic_index();
+		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let mut events = Self::events();
+		events.push(EventRecord { phase, event });
+		<Events<T>>::put(events);
+	}
+
 	/// Gets the index of extrinsic that is currenty executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
