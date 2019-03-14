@@ -211,6 +211,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 						break;
 					}
 
+					trace!("[{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);
