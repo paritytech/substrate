@@ -24,30 +24,30 @@ use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
-
-pub use substrate_primitives::{H256, Ed25519AuthorityId};
+pub use substrate_primitives::H256;
 use substrate_primitives::U256;
+use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UintAuthorityId(pub u64);
-impl Into<Ed25519AuthorityId> for UintAuthorityId {
-	fn into(self) -> Ed25519AuthorityId {
+impl Into<AuthorityId> for UintAuthorityId {
+	fn into(self) -> AuthorityId {
 		let bytes: [u8; 32] = U256::from(self.0).into();
-		Ed25519AuthorityId(bytes)
+		AuthorityId(bytes)
 	}
 }
 
 /// Converter between u64 and the AuthorityId wrapper type.
 pub struct ConvertUintAuthorityId;
-impl Convert<u64, UintAuthorityId> for ConvertUintAuthorityId {
-	fn convert(a: u64) -> UintAuthorityId {
-		UintAuthorityId(a)
+impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
+	fn convert(a: u64) -> Option<UintAuthorityId> {
+		Some(UintAuthorityId(a))
 	}
 }
 /// Digest item
-pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId>;
+pub type DigestItem = GenDigestItem<H256, AuthorityId, AuthoritySignature>;
 
 /// Header Digest
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]

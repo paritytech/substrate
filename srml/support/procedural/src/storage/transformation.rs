@@ -389,21 +389,6 @@ fn decl_store_extra_genesis(
 
 			#[cfg(feature = "std")]
 			impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
-
-				fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageOverlay, #scrate::runtime_primitives::ChildrenStorageOverlay), String> {
-					let mut r: #scrate::runtime_primitives::StorageOverlay = Default::default();
-					let mut c: #scrate::runtime_primitives::ChildrenStorageOverlay = Default::default();
-
-					{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
-						#builders
-					}
-
-					#scall(&mut r, &mut c, &self);
-
-					Ok((r, c))
-				}
 				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
 					use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 					let storage = (RefCell::new(r), PhantomData::<Self>::default());
@@ -434,6 +419,7 @@ fn decl_storage_items(
 	let mut impls = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
+			attrs,
 			name,
 			storage_type,
 			default_value,
@@ -443,6 +429,9 @@ fn decl_storage_items(
 
 		let type_infos = get_type_infos(storage_type);
 		let kind = type_infos.kind.clone();
+		// Propagate doc attributes.
+		let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 		let i = impls::Impls {
 			scrate,
 			visibility,
@@ -453,6 +442,7 @@ fn decl_storage_items(
 				.unwrap_or_else(|| quote!{ Default::default() }),
 			prefix: format!("{} {}", cratename, name),
 			name,
+			attrs,
 		};
 
 		let implementation = match kind {

@@ -762,7 +762,7 @@ fn check_justification_signed_message<H>(
 		let auth_id = sig.signer.clone().into();
 		if !authorities.contains(&auth_id) { return None }
 
-		if ed25519::verify_strong(&sig.signature, message, &sig.signer) {
+		if ed25519::Pair::verify(&sig.signature, message, &sig.signer) {
 			Some(sig.signer.0)
 		} else {
 			None
@@ -838,7 +838,7 @@ pub fn check_vote<B: Block>(
 
 fn check_action<B: Block>(action: Action<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
 	let message = localized_encode(*parent_hash, action);
-	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
+	if ed25519::Pair::verify(&sig.signature, &message, &sig.signer) {
 		Ok(())
 	} else {
 		Err(CommonErrorKind::InvalidSignature(sig.signature.into(), sig.signer.clone().into()).into())
@@ -1315,7 +1315,7 @@ mod tests {
 
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use self::keyring::Keyring;
+	use keyring::AuthorityKeyring;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -1420,7 +1420,7 @@ mod tests {
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: Arc::new(Keyring::One.into()),
+			key: Arc::new(AuthorityKeyring::One.into()),
 			factory: DummyFactory
 		}
 	}
@@ -1446,10 +1446,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public().into(),
-				Keyring::Two.to_raw_public().into(),
-				Keyring::Alice.to_raw_public().into(),
-				Keyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1493,17 +1493,17 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			Keyring::One.to_raw_public().into(),
-			Keyring::Two.to_raw_public().into(),
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::One.into(),
+			AuthorityKeyring::Two.into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let authorities_keys = vec![
-			Keyring::One.into(),
-			Keyring::Two.into(),
-			Keyring::Alice.into(),
-			Keyring::Eve.into(),
+			AuthorityKeyring::One.into(),
+			AuthorityKeyring::Two.into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
@@ -1554,8 +1554,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let block = TestBlock {
@@ -1563,7 +1563,7 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
+		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &AuthorityKeyring::Alice.pair(), parent_hash);;
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
@@ -1577,7 +1577,7 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
+		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &AuthorityKeyring::Bob.pair(), parent_hash);;
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
@@ -1591,8 +1591,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
@@ -1618,10 +1618,10 @@ mod tests {
 	fn drop_bft_future_does_not_deadlock() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public().into(),
-				Keyring::Two.to_raw_public().into(),
-				Keyring::Alice.to_raw_public().into(),
-				Keyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1643,10 +1643,10 @@ mod tests {
 	fn bft_can_build_though_skipped() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public().into(),
-				Keyring::Two.to_raw_public().into(),
-				Keyring::Alice.to_raw_public().into(),
-				Keyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};

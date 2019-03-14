@@ -24,13 +24,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::num::NonZeroU32;
 
-use serde_derive::{Serialize, Deserialize};
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+use error_chain::{bail, error_chain, error_chain_processing, impl_error_chain_processed,
 	impl_extract_backtrace, impl_error_chain_kind};
 
-use substrate_primitives::{hashing::blake2_256, ed25519::{Pair, Public, PKCS_LEN}};
+use substrate_primitives::{ed25519::{Pair, Public}, Pair as _Pair};
 
 pub use crypto::KEY_ITERATIONS;
 
@@ -45,99 +43,21 @@ error_chain! {
 			description("Invalid password"),
 			display("Invalid password"),
 		}
-		InvalidPKCS8 {
-			description("Invalid PKCS#8 data"),
-			display("Invalid PKCS#8 data"),
+		InvalidPhrase {
+			description("Invalid recovery phrase (BIP39) data"),
+			display("Invalid recovery phrase (BIP39) data"),
+		}
+		InvalidSeed {
+			description("Invalid seed"),
+			display("Invalid seed"),
 		}
 	}
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidPassword;
-
-#[derive(Serialize, Deserialize)]
-struct EncryptedKey {
-	mac: [u8; 32],
-	salt: [u8; 32],
-	ciphertext: Vec<u8>, // FIXME: switch to fixed-size when serde supports
-	iv: [u8; 16],
-	iterations: NonZeroU32,
-}
-
-impl EncryptedKey {
-	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: NonZeroU32) -> Self {
-		use rand::{Rng, rngs::OsRng};
-
-		let mut rng = OsRng::new().expect("OS Randomness available on all supported platforms; qed");
-
-		let salt: [u8; 32] = rng.gen();
-		let iv: [u8; 16] = rng.gen();
-
-		// two parts of derived key
-		// DK = [ DK[0..15] DK[16..31] ] = [derived_left_bits, derived_right_bits]
-		let (derived_left_bits, derived_right_bits) = crypto::derive_key_iterations(password.as_bytes(), &salt, iterations);
-
-		// preallocated (on-stack in case of `Secret`) buffer to hold cipher
-		// length = length(plain) as we are using CTR-approach
-		let mut ciphertext = vec![0; PKCS_LEN];
-
-		// aes-128-ctr with initial vector of iv
-		crypto::aes::encrypt_128_ctr(&derived_left_bits, &iv, plain, &mut *ciphertext)
-			.expect("input lengths of key and iv are both 16; qed");
-
-		// Blake2_256(DK[16..31] ++ <ciphertext>), where DK[16..31] - derived_right_bits
-		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &*ciphertext));
-
-		EncryptedKey {
-			salt,
-			iv,
-			mac,
-			iterations,
-			ciphertext,
-		}
-	}
-
-	fn decrypt(&self, password: &str) -> Result<[u8; PKCS_LEN]> {
-		let (derived_left_bits, derived_right_bits) =
-			crypto::derive_key_iterations(password.as_bytes(), &self.salt, self.iterations);
-
-		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &self.ciphertext));
-
-		if subtle::ConstantTimeEq::ct_eq(&mac[..], &self.mac[..]).unwrap_u8() != 1 {
-			return Err(ErrorKind::InvalidPassword.into());
-		}
-
-		let mut plain = [0; PKCS_LEN];
-		crypto::aes::decrypt_128_ctr(&derived_left_bits, &self.iv, &self.ciphertext, &mut plain[..])
-			.expect("input lengths of key and iv are both 16; qed");
-		Ok(plain)
-	}
-}
-
-type Seed = [u8; 32];
 
 /// Key store.
 pub struct Store {
 	path: PathBuf,
-	additional: HashMap<Public, Seed>,
-}
-
-pub fn pad_seed(seed:  &str) -> Seed {
-	let mut s: [u8; 32] = [' ' as u8; 32];
-
-	let was_hex = if seed.len() == 66 && &seed[0..2] == "0x" {
-		if let Ok(d) = hex::decode(&seed[2..]) {
-			s.copy_from_slice(&d);
-			true
-		} else { false }
-	} else { false };
-
-	if !was_hex {
-		let len = ::std::cmp::min(32, seed.len());
-		&mut s[..len].copy_from_slice(&seed.as_bytes()[..len]);
-	}
-
-	s
+	additional: HashMap<Public, Pair>,
 }
 
 impl Store {
@@ -149,44 +69,36 @@ impl Store {
 
 	/// Generate a new key, placing it into the store.
 	pub fn generate(&self, password: &str) -> Result<Pair> {
-		let (pair, pkcs_bytes) = Pair::generate_with_pkcs8();
-		let key_file = EncryptedKey::encrypt(
-			&pkcs_bytes,
-			password,
-			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
-		);
-
+		let (pair, phrase) = Pair::generate_with_phrase(Some(password));
 		let mut file = File::create(self.key_file_path(&pair.public()))?;
-		::serde_json::to_writer(&file, &key_file)?;
-
+		::serde_json::to_writer(&file, &phrase)?;
 		file.flush()?;
-
 		Ok(pair)
 	}
 
 	/// Create a new key from seed. Do not place it into the store.
-	/// Only the first 32 bytes of the sead are used. This is meant to be used for testing only.
-	// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
-		let padded_seed = pad_seed(seed);
-		let pair = Pair::from_seed(&padded_seed);
-		self.additional.insert(pair.public(), padded_seed);
+		let pair = Pair::from_string(seed, None)
+			.map_err(|_| Error::from(ErrorKind::InvalidSeed))?;
+		self.additional.insert(pair.public(), pair.clone());
 		Ok(pair)
 	}
 
 	/// Load a key file with given public key.
 	pub fn load(&self, public: &Public, password: &str) -> Result<Pair> {
-		if let Some(ref seed) = self.additional.get(public) {
-			let pair = Pair::from_seed(seed);
-			return Ok(pair);
+		if let Some(pair) = self.additional.get(public) {
+			return Ok(pair.clone());
 		}
 		let path = self.key_file_path(public);
 		let file = File::open(path)?;
 
-		let encrypted_key: EncryptedKey = ::serde_json::from_reader(&file)?;
-		let pkcs_bytes = encrypted_key.decrypt(password)?;
-
-		Pair::from_pkcs8(&pkcs_bytes[..]).map_err(|_| ErrorKind::InvalidPKCS8.into())
+		let phrase: String = ::serde_json::from_reader(&file)?;
+		let pair = Pair::from_phrase(&phrase, Some(password))
+			.map_err(|_| Error::from(ErrorKind::InvalidPhrase))?;
+		if &pair.public() != public {
+			bail!(ErrorKind::InvalidPassword);
+		}
+		Ok(pair)
 	}
 
 	/// Get public keys of all stored keys.
@@ -228,42 +140,6 @@ mod tests {
 	use tempdir::TempDir;
 
 	#[test]
-	fn encrypt_and_decrypt() {
-		let plain = [1; PKCS_LEN];
-		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED"));
-
-		let decrypted_key = encrypted_key.decrypt("thepassword").unwrap();
-
-		assert_eq!(&plain[..], &decrypted_key[..]);
-	}
-
-	#[test]
-	fn decrypt_wrong_password_fails() {
-		let plain = [1; PKCS_LEN];
-		let encrypted_key = EncryptedKey::encrypt(
-			&plain,
-			"thepassword",
-			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
-		);
-
-		assert!(encrypted_key.decrypt("thepassword2").is_err());
-	}
-
-	#[test]
-	fn decrypt_wrong_iterations_fails() {
-		let plain = [1; PKCS_LEN];
-		let mut encrypted_key = EncryptedKey::encrypt(
-			&plain,
-			"thepassword",
-			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
-		);
-
-		encrypted_key.iterations = NonZeroU32::new(encrypted_key.iterations.get() - 64).unwrap();
-
-		assert!(encrypted_key.decrypt("thepassword").is_err());
-	}
-
-	#[test]
 	fn basic_store() {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let store = Store::open(temp_dir.path().to_owned()).unwrap();
@@ -285,16 +161,7 @@ mod tests {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let mut store = Store::open(temp_dir.path().to_owned()).unwrap();
 
-		let pair = store.generate_from_seed("0x1").unwrap();
-		assert_eq!("5GqhgbUd2S9uc5Tm7hWhw29Tw2jBnuHshmTV1fDF4V1w3G2z", pair.public().to_ss58check());
-
 		let pair = store.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc").unwrap();
 		assert_eq!("5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HBL8", pair.public().to_ss58check());
-
-		let pair = store.generate_from_seed("12345678901234567890123456789022").unwrap();
-		assert_eq!("5DscZvfjnM5im7oKRXXP9xtCG1SEwfMb8J5eGLmw5EHhoHR3", pair.public().to_ss58check());
-
-		let pair = store.generate_from_seed("1").unwrap();
-		assert_eq!("5DYnksEZFc7kgtfyNM1xK2eBtW142gZ3Ho3NQubrF2S6B2fq", pair.public().to_ss58check());
 	}
 }

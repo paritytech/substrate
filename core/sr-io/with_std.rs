@@ -18,7 +18,8 @@
 pub use parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{
-	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519
+	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519,
+	Pair
 };
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
@@ -163,6 +164,7 @@ pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<H2
 }
 
 /// A trie root formed from the enumerated items.
+// TODO: remove (just use `ordered_trie_root`)
 pub fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
 where
 	H: Hasher,
@@ -196,12 +198,12 @@ where
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-	ed25519::verify(sig, msg, pubkey)
+	ed25519::Pair::verify_weak(sig, msg, pubkey)
 }
 
 /// Verify an sr25519 signature.
 pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-	sr25519::verify(sig, msg, pubkey)
+	sr25519::Pair::verify_weak(sig, msg, pubkey)
 }
 
 /// Verify and recover a SECP256k1 ECDSA signature.

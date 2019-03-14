@@ -36,6 +36,7 @@ use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
 use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
+use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use substrate_executor::NativeExecutor;
@@ -64,7 +65,7 @@ pub use network::OnDemand;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 
-const DEFAULT_PROTOCOL_ID: &'static str = "sup";
+const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {
