@@ -44,7 +44,7 @@ name = "impl-codec"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -54,7 +54,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "parity-codec"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -151,7 +151,7 @@ name = "sr-io"
 version = "0.1.0"
 dependencies = [
  "hash-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
@@ -161,7 +161,7 @@ dependencies = [
 name = "sr-sandbox"
 version = "0.1.0"
 dependencies = [
- "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
@@ -186,7 +186,7 @@ dependencies = [
  "byteorder 1.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash256-std-hasher 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
@@ -234,7 +234,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum hash256-std-hasher 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f5c13dbac3cc50684760f54af18545c9e80fb75e93a3e586d71ebdc13138f6a4"
 "checksum impl-codec 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d2050d823639fbeae26b2b5ba09aca8907793117324858070ade0673c49f793b"
 "checksum nodrop 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "9a2228dca57108069a5262f2ed8bd2e82496d2e074a06d1ccc7ce1687b6ae0a2"
-"checksum parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "67a4d27831e31e27f1454d6e3d3bb34bcac6bf7ad7032eed0ad0070dc8cf55c1"
+"checksum parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "21c9c3a1623c71ed83964ff28cac6126e178920f7646d32c337eacb9152b2907"
 "checksum parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "864e9f66b58c0b38f0d6b511b6576afa2b678ae801b64220553bced57ac12df9"
 "checksum primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "edb92f1ebfc177432c03287b15d48c202e6e2c95993a7af3ba039abb43b1492e"
 "checksum proc-macro-crate 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "4c6cf4e5b00300d151dfffae39f529dfa5188f42eeb14201229aa420d6aad10c"
