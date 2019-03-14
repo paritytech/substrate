@@ -16,7 +16,7 @@
 
 //! # Balances Module
 //!
-//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need to implement the following [Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
+//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need to implement the [balances Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
 //!
 //! ## Overview
 //!
@@ -37,9 +37,26 @@
 //! - **Existential Deposit:** The existential deposit is the minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
 //! - **Total Issuance:** The total amount of units in existence in a system.
 //! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set to zero.
-//! - **Free Balance:** The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is reaped.
+//! - **Free Balance:** The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is removed.
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the existential deposit then it will be deleted.
 //! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number.
+//!
+//! ### Implementations
+//! 
+//! The balances module provides implementations for the following traits. If these traits provide the functionality that you need, then you can avoid coupling with the balances module.
+//!
+//! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a fungible assets system.
+//! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for dealing with accounts that allow liquidity restrictions.
+//! - [`TransferAsset`](https://crates.parity.io/srml_support/traits/trait.TransferAsset.html): Functions to transfer fungible assets.
+//! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a given account is unused.
+//!
+//! Example from the treasury module:
+//!
+//! ```rust,ignore
+//! pub trait Trait: system::Trait {
+//! 	/// The staking balance.
+//! 	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=<<Self as Trait>::Currency as ArithmeticType>::Type>;
+//! }
 //!
 //! ## Interface
 //!
