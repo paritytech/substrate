@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -51,7 +51,8 @@ use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue};
 use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
-use client::LeafSet;
+use client::leaves::{LeafSet, FinalizationDisplaced};
+use client::children;
 use state_db::StateDb;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
@@ -248,6 +249,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 
 	fn leaves(&self) -> Result<Vec<Block::Hash>, client::error::Error> {
 		Ok(self.leaves.read().hashes())
+	}
+
+	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>, client::error::Error> {
+		children::read_children(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
 	}
 }
 
@@ -709,11 +714,18 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
+		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
-		self.note_finalized(transaction, header, *hash)?;
+		self.note_finalized(
+			transaction,
+			header,
+			*hash,
+			finalization_displaced,
+		)?;
+
 		if let Some(justification) = justification {
 			transaction.put(
 				columns::JUSTIFICATION,
@@ -762,10 +774,13 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		-> Result<(), client::error::Error>
 	{
 		let mut transaction = DBTransaction::new();
+		let mut finalization_displaced_leaves = None;
+
 		operation.apply_aux(&mut transaction);
 
 		let mut meta_updates = Vec::new();
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
+
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -777,6 +792,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					&block_header,
 					Some(last_finalized_hash),
 					justification,
+					&mut finalization_displaced_leaves,
 				)?);
 				last_finalized_hash = block_hash;
 			}
@@ -841,7 +857,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-				self.note_finalized(&mut transaction, header, hash)?;
+				self.note_finalized(
+					&mut transaction,
+					header,
+					hash,
+					&mut finalization_displaced_leaves,
+				)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
 				self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
@@ -856,6 +877,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 				displaced_leaf
 			};
+
+			let mut children = children::read_children(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
+			children.push(hash);
+			children::write_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
@@ -883,9 +908,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best)) = imported {
 			if let Err(e) = write_result {
+				let mut leaves = self.blockchain.leaves.write();
+				let mut undo = leaves.undo();
 				if let Some(displaced_leaf) = displaced_leaf {
-					self.blockchain.leaves.write().undo(displaced_leaf);
+					undo.undo_import(displaced_leaf);
 				}
+
+				if let Some(finalization_displaced) = finalization_displaced_leaves {
+					undo.undo_finalization(finalization_displaced);
+				}
+
 				return Err(e)
 			}
 
@@ -915,6 +947,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		transaction: &mut DBTransaction,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
+		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>
 	) -> Result<(), client::error::Error> where
 		Block: BlockT<Hash=H256>,
 	{
@@ -936,6 +969,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
 				.and_then(|v| Decode::decode(&mut &*v));
 			self.changes_tries_storage.prune(changes_trie_config, transaction, f_hash, f_num);
+		}
+
+		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
+		match displaced {
+			x @ &mut None => *x = Some(new_displaced),
+			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
 		}
 
 		Ok(())
@@ -1027,22 +1066,27 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let mut transaction = DBTransaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
-		let commit = || {
+		let mut displaced = None;
+		let commit = |displaced| {
 			let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
 				&mut transaction,
 				&hash,
 				&header,
 				None,
 				justification,
+				displaced,
 			)?;
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, is_best, is_finalized);
 			Ok(())
 		};
-		match commit() {
+		match commit(&mut displaced) {
 			Ok(()) => self.storage.state_db.apply_pending(),
 			e @ Err(_) => {
 				self.storage.state_db.revert_pending();
+				if let Some(displaced) = displaced {
+					self.blockchain.leaves.write().undo().undo_finalization(displaced);
+				}
 				return e;
 			}
 		}
@@ -1080,6 +1124,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash);
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
+					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
 					self.storage.db.write(transaction).map_err(db_err)?;
 					self.blockchain.update_meta(hash, best, true, false);
 					self.blockchain.leaves.write().revert(removed.hash().clone(), removed.number().clone(), removed.parent_hash().clone());
@@ -1142,6 +1187,7 @@ mod tests {
 	use super::*;
 	use crate::columns;
 	use client::backend::Backend as BTrait;
+	use client::blockchain::Backend as BLBTrait;
 	use client::backend::BlockImportOperation as Op;
 	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use runtime_primitives::traits::{Hash, BlakeTwo256};
@@ -1779,8 +1825,6 @@ mod tests {
 				BlockId::Hash(block1),
 			).unwrap();
 
-			println!("{:?}", tree_route);
-
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert!(tree_route.retracted().is_empty());
 			assert_eq!(tree_route.enacted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![block1]);
@@ -1794,9 +1838,39 @@ mod tests {
 	}
 
 	#[test]
+	fn test_children_with_complex_block_tree() {
+		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
+		test_client::trait_tests::test_children_for_backend(backend);
+	}
+
+	#[test]
 	fn test_blockchain_query_by_number_gets_canonical() {
 		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
 		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	}
+
+	#[test]
+	fn test_leaves_pruned_on_finality() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
+
+		let block1_a = insert_header(&backend, 1, block0, Default::default(), Default::default());
+		let block1_b = insert_header(&backend, 1, block0, Default::default(), [1; 32].into());
+		let block1_c = insert_header(&backend, 1, block0, Default::default(), [2; 32].into());
+
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block1_a, block1_b, block1_c]);
+
+		let block2_a = insert_header(&backend, 2, block1_a, Default::default(), Default::default());
+		let block2_b = insert_header(&backend, 2, block1_b, Default::default(), Default::default());
+		let block2_c = insert_header(&backend, 2, block1_b, Default::default(), [1; 32].into());
+
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c, block1_c]);
+
+		backend.finalize_block(BlockId::hash(block1_a), None).unwrap();
+		backend.finalize_block(BlockId::hash(block2_a), None).unwrap();
+
+		// leaves at same height stay. Leaves at lower heights pruned.
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c]);
 	}
 
 	#[test]

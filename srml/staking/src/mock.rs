@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -54,7 +54,6 @@ impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = Staking;
 	type Event = ();
 }
 impl session::Trait for Test {
@@ -72,61 +71,112 @@ impl Trait for Test {
 	type Event = ();
 }
 
-pub fn new_test_ext(
-	ext_deposit: u64,
+pub struct ExtBuilder {
+	existential_deposit: u64,
 	session_length: u64,
 	sessions_per_era: u64,
 	current_era: u64,
 	monied: bool,
-	reward: u64
-) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	let balance_factor = if ext_deposit > 0 {
-		256
-	} else {
-		1
-	};
-	t.extend(consensus::GenesisConfig::<Test>{
-		code: vec![],
-		authorities: vec![],
-	}.build_storage().unwrap().0);
-	t.extend(session::GenesisConfig::<Test>{
-		session_length,
-		validators: vec![10, 20],
-	}.build_storage().unwrap().0);
-	t.extend(balances::GenesisConfig::<Test>{
-		balances: if monied {
-			if reward > 0 {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (20, balance_factor)]
-			} else {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
-			}
+	reward: u64,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			existential_deposit: 0,
+			session_length: 3,
+			sessions_per_era: 3,
+			current_era: 0,
+			monied: true,
+			reward: 10,
+		}
+	}
+}
+
+impl ExtBuilder {
+	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+		self.existential_deposit = existential_deposit;
+		self
+	}
+	pub fn session_length(mut self, session_length: u64) -> Self {
+		self.session_length = session_length;
+		self
+	}
+	pub fn sessions_per_era(mut self, sessions_per_era: u64) -> Self {
+		self.sessions_per_era = sessions_per_era;
+		self
+	}
+	pub fn _current_era(mut self, current_era: u64) -> Self {
+		self.current_era = current_era;
+		self
+	}
+	pub fn _monied(mut self, monied: bool) -> Self {
+		self.monied = monied;
+		self
+	}
+	pub fn reward(mut self, reward: u64) -> Self {
+		self.reward = reward;
+		self
+	}
+	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let balance_factor = if self.existential_deposit > 0 {
+			256
 		} else {
-			vec![(10, balance_factor), (20, balance_factor)]
-		},
-		existential_deposit: ext_deposit,
-		transfer_fee: 0,
-		creation_fee: 0,
-		vesting: vec![],
-	}.build_storage().unwrap().0);
-	t.extend(GenesisConfig::<Test>{
-		sessions_per_era,
-		current_era,
-		intentions: vec![10, 20],
-		validator_count: 2,
-		minimum_validator_count: 0,
-		bonding_duration: sessions_per_era * session_length * 3,
-		session_reward: Perbill::from_millionths((1000000 * reward / balance_factor) as u32),
-		offline_slash: if monied { Perbill::from_percent(40) } else { Perbill::zero() },
-		current_session_reward: reward,
-		current_offline_slash: 20,
-		offline_slash_grace: 0,
-		invulnerables: vec![],
-	}.build_storage().unwrap().0);
-	t.extend(timestamp::GenesisConfig::<Test>{
-		period: 5,
-	}.build_storage().unwrap().0);
-	runtime_io::TestExternalities::new(t)
+			1
+		};
+		let _ = consensus::GenesisConfig::<Test>{
+			code: vec![],
+			authorities: vec![],
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = session::GenesisConfig::<Test>{
+			session_length: self.session_length,
+			validators: vec![10, 20],
+			keys: vec![],
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = balances::GenesisConfig::<Test>{
+			balances: if self.monied {
+				if self.reward > 0 {
+					vec![
+						(1, 10 * balance_factor),
+						(2, 20 * balance_factor),
+						(3, 300 * balance_factor),
+						(4, 400 * balance_factor),
+						(10, balance_factor),
+						(11, balance_factor * 1000),
+						(20, balance_factor),
+						(21, balance_factor * 2000)
+					]
+				} else {
+					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor)]
+				}
+			} else {
+				vec![(10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
+			},
+			existential_deposit: self.existential_deposit,
+			transfer_fee: 0,
+			creation_fee: 0,
+			vesting: vec![],
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = GenesisConfig::<Test>{
+			sessions_per_era: self.sessions_per_era,
+			current_era: self.current_era,
+			stakers: vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)],
+			validator_count: 2,
+			minimum_validator_count: 0,
+			bonding_duration: self.sessions_per_era * self.session_length * 3,
+			session_reward: Perbill::from_millionths((1000000 * self.reward / balance_factor) as u32),
+			offline_slash: if self.monied { Perbill::from_percent(40) } else { Perbill::zero() },
+			current_session_reward: self.reward,
+			current_offline_slash: 20,
+			offline_slash_grace: 0,
+			invulnerables: vec![],
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = timestamp::GenesisConfig::<Test>{
+			period: 5,
+		}.assimilate_storage(&mut t, &mut c);
+		t.into()
+	}
 }
 
 pub type System = system::Module<Test>;

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,12 +22,10 @@
 
 use error_chain::*;
 use std::io::Error as IoError;
-use network_libp2p::Error as NetworkError;
 use client;
 
 error_chain! {
 	foreign_links {
-		Network(NetworkError) #[doc = "Devp2p error."];
 		Io(IoError) #[doc = "IO error."];
 	}
 

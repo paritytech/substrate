@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -30,10 +30,7 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero,
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;
-use parity_codec_derive::{Encode, Decode};
-
-#[cfg(any(feature = "std", test))]
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -193,6 +190,15 @@ impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestIte
 	}
 }
 
+// Create a Hash with 69 for each byte,
+// only used to build genesis config
+#[cfg(feature = "std")]
+fn hash69<T: AsMut<[u8]> + Default>() -> T {
+	let mut h = T::default();
+	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
+	h
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 
@@ -200,12 +206,12 @@ decl_storage! {
 
 		ExtrinsicCount: Option<u32>;
 		AllExtrinsicsLen: Option<u32>;
-		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;
+		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| 1u64): T::BlockNumber;
-		ParentHash get(parent_hash) build(|_| [69u8; 32]): T::Hash;
+		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
+		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
 		Digest get(digest): T::Digest;
 

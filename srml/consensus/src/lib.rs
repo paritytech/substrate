@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,8 +22,7 @@
 use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
-use codec::Encode;
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 use srml_support::{storage, Parameter, decl_storage, decl_module};
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
@@ -35,7 +34,7 @@ use inherents::{
 };
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 mod mock;
 mod tests;
@@ -136,7 +135,7 @@ impl<SessionKey: Member> RawLog<SessionKey> {
 
 // Implementation for tests outside of this crate.
 #[cfg(any(feature = "std", test))]
-impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<Ed25519AuthorityId> {
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<AuthorityId> {
 	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>

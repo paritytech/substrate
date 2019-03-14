@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,11 +27,11 @@ pub use parity_codec as codec;
 pub use serde_derive;
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
-use substrate_primitives::hash::{H256, H512};
-use parity_codec_derive::{Encode, Decode};
+use substrate_primitives::{ed25519, sr25519, hash::{H256, H512}};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
@@ -87,17 +87,9 @@ pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
 
-/// A set of key value pairs for storage.
-#[cfg(feature = "std")]
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// A set of key value pairs for children storage;
-#[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
-
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
-pub trait BuildStorage {
+pub trait BuildStorage: Sized {
 	/// Hash given slice.
 	///
 	/// Default to xx128 hashing.
@@ -107,13 +99,24 @@ pub trait BuildStorage {
 		r
 	}
 	/// Build the storage out of this builder.
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String>;
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		let mut storage = Default::default();
+		let mut child_storage = Default::default();
+		self.assimilate_storage(&mut storage, &mut child_storage)?;
+		Ok((storage, child_storage))
+	}
+	/// Assimilate the storage for this module into pre-existing overlays.
+	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
+	}
+	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		storage.extend(self);
+		Ok(())
 	}
 }
 
@@ -248,39 +251,64 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// Ed25519 signature verify.
+/// Signature verify that can work with any known signature types..
+#[derive(Eq, PartialEq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum MultiSignature {
+	/// An Ed25519 signature.
+	Ed25519(ed25519::Signature),
+	/// An Sr25519 signature.
+	Sr25519(sr25519::Signature),
+}
+
+impl Default for MultiSignature {
+	fn default() -> Self {
+		MultiSignature::Ed25519(Default::default())
+	}
+}
+
+/// Public key for any known crypto algorithm.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum MultiSigner {
+	/// An Ed25519 identity.
+	Ed25519(ed25519::Public),
+	/// An Sr25519 identity.
+	Sr25519(sr25519::Public),
+}
+
+impl Default for MultiSigner {
+	fn default() -> Self {
+		MultiSigner::Ed25519(Default::default())
+	}
+}
+
+impl Verify for MultiSignature {
+	type Signer = MultiSigner;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+		match (self, signer) {
+			(MultiSignature::Ed25519(ref sig), &MultiSigner::Ed25519(ref who)) => sig.verify(msg, who),
+			(MultiSignature::Sr25519(ref sig), &MultiSigner::Sr25519(ref who)) => sig.verify(msg, who),
+			_ => false,
+		}
+	}
+}
+
+/// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Ed25519Signature(pub H512);
+pub struct AnySignature(H512);
 
-impl Verify for Ed25519Signature {
-	type Signer = H256;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
-	}
-}
-
-impl From<H512> for Ed25519Signature {
-	fn from(h: H512) -> Ed25519Signature {
-		Ed25519Signature(h)
-	}
-}
-
-/// Sr25519 signature verify.
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
+/// Public key for any known crypto algorithm.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Sr25519Signature(pub H512);
+pub struct AnySigner(H256);
 
-impl Verify for Sr25519Signature {
-	type Signer = H256;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::sr25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
-	}
-}
-
-impl From<H512> for Sr25519Signature {
-	fn from(h: H512) -> Sr25519Signature {
-		Sr25519Signature(h)
+impl Verify for AnySignature {
+	type Signer = AnySigner;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AnySigner) -> bool {
+		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0.as_bytes()) ||
+			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0.as_bytes())
 	}
 }
 
@@ -411,19 +439,13 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
-			fn build_storage(self) -> ::std::result::Result<($crate::StorageOverlay, $crate::ChildrenStorageOverlay), String> {
-				let mut top = $crate::StorageOverlay::new();
-				let mut children = $crate::ChildrenStorageOverlay::new();
+			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
 				$(
 					if let Some(extra) = self.$snake {
-						let (other_top, other_children) = extra.build_storage()?;
-						top.extend(other_top);
-						for (other_child_key, other_child_map) in other_children {
-							children.entry(other_child_key).or_default().extend(other_child_map);
-						}
+						extra.assimilate_storage(top, children)?;
 					}
 				)*
-				Ok((top, children))
+				Ok(())
 			}
 		}
 	}
@@ -584,9 +606,8 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
-	use substrate_primitives::hash::H256;
-	use crate::codec::{Encode as EncodeHidden, Decode as DecodeHidden};
-	use parity_codec_derive::{Encode, Decode};
+	use substrate_primitives::hash::{H256, H512};
+	use crate::codec::{Encode, Decode};
 	use crate::traits::DigestItem;
 
 	pub trait RuntimeT {
@@ -601,7 +622,7 @@ mod tests {
 
 	mod a {
 		use super::RuntimeT;
-		use parity_codec_derive::{Encode, Decode};
+		use crate::codec::{Encode, Decode};
 		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
@@ -611,7 +632,7 @@ mod tests {
 
 	mod b {
 		use super::RuntimeT;
-		use parity_codec_derive::{Encode, Decode};
+		use crate::codec::{Encode, Decode};
 		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
@@ -620,7 +641,7 @@ mod tests {
 	}
 
 	impl_outer_log! {
-		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
+		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
 			a(AuthoritiesChange), b()
 		}
 	}
@@ -630,26 +651,26 @@ mod tests {
 		// encode/decode regular item
 		let b1: Log = b::RawLog::B1::<u64>(777).into();
 		let encoded_b1 = b1.encode();
-		let decoded_b1: Log = DecodeHidden::decode(&mut &encoded_b1[..]).unwrap();
+		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		assert_eq!(b1, decoded_b1);
 
 		// encode/decode system item
 		let auth_change: Log = a::RawLog::AuthoritiesChange::<u64>(vec![100, 200, 300]).into();
 		let encoded_auth_change = auth_change.encode();
-		let decoded_auth_change: Log = DecodeHidden::decode(&mut &encoded_auth_change[..]).unwrap();
+		let decoded_auth_change: Log = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
 		assert_eq!(auth_change, decoded_auth_change);
 
 		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256, u64> = DecodeHidden::decode(&mut &encoded_b1[..]).unwrap();
+		let generic_b1: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		match generic_b1 {
 			super::generic::DigestItem::Other(_) => (),
 			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
 
 		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: super::generic::DigestItem<H256, u64> = DecodeHidden::decode(&mut &encoded_auth_change[..]).unwrap();
+		let generic_auth_change: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
 		match generic_auth_change {
-			super::generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
+			super::generic::DigestItem::AuthoritiesChange::<H256, u64, H512>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
 			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
 		}
 

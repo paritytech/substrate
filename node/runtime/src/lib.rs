@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,13 +21,13 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use support::{Serialize, Deserialize};
 use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -37,7 +37,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -60,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 29,
-	impl_version: 32,
+	spec_version: 35,
+	impl_version: 35,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -101,9 +101,8 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
-	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
 }
 
@@ -114,9 +113,9 @@ impl fees::Trait for Runtime {
 
 impl consensus::Trait for Runtime {
 	type Log = Log;
-	type SessionKey = SessionKey;
+	type SessionKey = AuthorityId;
 
-	// the aura module handles offline-reports internally
+	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
 	type InherentOfflineReport = ();
 }
@@ -126,16 +125,8 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
-/// Session key conversion.
-pub struct SessionKeyConversion;
-impl Convert<AccountId, SessionKey> for SessionKeyConversion {
-	fn convert(a: AccountId) -> SessionKey {
-		a.to_fixed_bytes().into()
-	}
-}
-
 impl session::Trait for Runtime {
-	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type ConvertAccountIdToSessionKey = ();
 	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
 	type Event = Event;
 }
@@ -187,13 +178,17 @@ impl sudo::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
-	type SessionKey = SessionKey;
+	type SessionKey = AuthorityId;
 	type Log = Log;
 	type Event = Event;
 }
 
+impl finality_tracker::Trait for Runtime {
+	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
+}
+
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -211,6 +206,7 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
+		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
@@ -242,7 +238,7 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn authorities() -> Vec<SessionKey> {
+		fn authorities() -> Vec<AuthorityId> {
 			Consensus::authorities()
 		}
 
@@ -295,7 +291,7 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_=> None
+				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_change(log) {
 					return Some(change);
@@ -304,7 +300,21 @@ impl_runtime_apis! {
 			None
 		}
 
-		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
+		fn grandpa_forced_change(digest: &DigestFor<Block>)
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
+		{
+			for log in digest.logs.iter().filter_map(|l| match l {
+				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
+				_ => None
+			}) {
+				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
+					return Some(change);
+				}
+			}
+			None
+		}
+
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 			Grandpa::grandpa_authorities()
 		}
 	}

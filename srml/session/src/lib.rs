@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::dispatch::Result;
+use srml_support::{dispatch::Result, traits::OnFreeBalanceZero};
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -50,8 +50,8 @@ macro_rules! impl_session_change {
 
 for_each_tuple!(impl_session_change);
 
-pub trait Trait: timestamp::Trait {
-	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
+pub trait Trait: timestamp::Trait + consensus::Trait {
+	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Option<Self::SessionKey>>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -110,9 +110,14 @@ decl_storage! {
 		/// Block at which the session length last changed.
 		LastLengthChange: Option<T::BlockNumber>;
 		/// The next key for a given validator.
-		NextKeyFor: map T::AccountId => Option<T::SessionKey>;
+		NextKeyFor build(|config: &GenesisConfig<T>| {
+			config.keys.clone()
+		}): map T::AccountId => Option<T::SessionKey>;
 		/// The next session length.
 		NextSessionLength: Option<T::BlockNumber>;
+	}
+	add_extra_genesis {
+		config(keys): Vec<(T::AccountId, T::SessionKey)>;
 	}
 }
 
@@ -136,13 +141,10 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of validators.
 	///
-	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
+	/// Called by `staking::new_era()` only. `rotate_session` must be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());
-		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
-		);
 	}
 
 	/// Hook to be called after transaction processing.
@@ -182,14 +184,17 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
-
 		// Update any changes in session keys.
-		Self::validators().iter().enumerate().for_each(|(i, v)| {
-			if let Some(n) = <NextKeyFor<T>>::take(v) {
-				<consensus::Module<T>>::set_authority(i as u32, &n);
-			}
-		});
+		for (i, v) in Self::validators().into_iter().enumerate() {
+			<consensus::Module<T>>::set_authority(
+				i as u32,
+				&<NextKeyFor<T>>::get(&v)
+					.or_else(|| T::ConvertAccountIdToSessionKey::convert(v))
+					.unwrap_or_default()
+			);
+		};
+
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
@@ -207,6 +212,12 @@ impl<T: Trait> Module<T> {
 		let length_minus_1 = length - One::one();
 		let block_number = <system::Module<T>>::block_number();
 		length_minus_1 - (block_number - Self::last_length_change() + length_minus_1) % length
+	}
+}
+
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		<NextKeyFor<T>>::remove(who);
 	}
 }
 
@@ -270,6 +281,7 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
+			keys: vec![],
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}

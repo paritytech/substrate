@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
 };
-use primitives::{Ed25519AuthorityId, ed25519};
+use primitives::{ed25519, Pair};
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future};
@@ -52,12 +52,16 @@ use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 use aura_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 
 pub use aura_slots::SlotDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
+
+type AuthorityId = ed25519::Public;
+type Signature = ed25519::Signature;
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
@@ -72,16 +76,17 @@ pub trait Network: Clone {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author(slot_num: u64, authorities: &[Ed25519AuthorityId]) -> Option<Ed25519AuthorityId> {
+fn slot_author(slot_num: u64, authorities: &[AuthorityId]) -> Option<AuthorityId> {
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
 	assert!(idx <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed");
 
-	let current_author = *authorities.get(idx as usize)
+	let current_author = authorities.get(idx as usize)
 		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed");
+				this is a valid index; qed")
+		.clone();
 
 	Some(current_author)
 }
@@ -108,22 +113,22 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self;
+	fn aura_seal(slot_number: u64, signature: Signature) -> Self;
 
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)>;
+	fn as_aura_seal(&self) -> Option<(u64, Signature)>;
 }
 
-impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId> {
+impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId, Signature> {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
+	fn aura_seal(slot_number: u64, signature: Signature) -> Self {
 		generic::DigestItem::Seal(slot_number, signature)
 	}
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
+	fn as_aura_seal(&self) -> Option<(u64, Signature)> {
 		match self {
-			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
+			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, sig.clone().into())),
 			_ => None
 		}
 	}
@@ -161,7 +166,7 @@ pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
 	Error: From<C::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	OnExit: Future<Item=(), Error=()> + Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId> + 'static,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
@@ -197,7 +202,7 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Sync + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 	OnExit: Future<Item=(), Error=()>,
 {
@@ -231,7 +236,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -265,12 +270,18 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					chain_head.hash(),
 					e
 				);
+				telemetry!(CONSENSUS_WARN; "aura.unable_fetching_authorities";
+					"slot" => ?chain_head.hash(), "err" => ?e
+				);
 				return Box::new(future::ok(()));
 			}
 		};
 
 		if self.sync_oracle.is_offline() && authorities.len() > 1 {
-			debug!(target: "aura", "Skipping proposal slot. Waiting for the netork.");
+			debug!(target: "aura", "Skipping proposal slot. Waiting for the network.");
+			telemetry!(CONSENSUS_DEBUG; "aura.skipping_proposal_slot";
+				"authorities_len" => authorities.len()
+			);
 			return Box::new(future::ok(()));
 		}
 
@@ -282,12 +293,18 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					slot_num,
 					timestamp
 				);
+				telemetry!(CONSENSUS_DEBUG; "aura.starting_authorship";
+					"slot_num" => slot_num, "timestamp" => timestamp
+				);
 
 				// we are the slot author. make a block and sign it.
 				let proposer = match env.init(&chain_head, &authorities) {
 					Ok(p) => p,
 					Err(e) => {
 						warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
+						telemetry!(CONSENSUS_WARN; "aura.unable_authoring_block";
+							"slot" => slot_num, "err" => ?e
+						);
 						return Box::new(future::ok(()))
 					}
 				};
@@ -314,6 +331,9 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 						info!(
 							"Discarding proposal for slot {}; block production took too long",
 							slot_num
+						);
+						telemetry!(CONSENSUS_INFO; "aura.discarding_proposal_took_too_long";
+							"slot" => slot_num
 						);
 						return
 					}
@@ -348,10 +368,18 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 						  import_block.post_header().hash(),
 						  pre_hash
 					);
+					telemetry!(CONSENSUS_INFO; "aura.pre_sealed_block";
+						"header_num" => ?header_num,
+						"hash_now" => ?import_block.post_header().hash(),
+						"hash_previously" => ?pre_hash
+					);
 
 					if let Err(e) = block_import.import_block(import_block, None) {
 						warn!(target: "aura", "Error with block built on {:?}: {:?}",
 							  parent_hash, e);
+						telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
+							"hash" => ?parent_hash, "err" => ?e
+						);
 					}
 				})
 				.map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into())
@@ -363,7 +391,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[Ed25519AuthorityId])
+fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId])
 	-> Result<CheckedHeader<B::Header, ed25519::Signature>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
 {
@@ -371,7 +399,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-	let (slot_num, &sig) = match digest_item.as_aura_seal() {
+	let (slot_num, sig) = match digest_item.as_aura_seal() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
@@ -392,7 +420,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 		let to_sign = (slot_num, pre_hash).encode();
 		let public = ed25519::Public(expected_author.0);
 
-		if ed25519::verify_strong(&sig, &to_sign[..], public) {
+		if ed25519::Pair::verify(&sig, &to_sign[..], public) {
 			Ok(CheckedHeader::Checked(header, slot_num, sig))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
@@ -456,6 +484,9 @@ impl<C, E> AuraVerifier<C, E>
 							"halting for block {} seconds in the future",
 							diff
 						);
+						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
+							"diff" => ?diff
+						);
 						thread::sleep(Duration::from_secs(diff));
 						Ok(())
 					},
@@ -504,6 +535,7 @@ impl<C, E> AuraVerifier<C, E>
 					"halting for block {} seconds in the future",
 					diff
 				);
+				telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block"; "diff" => ?diff);
 				thread::sleep(Duration::from_secs(diff));
 				Ok(())
 			},
@@ -527,7 +559,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
 	E: ExtraVerification<B>,
 {
 	fn verify(
@@ -536,7 +568,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<Ed25519AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
 		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
@@ -589,6 +621,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 				}
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
+				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
 				extra_verification.into_future().wait()?;
 
@@ -608,6 +641,9 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(CONSENSUS_DEBUG; "aura.header_too_far_in_future";
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
 				Err(format!("Header {:?} rejected: too far in the future", hash))
 			}
 		}
@@ -643,7 +679,7 @@ pub fn import_queue<B, C, E>(
 	B: Block,
 	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
 	E: 'static + ExtraVerification<B>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
@@ -664,7 +700,7 @@ mod tests {
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
-	use keyring::Keyring;
+	use keyring::ed25519::Keyring;
 	use client::BlockchainEvents;
 	use test_client;
 
@@ -679,7 +715,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Ed25519AuthorityId])
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -699,11 +735,12 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<()>>>,
+		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
 		started: bool,
 	}
 
 	impl TestNetFactory for AuraTestNet {
+		type Specialization = DummySpecialization;
 		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
 		type PeerData = ();
 
@@ -734,15 +771,15 @@ mod tests {
 			})
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::PeerData> {
+		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>> {
+		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 

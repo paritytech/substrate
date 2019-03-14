@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,15 @@ pub mod sr25519;
 /// Test account crypto for ed25519.
 pub mod ed25519;
 
-/// The Ed25519 keyring.
-/// 
-/// This is deprecated: use `ed25519::Keyring` instead.
-pub use ed25519::Keyring;
+/// Convenience export: Sr25519's Keyring is exposed as `AccountKeyring`,
+/// since it tends to be used for accounts.
+pub use sr25519::Keyring as AccountKeyring;
+
+/// Convenience export: Ed25519's Keyring is exposed as `AuthorityKeyring`,
+/// since it tends to be used for authorities (session keys &c.).
+pub use ed25519::Keyring as AuthorityKeyring;
+
+pub mod test {
+	/// The keyring for use with accounts when using the test runtime.
+	pub use super::ed25519::Keyring as AccountKeyring;
+}

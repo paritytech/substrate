@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -130,18 +130,20 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		}
 		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
+			#[doc(hidden)]
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
 					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
+			#[doc(hidden)]
 			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
 				#store_functions_to_metadata
 			}
+			#[doc(hidden)]
 			pub fn store_metadata_name() -> &'static str {
 				#cratename_string
 			}
-
 		}
 
 		#extra_genesis
@@ -168,6 +170,7 @@ fn decl_store_extra_genesis(
 	for sline in storage_lines.inner.iter() {
 
 		let DeclStorageLine {
+			attrs,
 			name,
 			getter,
 			config,
@@ -181,12 +184,20 @@ fn decl_store_extra_genesis(
 
 		let mut opt_build;
 		// need build line
-		if let (Some(ref getter), Some(ref config)) = (getter, config) {
+		if let Some(ref config) = config {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
-			} else {
+			} else if let Some(ref getter) = getter {
 				let ident = &getter.getfn.content;
 				quote!( #ident )
+			} else {
+				return Err(
+					Error::new_spanned(
+						name,
+						"Invalid storage definiton, couldn't find config identifier: storage must either have a get identifier \
+						`get(ident)` or a defined config identifier `config(ident)`"
+					)
+				);
 			};
 			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
@@ -197,13 +208,17 @@ fn decl_store_extra_genesis(
 			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
 				serde_complete_bound.insert(key_type);
 			}
+
+			// Propagate doc attributes.
+			let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 			let storage_type = type_infos.typ.clone();
 			config_field.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
-					quote!( pub #ident: #storage_type, )
+					quote!( #( #[ #attrs ] )* pub #ident: #storage_type, )
 				},
 				DeclStorageTypeInfosKind::Map {key_type, .. } => {
-					quote!( pub #ident: Vec<(#key_type, #storage_type)>, )
+					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key_type, #storage_type)>, )
 				},
 			});
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
@@ -224,22 +239,15 @@ fn decl_store_extra_genesis(
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
-			let error_message = format!(
-				"Genesis parameters encoding of {} does not match the expected type ({:?}).",
-				name,
-				type_infos.value_type,
-			);
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
-						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-							.expect(#error_message);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
+
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -247,11 +255,8 @@ fn decl_store_extra_genesis(
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-								.expect(#error_message);
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
@@ -384,16 +389,17 @@ fn decl_store_extra_genesis(
 
 			#[cfg(feature = "std")]
 			impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
-
-				fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageOverlay, #scrate::runtime_primitives::ChildrenStorageOverlay), String> {
-					let mut r: #scrate::runtime_primitives::StorageOverlay = Default::default();
-					let mut c: #scrate::runtime_primitives::ChildrenStorageOverlay = Default::default();
+				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+					use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+					let storage = (RefCell::new(r), PhantomData::<Self>::default());
 
 					#builders
 
-					#scall(&mut r, &mut c, &self);
+					let r = storage.0.into_inner();
 
-					Ok((r, c))
+					#scall(r, c, &self);
+
+					Ok(())
 				}
 			}
 		}
@@ -413,6 +419,7 @@ fn decl_storage_items(
 	let mut impls = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
+			attrs,
 			name,
 			storage_type,
 			default_value,
@@ -422,6 +429,9 @@ fn decl_storage_items(
 
 		let type_infos = get_type_infos(storage_type);
 		let kind = type_infos.kind.clone();
+		// Propagate doc attributes.
+		let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 		let i = impls::Impls {
 			scrate,
 			visibility,
@@ -432,6 +442,7 @@ fn decl_storage_items(
 				.unwrap_or_else(|| quote!{ Default::default() }),
 			prefix: format!("{} {}", cratename, name),
 			name,
+			attrs,
 		};
 
 		let implementation = match kind {
@@ -467,8 +478,12 @@ fn impl_store_items(
 ) -> TokenStream2 {
 	storage_lines.inner.iter().map(|sline| &sline.name)
 		.fold(TokenStream2::new(), |mut items, name| {
-		items.extend(quote!(type #name = #name<#traitinstance>;));
-		items
+			items.extend(
+				quote!(
+					type #name = #name<#traitinstance>;
+				)
+			);
+			items
 	})
 }
 
@@ -480,6 +495,7 @@ fn impl_store_fns(
 	let mut items = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
+			attrs,
 			name,
 			getter,
 			storage_type,
@@ -492,10 +508,14 @@ fn impl_store_fns(
 			let type_infos = get_type_infos(storage_type);
 			let value_type = type_infos.value_type;
 
+			// Propagate doc attributes.
+			let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 			let typ = type_infos.typ;
 			let item = match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{
+						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
 						}
@@ -503,6 +523,7 @@ fn impl_store_fns(
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
+						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
@@ -571,7 +592,7 @@ fn store_functions_to_metadata (
 			})
 			.unwrap_or_else(|| quote!( Default::default() ));
 		let mut docs = TokenStream2::new();
-		for attr in attrs.inner.iter().filter_map(|v| v.interpret_meta()) {
+		for attr in attrs.inner.iter().filter_map(|v| v.parse_meta().ok()) {
 			if let syn::Meta::NameValue(syn::MetaNameValue{
 				ref ident,
 				ref lit,
@@ -600,6 +621,7 @@ fn store_functions_to_metadata (
 		};
 		items.extend(item);
 		let def_get = quote! {
+			#[doc(hidden)]
 			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]

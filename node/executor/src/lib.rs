@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,17 +31,15 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::ed25519::Keyring;
+	use keyring::{AccountKeyring, AuthorityKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
-	use primitives::{
-		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue,
-		NativeOrEncoded
-	};
+	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
+		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, staking, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -55,15 +53,27 @@ mod tests {
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	fn alice() -> AccountId {
-		AccountId::from(Keyring::Alice.to_raw_public())
+		AccountKeyring::Alice.into()
 	}
 
 	fn bob() -> AccountId {
-		AccountId::from(Keyring::Bob.to_raw_public())
+		AccountKeyring::Bob.into()
 	}
 
 	fn charlie() -> AccountId {
-		AccountId::from(Keyring::Charlie.to_raw_public())
+		AccountKeyring::Charlie.into()
+	}
+
+	fn dave() -> AccountId {
+		AccountKeyring::Dave.into()
+	}
+
+	fn eve() -> AccountId {
+		AccountKeyring::Eve.into()
+	}
+
+	fn ferdie() -> AccountId {
+		AccountKeyring::Ferdie.into()
 	}
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
@@ -71,12 +81,12 @@ mod tests {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
-				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
+				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
-						pair.sign(&runtime_io::blake2_256(b))
+						key.sign(&runtime_io::blake2_256(b))
 					} else {
-						pair.sign(b)
+						key.sign(b)
 					}
 				}).into();
 				UncheckedExtrinsic {
@@ -247,7 +257,7 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let three = [3u8; 32].into();
+		let three = AccountId::from_raw([3u8; 32]);
 		TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(SystemConfig {
@@ -258,12 +268,16 @@ mod tests {
 				..Default::default()
 			}),
 			indices: Some(IndicesConfig {
-				ids: vec![alice(), charlie()],
+				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
 			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
 					(alice(), 111),
+					(bob(), 100),
 					(charlie(), 100_000_000),
+					(dave(), 111),
+					(eve(), 101),
+					(ferdie(), 100),
 				],
 				existential_deposit: 0,
 				transfer_fee: 0,
@@ -272,12 +286,17 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three],
+				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
+				keys: vec![
+					(alice(), AuthorityKeyring::Alice.into()),
+					(bob(), AuthorityKeyring::Bob.into()),
+					(charlie(), AuthorityKeyring::Charlie.into())
+				]
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				intentions: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
+				stakers: vec![(dave(), alice(), 111), (eve(), bob(), 101), (ferdie(), charlie(), 100)],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -286,7 +305,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
+				invulnerables: vec![alice(), bob(), charlie()],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -296,11 +315,7 @@ mod tests {
 			contract: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
-				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(Keyring::Alice.to_raw_public().into(), 1),
-					(Keyring::Bob.to_raw_public().into(), 1),
-					(Keyring::Charlie.to_raw_public().into(), 1),
-				],
+				authorities: vec![],
 			}),
 			fees: Some(FeesConfig {
 				transaction_base_fee: 1,
@@ -353,7 +368,7 @@ mod tests {
 			).0.unwrap();
 		}
 
-		let correct_header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		let header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_finalise_block",
 			&[0u8;0],
@@ -364,9 +379,8 @@ mod tests {
 			NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
 		};
 
-
-		let hash = correct_header.blake2_256();
-		(Block { header: correct_header, extrinsics }.encode(), hash.into())
+		let hash = header.blake2_256();
+		(Block { header, extrinsics }.encode(), hash.into())
 	}
 
 	fn changes_trie_block() -> (Vec<u8>, Hash) {
@@ -427,12 +441,7 @@ mod tests {
 			]
 		);
 
-		let mut digest = generic::Digest::<Log>::default();
-		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(Keyring::One.to_raw_public().into(), 1),
-			(Keyring::Two.to_raw_public().into(), 1),
-			([3u8; 32].into(), 1),
-		])));
+		let digest = generic::Digest::<Log>::default();
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
 		(block1, block2)
@@ -471,23 +480,14 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 41);
-			assert_eq!(Balances::total_balance(&bob()), 69);
+			// block1 transfers from alice 69 to bob.
+			// -1 is the default fee
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1);
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess)
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: Event::indices(indices::RawEvent::NewAccountIndex(bob(), 2))
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(balances::RawEvent::NewAccount(
-						bob().into(),
-						69
-					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -520,7 +520,7 @@ mod tests {
 				}
 			]);
 		});
-		
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -530,8 +530,11 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 30);
-			assert_eq!(Balances::total_balance(&bob()), 78);
+			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
+			// 111 - 69 - 1 - 10 - 1 = 30
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
+			// 100 + 69 + 10 - 1     = 178
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -573,18 +576,6 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::staking(staking::RawEvent::Reward(0))
-				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(Keyring::One.to_raw_public().into(), 1),
-						(Keyring::Two.to_raw_public().into(), 1),
-						([3u8; 32].into(), 1),
-					])),
-				},
-				EventRecord {
-					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Spending(0))
 				},
 				EventRecord {
@@ -616,15 +607,20 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 41);
-			assert_eq!(Balances::total_balance(&bob()), 69);
+			// block1 transfers from alice 69 to bob.
+			// -1 is the default fee
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1);
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69);
 		});
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 30);
-			assert_eq!(Balances::total_balance(&bob()), 78);
+			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
+			// 111 - 69 - 1 - 10 - 1 = 30
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
+			// 100 + 69 + 10 - 1     = 178
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 		});
 	}
 
@@ -748,7 +744,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 2)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(indices::address::Address::Id(addr), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(indices::address::Address::Id(addr.clone()), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]
@@ -877,7 +873,7 @@ mod tests {
 	#[test]
 	fn full_wasm_block_import_works_with_changes_trie() {
 		let block1 = changes_trie_block();
-		
+
 		let mut t = new_test_ext(COMPACT_CODE, true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 

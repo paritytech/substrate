@@ -33,7 +33,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use parity_codec as codec;
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ use service::{
 };
 use network::{
 	Protocol, config::{NetworkConfiguration, NonReservedPeerMode, Secret},
-	multiaddr,
+	build_multiaddr,
 };
 use primitives::H256;
 
@@ -59,8 +59,12 @@ use log::info;
 use lazy_static::lazy_static;
 
 use futures::Future;
+use substrate_telemetry::TelemetryEndpoints;
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
+
+/// The root phrase for our development network keys.
+pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
@@ -386,7 +390,7 @@ where
 	}
 
 	if cli.shared_params.dev {
-		config.keys.push("Alice".into());
+		config.keys.push(format!("{}//Alice", DEV_PHRASE));
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
@@ -401,9 +405,9 @@ where
 
 	// Override telemetry
 	if cli.no_telemetry {
-		config.telemetry_url = None;
-	} else if let Some(url) = cli.telemetry_url {
-		config.telemetry_url = Some(url);
+		config.telemetry_endpoints = None;
+	} else if !cli.telemetry_endpoints.is_empty() {
+		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
 	Ok(config)
@@ -455,7 +459,7 @@ where
 				.map_err(|err| format!("Error obtaining network key: {}", err))?;
 
 		let peer_id = network_keys.to_peer_id();
-		let addr = multiaddr![
+		let addr = build_multiaddr![
 			Ip4([127, 0, 0, 1]),
 			Tcp(30333u16),
 			P2p(peer_id)

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Block Builder extensions for tests.
 
 use client;
-use keyring;
+use super::AccountKeyring;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
 use client::block_builder::api::BlockBuilder;
@@ -38,9 +38,8 @@ impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime:
 }
 
 fn sign_tx(transfer: runtime::Transfer) -> runtime::Extrinsic {
-	let signature = keyring::Keyring::from_raw_public(transfer.from.to_fixed_bytes())
+	let signature = AccountKeyring::from_public(&transfer.from)
 		.unwrap()
-		.sign(&parity_codec::Encode::encode(&transfer))
-		.into();
+		.sign(&parity_codec::Encode::encode(&transfer));
 	runtime::Extrinsic::Transfer(transfer, signature)
 }

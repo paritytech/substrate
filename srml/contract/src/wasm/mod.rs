@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use crate::exec::{Ext, EmptyOutputBuf, VmExecResult};
 use crate::gas::GasMeter;
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use sandbox;
 
 #[macro_use]
@@ -580,7 +580,7 @@ mod tests {
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
 	/// compares it with the constant 42.
-	const CODE_CALLER: &'static str = r#"
+	const CODE_CALLER: &str = r#"
 (module
 	(import "env" "ext_caller" (func $ext_caller))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
@@ -645,7 +645,7 @@ mod tests {
 
 	/// calls `ext_address`, loads the address from the scratch buffer and
 	/// compares it with the constant 69.
-	const CODE_ADDRESS: &'static str = r#"
+	const CODE_ADDRESS: &str = r#"
 (module
 	(import "env" "ext_address" (func $ext_address))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))

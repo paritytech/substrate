@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -67,10 +67,10 @@ use crate::account_db::AccountDb;
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
+use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use parity_codec::Codec;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
@@ -121,7 +121,7 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
-	T::AccountId: From<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
@@ -131,7 +131,7 @@ where
 		buf.extend_from_slice(data_hash.as_ref());
 		buf.extend_from_slice(origin.as_ref());
 
-		T::Hashing::hash(&buf[..]).into()
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf[..]))
 	}
 }
 
@@ -140,7 +140,7 @@ where
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
-		let encoded_len = parity_codec::Encode::encode(&call).len();
+		let encoded_len = call.using_encoded(|encoded| encoded.len());
 		let base_fee = <fees::Module<T>>::transaction_base_fee();
 		let byte_fee = <fees::Module<T>>::transaction_byte_fee();
 		<T::Balance as As<u64>>::sa(base_fee.as_() + byte_fee.as_() * encoded_len as u64)
@@ -369,7 +369,7 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who.clone());
+		<StorageOf<T>>::remove_prefix(who);
 	}
 }
 
