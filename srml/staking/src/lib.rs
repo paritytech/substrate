@@ -276,8 +276,6 @@ decl_storage! {
 		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
-				println!("Staker: {:?}", config.stakers);
-				
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 					let _ = <Module<T>>::bond(
 						T::Origin::from(Some(stash.clone()).into()),
@@ -695,7 +693,7 @@ impl<T: Trait> Module<T> {
 				<SlashCount<T>>::insert(v, slash_count - 1);
 			}
 		}
-		println!("Elected : {:?}", elected_candidates);
+
 		// Populate Stakers.
 		for candidate in &elected_candidates {
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
