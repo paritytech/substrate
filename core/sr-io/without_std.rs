@@ -66,6 +66,7 @@ extern "C" {
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+	fn ext_clear_child_prefix(storage_key_data: *const u8, storage_key_len: u32, prefix_data: *const u8, prefix_len: u32);
 	fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
 	/// Host-side result allocation
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
@@ -223,8 +224,8 @@ pub fn clear_prefix(prefix: &[u8]) {
 pub fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
 	unsafe {
 		ext_clear_child_prefix(
-			storage_key as ptr(),
-			storage_key.len as u32,
+			storage_key.as_ptr(),
+			storage_key.len() as u32,
 			prefix.as_ptr(),
 			prefix.len() as u32
 		);
