@@ -23,6 +23,3 @@ lto = true
 
 [workspace]
 members = []
-
-[patch.crates-io]
-parity-codec = { git = "https://github.com/paritytech/parity-codec", branch = "gui-impl-codec-core-phantom" }

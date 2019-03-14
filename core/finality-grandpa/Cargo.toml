@@ -11,7 +11,7 @@ log = "0.4"
 parking_lot = "0.7.1"
 tokio = "0.1.7"
 rand = "0.6"
-parity-codec = { version = "3.1", features = ["derive"] }
+parity-codec = { version = "3.2", features = ["derive"] }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
