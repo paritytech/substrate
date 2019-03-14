@@ -21,7 +21,7 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, ops::Deref, cell::Cell};
+use rstd::{vec::Vec, cell::Cell};
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
 
@@ -56,17 +56,26 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	}
 }
 
+/// The state of an exchangeable function.
+#[derive(Clone, Copy)]
+enum ExchangeableFunctionState {
+	Original,
+	Replaced,
+}
+
 /// A function which implementation can be exchanged.
 ///
 /// Internally this works by swapping function pointers.
-pub struct ExchangeableFunction<T>(Cell<(T, bool)>);
+pub struct ExchangeableFunction<T>(Cell<(T, ExchangeableFunctionState)>);
 
 impl<T> ExchangeableFunction<T> {
 	/// Create a new instance of `ExchangeableFunction`.
 	pub const fn new(impl_: T) -> Self {
-		Self(Cell::new((impl_, false)))
+		Self(Cell::new((impl_, ExchangeableFunctionState::Original)))
 	}
+}
 
+impl<T: Copy> ExchangeableFunction<T> {
 	/// Replace the implementation with `new_impl`.
 	///
 	/// # Panics
@@ -76,37 +85,36 @@ impl<T> ExchangeableFunction<T> {
 	/// # Returns
 	///
 	/// Returns the original implementation wrapped in [`RestoreImplementation`].
-	pub unsafe fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
-		if (*self.0.as_ptr()).1 {
+	pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
+		if let ExchangeableFunctionState::Replaced = self.0.get().1 {
 			panic!("Trying to replace an already replaced implementation!")
 		}
 
-		let old = self.0.replace((new_impl, true));
+		let old = self.0.replace((new_impl, ExchangeableFunctionState::Replaced));
 
 		RestoreImplementation(self, Some(old.0))
 	}
 
 	/// Restore the original implementation.
 	fn restore_orig_implementation(&self, orig: T) {
-		self.0.set((orig, false));
+		self.0.set((orig, ExchangeableFunctionState::Original));
+	}
+
+	/// Returns the internal function pointer.
+	pub fn get(&self) -> T {
+		self.0.get().0
 	}
 }
 
 // WASM does not support threads, so this is safe; qed.
 unsafe impl<T> Sync for ExchangeableFunction<T> {}
 
-impl<T> Deref for ExchangeableFunction<T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		unsafe { &(*self.0.as_ptr()).0 }
-	}
-}
-
 /// Restores a function implementation on drop.
-pub struct RestoreImplementation<T: 'static>(&'static ExchangeableFunction<T>, Option<T>);
+///
+/// Stores a static reference to the function object and the original implementation.
+pub struct RestoreImplementation<T: 'static + Copy>(&'static ExchangeableFunction<T>, Option<T>);
 
-impl<T> Drop for RestoreImplementation<T> {
+impl<T: Copy> Drop for RestoreImplementation<T> {
 	fn drop(&mut self) {
 		self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
 	}
@@ -289,7 +297,7 @@ impl ExternTrieCrypto for Blake2Hasher {
 		let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
 		let mut result: [u8; 32] = Default::default();
 		unsafe {
-			ext_blake2_256_enumerated_trie_root(
+			ext_blake2_256_enumerated_trie_root.get()(
 				values.as_ptr(),
 				lengths.as_ptr(),
 				lengths.len() as u32,
@@ -304,7 +312,7 @@ impl ExternTrieCrypto for Blake2Hasher {
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	let mut length: u32 = 0;
 	unsafe {
-		let ptr = ext_get_allocated_storage(key.as_ptr(), key.len() as u32, &mut length);
+		let ptr = ext_get_allocated_storage.get()(key.as_ptr(), key.len() as u32, &mut length);
 		if length == u32::max_value() {
 			None
 		} else {
@@ -320,7 +328,13 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 	let mut length: u32 = 0;
 	unsafe {
-		let ptr = ext_get_allocated_child_storage(storage_key.as_ptr(), storage_key.len() as u32, key.as_ptr(), key.len() as u32, &mut length);
+		let ptr = ext_get_allocated_child_storage.get()(
+			storage_key.as_ptr(),
+			storage_key.len() as u32,
+			key.as_ptr(),
+			key.len() as u32,
+			&mut length
+		);
 		if length == u32::max_value() {
 			None
 		} else {
@@ -335,7 +349,7 @@ pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 /// Set the storage of some particular key to Some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	unsafe {
-		ext_set_storage(
+		ext_set_storage.get()(
 			key.as_ptr(), key.len() as u32,
 			value.as_ptr(), value.len() as u32
 		);
@@ -345,7 +359,7 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 /// Set the child storage of some particular key to Some value.
 pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
 	unsafe {
-		ext_set_child_storage(
+		ext_set_child_storage.get()(
 			storage_key.as_ptr(), key.len() as u32,
 			key.as_ptr(), key.len() as u32,
 			value.as_ptr(), value.len() as u32
@@ -356,7 +370,7 @@ pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
 /// Clear the storage of some particular key.
 pub fn clear_storage(key: &[u8]) {
 	unsafe {
-		ext_clear_storage(
+		ext_clear_storage.get()(
 			key.as_ptr(), key.len() as u32
 		);
 	}
@@ -365,7 +379,7 @@ pub fn clear_storage(key: &[u8]) {
 /// Clear the storage of some particular key.
 pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
 	unsafe {
-		ext_clear_child_storage(
+		ext_clear_child_storage.get()(
 			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32
 		);
@@ -375,7 +389,7 @@ pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
 /// Determine whether a particular key exists in storage.
 pub fn exists_storage(key: &[u8]) -> bool {
 	unsafe {
-		ext_exists_storage(
+		ext_exists_storage.get()(
 			key.as_ptr(), key.len() as u32
 		) != 0
 	}
@@ -384,7 +398,7 @@ pub fn exists_storage(key: &[u8]) -> bool {
 /// Determine whether a particular key exists in storage.
 pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
 	unsafe {
-		ext_exists_child_storage(
+		ext_exists_child_storage.get()(
 			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32
 		) != 0
@@ -394,7 +408,7 @@ pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
 /// Clear the storage entries key of which starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
 	unsafe {
-		ext_clear_prefix(
+		ext_clear_prefix.get()(
 			prefix.as_ptr(),
 			prefix.len() as u32
 		);
@@ -404,7 +418,7 @@ pub fn clear_prefix(prefix: &[u8]) {
 /// Clear an entire child storage.
 pub fn kill_child_storage(storage_key: &[u8]) {
 	unsafe {
-		ext_kill_child_storage(
+		ext_kill_child_storage.get()(
 			storage_key.as_ptr(),
 			storage_key.len() as u32
 		);
@@ -415,7 +429,7 @@ pub fn kill_child_storage(storage_key: &[u8]) {
 /// the number of bytes that the key in storage was beyond the offset.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	unsafe {
-		match ext_get_storage_into(
+		match ext_get_storage_into.get()(
 			key.as_ptr(),
 			key.len() as u32,
 			value_out.as_mut_ptr(),
@@ -432,7 +446,7 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 /// the number of bytes that the key in storage was beyond the offset.
 pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	unsafe {
-		match ext_get_child_storage_into(
+		match ext_get_child_storage_into.get()(
 			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32,
 			value_out.as_mut_ptr(), value_out.len() as u32,
@@ -448,7 +462,7 @@ pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], 
 pub fn storage_root() -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
-		ext_storage_root(result.as_mut_ptr());
+		ext_storage_root.get()(result.as_mut_ptr());
 	}
 	result
 }
@@ -457,7 +471,7 @@ pub fn storage_root() -> [u8; 32] {
 pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 	let mut length: u32 = 0;
 	unsafe {
-		let ptr = ext_child_storage_root(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
+		let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
 		if length == u32::max_value() {
 			None
 		} else {
@@ -473,7 +487,7 @@ pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]> {
 	let mut result: [u8; 32] = Default::default();
 	let is_set = unsafe {
-		ext_storage_changes_root(parent_hash.as_ptr(), parent_hash.len() as u32, parent_num, result.as_mut_ptr())
+		ext_storage_changes_root.get()(parent_hash.as_ptr(), parent_hash.len() as u32, parent_num, result.as_mut_ptr())
 	};
 
 	if is_set != 0 {
@@ -510,7 +524,7 @@ pub fn ordered_trie_root<
 /// The current relay chain identifier.
 pub fn chain_id() -> u64 {
 	unsafe {
-		ext_chain_id()
+		ext_chain_id.get()()
 	}
 }
 
@@ -518,7 +532,7 @@ pub fn chain_id() -> u64 {
 pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
-		ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		ext_blake2_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }
@@ -527,7 +541,7 @@ pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
-		ext_keccak_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		ext_keccak_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }
@@ -536,7 +550,7 @@ pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 pub fn twox_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
-		ext_twox_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		ext_twox_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }
@@ -545,7 +559,7 @@ pub fn twox_256(data: &[u8]) -> [u8; 32] {
 pub fn twox_128(data: &[u8]) -> [u8; 16] {
 	let mut result: [u8; 16] = Default::default();
 	unsafe {
-		ext_twox_128(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		ext_twox_128.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }
@@ -553,14 +567,14 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 /// Verify a ed25519 signature.
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	unsafe {
-		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+		ext_ed25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
 	}
 }
 
 /// Verify a sr25519 signature.
 pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	unsafe {
-		ext_sr25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+		ext_sr25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
 	}
 }
 
@@ -570,7 +584,7 @@ pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
 	let mut pubkey = [0u8; 64];
 	match unsafe {
-		ext_secp256k1_ecdsa_recover(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
+		ext_secp256k1_ecdsa_recover.get()(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
 	} {
 		0 => Ok(pubkey),
 		1 => Err(EcdsaVerifyError::BadRS),
@@ -588,7 +602,7 @@ pub trait Printable {
 impl<'a> Printable for &'a [u8] {
 	fn print(self) {
 		unsafe {
-			ext_print_hex(self.as_ptr(), self.len() as u32);
+			ext_print_hex.get()(self.as_ptr(), self.len() as u32);
 		}
 	}
 }
@@ -596,14 +610,14 @@ impl<'a> Printable for &'a [u8] {
 impl<'a> Printable for &'a str {
 	fn print(self) {
 		unsafe {
-			ext_print_utf8(self.as_ptr() as *const u8, self.len() as u32);
+			ext_print_utf8.get()(self.as_ptr() as *const u8, self.len() as u32);
 		}
 	}
 }
 
 impl Printable for u64 {
 	fn print(self) {
-		unsafe { ext_print_num(self); }
+		unsafe { ext_print_num.get()(self); }
 	}
 }
 

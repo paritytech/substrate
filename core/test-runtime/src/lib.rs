@@ -469,7 +469,7 @@ cfg_if! {
 				}
 
 				fn benchmark_indirect_call() -> u64 {
-					(0..10000).fold(0, |p, i| p + BENCHMARK_ADD_ONE(i))
+					(0..10000).fold(0, |p, i| p + BENCHMARK_ADD_ONE.get()(i))
 				}
 
 				fn benchmark_direct_call() -> u64 {
