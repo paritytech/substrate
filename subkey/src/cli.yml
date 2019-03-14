@@ -1,12 +1,7 @@
 name: subkey
 author: "Parity Team <admin@parity.io>"
-about: A substrate key utility
+about: Utility for generating and restoring with Substrate keys
 args:
-  - ed25519-legacy:
-      short: o
-      long: legacy
-      help: Use legacy, outdated Ed25519 cryptography
-      takes_value: false
   - ed25519:
       short: e
       long: ed25519
@@ -26,15 +21,41 @@ args:
 subcommands:
   - generate:
       about: Generate a random account
-  - restore:
-      about: Gets a public key and a SS58 address from the provided seed phrase
+  - inspect:
+      about: Gets a public key and a SS58 address from the provided Secret URI
       args:
-        - seed:
+        - uri:
             index: 1
             required: true
-            help: 32 bytes long seed phrase used to restore the public key. If the provided seed is shorter than that, then
-                  it will be right-padded with 0x20 bytes (ASCII space). If the provided seed is longer than
-                  32 bytes then seed will be truncated.
+            help: A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or public URI.
+  - sign:
+      about: Sign a message, provided on STDIN, with a given (secret) key
+      args:
+        - suri:
+            index: 1
+            required: true
+            help: The secret key URI.
+        - hex:
+            short: h
+            long: hex
+            help: The message on STDIN is hex-encoded data
+            takes_value: false
+  - verify:
+      about: Verify a signature for a message, provided on STDIN, with a given (public or secret) key
+      args:
+        - sig:
+            index: 1
+            required: true
+            help: Signature, hex-encoded.
+        - uri:
+            index: 2
+            required: true
+            help: The public or secret key URI.
+        - hex:
+            short: h
+            long: hex
+            help: The message on STDIN is hex-encoded data
+            takes_value: false
   - vanity:
       about: Generate a seed that provides a vanity address
       args:
@@ -47,9 +68,3 @@ subcommands:
             help: Number of keys to generate
             takes_value: true
             default_value: "1"
-  - query:
-      about: Query an account by its seed
-      args:
-        - seed:
-            index: 1
-            help: The 0x prefixed seed

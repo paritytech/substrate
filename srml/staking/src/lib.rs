@@ -276,6 +276,8 @@ decl_storage! {
 		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
+				println!("Staker: {:?}", config.stakers);
+				
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 					let _ = <Module<T>>::bond(
 						T::Origin::from(Some(stash.clone()).into()),
@@ -683,6 +685,7 @@ impl<T: Trait> Module<T> {
 			.min_by_key(|c| c.exposure.total)
 			.map(|c| c.exposure.total)
 			.unwrap_or_default();
+		<SlotStake<T>>::put(&slot_stake);
 
 		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
@@ -692,7 +695,7 @@ impl<T: Trait> Module<T> {
 				<SlashCount<T>>::insert(v, slash_count - 1);
 			}
 		}
-
+		println!("Elected : {:?}", elected_candidates);
 		// Populate Stakers.
 		for candidate in &elected_candidates {
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
@@ -703,7 +706,6 @@ impl<T: Trait> Module<T> {
 			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);
 		
-		<SlotStake<T>>::put(&slot_stake);
 		slot_stake
 	}
 
