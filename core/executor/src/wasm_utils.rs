@@ -42,13 +42,11 @@ impl ConvertibleToWasm for usize { type NativeType = u32; const VALUE_TYPE: Valu
 impl<T> ConvertibleToWasm for *const T { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) } }
 impl<T> ConvertibleToWasm for *mut T { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) } }
 
-#[macro_export]
 macro_rules! convert_args {
 	() => ([]);
 	( $( $t:ty ),* ) => ( [ $( { use $crate::wasm_utils::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
-#[macro_export]
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
@@ -85,7 +83,6 @@ macro_rules! resolve_fn {
 	);
 }
 
-#[macro_export]
 macro_rules! unmarshall_args {
 	( $body:tt, $objectname:ident, $args_iter:ident, $( $names:ident : $params:ty ),*) => ({
 		$(
@@ -120,7 +117,6 @@ where
 	f
 }
 
-#[macro_export]
 macro_rules! marshall {
 	( $args_iter:ident, $objectname:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
 		let body = $crate::wasm_utils::constrain_closure::<
@@ -162,7 +158,6 @@ macro_rules! dispatch_fn {
 	);
 }
 
-#[macro_export]
 macro_rules! impl_function_executor {
 	( $objectname:ident : $structname:ty,
 	  $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt , )*
