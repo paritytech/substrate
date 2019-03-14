@@ -147,7 +147,7 @@ pub trait Trait: 'static + Eq + Clone {
 		Digest = Self::Digest
 	>;
 
-	/// The event type
+	/// Represents an event which can be deposited
 	type Event: Parameter + Member + From<Event>;
 
 	/// Represents a piece of information which can be part of the digest (as a digest item)
