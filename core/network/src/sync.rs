@@ -21,7 +21,7 @@ use crate::protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
-use consensus::import_queue::{ImportQueue, IncomingBlock};
+use consensus::import_queue::{ImportQueue, IncomingBlock, SharedFinalityProofRequestBuilder};
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
 use crate::extra_requests::ExtraRequestsAggregator;
@@ -487,7 +487,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.extra_requests.justifications().queue_request(
-			&(*hash, number),
+			(*hash, number),
 			|base, block| protocol.client().is_descendent_of(base, block),
 		);
 
@@ -508,7 +508,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// Queues a new finality proof request and tries to dispatch all pending requests.
 	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.extra_requests.finality_proofs().queue_request(
-			&(*hash, number),
+			(*hash, number),
 			|base, block| protocol.client().is_descendent_of(base, block),
 		);
 
@@ -516,7 +516,11 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn finality_proof_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
-		self.extra_requests.justifications().on_import_result(hash, number, success);
+		self.extra_requests.finality_proofs().on_import_result(hash, number, success);
+	}
+
+	pub fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+		self.extra_requests.finality_proofs().essence().0 = Some(request_builder);
 	}
 
 	pub fn stop(&self) {

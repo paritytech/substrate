@@ -91,6 +91,7 @@ construct_service_factory! {
 					client.clone(),
 					None,
 					None,
+					None,
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
@@ -103,6 +104,7 @@ construct_service_factory! {
 				import_queue(
 					SlotDuration::get_or_compute(&*client)?,
 					client.clone(),
+					None,
 					None,
 					None,
 					client,

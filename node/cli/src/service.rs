@@ -138,6 +138,7 @@ construct_service_factory! {
 					block_import,
 					Some(justification_import),
 					None,
+					None,
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
@@ -149,15 +150,19 @@ construct_service_factory! {
 					.upgrade()
 					.map(|fetcher| fetcher.checker().clone())
 					.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-				let block_import = Arc::new(grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
+				let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
 					client.clone(), Arc::new(fetch_checker), client.clone()
-				)?);
+				)?;
+				let block_import = Arc::new(block_import);
+				let finality_proof_import = block_import.clone();
+				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
 				import_queue(
 					SlotDuration::get_or_compute(&*client)?,
-					block_import.clone(),
+					block_import,
 					None,
-					Some(block_import),
+					Some(finality_proof_import),
+					Some(finality_proof_request_builder),
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),

@@ -49,7 +49,7 @@ const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 pub use self::error::{Error, ErrorKind};
 pub use block_import::{
 	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult,
-	JustificationImport, FinalityProofImport,
+	JustificationImport, FinalityProofImport, FinalityProofRequestBuilder,
 };
 
 /// Trait for getting the authorities at a given block.

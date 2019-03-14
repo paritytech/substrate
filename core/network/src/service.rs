@@ -24,7 +24,7 @@ use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
-use consensus::import_queue::{ImportQueue, Link};
+use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
 use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
@@ -110,7 +110,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 	}
 
 	fn request_finality_proof(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.protocol_sender.send(ProtocolMsg::RequestFinalityProof(hash.clone(), number));
+		let _ = self.protocol_sender.send(ProtocolMsg::RequestFinalityProof(
+			hash.clone(),
+			number,
+		));
 	}
 
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {
@@ -127,6 +130,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 	fn restart(&self) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RestartSync);
+	}
+
+	fn set_finality_proof_request_builder(&self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+		let _ = self.protocol_sender.send(ProtocolMsg::SetFinalityProofRequestBuilder(request_builder));
 	}
 }
 

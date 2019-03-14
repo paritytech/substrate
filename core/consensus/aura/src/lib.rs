@@ -34,6 +34,7 @@ use consensus_common::{
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+	SharedFinalityProofRequestBuilder,
 };
 use client::ChainHead;
 use client::block_builder::api::{BlockBuilder as BlockBuilderApi, self as block_builder_api};
@@ -674,6 +675,7 @@ pub fn import_queue<B, C, E>(
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
@@ -689,7 +691,13 @@ pub fn import_queue<B, C, E>(
 	let verifier = Arc::new(
 		AuraVerifier { client: client.clone(), extra, inherent_data_providers }
 	);
-	Ok(BasicQueue::new(verifier, block_import, justification_import, finality_proof_import))
+	Ok(BasicQueue::new(
+		verifier,
+		block_import,
+		justification_import,
+		finality_proof_import,
+		finality_proof_request_builder,
+	))
 }
 
 #[cfg(test)]

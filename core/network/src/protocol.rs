@@ -21,7 +21,7 @@ use network_libp2p::{NodeIndex, PeerId, Severity};
 use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
-use consensus::import_queue::ImportQueue;
+use consensus::import_queue::{ImportQueue, SharedFinalityProofRequestBuilder};
 use crate::message::{self, Message, ConsensusEngineId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::ConsensusGossip;
@@ -192,24 +192,24 @@ struct ContextData<B: BlockT, H: ExHashT> {
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
 pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>>  {
-    fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
+	fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
-    fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
-        (*self)(spec, context)
-    }
+	fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
+		(*self)(spec, context)
+	}
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
 pub trait GossipTask<B: BlockT>  {
-    fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
+	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
 }
 
 impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
-    fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
-        (*self)(gossip, context)
-    }
+	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
+		(*self)(gossip, context)
+	}
 }
 
 /// Messages sent to Protocol from elsewhere inside the system.
@@ -230,6 +230,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a justification was successfully imported.
 	JustificationImportResult(B::Hash, NumberFor<B>, bool),
+	/// Set finality proof request builder.
+	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
 	/// Tell protocol to request finality proof for a block.
 	RequestFinalityProof(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a finality proof was successfully imported.
@@ -410,6 +412,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.sync.request_justification(&hash, number, &mut context);
 			},
 			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
+			ProtocolMsg::SetFinalityProofRequestBuilder(builder) => self.sync.set_finality_proof_request_builder(builder),
 			ProtocolMsg::RequestFinalityProof(hash, number) => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
@@ -1110,7 +1113,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = self.context_data.finality_proof_provider.as_ref()
 			.ok_or_else(|| String::from("Finality provider is not configured"))
-			.and_then(|provider| provider.prove_finality(request.last_finalized, request.block)
+			.and_then(|provider| provider.prove_finality(request.block, &request.request)
 				.map_err(|e| e.to_string()));
 		let finality_proof = match finality_proof {
 			Ok(finality_proof) => finality_proof,

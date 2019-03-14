@@ -26,9 +26,9 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::Verifier,
+	import_queue::{Verifier, SharedFinalityProofRequestBuilder},
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
-	Error as ConsensusError, ErrorKind as ConsensusErrorKind
+	Error as ConsensusError, ErrorKind as ConsensusErrorKind, FinalityProofRequestBuilder,
 };
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
@@ -42,7 +42,7 @@ use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
 use crate::environment::canonical_at_height;
-use crate::finality_proof::{AuthoritySetForFinalityChecker, ProvableJustification};
+use crate::finality_proof::{AuthoritySetForFinalityChecker, ProvableJustification, make_finality_proof_request};
 use crate::justification::GrandpaJustification;
 
 /// LightAuthoritySet is saved under this key in aux storage.
@@ -63,7 +63,8 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
-	let import_data = load_aux_import_data(&**client.backend(), api)?;
+	let info = client.info()?;
+	let import_data = load_aux_import_data(info.chain.finalized_hash, &**client.backend(), api)?;
 	Ok(GrandpaLightBlockImport {
 		client,
 		authority_set_provider,
@@ -84,6 +85,7 @@ pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 
 /// Mutable data of light block importer.
 struct LightImportData<Block: BlockT<Hash=H256>> {
+	last_finalized: Block::Hash,
 	authority_set: LightAuthoritySet,
 	consensus_changes: ConsensusChanges<Block::Hash, NumberFor<Block>>,
 }
@@ -93,6 +95,13 @@ struct LightImportData<Block: BlockT<Hash=H256>> {
 struct LightAuthoritySet {
 	set_id: u64,
 	authorities: Vec<(Ed25519AuthorityId, u64)>,
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaLightBlockImport<B, E, Block, RA> {
+	/// Create finality proof request builder.
+	pub fn create_finality_proof_request_builder(&self) -> SharedFinalityProofRequestBuilder<Block> {
+		Arc::new(GrandpaFinalityProofRequestBuilder(self.data.clone())) as _
+	}
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
@@ -191,6 +200,18 @@ impl LightAuthoritySet {
 	pub fn update(&mut self, set_id: u64, authorities: Vec<(Ed25519AuthorityId, u64)>) {
 		self.set_id = set_id;
 		std::mem::replace(&mut self.authorities, authorities);
+	}
+}
+
+struct GrandpaFinalityProofRequestBuilder<B: BlockT<Hash=H256>>(Arc<RwLock<LightImportData<B>>>);
+
+impl<B: BlockT<Hash=H256>> FinalityProofRequestBuilder<B> for GrandpaFinalityProofRequestBuilder<B> {
+	fn build_request_data(&self, _hash: &B::Hash) -> Vec<u8> {
+		let data = self.0.read();
+		make_finality_proof_request(
+			data.last_finalized,
+			data.authority_set.set_id(),
+		)
 	}
 }
 
@@ -336,7 +357,7 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	// first, try to behave optimistically
 	let authority_set_id = data.authority_set.set_id();
 	let justification = J::decode_and_verify(
-		justification,
+		&justification,
 		authority_set_id,
 		&data.authority_set.authorities(),
 	);
@@ -413,11 +434,15 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 		Err(error) => return Err(on_post_finalization_error(error, "consensus changes")),
 	}
 
+	// update last finalized block reference
+	data.last_finalized = hash;
+
 	Ok(ImportResult::imported())
 }
 
 /// Load light impoty aux data from the store.
 fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
+	last_finalized: Block::Hash,
 	aux_store: &B,
 	api: Arc<PRA>,
 ) -> Result<LightImportData<Block>, ClientError>
@@ -457,6 +482,7 @@ fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
 	};
 
 	Ok(LightImportData {
+		last_finalized,
 		authority_set,
 		consensus_changes,
 	})
@@ -490,6 +516,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 	ConsensusError::from(ConsensusErrorKind::ClientImport(error.to_string()))
 }
 
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -506,6 +533,7 @@ mod tests {
 	) -> ImportResult {
 		let client = test_client::new_light();
 		let mut import_data = LightImportData {
+			last_finalized: Default::default(),
 			authority_set: LightAuthoritySet::genesis(vec![(Ed25519AuthorityId([1; 32]), 1)]),
 			consensus_changes: ConsensusChanges::empty(),
 		};
@@ -585,7 +613,7 @@ mod tests {
 		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_none());
 
 		// it is updated on importer start
-		load_aux_import_data(&aux_store, api).unwrap();
+		load_aux_import_data(Default::default(), &aux_store, api).unwrap();
 		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_some());
 		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_some());
 	}
@@ -613,7 +641,7 @@ mod tests {
 		).unwrap();
 
 		// importer uses it on start
-		let data = load_aux_import_data(&aux_store, api).unwrap();
+		let data = load_aux_import_data(Default::default(), &aux_store, api).unwrap();
 		assert_eq!(data.authority_set.authorities(), vec![(Ed25519AuthorityId([42; 32]), 2)]);
 		assert_eq!(data.consensus_changes.pending_changes(), &[(42, Default::default())]);
 	}

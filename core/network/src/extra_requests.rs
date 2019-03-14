@@ -16,9 +16,9 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use log::{trace, debug, warn};
+use log::{trace, warn};
 use client::error::Error as ClientError;
-use consensus::import_queue::ImportQueue;
+use consensus::import_queue::{ImportQueue, SharedFinalityProofRequestBuilder};
 use fork_tree::ForkTree;
 use network_libp2p::NodeIndex;
 use runtime_primitives::Justification;
@@ -40,10 +40,16 @@ pub(crate) trait ExtraRequestsEssence<B: BlockT> {
 	/// Name of request type to display in logs.
 	fn type_name(&self) -> &'static str;
 	/// Prepare network message corresponding to the request.
-	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B>;
+	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B>;
 	/// Accept response.
-	fn import_response(&self, import_queue: &ImportQueue<B>, who: NodeIndex, request: ExtraRequest<B>, response: Self::Response);
-	///
+	fn import_response(
+		&self,
+		import_queue: &ImportQueue<B>,
+		who: NodeIndex,
+		request: ExtraRequest<B>,
+		response: Self::Response,
+	);
+	/// Create peer state for peer that is downloading extra data.
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B>;
 }
 
@@ -52,14 +58,14 @@ pub(crate) struct ExtraRequestsAggregator<B: BlockT> {
 	/// Manages justifications requests.
 	justifications: ExtraRequests<B, JustificationsRequestsEssence>,
 	/// Manages finality proof requests.
-	finality_proofs: ExtraRequests<B, FinalityProofRequestsEssence>,
+	finality_proofs: ExtraRequests<B, FinalityProofRequestsEssence<B>>,
 }
 
 impl<B: BlockT> ExtraRequestsAggregator<B> {
 	pub(crate) fn new() -> Self {
 		ExtraRequestsAggregator {
 			justifications: ExtraRequests::new(JustificationsRequestsEssence),
-			finality_proofs: ExtraRequests::new(FinalityProofRequestsEssence),
+			finality_proofs: ExtraRequests::new(FinalityProofRequestsEssence(None)),
 		}
 	}
 
@@ -67,7 +73,7 @@ impl<B: BlockT> ExtraRequestsAggregator<B> {
 		&mut self.justifications
 	}
 
-	pub(crate) fn finality_proofs(&mut self) -> &mut ExtraRequests<B, FinalityProofRequestsEssence> {
+	pub(crate) fn finality_proofs(&mut self) -> &mut ExtraRequests<B, FinalityProofRequestsEssence<B>> {
 		&mut self.finality_proofs
 	}
 
@@ -123,6 +129,11 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		}
 	}
 
+	/// Get mutable reference to the requests essence.
+	pub(crate) fn essence(&mut self) -> &mut Essence {
+		&mut self.essence
+	}
+
 	/// Dispatches all possible pending requests to the given peers. Peers are
 	/// filtered according to the current known best block (i.e. we won't send a
 	/// extra request for block #10 to a peer at block #2), and we also
@@ -151,14 +162,6 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 
 		let mut last_peer = available_peers.back().map(|p| p.0);
 		let mut unhandled_requests = VecDeque::new();
-
-		let last_finalzied_hash = match protocol.client().info() {
-			Ok(info) => info.chain.finalized_hash,
-			Err(e) => {
-				debug!(target:"sync", "Cannot dispatch {} requests: error {:?} when reading blockchain", self.essence.type_name(), e);
-				return;
-			},
-		};
 
 		loop {
 			let (peer, peer_best_number) = match available_peers.pop_front() {
@@ -210,7 +213,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 				.state = self.essence.peer_downloading_state(request.0);
 
 			trace!(target: "sync", "Requesting {} for block #{} from {}", self.essence.type_name(), request.0, peer);
-			let request = self.essence.into_network_request(request, last_finalzied_hash);
+			let request = self.essence.into_network_request(request);
 
 			protocol.send_message(peer, request);
 		}
@@ -225,7 +228,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 	}
 
 	/// Queue a extra data request (without dispatching it).
-	pub(crate) fn queue_request<F>(&mut self, request: &ExtraRequest<B>, is_descendent_of: F)
+	pub(crate) fn queue_request<F>(&mut self, request: ExtraRequest<B>, is_descendent_of: F)
 		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
 	{
 		match self.tree.import(request.0.clone(), request.1.clone(), (), &is_descendent_of) {
@@ -345,7 +348,7 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 		"justification"
 	}
 
-	fn into_network_request(&self, request: ExtraRequest<B>, _last_finalzied_hash: B::Hash) -> Message<B> {
+	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
 		GenericMessage::BlockRequest(message::generic::BlockRequest {
 			id: 0,
 			fields: message::BlockAttributes::JUSTIFICATION,
@@ -365,20 +368,22 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 	}
 }
 
-pub(crate) struct FinalityProofRequestsEssence;
+pub(crate) struct FinalityProofRequestsEssence<B: BlockT>(pub Option<SharedFinalityProofRequestBuilder<B>>);
 
-impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence {
+impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence<B> {
 	type Response = Vec<u8>;
 
 	fn type_name(&self) -> &'static str {
 		"finality proof"
 	}
 
-	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B> {
+	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
 		GenericMessage::FinalityProofRequest(message::generic::FinalityProofRequest {
 			id: 0,
 			block: request.0,
-			last_finalized: last_finalzied_hash,
+			request: self.0.as_ref()
+				.map(|builder| builder.build_request_data(&request.0))
+				.unwrap_or_default(),
 		})
 	}
 

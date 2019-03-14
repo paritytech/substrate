@@ -34,7 +34,7 @@ use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
 use crate::config::{ProtocolConfig, Roles};
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
-use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport, Verifier};
+use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::ConsensusGossip;
@@ -484,14 +484,6 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 			.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
-	/// Request a finality proof for the given block.
-	#[cfg(test)]
-	fn request_finality_proof(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
-		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::RequestFinalityProof(hash.clone(), number));
-	}
-
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersFullClient>) -> Block
@@ -653,7 +645,13 @@ pub trait TestNetFactory: Sized {
 		let (block_import, justification_import, finality_proof_import, data) = self.make_block_import(PeersClient::Full(client.clone()));
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
-		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import, finality_proof_import));
+		let import_queue = Box::new(BasicQueue::new(
+			verifier,
+			block_import,
+			justification_import,
+			finality_proof_import,
+			None,
+		));
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
@@ -704,7 +702,13 @@ pub trait TestNetFactory: Sized {
 		let (block_import, justification_import, finality_proof_import, data) = self.make_block_import(PeersClient::Light(client.clone()));
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
-		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import, finality_proof_import));
+		let import_queue = Box::new(BasicQueue::new(
+			verifier,
+			block_import,
+			justification_import,
+			finality_proof_import,
+			None,
+		));
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));

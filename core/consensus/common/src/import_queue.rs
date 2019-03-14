@@ -25,7 +25,8 @@
 //! instantiated simply.
 
 use crate::block_import::{
-	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport, FinalityProofImport,
+	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
+	FinalityProofImport, FinalityProofRequestBuilder,
 };
 use crossbeam_channel::{self as channel, Receiver, Sender};
 
@@ -47,6 +48,9 @@ pub type SharedJustificationImport<B> = Arc<dyn JustificationImport<B, Error=Con
 
 /// Shared finality proof import struct used by the queue.
 pub type SharedFinalityProofImport<B> = Arc<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
+
+/// Shared finality proof request builder struct used by the queue.
+pub type SharedFinalityProofRequestBuilder<B> = Arc<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = usize;
@@ -145,6 +149,7 @@ impl<B: BlockT> BasicQueue<B> {
 		block_import: SharedBlockImport<B>,
 		justification_import: Option<SharedJustificationImport<B>>,
 		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+		finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	) -> Self {
 		let (result_sender, result_port) = channel::unbounded();
 		let worker_sender = BlockImportWorker::new(result_sender, verifier.clone(), block_import);
@@ -154,6 +159,7 @@ impl<B: BlockT> BasicQueue<B> {
 			verifier,
 			justification_import,
 			finality_proof_import,
+			finality_proof_request_builder,
 		);
 
 		Self {
@@ -235,6 +241,7 @@ struct BlockImporter<B: BlockT> {
 	verifier: Arc<Verifier<B>>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 }
 
 impl<B: BlockT> BlockImporter<B> {
@@ -244,6 +251,7 @@ impl<B: BlockT> BlockImporter<B> {
 		verifier: Arc<Verifier<B>>,
 		justification_import: Option<SharedJustificationImport<B>>,
 		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+		finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	) -> Sender<BlockImportMsg<B>> {
 		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
@@ -257,6 +265,7 @@ impl<B: BlockT> BlockImporter<B> {
 					verifier,
 					justification_import,
 					finality_proof_import,
+					finality_proof_request_builder,
 				};
 				while importer.run() {
 					// Importing until all senders have been dropped...
@@ -300,6 +309,9 @@ impl<B: BlockT> BlockImporter<B> {
 				self.handle_import_finality_proof(who, hash, number, finality_proof)
 			},
 			BlockImportMsg::Start(link, sender) => {
+				if let Some(finality_proof_request_builder) = self.finality_proof_request_builder.take() {
+					link.set_finality_proof_request_builder(finality_proof_request_builder);
+				}
 				if let Some(justification_import) = self.justification_import.as_ref() {
 					justification_import.on_start(&*link);
 				}
@@ -526,6 +538,8 @@ pub trait Link<B: BlockT>: Send {
 	fn note_useless_and_restart_sync(&self, _who: Origin, _reason: &str) {}
 	/// Restart sync.
 	fn restart(&self) {}
+	/// Remember finality proof request builder on start.
+	fn set_finality_proof_request_builder(&self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
 }
 
 /// Block import successful result.
@@ -685,7 +699,7 @@ mod tests {
 		let (result_sender, result_port) = channel::unbounded();
 		let (worker_sender, _) = channel::unbounded();
 		let (link_sender, link_port) = channel::unbounded();
-		let importer_sender = BlockImporter::<Block>::new(result_port, worker_sender, Arc::new(()), None, None);
+		let importer_sender = BlockImporter::<Block>::new(result_port, worker_sender, Arc::new(()), None, None, None);
 		let link = TestLink::new(link_sender);
 		let (ack_sender, start_ack_port) = channel::bounded(4);
 		let _ = importer_sender.send(BlockImportMsg::Start(Box::new(link.clone()), ack_sender));

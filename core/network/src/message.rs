@@ -382,8 +382,8 @@ pub mod generic {
 		pub id: RequestId,
 		/// Hash of the block to request proof for.
 		pub block: H,
-		/// Hash of the last known finalized block.
-		pub last_finalized: H,
+		/// Additional data blob (that both requester and provider understood) required for proving finality.
+		pub request: Vec<u8>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
