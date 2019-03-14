@@ -3269,6 +3269,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-consensus 0.1.0",
  "srml-finality-tracker 0.1.0",
  "srml-session 0.1.0",
  "srml-support 0.1.0",
@@ -3576,9 +3577,10 @@ dependencies = [
 
 [[package]]
 name = "subkey"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnorrkel 0.0.0 (git+https://github.com/w3f/schnorrkel)",
@@ -3981,12 +3983,14 @@ dependencies = [
  "hash-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash256-std-hasher 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-serde 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnorrkel 0.0.0 (git+https://github.com/w3f/schnorrkel)",
@@ -4020,6 +4024,7 @@ dependencies = [
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-version 0.1.0",
  "substrate-client 0.1.0",
@@ -4029,6 +4034,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
+ "substrate-test-runtime 0.1.0",
  "substrate-transaction-pool 0.1.0",
  "tokio 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -4187,6 +4193,7 @@ dependencies = [
  "substrate-inherents 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-test-client 0.1.0",
 ]
 
 [[package]]
