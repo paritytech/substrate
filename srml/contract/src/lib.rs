@@ -391,7 +391,6 @@ decl_storage! {
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
 		/// The subtrie counter associated with an account id
 		pub AccountCounter: u64 = 0;
-		//pub AccountCounter: map T::AccountId => Option<u64>;
 	}
 }
 
@@ -420,10 +419,9 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-    let o_subtrie = <DirectAccountDb as AccountDb<T>>::get_subtrie(&DirectAccountDb, who);
-    o_subtrie.map(|subtrie| {
-		  child::kill_storage(&subtrie.key_space);
-    });
+		<DirectAccountDb as AccountDb<T>>::get_subtrie(&DirectAccountDb, who).map(|subtrie| {
+			child::kill_storage(&subtrie.key_space);
+		});
 	}
 }
 

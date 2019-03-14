@@ -172,9 +172,9 @@ pub fn child_trie_root2<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> H:
 
 
 pub fn child_root_from_slice<H: Hasher>(root_vec: &[u8]) -> H::Out {
-  let mut root = H::Out::default();
+	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(&root_vec); // root is fetched from DB, not writable by runtime, so it's always valid.
-  root
+	root
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
@@ -190,7 +190,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
 	let mut root = child_root_from_slice::<H>(&root_vec[..]);
-  {
+	{
 		let mut trie = TrieDBMut::<H>::from_existing(&mut *db, &mut root)?;
 
 		for (key, change) in delta {

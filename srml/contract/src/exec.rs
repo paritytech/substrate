@@ -225,7 +225,6 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
-	// TODO can we remove self_account
 	pub self_account: T::AccountId,
 	pub self_keyspace: KeySpace,
 	pub overlay: OverlayAccountDb<'a, T>,
