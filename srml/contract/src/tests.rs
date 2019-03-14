@@ -38,7 +38,7 @@ use crate::{
 	SubTrie,
 };
 use substrate_primitives::storage::well_known_keys;
-use parity_codec::KeyedVec;
+use parity_codec::{Encode, Decode, KeyedVec};
 
 mod contract {
 	// Re-export contents of the root. This basically

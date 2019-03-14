@@ -38,6 +38,22 @@ impl<'a> Input for IncrementalInput<'a> {
 	}
 }
 
+struct IncrementalChildInput<'a> {
+	storage_key: &'a [u8],
+	key: &'a [u8],
+	pos: usize,
+}
+
+impl<'a> Input for IncrementalChildInput<'a> {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let len = runtime_io::read_child_storage(self.storage_key, self.key, into, self.pos).unwrap_or(0);
+		let read = crate::rstd::cmp::min(len, into.len());
+		self.pos += read;
+		read
+	}
+}
+
+
  /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
@@ -566,12 +582,13 @@ pub mod unhashed {
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to 
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{runtime_io, Codec, Decode, Vec, IncrementalInput};
+	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Codec + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
 		runtime_io::read_child_storage(storage_key, key, &mut [0; 0][..], 0).map(|_| {
-			let mut input = IncrementalInput {
+			let mut input = IncrementalChildInput {
+				storage_key,
 				key,
 				pos: 0,
 			};
