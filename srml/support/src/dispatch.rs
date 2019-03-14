@@ -487,12 +487,10 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
-				{ $( $impl )* }
-				Ok(())
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
+			{ $( $impl )* }
+			Ok(())
 		}
 	};
 
@@ -505,11 +503,9 @@ macro_rules! decl_module {
 			root $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name($( $param: $param_ty ),* ) -> $result {
-				$( $impl )*
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name($( $param: $param_ty ),* ) -> $result {
+			$( $impl )*
 		}
 	};
 
@@ -522,14 +518,12 @@ macro_rules! decl_module {
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name(
-				$origin: $origin_ty $(, $param: $param_ty )*
-			) -> $crate::dispatch::Result {
-				{ $( $impl )* }
-				Ok(())
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name(
+			$origin: $origin_ty $(, $param: $param_ty )*
+		) -> $crate::dispatch::Result {
+			{ $( $impl )* }
+			Ok(())
 		}
 	};
 
@@ -542,11 +536,9 @@ macro_rules! decl_module {
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-				$( $impl )*
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
+			$( $impl )*
 		}
 	};
 
@@ -601,18 +593,23 @@ macro_rules! decl_module {
 			$( $deposit_event )*
 		}
 
-		$(
-			decl_module! {
-				@impl_function
-				$mod_type<$trait_instance: $trait_name>;
-				$origin_type;
-				$from;
-				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name (
-					$from $(, $param_name : $param )*
-				) $( -> $result )* { $( $impl )* }
-			}
-		)*
+		/// Can also be called using [`Call`].
+		///
+		/// [`Call`]: enum.Call.html
+		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
+			$(
+				decl_module! {
+					@impl_function
+					$mod_type<$trait_instance: $trait_name>;
+					$origin_type;
+					$from;
+					$(#[doc = $doc_attr])*
+					$fn_vis fn $fn_name (
+						$from $(, $param_name : $param )*
+					) $( -> $result )* { $( $impl )* }
+				}
+			)*
+		}
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
