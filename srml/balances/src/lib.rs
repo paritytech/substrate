@@ -84,20 +84,21 @@
 //!
 //! ### Real Use Example
 //!
-//! Use the `free_balance` function (from the `Currency` trait) in the `staking` module:
+//! Use in the `contract` module (gas.rs):
 //!
 //! ```rust,ignore
-//! fn bond_extra(origin, max_additional: BalanceOf<T>) {
-//! 	let controller = ensure_signed(origin)?;
-//! 	let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
-//! 	let stash_balance = T::Currency::free_balance(&ledger.stash);
+//! pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
+//! 	// Increase total spent gas.
+//! 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
+//! 	// also has T::Gas type.
+//! 	let gas_spent = <Module<T>>::gas_spent() + gas_meter.spent();
+//! 	<GasSpent<T>>::put(gas_spent);
 //!
-//! 	if stash_balance > ledger.total {
-//! 		let extra = (stash_balance - ledger.total).min(max_additional);
-//! 		ledger.total += extra;
-//! 		ledger.active += extra;
-//! 		Self::update_ledger(&controller, ledger);
-//! 	}
+//! 	// Refund gas left by the price it was bought.
+//! 	let b = <balances::Module<T>>::free_balance(transactor);
+//! 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
+//! 	<balances::Module<T>>::set_free_balance(transactor, b + refund);
+//! 	<balances::Module<T>>::increase_total_stake_by(refund);
 //! }
 //! ```
 //!
