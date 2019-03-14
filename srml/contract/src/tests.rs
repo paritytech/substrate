@@ -37,6 +37,8 @@ use crate::{
 	Trait, ComputeDispatchFee, KeySpaceGenerator, KeySpace,
 	SubTrie,
 };
+use substrate_primitives::storage::well_known_keys;
+use parity_codec::KeyedVec;
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -237,17 +239,18 @@ fn account_removal_removes_storage() {
 			{
 				Balances::set_free_balance(&1, 110);
 				Balances::increase_total_stake_by(110);
-				let contract_id1 = parity_codec::Encode::encode(&1);
+				let contract_id1 = 1u64.to_keyed_vec(well_known_keys::CONTRACT_SUBTRIE);
 				unhashed::put(&contract_id1[..], &SubTrie{
 					key_space: unique_id1.to_vec(),
 					current_mem_stored: 0,
 				});
 				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
+				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
 				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
 
 				Balances::set_free_balance(&2, 110);
 				Balances::increase_total_stake_by(110);
-				let contract_id2 = parity_codec::Encode::encode(&2);
+				let contract_id2 = 2u64.to_keyed_vec(well_known_keys::CONTRACT_SUBTRIE);
 				unhashed::put(&contract_id2[..], &SubTrie{
 					key_space: unique_id2.to_vec(),
 					current_mem_stored: 0,

@@ -63,7 +63,7 @@ mod wasm;
 mod tests;
 
 use crate::exec::ExecutionContext;
-use crate::account_db::AccountDb;
+use crate::account_db::{AccountDb, DirectAccountDb};
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
@@ -72,7 +72,7 @@ use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
+use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
@@ -259,7 +259,7 @@ decl_module! {
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -312,7 +312,7 @@ decl_module! {
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -419,7 +419,10 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who);
+    let o_subtrie = <DirectAccountDb as AccountDb<T>>::get_subtrie(&DirectAccountDb, who);
+    o_subtrie.map(|subtrie| {
+		  child::kill_storage(&subtrie.key_space);
+    });
 	}
 }
 

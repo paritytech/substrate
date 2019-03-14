@@ -93,7 +93,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie> {
 		use parity_codec::KeyedVec;
 		// warn slow to_keyed_vec
-		let keyed_account = account.to_keyed_vec(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
+		let keyed_account = account.to_keyed_vec(well_known_keys::CONTRACT_SUBTRIE);
 		let res: Option<SubTrie> = unhashed::get(&keyed_account[..]);
 		res
 	}

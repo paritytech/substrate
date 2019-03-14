@@ -634,6 +634,11 @@ pub mod child {
 		runtime_io::read_child_storage(storage_key, key, &mut [0;0][..], 0).is_some()
 	}
 
+	/// Remove all `storage_key` key/values 
+	pub fn kill_storage(storage_key: &[u8]) {
+		runtime_io::kill_child_storage(storage_key)
+	}
+
 	/// Ensure `key` has no explicit entry in storage.
 	pub fn kill(storage_key: &[u8], key: &[u8]) {
 		runtime_io::clear_child_storage(storage_key, key);
