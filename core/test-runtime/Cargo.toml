@@ -24,6 +24,7 @@ cfg-if = "0.1.6"
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
+substrate-test-client = { path = "../test-client" }
 
 [features]
 default = ["std"]
