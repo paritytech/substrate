@@ -324,7 +324,7 @@ impl<B: BlockT> BlockImporter<B> {
 
 					if aux.bad_justification {
 						if let Some(peer) = who {
-							link.useless_peer(peer, "Sent block with bad justification to import");						
+							link.useless_peer(peer, "Sent block with bad justification to import");
 						}
 					}
 				},

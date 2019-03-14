@@ -458,10 +458,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		match justification {
 			Some(justification) => {
-				if self.import_justification(hash, number, justification, needs_justification).is_err() {
+				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
+					debug!(target: "finality", "Imported block #{} that enacts authority set change with \
+						invalid justification: {:?}, requesting justification from peers.", number, err);
 					imported_aux.bad_justification = true;
 					imported_aux.needs_justification = true;
-				};
+				});
 			},
 			None => {
 				if needs_justification {
