@@ -25,7 +25,7 @@
 //! The system module defines the core data types used in Substrate runtime. 
 //! It also provides several utility functions ([`Module`]) for other modules.
 //! 
-//! In addition, it manages the storage items for extricsics data, indexes, event record and digest items, among other things, 
+//! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, among other things, 
 //! which support the execution of the current block.
 //! 
 //! It also handles lowest level stuff like depositing logs, basic set up and take down of
