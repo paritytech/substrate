@@ -219,7 +219,7 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 	/// The type of fee amount.
 	type Amount;
 
-	/// Charge `amount` of fees from `transactor`. Return Ok if the payment was successful.
+	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
 	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
 	/// Refund `amount` of previous charged fees from `transactor`. Return Ok if the refund was successful.

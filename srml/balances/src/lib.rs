@@ -368,7 +368,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Returns `Ok` if the account is able to make a withdrawal of the given amount
+	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
 	/// for the given reason.
 	/// 
 	/// `Err(...)` with the reason why not otherwise.
