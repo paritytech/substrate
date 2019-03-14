@@ -728,7 +728,7 @@ macro_rules! decl_module {
 							)
 						},
 					)*
-					$call_type::__PhantomItem(_, _) => { panic!("__PhantomItem should never be used.") },
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
 		}
