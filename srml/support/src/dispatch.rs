@@ -702,7 +702,11 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Encode for $call_type<$trait_instance $(, $instance)?> {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
 				$crate::__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
-				if let $call_type::__PhantomItem(_) = *self { unreachable!() }
+
+				#[allow(irrefutable_let_patterns)] // In case of Module with no dispatchables
+				{
+					if let $call_type::__PhantomItem(_) = *self { unreachable!() }
+				}
 			}
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Dispatchable
