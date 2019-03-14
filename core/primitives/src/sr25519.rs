@@ -507,7 +507,6 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::Pair as _Pair;
 	use hex_literal::{hex, hex_impl};
 	
 	#[test]
