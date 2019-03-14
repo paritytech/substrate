@@ -11,6 +11,7 @@ parity-codec = { version = "3.1", default-features = false, features = ["derive"
 runtime_io = { package = "sr-io", path = "../../../core/sr-io", default-features = false }
 srml-support = { path = "../", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../core/inherents", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../core/primitives", default-features = false }
 
 [features]
 default = ["std"]
@@ -20,4 +21,5 @@ std = [
 	"runtime_io/std",
 	"srml-support/std",
 	"inherents/std",
+	"primitives/std",
 ]

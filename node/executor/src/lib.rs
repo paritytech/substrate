@@ -31,15 +31,13 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::ed25519::Keyring;
+	use keyring::{AccountKeyring, AuthorityKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
-	use primitives::{
-		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue,
-		NativeOrEncoded
-	};
+	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
+		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
@@ -55,27 +53,27 @@ mod tests {
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	fn alice() -> AccountId {
-		AccountId::from(Keyring::Alice.to_raw_public())
+		AccountKeyring::Alice.into()
 	}
 
 	fn bob() -> AccountId {
-		AccountId::from(Keyring::Bob.to_raw_public())
+		AccountKeyring::Bob.into()
 	}
 
 	fn charlie() -> AccountId {
-		AccountId::from(Keyring::Charlie.to_raw_public())
+		AccountKeyring::Charlie.into()
 	}
 
 	fn dave() -> AccountId {
-		AccountId::from(Keyring::Dave.to_raw_public())
+		AccountKeyring::Dave.into()
 	}
 
 	fn eve() -> AccountId {
-		AccountId::from(Keyring::Eve.to_raw_public())
+		AccountKeyring::Eve.into()
 	}
 
 	fn ferdie() -> AccountId {
-		AccountId::from(Keyring::Ferdie.to_raw_public())
+		AccountKeyring::Ferdie.into()
 	}
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
@@ -83,12 +81,12 @@ mod tests {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
-				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
+				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
-						pair.sign(&runtime_io::blake2_256(b))
+						key.sign(&runtime_io::blake2_256(b))
 					} else {
-						pair.sign(b)
+						key.sign(b)
 					}
 				}).into();
 				UncheckedExtrinsic {
@@ -259,7 +257,7 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let three = [3u8; 32].into();
+		let three = AccountId::from_raw([3u8; 32]);
 		TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(SystemConfig {
@@ -288,11 +286,11 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three],
+				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
-					(alice(), keyring::ed25519::Keyring::Alice.to_raw_public().into()),
-					(bob(), keyring::ed25519::Keyring::Bob.to_raw_public().into()),
-					(charlie(), keyring::ed25519::Keyring::Charlie.to_raw_public().into())
+					(alice(), AuthorityKeyring::Alice.into()),
+					(bob(), AuthorityKeyring::Bob.into()),
+					(charlie(), AuthorityKeyring::Charlie.into())
 				]
 			}),
 			staking: Some(StakingConfig {
@@ -317,11 +315,7 @@ mod tests {
 			contract: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
-				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
-				],
+				authorities: vec![],
 			}),
 			fees: Some(FeesConfig {
 				transaction_base_fee: 1,
@@ -447,12 +441,7 @@ mod tests {
 			]
 		);
 
-		let mut digest = generic::Digest::<Log>::default();
-		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(Keyring::Alice.to_raw_public().into(), 1),
-			(Keyring::Bob.to_raw_public().into(), 1),
-			(Keyring::Charlie.to_raw_public().into(), 1),
-		])));
+		let digest = generic::Digest::<Log>::default();
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
 		(block1, block2)
@@ -584,18 +573,6 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))
-				},
-				// EventRecord {
-				// 	phase: Phase::Finalization,
-				// 	event: Event::staking(staking::RawEvent::Reward(0))
-				// },
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(Keyring::Alice.to_raw_public().into(), 1),
-						(Keyring::Bob.to_raw_public().into(), 1),
-						(Keyring::Charlie.to_raw_public().into(), 1),
-					])),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
@@ -767,7 +744,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 2)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(indices::address::Address::Id(addr), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(indices::address::Address::Id(addr.clone()), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]

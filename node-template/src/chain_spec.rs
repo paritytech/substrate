@@ -1,9 +1,12 @@
-use primitives::{Ed25519AuthorityId, ed25519};
+use primitives::{ed25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, FeesConfig,
 };
+use substrate_cli::DEV_PHRASE;
 use substrate_service;
+
+use ed25519::Public as AuthorityId;
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -22,6 +25,18 @@ pub enum Alternative {
 	LocalTestnet,
 }
 
+fn authority_key(s: &str) -> AuthorityId {
+	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+fn account_key(s: &str) -> AccountId {
+	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
 impl Alternative {
 	/// Get an actual chain config from one of the alternatives.
 	pub(crate) fn load(self) -> Result<ChainSpec, String> {
@@ -30,11 +45,11 @@ impl Alternative {
 				"Development",
 				"dev",
 				|| testnet_genesis(vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+					authority_key("Alice")
 				], vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
+					account_key("Alice")
 				],
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+					account_key("Alice")
 				),
 				vec![],
 				None,
@@ -46,17 +61,17 @@ impl Alternative {
 				"Local Testnet",
 				"local_testnet",
 				|| testnet_genesis(vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-					ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+					authority_key("Alice"),
+					authority_key("Bob"),
 				], vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
-					ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
-					ed25519::Pair::from_seed(b"Charlie                         ").public().0.into(),
-					ed25519::Pair::from_seed(b"Dave                            ").public().0.into(),
-					ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
-					ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
+					account_key("Alice"),
+					account_key("Bob"),
+					account_key("Charlie"),
+					account_key("Dave"),
+					account_key("Eve"),
+					account_key("Ferdie"),
 				],
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+					account_key("Alice"),
 				),
 				vec![],
 				None,
@@ -76,7 +91,7 @@ impl Alternative {
 	}
 }
 
-fn testnet_genesis(initial_authorities: Vec<Ed25519AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
+fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/node_template_runtime_wasm.compact.wasm").to_vec(),
@@ -93,7 +108,7 @@ fn testnet_genesis(initial_authorities: Vec<Ed25519AuthorityId>, endowed_account
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			balances: endowed_accounts.iter().map(|&k|(k, (1 << 60))).collect(),
+			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 			vesting: vec![],
 		}),
 		sudo: Some(SudoConfig {

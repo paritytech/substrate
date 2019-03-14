@@ -16,7 +16,7 @@
 
 //! Substrate chain configurations.
 
-use primitives::{Ed25519AuthorityId as AuthorityId, ed25519};
+use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
@@ -24,9 +24,8 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::{hex, hex_impl};
-
-use substrate_keystore::pad_seed;
 use substrate_telemetry::TelemetryEndpoints;
+use cli::DEV_PHRASE;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -40,25 +39,30 @@ pub fn dried_danta_config() -> Result<ChainSpec, String> {
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
 	// stash, controller, session-key
+	// generated with secret:
+	// for i in 1 2 3 4 ; do for j in stash controller; do subkey -p danta-$i-$j restore $secret; done; done
+	// and
+	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 -p danta-$i-$j restore $secret; done; done
 	let initial_authorities: Vec<(AccountId, AccountId, AuthorityId)> = vec![(
-		hex!["fbecf7767fc63a6f9fa8094bbc5751d7269cd8e619cfdd9edfbe1fbc716b173e"].into(),	// 5Hm2GcbuUct7sWX8d56zRktxr9D9Lw5hTFjSUhUoVHwFNmYW TODO: change once we switch to sr25519
-		hex!["6ed35e632190b9c795f019030e6c5cff1508655db28c83577e0a4366c9bd5773"].into(),	// 5Ea1uyGz6H5WHZhWvPDxxLXWyiUkzWDwx54Hcn8LJ5dbFawH TODO: change once we switch to sr25519
-		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
+		hex!["d807f8bd6b4b02b3db716dd5372960b094ed0e62b5704a07bc990130a642992b"].unchecked_into(), // 5GwxZv7LxSUQn89TLUaLi3oEWhFcabqW3nHcEg2J88gZNhrb
+		hex!["1a934af462454e512e22b5d9455c0c3c2df479b1c61406b3d990f6bc2eb25e09"].unchecked_into(), // 5CfYrg5cW8UebBdfJpJbKFhZLyk7yHWXUgdxZnSGb2dWKgpt
+		hex!["831fcce3a9565baf093b52568a8cb9875cb54974d80da8fc4f0cc767128a23e9"].unchecked_into(), // 5F2daQPHK7yv4Yuwyz3cggvvn1R5u1ofGMQ5LK5XvnfebMcX
 	),(
-		hex!["30b76ef977b84a575992ef52f561db315221123c68074269d3d51ce211c4a3dc"].into(),	// 5DAaeTwVuyUmTyLBR5vKEDWeDJ75nhLutDuCJH58it7EHDM2 TODO: change once we switch to sr25519
-		hex!["a270edf24cb2a472b0e913fc43bfd4da0ef337cc715eaf94073d5198f7659f0c"].into(),	// 5FjhAKgzpuzt1dYWE7H7Jb1sEHSuG5hcyZdPtfX829gmFVXh TODO: change once we switch to sr25519
-		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
+		hex!["12652f26e427c56268095bb0ec5824471e37722b073a9fa5de61c61c1de94656"].unchecked_into(), // 5CUpn2JmpsWkHQjZgWjN3rqPEUnjjUQZYcMk14nbUgR2Gpab
+		hex!["5279e73e22971d729276ebad4eb6804d1b9c0c35bd32e8aba4513c674760a461"].unchecked_into(), // 5Dvqzke7Mdp3fP6Ysut7UXPSepPr3Qguys6LNkZGPSwXwAkR
+		hex!["dbe61640d854bb7bf83cbfaf638a8a4c76c49a919ec3bbdd86799061fc1903e4"].unchecked_into(), // 5H32hCtKf6nXSckviVhUvWb7N14wDCRunRkCM29mxEXwjcUZ
 	),(
-		hex!["7b9e79c1bfc71ad0c4389565c01e79269dc512cb9bd856489671662481355417"].into(),	// 5ErnpkRUbmM3WdbQwnVwfZeYs3iKmggEQceyB9db9ft18dSn TODO: change once we switch to sr25519
-		hex!["9ffec660c4d328306cf5e38faf4b132fb5c9f38287af95d9b25629fc29de3945"].into(),	// 5FgV9vxNpdCXMUmHCLQcsN4mUUUG6ZpFuvAMrm5X4BUnFhie TODO: change once we switch to sr25519
-		hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
+		hex!["a81d738fdeeaed440cfce5635e0820d0d23e89207cf66a62b8c0d2a968e37d32"].unchecked_into(), // 5Fs8ehAjDEnenDwULCPnEr3HVXgepAVfyk9ABW84NfxCYtWD
+		hex!["443a2c779a5f5dada8ee6921efec9673f67e5ce1bd6012899ff6c1adc437696c"].unchecked_into(), // 5DcAPqR269myKXhZmwbU1x2xLbuTojr85jHNRuDhrFdZ3vwi
+		hex!["5bc01f56225e8602372fb343dba65a73e20c55bdbb3b8343a8f34df298a616fb"].unchecked_into(), // 5E91HbY2xo2qDJzi3KY8nRXjDNAQE9WtmMaji6YRwT8DAuK1
 	),(
-		hex!["7e58b096b95c4b3b271f27fedd9f2c51edd48b9d37046240e601180c9dcc8c27"].into(),	// 5EvNEhYYd4b9giczuCo2o8bfLZoKW9jnTeUukfL1NWsAAeEx TODO: change once we switch to sr25519
-		hex!["36dfc933bb0848d8addf16a961369b2e122633a5819a19e43c8142381a1280e3"].into(),	// 5DJevPKpz4EEvmSpK7W6KemS3i5JYPq5FEuEewgRY2cZCxNg TODO: change once we switch to sr25519
-		hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
+		hex!["e269e835e0bc07c497d55bc17c7bb29c85c5615f9e61582ffdeca7e5f5c66578"].unchecked_into(), // 5HBa95U5HDFCV1N5Xyrjti65F71tHRQcPbZBmkxRJ39SpqzM
+		hex!["3e9829e6fd4fc7501b504fc16f12177c6c7f38aeb3b8344efb9b15ee85118b2c"].unchecked_into(), // 5DUn2afs2QevZ6PrGu8snrt76157oacH6JXUD8JNM18VKMwK
+		hex!["0fd673ee5e95ed124bcd71463ff924c810573dad91527ab9d2b5af36f66ff84b"].unchecked_into(), // 5CRUHGLA1JYe2v4p479VCHybqjB9uBXjGkJ2npdduVdrTuUM
 	)];
+	// generated with secret: subkey -p danta-root restore $secret
 	let endowed_accounts: Vec<AccountId> = vec![
-		hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),	// 5HYmsxGRAmZMjyZYmf7uGPL2YDQGHEt6NjGrfUuxNEgeGBRN TODO: change once we switch to sr25519
+		hex!["343df6f04ffae0840f214f6cb0da00b612c7e9347f980e7afafc520582f79136"].unchecked_into(), // 5DFCkiP9vky31C1ZP3LpuQYinLAFwQqq6vda7NXa8ALCpq5D
 	];
 	const MILLICENTS: u128 = 1_000_000_000;
 	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.
@@ -79,8 +83,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
-			balances: endowed_accounts.iter()
-				.map(|&k| (k, ENDOWMENT))
+			balances: endowed_accounts.iter().cloned()
+				.map(|k| (k, ENDOWMENT))
 				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
 				.collect(),
 			existential_deposit: 1 * DOLLARS,
@@ -94,7 +98,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			session_length: 5 * MINUTES,
 			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
 		}),
@@ -109,8 +113,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
-			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH)).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 10 * MINUTES,    // 1 day per public referendum
@@ -182,23 +186,26 @@ pub fn staging_testnet_config() -> ChainSpec {
 	)
 }
 
-/// Helper function to generate AuthorityID from seed
+/// Helper function to generate AccountId from seed
 pub fn get_account_id_from_seed(seed: &str) -> AccountId {
-	let padded_seed = pad_seed(seed);
-	// NOTE from ed25519 impl:
-	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
-	ed25519::Pair::from_seed(&padded_seed).public().0.into()
+	sr25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+/// Helper function to generate AuthorityId from seed
+pub fn get_session_key_from_seed(seed: &str) -> AuthorityId {
+	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, seed), None)
+		.expect("static values are valid; qed")
+		.public()
 }
 
 /// Helper function to generate stash, controller and session key from seed
 pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuthorityId) {
-	let padded_seed = pad_seed(seed);
-	// NOTE from ed25519 impl:
-	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
 	(
-		get_account_id_from_seed(&format!("{}-stash", seed)),
+		get_account_id_from_seed(&format!("{}//stash", seed)),
 		get_account_id_from_seed(seed),
-		ed25519::Pair::from_seed(&padded_seed).public().0.into()
+		get_session_key_from_seed(seed)
 	)
 }
 
@@ -216,6 +223,12 @@ pub fn testnet_genesis(
 			get_account_id_from_seed("Dave"),
 			get_account_id_from_seed("Eve"),
 			get_account_id_from_seed("Ferdie"),
+			get_account_id_from_seed("Alice//stash"),
+			get_account_id_from_seed("Bob//stash"),
+			get_account_id_from_seed("Charlie//stash"),
+			get_account_id_from_seed("Dave//stash"),
+			get_account_id_from_seed("Eve//stash"),
+			get_account_id_from_seed("Ferdie//stash"),
 		]
 	});
 
@@ -235,11 +248,11 @@ pub fn testnet_genesis(
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			balances: endowed_accounts.iter().map(|&k| (k.into(), ENDOWMENT)).collect(),
+			balances: endowed_accounts.iter().map(|k| (k.clone(), ENDOWMENT)).collect(),
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			session_length: 10,
 			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
 		}),
@@ -254,8 +267,8 @@ pub fn testnet_genesis(
 			current_offline_slash: 0,
 			current_session_reward: 0,
 			offline_slash_grace: 0,
-			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH)).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,
@@ -267,7 +280,7 @@ pub fn testnet_genesis(
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, _)| controller == endowed).is_none())
-				.map(|a| (a.clone().into(), 1000000)).collect(),
+				.map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
 			present_slash_per_voter: 1,
@@ -275,7 +288,7 @@ pub fn testnet_genesis(
 			presentation_duration: 10,
 			approval_voting_period: 20,
 			term_duration: 1000000,
-			desired_seats: (endowed_accounts.len() - initial_authorities.len()) as u32,
+			desired_seats: (endowed_accounts.len() / 2 - initial_authorities.len()) as u32,
 			inactive_grace_period: 1,
 		}),
 		council_voting: Some(CouncilVotingConfig {
@@ -319,8 +332,8 @@ fn development_config_genesis() -> GenesisConfig {
 		vec![
 			get_authority_keys_from_seed("Alice"),
 		],
-		get_account_id_from_seed("Alice").into(),
-		Some(vec![get_authority_keys_from_seed("Alice").0]),
+		get_account_id_from_seed("Alice"),
+		None,
 	)
 }
 
@@ -335,11 +348,8 @@ fn local_testnet_genesis() -> GenesisConfig {
 			get_authority_keys_from_seed("Alice"),
 			get_authority_keys_from_seed("Bob"),
 		],
-		get_account_id_from_seed("Alice").into(),
-		Some(vec![
-			get_authority_keys_from_seed("Alice").0,
-			get_authority_keys_from_seed("Bob").0,
-		]),
+		get_account_id_from_seed("Alice"),
+		None,
 	)
 }
 

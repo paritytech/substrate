@@ -22,14 +22,14 @@ use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::rstd::prelude::*;
 use srml_support::rstd as rstd;
 use srml_support::codec::{Encode, Decode};
-use srml_support::runtime_primitives::{generic, Ed25519Signature, testing::H256, BuildStorage};
+use srml_support::runtime_primitives::{generic, BuildStorage};
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify, Digest};
 use srml_support::{Parameter, construct_runtime, decl_module, decl_storage, decl_event};
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
 use srml_support::{StorageValue, StorageMap};
-
+use primitives::{H256, sr25519};
 
 pub trait Currency {
 }
@@ -42,6 +42,7 @@ mod system {
 		type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 		type BlockNumber;
 		type Digest: Digest<Hash = H256>;
+		type Hash;
 		type AccountId;
 		type Event: From<Event>;
 		type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
@@ -89,7 +90,7 @@ mod system {
 	pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
 
 	pub type Log<T> = RawLog<
-		<T as Trait>::AccountId,
+		<T as Trait>::Hash,
 	>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
@@ -319,12 +320,13 @@ impl module3::Trait for Runtime {
 	type Currency2 = Module2_3;
 }
 
-pub type Signature = Ed25519Signature;
+pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Trait for Runtime {
+	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type Digest = generic::Digest<Log>;
@@ -334,7 +336,7 @@ impl system::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<H256, ()>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
