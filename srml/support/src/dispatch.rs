@@ -593,8 +593,6 @@ macro_rules! decl_module {
 			$( $deposit_event )*
 		}
 
-		/// Public dispatchable functions.
-		///
 		/// Can also be called using [`Call`].
 		///
 		/// [`Call`]: enum.Call.html
