@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ use crate::utils::{
 	return_type_extract_type
 };
 
-use proc_macro;
 use proc_macro2::{Span, TokenStream};
 
 use quote::quote;

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -558,12 +558,7 @@ mod tests {
 	use super::*;
 	use parity_codec::Encode;
 	use consensus_common::BlockOrigin;
-	use substrate_test_client::{
-		self,
-		TestClient,
-		keyring::Keyring,
-		runtime::{Extrinsic, Transfer},
-	};
+	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::{Extrinsic, Transfer}};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
@@ -573,10 +568,10 @@ mod tests {
 			let transfer = Transfer {
 				amount: 5,
 				nonce: 0,
-				from: Keyring::Alice.to_raw_public().into(),
+				from: AccountKeyring::Alice.into(),
 				to: Default::default(),
 			};
-			let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
+			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
 			Extrinsic::Transfer(transfer, signature)
 		};
 		// store the transaction in the pool

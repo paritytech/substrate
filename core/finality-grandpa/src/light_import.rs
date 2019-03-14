@@ -37,7 +37,7 @@ use runtime_primitives::traits::{
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher, ed25519::Public as AuthorityId};
 
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
@@ -94,7 +94,7 @@ struct LightImportData<Block: BlockT<Hash=H256>> {
 #[derive(Debug, Encode, Decode)]
 struct LightAuthoritySet {
 	set_id: u64,
-	authorities: Vec<(Ed25519AuthorityId, u64)>,
+	authorities: Vec<(AuthorityId, u64)>,
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaLightBlockImport<B, E, Block, RA> {
@@ -110,7 +110,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 {
 	type Error = ConsensusError;
@@ -118,7 +118,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	fn import_block(
 		&self,
 		block: ImportBlock<Block>,
-		new_authorities: Option<Vec<Ed25519AuthorityId>>,
+		new_authorities: Option<Vec<AuthorityId>>,
 	) -> Result<ImportResult, Self::Error> {
 		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(&*self.client, &mut *self.data.write(), block, new_authorities)
 	}
@@ -138,7 +138,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 {
 	type Error = ConsensusError;
@@ -179,7 +179,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 
 impl LightAuthoritySet {
 	/// Get a genesis set with given authorities.
-	pub fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
+	pub fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
 		LightAuthoritySet {
 			set_id: 0,
 			authorities: initial,
@@ -192,12 +192,12 @@ impl LightAuthoritySet {
 	}
 
 	/// Get latest authorities set.
-	pub fn authorities(&self) -> Vec<(Ed25519AuthorityId, u64)> {
+	pub fn authorities(&self) -> Vec<(AuthorityId, u64)> {
 		self.authorities.clone()
 	}
 
 	/// Set new authorities set.
-	pub fn update(&mut self, set_id: u64, authorities: Vec<(Ed25519AuthorityId, u64)>) {
+	pub fn update(&mut self, set_id: u64, authorities: Vec<(AuthorityId, u64)>) {
 		self.set_id = set_id;
 		std::mem::replace(&mut self.authorities, authorities);
 	}
@@ -220,7 +220,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	client: &Client<B, E, Block, RA>,
 	data: &mut LightImportData<Block>,
 	mut block: ImportBlock<Block>,
-	new_authorities: Option<Vec<Ed25519AuthorityId>>,
+	new_authorities: Option<Vec<AuthorityId>>,
 ) -> Result<ImportResult, ConsensusError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -228,7 +228,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		RA: Send + Sync,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		J: ProvableJustification<Block::Header>,
 {
 	let hash = block.post_header().hash();
@@ -287,7 +287,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		J: ProvableJustification<Block::Header>,
 {
@@ -528,13 +528,13 @@ mod tests {
 	use crate::finality_proof::tests::TestJustification;
 
 	fn import_block(
-		new_authorities: Option<Vec<Ed25519AuthorityId>>,
+		new_authorities: Option<Vec<AuthorityId>>,
 		justification: Option<Justification>,
 	) -> ImportResult {
 		let client = test_client::new_light();
 		let mut import_data = LightImportData {
 			last_finalized: Default::default(),
-			authority_set: LightAuthoritySet::genesis(vec![(Ed25519AuthorityId([1; 32]), 1)]),
+			authority_set: LightAuthoritySet::genesis(vec![(AuthorityId([1; 32]), 1)]),
 			consensus_changes: ConsensusChanges::empty(),
 		};
 		let block = ImportBlock {
@@ -566,6 +566,7 @@ mod tests {
 		assert_eq!(import_block(None, None), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
+			bad_justification: false,
 			needs_finality_proof: false,
 		}));
 	}
@@ -576,15 +577,17 @@ mod tests {
 		assert_eq!(import_block(None, Some(justification)), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
+			bad_justification: false,
 			needs_finality_proof: false,
 		}));
 	}
 
 	#[test]
 	fn finality_proof_required_when_consensus_data_changes_and_no_justification_provided() {
-		assert_eq!(import_block(Some(vec![Ed25519AuthorityId([2; 32])]), None), ImportResult::Imported(ImportedAux {
+		assert_eq!(import_block(Some(vec![AuthorityId([2; 32])]), None), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
+			bad_justification: false,
 			needs_finality_proof: true,
 		}));
 	}
@@ -593,10 +596,11 @@ mod tests {
 	fn finality_proof_required_when_consensus_data_changes_and_incorrect_justification_provided() {
 		let justification = TestJustification(false, Vec::new()).encode();
 		assert_eq!(
-			import_block(Some(vec![Ed25519AuthorityId([2; 32])]), Some(justification)),
+			import_block(Some(vec![AuthorityId([2; 32])]), Some(justification)),
 			ImportResult::Imported(ImportedAux {
 				clear_justification_requests: false,
 				needs_justification: false,
+				bad_justification: false,
 				needs_finality_proof: true,
 			},
 		));
@@ -606,7 +610,7 @@ mod tests {
 	#[test]
 	fn aux_data_updated_on_start() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = Arc::new(TestApi::new(vec![(Ed25519AuthorityId([1; 32]), 1)]));
+		let api = Arc::new(TestApi::new(vec![(AuthorityId([1; 32]), 1)]));
 
 		// when aux store is empty initially
 		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_none());
@@ -621,7 +625,7 @@ mod tests {
 	#[test]
 	fn aux_data_loaded_on_restart() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = Arc::new(TestApi::new(vec![(Ed25519AuthorityId([1; 32]), 1)]));
+		let api = Arc::new(TestApi::new(vec![(AuthorityId([1; 32]), 1)]));
 
 		// when aux store is non-empty initially
 		let mut consensus_changes = ConsensusChanges::<H256, u64>::empty();
@@ -630,7 +634,7 @@ mod tests {
 			&[
 				(
 					LIGHT_AUTHORITY_SET_KEY,
-					LightAuthoritySet::genesis(vec![(Ed25519AuthorityId([42; 32]), 2)]).encode().as_slice(),
+					LightAuthoritySet::genesis(vec![(AuthorityId([42; 32]), 2)]).encode().as_slice(),
 				),
 				(
 					LIGHT_CONSENSUS_CHANGES_KEY,
@@ -642,7 +646,7 @@ mod tests {
 
 		// importer uses it on start
 		let data = load_aux_import_data(Default::default(), &aux_store, api).unwrap();
-		assert_eq!(data.authority_set.authorities(), vec![(Ed25519AuthorityId([42; 32]), 2)]);
+		assert_eq!(data.authority_set.authorities(), vec![(AuthorityId([42; 32]), 2)]);
 		assert_eq!(data.consensus_changes.pending_changes(), &[(42, Default::default())]);
 	}
 }

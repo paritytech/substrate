@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -193,5 +193,6 @@ fn dispatch_forced_change() {
 			Grandpa::on_finalise(11);
 			header = System::finalise();
 		}
+		let _ = header;
 	});
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
-use keyring::Keyring;
+use keyring::AuthorityKeyring;
 use client::{
 	error::Result,
 	runtime_api::{Core, RuntimeVersion, ApiExt},
@@ -262,13 +262,13 @@ impl Network<Block> for MessageRouting {
 
 #[derive(Default, Clone)]
 pub(crate) struct TestApi {
-	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	genesis_authorities: Vec<(AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 	forced_changes: Arc<Mutex<HashMap<Hash, (BlockNumber, ScheduledChange<BlockNumber>)>>>,
 }
 
 impl TestApi {
-	pub fn new(genesis_authorities: Vec<(Ed25519AuthorityId, u64)>) -> Self {
+	pub fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
@@ -306,7 +306,7 @@ impl Core<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<Ed25519AuthorityId>>> {
+	) -> Result<NativeOrEncoded<Vec<AuthorityId>>> {
 		unimplemented!("Not required for testing!")
 	}
 
@@ -351,7 +351,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
+	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
 		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 
@@ -392,7 +392,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 }
 
 impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, block: &BlockId<Block>) -> Result<Vec<(Ed25519AuthorityId, u64)>> {
+	fn authorities(&self, block: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>> {
 		let runtime_api = RuntimeApi { inner: self.clone() };
 		runtime_api.grandpa_authorities_runtime_api_impl(block, ExecutionContext::Syncing, None, Vec::new())
 			.map(|v| match v {
@@ -412,7 +412,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		_hash: <Block as BlockT>::Hash,
 		_header: <Block as BlockT>::Header,
 		proof: Vec<Vec<u8>>,
-	) -> Result<Vec<(Ed25519AuthorityId, u64)>> {
+	) -> Result<Vec<(AuthorityId, u64)>> {
 		Decode::decode(&mut &proof[0][..])
 			.ok_or_else(|| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
 	}
@@ -421,9 +421,9 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
-fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
+fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
-		.map(|key| Ed25519AuthorityId(key.to_raw_public()))
+		.map(|key| AuthorityId(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }
@@ -433,7 +433,7 @@ fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
 fn run_to_completion_with<F: FnOnce()>(
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
-	peers: &[Keyring],
+	peers: &[AuthorityKeyring],
 	before_waiting: F,
 ) -> u64 {
 	use parking_lot::RwLock;
@@ -509,14 +509,14 @@ fn run_to_completion_with<F: FnOnce()>(
 	highest_finalized
 }
 
-fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) -> u64 {
+fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[AuthorityKeyring]) -> u64 {
 	run_to_completion_with(blocks, net, peers, || {})
 }
 
 #[test]
 fn finalize_3_voters_no_observers() {
 	let _ = env_logger::try_init();
-	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
@@ -538,7 +538,7 @@ fn finalize_3_voters_no_observers() {
 
 #[test]
 fn finalize_3_voters_1_observer() {
-	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
@@ -601,24 +601,24 @@ fn finalize_3_voters_1_observer() {
 fn transition_3_voters_twice_1_observer() {
 	let _ = env_logger::try_init();
 	let peers_a = &[
-		Keyring::Alice,
-		Keyring::Bob,
-		Keyring::Charlie,
+		AuthorityKeyring::Alice,
+		AuthorityKeyring::Bob,
+		AuthorityKeyring::Charlie,
 	];
 
 	let peers_b = &[
-		Keyring::Dave,
-		Keyring::Eve,
-		Keyring::Ferdie,
+		AuthorityKeyring::Dave,
+		AuthorityKeyring::Eve,
+		AuthorityKeyring::Ferdie,
 	];
 
 	let peers_c = &[
-		Keyring::Alice,
-		Keyring::Eve,
-		Keyring::Two,
+		AuthorityKeyring::Alice,
+		AuthorityKeyring::Eve,
+		AuthorityKeyring::Two,
 	];
 
-	let observer = &[Keyring::One];
+	let observer = &[AuthorityKeyring::One];
 
 	let genesis_voters = make_ids(peers_a);
 
@@ -768,11 +768,11 @@ fn transition_3_voters_twice_1_observer() {
 
 #[test]
 fn justification_is_emitted_when_consensus_data_changes() {
-	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
-	let new_authorities = vec![Ed25519AuthorityId::from([42; 32])];
+	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	net.sync();
 	let net = Arc::new(Mutex::new(net));
@@ -785,7 +785,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 
 #[test]
 fn justification_is_generated_periodically() {
-	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
@@ -823,8 +823,8 @@ fn consensus_changes_works() {
 
 #[test]
 fn sync_justifications_on_change_blocks() {
-	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
-	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
 	let voters = make_ids(peers_b);
 
 	// 4 peers, 3 of them are authorities and participate in grandpa
@@ -873,13 +873,13 @@ fn sync_justifications_on_change_blocks() {
 fn finalizes_multiple_pending_changes_in_order() {
 	let _ = env_logger::try_init();
 
-	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
-	let peers_b = &[Keyring::Dave, Keyring::Eve, Keyring::Ferdie];
-	let peers_c = &[Keyring::Dave, Keyring::Alice, Keyring::Bob];
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_b = &[AuthorityKeyring::Dave, AuthorityKeyring::Eve, AuthorityKeyring::Ferdie];
+	let peers_c = &[AuthorityKeyring::Dave, AuthorityKeyring::Alice, AuthorityKeyring::Bob];
 
 	let all_peers = &[
-		Keyring::Alice, Keyring::Bob, Keyring::Charlie,
-		Keyring::Dave, Keyring::Eve, Keyring::Ferdie,
+		AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie,
+		AuthorityKeyring::Dave, AuthorityKeyring::Eve, AuthorityKeyring::Ferdie,
 	];
 	let genesis_voters = make_ids(peers_a);
 
@@ -931,7 +931,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 #[test]
 fn doesnt_vote_on_the_tip_of_the_chain() {
-	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api, 3);
@@ -955,8 +955,8 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 #[test]
 fn force_change_to_new_set() {
 	// two of these guys are offline.
-	let genesis_authorities = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::One, Keyring::Two];
-	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let genesis_authorities = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie, AuthorityKeyring::One, AuthorityKeyring::Two];
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let api = TestApi::new(make_ids(genesis_authorities));
 
 	let voters = make_ids(peers_a);
@@ -1009,8 +1009,8 @@ fn force_change_to_new_set() {
 
 #[test]
 fn allows_reimporting_change_blocks() {
-	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
-	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
 	let net = GrandpaTestNet::new(api.clone(), 3);
@@ -1018,7 +1018,7 @@ fn allows_reimporting_change_blocks() {
 	let client = net.peer(0).client().clone();
 	let (block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().expect("only full clients are used in test");
+	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
@@ -1042,7 +1042,61 @@ fn allows_reimporting_change_blocks() {
 
 	assert_eq!(
 		block_import.import_block(block(), None).unwrap(),
-		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, ..Default::default() }),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: true,
+			clear_justification_requests: false,
+			bad_justification: false,
+			needs_finality_proof: false,
+		}),
+	);
+
+	assert_eq!(
+		block_import.import_block(block(), None).unwrap(),
+		ImportResult::AlreadyInChain
+	);
+}
+
+#[test]
+fn test_bad_justification() {
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let voters = make_ids(peers_a);
+	let api = TestApi::new(voters);
+	let net = GrandpaTestNet::new(api.clone(), 3);
+
+	let client = net.peer(0).client().clone();
+	let (block_import, ..) = net.make_block_import(client.clone());
+
+	let full_client = client.as_full().expect("only full clients are used in test");
+	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
+	let block = builder.bake().unwrap();
+	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
+		next_authorities: make_ids(peers_b),
+		delay: 0,
+	});
+
+	let block = || {
+		let block = block.clone();
+		ImportBlock {
+			origin: BlockOrigin::File,
+			header: block.header,
+			justification: Some(Vec::new()),
+			post_digests: Vec::new(),
+			body: Some(block.extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}
+	};
+
+	assert_eq!(
+		block_import.import_block(block(), None).unwrap(),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: true,
+			clear_justification_requests: false,
+			bad_justification: true,
+			..Default::default()
+		}),
 	);
 
 	assert_eq!(
@@ -1055,11 +1109,11 @@ fn allows_reimporting_change_blocks() {
 fn justification_is_fetched_by_light_client_when_consensus_data_changes() {
 	let _ = ::env_logger::try_init();
 
- 	let peers = &[Keyring::Alice];
+ 	let peers = &[AuthorityKeyring::Alice];
 	let net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
 
  	// import block#1 WITH consensus data change + ensure if is finalized (with justification)
-	let new_authorities = vec![Ed25519AuthorityId::from([42; 32])];
+	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(1, net.clone(), peers);

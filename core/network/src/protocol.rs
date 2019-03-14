@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -502,7 +502,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
 					msg,
-					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(

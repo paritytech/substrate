@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -71,6 +71,9 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
 		}
+	}
+	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
 

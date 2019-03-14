@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ use log::{info, warn, debug};
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
+use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
@@ -62,7 +63,7 @@ use components::{StartRPC, MaintainTransactionPool};
 #[doc(hidden)]
 pub use network::{FinalityProofProvider, OnDemand};
 
-const DEFAULT_PROTOCOL_ID: &'static str = "sup";
+const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {

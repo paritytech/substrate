@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -62,6 +62,9 @@ use futures::Future;
 use substrate_telemetry::TelemetryEndpoints;
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
+
+/// The root phrase for our development network keys.
+pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
@@ -387,7 +390,7 @@ where
 	}
 
 	if cli.shared_params.dev {
-		config.keys.push("Alice".into());
+		config.keys.push(format!("{}//Alice", DEV_PHRASE));
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };

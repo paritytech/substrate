@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -42,6 +42,8 @@ pub struct ImportedAux {
 	pub clear_justification_requests: bool,
 	/// Request a justification for the given block.
 	pub needs_justification: bool,
+	/// Received a bad justification.
+	pub bad_justification: bool,
 	/// Request a finality proof for the given block.
 	pub needs_finality_proof: bool,
 }
@@ -51,6 +53,7 @@ impl Default for ImportedAux {
 		ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
+			bad_justification: false,
 			needs_finality_proof: false,
 		}
 	}
