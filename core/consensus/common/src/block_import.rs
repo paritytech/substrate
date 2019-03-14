@@ -40,6 +40,8 @@ pub struct ImportedAux {
 	pub clear_justification_requests: bool,
 	/// Request a justification for the given block.
 	pub needs_justification: bool,
+	/// Received a bad justification.
+	pub bad_justification: bool,
 }
 
 impl Default for ImportedAux {
@@ -47,6 +49,7 @@ impl Default for ImportedAux {
 		ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
+			bad_justification: false,
 		}
 	}
 }
