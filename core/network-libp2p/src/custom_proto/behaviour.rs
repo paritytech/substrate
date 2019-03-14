@@ -240,6 +240,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer: &PeerId) {
+		if self.reserved_peers.contains(peer) {
+			warn!(target: "sub-libp2p", "Ignored attempt to disconnect reserved peer {:?}", peer);
+			return;
+		}
+
 		if self.enabled_peers.remove(peer) {
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer.clone(),
@@ -250,6 +255,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 
 	/// Disconnects the given peer if we are connected to it and disables it for a little while.
 	pub fn ban_peer(&mut self, peer_id: PeerId) {
+		if self.reserved_peers.contains(&peer_id) {
+			warn!(target: "sub-libp2p", "Ignored attempt to ban reserved peer {:?}", peer_id);
+			return;
+		}
+
 		// Peer is already banned
 		if let Some(pos) = self.banned_peers.iter().position(|(p, _)| p == &peer_id) {
 			if self.banned_peers[pos].1 > Instant::now() {

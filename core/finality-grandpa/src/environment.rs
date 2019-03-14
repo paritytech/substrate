@@ -33,7 +33,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_primitives::{Blake2Hasher, ed25519,Ed25519AuthorityId, H256};
+use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
@@ -44,6 +44,8 @@ use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
+
+use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.
 pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
@@ -75,7 +77,7 @@ impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
-	pub(crate) voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -205,7 +207,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
-	type Id = Ed25519AuthorityId;
+	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
 
 	// regular round message streams

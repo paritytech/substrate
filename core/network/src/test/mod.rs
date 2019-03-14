@@ -39,19 +39,18 @@ use crate::consensus_gossip::ConsensusGossip;
 use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
-use keyring::Keyring;
 use crate::message::{Message, ConsensusEngineId};
 use network_libp2p::{NodeIndex, ProtocolId, PeerId};
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, Ed25519AuthorityId};
+use primitives::{H256, ed25519::Public as AuthorityId};
 use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::Justification;
 use crate::service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
 use crate::specialization::NetworkSpecialization;
-use test_client;
+use test_client::{self, AccountKeyring};
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
@@ -458,12 +457,12 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
 				let transfer = Transfer {
-					from: Keyring::Alice.to_raw_public().into(),
-					to: Keyring::Alice.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Alice.into(),
 					amount: 1,
 					nonce,
 				};
-				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
+				let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
 				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
@@ -473,7 +472,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		}
 	}
 
-	pub fn push_authorities_change_block(&self, new_authorities: Vec<Ed25519AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.bake().unwrap()
