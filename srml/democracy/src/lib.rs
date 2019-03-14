@@ -160,8 +160,6 @@ decl_module! {
 		/// Delegate vote.
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_acyclic_delegation(&who, to.clone(), MAX_RECURSION_LIMIT),
-				"delegation creates a cycle or max delegation depth reached");
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			Self::deposit_event(RawEvent::Delegated(who, to));
 			Ok(())
