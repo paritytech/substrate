@@ -28,7 +28,6 @@ pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
 	code: Option<Option<CodeHash<T>>>,
-	storage_key_space: KeySpace,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -38,7 +37,6 @@ impl<T: Trait> Default for ChangeEntry<T> {
 		ChangeEntry {
 			balance: Default::default(),
 			code: Default::default(),
-			storage_key_space: Default::default(),
 			storage: Default::default(),
 		}
 	}
@@ -117,7 +115,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
-			let keyspace = changed.storage_key_space;
+			let keyspace = <Self as AccountDb<T>>::get_or_create_keyspace(&self, &address);
 			if let Some(balance) = changed.balance {
 				if let UpdateBalanceOutcome::AccountKilled =
 					balances::Module::<T>::set_free_balance_creating(&address, balance)
@@ -169,20 +167,11 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		location: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) {
-		use super::KeySpaceGenerator;
-		let mut local_mut = self.local.borrow_mut();
-		let mut entry = local_mut
+		self.local.borrow_mut()
 			.entry(account.clone())
-			.or_insert(Default::default());
-		entry.storage.insert(location, value);
-		if entry.storage_key_space.len() == 0 {
-			entry.storage_key_space = if let Some(ks) = self.underlying.get_subtrie(account) {
-				ks.key_space
-			} else {
-				// gen new keyspace
-				<T as Trait>::KeySpaceGenerator::key_space(&account)
-			}
-		}
+			.or_insert(Default::default())
+			.storage
+			.insert(location, value);
 	}
 
 	pub fn set_code(&mut self, account: &T::AccountId, code: Option<CodeHash<T>>) {
@@ -212,7 +201,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace {
 		self.keyspace_account.as_ref()
 			.map(|ka| {
-        let mut ka_mut = ka.borrow_mut();
+				let mut ka_mut = ka.borrow_mut();
 				if let Some(v) = ka_mut.get_keyspace(account) {
 					v.clone()
 				} else {
