@@ -28,7 +28,7 @@ use futures::prelude::*;
 use futures::stream::Fuse;
 use parking_lot::Mutex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519::Public as AuthorityId;
 use tokio::timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
@@ -199,7 +199,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 	}
 }
 
-fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: Ed25519AuthorityId) {
+fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId) {
 	warn!(
 		target: "afg",
 		"Authority {:?} signed GRANDPA message with \

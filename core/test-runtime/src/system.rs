@@ -26,8 +26,8 @@ use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
-use primitives::{Ed25519AuthorityId, Blake2Hasher};
-use primitives::storage::well_known_keys;
+use primitives::{Blake2Hasher, storage::well_known_keys};
+use primitives::ed25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -37,7 +37,7 @@ storage_items! {
 	// The current block number being processed. Set by `execute_block`.
 	Number: b"sys:num" => required BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
-	NewAuthorities: b"sys:new_auth" => Vec<Ed25519AuthorityId>;
+	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -53,7 +53,7 @@ pub fn nonce_of(who: AccountId) -> u64 {
 }
 
 /// Get authorities ar given block.
-pub fn authorities() -> Vec<Ed25519AuthorityId> {
+pub fn authorities() -> Vec<AuthorityId> {
 	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
 		.expect("There are always authorities in test-runtime");
 	(0..len)
@@ -71,6 +71,36 @@ pub fn initialise_block(header: &Header) {
 }
 
 /// Actually execute all transitioning for `block`.
+pub fn polish_block(block: &mut Block) {
+	let header = &mut block.header;
+
+	// check transaction trie root represents the transactions.
+	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
+	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
+	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
+	header.extrinsics_root = txs_root;
+
+	// execute transactions
+	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
+		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	});
+
+	header.state_root = storage_root().into();
+
+	// check digest
+	let mut digest = Digest::default();
+	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
+	}
+	if let Some(new_authorities) = <NewAuthorities>::take() {
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+	}
+	header.digest = digest;
+}
+
 pub fn execute_block(block: Block) {
 	let ref header = block.header;
 
@@ -83,9 +113,9 @@ pub fn execute_block(block: Block) {
 
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error");
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
+	execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+	storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
 	// check storage root.
@@ -122,7 +152,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	}
 
 	let hash = |from: &AccountId, nonce: u64| {
-		twox_128(&nonce.to_keyed_vec(from.as_bytes())).to_vec()
+		twox_128(&nonce.to_keyed_vec(&from.encode())).to_vec()
 	};
 	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
 		let mut deps = Vec::new();
@@ -143,7 +173,6 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		longevity: 64,
 	}
 }
-
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
@@ -225,8 +254,8 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	Ok(ApplyOutcome::Success)
 }
 
-fn execute_new_authorities_backend(new_authorities: &[Ed25519AuthorityId]) -> ApplyResult {
-	let new_authorities: Vec<Ed25519AuthorityId> = new_authorities.iter().cloned().collect();
+fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
+	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
 	<NewAuthorities>::put(new_authorities);
 	Ok(ApplyOutcome::Success)
 }
@@ -258,12 +287,11 @@ mod tests {
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
-	use keyring::Keyring;
-	use crate::{Header, Digest, Extrinsic, Transfer};
+	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
+	use crate::{Header, Extrinsic, Transfer};
 	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;
-	use hex_literal::{hex, hex_impl};
 
 	const WASM_CODE: &'static [u8] =
 			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
@@ -272,36 +300,34 @@ mod tests {
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
-			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
-			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
-			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Alice.to_raw_public().to_vec(),
+			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Bob.to_raw_public().to_vec(),
+			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Charlie.to_raw_public().to_vec(),
+			twox_128(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		])
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
-		let mut t = new_test_ext();
-
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("e51369d0b37e4aa1383f1e7a34c2eec75f18ee6b4b199a440f4f2456906e0eb7").into(),
-			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-			digest: Digest { logs: vec![], },
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
 		};
-
-		let b = Block {
+		let mut b = Block {
 			header: h,
 			extrinsics: vec![],
 		};
 
-		block_executor(b, &mut t);
+		with_externalities(&mut new_test_ext(), || polish_block(&mut b));
 
+		block_executor(b, &mut new_test_ext());
 	}
 
 	#[test]
@@ -321,69 +347,74 @@ mod tests {
 	}
 
 	fn block_import_with_transaction_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
-		let mut t = new_test_ext();
-
-		with_externalities(&mut t, || {
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 111);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 0);
-		});
-
-		let b = Block {
+		let mut b1 = Block {
 			header: Header {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
-				state_root: hex!("f61a14ce70846cd6a1714bbe1b63b2ca1172df1c8c01adfd798bb08bd30dc486").into(),
-				extrinsics_root: hex!("198205cb7729fec8ccdc2e58571a4858586a4f305898078e0e8bee1dddea7e4b").into(),
-				digest: Digest { logs: vec![], },
+				state_root: Default::default(),
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
 			},
 			extrinsics: vec![
 				construct_signed_tx(Transfer {
-					from: Keyring::Alice.to_raw_public().into(),
-					to: Keyring::Bob.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Bob.into(),
 					amount: 69,
 					nonce: 0,
 				})
 			],
 		};
 
-		with_externalities(&mut t, || {
-			execute_block(b.clone());
+		let mut dummy_ext = new_test_ext();
+		with_externalities(&mut dummy_ext, || polish_block(&mut b1));
 
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 42);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 69);
-		});
-
-		let b = Block {
+		let mut b2 = Block {
 			header: Header {
-				parent_hash: b.header.hash(),
+				parent_hash: b1.header.hash(),
 				number: 2,
-				state_root: hex!("a47383d9a5d6c8c7531386abccdf512c76729a1a19c59b6c2e4f95dde419923a").into(),
-				extrinsics_root: hex!("041fa8971dda28745967179a9f39e3ca1a595c510682105df1cff74ae6f05e0d").into(),
-				digest: Digest { logs: vec![], },
+				state_root: Default::default(),
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
 			},
 			extrinsics: vec![
 				construct_signed_tx(Transfer {
-					from: Keyring::Bob.to_raw_public().into(),
-					to: Keyring::Alice.to_raw_public().into(),
+					from: AccountKeyring::Bob.into(),
+					to: AccountKeyring::Alice.into(),
 					amount: 27,
 					nonce: 0,
 				}),
 				construct_signed_tx(Transfer {
-					from: Keyring::Alice.to_raw_public().into(),
-					to: Keyring::Charlie.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Charlie.into(),
 					amount: 69,
 					nonce: 1,
 				}),
 			],
 		};
 
-		block_executor(b, &mut t);
+		with_externalities(&mut dummy_ext, || polish_block(&mut b2));
+		drop(dummy_ext);
+
+		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
+			assert_eq!(balance_of(AccountKeyring::Alice.into()), 111);
+			assert_eq!(balance_of(AccountKeyring::Bob.into()), 0);
+		});
 
-			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 0);
-			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 42);
-			assert_eq!(balance_of(Keyring::Charlie.to_raw_public().into()), 69);
+		block_executor(b1, &mut t);
+
+		with_externalities(&mut t, || {
+			assert_eq!(balance_of(AccountKeyring::Alice.into()), 42);
+			assert_eq!(balance_of(AccountKeyring::Bob.into()), 69);
+		});
+
+		block_executor(b2, &mut t);
+
+		with_externalities(&mut t, || {
+			assert_eq!(balance_of(AccountKeyring::Alice.into()), 0);
+			assert_eq!(balance_of(AccountKeyring::Bob.into()), 42);
+			assert_eq!(balance_of(AccountKeyring::Charlie.into()), 69);
 		});
 	}
 

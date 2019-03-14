@@ -25,11 +25,12 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
-use substrate_primitives::{ed25519, Ed25519AuthorityId};
+use substrate_primitives::{ed25519, Pair};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
 	CompactCommit, GossipMessage, FullCommitMessage, VoteOrPrecommitMessage};
+use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
@@ -242,14 +243,14 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
-	id: &Ed25519AuthorityId,
-	signature: &ed25519::Signature,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
 	round: u64,
 	set_id: u64,
 ) -> Result<(), ()> {
-	let as_public = ed25519::Public::from_raw(id.0);
+	let as_public = AuthorityId::from_raw(id.0);
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ed25519::verify_strong(signature, &encoded_raw, as_public) {
+	if ed25519::Pair::verify(signature, &encoded_raw, as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -261,7 +262,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// the output stream checks signatures also.
 pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	inner: S,
-	voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
@@ -297,7 +298,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 pub(crate) struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
-	locals: Option<(Arc<ed25519::Pair>, Ed25519AuthorityId)>,
+	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 }
@@ -309,7 +310,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 	fn start_send(&mut self, msg: Message<Block>) -> StartSend<Message<Block>, Error> {
 		// when locals exist, sign messages on import
-		if let Some((ref pair, local_id)) = self.locals {
+		if let Some((ref pair, ref local_id)) = self.locals {
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
 
@@ -317,7 +318,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			let signed = SignedMessage::<Block> {
 				message: msg,
 				signature,
-				id: local_id,
+				id: local_id.clone(),
 			};
 
 			let message = GossipMessage::VoteOrPrecommit(VoteOrPrecommitMessage::<Block> {
@@ -361,7 +362,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 	round: u64,
 	set_id: u64,
 	local_key: Option<Arc<ed25519::Pair>>,
-	voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: Arc<VoterSet<AuthorityId>>,
 	network: N,
 ) -> (
 	impl Stream<Item=SignedMessage<Block>,Error=Error>,
@@ -369,7 +370,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 ) {
 	let locals = local_key.and_then(|pair| {
 		let public = pair.public();
-		let id = Ed25519AuthorityId(public.0);
+		let id = AuthorityId(public.0);
 		if voters.contains_key(&id) {
 			Some((pair, id))
 		} else {
@@ -395,7 +396,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 
 fn check_compact_commit<Block: BlockT>(
 	msg: CompactCommit<Block>,
-	voters: &VoterSet<Ed25519AuthorityId>,
+	voters: &VoterSet<AuthorityId>,
 ) -> Option<CompactCommit<Block>> {
 	if msg.precommits.len() != msg.auth_data.len() || msg.precommits.is_empty() {
 		debug!(target: "afg", "Skipping malformed compact commit");
@@ -417,7 +418,7 @@ fn check_compact_commit<Block: BlockT>(
 /// messages.
 pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	inner: S,
-	voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>

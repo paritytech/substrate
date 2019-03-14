@@ -1,6 +1,6 @@
 [package]
 name = "subkey"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
@@ -12,6 +12,7 @@ tiny-bip39 = "0.6.0"
 rustc-hex = "2.0"
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39" }
 schnorrkel = { git = "https://github.com/w3f/schnorrkel" }
+hex = "0.3"
 
 [features]
 bench = []
