@@ -25,11 +25,11 @@
 //! The system module defines the core data types used in Substrate runtime. 
 //! It also provides several utility functions ([`Module`]) for other modules.
 //! 
-//! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, among other things, 
-//! which support the execution of the current block.
+//! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, 
+//! among other things that support the execution of the current block.
 //! 
-//! It also handles lowest level stuff like depositing logs, basic set up and take down of
-//! temporary storage entries, access to old block hashes.
+//! It also handles low level tasks like depositing logs, basic set up and take down of
+//! temporary storage entries and access to previous block hashes.
 //! 
 //! ## Interface
 //! 
@@ -265,7 +265,7 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 		/// Maps block hashes to block numbers
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
-		/// Extrinsics data for the current block (maps extrinsic's index to it's data)
+		/// Extrinsics data for the current block (maps extrinsic's index to its data)
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		/// Random seed of the current block
 		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
