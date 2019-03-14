@@ -520,7 +520,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if would_create && value < ctx.config.existential_deposit {
 		return Err("value too low to create account");
 	}
-	<balances::Module<T>>::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+	<balances::Module<T>>::ensure_account_can_withdraw(transactor, WithdrawReason::Transfer, new_from_balance)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,
