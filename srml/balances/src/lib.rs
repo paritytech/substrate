@@ -30,14 +30,13 @@
 //! - Account removal
 //! - Lookup of an index to reclaim an account
 //! - Increasing or decreasing total issuance
-//! - Implementation of `Currency` and `LockableCurrency`
 //!
 //! ### Terminology
 //!
-//! - **Existential Deposit:** The existential deposit is the minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
+//! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
 //! - **Total Issuance:** The total amount of units in existence in a system.
 //! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set to zero.
-//! - **Free Balance:** The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is removed.
+//! - **Free Balance:** The liquid or spendable balance. The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is removed.
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the existential deposit then it will be deleted.
 //! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number.
 //!
