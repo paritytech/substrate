@@ -258,11 +258,13 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	}
 
 	// SyncOracle: are we connected to any peer?
+	#[cfg(test)]
 	fn is_offline(&self) -> bool {
 		self.is_offline.load(Ordering::Relaxed)
 	}
 
 	// SyncOracle: are we in the process of catching-up with the chain?
+	#[cfg(test)]
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
 	}
