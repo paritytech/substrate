@@ -21,7 +21,7 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, ops::Deref};
+use rstd::{vec::Vec, ops::Deref, cell::Cell};
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
 
@@ -59,44 +59,56 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 /// A function which implementation can be exchanged.
 ///
 /// Internally this works by swapping function pointers.
-pub struct ExchangeableFunction<T>(T);
+pub struct ExchangeableFunction<T>(Cell<(T, bool)>);
 
 impl<T> ExchangeableFunction<T> {
 	/// Create a new instance of `ExchangeableFunction`.
 	pub const fn new(impl_: T) -> Self {
-		Self(impl_)
+		Self(Cell::new((impl_, false)))
 	}
+
 	/// Replace the implementation with `new_impl`.
+	///
+	/// # Panics
+	///
+	/// Panics when trying to replace an already replaced implementation.
 	///
 	/// # Returns
 	///
 	/// Returns the original implementation wrapped in [`RestoreImplementation`].
-	pub fn replace_implementation(&'static mut self, new_impl: T)  -> RestoreImplementation<T> {
-		let old = mem::replace(&mut self.0, new_impl);
+	pub unsafe fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
+		if (*self.0.as_ptr()).1 {
+			panic!("Trying to replace an already replaced implementation!")
+		}
 
-		RestoreImplementation(self, Some(old))
+		let old = self.0.replace((new_impl, true));
+
+		RestoreImplementation(self, Some(old.0))
 	}
 
-	/// Set the given implementation.
-	fn set_implementation(&mut self, new_impl: T) {
-		self.0 = new_impl;
+	/// Restore the original implementation.
+	fn restore_orig_implementation(&self, orig: T) {
+		self.0.set((orig, false));
 	}
 }
+
+// WASM does not support threads, so this is safe; qed.
+unsafe impl<T> Sync for ExchangeableFunction<T> {}
 
 impl<T> Deref for ExchangeableFunction<T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		unsafe { &(*self.0.as_ptr()).0 }
 	}
 }
 
 /// Restores a function implementation on drop.
-pub struct RestoreImplementation<T: 'static>(&'static mut ExchangeableFunction<T>, Option<T>);
+pub struct RestoreImplementation<T: 'static>(&'static ExchangeableFunction<T>, Option<T>);
 
 impl<T> Drop for RestoreImplementation<T> {
 	fn drop(&mut self) {
-		self.0.set_implementation(self.1.take().expect("Value is only taken on drop; qed"));
+		self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
 	}
 }
 
@@ -111,8 +123,8 @@ macro_rules! extern_functions {
 		$(
 			$( #[$attr] )*
 			#[allow(non_upper_case_globals)]
-			pub static mut $name: ExchangeableFunction<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> =
-				ExchangeableFunction(extern_functions_host_impl::$name);
+			pub static $name: ExchangeableFunction<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> =
+				ExchangeableFunction::new(extern_functions_host_impl::$name);
 		)*
 
 		/// The exchangeable extern functions host implementations.

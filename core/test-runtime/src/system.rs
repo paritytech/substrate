@@ -74,7 +74,7 @@ fn execute_extrinsics_without_checks(extrinsics: Vec<<Block as BlockT>::Extrinsi
 	// execute transactions
 	extrinsics.into_iter().enumerate().for_each(|(i, e)| {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		execute_transaction_backend(&e).unwrap_or_else(|_| panic!("Invalid transaction"));
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 }
@@ -390,14 +390,14 @@ mod tests {
 			},
 			extrinsics: vec![
 				Transfer {
-					from: Keyring::Bob.into(),
-					to: Keyring::Alice.into(),
+					from: AccountKeyring::Bob.into(),
+					to: AccountKeyring::Alice.into(),
 					amount: 27,
 					nonce: 0,
 				}.into_signed_tx(),
 				Transfer {
-					from: Keyring::Alice.into(),
-					to: Keyring::Charlie.into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Charlie.into(),
 					amount: 69,
 					nonce: 1,
 				}.into_signed_tx(),
