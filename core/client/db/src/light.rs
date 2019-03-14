@@ -843,8 +843,7 @@ pub(crate) mod tests {
 				(3, Some(vec![auth1()])),
 				(4, Some(vec![auth1(), auth2()])),
 				(5, Some(vec![auth1(), auth2()])),
-				(6, None),
-				(7, None), // block will work for 'future' block too
+				(6, Some(vec![auth1(), auth2()])),
 			];
 
 			let hash0 = insert_final_block(&db, None, || default_header(&Default::default(), 0));
@@ -928,7 +927,7 @@ pub(crate) mod tests {
 				Some(vec![auth1(), auth2()]),
 			);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![auth3()]));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![auth4()]));
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![auth3()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![auth4()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_1)), Some(vec![auth5()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_2)), Some(vec![auth6()]));
