@@ -48,7 +48,7 @@
 //! The `Call` enum is documented [here](https://crates.parity.io/srml_balances/enum.Call.html).
 //!
 //! - `transfer` - Transfer some liquid free balance to another account.
-//! - `set_balance` - Set the balances of a given account. Only dispatchable by a user with root privileges.
+//! - `set_balance` - Set the balances of a given account. The origin of this call must be root.
 //!
 //! ### Public Functions
 //!

@@ -137,7 +137,7 @@ pub trait Currency<AccountId> {
 	///
 	/// # NOTES
 	///
-	/// This assumes that the total issuance remains unchanged after this operation.
+	/// Assumes that the total issuance remains unchanged after calling this function.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
 
 	/// Moves `value` from balance to reserved balance.
