@@ -57,6 +57,7 @@
 //! 	/// The staking balance.
 //! 	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=<<Self as Trait>::Currency as ArithmeticType>::Type>;
 //! }
+//! ```
 //!
 //! ## Interface
 //!
