@@ -811,7 +811,7 @@ impl<T: Trait> Module<T> {
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
-	/// @returns the new SlotStake value.
+	/// returns the new SlotStake value.
 	fn select_validators() -> BalanceOf<T> {
 		// Map of (would-be) validator account to amount of stake backing it.
 		
