@@ -19,7 +19,7 @@
 use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
+	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, FeesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -113,7 +113,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
-			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH)).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
@@ -267,7 +267,7 @@ pub fn testnet_genesis(
 			current_offline_slash: 0,
 			current_session_reward: 0,
 			offline_slash_grace: 0,
-			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH)).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
