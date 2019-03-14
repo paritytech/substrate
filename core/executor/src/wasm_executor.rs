@@ -716,7 +716,7 @@ impl WasmExecutor {
 			|res, memory| {
 				if let Some(I64(r)) = res {
 					let offset = r as u32;
-					let length = (r >> 32) as usize;
+					let length = (r as u64 >> 32) as usize;
 					memory.get(offset, length).map_err(|_| ErrorKind::Runtime.into()).map(Some)
 				} else {
 					Ok(None)
@@ -815,7 +815,7 @@ impl WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	
+
 	use parity_codec::Encode;
 
 	use state_machine::TestExternalities;
