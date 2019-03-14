@@ -85,7 +85,7 @@ macro_rules! create_runtime_str {
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+pub use serde_derive::{Serialize, Deserialize};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -247,6 +247,86 @@ impl codec::CompactAs for Perbill {
 
 impl From<codec::Compact<Perbill>> for Perbill {
 	fn from(x: codec::Compact<Perbill>) -> Perbill {
+		x.0
+	}
+}
+
+/// Perquintill is parts-per-quintillion. It stores a value between 0 and 1 in fixed point and
+/// provides a means to multiply some other value by that.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+pub struct Perquintill(u64);
+
+const QUINTILLION: u64 = 1_000_000_000_000_000_000;
+
+impl Perquintill {
+	/// Nothing.
+	pub fn zero() -> Self { Self(0) }
+
+	/// Everything.
+	pub fn one() -> Self { Self(QUINTILLION) }
+
+	/// Construct new instance where `x` is in quintillionths. Value equivalent to `x / 1,000,000,000,000,000,000`.
+	pub fn from_quintillionths(x: u64) -> Self { Self(x.min(QUINTILLION)) }
+
+	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
+	pub fn from_billionths(x: u64) -> Self { Self(x.min(1_000_000_000) * 1_000_000_000 ) }
+
+	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
+	pub fn from_millionths(x: u64) -> Self { Self(x.min(1_000_000) * 1000_000_000_000) }
+
+	/// Construct new instance where `x` is denominator and the nominator is 1.
+	pub fn from_xth(x: u64) -> Self { Self(QUINTILLION / x.min(QUINTILLION)) }
+
+	#[cfg(feature = "std")]
+	/// Construct new instance whose value is equal to `x` (between 0 and 1).
+	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * QUINTILLION as f64) as u64) }
+}
+
+impl ::rstd::ops::Deref for Perquintill {
+	type Target = u64;
+
+	fn deref(&self) -> &u64 {
+        &self.0
+    }
+}
+
+impl<N> ::rstd::ops::Mul<N> for Perquintill
+where
+	N: traits::As<u64>
+{
+	type Output = N;
+	fn mul(self, b: N) -> Self::Output {
+		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0) / QUINTILLION)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f64> for Perquintill {
+	fn from(x: f64) -> Perquintill {
+		Perquintill::from_fraction(x)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f32> for Perquintill {
+	fn from(x: f32) -> Perquintill {
+		Perquintill::from_fraction(x as f64)
+	}
+}
+
+impl codec::CompactAs for Perquintill {
+	type As = u64;
+	fn encode_as(&self) -> &u64 {
+		&self.0
+	}
+	fn decode_from(x: u64) -> Perquintill {
+		Perquintill(x)
+	}
+}
+
+impl From<codec::Compact<Perquintill>> for Perquintill {
+	fn from(x: codec::Compact<Perquintill>) -> Perquintill {
 		x.0
 	}
 }

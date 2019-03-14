@@ -51,6 +51,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
+pub use staking::StakerStatus;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -58,7 +59,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
 	spec_version: 35,
-	impl_version: 36,
+	impl_version: 37,
 	apis: RUNTIME_API_VERSIONS,
 };
 
