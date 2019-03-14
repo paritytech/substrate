@@ -32,11 +32,9 @@
 //! 
 //! ## Interface
 //! 
-//! ### Dispatchable functions
+//! ### Dispatchable functions ([`Call`])
 //! 
 //! * `set` - Sets the current time.
-//! 
-//! Please refer to the [`Call`] enum and its associated functions for a detailed list of dispatchable functions.
 //! 
 //! ### Public functions
 //! 
@@ -251,7 +249,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-/// Extracts the timestamp inherent from inherent data.
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
 	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
