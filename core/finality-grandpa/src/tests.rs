@@ -1003,8 +1003,8 @@ fn allows_reimporting_change_blocks() {
 
 #[test]
 fn test_bad_justification() {
-	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
-	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
 	let net = GrandpaTestNet::new(api.clone(), 3);
