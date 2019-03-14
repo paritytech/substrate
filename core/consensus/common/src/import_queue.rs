@@ -637,6 +637,14 @@ mod tests {
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
+		// Send an unknown with peer and bad justification
+		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(),
+			ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: true },
+			Some(0))), Default::default())];
+		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
+		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
+
 		// Send an incomplete header
 		let results = vec![(Err(BlockImportError::IncompleteHeader(Some(Default::default()))), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
