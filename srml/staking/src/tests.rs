@@ -50,7 +50,8 @@ fn basic_setup_works() {
 		]);
 
 		// Account 100 is the default nominator
-		assert_eq!(Staking::stakers(100), Exposure { total: 500, own: 500, others: vec![] });
+		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
+		assert_eq!(Staking::nominators(100), vec![10, 20]);
 
 		// Account 10 is exposed by 100 * balance_factor from their own stash in account 11
 		assert_eq!(Staking::stakers(10), Exposure { total: 1500, own: 1000, others: vec![ IndividualExposure { who: 100, value: 500 }] });

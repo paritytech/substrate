@@ -175,7 +175,9 @@ impl ExtBuilder {
 						(10, balance_factor),
 						(11, balance_factor * 1000),
 						(20, balance_factor),
-						(21, balance_factor * 2000)
+						(21, balance_factor * 2000),
+						(100, 2000 * balance_factor),
+						(101, 2000 * balance_factor),
 					]
 				} else {
 					vec![
