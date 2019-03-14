@@ -947,4 +947,27 @@ pub(crate) mod tests {
 			new_authorities: vec![(AuthorityId::from_raw([4u8; 32]), 1u64)],
 		});
 	}
+
+	#[test]
+	fn finality_proof_is_none_if_first_justification_is_generated_by_unknown_set() {
+		// this is the case for forced change: set_id has been forcibly increased on full node
+		// and ligh node missed that
+		// => justification verification will fail on light node anyways, so we do not return
+		// finality proof at all
+		let blockchain = test_blockchain();
+		let just4 = TestJustification(false, vec![4]).encode(); // false makes verification fail
+		blockchain.insert(header(4).hash(), header(4), Some(just4), None, NewBlockState::Final).unwrap();
+
+		let proof_of_4 = prove_finality::<_, _, TestJustification>(
+			&blockchain,
+			&(
+				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| unreachable!("should return before calling ProveAuthorities"),
+			),
+			0,
+			header(3).hash(),
+			header(4).hash(),
+		).unwrap();
+		assert!(proof_of_4.is_none());
+	}
 }
