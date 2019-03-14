@@ -56,6 +56,14 @@ pub enum ValidationResult<H> {
 	Expired,
 }
 
+/// Action to take on status message.
+pub enum StatusResult<H> {
+	/// Do nothing.
+	Ignore,
+	/// Broadcast all messages with given topics.
+	BroadcastTopics(Vec<H>),
+}
+
 /// Validates consensus messages.
 pub trait Validator<H> {
 	/// New peer is connected.
@@ -70,7 +78,8 @@ pub trait Validator<H> {
 	fn validate(&self, data: &[u8]) -> ValidationResult<H>;
 
 	/// Process status message.
-	fn on_status(&self, _who: NodeIndex, _data: &[u8]) {
+	fn on_status(&self, _who: NodeIndex, _data: &[u8]) -> StatusResult<H> {
+		StatusResult::Ignore
 	}
 
 	/// Filter out departing messages.
@@ -344,7 +353,19 @@ impl<B: BlockT> ConsensusGossip<B> {
 			let engine_id = message.engine_id;
 			//validate the message
 			if let Some(validator) = self.validators.get(&engine_id) {
-				validator.on_status(who, &message.data)
+				let topics = match validator.on_status(who, &message.data) {
+					StatusResult::Ignore => Vec::new(),
+					StatusResult::BroadcastTopics(topics) => topics,
+				};
+
+				for topic in topics {
+					let messages: Vec<_> = self.messages.iter()
+						.filter_map(|entry| if entry.topic == topic { Some(entry.message.clone()) } else { None })
+						.collect();
+					for m in messages {
+						self.multicast(protocol, topic, m);
+					}
+				}
 			} else {
 				protocol.report_peer(
 					who,
