@@ -62,22 +62,24 @@ mod wasm;
 #[cfg(test)]
 mod tests;
 
-use crate::exec::ExecutionContext;
 use crate::account_db::AccountDb;
+use crate::exec::ExecutionContext;
 
-#[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
-use rstd::prelude::*;
-use rstd::marker::PhantomData;
-use parity_codec::{Codec, Encode, Decode};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
-use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
-use srml_support::traits::OnFreeBalanceZero;
-use system::{ensure_signed, RawOrigin};
-use runtime_io::{blake2_256, twox_128};
-use timestamp;
 use fees;
+use parity_codec::{Codec, Decode, Encode};
+use rstd::marker::PhantomData;
+use rstd::prelude::*;
+use runtime_io::{blake2_256, twox_128};
+use runtime_primitives::traits::{As, Bounded, Hash, SimpleArithmetic, StaticLookup};
+#[cfg(feature = "std")]
+use serde_derive::{Deserialize, Serialize};
+use srml_support::dispatch::{Dispatchable, Result};
+use srml_support::traits::OnFreeBalanceZero;
+use srml_support::{
+	decl_event, decl_module, decl_storage, Parameter, StorageDoubleMap, StorageMap, StorageValue,
+};
+use system::{ensure_signed, RawOrigin};
+use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 
@@ -93,13 +95,21 @@ pub trait ComputeDispatchFee<Call, Balance> {
 
 pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	/// The outer call dispatch type.
-	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
+	type Call: Parameter + Dispatchable<Origin = <Self as system::Trait>::Origin>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter
+		+ Default
+		+ Codec
+		+ SimpleArithmetic
+		+ Bounded
+		+ Copy
+		+ As<Self::Balance>
+		+ As<u64>
+		+ As<u32>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -120,9 +130,13 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
-	T::AccountId: From<T::Hash> + AsRef<[u8]>
+	T::AccountId: From<T::Hash> + AsRef<[u8]>,
 {
-	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
+	fn contract_address_for(
+		code_hash: &CodeHash<T>,
+		data: &[u8],
+		origin: &T::AccountId,
+	) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
 
 		let mut buf = Vec::new();
@@ -213,7 +227,6 @@ decl_module! {
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
 				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
-
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
 			}
@@ -314,6 +327,9 @@ decl_event! {
 		/// A call was dispatched from the given account. The bool signals whether it was
 		/// successful execution or not.
 		Dispatched(AccountId, bool),
+
+		/// A contract execution failed. Contract address, caller, and status code
+		ExecutionFailed(AccountId, AccountId, u32),
 	}
 }
 

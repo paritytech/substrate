@@ -24,16 +24,19 @@ use crate::{CodeHash, ComputeDispatchFee, Schedule, Trait};
 use parity_codec::{Decode, Encode};
 use rstd::mem;
 use rstd::prelude::*;
-use runtime_primitives::traits::{As, Bounded, CheckedMul};
+use runtime_primitives::traits::{As, Bounded, CheckedMul, Zero};
 use sandbox;
 use system;
 
 /// Trap error codes
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-enum ErrorCode {
+#[derive(Copy, Clone)]
+pub(crate) enum ErrorCode {
 	OutOfGas = 1,          // Execution ran out of gas
 	MemoryOutOfBounds = 2, // Contract attempted to access memory "out of bounds"
 	BadEncoding = 3,       // Runtime ABI failed to decode a buffer from the contract
+	InvalidModule = 4,     // Contract has invalid wasm module
+	FailedInit = 5,        // Contract failed to instantiate
 }
 
 impl ErrorCode {
@@ -43,36 +46,18 @@ impl ErrorCode {
 			ErrorCode::OutOfGas => "out of gas",
 			ErrorCode::MemoryOutOfBounds => "memory out of bounds",
 			ErrorCode::BadEncoding => "bad type encoding",
+			ErrorCode::InvalidModule => "validation error",
+			ErrorCode::FailedInit => "during start function",
 		}
 	}
 }
 
 /// Trap types
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq)]
 enum Trap {
 	Success,
 	Error(ErrorCode),
 	Returned(OutputBuf),
-}
-
-impl Trap {
-	/// Return a description of the trap
-	fn description(self) -> &'static str {
-		match self {
-			Trap::Success => "execution success",
-			Trap::Error(code) => code.description(),
-			Trap::Returned(_) => "ext_return call",
-		}
-	}
-
-	/// Return the trap as a u32 code
-	fn code(self) -> u32 {
-		match self {
-			Trap::Success => 0,
-			Trap::Error(code) => code as u32,
-			Trap::Returned(_) => 2,
-		}
-	}
 }
 
 impl From<Trap> for sandbox::HostError {
@@ -125,15 +110,25 @@ pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_err: Option<sandbox::Error>,
 ) -> VmExecResult {
-	// Check the exact type of the error. It could be plain trap or
-	// special runtime trap the we must recognize.
+	// Check the exact type of the error. It could be a wasm sandbox trap or
+	// contract runtime trap the we must recognize.
 	match (sandbox_err, runtime.trap) {
 		// No traps were generated. Proceed normally.
 		(None, Trap::Success) => VmExecResult::Ok,
 		// Special case. The trap was the result of the execution `return` host function.
 		(Some(sandbox::Error::Execution), Trap::Returned(buf)) => VmExecResult::Returned(buf),
-		// A known error trap which can be logged definitivley
-		(Some(_), Trap::Error(code)) => VmExecResult::Trap(code.description()),
+		// A trap during contract execution which can be logged definitivley
+		(Some(_), Trap::Error(code)) => VmExecResult::Trap(code.description(), code as u32),
+		// Error during start
+		(Some(sandbox::Error::Execution), _) => VmExecResult::Trap(
+			ErrorCode::FailedInit.description(),
+			ErrorCode::FailedInit as u32,
+		),
+		// Contract has invalid wasm module e.g. bad import
+		(Some(sandbox::Error::Module), _) => VmExecResult::Trap(
+			ErrorCode::InvalidModule.description(),
+			ErrorCode::InvalidModule as u32,
+		),
 		// Any other case (such as special trap flag without actual trap) signifies
 		// a logic error.
 		_ => unreachable!(),
@@ -202,7 +197,11 @@ fn charge_gas<T: Trait, Tok: Token<T>>(
 /// - calculating the gas cost resulted in overflow.
 /// - out of gas
 /// - requested buffer is not within the bounds of the sandbox memory.
-fn read_sandbox_memory<E: Ext>(ctx: &mut Runtime<E>, ptr: u32, len: u32) -> Result<Vec<u8>, Trap> {
+fn read_sandbox_memory<E: Ext>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	len: u32,
+) -> Result<Vec<u8>, Trap> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	let mut buf = Vec::new();
@@ -271,7 +270,7 @@ define_env!(Env, <E: Ext>,
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
 		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
 		let value =
-			if value_non_null != 0 {
+			if !value_non_null.is_zero() {
 				Some(read_sandbox_memory(ctx, value_ptr, value_len)?)
 			} else {
 				None
@@ -344,7 +343,7 @@ define_env!(Env, <E: Ext>,
 		let scratch_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
 		let empty_output_buf = EmptyOutputBuf::from_spare_vec(scratch_buf);
 
-		let nested_gas_limit = if gas == 0 {
+		let nested_gas_limit = if gas.is_zero() {
 			ctx.gas_meter.gas_left()
 		} else {
 			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
@@ -422,7 +421,7 @@ define_env!(Env, <E: Ext>,
 		// Clear the scratch buffer in any case.
 		ctx.scratch_buf.clear();
 
-		let nested_gas_limit = if gas == 0 {
+		let nested_gas_limit = if gas.is_zero() {
 			ctx.gas_meter.gas_left()
 		} else {
 			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
@@ -604,7 +603,13 @@ define_env!(Env, <E: Ext>,
 		}
 
 		// Finally, perform the write.
-		write_sandbox_memory(ctx.schedule, &mut ctx.gas_meter, &ctx.memory, dest_ptr, src).map_err(|_| sandbox::HostError)
+		write_sandbox_memory(
+			ctx.schedule,
+			&mut ctx.gas_meter,
+			&ctx.memory,
+			dest_ptr,
+			src,
+		).map_err(|_| sandbox::HostError)
 	},
 
 	// Returns the size of the scratch buffer.
@@ -630,7 +635,13 @@ define_env!(Env, <E: Ext>,
 		}
 
 		// Finally, perform the write.
-		write_sandbox_memory(ctx.schedule, &mut ctx.gas_meter, &ctx.memory, dest_ptr, src).map_err(|_| sandbox::HostError)
+		write_sandbox_memory(
+			ctx.schedule,
+			&mut ctx.gas_meter,
+			&ctx.memory,
+			dest_ptr,
+			src,
+		).map_err(|_| sandbox::HostError)
 	},
 );
 

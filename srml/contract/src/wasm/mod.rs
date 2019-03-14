@@ -22,8 +22,8 @@ use crate::gas::GasMeter;
 use crate::wasm::env_def::FunctionImplProvider;
 use crate::{CodeHash, Schedule, Trait};
 
+use parity_codec::{Decode, Encode};
 use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
 use sandbox;
 
 #[macro_use]
@@ -152,19 +152,21 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 				to_execution_result(runtime, err)
 			}
 			// `start` function trapped. Treat it in the same manner as an execution error.
-			Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
-			Err(_err @ sandbox::Error::Module) => {
+			Err(err @ sandbox::Error::Execution) => {
+				to_execution_result(runtime, Some(err))
+			}
+			Err(err @ sandbox::Error::Module) => {
 				// `Error::Module` is returned only if instantiation or linking failed (i.e.
 				// wasm bianry tried to import a function that is not provided by the host).
 				// This shouldn't happen because validation proccess ought to reject such binaries.
 				//
 				// Because panics are really undesirable in the runtime code, we treat this as
 				// a trap for now. Eventually, we might want to revisit this.
-				return VmExecResult::Trap("validation error");
+				to_execution_result(runtime, Some(err))
 			}
 			// Other instantiation errors.
 			// Return without executing anything.
-			Err(_) => return VmExecResult::Trap("during start function"),
+			Err(err) => to_execution_result(runtime, Some(err)),
 		}
 	}
 }
@@ -300,10 +302,11 @@ pub(crate) mod tests {
 
 		let cfg = Default::default();
 		let vm = WasmVm::new(&cfg);
-
+		
 		*output_data = vm
 			.execute(&exec, ext, input_data, EmptyOutputBuf::new(), gas_meter)
-			.into_result()?;
+			.into_result()
+			.map_err(|err| err.0)?;
 
 		Ok(())
 	}
@@ -1025,14 +1028,13 @@ pub(crate) mod tests {
 	fn return_from_start_fn() {
 		let mut mock_ext = MockExt::default();
 		let mut output_data = Vec::new();
-		execute(
+		let _ = execute(
 			CODE_RETURN_FROM_START_FN,
 			&[],
 			&mut output_data,
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		)
-		.unwrap();
+		);
 
 		assert_eq!(output_data, vec![1, 2, 3, 4]);
 	}
@@ -1149,10 +1151,10 @@ pub(crate) mod tests {
 	fn random_seed() {
 		let mut mock_ext = MockExt::default();
 		let seed: [u8; 32] = [
-			1,0,0,0,0,0,0,0,
-			2,0,0,0,0,0,0,0,
-			3,0,0,0,0,0,0,0,
-			4,0,0,0,0,0,0,0,
+			1, 0, 0, 0, 0, 0, 0, 0,
+			2, 0, 0, 0, 0, 0, 0, 0,
+			3, 0, 0, 0, 0, 0, 0, 0,
+			4, 0, 0, 0, 0, 0, 0, 0,
 		];
 		mock_ext.random_seed = H256::from_slice(&seed);
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);

@@ -16,7 +16,7 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use crate::gas::{GasMeter, Token, approx_gas_for_balance};
+use crate::gas::{approx_gas_for_balance, GasMeter, Token};
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
@@ -90,7 +90,6 @@ pub trait Ext {
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
-
 	/// Returns the balance of the current contract.
 	///
 	/// The `value_transferred` is already added.
@@ -146,8 +145,15 @@ impl EmptyOutputBuf {
 	/// Write to the buffer result of the specified size.
 	///
 	/// Calls closure with the buffer of the requested size.
-	pub fn fill<E, F: FnOnce(&mut [u8]) -> Result<(), E>>(mut self, size: usize, f: F) -> Result<OutputBuf, E> {
-		assert!(self.0.len() == 0, "the vector is always cleared; it's written only once");
+	pub fn fill<E, F: FnOnce(&mut [u8]) -> Result<(), E>>(
+		mut self,
+		size: usize,
+		f: F,
+	) -> Result<OutputBuf, E> {
+		assert!(
+			self.0.len() == 0,
+			"the vector is always cleared; it's written only once"
+		);
 		self.0.resize(size, 0);
 		f(&mut self.0).map(|()| OutputBuf(self.0))
 	}
@@ -166,16 +172,16 @@ pub enum VmExecResult {
 	/// This can include, e.g.: division by 0, OOB access or failure to satisfy some precondition
 	/// of a system call.
 	///
-	/// Contains some vm-specific description of a trap.
-	Trap(&'static str),
+	/// Contains some vm-specific trap code
+	Trap(&'static str, u32),
 }
 
 impl VmExecResult {
-	pub fn into_result(self) -> Result<Vec<u8>, &'static str> {
+	pub fn into_result(self) -> Result<Vec<u8>, (&'static str, u32)> {
 		match self {
 			VmExecResult::Ok => Ok(Vec::new()),
 			VmExecResult::Returned(buf) => Ok(buf.0),
-			VmExecResult::Trap(description) => Err(description),
+			VmExecResult::Trap(description, code) => Err((description, code)),
 		}
 	}
 }
@@ -293,12 +299,8 @@ where
 
 		let dest_code_hash = self.overlay.get_code(&dest);
 		let mut output_data = Vec::new();
-
 		let (change_set, events, calls) = {
-			let mut nested = self.nested(
-				OverlayAccountDb::new(&self.overlay),
-				dest.clone()
-			);
+			let mut nested = self.nested(OverlayAccountDb::new(&self.overlay), dest.clone());
 
 			if value > T::Balance::zero() {
 				transfer(
@@ -313,7 +315,7 @@ where
 
 			if let Some(dest_code_hash) = dest_code_hash {
 				let executable = self.loader.load_main(&dest_code_hash)?;
-				output_data = self
+				let result = self
 					.vm
 					.execute(
 						&executable,
@@ -328,7 +330,18 @@ where
 						empty_output_buf,
 						gas_meter,
 					)
-					.into_result()?;
+					.into_result();
+
+				// Log an exeuction failure event
+				if let Err(err) = result {
+					self.events.push(RawEvent::ExecutionFailed(
+						dest.clone(),
+						self.self_account.clone(),
+						err.1,
+					));
+					return Err(err.0);
+				}
+				output_data = result.unwrap();
 			}
 
 			(nested.overlay.into_change_set(), nested.events, nested.calls)
@@ -387,7 +400,8 @@ where
 			)?;
 
 			let executable = self.loader.load_init(&code_hash)?;
-			self.vm
+			let result = self
+				.vm
 				.execute(
 					&executable,
 					&mut CallContext {
@@ -401,12 +415,29 @@ where
 					EmptyOutputBuf::new(),
 					gas_meter,
 				)
-				.into_result()?;
+				.into_result();
+
+			// Log an exeuction failure event
+			if let Err(err) = result {
+				self.events.push(RawEvent::ExecutionFailed(
+					dest.clone(),
+					self.self_account.clone(),
+					err.1,
+				));
+				return Err(err.0);
+			}
 
 			// Deposit an instantiation event.
-			nested.events.push(RawEvent::Instantiated(self.self_account.clone(), dest.clone()));
+			nested.events.push(RawEvent::Instantiated(
+				self.self_account.clone(),
+				dest.clone(),
+			));
 
-			(nested.overlay.into_change_set(), nested.events, nested.calls)
+			(
+				nested.overlay.into_change_set(),
+				nested.events,
+				nested.calls,
+			)
 		};
 
 		self.overlay.commit(change_set);
@@ -496,11 +527,13 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 
 			// Otherwise the fee depends on whether we create a new account or transfer
 			// to an existing one.
-			Call => if would_create {
-				TransferFeeKind::AccountCreate
-			} else {
-				TransferFeeKind::Transfer
-			},
+			Call => {
+				if would_create {
+					TransferFeeKind::AccountCreate
+				} else {
+					TransferFeeKind::Transfer
+				}
+			}
 		};
 		TransferFeeToken {
 			kind,
@@ -521,7 +554,12 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if would_create && value < ctx.config.existential_deposit {
 		return Err("value too low to create account");
 	}
-	<balances::Module<T>>::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+	<balances::Module<T>>::ensure_account_can_withdraw(
+		transactor,
+		value,
+		WithdrawReason::Transfer,
+		new_from_balance,
+	)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,
@@ -571,7 +609,8 @@ where
 		gas_meter: &mut GasMeter<T>,
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
-		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
+		self.ctx
+			.instantiate(endowment, gas_meter, code_hash, input_data)
 	}
 
 	fn call(
@@ -588,9 +627,7 @@ where
 
 	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
-		self.ctx.calls.push(
-			(self.ctx.self_account.clone(), call)
-		);
+		self.ctx.calls.push((self.ctx.self_account.clone(), call));
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -631,19 +668,19 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{
-		ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
-		Vm, VmExecResult, InstantiateReceipt, RawEvent,
+		EmptyOutputBuf, ExecFeeToken, ExecutionContext, Ext, InstantiateReceipt, Loader, RawEvent,
+		TransferFeeKind, TransferFeeToken, Vm, VmExecResult,
 	};
 	use crate::account_db::AccountDb;
 	use crate::gas::GasMeter;
 	use crate::tests::{ExtBuilder, Test};
 	use crate::{CodeHash, Config};
+	use assert_matches::assert_matches;
 	use runtime_io::with_externalities;
 	use std::cell::RefCell;
 	use std::collections::HashMap;
 	use std::marker::PhantomData;
 	use std::rc::Rc;
-	use assert_matches::assert_matches;
 
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
@@ -694,7 +731,9 @@ mod tests {
 
 	impl<'a> MockVm<'a> {
 		fn new() -> Self {
-			MockVm { _marker: PhantomData }
+			MockVm {
+				_marker: PhantomData,
+			}
 		}
 	}
 
@@ -977,8 +1016,8 @@ mod tests {
 			#[derive(Debug)]
 			enum Void {}
 			let empty_output_buf = ctx.empty_output_buf.take().unwrap();
-			let output_buf =
-				empty_output_buf.fill::<Void, _>(4, |data| {
+			let output_buf = empty_output_buf
+				.fill::<Void, _>(4, |data| {
 					data.copy_from_slice(&[1, 2, 3, 4]);
 					Ok(())
 				})
@@ -997,10 +1036,9 @@ mod tests {
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
 				EmptyOutputBuf::new(),
-			);
+			).unwrap();
 
-			let output_data = result.unwrap().output_data;
-			assert_eq!(&output_data, &[1, 2, 3, 4]);
+			assert_eq!(&result.output_data, &[1, 2, 3, 4]);
 		});
 	}
 
@@ -1203,7 +1241,7 @@ mod tests {
 					),
 					Err(_)
 				);
-			}
+			},
 		);
 	}
 
@@ -1233,12 +1271,18 @@ mod tests {
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
-				assert_eq!(ctx.overlay.get_code(&created_contract_address).unwrap(), dummy_ch);
-				assert_eq!(&ctx.events, &[
-					RawEvent::Transfer(ALICE, created_contract_address, 100),
-					RawEvent::Instantiated(ALICE, created_contract_address),
-				]);
-			}
+				assert_eq!(
+					ctx.overlay.get_code(&created_contract_address).unwrap(),
+					dummy_ch
+				);
+				assert_eq!(
+					&ctx.events,
+					&[
+						RawEvent::Transfer(ALICE, created_contract_address, 100),
+						RawEvent::Instantiated(ALICE, created_contract_address),
+					]
+				);
+			},
 		);
 	}
 
@@ -1255,14 +1299,14 @@ mod tests {
 			move |ctx| {
 				// Instantiate a contract and save it's address in `created_contract_address`.
 				*created_contract_address.borrow_mut() =
-					ctx.ext.instantiate(
-						&dummy_ch,
-						15u64,
-						ctx.gas_meter,
-						&[]
-					)
-					.unwrap()
-					.address.into();
+				ctx.ext.instantiate(
+					&dummy_ch,
+					15u64,
+					ctx.gas_meter,
+					&[],
+				)
+				.unwrap()
+				.address.into();
 
 				VmExecResult::Ok
 			}
@@ -1277,7 +1321,13 @@ mod tests {
 				ctx.overlay.set_code(&BOB, Some(creator_ch));
 
 				assert_matches!(
-					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
+					ctx.call(
+						BOB,
+						20,
+						&mut GasMeter::<Test>::with_limit(1000, 1),
+						&[],
+						EmptyOutputBuf::new()
+					),
 					Ok(_)
 				);
 
@@ -1291,7 +1341,7 @@ mod tests {
 					RawEvent::Transfer(BOB, created_contract_address, 15),
 					RawEvent::Instantiated(BOB, created_contract_address),
 				]);
-			}
+			},
 		);
 	}
 
@@ -1300,18 +1350,13 @@ mod tests {
 		let vm = MockVm::new();
 
 		let mut loader = MockLoader::empty();
-		let dummy_ch = loader.insert(|_| VmExecResult::Trap("It's a trap!"));
+		let dummy_ch = loader.insert(|_| VmExecResult::Trap("It's a trap!", 0));
 		let creator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
 			move |ctx| {
 				// Instantiate a contract and save it's address in `created_contract_address`.
 				assert_matches!(
-					ctx.ext.instantiate(
-						&dummy_ch,
-						15u64,
-						ctx.gas_meter,
-						&[]
-					),
+					ctx.ext.instantiate(&dummy_ch, 15u64, ctx.gas_meter, &[]),
 					Err("It's a trap!")
 				);
 
@@ -1334,10 +1379,13 @@ mod tests {
 
 				// The contract wasn't created so we don't expect to see an instantiation
 				// event here.
-				assert_eq!(&ctx.events, &[
-					RawEvent::Transfer(ALICE, BOB, 20),
-				]);
-			}
+				assert_eq!(
+					&ctx.events,
+					&[
+						RawEvent::Transfer(ALICE, BOB, 20),
+						RawEvent::ExecutionFailed(3, 2, 0),
+					);
+			},
 		);
 	}
 }
