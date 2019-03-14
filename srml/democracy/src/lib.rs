@@ -312,7 +312,8 @@ impl<T: Trait> Module<T> {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
 				let vote = Self::vote_of((ref_index, voter.clone()));
-				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT);
+				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT)
+					.unwrap_or((Zero::zero(), Zero::zero()));
 				if vote.is_aye() {
 					(approve_acc + votes, against_acc, capital_acc + balance)
 				} else {
@@ -326,32 +327,19 @@ impl<T: Trait> Module<T> {
 		to: T::AccountId,
 		min_lock_periods: LockPeriods,
 		recursion_limit: u32,
-	) -> (BalanceOf<T>, BalanceOf<T>) {
-		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
+	) -> result::Result<(BalanceOf<T>, BalanceOf<T>), &'static str> {
+		if recursion_limit == 0 { return Err("maximum recursion depth exceeded"); }
 		<Delegations<T>>::enumerate()
 			.filter(|(delegator, (delegate, _))| *delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())))
-			.fold((Zero::zero(), Zero::zero()), |(votes_acc, balance_acc), (delegator, (_delegate, periods))| {
-				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
-				let balance = T::Currency::total_balance(&delegator);
-				let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
-				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1);
-				(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
+			.fold(Ok((Zero::zero(), Zero::zero())), |acc, (delegator, (_delegate, periods))| {
+				acc.and_then(|(votes_acc, balance_acc)| {
+					let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
+					let balance = T::Currency::total_balance(&delegator);
+					let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
+					let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1)?;
+					Ok((votes_acc + votes + del_votes, balance_acc + balance + del_balance))
+				})
 			})
-	}
-
-	/// Indicates if the account is delegating vote.
-	fn is_delegating(who: T::AccountId) -> bool {
-		<Delegations<T>>::exists(who)
-	}
-
-	fn is_acyclic_delegation(from: &T::AccountId, to: T::AccountId, recursion_limit: u32) -> bool {
-		if from == &to || recursion_limit == 0 {
-			return false;
-		}
-		if !<Delegations<T>>::exists(to.clone()) {
-			return true;
-		}
-		Self::is_acyclic_delegation(from, Self::delegations(to).0, recursion_limit - 1)
 	}
 
 	// Exposed mutables.
@@ -484,7 +472,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, assert_err};
+	use srml_support::{impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
@@ -672,7 +660,7 @@ mod tests {
 	}
 
 	#[test]
-	fn single_proposal_should_work_with_acyclic_delegation() {
+	fn single_proposal_should_work_with_cyclic_delegation() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 
@@ -682,15 +670,10 @@ mod tests {
 			System::set_block_number(2);
 			let r = 0;
 
-			// Check behaviour with cycles.
-			assert_err!(Democracy::delegate(Origin::signed(1), 1, 100),
-				"delegation creates a cycle or max delegation depth reached");
+			// Check behaviour with cycle.
 			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
-			assert_err!(Democracy::delegate(Origin::signed(1), 2, 100),
-				"delegation creates a cycle or max delegation depth reached");
 			assert_ok!(Democracy::delegate(Origin::signed(3), 2, 100));
-			assert_err!(Democracy::delegate(Origin::signed(1), 3, 100),
-				"delegation creates a cycle or max delegation depth reached");
+			assert_ok!(Democracy::delegate(Origin::signed(1), 3, 100));
 			
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -699,7 +682,6 @@ mod tests {
 
 			// Delegated vote is counted.
 			assert_eq!(Democracy::tally(r), (60, 0, 60));
-
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			assert_eq!(Balances::free_balance(&42), 2);
