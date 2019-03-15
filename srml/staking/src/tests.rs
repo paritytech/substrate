@@ -761,7 +761,6 @@ fn double_staking_should_fail() {
 fn session_and_eras_work() {
 	with_externalities(&mut ExtBuilder::default()
 		.sessions_per_era(2)
-		.reward(10)
 		.build(),
 	|| {
 		assert_eq!(Staking::era_length(), 2);
@@ -1066,7 +1065,6 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * it can unbond a portion of its funds from the stash account.
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
 	with_externalities(&mut ExtBuilder::default()
-		.reward(10) // it is the default, just for verbosity
 		.nominate(false)
 		.build(), 
 	|| {
@@ -1407,8 +1405,8 @@ fn phragmen_poc_works() {
 
 		// This is only because 30 has been bonded on the fly, exposures are stored at the very end of the era. 
 		// 35 is the point, not 'own' Exposure.
-		assert_eq!(Staking::stakers(30).own, 0); 
-		assert_eq!(Staking::stakers(30).total, 0 + 35);
+		assert_eq!(Staking::stakers(30).own, 1000); 
+		assert_eq!(Staking::stakers(30).total, 1000 + 35);
 		// same as above. +25 is the point
 		assert_eq!(Staking::stakers(20).own, 2010);
 		assert_eq!(Staking::stakers(20).total, 2010 + 25);  
@@ -1482,7 +1480,7 @@ fn phragmen_election_works() {
 		assert_eq!(winner_10.exposure.others[0].value, 21);
 		assert_eq!(winner_10.exposure.others[1].value, 5);
 
-		assert_eq!(winner_30.exposure.total, 23);
+		assert_eq!(winner_30.exposure.total, 1000 + 23);
 		assert_eq!(winner_30.score, Perquintill::from_quintillionths(42222222222222222));
 		assert_eq!(winner_30.exposure.others[0].value, 23);
 	})

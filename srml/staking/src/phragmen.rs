@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
 // Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Default))]
 pub struct Candidate<AccountId, Balance: HasCompact> {
 	// The validator's account
 	pub who: AccountId,
@@ -53,9 +53,10 @@ pub struct Nominations<AccountId, Balance: HasCompact> {
 }
 
 // Wrapper around a nominator vote and the load of that vote.
+// 
 // Referred to as 'edge' in the Phragmén reference implementation.
 #[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Default))]
 pub struct Vote<AccountId, Balance: HasCompact> {
 	// Account being voted for
 	who: AccountId,
@@ -94,9 +95,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		let stash_balance = stash_of(who.clone());
 		Candidate {
 			who,
-			approval_stake: BalanceOf::<T>::zero(),
-			score: Perquintill::zero(),
 			exposure: Exposure { total: stash_balance, own: stash_balance, others: vec![] },
+			..Default::default()
 		}
 	}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
@@ -116,7 +116,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		Nominations {
 			who,
 			nominees: nominees.into_iter()
-				.map(|n| Vote {who: n, load: Perquintill::zero(), backing_stake: BalanceOf::<T>::zero()})
+				.map(|n| Vote { who: n, ..Default::default() })
 				.collect::<Vec<Vote<T::AccountId, BalanceOf<T>>>>(),
 			stake: nominator_stake,
 			load : Perquintill::zero(),
@@ -135,23 +135,16 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			// Loop 1: initialize score
 			for nominaotion in &nominations {
 				for vote in &nominaotion.nominees {
-					let candidate = &vote.who;
-					if let Some(c) = candidates.iter_mut().find(|i| i.who == *candidate) {
-						let approval_stake = c.approval_stake;
-						c.score = Perquintill::from_xth(approval_stake.as_());
+					if let Some(c) = candidates.iter_mut().find(|i| i.who == vote.who) {
+						c.score = Perquintill::from_xth(c.approval_stake.as_());
 					}
 				}
 			}
 			// Loop 2: increment score.
-			for nominaotion in &nominations {
-				for vote in &nominaotion.nominees {
-					let candidate = &vote.who;
-					if let Some(c) = candidates.iter_mut().find(|i| i.who == *candidate) {
-						let approval_stake = c.approval_stake;
-						let temp =
-							nominaotion.stake.as_()
-							* *nominaotion.load
-							/ approval_stake.as_();
+			for nomination in &nominations {
+				for vote in &nomination.nominees {
+					if let Some(c) = candidates.iter_mut().find(|i| i.who == vote.who) {
+						let temp = nomination.stake.as_() * *nomination.load / c.approval_stake.as_();
 						c.score = Perquintill::from_quintillionths(*c.score + temp);
 					}
 				}
@@ -166,11 +159,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			for n in &mut nominations {
 				for v in &mut n.nominees {
 					if v.who == winner.who {
-						v.load =
-							Perquintill::from_quintillionths(
-								*winner.score
-								- *n.load
-							);
+						v.load = Perquintill::from_quintillionths(*winner.score - *n.load);
 						n.load = winner.score;
 					}
 				}

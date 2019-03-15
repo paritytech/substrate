@@ -31,7 +31,7 @@ use srml_support::traits::{
 	LockIdentifier, LockableCurrency, WithdrawReasons
 };
 use session::OnSessionChange;
-use primitives::{Perbill};
+use primitives::Perbill;
 use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -48,7 +48,11 @@ const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
 // Indicates the initial status of the staker
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub enum StakerStatus<AccountId> { Idle, Validator, Nominator(Vec<AccountId>), }
+pub enum StakerStatus<AccountId> { 
+	Idle,
+	Validator,
+	Nominator(Vec<AccountId>),
+}
 
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
@@ -166,7 +170,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type; 
+type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
@@ -277,6 +281,7 @@ decl_storage! {
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
+					assert!(T::Currency::free_balance(&stash) >= balance);
 					let _ = <Module<T>>::bond(
 						T::Origin::from(Some(stash.clone()).into()),
 						T::Lookup::unlookup(controller.clone()),
@@ -483,7 +488,7 @@ decl_module! {
 	}
 }
 
-/// An event in this module.
+// An event in this module.
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
 		/// All validators have been rewarded by the given balance.
