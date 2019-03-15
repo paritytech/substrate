@@ -528,7 +528,6 @@ mod test {
 	#[test]
 	fn default_phrase_should_be_used() {
 		assert_eq!(
-
 			Pair::from_string("//Alice///password", None).unwrap().public(),
 			Pair::from_string(&format!("{}//Alice", DEV_PHRASE), Some("password")).unwrap().public(),
 		);
