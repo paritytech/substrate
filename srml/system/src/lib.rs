@@ -23,7 +23,7 @@
 //! ## Overview
 //! 
 //! The system module defines the core data types used in Substrate runtime. 
-//! It also provides several utility functions ([`Module`]) for other modules.
+//! It also provides several utility functions (see [`Module`]) for other modules.
 //! 
 //! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, 
 //! among other things that support the execution of the current block.
@@ -37,15 +37,17 @@
 //! 
 //! The system module does not implement any dispatchable functions.
 //! 
-//! ### Public functions - [`Module`]
+//! ### Public functions
+//! 
+//! All public functions are available as part of the [`Module`] type.
 //! 
 //! ## Usage
 //! 
 //! ### Prerequisites
 //! 
-//! Import the system module and derive your module configuration trait from the `system` trait.
+//! Import the system module and derive your module configuration trait from the system trait.
 //! 
-//! ### Example - get random seed for the current block
+//! ### Example - get random seed and extrinsic count for the current block
 //! 
 //! ```ignore
 //! use support::{decl_module, dispatch::Result};
@@ -55,33 +57,16 @@
 //! 
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
+//! 		pub fn system_module_example(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _random_seed = <system::Module<T>>::random_seed();
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
-//! ```
-//! 
-//! ### Example - get extrinsic count for the current block
-//! 
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
-//! use system::ensure_signed;
-//! 
-//! pub trait Trait: system::Trait {}
-//! 
-//! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
 //! 			Ok(())
 //! 		}
 //! 	}
 //! }
 //! ```
+//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -138,13 +123,13 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
-	/// Represents the origin for a call
+	/// The `Origin` type used by dispatchable calls
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 
 	/// Represents account indexes and nonces for lookups
 	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
 
-	/// The block number on the current block
+	/// The block number type used by the runtime
 	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	
 	/// Represents the output of a hashing function
@@ -162,8 +147,9 @@ pub trait Trait: 'static + Eq + Clone {
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 
 	/// Wrapper for converting other types to AccountId
-	/// Useful when resolving AccountId from predefined source types
-	/// For example: Index to AccountId lookup
+	/// 
+	/// Useful when resolving AccountId from predefined source types.
+	/// For example: Index to AccountId lookup.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
 	/// The block header
@@ -173,7 +159,7 @@ pub trait Trait: 'static + Eq + Clone {
 		Digest = Self::Digest
 	>;
 
-	/// Represents an event which can be deposited
+	/// Represents the event type of the runtime
 	type Event: Parameter + Member + From<Event>;
 
 	/// Represents a piece of information which can be part of the digest (as a digest item)
@@ -183,7 +169,7 @@ pub trait Trait: 'static + Eq + Clone {
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposits an event onto this block's event record.
 		pub fn deposit_event(event: T::Event) {
 			let extrinsic_index = Self::extrinsic_index();
