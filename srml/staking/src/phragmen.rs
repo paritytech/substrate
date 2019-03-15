@@ -69,7 +69,7 @@ pub struct Vote<AccountId, Balance: HasCompact> {
 ///
 /// Reference implementation: https://github.com/w3f/consensus
 ///
-/// returns a vector of elected candidates
+/// Returns a vector of elected candidates
 pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		get_rounds: FR,
 		get_validators: FV,
