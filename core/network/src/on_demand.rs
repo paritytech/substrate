@@ -532,7 +532,7 @@ pub mod tests {
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 	use crate::config::Roles;
 	use crate::message;
-	use network_libp2p::{NodeIndex, ProtocolId, Severity};
+	use network_libp2p::{NodeIndex, Severity};
 	use crate::service::{network_channel, NetworkPort, NetworkMsg};
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};
@@ -644,7 +644,7 @@ pub mod tests {
 	#[test]
 	fn disconnects_from_timeouted_peer() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
+		let (network_sender, network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 		on_demand.on_connect(1, Roles::FULL, 1000);
@@ -671,7 +671,7 @@ pub mod tests {
 	#[test]
 	fn disconnects_from_peer_on_response_with_wrong_id() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
+		let (network_sender, network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -690,7 +690,7 @@ pub mod tests {
 	#[test]
 	fn disconnects_from_peer_on_incorrect_response() {
 		let (_x, on_demand) = dummy(false);
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
+		let (network_sender, network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.remote_call(RemoteCallRequest {
 			block: Default::default(),
@@ -709,7 +709,7 @@ pub mod tests {
 	#[test]
 	fn disconnects_from_peer_on_unexpected_response() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
+		let (network_sender, network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -720,7 +720,7 @@ pub mod tests {
 	#[test]
 	fn disconnects_from_peer_on_wrong_response_type() {
 		let (_x, on_demand) = dummy(false);
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
+		let (network_sender, network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -746,7 +746,7 @@ pub mod tests {
 
 		let retry_count = 2;
 		let (_x, on_demand) = dummy(false);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		for i in 0..retry_count+1 {
 			on_demand.on_connect(i, Roles::FULL, 1000);
@@ -786,7 +786,7 @@ pub mod tests {
 	#[test]
 	fn receives_remote_call_response() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -809,7 +809,7 @@ pub mod tests {
 	#[test]
 	fn receives_remote_read_response() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -834,7 +834,7 @@ pub mod tests {
 	#[test]
 	fn receives_remote_header_response() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -869,7 +869,7 @@ pub mod tests {
 	#[test]
 	fn receives_remote_changes_response() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
@@ -900,7 +900,7 @@ pub mod tests {
 	#[test]
 	fn does_not_sends_request_to_peer_who_has_no_required_block() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 
 		on_demand.on_connect(1, Roles::FULL, 100);
@@ -952,7 +952,7 @@ pub mod tests {
 		// loop forever after dispatching a request to the last peer, since the
 		// last peer was not updated
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 
 		on_demand.remote_header(RemoteHeaderRequest {
@@ -977,7 +977,7 @@ pub mod tests {
 	#[test]
 	fn tries_to_send_all_pending_requests() {
 		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel(ProtocolId::default());
+		let (network_sender, _network_port) = network_channel();
 		on_demand.set_network_sender(network_sender.clone());
 
 		on_demand.remote_header(RemoteHeaderRequest {
