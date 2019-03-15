@@ -184,7 +184,7 @@
 //!     validator and their nominators is calculated by multiplying the result of the above point 
 //!       by `2.pow(unstake_threshold)`. This punishment is shared in the same manner as the rewards.
 //! - If the previous overflows, then `slot_stake` is used. (NOTE: This should never happen in a correctly implemented, non-corrupted, well-configured system)
-//! - All individual accounts' punishments are capped at their total stake. (NOTE: This cap should never comee into force in a correctly implemented, non-corrupted, well-configured system)
+//! - All individual accounts' punishments are capped at their total stake. (NOTE: This cap should never come into force in a correctly implemented, non-corrupted, well-configured system)
 //! 
 //! ### Additional Fund Management Operations
 //! 
