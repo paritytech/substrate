@@ -50,17 +50,16 @@
 //! 
 //! #### Staking 
 //! 
-//! Almost any interaction with the staking module requires at least one account to become **bonded**, also known as 
-//! being a **staker**. For this, all that it is needed is a secondary _**stash account**_ which will hold the staked funds.
-//! Henceforth, the former account that initiated the interest is called the **controller** and the latter, holding the
-//! funds, is named the **stash**. Also, note that this implies that entering the staking process requires an _account 
-//! pair_, one to take the role of the controller and one to be the frozen stash account (any value locked in 
-//! stash cannot be used, hence called _frozen_). This process in the public API is mostly referred to as _bonding_ via 
+//! Almost any interaction with the staking module requires a process of *bonding* (also known as 
+//! being a **staker**). To become *bonded* a fund-holding account known as the _**stash account**_, which holds some of all of the
+//! funds that become frozen in place as part of the staking process, is paired with an active **controller** account which issues
+//! instructions on how they shall be used. This process in the public API is mostly referred to as _bonding_ via 
 //! the `bond()` function. 
 //! 
-//! Any account pair successfully placed at stake can accept three possible roles, namely: `validate`, `nominate` or 
-//! simply `chill`. Note that during the process of accepting these roles, the _controller_ account is always responsible
-//! for declaring interest and the _stash_ account stays untouched, without directly interacting in any operation. 
+//! There are three possible roles that any staked account pair can be in: `Validator`, `Nominator` and `Idle`. There are
+//! three corresponding instructions to change between roles, namely: `validate`, `nominate` and `chill`. Note that the
+//! _controller_ account is always responsible
+//! for declaring changes and the _stash_ account stays untouched, without directly interacting in any operation. 
 //! 
 //! #### Validating
 //! 
@@ -68,17 +67,16 @@
 //! the network. A validator should avoid both any sort of malicious misbehavior and going offline.
 //! Bonded accounts that state interest in being a validator do NOT get immediately chosen as a validator. Instead, they
 //! are declared as a _candidate_ and they _might_ get elected at the _next **era**_ as a validator. The result of the
-//! election is determined by nominators and their votes. An account can become a validator via the `validate()` call.
+//! election is determined by nominators and their votes. An account can become a validator candidate via the `validate()`
+//! call.
 //! 
 //! #### Nomination 
 //! 
 //! A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on a set of validators
-//! to be elected. Once interest in nomination is stated by an account, it takes effect _immediately_, meaning that its
-//! votes will be taken into account at the next election round. As mentioned above, a nominator must also place some
-//! funds in a stash account, essentially indicating the _weight_ of its vote. In some sense, the nominator bets on the
-//! honesty of a set of validators by voting for them, with the goal of having a share of the reward granted to them. 
-//! Any rewards given to a validator is shared among that validator and all of the nominators that voted for it. The 
-//! same logic applies to the slash of a validator; if a validator misbehaves all of its nominators also get slashed. 
+//! to be elected. Once interest in nomination is stated by an account, it takes effect at the next election round. The
+//! funds in the nominator's stash account indicate the _weight_ of its vote. In some sense, the nominator bets on the
+//! honesty of a set of validators by voting for them, with the goal of having some share of the reward granted to them. 
+//! Both rewards and any punishment that a validator earns are shared between itself and its nominators.
 //! This rule incentivizes the nominators to NOT vote for the misbehaving/offline validators as much as possible, simply
 //! because the nominators will also lose funds if they vote poorly. An account can become a nominator via the 
 //! `nominate()` call.
@@ -167,12 +165,12 @@
 //! - Once a new era is triggered, rewards are paid to the validators and the associated nominators. 
 //! - The validator can declare an amount, named `validator_payment`, that does not get shared with the nominators at 
 //!     each reward payout through their `ValidatorPrefs`. This value gets deducted from the total reward that can be paid.
-//!     The remaining portion is split among the validator and all of the nominators who had a vote for this validator,
-//!     proportional to their staked value. 
+//!     The remaining portion is split among the validator and all of the nominators that nominated the validator,
+//!     proportional to the value staked behind this validator. 
 //! - All entities who receive a reward have the option to choose their reward destination, through the `Payee` storage item (see `set_payee()`), to be one of the following: 
-//! - Controller account.
-//! - Stash account, not increasing the staked value.
-//! - Stash account, also increasing the staked value.
+//!   - Controller account.
+//!   - Stash account, not increasing the staked value.
+//!   - Stash account, also increasing the staked value.
 //! 
 //! ### Slashing details 
 //! 
@@ -182,20 +180,20 @@
 //!      which applies to all validators and prevents them from getting immediately slashed.
 //! - Similar to the reward value, the slash value is updated at the end of each era by multiplying `slot_stake` and a 
 //!     configuration storage item, `OfflineSlash`.
-//! - Once a validator has been reported a sufficient number of times, the actual value that gets deducted from that 
-//!     validator, and every single nominator that voted for it is calculated by multiplying the result of the above point 
-//!       by `2.pow(unstake_threshold)`.
-//! - If the previous overflows, then `slot_stake` is used.
-//! - If the previous is more than what the validator/nominator has in stake, all of its stake is slashed (`.max(total_stake)`).
+//! - Once a validator has been reported a sufficient number of times, the total value that gets deducted from that 
+//!     validator and their nominators is calculated by multiplying the result of the above point 
+//!       by `2.pow(unstake_threshold)`. This punishment is shared in the same manner as the rewards.
+//! - If the previous overflows, then `slot_stake` is used. (NOTE: This should never happen in a correctly implemented, non-corrupted, well-configured system)
+//! - All individual accounts' punishments are capped at their total stake. (NOTE: This cap should never comee into force in a correctly implemented, non-corrupted, well-configured system)
 //! 
 //! ### Additional Fund Management Operations
 //! 
 //! Any funds already placed into stash can be the target of the following operations:
 //! 
 //! - The controller account can free a portion (or all) of the funds using the `unbond()` call. Note that the funds 
-//!     are not immediately accessible, instead, a duration denoted by `BondingDuration` (in number of eras) must pass until the funds can actually be removed.
-//! - To actually remove the funds, once the bonding duration is over, `withdraw_unbonded()` can be used.
-//! - As opposed to the above, additional funds can be added to the stash account via the `bond_extra()` transaction call. 
+//!   are not immediately accessible, instead, a duration denoted by `BondingDuration` (in number of eras) must pass until the funds can actually be removed.
+//! - To preparee the funds for transfer away from the stash account, then `withdraw_unbonded()` must be used once the bonding duration is over.
+//! - Additional funds that are placed in the stash account may be bonded with the `bond_extra()` transaction call. 
 //! 
 //! ### Election algorithm details.
 //! 
