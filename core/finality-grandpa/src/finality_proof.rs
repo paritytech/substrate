@@ -44,6 +44,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{ed25519, H256};
 use ed25519::Public as AuthorityId;
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::justification::GrandpaJustification;
 
@@ -170,14 +171,14 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		}
 	}
 
-	// check that the last header in finalization path is the jsutification target block
+	// check that the last header in finalization path is the justification target block
 	let just_block = proof.justification.target_block();
 	{
 		let finalized_header = proof.finalization_path.last()
 			.expect("checked above that proof.finalization_path is not empty; qed");
 		if *finalized_header.number() != just_block.0 || finalized_header.hash() != just_block.1 {
 			return Err(ClientErrorKind::BadJustification(
-				"finality proof: target jsutification block is not a part of finalized path".into()
+				"finality proof: target justification block is not a part of finalized path".into()
 			).into());
 		}
 	}
@@ -196,6 +197,8 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 	// and now check justification
 	proof.justification.verify(set_id, &grandpa_authorities.into_iter().collect())?;
 
+	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
+		"set_id" => ?set_id, "finalized_header_hash" => ?block.1);
 	Ok(proof.finalization_path)
 }
 
