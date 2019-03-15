@@ -137,8 +137,8 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	);
 
 	let InstanceOpts {
-		instance_and_bounds,
 		instance,
+		bound_instantiable,
 		..
 	} = instance_opts;
 
@@ -150,10 +150,10 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#decl_store_items
 		}
 		#store_default_struct
-		impl<#traitinstance: #traittype, #instance_and_bounds> #storetype for #module_ident<#traitinstance, #instance> {
+		impl<#traitinstance: #traittype, #instance #bound_instantiable> #storetype for #module_ident<#traitinstance, #instance> {
 			#impl_store_items
 		}
-		impl<#traitinstance: 'static + #traittype, #instance_and_bounds> #module_ident<#traitinstance, #instance> {
+		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #module_ident<#traitinstance, #instance> {
 			#impl_store_fns
 			#[doc(hidden)]
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
@@ -851,7 +851,6 @@ pub(crate) struct InstanceOpts {
 	pub comma_instance: TokenStream2,
 	pub equal_default_instance: TokenStream2,
 	pub bound_instantiable: TokenStream2,
-	pub instance_and_bounds: TokenStream2,
 }
 
 fn get_instance_opts(
@@ -873,7 +872,6 @@ fn get_instance_opts(
 				comma_instance: quote!{, #instance},
 				equal_default_instance,
 				bound_instantiable: quote!{: #instantiable},
-				instance_and_bounds: quote!{#instance: 'static + #instantiable},
 				instance: Some(instance),
 				default_instance,
 				instantiable: Some(instantiable),

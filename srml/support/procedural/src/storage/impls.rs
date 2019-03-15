@@ -232,7 +232,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = self;
 
 		let InstanceOpts {
-			instance_and_bounds,
 			comma_instance,
 			equal_default_instance,
 			bound_instantiable,
@@ -516,7 +515,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 
-			impl<#traitinstance: 'static + #traittype, #instance_and_bounds> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
+			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
 				fn head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
 					use self::#inner_module::Utils;
 

@@ -389,7 +389,7 @@ macro_rules! decl_module {
 		$system:ident;
 		$vis:vis fn deposit_event$(<$event_trait_instance:ident $(, $event_instance:ident)?>)?() = default;
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?> {
 			$vis fn deposit_event(event: Event$(<$event_trait_instance $(, $event_instance)?>)?) {
 				<$system::Module<$trait_instance>>::deposit_event(
 					<$trait_instance as $trait_name$(<$instance>)?>::Event::from(event).into()
@@ -403,7 +403,7 @@ macro_rules! decl_module {
 		$system:ident;
 		$vis:vis fn deposit_event($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?> {
 			$vis fn deposit_event($param: $param_ty) {
 				$( $impl )*
 			}
@@ -414,7 +414,7 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		fn on_initialise() { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnInitialise<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?>
 		{
@@ -426,7 +426,7 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		fn on_initialise($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnInitialise<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?>
 		{
@@ -437,7 +437,7 @@ macro_rules! decl_module {
 	(@impl_on_initialise
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnInitialise<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?>
 		{}
@@ -447,7 +447,7 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		fn on_finalise() { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?>
 		{
@@ -459,7 +459,7 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		fn on_finalise($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?>
 		{
@@ -470,7 +470,7 @@ macro_rules! decl_module {
 	(@impl_on_finalise
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: 'static + $instantiable)?>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?>
 		{
@@ -594,7 +594,7 @@ macro_rules! decl_module {
 		/// Can also be called using [`Call`].
 		///
 		/// [`Call`]: enum.Call.html
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			$(
 				decl_module! {
 					@impl_function
@@ -635,7 +635,7 @@ macro_rules! decl_module {
 
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Clone
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
 			for $call_type<$trait_instance $(, $instance)?>
 		{
 			fn clone(&self) -> Self {
@@ -648,7 +648,7 @@ macro_rules! decl_module {
 				}
 			}
 		}
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::PartialEq
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::PartialEq
 			for $call_type<$trait_instance $(, $instance)?>
 		{
 			fn eq(&self, _other: &Self) -> bool {
@@ -670,12 +670,12 @@ macro_rules! decl_module {
 				}
 			}
 		}
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Eq
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Eq
 			for $call_type<$trait_instance $(, $instance)?>
 		{}
 
 		#[cfg(feature = "std")]
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::fmt::Debug
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::fmt::Debug
 			for $call_type<$trait_instance $(, $instance)?>
 		{
 			fn fmt(&self, _f: &mut $crate::dispatch::fmt::Formatter) -> $crate::dispatch::result::Result<(), $crate::dispatch::fmt::Error> {
@@ -692,19 +692,19 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Decode for $call_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Decode for $call_type<$trait_instance $(, $instance)?> {
 			fn decode<Input: $crate::dispatch::Input>(input: &mut Input) -> Option<Self> {
 				let _input_id = input.read_byte()?;
 				$crate::__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*)
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Encode for $call_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Encode for $call_type<$trait_instance $(, $instance)?> {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
 				$crate::__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
 			}
 		}
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Dispatchable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance $(, $instance)?>
 		{
 			type Trait = $trait_instance;
@@ -724,13 +724,13 @@ macro_rules! decl_module {
 				}
 			}
 		}
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Callable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable
 			for $mod_type<$trait_instance $(, $instance)?>
 		{
 			type Call = $call_type<$trait_instance $(, $instance)?>;
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			#[doc(hidden)]
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
 				d.dispatch(origin)
@@ -947,7 +947,7 @@ macro_rules! __dispatch_impl_metadata {
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
 		$($rest:tt)*
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			#[doc(hidden)]
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				$crate::__call_to_functions!($($rest)*)
