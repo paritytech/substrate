@@ -214,22 +214,6 @@
 //!
 //! // Show a usage example in an actual runtime
 //!
-//! \## Implementation Details
-//!
-//! \### Module configuration trait
-//!
-//! // Explain implementation details that look important or distinguish the module
-//!
-//! The module configuration trait of the `INSERT_CUSTOM_MODULE_NAME` module derives from the `INSERT_CUSTOM_MODULE_NAME` module and it defines the `ExampleType` type to represent <EXPLAIN_WHAT_IT_REPRESENTS>.
-//!
-//! \### Other implemented traits
-//!
-//! // Explain other implementation trait details
-//!
-//! \## Extensibility
-//!
-//! // Explain how to modify or customise the module to make it their own
-//!
 //! \## Genesis Config
 //!
 //! <!-- Original author of paragraph: @joepetrowski -->
