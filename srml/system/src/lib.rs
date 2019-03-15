@@ -48,13 +48,39 @@
 //! ### Example - get random seed for the current block
 //! 
 //! ```ignore
-//! let rnd = <system::Module<T>>::random_seed();
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! 
+//! pub trait Trait: system::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _random_seed = <system::Module<T>>::random_seed();
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
 //! ```
 //! 
 //! ### Example - get extrinsic count for the current block
 //! 
 //! ```ignore
-//! let e_count = <system::Module<T>>::extrinsic_count();
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! 
+//! pub trait Trait: system::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -112,7 +138,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
-	/// Represents the origin for an extrinsic call
+	/// Represents the origin for a call
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 
 	/// Represents account indexes and nonces for lookups
@@ -157,7 +183,16 @@ pub trait Trait: 'static + Eq + Clone {
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin { 
+		/// Deposits an event onto this block's event record.
+		pub fn deposit_event(event: T::Event) {
+			let extrinsic_index = Self::extrinsic_index();
+			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+			let mut events = Self::events();
+			events.push(EventRecord { phase, event });
+			<Events<T>>::put(events);
+		}
+	}
 }
 
 /// A phase of a block's execution.
@@ -263,7 +298,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 		/// Total length in bytes for all extrinsics put together, for the current block
 		AllExtrinsicsLen: Option<u32>;
-		/// Maps block hashes to block numbers
+		/// Maps block numbers to block hashes
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps extrinsic's index to its data)
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
@@ -337,15 +372,6 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
-	/// Deposits an event onto this block's event record.
-	pub fn deposit_event(event: T::Event) {
-		let extrinsic_index = Self::extrinsic_index();
-		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-		let mut events = Self::events();
-		events.push(EventRecord { phase, event });
-		<Events<T>>::put(events);
-	}
-
 	/// Gets the index of extrinsic that is currenty executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
