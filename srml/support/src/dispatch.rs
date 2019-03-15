@@ -27,6 +27,9 @@ pub use srml_metadata::{
 	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 
+/// A type that can not be instantiated.
+pub enum Never {}
+
 /// Result of a module function call; either nothing (functions are only called for "side efeects")
 /// or an error message.
 pub type Result = result::Result<(), &'static str>;
@@ -481,12 +484,10 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
-				{ $( $impl )* }
-				Ok(())
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
+			{ $( $impl )* }
+			Ok(())
 		}
 	};
 
@@ -499,11 +500,9 @@ macro_rules! decl_module {
 			root $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name($( $param: $param_ty ),* ) -> $result {
-				$( $impl )*
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name($( $param: $param_ty ),* ) -> $result {
+			$( $impl )*
 		}
 	};
 
@@ -516,14 +515,12 @@ macro_rules! decl_module {
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name(
-				$origin: $origin_ty $(, $param: $param_ty )*
-			) -> $crate::dispatch::Result {
-				{ $( $impl )* }
-				Ok(())
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name(
+			$origin: $origin_ty $(, $param: $param_ty )*
+		) -> $crate::dispatch::Result {
+			{ $( $impl )* }
+			Ok(())
 		}
 	};
 
@@ -536,11 +533,9 @@ macro_rules! decl_module {
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
-			$(#[doc = $doc_attr])*
-			$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-				$( $impl )*
-			}
+		$(#[doc = $doc_attr])*
+		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
+			$( $impl )*
 		}
 	};
 
@@ -596,24 +591,29 @@ macro_rules! decl_module {
 			$( $deposit_event )*
 		}
 
-		$(
-			decl_module! {
-				@impl_function
-				$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
-				$origin_type;
-				$from;
-				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name (
-					$from $(, $param_name : $param )*
-				) $( -> $result )* { $( $impl )* }
-			}
-		)*
+		/// Can also be called using [`Call`].
+		///
+		/// [`Call`]: enum.Call.html
+		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+			$(
+				decl_module! {
+					@impl_function
+					$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
+					$origin_type;
+					$from;
+					$(#[doc = $doc_attr])*
+					$fn_vis fn $fn_name (
+						$from $(, $param_name : $param )*
+					) $( -> $result )* { $( $impl )* }
+				}
+			)*
+		}
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
 			#[doc(hidden)]
-			__PhantomItem(::std::marker::PhantomData<($trait_instance $(, $instance)?)>),
+			__PhantomItem(::std::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
 			$(
 				#[allow(non_camel_case_types)]
 				$(#[doc = $doc_attr])*
@@ -625,7 +625,7 @@ macro_rules! decl_module {
 		$(#[$attr])*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
 			#[doc(hidden)]
-			__PhantomItem(::core::marker::PhantomData<($trait_instance $(, $instance)?)>),
+			__PhantomItem(::core::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
 			$(
 				#[allow(non_camel_case_types)]
 				$(#[doc = $doc_attr])*
@@ -660,7 +660,7 @@ macro_rules! decl_module {
 								self_params == ( $( $param_name, )* )
 							} else {
 								match *_other {
-									$call_type::__PhantomItem(_) => unreachable!(),
+									$call_type::__PhantomItem(_, _) => unreachable!(),
 									_ => false,
 								}
 							}
@@ -702,11 +702,6 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Encode for $call_type<$trait_instance $(, $instance)?> {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
 				$crate::__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
-
-				#[allow(irrefutable_let_patterns)] // In case of Module with no dispatchables
-				{
-					if let $call_type::__PhantomItem(_) = *self { unreachable!() }
-				}
 			}
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Dispatchable
@@ -725,7 +720,7 @@ macro_rules! decl_module {
 							)
 						},
 					)*
-					$call_type::__PhantomItem(_) => { panic!("__PhantomItem should never be used.") },
+					$call_type::__PhantomItem(_, _) => { unreachable!("__PhantomItem should never be used.") },
 				}
 			}
 		}

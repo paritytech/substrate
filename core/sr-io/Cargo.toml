@@ -35,3 +35,4 @@ std = [
 ]
 nightly = []
 strict = []
+wasm-nice-panic-message = []

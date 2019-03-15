@@ -18,12 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	OnInitialise, Hash, As, Digest};
+use primitives::traits::{
+	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
+	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT
+};
 use srml_support::{Dispatchable, traits::ChargeBytesFee};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -47,18 +48,43 @@ mod internal {
 	}
 }
 
-pub struct Executive<
-	System,
-	Block,
-	Context,
-	Payment,
-	AllModules,
->(PhantomData<(System, Block, Context, Payment, AllModules)>);
+/// Something that can be used to execute a block.
+pub trait ExecuteBlock<Block: BlockT> {
+	/// Actually execute all transitioning for `block`.
+	fn execute_block(block: Block);
+	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
+	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>);
+}
+
+pub struct Executive<System, Block, Context, Payment, AllModules>(
+	PhantomData<(System, Block, Context, Payment, AllModules)>
+);
 
 impl<
-	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
+	Context: Default,
+	Payment: ChargeBytesFee<System::AccountId>,
+	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
+	Block::Extrinsic: Checkable<Context> + Codec,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+{
+	fn execute_block(block: Block) {
+		Self::execute_block(block);
+	}
+
+	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>) {
+		Self::execute_extrinsics_without_checks(block_number, extrinsics);
+	}
+}
+
+impl<
+	System: system::Trait,
+	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
+	Context: Default,
 	Payment: ChargeBytesFee<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
@@ -69,8 +95,12 @@ impl<
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
-		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
-		<AllModules as OnInitialise<System::BlockNumber>>::on_initialise(*header.number());
+		Self::initialise_block_impl(header.number(), header.parent_hash(), header.extrinsics_root());
+	}
+
+	fn initialise_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash) {
+		<system::Module<System>>::initialise(block_number, parent_hash, extrinsics_root);
+		<AllModules as OnInitialise<System::BlockNumber>>::on_initialise(*block_number);
 	}
 
 	fn initial_checks(block: &Block) {
@@ -96,16 +126,33 @@ impl<
 		// any initial checks
 		Self::initial_checks(&block);
 
-		// execute transactions
+		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
-		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
-
-		// post-transactional book-keeping.
-		<system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(*header.number());
+		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 		// any final checks
 		Self::final_checks(&header);
+	}
+
+	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
+	pub fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>) {
+		// Make the api happy, but maybe we should not set them at all.
+		let parent_hash = <Block::Header as Header>::Hashing::hash(b"parent_hash");
+		let extrinsics_root = <Block::Header as Header>::Hashing::hash(b"extrinsics_root");
+
+		Self::initialise_block_impl(&block_number, &parent_hash, &extrinsics_root);
+
+		// execute extrinsics
+		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number);
+	}
+
+	/// Execute given extrinsics and take care of post-extrinsics book-keeping
+	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
+
+		// post-extrinsics book-keeping.
+		<system::Module<System>>::note_finished_extrinsics();
+		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(block_number);
 	}
 
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
