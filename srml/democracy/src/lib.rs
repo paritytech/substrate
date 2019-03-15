@@ -312,8 +312,7 @@ impl<T: Trait> Module<T> {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
 				let vote = Self::vote_of((ref_index, voter.clone()));
-				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT)
-					.unwrap_or((Zero::zero(), Zero::zero()));
+				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT);
 				if vote.is_aye() {
 					(approve_acc + votes, against_acc, capital_acc + balance)
 				} else {
@@ -327,18 +326,16 @@ impl<T: Trait> Module<T> {
 		to: T::AccountId,
 		min_lock_periods: LockPeriods,
 		recursion_limit: u32,
-	) -> result::Result<(BalanceOf<T>, BalanceOf<T>), &'static str> {
-		if recursion_limit == 0 { return Err("maximum recursion depth exceeded"); }
+	) -> (BalanceOf<T>, BalanceOf<T>) {
+		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
 		<Delegations<T>>::enumerate()
 			.filter(|(delegator, (delegate, _))| *delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())))
-			.fold(Ok((Zero::zero(), Zero::zero())), |acc, (delegator, (_delegate, periods))| {
-				acc.and_then(|(votes_acc, balance_acc)| {
-					let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
-					let balance = T::Currency::total_balance(&delegator);
-					let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
-					let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1)?;
-					Ok((votes_acc + votes + del_votes, balance_acc + balance + del_balance))
-				})
+			.fold((Zero::zero(), Zero::zero()), |(votes_acc, balance_acc), (delegator, (_delegate, periods))| {
+				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
+				let balance = T::Currency::total_balance(&delegator);
+				let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
+				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1);
+				(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
 			})
 	}
 
