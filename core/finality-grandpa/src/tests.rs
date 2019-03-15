@@ -1128,33 +1128,76 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
-	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
-	net.peer(0).push_authorities_change_block(new_authorities);
+	net.peer(0).push_authorities_change_block(vec![AuthorityId::from_raw([42; 32])]);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(1, net.clone(), peers);
 	net.lock().sync();
 
- 	// check that the block#1 is finalized on light client
+	// check that the block#1 is finalized on light client
 	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);
 }
 
 #[test]
-fn empty_finality_proof_is_returned_to_light_client_when_consensus_data_changes() {
-/*	let _ = ::env_logger::try_init();
+fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_different() {
+	// for debug: to ensure that without forced change light client will sync finality proof
+	const FORCE_CHANGE: bool = true;
 
- 	let peers = &[AuthorityKeyring::Alice];
-	let net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
+	let _ = ::env_logger::try_init();
 
- 	// import block#1 WITH consensus data change + ensure if is finalized (with justification)
-	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
-	net.peer(0).push_authorities_change_block(new_authorities);
+	// two of these guys are offline.
+	let genesis_authorities = if FORCE_CHANGE {
+		vec![
+			AuthorityKeyring::Alice,
+			AuthorityKeyring::Bob,
+			AuthorityKeyring::Charlie,
+			AuthorityKeyring::One,
+			AuthorityKeyring::Two,
+		]
+	} else {
+		vec![
+			AuthorityKeyring::Alice,
+			AuthorityKeyring::Bob,
+			AuthorityKeyring::Charlie,
+		]
+	};
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let api = TestApi::new(make_ids(&genesis_authorities));
+
+	let voters = make_ids(peers_a);
+	let forced_transitions = api.forced_changes.clone();
+	let net = GrandpaTestNet::new(api, 3);
 	let net = Arc::new(Mutex::new(net));
-	run_to_completion(1, net.clone(), peers);
-
-	// add && sync light peer
 	net.lock().add_light_peer(&GrandpaTestNet::default_config());
-	net.lock().sync();
 
- 	// ... and check that the block#1 is finalized on light client
-	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);*/
+	let runner_net = net.clone();
+	let add_blocks = move || {
+		net.lock().peer(0).push_blocks(1, false); // best is #1
+
+		// add a forced transition at block 5.
+		if FORCE_CHANGE {
+			let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
+			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
+				next_authorities: voters.clone(),
+				delay: 3,
+			}));
+		}
+
+		// ensure block#10 enacts authorities set change => justification is generated
+		// normally it will reach light client, but because of the forced change, it will not
+		net.lock().peer(0).push_blocks(8, false); // best is #9
+		net.lock().peer(0).push_authorities_change_block(vec![AuthorityId::from_raw([42; 32])]); // #10
+		net.lock().peer(0).push_blocks(1, false); // best is #11
+		net.lock().sync();
+	};
+
+	// finalize block #11 on full clients
+	run_to_completion_with(11, runner_net.clone(), peers_a, add_blocks);
+	// request finalization by light client
+	runner_net.lock().sync();
+
+	// check block, finalized on light client
+	assert_eq!(
+		runner_net.lock().peer(3).client().info().unwrap().chain.finalized_number,
+		if FORCE_CHANGE { 0 } else { 10 },
+	);
 }
