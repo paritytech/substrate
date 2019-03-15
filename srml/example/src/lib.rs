@@ -142,10 +142,6 @@
 //!
 //! // It is up to the writer of the respective module (with respect to how much information to provide).
 //!
-//! \#### Public Dispatchable functions
-//!
-//! <!-- See https://github.com/paritytech/substrate/pull/1945#discussion_r265802324 -->
-//!
 //! \#### Public Inspection functions - Immutable (getters)
 //!
 //! // Insert a subheading for each getter function signature
