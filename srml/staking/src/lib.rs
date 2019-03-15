@@ -201,7 +201,7 @@
 //! 
 //! ## GenesisConfig
 //! 
-//! See the [`GensisConfig`] for a list of attributes that can be provided.
+//! See the [`GenesisConfig`] for a list of attributes that can be provided.
 //! 
 //! ## Related Modules 
 //! 
