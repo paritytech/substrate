@@ -16,7 +16,9 @@
 
 //! # Balances Module
 //!
-//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need to implement the [balances Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
+//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need
+//! to implement the [balances Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables
+//! are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
 //!
 //! ## Overview
 //!
@@ -33,21 +35,31 @@
 //!
 //! ### Terminology
 //!
-//! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
+//! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
+//! "dust accounts" from filling storage.
 //! - **Total Issuance:** The total amount of units in existence in a system.
-//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set to zero.
-//! - **Free Balance:** The liquid or spendable balance. The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is removed.
-//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the existential deposit then it will be deleted.
+//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set
+//! to zero.
+//! - **Free Balance:** The liquid or spendable balance. The free balance is the only balance that matters for most
+//! operations. When this balance falls below the existential deposit, the account is removed.
+//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
+//! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
+//! existential deposit then it will be deleted.
 //! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number.
 //!
 //! ### Implementations
 //! 
-//! The balances module provides implementations for the following traits. If these traits provide the functionality that you need, then you can avoid coupling with the balances module.
+//! The balances module provides implementations for the following traits. If these traits provide the functionality
+//! that you need, then you can avoid coupling with the balances module.
 //!
-//! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a fungible assets system.
-//! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for dealing with accounts that allow liquidity restrictions.
-//! - [`TransferAsset`](https://crates.parity.io/srml_support/traits/trait.TransferAsset.html): Functions to transfer fungible assets.
-//! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a given account is unused.
+//! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a
+//! fungible assets system.
+//! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
+//! dealing with accounts that allow liquidity restrictions.
+//! - [`TransferAsset`](https://crates.parity.io/srml_support/traits/trait.TransferAsset.html): Functions to transfer
+//! fungible assets.
+//! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a
+//! given account is unused.
 //!
 //! Example from the treasury module:
 //!
@@ -69,9 +81,11 @@
 //!
 //! ### Public Functions
 //!
-//! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available functions.
+//! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available
+//! functions.
 //!
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing
+//! any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
 //!
 //! ## Usage
 //!
@@ -79,7 +93,8 @@
 //!
 //! ### Import and Balance Transfer
 //!
-//! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call functions from the module.
+//! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call
+//! functions from the module.
 //!
 //! ```rust,ignore
 //! use support::{decl_module, dispatch::Result};
@@ -121,7 +136,7 @@
 //!
 //! ## Genesis config
 //!
-//! Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
+//! The following storage items depend on the genesis config:
 //! 
 //! - `TotalIssuance`
 //! - `ExistentialDeposit`
@@ -132,7 +147,9 @@
 //!
 //! ## Related Modules
 //!
-//! The balances module depends on the [`system`](https://crates.parity.io/srml_system/index.html) and [`srml_support`](https://crates.parity.io/srml_support/index.html) modules as well as Substrate Core libraries and the Rust standard library.
+//! The balances module depends on the [`system`](https://crates.parity.io/srml_system/index.html) and
+//! [`srml_support`](https://crates.parity.io/srml_support/index.html) modules as well as Substrate Core
+//! libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

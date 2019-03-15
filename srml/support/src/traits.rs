@@ -184,7 +184,7 @@ pub trait Currency<AccountId> {
 /// they can be individually replaced or removed.
 pub type LockIdentifier = [u8; 8];
 
-/// A currency whose accounts can have liquidity restructions.
+/// A currency whose accounts can have liquidity restrictions.
 pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
