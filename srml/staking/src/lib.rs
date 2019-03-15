@@ -192,7 +192,7 @@
 //! 
 //! - The controller account can free a portion (or all) of the funds using the `unbond()` call. Note that the funds 
 //!   are not immediately accessible, instead, a duration denoted by `BondingDuration` (in number of eras) must pass until the funds can actually be removed.
-//! - To preparee the funds for transfer away from the stash account, then `withdraw_unbonded()` must be used once the bonding duration is over.
+//! - To prepare the funds for transfer away from the stash account, then `withdraw_unbonded()` must be used once the bonding duration is over.
 //! - Additional funds that are placed in the stash account may be bonded with the `bond_extra()` transaction call. 
 //! 
 //! ### Election algorithm details.
