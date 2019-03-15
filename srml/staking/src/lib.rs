@@ -682,14 +682,6 @@ impl<T: Trait> Module<T> {
 			min_validator_count
 		);
 
-		// Figure out the minimum stake behind a slot.
-		let slot_stake = elected_candidates
-			.iter()
-			.min_by_key(|c| c.exposure.total)
-			.map(|c| c.exposure.total)
-			.unwrap_or_default();
-		<SlotStake<T>>::put(&slot_stake);
-
 		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
 			<Stakers<T>>::remove(v);
@@ -699,10 +691,13 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// Populate Stakers.
+		// Populate Stakers and figure out the minimum stake behind a slot.
+		let mut slot_stake = elected_candidates[0].exposure.total;
 		for candidate in &elected_candidates {
+			if candidate.exposure.total < slot_stake { slot_stake = candidate.exposure.total; }
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
 		}
+		<SlotStake<T>>::put(&slot_stake);
 
 		// Set the new validator set.
 		<session::Module<T>>::set_validators(
