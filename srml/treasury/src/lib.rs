@@ -36,7 +36,7 @@ type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=BalanceOf<Self>>;
+	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=<<Self as Trait>::Currency as ArithmeticType>::Type>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;

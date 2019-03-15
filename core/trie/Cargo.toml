@@ -12,7 +12,7 @@ name = "bench"
 harness = false
 
 [dependencies]
-codec = { package = "parity-codec", version = "3.0" }
+codec = { package = "parity-codec", version = "3.2" }
 hash-db = { version = "0.11", default-features = false }
 trie-db = { version = "0.11", optional = true }
 trie-root = { version = "0.11", default-features = false }

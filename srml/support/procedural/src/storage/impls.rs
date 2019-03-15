@@ -17,7 +17,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use syn;
 use quote::quote;
-use crate::storage::transformation::DeclStorageTypeInfos;
+use crate::storage::transformation::{DeclStorageTypeInfos, InstanceOpts};
 
 pub fn option_unwrap(is_option: bool) -> TokenStream2 {
 	if !is_option {
@@ -34,9 +34,11 @@ pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub visibility: &'a syn::Visibility,
 	pub traitinstance: &'a syn::Ident,
 	pub traittype: &'a syn::TypeParamBound,
+	pub instance_opts: &'a InstanceOpts,
 	pub type_infos: DeclStorageTypeInfos<'a>,
 	pub fielddefault: TokenStream2,
 	pub prefix: String,
+	pub cratename: &'a syn::Ident,
 	pub name: &'a syn::Ident,
 	pub attrs: I,
 }
@@ -48,11 +50,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			visibility,
 			traitinstance,
 			traittype,
+			instance_opts,
 			type_infos,
 			fielddefault,
 			prefix,
 			name,
 			attrs,
+			..
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
@@ -70,17 +74,32 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			}
 		};
 
+		let InstanceOpts {
+			comma_instance,
+			equal_default_instance,
+			bound_instantiable,
+			instance,
+			..
+		} = instance_opts;
+
+		let final_prefix = if let Some(instance) = instance {
+			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+		} else {
+			quote!{ #prefix.as_bytes() }
+		};
+
 		// generator for value
 		quote!{
 			#( #[ #attrs ] )*
-			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance, #instance> {
 				type Query = #value_type;
 
 				/// Get the storage key.
 				fn key() -> &'static [u8] {
-					#prefix.as_bytes()
+					#final_prefix
 				}
 
 				/// Load the value from the provided storage instance.
@@ -113,11 +132,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			visibility,
 			traitinstance,
 			traittype,
+			instance_opts,
 			type_infos,
 			fielddefault,
 			prefix,
 			name,
 			attrs,
+			..
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
@@ -134,22 +155,38 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 		};
+
+		let InstanceOpts {
+			comma_instance,
+			equal_default_instance,
+			bound_instantiable,
+			instance,
+			..
+		} = instance_opts;
+
+		let final_prefix = if let Some(instance) = instance {
+			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+		} else {
+			quote!{ #prefix.as_bytes() }
+		};
+
 		// generator for map
 		quote!{
 			#( #[ #attrs ] )*
-			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
 				type Query = #value_type;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
-					#prefix.as_bytes()
+					#final_prefix
 				}
 
 				/// Get the storage key used to fetch a value corresponding to a specific key.
 				fn key_for(x: &#kty) -> #scrate::rstd::vec::Vec<u8> {
-					let mut key = #prefix.as_bytes().to_vec();
+					let mut key = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::prefix().to_vec();
 					#scrate::codec::Encode::encode_to(x, &mut key);
 					key
 				}
@@ -185,16 +222,41 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			visibility,
 			traitinstance,
 			traittype,
+			instance_opts,
 			type_infos,
 			fielddefault,
 			prefix,
 			name,
 			attrs,
+			..
 		} = self;
+
+		let InstanceOpts {
+			comma_instance,
+			equal_default_instance,
+			bound_instantiable,
+			instance,
+			..
+		} = instance_opts;
+
+		let final_prefix = if let Some(instance) = instance {
+			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+		} else {
+			quote!{ #prefix.as_bytes() }
+		};
+
+		// make sure to use different prefix for head and elements.
+		let final_head_key = if let Some(instance) = instance {
+			let method_name = syn::Ident::new(&format!("build_head_key_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+		} else {
+			let final_head_key = format!("head of {}", prefix);
+			quote!{ #final_head_key.as_bytes() }
+		};
+
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
-		// make sure to use different prefix for head and elements.
-		let head_key = format!("head of {}", prefix);
 		let name_lowercase = name.to_string().to_lowercase();
 		let inner_module = syn::Ident::new(&format!("__linked_map_details_for_{}_do_not_use", name_lowercase), name.span());
 		let linkage = syn::Ident::new(&format!("__LinkageFor{}DoNotUse", name), name.span());
@@ -250,30 +312,22 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					pub _data: #phantom_data<V>,
 				}
 
-				impl<'a, S: #scrate::GenericStorage, K, V> Iterator for Enumerator<'a, S, K, V> where
-					K: 'a + #scrate::codec::Codec,
-					V: 'a + #scrate::codec::Decode,
+				impl<'a, S: #scrate::GenericStorage, #traitinstance: #traittype, #instance #bound_instantiable> Iterator for Enumerator<'a, S, #kty, (#typ, #traitinstance, #instance)>
+					where #traitinstance: 'a
 				{
-					type Item = (K, V);
+					type Item = (#kty, #typ);
 
 					fn next(&mut self) -> Option<Self::Item> {
 						let next = self.next.take()?;
-						let key_for = key_for(&next);
-						let (val, linkage): (V, Linkage<K>) = self.storage.get(&*key_for)
+						let key_for = <super::#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(&next);
+						let (val, linkage): (#typ, Linkage<#kty>) = self.storage.get(&*key_for)
 							.expect("previous/next only contain existing entires; we enumerate using next; entry exists; qed");
 						self.next = linkage.next;
 						Some((next, val))
 					}
 				}
 
-				/// Generate a storage key for given item.
-				pub(crate) fn key_for<Key: #scrate::codec::Encode>(key: &Key) -> #scrate::rstd::vec::Vec<u8> {
-					let mut key_for = #prefix.as_bytes().to_vec();
-					#scrate::codec::Encode::encode_to(&key, &mut key_for);
-					key_for
-				}
-
-				pub(crate) trait Utils<#traitinstance: #traittype> {
+				pub(crate) trait Utils<#traitinstance: #traittype, #instance #bound_instantiable> {
 					/// Update linkage when this element is removed.
 					///
 					/// Takes care of updating previous and next elements points
@@ -304,17 +358,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		let structure = quote! {
 			#( #[ #attrs ] )*
-			#visibility struct #name<#traitinstance: #traittype>(#phantom_data<#traitinstance>);
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#phantom_data<(#traitinstance #comma_instance)>);
 
-			impl<#traitinstance: #traittype> self::#inner_module::Utils<#traitinstance> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> self::#inner_module::Utils<#traitinstance, #instance> for #name<#traitinstance, #instance> {
 				fn remove_linkage<S: #scrate::GenericStorage>(
 					linkage: self::#inner_module::Linkage<#kty>,
 					storage: &S,
 				) {
-					use self::#inner_module::{key_for, Utils};
+					use self::#inner_module::Utils;
 
-					let next_key = linkage.next.as_ref().map(|x| key_for(x));
-					let prev_key = linkage.previous.as_ref().map(|x| key_for(x));
+					let next_key = linkage.next.as_ref().map(|x| #as_map::key_for(x));
+					let prev_key = linkage.previous.as_ref().map(|x| #as_map::key_for(x));
 
 					if let Some(prev_key) = prev_key {
 						// Retrieve previous element and update `next`
@@ -347,12 +401,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					storage: &S,
 					key: &#kty,
 				) -> self::#inner_module::Linkage<#kty> {
-					use self::#inner_module::{key_for, Utils};
+					use self::#inner_module::Utils;
 
 					if let Some(head) = Self::read_head(storage) {
 						// update previous head predecessor
 						{
-							let head_key = key_for(&head);
+							let head_key = #as_map::key_for(&head);
 							let (data, linkage) = Self::read_with_linkage(storage, &*head_key).expect(r#"
 								head is set when first element is inserted and unset when last element is removed;
 								if head is Some then it points to existing key; qed
@@ -376,13 +430,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				fn read_head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
-					storage.get(#head_key.as_bytes())
+					storage.get(#final_head_key)
 				}
 
 				fn write_head<S: #scrate::GenericStorage>(storage: &S, head: Option<&#kty>) {
 					match head {
-						Some(head) => storage.put(#head_key.as_bytes(), head),
-						None => storage.kill(#head_key.as_bytes()),
+						Some(head) => storage.put(#final_head_key, head),
+						None => storage.kill(#final_head_key),
 					}
 				}
 			}
@@ -393,17 +447,19 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			#structure
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
 				type Query = #value_type;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
-					#prefix.as_bytes()
+					#final_prefix
 				}
 
 				/// Get the storage key used to fetch a value corresponding to a specific key.
-				fn key_for(x: &#kty) -> #scrate::rstd::vec::Vec<u8> {
-					self::#inner_module::key_for(x)
+				fn key_for(key: &#kty) -> #scrate::rstd::vec::Vec<u8> {
+					let mut key_for = #as_map::prefix().to_vec();
+					#scrate::codec::Encode::encode_to(&key, &mut key_for);
+					key_for
 				}
 
 				/// Load the value associated with the given key from the map.
@@ -413,9 +469,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				/// Take the value, reading and removing it.
 				fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					use self::#inner_module::{Utils, key_for};
+					use self::#inner_module::Utils;
 
-					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*key_for(key));
+					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
 					match res {
 						Some((data, linkage)) => {
 							Self::remove_linkage(linkage, storage);
@@ -432,9 +488,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				/// Store a value to be associated with the given key from the map.
 				fn insert<S: #scrate::GenericStorage>(key: &#kty, val: &#typ, storage: &S) {
-					use self::#inner_module::{Utils, key_for};
+					use self::#inner_module::Utils;
 
-					let key_for = &*key_for(key);
+					let key_for = &*#as_map::key_for(key);
 					let linkage = match Self::read_with_linkage(storage, key_for) {
 						// overwrite but reuse existing linkage
 						Some((_data, linkage)) => linkage,
@@ -446,9 +502,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				/// Mutate the value under a key
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
-					use self::#inner_module::{Utils, key_for};
+					use self::#inner_module::Utils;
 
-					let key_for = &*key_for(key);
+					let key_for = &*#as_map::key_for(key);
 					let (mut val, linkage) = Self::read_with_linkage(storage, key_for)
 						.map(|(data, linkage)| (data, Some(linkage)))
 						.unwrap_or_else(|| (#fielddefault, None));
@@ -459,7 +515,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance> {
+			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
 				fn head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
 					use self::#inner_module::Utils;
 
@@ -475,7 +531,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#scrate::storage::generator::Box::new(Enumerator {
 						next: Self::read_head(storage),
 						storage,
-						_data: #phantom_data::<#typ>::default(),
+						_data: #phantom_data::<(#typ, #traitinstance, #instance)>::default(),
 					})
 				}
 			}
