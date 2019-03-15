@@ -70,25 +70,25 @@ pub struct Vote<AccountId, Balance: HasCompact> {
 ///
 /// Reference implementation: https://github.com/w3f/consensus
 ///
-/// @returns a vector of elected candidates
+/// Returns a vector of elected candidates
 pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		get_rounds: FR,
 		get_validators: FV,
 		get_nominators: FN,
 		stash_of: FS,
 		minimum_validator_count: usize,
-	) -> Vec<Candidate<T::AccountId, BalanceOf<T>>> where
-		FR: Fn() -> usize,
-		FV: Fn() -> Box<dyn Iterator<
-			Item =(T::AccountId, ValidatorPrefs<BalanceOf<T>>)
-		>>,
-		FN: Fn() -> Box<dyn Iterator<
-			Item =(T::AccountId, Vec<T::AccountId>)
-		>>,
-		FS: Fn(T::AccountId) -> BalanceOf<T>,
+) -> Vec<Candidate<T::AccountId, BalanceOf<T>>> where
+	FR: Fn() -> usize,
+	FV: Fn() -> Box<dyn Iterator<
+		Item =(T::AccountId, ValidatorPrefs<BalanceOf<T>>)
+	>>,
+	FN: Fn() -> Box<dyn Iterator<
+		Item =(T::AccountId, Vec<T::AccountId>)
+	>>,
+	FS: Fn(T::AccountId) -> BalanceOf<T>,
 {
 	let rounds = get_rounds();
-	let mut elected_candidates = vec![];
+	let mut elected_candidates;
 	
 	// 1- Pre-process candidates and place them in a container
 	let mut candidates = get_validators().map(|(who, _)| {
@@ -130,6 +130,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 
 	// 4- If we have more candidates then needed, run Phragmén.
 	if candidates.len() > rounds {
+		elected_candidates = Vec::with_capacity(rounds);
 		// Main election loop
 		for _round in 0..rounds {
 			// Loop 1: initialize score
@@ -166,7 +167,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			}
 
 			elected_candidates.push(winner);
-
 		} // end of all rounds
 
 		// 4.1- Update backing stake of candidates and nominators
@@ -174,15 +174,11 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			for v in &mut n.nominees {
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who) {
-					v.backing_stake = <BalanceOf<T> as As<u64>>::sa(
-						n.stake.as_()
-						* *v.load
-						/ *n.load
-					);
+					v.backing_stake = <BalanceOf<T> as As<u64>>::sa(n.stake.as_() * *v.load / *n.load);
 					c.exposure.total += v.backing_stake;
 					// Update IndividualExposure of those who nominated and their vote won
 					c.exposure.others.push(
-						IndividualExposure {who: n.who.clone(), value: v.backing_stake }
+						IndividualExposure { who: n.who.clone(), value: v.backing_stake }
 					);
 				}
 			}
@@ -197,7 +193,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who) {
 						c.exposure.total += n.stake;
 						c.exposure.others.push(
-							IndividualExposure {who: n.who.clone(), value: n.stake }
+							IndividualExposure { who: n.who.clone(), value: n.stake }
 						);
 					}
 				}
