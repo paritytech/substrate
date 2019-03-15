@@ -458,7 +458,6 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 					let round = msg.round;
 					let precommits_signed_by: Vec<String> =
 						msg.message.auth_data.iter().map(move |(_, a)| {
-							let a = a as &AuthorityId;
 							format!("{}", a)
 						}).collect();
 					telemetry!(CONSENSUS_INFO; "afg.received_commit";

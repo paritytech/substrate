@@ -390,7 +390,6 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let topic = commit_topic::<Block>(full.set_id);
 
 		let precommits_signed_by: Vec<String> = full.message.auth_data.iter().map(move |(_, a)| {
-			let a = a as &AuthorityId;
 			format!("{}", a)
 		}).collect();
 		telemetry!(CONSENSUS_INFO; "afg.received_commit_msg";
@@ -881,7 +880,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			match command {
 				VoterCommand::ChangeAuthorities(new) => {
 					let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
-						let a = a as &AuthorityId;
 						format!("{}", a)
 					}).collect();
 					telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
