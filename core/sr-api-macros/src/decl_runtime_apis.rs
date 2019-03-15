@@ -51,7 +51,7 @@ const API_VERSION_ATTRIBUTE: &str = "api_version";
 /// Is used when the function signature changed between different versions of a trait.
 /// This attribute should be placed on the old signature of the function.
 const CHANGED_IN_ATTRIBUTE: &str = "changed_in";
-/// All attributes that we support in the declaratio of a runtime api trait.
+/// All attributes that we support in the declaration of a runtime api trait.
 const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[
 	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE
 ];
@@ -127,7 +127,7 @@ fn return_type_is_using_block(ty: &ReturnType) -> bool {
 	visitor.result
 }
 
-/// Replace all occurences of `Block` with `NodeBlock`
+/// Replace all occurrences of `Block` with `NodeBlock`
 struct ReplaceBlockWithNodeBlock {}
 
 impl Fold for ReplaceBlockWithNodeBlock {
@@ -140,13 +140,13 @@ impl Fold for ReplaceBlockWithNodeBlock {
 	}
 }
 
-/// Replace all occurences of `Block` with `NodeBlock`
+/// Replace all occurrences of `Block` with `NodeBlock`
 fn fn_arg_replace_block_with_node_block(fn_arg: FnArg) -> FnArg {
 	let mut replace = ReplaceBlockWithNodeBlock {};
 	fold::fold_fn_arg(&mut replace, fn_arg)
 }
 
-/// Replace all occurences of `Block` with `NodeBlock`
+/// Replace all occurrences of `Block` with `NodeBlock`
 fn return_type_replace_block_with_node_block(return_type: ReturnType) -> ReturnType {
 	let mut replace = ReplaceBlockWithNodeBlock {};
 	fold::fold_return_type(&mut replace, return_type)
@@ -162,7 +162,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	let trait_ = &decl.ident;
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
-	// Auxilariy function that is used to convert between types that use different block types.
+	// Auxiliary function that is used to convert between types that use different block types.
 	// The function expects that both a convertable by encoding the one and decoding the other.
 	result.push(quote!(
 		#[cfg(any(feature = "std", test))]
