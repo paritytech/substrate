@@ -367,11 +367,6 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
 	secret.hard_derive_mini_secret_key(signing_context(b"SchnorrRistrettoHDKD").bytes(&cc[..])).expand()
-/*	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc).using_encoded(|data|
-		MiniSecretKey::from_bytes(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes())
-			.expect("all 32-byte crypto-hash results are valid MiniSecretKeys; qed")
-			.expand()
-	)*/
 }
 
 #[cfg(feature = "std")]
