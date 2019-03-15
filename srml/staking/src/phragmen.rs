@@ -133,8 +133,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		// Main election loop
 		for _round in 0..rounds {
 			// Loop 1: initialize score
-			for nominaotion in &nominations {
-				for vote in &nominaotion.nominees {
+			for nomination in &nominations {
+				for vote in &nomination.nominees {
 					if let Some(c) = candidates.iter_mut().find(|i| i.who == vote.who) {
 						c.score = Perquintill::from_xth(c.approval_stake.as_());
 					}
