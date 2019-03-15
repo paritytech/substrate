@@ -159,26 +159,6 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 }
 
 #[test]
-fn ancestry_search_works_when_common_is_hundred() {
-	let _ = ::env_logger::try_init();
-	let mut net = TestNet::new(3);
-	
-	net.peer(0).push_blocks(100, false);
-	net.peer(1).push_blocks(100, false);
-	net.peer(2).push_blocks(100, false);
-
-	net.peer(0).push_blocks(10, true);
-	net.peer(1).push_blocks(100, false);
-	net.peer(2).push_blocks(100, false);
-
-	net.restart_peer(0);
-	net.sync();
-
-	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
-		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
-}
-
-#[test]
 fn ancestry_search_works_when_backoff_is_one() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
@@ -216,6 +196,11 @@ fn ancestry_search_works_when_common_is_one() {
 #[test]
 fn ancestry_search_works_when_common_is_two() {
 	test_ancestor_search_when_common_is(2);
+}
+
+#[test]
+fn ancestry_search_works_when_common_is_hundred() {
+	test_ancestor_search_when_common_is(100);
 }
 
 #[test]
