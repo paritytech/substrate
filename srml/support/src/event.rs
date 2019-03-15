@@ -227,6 +227,10 @@ macro_rules! __decl_generic_event {
 		{ $( $events:tt )* };
 		{ ,$( $generic_param:ident = $generic_type:ty ),* };
 	) => {
+		/// [`RawEvent`] specialized for the configuration [`Trait`]
+		///
+		/// [`RawEvent`]: enum.RawEvent.html
+		/// [`Trait`]: trait.Trait.html
 		pub type Event<$event_generic_param> = RawEvent<$( $generic_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
