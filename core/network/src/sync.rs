@@ -519,7 +519,7 @@ impl<B: BlockT> ChainSync<B> {
 		match state {
 			AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
 				if block_hash_match && next_distance_to_tip == As::sa(1) {
-					// We found the ancestor so there is no more ancestor search state.
+					// We found the ancestor in the first step so there is no need to execute binary search.
 					return None;
 				}
 				if block_hash_match {
