@@ -39,13 +39,19 @@ struct StorageDefinition {
 	pub module_ident: Ident,
 	pub mod_lt_token: Token![<],
 	pub mod_param: syn::GenericParam,
+	pub mod_instance_param_token: Option<Token![,]>,
+	pub mod_instance: Option<syn::Ident>,
+	pub mod_instantiable_token: Option<Token![:]>,
+	pub mod_instantiable: Option<syn::Ident>,
+	pub mod_default_instance_token: Option<Token![=]>,
+	pub mod_default_instance: Option<syn::Ident>,
 	pub mod_gt_token: Token![>],
 	pub as_token: Token![as],
 	pub crate_ident: Ident,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: Option<AddExtraGenesis>,
+	pub extra_genesis_skip_phantom_data_field: Option<ExtraGenesisSkipPhantomDataField>,
 }
-
 
 #[derive(Parse, ToTokens, Debug)]
 struct SpecificHiddenCrate {
@@ -57,6 +63,12 @@ struct SpecificHiddenCrate {
 struct AddExtraGenesis {
 	pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
 	pub content: ext::Braces<AddExtraGenesisContent>,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct ExtraGenesisSkipPhantomDataField {
+	pub genesis_phantom_keyword: ext::CustomToken<ExtraGenesisSkipPhantomDataField>,
+	pub token: Token![;],
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -153,3 +165,4 @@ custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesi
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
+custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");

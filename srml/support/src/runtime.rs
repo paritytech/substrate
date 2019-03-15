@@ -37,6 +37,10 @@
 ///         System: system,
 ///         Test: test::{default, Log(Test)},
 ///         Test2: test_with_long_module::{Module},
+///
+///         // Module with instances
+///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
 ///     }
 /// )
 /// ```
@@ -55,9 +59,9 @@
 /// - `Module`
 /// - `Call`
 /// - `Storage`
-/// - `Event` or `Event<T>` (if the event is generic)
-/// - `Origin` or `Origin<T>` (if the origin is generic)
-/// - `Config` or `Config<T>` (if the config is generic)
+/// - `Event` or `Event<T>` (if the event is generic) or `Event<T, I>` (if also over instance)
+/// - `Origin` or `Origin<T>` (if the origin is generic) or `Origin<T, I>` (if also over instance)
+/// - `Config` or `Config<T>` (if the config is generic) or `Config<T, I>` (if also over instance)
 /// - `Log( $(IDENT),* )`
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
@@ -84,155 +88,60 @@ macro_rules! construct_runtime {
 		}
 	) => {
 		construct_runtime!(
-			$runtime;
-			$block;
-			$node_block;
-			$uncheckedextrinsic;
-			$log_internal < $( $log_genarg ),* >;
-			;
+			{
+				$runtime;
+				$block;
+				$node_block;
+				$uncheckedextrinsic;
+				$log_internal < $( $log_genarg ),* >;
+			};
+			{};
 			$( $rest )*
 		);
 	};
 	(
-		$runtime:ident;
-		$block:ident;
-		$node_block:ty;
-		$uncheckedextrinsic:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$(
-			$expanded_name:ident: $expanded_module:ident::{
-				$(
-					$expanded_modules:ident
-						$( <$expanded_modules_generic:ident> )*
-						$( ( $( $expanded_modules_args:ident ),* ) )*
-				),*
-			}
-		),*;
+		{ $( $preset:tt )* };
+		{ $( $expanded:tt )* };
 		$name:ident: $module:ident,
-		$(
-			$rest_name:ident: $rest_module:ident $(
-				::{
-					$(
-						$rest_modules:ident
-							$( <$rest_modules_generic:ident> )*
-							$( ( $( $rest_modules_args:ident ),* ) )*
-					),*
-				}
-			)*,
-		)*
+		$( $rest:tt )*
 	) => {
 		construct_runtime!(
-			$runtime;
-			$block;
-			$node_block;
-			$uncheckedextrinsic;
-			$log_internal < $( $log_genarg ),* >;
-			$(
-				$expanded_name: $expanded_module::{
-					$(
-						$expanded_modules
-							$( <$expanded_modules_generic> )*
-							$( ( $( $expanded_modules_args ),* ) )*
-					),*
-				},
-			)* $name: $module::{Module, Call, Storage, Event<T>, Config<T>};
-			$(
-				$rest_name: $rest_module $(
-					::{
-						$(
-							$rest_modules
-								$( <$rest_modules_generic> )*
-								$( ( $( $rest_modules_args ),* ) )*
-						),*
-					}
-				)*,
-			)*
+			{ $( $preset )* };
+			{ $( $expanded )* $name: $module::{Module, Call, Storage, Event<T>, Config<T>}, };
+			$( $rest )*
 		);
 	};
 	(
-		$runtime:ident;
-		$block:ident;
-		$node_block:ty;
-		$uncheckedextrinsic:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$(
-			$expanded_name:ident: $expanded_module:ident::{
-				$(
-					$expanded_modules:ident
-						$( <$expanded_modules_generic:ident> )*
-						$( ( $( $expanded_modules_args:ident ),* ) )*
-				),*
-			}
-		),*;
+		{ $( $preset:tt )* };
+		{ $( $expanded:tt )* };
 		$name:ident: $module:ident::{
 			default,
 			$(
 				$modules:ident
-					$( <$modules_generic:ident> )*
+					$( <$modules_generic:ident $(, $modules_instance:ident)?> )*
 					$( ( $( $modules_args:ident ),* ) )*
 			),*
 		},
-		$(
-			$rest_name:ident: $rest_module:ident $(
-				::{
-					$(
-						$rest_modules:ident
-							$( <$rest_modules_generic:ident> )*
-							$( ( $( $rest_modules_args:ident ),* ) )*
-					),*
-				}
-			)*,
-		)*
+		$( $rest:tt )*
 	) => {
 		construct_runtime!(
-			$runtime;
-			$block;
-			$node_block;
-			$uncheckedextrinsic;
-			$log_internal < $( $log_genarg ),* >;
-			$(
-				$expanded_name: $expanded_module::{
+			{ $( $preset )* };
+			{
+				$( $expanded )*
+				$name: $module::{
+					Module, Call, Storage, Event<T>, Config<T>,
 					$(
-						$expanded_modules
-							$( <$expanded_modules_generic> )*
-							$( ( $( $expanded_modules_args ),* ) )*
+						$modules $( <$modules_generic $(, $modules_instance)?> )*
+						$( ( $( $modules_args ),* ) )*
 					),*
 				},
-			)*
-			$name: $module::{
-				Module, Call, Storage, Event<T>, Config<T>,
-				$(
-					$modules $( <$modules_generic> )* $( ( $( $modules_args ),* ) )*
-				),*
 			};
-			$(
-				$rest_name: $rest_module $(
-					::{
-						$(
-							$rest_modules
-								$( <$rest_modules_generic> )*
-								$( ( $( $rest_modules_args ),* ) )*
-						),*
-					}
-				)*,
-			)*
+			$( $rest )*
 		);
 	};
 	(
-		$runtime:ident;
-		$block:ident;
-		$node_block:ty;
-		$uncheckedextrinsic:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$(
-			$expanded_name:ident: $expanded_module:ident::{
-				$(
-					$expanded_modules:ident
-						$( <$expanded_modules_generic:ident> )*
-						$( ( $( $expanded_modules_args:ident ),* ) )*
-				),*
-			}
-		),*;
+		{ $( $preset:tt )* };
+		{ $( $expanded:tt )* };
 		$name:ident: $module:ident::{
 			$(
 				$modules:ident
@@ -240,69 +149,70 @@ macro_rules! construct_runtime {
 					$( ( $( $modules_args:ident ),* ) )*
 			),*
 		},
-		$(
-			$rest_name:ident: $rest_module:ident $(
-				::{
-					$(
-						$rest_modules:ident
-							$( <$rest_modules_generic:ident> )*
-							$( ( $( $rest_modules_args:ident ),* ) )*
-					),*
-				}
-			)*,
-		)*
+		$( $rest:tt )*
 	) => {
 		construct_runtime!(
-			$runtime;
-			$block;
-			$node_block;
-			$uncheckedextrinsic;
-			$log_internal < $( $log_genarg ),* >;
-			$(
-				$expanded_name: $expanded_module::{
+			{ $( $preset )* };
+			{
+				$( $expanded )*
+				$name: $module::{
 					$(
-						$expanded_modules
-							$( <$expanded_modules_generic> )*
-							$( ( $( $expanded_modules_args ),* ) )*
+						$modules $( <$modules_generic> )*
+						$( ( $( $modules_args ),* ) )*
 					),*
 				},
-			)*
-			$name: $module::{
-				$(
-					$modules $( <$modules_generic> )* $( ( $( $modules_args ),* ) )*
-				),*
 			};
+			$( $rest )*
+		);
+	};
+	( // Instance module: we indicate the generic instance `I` with the full instance path
+		{ $( $preset:tt )* };
+		{ $( $expanded:tt )* };
+		$name:ident: $module:ident ::< $module_instance:ident >::{
 			$(
-				$rest_name: $rest_module $(
-					::{
-						$(
-							$rest_modules
-								$( <$rest_modules_generic> )*
-								$( ( $( $rest_modules_args ),* ) )*
-						),*
-					}
-				)*,
-			)*
+				$modules:ident
+					$( <$modules_generic:ident $(, $modules_instance:ident )?> )*
+					$( ( $( $modules_args:ident ),* ) )*
+			),*
+		},
+		$( $rest:tt )*
+	) => {
+		construct_runtime!(
+			{ $( $preset )* };
+			{
+				$( $expanded )*
+				$name: $module::<$module_instance>::{
+					$(
+						$modules $( <$modules_generic $(, $modules_instance=$module::$module_instance)?> )*
+						$( ( $( $modules_args ),* ) )*
+					),*
+				},
+			};
+			$( $rest )*
 		);
 	};
 
 	// The main macro expansion that actually renders the Runtime code.
 
 	(
-		$runtime:ident;
-		$block:ident;
-		$node_block:ty;
-		$uncheckedextrinsic:ident;
-		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$(
-			$name:ident: $module:ident::{
-				$(
-					$modules:ident
-						$( <$modules_generic:ident> )*
-						$( ( $( $modules_args:ident ),* ) )*
-				),*
-			}
-		),*;
+		{
+			$runtime:ident;
+			$block:ident;
+			$node_block:ty;
+			$uncheckedextrinsic:ident;
+			$log_internal:ident <$( $log_genarg:ty ),+>;
+		};
+		{
+			$(
+				$name:ident: $module:ident :: $( < $module_instance:ident >:: )? {
+					$(
+						$modules:ident
+							$( <$modules_generic:ident $(, I=$modules_instance:path)?> )*
+							$( ( $( $modules_args:ident ),* ) )*
+					),*
+				},
+			)*
+		};
 	) => {
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
@@ -313,54 +223,59 @@ macro_rules! construct_runtime {
 		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
 			type RuntimeBlock = $block;
 		}
+		$crate::__decl_instance_import!(
+			$( $( $module < $module_instance > )? )*
+		);
 		$crate::__decl_outer_event!(
 			$runtime;
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
+				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
 			),*
 		);
 		$crate::__decl_outer_origin!(
 			$runtime;
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
+				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
 			),*
 		);
 		$crate::__decl_all_modules!(
 			$runtime;
 			;
-			;
+			{};
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			),*;
+				$name: $module:: $( < $module_instance >:: )? { $( $modules ),* },
+			)*
 		);
 		$crate::__decl_outer_dispatch!(
 			$runtime;
 			;
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
+				$name: $module::{ $( $modules ),* }
 			),*;
 		);
 		$crate::__decl_runtime_metadata!(
 			$runtime;
-			;
+			{};
 			$(
-				$name: $module::{ $( $modules )* }
+				$name: $module:: $( < $module_instance >:: )? { $( $modules )* }
 			)*
 		);
 		$crate::__decl_outer_log!(
 			$runtime;
 			$log_internal < $( $log_genarg ),* >;
-			;
+			{};
 			$(
-				$name: $module::{ $( $modules $( ( $( $modules_args ),* ) )* ),* }
-			),*;
+				$name: $module:: $( < $module_instance >:: )? { $( $modules $( ( $( $modules_args )* ) )* )* }
+			)*
 		);
 		$crate::__decl_outer_config!(
 			$runtime;
-			;
+			{};
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			),*;
+				$name: $module:: $( < $module_instance >:: )? {
+					$( $modules $( <$modules_generic $(, $modules_instance)?> )* ),*
+				},
+			)*
 		);
 		$crate::__decl_outer_inherent!(
 			$runtime;
@@ -392,121 +307,135 @@ macro_rules! __create_decl_macro {
 		macro_rules! $macro_name {
 			(
 				$runtime:ident;
-				$d( $name:ident : $module:ident::{
-					$d( $modules:ident $d( <$modules_generic:ident> )* ),*
+				$d( $name:ident : $module:ident:: $d( < $module_instance:ident >:: )? {
+					$d( $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> ),* ),*
 				}),*
 			) => {
 				$d crate::$macro_name!(@inner
 					$runtime;
 					;
-					;
+					{};
 					$d(
-						$name: $module::{
-							$d( $modules $d( <$modules_generic> )* ),*
-						}
-					),*;
+						$name: $module:: $d( < $module_instance >:: )? {
+							$d( $modules $d( <$modules_generic $d(, $modules_instance)?> )* ),*
+						},
+					)*
 				);
 			};
 			(@inner
 				$runtime:ident;
 				; // there can not be multiple `System`s
-				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
+				{ $d( $parsed:tt )* };
 				System: $module:ident::{
-					$ingore:ident $d( <$ignor:ident> )* $d(, $modules:ident $d( <$modules_generic:ident> )* )*
-				}
-				$d(, $rest_name:ident : $rest_module:ident::{
-					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
-				})*;
+					$d( $modules:ident $d( <$modules_generic:ident> )* ),*
+				},
+				$d( $rest:tt )*
 			) => {
 				$d crate::$macro_name!(@inner
 					$runtime;
 					$module;
-					$d( $parsed_modules $d( <$parsed_generic> )* ),*;
-					$d(
-						$rest_name: $rest_module::{
-							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
-						}
-					),*;
+					{ $d( $parsed )* };
+					$d( $rest )*
 				);
 			};
 			(@inner
 				$runtime:ident;
-				$d( $system:ident )*;
-				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
-				$name:ident: $module:ident::{
-					$macro_enum_name $d( <$event_gen:ident> )* $d(, $modules:ident $d( <$modules_generic:ident> )* )*
-				}
-				$d(, $rest_name:ident : $rest_module:ident::{
-					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
-				})*;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident : $module:ident:: < $module_instance:ident >:: {
+					$macro_enum_name <$event_generic:ident, $event_instance:path> $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+				},
+				$d( $rest:tt )*
 			) => {
 				$d crate::$macro_name!(@inner
 					$runtime;
-					$d( $system )*;
-					$d(
-						$parsed_modules $d( <$parsed_generic> )* , )*
-						$module $d( <$event_gen> )*;
-					$d(
-						$rest_name: $rest_module::{
-							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
-						}
-					),*;
+					$d( $system )?;
+					{
+						$d( $parsed )*
+						$module $module_instance <$event_generic, $event_instance>,
+					};
+					$d( $rest )*
 				);
 			};
 			(@inner
 				$runtime:ident;
-				$d( $system:ident )*;
-				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
-				$name:ident: $module:ident::{
-					$ingore:ident $d( <$ignor:ident> )* $d(, $modules:ident $d( <$modules_generic:ident> )* )*
-				}
-				$d(, $rest_name:ident : $rest_module:ident::{
-					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
-				})*;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident : $module:ident:: < $module_instance:ident >:: {
+					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+				},
+				$d( $rest:tt )*
+			) => {
+				compile_error!{concat!{
+					"Module `", stringify!{$name}, "` must have `", stringify!{$macro_enum_name}, "<T, I>`",
+					" but has `", stringify!{$macro_enum_name} $d(, "<", stringify!{$event_generic}, ">")*, "`",
+					": Instantiated modules must have ", stringify!{$macro_enum_name},
+					" generic over instance to be able to convert to outer ", stringify!{$macro_enum_name}
+				}}
+			};
+			(@inner
+				$runtime:ident;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident : $module:ident:: {
+					$macro_enum_name $d( <$event_generic:ident $d(, $event_instance:path)?> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+				},
+				$d( $rest:tt )*
 			) => {
 				$d crate::$macro_name!(@inner
 					$runtime;
-					$d( $system )*;
-					$d( $parsed_modules $d( <$parsed_generic> )* ),*;
-					$name: $module::{ $d( $modules $d( <$modules_generic> )* ),* }
-					$d(
-						, $rest_name: $rest_module::{
-							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
-						}
-					)*;
+					$d( $system )?;
+					{
+						$d( $parsed )*
+						$module $d( <$event_generic $d(, $event_instance)?> )*,
+					};
+					$d( $rest )*
 				);
 			};
 			(@inner
 				$runtime:ident;
-				$d( $system:ident )*;
-				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
-				$name:ident: $module:ident::{}
-				$d(, $rest_name:ident : $rest_module:ident::{
-					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
-				})*;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident : $module:ident:: $d( < $module_instance:ident >:: )? {
+					$ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* $d(, $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> )* )*
+				},
+				$d( $rest:tt )*
 			) => {
 				$d crate::$macro_name!(@inner
 					$runtime;
-					$d( $system )*;
-					$d( $parsed_modules $d( <$parsed_generic> )* ),*;
-					$d(
-						$rest_name: $rest_module::{
-							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
-						}
-					),*;
+					$d( $system )?;
+					{ $d( $parsed )* };
+					$name: $module:: $d( < $module_instance >:: )? { $d( $modules $d( <$modules_generic $d(, $modules_instance)?> )* ),* },
+					$d( $rest )*
 				);
 			};
 			(@inner
 				$runtime:ident;
-				$d( $system:ident )+;
-				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
-				;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident: $module:ident:: $d( < $module_instance:ident >:: )? {},
+				$d( $rest:tt )*
 			) => {
-				$d crate::$macro_outer_name! {
-					pub enum $macro_enum_name for $runtime where system = $d( $system )* {
-						$d(
-							$parsed_modules $d( <$parsed_generic> )*,
-						)*
+				$d crate::$macro_name!(@inner
+					$runtime;
+					$d( $system )?;
+					{ $d( $parsed )* };
+					$d( $rest )*
+				);
+			};
+			(@inner
+				$runtime:ident;
+				$system:ident;
+				{ $d( $parsed_modules:ident $d( $instance:ident )? $d( <$parsed_generic:ident $d(, $parsed_instance_full_path:path)?> )* ,)* };
+			) => {
+				$d crate::paste::item! {
+					$d crate::$macro_outer_name! {
+
+						pub enum $macro_enum_name for $runtime where system = $system {
+							$d(
+								[< $parsed_modules $d(_ $instance )? >] $d( <$parsed_generic $d(, $parsed_instance_full_path)?> )*,
+							)*
+						}
 					}
 				}
 			}
@@ -524,99 +453,71 @@ macro_rules! __decl_all_modules {
 	(
 		$runtime:ident;
 		;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		System: $module:ident::{
-			Module $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		{ $( $parsed:tt )* };
+		System: $module:ident::{ Module $(, $modules:ident )* },
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_all_modules!(
 			$runtime;
 			$module;
-			$( $parsed_modules :: $parsed_name ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
+			{ $( $parsed )* };
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
-		$( $system:ident )*;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		$name:ident: $module:ident::{
-			Module $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $system:ident )?;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { Module $(, $modules:ident )* },
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_all_modules!(
 			$runtime;
-			$( $system )*;
-			$( $parsed_modules :: $parsed_name, )* $module::$name;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
+			$( $system )?;
+			{
+				$( $parsed )*
+				$module::$name $(<$module_instance>)?,
+			};
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
-		$( $system:ident )*;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		$name:ident: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $system:ident )?;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ingore:ident $(, $modules:ident )* },
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_all_modules!(
 			$runtime;
-			$( $system )*;
-			$( $parsed_modules :: $parsed_name ),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
+			$( $system )?;
+			{ $( $parsed )* };
+			$name: $module::{ $( $modules ),* },
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
-		$( $system:ident )*;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $system:ident )?;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {},
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_all_modules!(
 			$runtime;
-			$( $system )*;
-			$( $parsed_modules :: $parsed_name ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
+			$( $system )?;
+			{ $( $parsed )* };
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
 		$system:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
-		;
+		{ $( $parsed_module:ident :: $parsed_name:ident $(<$instance:ident>)? ,)*};
 	) => {
 		pub type System = system::Module<$runtime>;
 		$(
-			pub type $parsed_name = $parsed_modules::Module<$runtime>;
+			pub type $parsed_name = $parsed_module::Module<$runtime $(, $parsed_module::$instance )?>;
 		)*
 		type AllModules = ( $( $parsed_name, )* );
 	}
@@ -726,84 +627,68 @@ macro_rules! __decl_runtime_metadata {
 	// leading is Module : parse
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident { $( $withs:ident )* } )*;
+		{ $( $parsed:tt )* };
 		$( { leading_module: $( $leading_module:ident )* } )?
-		$name:ident: $module:ident::{
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
 			Module $( $modules:ident )*
 		}
-		$( $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident )*
-		})*
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_runtime_metadata!(
 			$runtime;
-			$( $parsed_modules { $( $withs )* } )* $module { $( $( $leading_module )* )? $( $modules )* };
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules )*
-				}
-			)*
+			{
+				$( $parsed )*
+				$module $( < $module_instance > )?  { $( $( $leading_module )* )? $( $modules )* }
+			};
+			$( $rest )*
 		);
 	};
 	// leading isn't Module : put it in leadings
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident { $( $withs:ident )* } )*;
+		{ $( $parsed:tt )* };
 		$( { leading_module: $( $leading_module:ident )* } )?
-		$name:ident: $module:ident::{
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
 			$other_module:ident $( $modules:ident )*
 		}
-		$( $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident )*
-		})*
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_runtime_metadata!(
 			$runtime;
-			$( $parsed_modules { $( $withs )* } )*;
+			{ $( $parsed )* };
 			{ leading_module: $( $( $leading_module )* )? $other_module }
-			$name: $module::{
+			$name: $module:: $( < $module_instance >:: )? {
 				$( $modules )*
 			}
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules )*
-				}
-			)*
+			$( $rest )*
 		);
 	};
 	// does not contain Module : skip
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident { $( $withs:ident )* } )*;
+		{ $( $parsed:tt )* };
 		$( { leading_module: $( $leading_module:ident )* } )?
-		$name:ident: $module:ident::{}
-		$( $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident )*
-		})*
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {}
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_runtime_metadata!(
 			$runtime;
-			$( $parsed_modules { $( $withs )* } )*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules )*
-				}
-			)*
+			{ $( $parsed )* };
+			$( $rest )*
 		);
 	};
 	// end of decl
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident { $( $withs:ident )* } )*;
+		{ $( $parsed_modules:ident $( < $module_instance:ident > )? { $( $withs:ident )* } )* };
 	) => {
 		$crate::impl_runtime_metadata!(
 			for $runtime with modules
-				$( $parsed_modules::Module with $( $withs )* , )*
+				$( $parsed_modules::Module $( < $module_instance > )? with $( $withs )* , )*
 		);
 	}
 
 }
-
 /// A private macro that generates Log enum for the runtime. See impl_outer_log macro.
 #[macro_export]
 #[doc(hidden)]
@@ -811,80 +696,65 @@ macro_rules! __decl_outer_log {
 	(
 		$runtime:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$( $parsed_modules:ident( $( $parsed_args:ident ),* ) ),*;
-		$name:ident: $module:ident::{
-			Log ( $( $args:ident ),* ) $(, $modules:ident $( ( $( $modules_args:ident )* ) )* )*
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
+			Log ( $( $args:ident )* ) $( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( ( $( $rest_modules_args:ident )* ) )* ),*
-		})*;
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_log!(
 			$runtime;
 			$log_internal < $( $log_genarg ),* >;
-			$( $parsed_modules ( $( $parsed_args ),* ), )* $module ( $( $args ),* );
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( ( $( $rest_modules_args ),* ) )* ),*
-				}
-			),*;
+			{ $( $parsed )* $module $(<$module_instance>)? ( $( $args )* )};
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$( $parsed_modules:ident( $( $parsed_args:ident ),* ) ),*;
-		$name:ident: $module:ident::{
-			$ignore:ident $( ( $( $args_ignore:ident ),* ) )*
-			$(, $modules:ident $( ( $( $modules_args:ident ),* ) )* )*
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
+			$ignore:ident $( ( $( $args_ignore:ident )* ) )*
+			$( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-				$( $rest_modules:ident $( ( $( $rest_modules_args:ident )* ) )* ),*
-		})*;
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_log!(
 			$runtime;
 			$log_internal < $( $log_genarg ),* >;
-			$( $parsed_modules ( $( $parsed_args ),* ) ),*;
-			$name: $module::{ $( $modules $( ( $( $modules_args ),* ) )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( ( $( $rest_modules_args ),* ) )* ),*
-				}
-			)*;
+			{ $( $parsed )* };
+			$name: $module:: $(<$module_instance>::)? { $( $modules $( ( $( $modules_args )* ) )* )* }
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$( $parsed_modules:ident( $( $parsed_args:ident ),* ) ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( ( $( $rest_modules_args:ident )* ) )* ),*
-		})*;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {}
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_log!(
 			$runtime;
 			$log_internal < $( $log_genarg ),* >;
-			$( $parsed_modules ( $( $parsed_args ),* ) ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( ( $( $rest_modules_args ),* ) )* ),*
-				}
-			),*;
+			{ $( $parsed )* };
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
-		$( $parsed_modules:ident( $( $parsed_args:ident ),* ) ),*;
-		;
+		{ $(
+			$parsed_modules:ident $(< $parsed_instance:ident >)? ( $( $parsed_args:ident )* )
+		)* };
 	) => {
-		$crate::runtime_primitives::impl_outer_log!(
-			pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
-				$( $parsed_modules ( $( $parsed_args ),* ) ),*
-			}
-		);
+		$crate::paste::item! {
+			$crate::runtime_primitives::impl_outer_log!(
+				pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
+					$( [< $parsed_modules $(_ $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args ),* ) ),*
+				}
+			);
+		}
 	};
 }
 
@@ -894,93 +764,57 @@ macro_rules! __decl_outer_log {
 macro_rules! __decl_outer_config {
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
-		$name:ident: $module:ident::{
-			Config $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
+			Config $(< $config_generic:ident $(, $config_instance:path)?>)? $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
+		},
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_config!(
 			$runtime;
-			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*, )* $module::$name;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
+			{
+				$( $parsed )*
+				$module::$name $( $module_instance )?  $(<$config_generic $(, $config_instance)?>)?,
+			};
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
-		$name:ident: $module:ident::{
-			Config<T> $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
+			$ingore:ident $( <$ignor:ident $(, $ignore_instance:path)?> )* $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
+		},
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_config!(
 			$runtime;
-			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*, )* $module::$name<T>;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
+			{ $( $parsed )* };
+			$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* },
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
-		$name:ident: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {},
+		$( $rest:tt )*
 	) => {
 		$crate::__decl_outer_config!(
 			$runtime;
-			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
+			{ $( $parsed )* };
+			$( $rest )*
 		);
 	};
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		$crate::__decl_outer_config!(
-			$runtime;
-			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
-		);
-	};
-	(
-		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
-		;
+		{$( $parsed_modules:ident :: $parsed_name:ident $( $parsed_instance:ident )?  $( < $parsed_generic:ident $(, $parsed_instance_full_path:path)? > )* ,)* };
 	) => {
 		$crate::paste::item! {
 			$crate::runtime_primitives::impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
-						[< $parsed_name Config >] => $parsed_modules $( < $parsed_generic > )*,
+						[< $parsed_name Config >] => [< $parsed_modules $( _ $parsed_instance)? >] $( < $parsed_generic $(, $parsed_instance_full_path)? > )*,
 					)*
 				}
 			);
@@ -1100,5 +934,16 @@ macro_rules! __decl_outer_inherent {
 				$( $parsed_name : $parsed_call, )*
 			}
 		);
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+// Those imports are used by event, config, origin and log macros to get access to its inner type
+macro_rules! __decl_instance_import {
+	( $( $module:ident <$instance:ident> )* ) => {
+		$crate::paste::item! {
+			$(use $module as [< $module _ $instance >];)*
+		}
 	};
 }
