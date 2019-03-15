@@ -155,7 +155,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// To support versioning of the traits, the macro supports the attribute `#[api_version(1)]`.
 /// The attribute supports any `u32` as version. By default, each trait is at version `1`, if no
-/// version is provided. We also support chaning the signature of a method. This signature
+/// version is provided. We also support changing the signature of a method. This signature
 /// change is highlighted with the `#[changed_in(2)]` attribute above a method. A method that is
 /// tagged with this attribute is callable by the name `METHOD_before_version_VERSION`. This
 /// method will only support calling into wasm, trying to call into native will fail (change the

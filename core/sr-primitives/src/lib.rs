@@ -625,7 +625,7 @@ macro_rules! impl_outer_log {
 		}
 
 		impl $crate::codec::Decode for $name {
-			/// `generic::DigestItem` binray compatible decode.
+			/// `generic::DigestItem` binary compatible decode.
 			fn decode<I: $crate::codec::Input>(input: &mut I) -> Option<Self> {
 				let gen: $crate::generic::DigestItem<$($genarg),*> =
 					$crate::codec::Decode::decode(input)?;
@@ -634,7 +634,7 @@ macro_rules! impl_outer_log {
 		}
 
 		impl $crate::codec::Encode for $name {
-			/// `generic::DigestItem` binray compatible encode.
+			/// `generic::DigestItem` binary compatible encode.
 			fn encode(&self) -> Vec<u8> {
 				match self.dref() {
 					Some(dref) => dref.encode(),
@@ -665,7 +665,7 @@ macro_rules! impl_outer_log {
 	};
 }
 
-/// Simple blob to hold an extrinsic without commiting to its format and ensure it is serialized
+/// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]

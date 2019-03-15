@@ -574,22 +574,27 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-
 	let db_path = config.database_path;
-	print!("Are you sure to remove {:?}? (y/n)", &db_path);
-	stdout().flush().expect("failed to flush stdout");
 
-	let mut input = String::new();
-	stdin().read_line(&mut input)?;
-	let input = input.trim();
+	if cli.yes == false {
+		print!("Are you sure to remove {:?}? (y/n)", &db_path);
+		stdout().flush().expect("failed to flush stdout");
 
-	match input.chars().nth(0) {
-		Some('y') | Some('Y') => {
-			fs::remove_dir_all(&db_path)?;
-			println!("{:?} removed.", &db_path);
-		},
-		_ => println!("Aborted"),
+		let mut input = String::new();
+		stdin().read_line(&mut input)?;
+		let input = input.trim();
+
+		match input.chars().nth(0) {
+			Some('y') | Some('Y') => {},
+			_ => {
+				println!("Aborted");
+				return Ok(());
+			},
+		}
 	}
+
+	fs::remove_dir_all(&db_path)?;
+	println!("{:?} removed.", &db_path);
 
 	Ok(())
 }

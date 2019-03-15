@@ -37,6 +37,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::InherentData;
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -251,6 +252,10 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
 				.collect::<Vec<_>>()
 				.join(", ")
+		);
+		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+			"number" => ?block.header().number(),
+			"hash" => ?<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
 		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
