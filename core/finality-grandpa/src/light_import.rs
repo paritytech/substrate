@@ -176,7 +176,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 	}
 }
 
-
 impl LightAuthoritySet {
 	/// Get a genesis set with given authorities.
 	pub fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
@@ -518,7 +517,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use super::*;
 	use consensus_common::ForkChoiceStrategy;
 	use substrate_primitives::H256;
@@ -526,6 +525,81 @@ mod tests {
 	use test_client::runtime::{Block, Header};
 	use crate::tests::TestApi;
 	use crate::finality_proof::tests::TestJustification;
+
+	pub struct NoJustificationsImport<B, E, Block: BlockT<Hash=H256>, RA>(
+		pub GrandpaLightBlockImport<B, E, Block, RA>
+	);
+
+	impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
+		for NoJustificationsImport<B, E, Block, RA> where
+			NumberFor<Block>: grandpa::BlockNumberOps,
+			B: Backend<Block, Blake2Hasher> + 'static,
+			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+			DigestFor<Block>: Encode,
+			DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
+			RA: Send + Sync,
+	{
+		type Error = ConsensusError;
+
+		fn import_block(
+			&self,
+			mut block: ImportBlock<Block>,
+			new_authorities: Option<Vec<AuthorityId>>,
+		) -> Result<ImportResult, Self::Error> {
+			block.justification.take();
+			self.0.import_block(block, new_authorities)
+		}
+
+		fn check_block(
+			&self,
+			hash: Block::Hash,
+			parent_hash: Block::Hash,
+		) -> Result<ImportResult, Self::Error> {
+			self.0.check_block(hash, parent_hash)
+		}
+	}
+
+	impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
+		for NoJustificationsImport<B, E, Block, RA> where
+			NumberFor<Block>: grandpa::BlockNumberOps,
+			B: Backend<Block, Blake2Hasher> + 'static,
+			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+			DigestFor<Block>: Encode,
+			DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
+			RA: Send + Sync,
+	{
+		type Error = ConsensusError;
+
+		fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
+			self.0.on_start(link)
+		}
+
+		fn import_finality_proof(
+			&self,
+			hash: Block::Hash,
+			number: NumberFor<Block>,
+			finality_proof: Vec<u8>,
+			verifier: &Verifier<Block>,
+		) -> Result<(), Self::Error> {
+			self.0.import_finality_proof(hash, number, finality_proof, verifier)
+		}
+	}
+
+	/// Creates light block import that ignores justifications that came outside of finality proofs.
+	pub fn light_block_import_without_justifications<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
+		client: Arc<Client<B, E, Block, RA>>,
+		authority_set_provider: Arc<AuthoritySetForFinalityChecker<Block>>,
+		api: Arc<PRA>,
+	) -> Result<NoJustificationsImport<B, E, Block, RA>, ClientError>
+		where
+			B: Backend<Block, Blake2Hasher> + 'static,
+			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+			RA: Send + Sync,
+			PRA: ProvideRuntimeApi,
+			PRA::Api: GrandpaApi<Block>,
+	{
+		light_block_import(client, authority_set_provider, api).map(NoJustificationsImport)
+	}
 
 	fn import_block(
 		new_authorities: Option<Vec<AuthorityId>>,

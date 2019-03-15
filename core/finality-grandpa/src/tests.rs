@@ -29,7 +29,9 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
-use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport};
+use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+	SharedFinalityProofRequestBuilder,
+};
 use std::collections::{HashMap, HashSet};
 use std::result;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
@@ -103,7 +105,13 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn make_block_import(&self, client: PeersClient)
-		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Option<SharedFinalityProofImport<Block>>, PeerData)
+		-> (
+			SharedBlockImport<Block>,
+			Option<SharedJustificationImport<Block>>,
+			Option<SharedFinalityProofImport<Block>>,
+			Option<SharedFinalityProofRequestBuilder<Block>>,
+			PeerData,
+		)
 	{
 		match client {
 			PeersClient::Full(ref client) => {
@@ -112,17 +120,22 @@ impl TestNetFactory for GrandpaTestNet {
 					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
 				let shared_import = Arc::new(import);
-				(shared_import.clone(), Some(shared_import), None, Mutex::new(Some(link)))
+				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)))
 			},
 			PeersClient::Light(ref client) => {
+				use crate::light_import::tests::light_block_import_without_justifications;
+
 				let authorities_provider = Arc::new(self.test_config.clone());
-				let import = light_block_import(
+				// forbid direct finalization using justification that cames with the block
+				// => light clients will try to fetch finality proofs
+				let import = light_block_import_without_justifications(
 					client.clone(),
 					authorities_provider,
 					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
+				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let shared_import = Arc::new(import);
-				(shared_import.clone(), None, Some(shared_import), Mutex::new(None))
+				(shared_import.clone(), None, Some(shared_import), Some(finality_proof_req_builder), Mutex::new(None))
 			},
 		}
 	}
@@ -238,7 +251,7 @@ impl Network<Block> for MessageRouting {
 		self.validator.note_set(set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-        let messages = peer.consensus_gossip_messages_for(
+		let messages = peer.consensus_gossip_messages_for(
 			GRANDPA_ENGINE_ID,
 			make_commit_topic(set_id),
 		);
@@ -1106,8 +1119,28 @@ fn test_bad_justification() {
 }
 
 #[test]
-fn justification_is_fetched_by_light_client_when_consensus_data_changes() {
+fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	let _ = ::env_logger::try_init();
+
+	let peers = &[AuthorityKeyring::Alice];
+	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
+	net.add_light_peer(&GrandpaTestNet::default_config());
+
+	// import block#1 WITH consensus data change. Light client ignores justification
+	// && instead fetches finality proof for block #1
+	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
+	net.peer(0).push_authorities_change_block(new_authorities);
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(1, net.clone(), peers);
+	net.lock().sync();
+
+ 	// check that the block#1 is finalized on light client
+	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);
+}
+
+#[test]
+fn empty_finality_proof_is_returned_to_light_client_when_consensus_data_changes() {
+/*	let _ = ::env_logger::try_init();
 
  	let peers = &[AuthorityKeyring::Alice];
 	let net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
@@ -1123,5 +1156,5 @@ fn justification_is_fetched_by_light_client_when_consensus_data_changes() {
 	net.lock().sync();
 
  	// ... and check that the block#1 is finalized on light client
-	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);
+	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);*/
 }

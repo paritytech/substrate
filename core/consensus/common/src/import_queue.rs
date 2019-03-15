@@ -538,14 +538,14 @@ pub trait Link<B: BlockT>: Send {
 	fn finality_proof_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
+	/// Remember finality proof request builder on start.
+	fn set_finality_proof_request_builder(&self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
 	/// Disconnect from peer.
 	fn useless_peer(&self, _who: Origin, _reason: &str) {}
 	/// Disconnect from peer and restart sync.
 	fn note_useless_and_restart_sync(&self, _who: Origin, _reason: &str) {}
 	/// Restart sync.
 	fn restart(&self) {}
-	/// Remember finality proof request builder on start.
-	fn set_finality_proof_request_builder(&self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
 }
 
 /// Block import successful result.

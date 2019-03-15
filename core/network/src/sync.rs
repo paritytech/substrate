@@ -682,6 +682,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Clear all sync data.
 	pub(crate) fn clear(&mut self) {
+		self.extra_requests.clear();
 		self.blocks.clear();
 		self.peers.clear();
 	}

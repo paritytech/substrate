@@ -34,7 +34,10 @@ use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
 use crate::config::{ProtocolConfig, Roles};
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
-use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport};
+use consensus::import_queue::{
+	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
+	SharedFinalityProofRequestBuilder,
+};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::ConsensusGossip;
@@ -254,6 +257,10 @@ impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
 
 	fn request_finality_proof(&self, hash: &Hash, number: NumberFor<Block>) {
 		self.link.request_finality_proof(hash, number);
+	}
+
+	fn set_finality_proof_request_builder(&self, request_builder: SharedFinalityProofRequestBuilder<Block>) {
+		self.link.set_finality_proof_request_builder(request_builder);
 	}
 
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {
@@ -611,9 +618,15 @@ pub trait TestNetFactory: Sized {
 
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: PeersClient)
-		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Option<SharedFinalityProofImport<Block>>, Self::PeerData)
+		-> (
+			SharedBlockImport<Block>,
+			Option<SharedJustificationImport<Block>>,
+			Option<SharedFinalityProofImport<Block>>,
+			Option<SharedFinalityProofRequestBuilder<Block>>,
+			Self::PeerData,
+		)
 	{
-		(client.as_block_import(), None, None, Default::default())
+		(client.as_block_import(), None, None, None, Default::default())
 	}
 
 	/// Get finality proof provider (if supported).
@@ -641,7 +654,8 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
-		let (block_import, justification_import, finality_proof_import, data) = self.make_block_import(PeersClient::Full(client.clone()));
+		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
+			= self.make_block_import(PeersClient::Full(client.clone()));
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
 		let import_queue = Box::new(BasicQueue::new(
@@ -649,7 +663,7 @@ pub trait TestNetFactory: Sized {
 			block_import,
 			justification_import,
 			finality_proof_import,
-			None,
+			finality_proof_request_builder,
 		));
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let is_offline = Arc::new(AtomicBool::new(true));
@@ -698,7 +712,8 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new_light());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
-		let (block_import, justification_import, finality_proof_import, data) = self.make_block_import(PeersClient::Light(client.clone()));
+		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
+			= self.make_block_import(PeersClient::Light(client.clone()));
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
 		let import_queue = Box::new(BasicQueue::new(
@@ -706,7 +721,7 @@ pub trait TestNetFactory: Sized {
 			block_import,
 			justification_import,
 			finality_proof_import,
-			None,
+			finality_proof_request_builder,
 		));
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let is_offline = Arc::new(AtomicBool::new(true));
@@ -994,8 +1009,14 @@ impl TestNetFactory for JustificationTestNet {
 	}
 
 	fn make_block_import(&self, client: PeersClient)
-		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Option<SharedFinalityProofImport<Block>>, Self::PeerData)
+		-> (
+			SharedBlockImport<Block>,
+			Option<SharedJustificationImport<Block>>,
+			Option<SharedFinalityProofImport<Block>>,
+			Option<SharedFinalityProofRequestBuilder<Block>>,
+			Self::PeerData,
+		)
 	{
-		(client.as_block_import(), Some(Arc::new(ForceFinalized(client))), None, Default::default())
+		(client.as_block_import(), Some(Arc::new(ForceFinalized(client))), None, None, Default::default())
 	}
 }

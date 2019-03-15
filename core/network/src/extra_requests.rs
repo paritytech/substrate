@@ -103,6 +103,12 @@ impl<B: BlockT> ExtraRequestsAggregator<B> {
 		self.justifications.peer_disconnected(who);
 		self.finality_proofs.peer_disconnected(who);
 	}
+
+	/// Clear all data.
+	pub(crate) fn clear(&mut self) {
+		self.justifications.clear();
+		self.finality_proofs.clear();
+	}
 }
 
 /// Manages pending block extra data (e.g. justification) requests.
