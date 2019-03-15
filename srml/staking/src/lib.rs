@@ -24,6 +24,7 @@
 //! normal operation but are held at pain of "slash" (expropriation) should the staked maintainer be found not to be 
 //! discharging their duties properly. 
 //! You can start using the Staking module by implementing the staking [`Trait`].
+//! The supported dispatchable functions are documented as part of the [`Call`] enum.
 //! 
 //! ## Overview 
 //! 
@@ -97,10 +98,6 @@
 //! 
 //! ## Interface
 //! 
-//! ### Types
-//! 
-//! - `Currency`: Used as the measurement means of staking and funds management.		
-//!  
 //! ### Dispatchable
 //! 
 //! The Dispatchable functions of the staking module enable the steps needed for entities to accept and change their 
