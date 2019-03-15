@@ -36,11 +36,11 @@
 //! 
 //! * `set` - Sets the current time.
 //! 
-//! ### Public functions
+//! ### Public functions ([`Module`])
 //! 
 //! * `get` - Gets the current time for the current block. If this function is called prior the setting to timestamp, it will return the timestamp of the previous block.
 //! 
-//! * `block_period` - Gets the block period for the chain.
+//! * `block_period` - Gets the minimum (and advised) period between blocks for the chain.
 //! 
 //! ## Usage
 //! 
@@ -53,10 +53,23 @@
 //! ### Get current timestamp
 //! 
 //! ```ignore
-//! let now = <timestamp::Module<T>>::get();
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! 
+//! pub trait Trait: timestamp::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _now = <timestamp::Module<T>>::get();
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
 //! ```
 //! 
-//! ### Example usage
+//! ### Example from SRML
 //! 
 //! The [`Session` module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses the `timestamp` module for session management.
 //! 
