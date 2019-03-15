@@ -292,7 +292,7 @@ publish:s3:doc:
       --set image.tag=${DEPLOY_TAG}
       --set validator.keys=${VALIDATOR_KEYS}
       ./scripts/kubernetes | kubectl apply -f - --dry-run=false
-    - echo "# substrate namespace"
+    - echo "# substrate namespace ${KUBE_NAMESPACE}"
     - kubectl -n substrate get all
     - echo "# substrate's nodes' external ip addresses:"
     - kubectl get nodes -l node=substrate
@@ -300,6 +300,8 @@ publish:s3:doc:
     - echo "# substrate' nodes"
     - kubectl -n substrate get pods
       -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}{end}'
+    - echo "# wait for the rollout to complete"
+    - kubectl -n substrate rollout status statefulset/substrate
 
 
 
