@@ -192,17 +192,11 @@
 //! \## Usage
 //!
 //! // Insert 2-3 examples of usage and code snippets that show how to use <INSERT_CUSTOM_MODULE_NAME> module in a custom module.
-//! //
-//! // 1. Include 1 simple example, e.g. calling a getter
-//! // 2. Include 1 usage example in an actual runtime
 //!
-//! // See:
-//! // - Substrate TCR https://github.com/parity-samples/substrate-tcr
-//! // - Substrate Kitties https://shawntabrizi.github.io/substrate-collectables-workshop/#/
+//! \### Prerequisites
 //!
-//! // Show how to import <INSERT_CUSTOM_MODULE_NAME>
-//!
-//! // 1. Import the `INSERT_CUSTOM_MODULE_NAME` module and derive your module configuration trait with the `INSERT_CUSTOM_MODULE_NAME` trait.
+//! // Show how to include necessary imports for <INSERT_CUSTOM_MODULE_NAME> and derive
+//! // your module configuration trait with the `INSERT_CUSTOM_MODULE_NAME` trait.
 //!
 //! \```rust
 //! use <INSERT_CUSTOM_MODULE_NAME>;
@@ -210,17 +204,19 @@
 //! pub trait Trait: <INSERT_CUSTOM_MODULE_NAME>::Trait { }
 //! \```
 //!
-//! // 2. Show how to query a public getter function of <INSERT_CUSTOM_MODULE_NAME>
-//!
-//! // 3. Show a usage example in an actual runtime
-//!
-//! \### Prerequisites
-//!
-//! // Include necessary imports
-//!
 //! \### Simple Code Snippet
 //!
+//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_MODULE_NAME>)
+//!
 //! \### Example from SRML
+//!
+//! // Show a usage example in an actual runtime
+//!
+//! // See:
+//! // - Substrate TCR https://github.com/parity-samples/substrate-tcr
+//! // - Substrate Kitties https://shawntabrizi.github.io/substrate-collectables-workshop/#/
+//!
+//! // Show a usage example in an actual runtime
 //!
 //! \## Implementation Details
 //!
