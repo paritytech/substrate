@@ -70,7 +70,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		}
 	}
 
-	/// Sends a message to a peer using the given custom protocol.
+	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
 	///

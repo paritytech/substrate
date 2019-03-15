@@ -215,22 +215,26 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 			let mut substream = self.incoming_substreams.swap_remove(n);
 			match substream.poll() {
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
-					if let CustomMessageId::Request(id) = message.request_id() {
-						self.pending_send_back.push((id, substream));
-						return Some(CustomProtoHandlerOut::CustomMessage {
-							message
-						});
-					} else if let CustomMessageId::OneWay = message.request_id() {
-						self.shutdown.push(substream);
-						return Some(CustomProtoHandlerOut::CustomMessage {
-							message
-						});
-					} else {
-						self.shutdown.push(substream);
-						return Some(CustomProtoHandlerOut::ProtocolError {
-							is_severe: true,
-							error: format!("Received response in new substream").into(),
-						});
+					return match message.request_id() {
+						CustomMessageId::Request(id) => {
+							self.pending_send_back.push((id, substream));
+							Some(CustomProtoHandlerOut::CustomMessage {
+								message
+							})
+						}
+						CustomMessageId::OneWay => {
+							self.shutdown.push(substream);
+							Some(CustomProtoHandlerOut::CustomMessage {
+								message
+							})
+						}
+						_ => {
+							self.shutdown.push(substream);
+							Some(CustomProtoHandlerOut::ProtocolError {
+								is_severe: true,
+								error: format!("Received response in new substream").into(),
+							})
+						}
 					}
 				},
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { .. }))) =>

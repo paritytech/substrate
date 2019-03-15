@@ -42,7 +42,7 @@ pub struct CustomProto<TMessage, TSubstream> {
 	/// Topology of the network.
 	topology: NetTopology,
 
-	/// List of custom protocols that we have open with remotes.
+	/// List of peers for which the custom protocol is open.
 	opened_peers: FnvHashSet<PeerId>,
 
 	/// List of peer handlers that were enabled.
@@ -282,7 +282,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		self.opened_peers.contains(peer_id)
 	}
 
-	/// Sends a message to a peer using the given custom protocol.
+	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
 	///
@@ -602,6 +602,7 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 			CustomProtoHandlerOut::CustomMessage { message } => {
+				debug_assert!(self.is_open(&source));
 				let event = CustomProtoOut::CustomMessage {
 					peer_id: source,
 					message,
