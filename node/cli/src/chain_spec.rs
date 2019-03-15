@@ -25,7 +25,6 @@ pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::{hex, hex_impl};
 use substrate_telemetry::TelemetryEndpoints;
-use cli::DEV_PHRASE;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -188,14 +187,14 @@ pub fn staging_testnet_config() -> ChainSpec {
 
 /// Helper function to generate AccountId from seed
 pub fn get_account_id_from_seed(seed: &str) -> AccountId {
-	sr25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, seed), None)
+	sr25519::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 /// Helper function to generate AuthorityId from seed
 pub fn get_session_key_from_seed(seed: &str) -> AuthorityId {
-	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, seed), None)
+	ed25519::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }

@@ -366,11 +366,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc).using_encoded(|data|
-		MiniSecretKey::from_bytes(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes())
-			.expect("all 32-byte crypto-hash results are valid MiniSecretKeys; qed")
-			.expand()
-	)
+	secret.hard_derive_mini_secret_key(signing_context(b"SchnorrRistrettoHDKD").bytes(&cc[..])).expand()
 }
 
 #[cfg(feature = "std")]
@@ -507,9 +503,41 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::Pair as _Pair;
+	use crate::{Pair as _Pair, crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS}};
 	use hex_literal::{hex, hex_impl};
-	
+
+	#[test]
+	fn default_phrase_should_be_used() {
+		assert_eq!(
+			Pair::from_string("//Alice///password", None).unwrap().public(),
+			Pair::from_string(&format!("{}//Alice", DEV_PHRASE), Some("password")).unwrap().public(),
+		);
+		assert_eq!(
+			Pair::from_string(&format!("{}/Alice", DEV_PHRASE), None).as_ref().map(Pair::public),
+			Pair::from_string("/Alice", None).as_ref().map(Pair::public)
+		);
+	}
+
+	#[test]
+	fn default_address_should_be_used() {
+		assert_eq!(
+			Public::from_string(&format!("{}/Alice", DEV_ADDRESS)),
+			Public::from_string("/Alice")
+		);
+	}
+
+	#[test]
+	fn default_phrase_should_correspond_to_default_address() {
+		assert_eq!(
+			Pair::from_string(&format!("{}/Alice", DEV_PHRASE), None).unwrap().public(),
+			Public::from_string(&format!("{}/Alice", DEV_ADDRESS)).unwrap(),
+		);
+		assert_eq!(
+			Pair::from_string("/Alice", None).unwrap().public(),
+			Public::from_string("/Alice").unwrap()
+		);
+	}
+
 	#[test]
 	fn derive_soft_should_work() {
 		let pair: Pair = Pair::from_seed(hex!(
