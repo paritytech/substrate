@@ -21,7 +21,7 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT, NumberFor, Block as BlockT};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
@@ -70,6 +70,15 @@ pub fn initialise_block(header: &Header) {
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 }
 
+fn execute_extrinsics_without_checks(extrinsics: Vec<<Block as BlockT>::Extrinsic>) {
+	// execute transactions
+	extrinsics.into_iter().enumerate().for_each(|(i, e)| {
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
+		execute_transaction_backend(&e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	});
+}
+
 /// Actually execute all transitioning for `block`.
 pub fn polish_block(block: &mut Block) {
 	let header = &mut block.header;
@@ -111,12 +120,7 @@ pub fn execute_block(block: Block) {
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
-	// execute transactions
-	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-	execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
-	storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
-	});
+	execute_extrinsics_without_checks(block.extrinsics);
 
 	// check storage root.
 	let storage_root = storage_root().into();
@@ -132,6 +136,19 @@ pub fn execute_block(block: Block) {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
+}
+
+/// The block executor.
+pub struct BlockExecutor;
+
+impl executive::ExecuteBlock<Block> for BlockExecutor {
+	fn execute_block(block: Block) {
+		execute_block(block);
+	}
+
+	fn execute_extrinsics_without_checks(_: NumberFor<Block>, extrinsics: Vec<<Block as BlockT>::Extrinsic>) {
+		execute_extrinsics_without_checks(extrinsics);
+	}
 }
 
 /// Execute a transaction outside of the block execution function.
@@ -307,11 +324,6 @@ mod tests {
 		])
 	}
 
-	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
-		Extrinsic::Transfer(tx, signature)
-	}
-
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
@@ -356,12 +368,12 @@ mod tests {
 				digest: Default::default(),
 			},
 			extrinsics: vec![
-				construct_signed_tx(Transfer {
+				Transfer {
 					from: AccountKeyring::Alice.into(),
 					to: AccountKeyring::Bob.into(),
 					amount: 69,
 					nonce: 0,
-				})
+				}.into_signed_tx()
 			],
 		};
 
@@ -377,18 +389,18 @@ mod tests {
 				digest: Default::default(),
 			},
 			extrinsics: vec![
-				construct_signed_tx(Transfer {
+				Transfer {
 					from: AccountKeyring::Bob.into(),
 					to: AccountKeyring::Alice.into(),
 					amount: 27,
 					nonce: 0,
-				}),
-				construct_signed_tx(Transfer {
+				}.into_signed_tx(),
+				Transfer {
 					from: AccountKeyring::Alice.into(),
 					to: AccountKeyring::Charlie.into(),
 					amount: 69,
 					nonce: 1,
-				}),
+				}.into_signed_tx(),
 			],
 		};
 
