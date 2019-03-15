@@ -315,7 +315,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			use std::collections::hash_map::Entry;
 
 			let engine_id = message.engine_id;
-			//validate the message
+			// validate the message
 			let (topic, status) = match self.validators.get(&engine_id)
 				.map(|v| v.validate(&message.data))
 			{

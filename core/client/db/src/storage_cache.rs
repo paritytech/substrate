@@ -109,7 +109,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		}
 	}
 
-	/// Propagate local cache into the shared cache and synchonize
+	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
 	/// that are invalidated by chain reorganization. `sync_cache`

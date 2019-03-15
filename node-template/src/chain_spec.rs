@@ -3,7 +3,6 @@ use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, FeesConfig,
 };
-use substrate_cli::DEV_PHRASE;
 use substrate_service;
 
 use ed25519::Public as AuthorityId;
@@ -26,13 +25,13 @@ pub enum Alternative {
 }
 
 fn authority_key(s: &str) -> AuthorityId {
-	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+	ed25519::Pair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 fn account_key(s: &str) -> AccountId {
-	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+	ed25519::Pair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
 }

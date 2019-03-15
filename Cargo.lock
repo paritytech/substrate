@@ -2768,7 +2768,7 @@ dependencies = [
 [[package]]
 name = "schnorrkel"
 version = "0.0.0"
-source = "git+https://github.com/w3f/schnorrkel#0876f3f2194426150efea99304a8d23a336744bc"
+source = "git+https://github.com/w3f/schnorrkel#0a0de4294b475ef6abdeebb50067f213ca79b3c7"
 dependencies = [
  "clear_on_drop 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "curve25519-dalek 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3612,6 +3612,7 @@ dependencies = [
  "substrate-consensus-common 0.1.0",
  "substrate-inherents 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-telemetry 0.3.1",
  "substrate-test-client 0.1.0",
  "substrate-transaction-pool 0.1.0",
 ]
@@ -4673,7 +4674,7 @@ name = "twox-hash"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
