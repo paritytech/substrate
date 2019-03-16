@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -41,12 +41,14 @@
 
 use std::collections::BTreeSet;
 
+use log::warn;
+
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, As, Zero};
 
-use cache::{CacheItemT, ComplexBlockId};
-use cache::list_entry::{Entry, StorageEntry};
-use cache::list_storage::{Storage, StorageTransaction, Metadata};
+use crate::cache::{CacheItemT, ComplexBlockId};
+use crate::cache::list_entry::{Entry, StorageEntry};
+use crate::cache::list_storage::{Storage, StorageTransaction, Metadata};
 
 /// List-based cache.
 pub struct ListCache<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> {
@@ -583,15 +585,16 @@ fn read_forks<Block: BlockT, T: CacheItemT, S: Storage<Block, T>>(
 
 #[cfg(test)]
 pub mod tests {
+	use test_client::runtime::H256;
 	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use runtime_primitives::traits::Header as HeaderT;
-	use cache::list_storage::tests::{DummyStorage, FaultyStorage, DummyTransaction};
+	use crate::cache::list_storage::tests::{DummyStorage, FaultyStorage, DummyTransaction};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	pub fn test_id(number: u64) -> ComplexBlockId<Block> {
-		ComplexBlockId::new(From::from(number), number)
+		ComplexBlockId::new(H256::from_low_u64_be(number), number)
 	}
 
 	fn correct_id(number: u64) -> ComplexBlockId<Block> {
@@ -619,7 +622,7 @@ pub mod tests {
 			Header {
 				parent_hash: fork_header(fork_nonce, fork_from, number - 1).hash(),
 				number,
-				state_root: (1 + fork_nonce).into(),
+				state_root: H256::from_low_u64_be(1 + fork_nonce),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			}
@@ -638,7 +641,7 @@ pub mod tests {
 		assert_eq!(ListCache::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
-				.with_id(50, 50.into())
+				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: Some(100) })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: None }),
 			1024, test_id(100)
@@ -648,7 +651,7 @@ pub mod tests {
 		assert_eq!(ListCache::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
-				.with_id(50, 50.into())
+				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: Some(100) })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: Some(30) }),
 			1024, test_id(100)
@@ -658,7 +661,7 @@ pub mod tests {
 		assert_eq!(ListCache::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
-				.with_id(100, 100.into())
+				.with_id(100, H256::from_low_u64_be(100))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: Some(100) })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: Some(30) }),
 			1024, test_id(100)
@@ -669,18 +672,18 @@ pub mod tests {
 		assert_eq!(ListCache::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
-				.with_id(50, 50.into())
+				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: Some(100) })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: Some(30) }),
 			1024, test_id(100)
-		).value_at_block(&ComplexBlockId::new(2.into(), 100)).unwrap(), None);
+		).value_at_block(&ComplexBlockId::new(H256::from_low_u64_be(2), 100)).unwrap(), None);
 
 		// when block is later than last finalized block AND there are no forks AND finalized value is None
 		// ---> [100] --- 200
 		assert_eq!(ListCache::<_, u64, _>::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
-				.with_id(50, 50.into())
+				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: None }),
 			1024, test_id(100)
 		).value_at_block(&test_id(200)).unwrap(), None);
@@ -689,7 +692,7 @@ pub mod tests {
 		assert_eq!(ListCache::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
-				.with_id(50, 50.into())
+				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: Some(100) }),
 			1024, test_id(100)
 		).value_at_block(&test_id(200)).unwrap(), Some(100));
@@ -1211,14 +1214,14 @@ pub mod tests {
 	#[test]
 	fn fork_destroy_works() {
 		// when we reached finalized entry without iterations
-		let storage = DummyStorage::new().with_id(100, 100.into());
+		let storage = DummyStorage::new().with_id(100, H256::from_low_u64_be(100));
 		let mut tx = DummyTransaction::new();
 		Fork::<_, u64> { best_block: None, head: Entry { valid_from: test_id(100), value: None } }
 			.destroy(&storage, &mut tx, Some(200)).unwrap();
 		assert!(tx.removed_entries().is_empty());
 		// when we reach finalized entry with iterations
 		let storage = DummyStorage::new()
-			.with_id(10, 10.into())
+			.with_id(10, H256::from_low_u64_be(10))
 			.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(50)), value: Some(100) })
 			.with_entry(test_id(50), StorageEntry { prev_valid_from: Some(test_id(20)), value: Some(50) })
 			.with_entry(test_id(20), StorageEntry { prev_valid_from: Some(test_id(10)), value: Some(20) })
@@ -1232,7 +1235,7 @@ pub mod tests {
 			vec![test_id(100).hash, test_id(50).hash, test_id(20).hash].into_iter().collect());
 		// when we reach beginning of fork before finalized block
 		let storage = DummyStorage::new()
-			.with_id(10, 10.into())
+			.with_id(10, H256::from_low_u64_be(10))
 			.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(50)), value: Some(100) })
 			.with_entry(test_id(50), StorageEntry { prev_valid_from: None, value: Some(50) });
 		let mut tx = DummyTransaction::new();
@@ -1301,10 +1304,10 @@ pub mod tests {
 		assert_eq!(chain::is_finalized_block::<_, u64, _>(&DummyStorage::new(), &test_id(1), 100).unwrap(), false);
 		// when there's different hash for this block number in the database
 		assert_eq!(chain::is_finalized_block::<_, u64, _>(&DummyStorage::new()
-			.with_id(1, From::from(2)), &test_id(1), 100).unwrap(), false);
+			.with_id(1, H256::from_low_u64_be(2)), &test_id(1), 100).unwrap(), false);
 		// when there's the same hash for this block number in the database
 		assert_eq!(chain::is_finalized_block::<_, u64, _>(&DummyStorage::new()
-			.with_id(1, From::from(1)), &test_id(1), 100).unwrap(), true);
+			.with_id(1, H256::from_low_u64_be(1)), &test_id(1), 100).unwrap(), true);
 	}
 
 	#[test]
@@ -1354,9 +1357,9 @@ pub mod tests {
 	#[test]
 	fn ancient_entries_are_pruned() {
 		let cache = ListCache::new(DummyStorage::new()
-			.with_id(10, 10.into())
-			.with_id(20, 20.into())
-			.with_id(30, 30.into())
+			.with_id(10, H256::from_low_u64_be(10))
+			.with_id(20, H256::from_low_u64_be(20))
+			.with_id(30, H256::from_low_u64_be(30))
 			.with_entry(test_id(10), StorageEntry { prev_valid_from: None, value: Some(10) })
 			.with_entry(test_id(20), StorageEntry { prev_valid_from: Some(test_id(10)), value: Some(20) })
 			.with_entry(test_id(30), StorageEntry { prev_valid_from: Some(test_id(20)), value: Some(30) }),

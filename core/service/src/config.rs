@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,13 +18,14 @@
 
 use std::net::SocketAddr;
 use transaction_pool;
-use chain_spec::ChainSpec;
-pub use client::ExecutionStrategy;
+use crate::chain_spec::ChainSpec;
+pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
 pub use network::config::{NetworkConfiguration, Roles};
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
+use tel::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
@@ -57,16 +58,16 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub custom: C,
 	/// Node name.
 	pub name: String,
-	/// Block execution strategy.
-	pub block_execution_strategy: ExecutionStrategy,
-	/// Runtime API execution strategy.
-	pub api_execution_strategy: ExecutionStrategy,
+	/// Execution strategies.
+	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
-	pub telemetry_url: Option<String>,
+	pub telemetry_endpoints: Option<TelemetryEndpoints>,
+	/// The default number of 64KB pages to allocate for Wasm execution
+	pub default_heap_pages: Option<u64>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -87,14 +88,16 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
-			block_execution_strategy: ExecutionStrategy::Both,
-			api_execution_strategy: ExecutionStrategy::Both,
+			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
-			telemetry_url: None,
+			telemetry_endpoints: None,
+			default_heap_pages: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
-		configuration.telemetry_url = configuration.chain_spec.telemetry_url().map(str::to_owned);
+
+		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
+
 		configuration
 	}
 

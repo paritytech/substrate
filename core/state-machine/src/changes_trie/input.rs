@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output};
+use parity_codec::{Decode, Encode, Input, Output};
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -6,13 +6,9 @@ extern crate alloc;
 use alloc::vec::Vec;
 use alloc::slice;
 
-extern crate sr_io as runtime_io;
-extern crate sr_sandbox as sandbox;
-extern crate substrate_primitives;
-
 use runtime_io::{
 	set_storage, storage, clear_prefix, print, blake2_256,
-	twox_128, twox_256, ed25519_verify, enumerated_trie_root
+	twox_128, twox_256, ed25519_verify, sr25519_verify, enumerated_trie_root
 };
 
 macro_rules! impl_stubs {
@@ -63,6 +59,7 @@ impl_stubs!(
 		b"all ok!".to_vec()
 	},
 	test_empty_return => |_| Vec::new(),
+	test_exhaust_heap => |_| Vec::with_capacity(16777216),
 	test_panic => |_| panic!("test panic"),
 	test_conditional_panic => |input: &[u8]| {
 		if input.len() > 0 {
@@ -82,6 +79,16 @@ impl_stubs!(
 
 		let msg = b"all ok!";
 		[ed25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
+	},
+	test_sr25519_verify => |input: &[u8]| {
+		let mut pubkey = [0; 32];
+		let mut sig = [0; 64];
+
+		pubkey.copy_from_slice(&input[0..32]);
+		sig.copy_from_slice(&input[32..96]);
+
+		let msg = b"all ok!";
+		[sr25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
 	},
 	test_enumerated_trie_root => |_| {
 		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()

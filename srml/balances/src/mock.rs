@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,10 +19,11 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, system};
+use srml_support::impl_outer_origin;
+use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -39,15 +40,15 @@ impl system::Trait for Runtime {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type AccountIndex = u64;
 	type OnFreeBalanceZero = ();
-	type EnsureAccountLiquid = ();
+	type OnNewAccount = ();
 	type Event = ();
 }
 
@@ -56,6 +57,7 @@ pub struct ExtBuilder {
 	transfer_fee: u64,
 	creation_fee: u64,
 	monied: bool,
+	vesting: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
@@ -64,6 +66,7 @@ impl Default for ExtBuilder {
 			transfer_fee: 0,
 			creation_fee: 0,
 			monied: false,
+			vesting: false,
 		}
 	}
 }
@@ -85,6 +88,10 @@ impl ExtBuilder {
 		self.monied = monied;
 		self
 	}
+	pub fn vesting(mut self, vesting: bool) -> Self {
+		self.vesting = vesting;
+		self
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		let balance_factor = if self.existential_deposit > 0 {
@@ -98,12 +105,14 @@ impl ExtBuilder {
 			} else {
 				vec![(10, balance_factor), (20, balance_factor)]
 			},
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,
 			creation_fee: self.creation_fee,
-			reclaim_rebate: 0,
+			vesting: if self.vesting && self.monied {
+				vec![(1, 0, 10), (2, 10, 20)]
+			} else {
+				vec![]
+			},
 		}.build_storage().unwrap().0);
 		t.into()
 	}

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,13 +22,14 @@ use std::io;
 
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use log::debug;
 
 use client;
-use codec::Decode;
+use parity_codec::Decode;
 use trie::DBValue;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Zero};
-use DatabaseSettings;
+use crate::DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
@@ -50,6 +51,8 @@ pub mod meta_keys {
 	pub const GENESIS_HASH: &[u8; 3] = b"gen";
 	/// Leaves prefix list key.
 	pub const LEAF_PREFIX: &[u8; 4] = b"leaf";
+	/// Children prefix list key.
+	pub const CHILDREN_PREFIX: &[u8; 8] = b"children";
 }
 
 /// Database metadata.

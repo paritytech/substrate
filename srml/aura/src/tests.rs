@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,31 +18,44 @@
 
 #![cfg(test)]
 
-use mock::{System, Aura, new_test_ext};
+use lazy_static::lazy_static;
+use crate::mock::{System, Aura, new_test_ext};
 use primitives::traits::Header;
 use runtime_io::with_externalities;
 use parking_lot::Mutex;
-use {AuraReport, HandleReport};
+use crate::{AuraReport, HandleReport};
 
 #[test]
 fn aura_report_gets_skipped_correctly() {
 	let mut report = AuraReport {
-		start_slot: 0,
-		skipped: 30,
+		start_slot: 3,
+		skipped: 15,
 	};
 
 	let mut validators = vec![0; 10];
 	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-	assert_eq!(validators, vec![3; 10]);
+	let mut validators = vec![0; 10];
+	report.skipped = 5;
+	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![0, 0, 0, 1, 1, 1, 1, 1, 0, 0]);
+
+	let mut validators = vec![0; 10];
+	report.start_slot = 8;
+	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![1, 1, 1, 0, 0, 0, 0, 0, 1, 1]);
 
 	let mut validators = vec![0; 4];
+	report.start_slot = 1;
+	report.skipped = 3;
 	report.punish(4, |idx, count| validators[idx] += count);
-	assert_eq!(validators, vec![8, 8, 7, 7]);
+	assert_eq!(validators, vec![0, 1, 1, 1]);
 
+	let mut validators = vec![0; 4];
 	report.start_slot = 2;
 	report.punish(4, |idx, count| validators[idx] += count);
-	assert_eq!(validators, vec![15, 15, 15, 15]);
+	assert_eq!(validators, vec![1, 0, 1, 1]);
 }
 
 #[test]

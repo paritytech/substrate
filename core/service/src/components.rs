@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,15 +19,18 @@
 use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
-use chain_spec::ChainSpec;
+use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
-use {error, Service, maybe_start_server};
-use network::{self, OnDemand, import_queue::ImportQueue};
+use crate::{error, Service, maybe_start_server};
+use consensus_common::import_queue::ImportQueue;
+use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::{BlockId, SignedBlock}};
-use config::Configuration;
+use runtime_primitives::{
+	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
+};
+use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
@@ -35,11 +38,7 @@ use parking_lot::Mutex;
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 /// Network service type for a factory.
-pub type NetworkService<F> = network::Service<
-	<F as ServiceFactory>::Block,
-	<F as ServiceFactory>::NetworkProtocol,
-	<<F as ServiceFactory>::Block as BlockT>::Hash,
->;
+pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -56,17 +55,33 @@ pub type FullExecutor<F> = client::LocalCallExecutor<
 /// Light client backend type for a factory.
 pub type LightBackend<F> = client::light::backend::Backend<
 	client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+	network::OnDemand<<F as ServiceFactory>::Block>,
+	Blake2Hasher,
 >;
 
 /// Light client executor type for a factory.
-pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
-	client::light::blockchain::Blockchain<
+pub type LightExecutor<F> = client::light::call_executor::RemoteOrLocalCallExecutor<
+	<F as ServiceFactory>::Block,
+	client::light::backend::Backend<
 		client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+		network::OnDemand<<F as ServiceFactory>::Block>,
+		Blake2Hasher
 	>,
-	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
-	Blake2Hasher,
+	client::light::call_executor::RemoteCallExecutor<
+		client::light::blockchain::Blockchain<
+			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+			network::OnDemand<<F as ServiceFactory>::Block>
+		>,
+		network::OnDemand<<F as ServiceFactory>::Block>
+	>,
+	client::LocalCallExecutor<
+		client::light::backend::Backend<
+			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+			network::OnDemand<<F as ServiceFactory>::Block>,
+			Blake2Hasher
+		>,
+		CodeExecutor<F>
+	>
 >;
 
 /// Full client type for a factory.
@@ -134,8 +149,8 @@ pub trait StartRPC<C: Components> {
 }
 
 impl<C: Components> StartRPC<Self> for C where
-	C::RuntimeApi: Metadata<ComponentBlock<C>>,
-	for<'de> SignedBlock<ComponentBlock<C>>: ::serde::Deserialize<'de>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: Metadata<ComponentBlock<C>>,
 {
 	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
 
@@ -184,44 +199,44 @@ pub trait MaintainTransactionPool<C: Components> {
 	) -> error::Result<()>;
 }
 
-impl<C: Components> MaintainTransactionPool<Self> for C where
-	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
-	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
+fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
+	id: &BlockId<Block>,
+	client: &Client<Backend, Executor, Block, Api>,
+	transaction_pool: &TransactionPool<PoolApi>,
+) -> error::Result<()> where
+	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher>,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
+	Executor: client::CallExecutor<Block, Blake2Hasher>,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
-	// TODO [ToDr] Optimize and re-use tags from the pool.
+	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
+	if transaction_pool.status().is_empty() {
+		return Ok(())
+	}
+
+	if let Some(block) = client.block(id)? {
+		let parent_id = BlockId::hash(*block.block.header().parent_hash());
+		let extrinsics = block.block.extrinsics();
+		transaction_pool.prune(id, &parent_id, extrinsics).map_err(|e| format!("{:?}", e))?;
+	}
+
+	Ok(())
+}
+
+impl<C: Components> MaintainTransactionPool<Self> for C where
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
+{
 	fn on_block_imported(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,
 		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
 	) -> error::Result<()> {
-		use runtime_primitives::transaction_validity::TransactionValidity;
-
-		let block = client.block(id)?;
-		let tags = match block {
-			None => return Ok(()),
-			Some(block) => {
-				let mut tags = vec![];
-				for tx in block.block.extrinsics() {
-					let tx = client.runtime_api().validate_transaction(id, &tx)?;
-					match tx {
-						TransactionValidity::Valid { mut provides, .. } => {
-							tags.append(&mut provides);
-						},
-						// silently ignore invalid extrinsics,
-						// cause they might just be inherent
-						_ => {}
-					}
-
-				}
-				tags
-			}
-		};
-
-		transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
-		Ok(())
+		on_block_imported(id, client, transaction_pool)
 	}
 }
-
 
 /// The super trait that combines all required traits a `Service` needs to implement.
 pub trait ServiceTrait<C: Components>:
@@ -259,9 +274,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Extended light service type.
 	type LightService: ServiceTrait<LightComponents<Self>>;
 	/// ImportQueue for full client
-	type FullImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	type FullImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
-	type LightImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	type LightImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
@@ -325,7 +340,7 @@ pub trait Components: Sized + 'static {
 	type RuntimeApi: Send + Sync;
 	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
-	// TODO [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
+	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// A type that can maintain transaction pool.
 	type TransactionPool: MaintainTransactionPool<Self>;
 	/// Extrinsic pool type.
@@ -344,7 +359,7 @@ pub trait Components: Sized + 'static {
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 		),
 		error::Error
 	>;
@@ -410,7 +425,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	)
 		-> Result<(
 			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 		), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
@@ -422,8 +437,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			db_settings,
 			executor,
 			&config.chain_spec,
-			config.block_execution_strategy,
-			config.api_execution_strategy,
+			config.execution_strategies.clone(),
 		)?), None))
 	}
 
@@ -486,7 +500,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		-> Result<
 			(
 				Arc<ComponentClient<Self>>,
-				Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+				Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 			), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
@@ -496,10 +510,10 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher, _, _, _>(light_blockchain.clone(), executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;
+		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec, executor)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 
@@ -514,5 +528,50 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use parity_codec::Encode;
+	use consensus_common::BlockOrigin;
+	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::{Extrinsic, Transfer}};
+
+	#[test]
+	fn should_remove_transactions_from_the_pool() {
+		let client = Arc::new(substrate_test_client::new());
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let transaction = {
+			let transfer = Transfer {
+				amount: 5,
+				nonce: 0,
+				from: AccountKeyring::Alice.into(),
+				to: Default::default(),
+			};
+			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
+			Extrinsic::Transfer(transfer, signature)
+		};
+		// store the transaction in the pool
+		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();
+
+		// import the block
+		let mut builder = client.new_block().unwrap();
+		builder.push(transaction.clone()).unwrap();
+		let block = builder.bake().unwrap();
+		let id = BlockId::hash(block.header().hash());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should clean up the queue
+		assert_eq!(pool.status().ready, 1);
+		on_block_imported(
+			&id,
+			&client,
+			&pool,
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
 	}
 }

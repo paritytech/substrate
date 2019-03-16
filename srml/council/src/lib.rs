@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,39 +18,21 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-extern crate parity_codec as codec;
-#[macro_use] extern crate parity_codec_derive;
-extern crate substrate_primitives;
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
-#[macro_use] extern crate srml_support;
-extern crate sr_primitives as primitives;
-extern crate srml_balances as balances;
-extern crate srml_democracy as democracy;
-extern crate srml_system as system;
-
 pub mod voting;
 pub mod motions;
 pub mod seats;
 
-pub use seats::{Trait, Module, RawEvent, Event, VoteIndex};
+pub use crate::seats::{Trait, Module, RawEvent, Event, VoteIndex};
 
 #[cfg(test)]
 mod tests {
 	// These re-exports are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
+	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch};
 	pub use substrate_primitives::H256;
 	pub use primitives::BuildStorage;
-	pub use primitives::traits::{BlakeTwo256};
+	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use substrate_primitives::{Blake2Hasher};
 	pub use {seats, motions, voting};
@@ -85,18 +67,19 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = Event;
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
-		type EnsureAccountLiquid = ();
+		type OnNewAccount = ();
 		type Event = Event;
 	}
 	impl democracy::Trait for Test {
+		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = Event;
 	}
@@ -116,12 +99,10 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
-			reclaim_rebate: 0,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,

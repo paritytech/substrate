@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,52 +28,23 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-extern crate parity_codec as codec;
-extern crate sr_io as runtime_io;
-#[cfg_attr(test, macro_use)]
-extern crate substrate_primitives as primitives;
-extern crate substrate_serializer as serializer;
-extern crate substrate_state_machine as state_machine;
-extern crate sr_version as runtime_version;
-extern crate substrate_trie as trie;
-
-extern crate wasmi;
-extern crate byteorder;
-extern crate parking_lot;
-
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
-extern crate error_chain;
-
-#[cfg(test)]
-extern crate assert_matches;
-
-#[cfg(test)]
-extern crate wabt;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
 #[macro_use]
 mod wasm_utils;
 mod wasm_executor;
 #[macro_use]
 mod native_executor;
 mod sandbox;
+mod allocator;
 
 pub mod error;
+pub use wasmi;
 pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use state_machine::Externalities;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
-pub use codec::Codec;
-use primitives::Blake2Hasher;
+pub use parity_codec::Codec;
+#[doc(hidden)]
+pub use primitives::Blake2Hasher;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -84,7 +55,5 @@ pub trait RuntimeInfo {
 	fn runtime_version<E: Externalities<Blake2Hasher>> (
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8]
 	) -> Option<RuntimeVersion>;
 }

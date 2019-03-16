@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use wasmi::{ValueType, RuntimeValue, HostError};
 use wasmi::nan_preserving_float::{F32, F64};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct UserError(pub &'static str);
 impl fmt::Display for UserError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

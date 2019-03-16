@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,39 +23,50 @@ mod helpers;
 mod tests;
 
 use std::sync::Arc;
+use jsonrpc_derive::rpc;
 use network;
-use runtime_primitives::traits;
+use runtime_primitives::traits::{self, Header as HeaderT};
 
 use self::error::Result;
-pub use self::helpers::{Properties, SystemInfo, Health};
+pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 
-build_rpc_trait! {
-	/// Substrate system RPC API
-	pub trait SystemApi {
-		/// Get the node's implementation name. Plain old string.
-		#[rpc(name = "system_name")]
-		fn system_name(&self) -> Result<String>;
+/// Substrate system RPC API
+#[rpc]
+pub trait SystemApi<Hash, Number> {
+	/// Get the node's implementation name. Plain old string.
+	#[rpc(name = "system_name")]
+	fn system_name(&self) -> Result<String>;
 
-		/// Get the node implementation's version. Should be a semver string.
-		#[rpc(name = "system_version")]
-		fn system_version(&self) -> Result<String>;
+	/// Get the node implementation's version. Should be a semver string.
+	#[rpc(name = "system_version")]
+	fn system_version(&self) -> Result<String>;
 
-		/// Get the chain's type. Given as a string identifier.
-		#[rpc(name = "system_chain")]
-		fn system_chain(&self) -> Result<String>;
+	/// Get the chain's type. Given as a string identifier.
+	#[rpc(name = "system_chain")]
+	fn system_chain(&self) -> Result<String>;
 
-		/// Get a custom set of properties as a JSON object, defined in the chain spec.
-		#[rpc(name = "system_properties")]
-		fn system_properties(&self) -> Result<Properties>;
+	/// Get a custom set of properties as a JSON object, defined in the chain spec.
+	#[rpc(name = "system_properties")]
+	fn system_properties(&self) -> Result<Properties>;
 
-		/// Return health status of the node.
-		///
-		/// Node is considered healthy if it is:
-		/// - connected to some peers (unless running in dev mode)
-		/// - not performing a major sync
-		#[rpc(name = "system_health")]
-		fn system_health(&self) -> Result<Health>;
-	}
+	/// Return health status of the node.
+	///
+	/// Node is considered healthy if it is:
+	/// - connected to some peers (unless running in dev mode)
+	/// - not performing a major sync
+	#[rpc(name = "system_health")]
+	fn system_health(&self) -> Result<Health>;
+
+	/// Returns currently connected peers
+	#[rpc(name = "system_peers")]
+	fn system_peers(&self) -> Result<Vec<PeerInfo<Hash, Number>>>;
+
+	/// Returns current state of the network.
+	///
+	/// **Warning**: This API is not stable.
+	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
+	#[rpc(name = "system_networkState")]
+	fn system_network_state(&self) -> Result<network::NetworkState>;
 }
 
 /// System API implementation
@@ -80,7 +91,7 @@ impl<B: traits::Block> System<B> {
 	}
 }
 
-impl<B: traits::Block> SystemApi for System<B> {
+impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for System<B> {
 	fn system_name(&self) -> Result<String> {
 		Ok(self.info.impl_name.clone())
 	}
@@ -98,21 +109,25 @@ impl<B: traits::Block> SystemApi for System<B> {
 	}
 
 	fn system_health(&self) -> Result<Health> {
-		let status = self.sync.status();
+		Ok(Health {
+			peers: self.sync.peers().len(),
+			is_syncing: self.sync.is_major_syncing(),
+			should_have_peers: self.should_have_peers,
+		})
+	}
 
-		let is_syncing = status.sync.is_major_syncing();
-		let peers = status.num_peers;
+	fn system_peers(&self) -> Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
+		Ok(self.sync.peers().into_iter().map(|(index, p)| PeerInfo {
+			index,
+			peer_id: p.peer_id.to_base58(),
+			roles: format!("{:?}", p.roles),
+			protocol_version: p.protocol_version,
+			best_hash: p.best_hash,
+			best_number: p.best_number,
+		}).collect())
+	}
 
-		let health = Health {
-			peers,
-			is_syncing,
-		};
-
-		let has_no_peers = peers == 0 && self.should_have_peers;
-		if has_no_peers || is_syncing {
-			Err(error::ErrorKind::NotHealthy(health))?
-		} else {
-			Ok(health)
-		}
+	fn system_network_state(&self) -> Result<network::NetworkState> {
+		Ok(self.sync.network_state())
 	}
 }

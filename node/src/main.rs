@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,13 +17,6 @@
 //! Substrate Node CLI
 
 #![warn(missing_docs)]
-
-extern crate node_cli as cli;
-extern crate ctrlc;
-extern crate futures;
-
-#[macro_use]
-extern crate error_chain;
 
 use cli::VersionInfo;
 use futures::sync::oneshot;
@@ -50,15 +43,17 @@ impl cli::IntoExit for Exit {
 	}
 }
 
-quick_main!(run);
+error_chain::quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
 	let version = VersionInfo {
+		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
 		version: env!("CARGO_PKG_VERSION"),
 		executable_name: "substrate",
-		author: "Parity Team <admin@parity.io>",
+		author: "Parity Technologies <admin@parity.io>",
 		description: "Generic substrate node",
+		support_url: "https://github.com/paritytech/substrate/issues/new",
 	};
 	cli::run(::std::env::args(), Exit, version)
 }

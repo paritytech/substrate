@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,6 +16,9 @@
 
 //! Error types in Consensus
 use runtime_version::RuntimeVersion;
+use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+	impl_extract_backtrace, impl_error_chain_kind};
+use primitives::ed25519::{Public, Signature};
 
 error_chain! {
 	errors {
@@ -37,6 +40,12 @@ error_chain! {
 			display("Timer error: {}", e),
 		}
 
+		/// Error while working with inherent data.
+		InherentData(e: String) {
+			description("InherentData error"),
+			display("InherentData error: {}", e),
+		}
+
 		/// Unable to propose a block.
 		CannotPropose {
 			description("Unable to create block proposal."),
@@ -44,13 +53,13 @@ error_chain! {
 		}
 
 		/// Error checking signature
-		InvalidSignature(s: ::primitives::ed25519::Signature, a: ::primitives::AuthorityId) {
+		InvalidSignature(s: Signature, a: Public) {
 			description("Message signature is invalid"),
 			display("Message signature {:?} by {:?} is invalid.", s, a),
 		}
 
 		/// Account is not an authority.
-		InvalidAuthority(a: ::primitives::AuthorityId) {
+		InvalidAuthority(a: Public) {
 			description("Message sender is not a valid authority"),
 			display("Message sender {:?} is not a valid authority.", a),
 		}
@@ -83,6 +92,12 @@ error_chain! {
 		Other(e: Box<::std::error::Error + Send>) {
 			description("Other error")
 			display("Other error: {}", e.description())
+		}
+
+		/// Error from the client while importing
+		ClientImport(reason: String) {
+			description("Import failed"),
+			display("Import failed: {}", reason),
 		}
 	}
 }

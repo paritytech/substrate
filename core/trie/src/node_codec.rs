@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 use codec::{Encode, Decode, Compact};
 use hash_db::Hasher;
 use trie_db::{self, DBValue, NibbleSlice, node::Node, ChildReference};
-use error::Error;
+use crate::error::Error;
 use super::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,
 	EXTENSION_NODE_BIG, take, partial_to_key, node_header::NodeHeader, branch_node};
 
@@ -95,14 +95,14 @@ impl<H: Hasher> trie_db::NodeCodec<H> for NodeCodec<H> {
 		vec![EMPTY_TRIE]
 	}
 
-	// TODO: refactor this so that `partial` isn't already encoded with HPE. Should just be an `impl Iterator<Item=u8>`.
+	// FIXME: refactor this so that `partial` isn't already encoded with HPE. Should just be an `impl Iterator<Item=u8>`.
 	fn leaf_node(partial: &[u8], value: &[u8]) -> Vec<u8> {
 		let mut output = partial_to_key(partial, LEAF_NODE_OFFSET, LEAF_NODE_BIG);
 		value.encode_to(&mut output);
 		output
 	}
 
-	// TODO: refactor this so that `partial` isn't already encoded with HPE. Should just be an `impl Iterator<Item=u8>`.
+	// FIXME: refactor this so that `partial` isn't already encoded with HPE. Should just be an `impl Iterator<Item=u8>`.
 	fn ext_node(partial: &[u8], child: ChildReference<H::Out>) -> Vec<u8> {
 		let mut output = partial_to_key(partial, EXTENSION_NODE_OFFSET, EXTENSION_NODE_BIG);
 		match child {

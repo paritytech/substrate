@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,10 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-use codec::{Decode, Encode, Input, Output};
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
+
+use crate::codec::{Decode, Encode, Input, Output};
 
 pub type Period = u64;
 pub type Phase = u64;

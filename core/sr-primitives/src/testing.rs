@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,17 +17,42 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
+use serde_derive::Serialize;
+#[cfg(feature = "std")]
+use serde_derive::Deserialize;
 use std::{fmt::Debug, ops::Deref, fmt};
-use codec::{Codec, Encode, Decode};
-use traits::{self, Checkable, Applyable, BlakeTwo256};
-use generic::DigestItem as GenDigestItem;
+use crate::codec::{Codec, Encode, Decode};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
+use crate::generic::DigestItem as GenDigestItem;
+pub use substrate_primitives::H256;
+use substrate_primitives::U256;
+use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
-pub use substrate_primitives::{H256, AuthorityId};
+/// Authority Id
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct UintAuthorityId(pub u64);
+impl Into<AuthorityId> for UintAuthorityId {
+	fn into(self) -> AuthorityId {
+		let bytes: [u8; 32] = U256::from(self.0).into();
+		AuthorityId(bytes)
+	}
+}
 
-pub type DigestItem = GenDigestItem<H256, u64>;
+/// Converter between u64 and the AuthorityId wrapper type.
+pub struct ConvertUintAuthorityId;
+impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
+	fn convert(a: u64) -> Option<UintAuthorityId> {
+		Some(UintAuthorityId(a))
+	}
+}
+/// Digest item
+pub type DigestItem = GenDigestItem<H256, AuthorityId, AuthoritySignature>;
 
+/// Header Digest
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Digest {
+	/// Generated logs
 	pub logs: Vec<DigestItem>,
 }
 
@@ -48,14 +73,20 @@ impl traits::Digest for Digest {
 	}
 }
 
+/// Block Header
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
+	/// Parent hash
 	pub parent_hash: H256,
+	/// Block Number
 	pub number: u64,
+	/// Post-execution state trie root
 	pub state_root: H256,
+	/// Merkle root of block's extrinsics
 	pub extrinsics_root: H256,
+	/// Digest items
 	pub digest: Digest,
 }
 
@@ -105,6 +136,7 @@ impl<'a> Deserialize<'a> for Header {
 	}
 }
 
+/// An opaque extrinsic wrapper type.
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
@@ -135,9 +167,12 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 	}
 }
 
+/// Testing block
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
+	/// Block header
 	pub header: Header,
+	/// List of extrinsics
 	pub extrinsics: Vec<Xt>,
 }
 
@@ -167,6 +202,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
+/// Test transaction
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 

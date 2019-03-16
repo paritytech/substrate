@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,9 +20,6 @@
 //! to something more compact, but for now we're using JSON.
 
 #![warn(missing_docs)]
-
-extern crate serde;
-extern crate serde_json;
 
 pub use serde_json::{from_str, from_slice, from_reader, Result, Error};
 

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 /// Unwraps the trailing parameter or falls back with the closure result.
-pub fn unwrap_or_else<F, H, E>(or_else: F, optional: ::jsonrpc_macros::Trailing<H>) -> Result<H, E> where
+pub fn unwrap_or_else<F, H, E>(or_else: F, optional: Option<H>) -> Result<H, E> where
 	F: FnOnce() -> Result<H, E>,
 {
 	match optional.into() {

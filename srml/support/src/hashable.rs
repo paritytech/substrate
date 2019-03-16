@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! Hashable trait.
 
-use codec::Codec;
+use crate::codec::Codec;
 use runtime_io::{blake2_256, twox_128, twox_256};
 
 pub trait Hashable: Sized {

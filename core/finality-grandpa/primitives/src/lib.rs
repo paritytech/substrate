@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,21 +22,13 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-extern crate substrate_primitives;
-extern crate sr_primitives;
-extern crate parity_codec;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[macro_use]
-extern crate substrate_client as client;
-
-extern crate sr_std as rstd;
-
-use substrate_primitives::AuthorityId;
+use parity_codec::{Encode, Decode};
+use substrate_primitives::ed25519;
 use sr_primitives::traits::{DigestFor, NumberFor};
+use client::decl_runtime_apis;
 use rstd::vec::Vec;
+
+use ed25519::Public as AuthorityId;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
@@ -52,14 +44,6 @@ pub struct ScheduledChange<N> {
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
-
-/// The ApiIds for GRANDPA API.
-pub mod id {
-	use client::runtime_api::ApiId;
-
-	/// ApiId for the GrandpaApi trait.
-	pub const GRANDPA_API: ApiId = *b"fgrandpa";
-}
 
 /// Well-known storage keys for GRANDPA.
 pub mod well_known_keys {
@@ -79,6 +63,7 @@ decl_runtime_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
+	#[api_version(2)]
 	pub trait GrandpaApi {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.
@@ -92,11 +77,37 @@ decl_runtime_apis! {
 		/// This should be a pure function: i.e. as long as the runtime can interpret
 		/// the digest type it should return the same result regardless of the current
 		/// state.
-		fn grandpa_pending_change(digest: DigestFor<Block>)
+		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>;
+
+		/// Check a digest for forced changes.
+		/// Return `None` if there are no forced changes. Otherwise, return a
+		/// tuple containing the pending change and the median last finalized
+		/// block number at the time the change was signalled.
+		///
+		/// Added in version 2.
+		///
+		/// Forced changes are applied after a delay of _imported_ blocks,
+		/// while pending changes are applied after a delay of _finalized_ blocks.
+		///
+		/// Precedence towards earlier or later digest items can be given
+		/// based on the rules of the chain.
+		///
+		/// No change should be scheduled if one is already and the delay has not
+		/// passed completely.
+		///
+		/// This should be a pure function: i.e. as long as the runtime can interpret
+		/// the digest type it should return the same result regardless of the current
+		/// state.
+		fn grandpa_forced_change(digest: &DigestFor<Block>)
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>;
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
+		///
+		/// When called at block B, it will return the set of authorities that should be
+		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
+		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
 	}
 }

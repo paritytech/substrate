@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,32 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate environmental;
-
-#[cfg_attr(test, macro_use)]
-extern crate substrate_primitives as primitives;
-
-extern crate substrate_state_machine;
-extern crate substrate_trie as trie;
-extern crate hash_db;
-
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
+pub use parity_codec as codec;
 // re-export hashing functions.
-pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
-
-pub use primitives::{Blake2Hasher};
+pub use primitives::{
+	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519,
+	Pair
+};
+pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
-pub use substrate_state_machine::{Externalities, TestExternalities};
-use primitives::hexdisplay::HexDisplay;
-use primitives::H256;
+pub use substrate_state_machine::{Externalities, BasicExternalities, TestExternalities};
+
+use environmental::{environmental, thread_local_impl};
+use primitives::{hexdisplay::HexDisplay, H256};
 use hash_db::Hasher;
 
-// TODO: use the real error, not NoError.
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
+
+/// A set of key value pairs for storage.
+pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -164,6 +164,7 @@ pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<H2
 }
 
 /// A trie root formed from the enumerated items.
+// TODO: remove (just use `ordered_trie_root`)
 pub fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
 where
 	H: Hasher,
@@ -197,7 +198,24 @@ where
 
 /// Verify a ed25519 signature.
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-	ed25519::verify(sig, msg, pubkey)
+	ed25519::Pair::verify_weak(sig, msg, pubkey)
+}
+
+/// Verify an sr25519 signature.
+pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	sr25519::Pair::verify_weak(sig, msg, pubkey)
+}
+
+/// Verify and recover a SECP256k1 ECDSA signature.
+/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+/// - returns `Err` if the signature is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
+pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
+	let rs = secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
+	let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8).map_err(|_| EcdsaVerifyError::BadV)?;
+	let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v).map_err(|_| EcdsaVerifyError::BadSignature)?;
+	let mut res = [0u8; 64];
+	res.copy_from_slice(&pubkey.serialize()[1..65]);
+	Ok(res)
 }
 
 /// Execute the given closure with global function available whose functionality routes into the
@@ -205,6 +223,17 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
 pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
+}
+
+/// Execute the given closure with global functions available whose functionality routes into
+/// externalities that draw from and populate `storage`. Forwards the value that the closure returns.
+pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
+	let mut alt_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+	let mut ext: BasicExternalities = alt_storage.into();
+	let r = ext::using(&mut ext, f);
+	*storage = ext.into();
+	r
 }
 
 /// Trait for things which can be printed.
@@ -238,10 +267,11 @@ pub fn print<T: Printable + Sized>(value: T) {
 #[cfg(test)]
 mod std_tests {
 	use super::*;
+	use primitives::map;
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::default();
+		let mut t = BasicExternalities::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -251,7 +281,7 @@ mod std_tests {
 			true
 		}));
 
-		t = TestExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
+		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
 
 		assert!(!with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
@@ -262,7 +292,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::new(map![
+		let mut t = BasicExternalities::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		]);
 
@@ -278,7 +308,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::new(map![
+		let mut t = BasicExternalities::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,6 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Substrate changes trie configuration.
+
+#[cfg(any(feature = "std", test))]
+use serde_derive::{Serialize, Deserialize};
+use parity_codec::{Encode, Decode};
 
 /// Substrate changes trie configuration.
 #[cfg_attr(any(feature = "std", test), derive(Serialize, Deserialize))]
@@ -49,7 +53,7 @@ impl ChangesTrieConfiguration {
 			return 1;
 		}
 
-		// TODO: use saturating_pow when available
+		// FIXME: use saturating_pow once stabilized  - https://github.com/rust-lang/rust/issues/48320
 		let mut max_digest_interval = self.digest_interval;
 		for _ in 1..self.digest_levels {
 			max_digest_interval = match max_digest_interval.checked_mul(self.digest_interval) {

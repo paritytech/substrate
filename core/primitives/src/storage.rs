@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,9 @@
 //! Contract execution data.
 
 #[cfg(feature = "std")]
-use bytes;
+use serde_derive::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+use crate::bytes;
 use rstd::vec::Vec;
 
 /// Contract storage key.
@@ -32,6 +34,7 @@ pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec
 
 /// Storage change set
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct StorageChangeSet<Hash> {
 	/// Block hash
 	pub block: Hash,
@@ -69,6 +72,9 @@ pub mod well_known_keys {
 
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+
+	/// Sum of all lengths of executed extrinsics (u32).
+	pub const ALL_EXTRINSICS_LEN: &'static [u8] = b":all_extrinsics_len";
 
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";

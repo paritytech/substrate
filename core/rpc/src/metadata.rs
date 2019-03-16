@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use jsonrpc_pubsub::{Session, PubSubMetadata};
-use rpc::futures::sync::mpsc;
+use crate::rpc::futures::sync::mpsc;
 
 /// RPC Metadata.
 ///
@@ -30,7 +30,7 @@ pub struct Metadata {
 	session: Option<Arc<Session>>,
 }
 
-impl ::rpc::Metadata for Metadata {}
+impl crate::rpc::Metadata for Metadata {}
 impl PubSubMetadata for Metadata {
 	fn session(&self) -> Option<Arc<Session>> {
 		self.session.clone()

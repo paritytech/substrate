@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,39 +18,27 @@
 
 #![warn(missing_docs)]
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-#[macro_use]
-extern crate log;
-
-extern crate hash_db;
-extern crate substrate_trie;
-
-extern crate parking_lot;
-extern crate heapsize;
-#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
-extern crate parity_codec as codec;
-extern crate substrate_trie as trie;
-
-use std::fmt;
+use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
+use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use codec::Decode;
-use primitives::storage::well_known_keys;
+use parity_codec::{Decode, Encode};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
 
 pub mod backend;
 mod changes_trie;
 mod ext;
 mod testing;
+mod basic;
 mod overlayed_changes;
 mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
+use overlayed_changes::OverlayedChangeSet;
 pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
+pub use basic::BasicExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{
@@ -59,14 +47,13 @@ pub use changes_trie::{
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check,
-	prune as prune_changes_tries};
+	prune as prune_changes_tries,
+	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
+};
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
-
-/// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES :u64 = 1024;
 
 /// State Machine Error bound.
 ///
@@ -96,12 +83,19 @@ impl fmt::Display for ExecutionError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
 }
 
+type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
+
 /// Externalities: pinned to specific active address.
 pub trait Externalities<H: Hasher> {
-	/// Read storage of current contract being called.
+	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Read child storage of current contract being called.
+	/// Get storage value hash. This may be optimized for large values.
+	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+		self.storage(key).map(|v| H::hash(&v))
+	}
+
+	/// Read child runtime storage.
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
@@ -157,7 +151,7 @@ pub trait Externalities<H: Hasher> {
 	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
 	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Get the change trie root of the current storage overlay at a block wth given parent.
+	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 }
 
@@ -168,15 +162,16 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<E: Externalities<H>>(
+	fn call<
+		E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+	>(
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
 		method: &str,
 		data: &[u8],
-		use_native: bool
-	) -> (Result<Vec<u8>, Self::Error>, bool);
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (CallResult<R, Self::Error>, bool);
 }
 
 /// Strategy for executing a call into the runtime.
@@ -188,7 +183,14 @@ pub enum ExecutionStrategy {
 	AlwaysWasm,
 	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
 	Both,
+	/// First native, then if that fails or is not possible, wasm.
+	NativeElseWasm,
 }
+
+type DefaultHandler<R, E> = fn(
+	CallResult<R, E>,
+	CallResult<R, E>,
+) -> CallResult<R, E>;
 
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
 #[derive(Clone)]
@@ -199,6 +201,8 @@ pub enum ExecutionManager<F> {
 	AlwaysWasm,
 	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
 	Both(F),
+	/// First native, then if that fails or is not possible, wasm.
+	NativeElseWasm,
 }
 
 impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
@@ -206,194 +210,254 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 		match *s {
 			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
 			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
 			ExecutionManager::Both(_) => ExecutionStrategy::Both,
 		}
 	}
 }
 
+impl ExecutionStrategy {
+	/// Gets the corresponding manager for the execution strategy.
+	pub fn get_manager<E: std::fmt::Debug, R: Decode + Encode>(self) -> ExecutionManager<DefaultHandler<R, E>> {
+		match self {
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!(
+					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
+					wasm_result,
+					native_result
+				);
+				wasm_result
+			}),
+		}
+	}
+}
+
+
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn native_when_possible<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
-	ExecutionManager::NativeWhenPossible
+pub fn native_when_possible<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	 ExecutionManager::NativeWhenPossible
+}
+
+/// Evaluate to ExecutionManager::NativeElseWasm, without having to figure out the type.
+pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	ExecutionManager::NativeElseWasm
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 	ExecutionManager::AlwaysWasm
 }
 
-/// Execute a call using the given state backend, overlayed changes, and call executor.
-/// Produces a state-backend-specific "transaction" which can be used to apply the changes
-/// to the backing store, such as the disk.
-///
-/// On an error, no prospective changes are written to the overlay.
-///
-/// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute<H, B, T, Exec>(
-	backend: &B,
-	changes_trie_storage: Option<&T>,
-	overlay: &mut OverlayedChanges,
-	exec: &Exec,
-	method: &str,
-	call_data: &[u8],
-	strategy: ExecutionStrategy,
-) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
-where
-	H: Hasher,
-	Exec: CodeExecutor<H>,
-	B: Backend<H>,
-	T: ChangesTrieStorage<H>,
-	H::Out: Ord + HeapSizeOf,
-{
-	execute_using_consensus_failure_handler(
+/// Creates new substrate state machine.
+pub fn new<'a, H, B, T, Exec>(
+	backend: &'a B,
+	changes_trie_storage: Option<&'a T>,
+	overlay: &'a mut OverlayedChanges,
+	exec: &'a Exec,
+	method: &'a str,
+	call_data: &'a [u8],
+) -> StateMachine<'a, H, B, T, Exec> {
+	StateMachine {
 		backend,
 		changes_trie_storage,
 		overlay,
 		exec,
 		method,
 		call_data,
-		match strategy {
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
-				wasm_result
-			}),
-		},
-		true,
-	)
-	.map(|(result, storage_tx, changes_tx)| (
-		result,
-		storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
-		changes_tx,
-	))
+		_hasher: PhantomData,
+	}
 }
 
-/// Execute a call using the given state backend, overlayed changes, and call executor.
-/// Produces a state-backend-specific "transaction" which can be used to apply the changes
-/// to the backing store, such as the disk.
-///
-/// On an error, no prospective changes are written to the overlay.
-///
-/// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
-	backend: &B,
-	changes_trie_storage: Option<&T>,
-	overlay: &mut OverlayedChanges,
-	exec: &Exec,
-	method: &str,
-	call_data: &[u8],
-	manager: ExecutionManager<Handler>,
-	compute_tx: bool,
-) -> Result<(Vec<u8>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
-where
+/// The substrate state machine.
+pub struct StateMachine<'a, H, B, T, Exec> {
+	backend: &'a B,
+	changes_trie_storage: Option<&'a T>,
+	overlay: &'a mut OverlayedChanges,
+	exec: &'a Exec,
+	method: &'a str,
+	call_data: &'a [u8],
+	_hasher: PhantomData<H>,
+}
+
+impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
-	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
 {
-	let strategy: ExecutionStrategy = (&manager).into();
+	/// Execute a call using the given state backend, overlayed changes, and call executor.
+	/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+	/// to the backing store, such as the disk.
+	///
+	/// On an error, no prospective changes are written to the overlay.
+	///
+	/// Note: changes to code will be in place if this call is made again. For running partial
+	/// blocks (e.g. a transaction at a time), ensure a different method is used.
+	pub fn execute(
+		&mut self,
+		strategy: ExecutionStrategy,
+	) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>> {
+		// We are not giving a native call and thus we are sure that the result can never be a native
+		// value.
+		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+			strategy.get_manager(),
+			true,
+			None,
+		)
+		.map(|(result, storage_tx, changes_tx)| (
+			result.into_encoded(),
+			storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+			changes_tx,
+		))
+	}
 
-	// make a copy.
-	let code = try_read_overlay_value(overlay, backend, well_known_keys::CODE)?
-		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
-		.to_vec();
-
-	let heap_pages = try_read_overlay_value(overlay, backend, well_known_keys::HEAP_PAGES)?
-		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(DEFAULT_HEAP_PAGES) as usize;
-
-	// read changes trie configuration. The reason why we're doing it here instead of the
-	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
-	// proof-of-execution on light clients. And the proof is recorded by the backend which
-	// is created after OverlayedChanges
-
-	let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
-		let changes_trie_config = try_read_overlay_value(
-			overlay,
-			backend,
-			well_known_keys::CHANGES_TRIE_CONFIG
-		)?;
-		set_changes_trie_config(overlay, changes_trie_config, final_check)
-	};
-	init_overlay(overlay, false)?;
-
-	let result = {
-		let mut orig_prospective = overlay.prospective.clone();
-
-		let (result, was_native, storage_delta, changes_delta) = {
-			let ((result, was_native), (storage_delta, changes_delta)) = {
-				let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-				let retval = exec.call(
-					&mut externalities,
-					heap_pages,
-					&code,
-					method,
-					call_data,
-					// attempt to run native first, if we're not directed to run wasm only
-					strategy != ExecutionStrategy::AlwaysWasm,
-				);
-				let (storage_delta, changes_delta) = if compute_tx {
-					let (storage_delta, changes_delta) = externalities.transaction();
-					(Some(storage_delta), changes_delta)
-				} else {
-					(None, None)
-				};
-				(retval, (storage_delta, changes_delta))
-			};
-			(result, was_native, storage_delta, changes_delta)
+	fn execute_aux<R, NC>(
+		&mut self,
+		compute_tx: bool,
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (CallResult<R, Exec::Error>, bool, Option<B::Transaction>, Option<MemoryDB<H>>) where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+	{
+		let mut externalities = ext::Ext::new(self.overlay, self.backend, self.changes_trie_storage);
+		let (result, was_native) = self.exec.call(
+			&mut externalities,
+			self.method,
+			self.call_data,
+			use_native,
+			native_call,
+		);
+		let (storage_delta, changes_delta) = if compute_tx {
+			let (storage_delta, changes_delta) = externalities.transaction();
+			(Some(storage_delta), changes_delta)
+		} else {
+			(None, None)
 		};
+		(result, was_native, storage_delta, changes_delta)
+	}
 
-		// run wasm separately if we did run native the first time and we're meant to run both
-		let (result, storage_delta, changes_delta) = if let (true, ExecutionManager::Both(on_consensus_failure)) =
-			(was_native, manager)
-		{
-			overlay.prospective = orig_prospective.clone();
+	fn execute_call_with_both_strategy<Handler, R, NC>(
+		&mut self,
+		compute_tx: bool,
+		mut native_call: Option<NC>,
+		orig_prospective: OverlayedChangeSet,
+		on_consensus_failure: Handler,
+	) -> (CallResult<R, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>) where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		Handler: FnOnce(
+			CallResult<R, Exec::Error>,
+			CallResult<R, Exec::Error>
+		) -> CallResult<R, Exec::Error>
+	{
+		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(compute_tx, true, native_call.take());
 
-			let (wasm_result, wasm_storage_delta, wasm_changes_delta) = {
-				let ((result, _), (storage_delta, changes_delta)) = {
-					let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-					let retval = exec.call(
-						&mut externalities,
-						heap_pages,
-						&code,
-						method,
-						call_data,
-						false,
-					);
-					let (storage_delta, changes_delta) = if compute_tx {
-						let (storage_delta, changes_delta) = externalities.transaction();
-						(Some(storage_delta), changes_delta)
-					} else {
-						(None, None)
-					};
-					(retval, (storage_delta, changes_delta))
-				};
-				(result, storage_delta, changes_delta)
-			};
+		if was_native {
+			self.overlay.prospective = orig_prospective.clone();
+			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(compute_tx, false, native_call);
 
-			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
-				|| (result.is_err() && wasm_result.is_err())
-			{
+			if (result.is_ok() && wasm_result.is_ok()
+				&& result.as_ref().ok() == wasm_result.as_ref().ok())
+				|| result.is_err() && wasm_result.is_err() {
 				(result, storage_delta, changes_delta)
 			} else {
-				// Consensus error.
 				(on_consensus_failure(wasm_result, result), wasm_storage_delta, wasm_changes_delta)
 			}
 		} else {
 			(result, storage_delta, changes_delta)
-		};
-		result.map(move |out| (out, storage_delta, changes_delta))
-	};
-
-	// ensure that changes trie config has not been changed
-	if result.is_ok() {
-		init_overlay(overlay, true)?;
+		}
 	}
 
-	result.map_err(|e| Box::new(e) as _)
+	fn execute_call_with_native_else_wasm_strategy<R, NC>(
+		&mut self,
+		compute_tx: bool,
+		mut native_call: Option<NC>,
+		orig_prospective: OverlayedChangeSet,
+	) -> (CallResult<R, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>) where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+	{
+		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(compute_tx, true, native_call.take());
+
+		if !was_native || result.is_ok() {
+			(result, storage_delta, changes_delta)
+		} else {
+			self.overlay.prospective = orig_prospective.clone();
+			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(compute_tx, false, native_call);
+			(wasm_result, wasm_storage_delta, wasm_changes_delta)
+		}
+	}
+
+	/// Execute a call using the given state backend, overlayed changes, and call executor.
+	/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+	/// to the backing store, such as the disk.
+	///
+	/// On an error, no prospective changes are written to the overlay.
+	///
+	/// Note: changes to code will be in place if this call is made again. For running partial
+	/// blocks (e.g. a transaction at a time), ensure a different method is used.
+	pub fn execute_using_consensus_failure_handler<Handler, R, NC>(
+		&mut self,
+		manager: ExecutionManager<Handler>,
+		compute_tx: bool,
+		mut native_call: Option<NC>,
+	) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>> where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		Handler: FnOnce(
+			CallResult<R, Exec::Error>,
+			CallResult<R, Exec::Error>
+		) -> CallResult<R, Exec::Error>
+	{
+		// read changes trie configuration. The reason why we're doing it here instead of the
+		// `OverlayedChanges` constructor is that we need proofs for this read as a part of
+		// proof-of-execution on light clients. And the proof is recorded by the backend which
+		// is created after OverlayedChanges
+
+		let backend = self.backend.clone();
+		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
+			let changes_trie_config = try_read_overlay_value(
+				overlay,
+				backend,
+				well_known_keys::CHANGES_TRIE_CONFIG
+			)?;
+			set_changes_trie_config(overlay, changes_trie_config, final_check)
+		};
+		init_overlay(self.overlay, false)?;
+
+		let result = {
+			let orig_prospective = self.overlay.prospective.clone();
+
+			let (result, storage_delta, changes_delta) = match manager {
+				ExecutionManager::Both(on_consensus_failure) => {
+					self.execute_call_with_both_strategy(compute_tx, native_call.take(), orig_prospective, on_consensus_failure)
+				},
+				ExecutionManager::NativeElseWasm => {
+					self.execute_call_with_native_else_wasm_strategy(compute_tx, native_call.take(), orig_prospective)
+				},
+				ExecutionManager::AlwaysWasm => {
+					let (result, _, storage_delta, changes_delta) = self.execute_aux(compute_tx, false, native_call);
+					(result, storage_delta, changes_delta)
+				},
+				ExecutionManager::NativeWhenPossible => {
+					let (result, _was_native, storage_delta, changes_delta) = self.execute_aux(compute_tx, true, native_call);
+					(result, storage_delta, changes_delta)
+				},
+			};
+			result.map(move |out| (out, storage_delta, changes_delta))
+		};
+
+		if result.is_ok() {
+			init_overlay(self.overlay, true)?;
+		}
+
+		result.map_err(|e| Box::new(e) as _)
+	}
 }
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
@@ -438,18 +502,22 @@ where
 	H::Out: Ord + HeapSizeOf,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, _, _) = execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
-		&proving_backend,
-		None,
+	let mut sm = StateMachine {
+		backend: &proving_backend,
+		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
 		overlay,
 		exec,
 		method,
 		call_data,
-		native_when_possible(),
+		_hasher: PhantomData,
+	};
+	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+		native_else_wasm(),
 		false,
+		None,
 	)?;
 	let proof = proving_backend.extract_proof();
-	Ok((result, proof))
+	Ok((result.into_encoded(), proof))
 }
 
 /// Check execution proof, generated by `prove_execution` call.
@@ -483,16 +551,20 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
-		trie_backend,
-		None,
+	let mut sm = StateMachine {
+		backend: trie_backend,
+		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
 		overlay,
 		exec,
 		method,
 		call_data,
-		native_when_possible(),
+		_hasher: PhantomData,
+	};
+	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+		native_else_wasm(),
 		false,
-	).map(|(result, _, _)| result)
+		None,
+	).map(|(result, _, _)| result.into_encoded())
 }
 
 /// Generate storage read proof.
@@ -555,7 +627,7 @@ where
 /// differs from previous OR config decode has failed.
 pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
 	let config = match config {
-		Some(v) => Some(changes_trie::Configuration::decode(&mut &v[..])
+		Some(v) => Some(Decode::decode(&mut &v[..])
 			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
 		None => None,
 	};
@@ -590,7 +662,7 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use codec::Encode;
+	use parity_codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -599,7 +671,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::{Blake2Hasher};
+	use primitives::{Blake2Hasher, map};
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -611,26 +683,41 @@ mod tests {
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>>(
+		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str>>(
 			&self,
 			ext: &mut E,
-			_heap_pages: usize,
-			_code: &[u8],
 			_method: &str,
 			_data: &[u8],
-			use_native: bool
-		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			use_native: bool,
+			_native_call: Option<NC>,
+		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
-				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
-					digest_interval: 777,
-					digest_levels: 333,
-				}.encode()));
+				ext.place_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+					Some(
+						ChangesTrieConfig {
+							digest_interval: 777,
+							digest_levels: 333,
+						}.encode()
+					)
+				);
 			}
 
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) =>
-					(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), using_native),
+				(true, true, _) | (false, _, true) => {
+					(
+						Ok(
+							NativeOrEncoded::Encoded(
+								vec![
+									ext.storage(b"value1").unwrap()[0] +
+									ext.storage(b"value2").unwrap()[0]
+								]
+							)
+						),
+						using_native
+					)
+				},
 				_ => (Err(0), using_native),
 			}
 		}
@@ -640,7 +727,7 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		assert_eq!(execute(
+		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -652,14 +739,35 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeWhenPossible
+		).unwrap().0, vec![66]);
+	}
+
+
+	#[test]
+	fn execute_works_with_native_else_wasm() {
+		assert_eq!(new(
+			&trie_backend::tests::test_trie(),
+			Some(&InMemoryChangesTrieStorage::new()),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				change_changes_trie_config: false,
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+		).execute(
+			ExecutionStrategy::NativeElseWasm
 		).unwrap().0, vec![66]);
 	}
 
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
-		assert!(execute_using_consensus_failure_handler(
+		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -671,12 +779,14 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
 				println!("HELLO!");
 				we
 			}),
 			true,
+			None,
 		).is_err());
 		assert!(consensus_failed);
 	}
@@ -776,7 +886,7 @@ mod tests {
 
 	#[test]
 	fn cannot_change_changes_trie_config() {
-		assert!(execute(
+		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -788,7 +898,27 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeWhenPossible
+		).is_err());
+	}
+
+	#[test]
+	fn cannot_change_changes_trie_config_with_native_else_wasm() {
+		assert!(new(
+			&trie_backend::tests::test_trie(),
+			Some(&InMemoryChangesTrieStorage::new()),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				change_changes_trie_config: true,
+				native_available: false,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+		).execute(
+			ExecutionStrategy::NativeElseWasm
 		).is_err());
 	}
 }

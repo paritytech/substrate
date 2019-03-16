@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,11 +19,13 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
+use serde_derive::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
-use runtime_primitives::{BuildStorage, StorageMap, ChildrenStorageMap};
+use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
-use components::RuntimeGenesis;
+use crate::components::RuntimeGenesis;
 use network::Multiaddr;
+use tel::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -64,11 +66,14 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
-	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String> {
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
 		}
+	}
+	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
 
@@ -86,7 +91,7 @@ struct ChainSpecFile {
 	pub name: String,
 	pub id: String,
 	pub boot_nodes: Vec<String>,
-	pub telemetry_url: Option<String>,
+	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	pub protocol_id: Option<String>,
 	pub consensus_engine: Option<String>,
 	pub properties: Option<Properties>,
@@ -123,8 +128,8 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		&self.spec.id
 	}
 
-	pub fn telemetry_url(&self) -> Option<&str> {
-		self.spec.telemetry_url.as_ref().map(String::as_str)
+	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
+		&self.spec.telemetry_endpoints
 	}
 
 	pub fn protocol_id(&self) -> Option<&str> {
@@ -169,7 +174,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		id: &str,
 		constructor: fn() -> G,
 		boot_nodes: Vec<String>,
-		telemetry_url: Option<&str>,
+		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
 		consensus_engine: Option<&str>,
 		properties: Option<Properties>,
@@ -179,7 +184,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			name: name.to_owned(),
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
-			telemetry_url: telemetry_url.map(str::to_owned),
+			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
 			consensus_engine: consensus_engine.map(str::to_owned),
 			properties,

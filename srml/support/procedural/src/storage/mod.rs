@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,14 +19,17 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
+use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyword_impl};
 
-use syn::Ident;
+use syn::{Ident, Token};
 use syn::token::CustomKeyword;
+
+mod impls;
 
 pub mod transformation;
 
 /// Parsing usage only
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct StorageDefinition {
 	pub hidden_crate: Option<SpecificHiddenCrate>,
 	pub visibility: syn::Visibility,
@@ -36,49 +39,60 @@ struct StorageDefinition {
 	pub module_ident: Ident,
 	pub mod_lt_token: Token![<],
 	pub mod_param: syn::GenericParam,
+	pub mod_instance_param_token: Option<Token![,]>,
+	pub mod_instance: Option<syn::Ident>,
+	pub mod_instantiable_token: Option<Token![:]>,
+	pub mod_instantiable: Option<syn::Ident>,
+	pub mod_default_instance_token: Option<Token![=]>,
+	pub mod_default_instance: Option<syn::Ident>,
 	pub mod_gt_token: Token![>],
 	pub as_token: Token![as],
 	pub crate_ident: Ident,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: Option<AddExtraGenesis>,
+	pub extra_genesis_skip_phantom_data_field: Option<ExtraGenesisSkipPhantomDataField>,
 }
 
-
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct SpecificHiddenCrate {
 	pub keyword: ext::CustomToken<SpecificHiddenCrate>,
 	pub ident: ext::Parens<Ident>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesis {
 	pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
 	pub content: ext::Braces<AddExtraGenesisContent>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
+struct ExtraGenesisSkipPhantomDataField {
+	pub genesis_phantom_keyword: ext::CustomToken<ExtraGenesisSkipPhantomDataField>,
+	pub token: Token![;],
+}
+
+#[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisContent {
 	pub lines: ext::Punctuated<AddExtraGenesisLineEnum, Token![;]>,
 }
 
-#[derive(ParseEnum, ToTokensEnum, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 enum AddExtraGenesisLineEnum {
 	AddExtraGenesisLine(AddExtraGenesisLine),
 	AddExtraGenesisBuild(DeclStorageBuild),
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisLine {
 	pub attrs: ext::OuterAttributes,
 	pub config_keyword: ext::CustomToken<ConfigKeyword>,
 	pub extra_field: ext::Parens<Ident>,
 	pub coldot_token: Token![:],
 	pub extra_type: syn::Type,
-	// TODO use a custom ext::Option instead (syn option on '=' fails)
-	pub default_value: ext::Seq<DeclStorageDefault>,
+	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLine {
 	// attrs (main use case is doc)
 	pub attrs: ext::OuterAttributes,
@@ -91,36 +105,36 @@ struct DeclStorageLine {
 	pub build: Option<DeclStorageBuild>,
 	pub coldot_token: Token![:],
 	pub storage_type: DeclStorageType,
-	// TODO use a custom ext::Option instead (syn option on '=' fails)
-	pub default_value: ext::Seq<DeclStorageDefault>,
+	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageGetter {
 	pub getter_keyword: ext::CustomToken<DeclStorageGetter>,
 	pub getfn: ext::Parens<Ident>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageConfig {
 	pub config_keyword: ext::CustomToken<DeclStorageConfig>,
 	pub expr: ext::Parens<Option<syn::Ident>>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageBuild {
 	pub build_keyword: ext::CustomToken<DeclStorageBuild>,
 	pub expr: ext::Parens<syn::Expr>,
 }
 
-#[derive(ParseEnum, ToTokensEnum, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
+	LinkedMap(DeclStorageLinkedMap),
 	Simple(syn::Type),
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: ext::CustomToken<MapKeyword>,
 	pub key: syn::Type,
@@ -128,7 +142,15 @@ struct DeclStorageMap {
 	pub value: syn::Type,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageLinkedMap {
+	pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
+	pub key: syn::Type,
+	pub ass_keyword: Token![=>],
+	pub value: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
@@ -142,3 +164,5 @@ custom_keyword_impl!(DeclStorageBuild, "build", "storage build config");
 custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis");
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
+custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
+custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");

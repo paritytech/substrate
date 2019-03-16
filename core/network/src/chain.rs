@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,18 +19,18 @@
 use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
-use consensus::BlockImport;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use consensus::{BlockImport, Error as ConsensusError};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, AuthorityIdFor};
 use runtime_primitives::generic::{BlockId};
 use consensus::{ImportBlock, ImportResult};
 use runtime_primitives::Justification;
-use primitives::{H256, Blake2Hasher, AuthorityId};
+use primitives::{H256, Blake2Hasher, storage::StorageKey};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
-		-> Result<ImportResult, Error>;
+	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityIdFor<Block>>>)
+		-> Result<ImportResult, ConsensusError>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo<Block>, Error>;
@@ -66,19 +66,22 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &[u8]
+		key: &StorageKey
 	) -> Result<ChangesProof<Block::Header>, Error>;
+
+	/// Returns `true` if the given `block` is a descendent of `base`.
+	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error>;
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	Self: BlockImport<Block, Error=Error>,
+	Self: BlockImport<Block, Error=ConsensusError>,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
-	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
-		-> Result<ImportResult, Error>
+	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityIdFor<Block>>>)
+		-> Result<ImportResult, ConsensusError>
 	{
 		(self as &SubstrateClient<B, E, Block, RA>).import_block(block, new_authorities)
 	}
@@ -125,8 +128,22 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &[u8]
+		key: &StorageKey
 	) -> Result<ChangesProof<Block::Header>, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, key)
+	}
+
+	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error> {
+		if base == block {
+			return Ok(false);
+		}
+
+		let tree_route = ::client::blockchain::tree_route(
+			self.backend().blockchain(),
+			BlockId::Hash(*block),
+			BlockId::Hash(*base),
+		)?;
+
+		Ok(tree_route.common_block().hash == *base)
 	}
 }

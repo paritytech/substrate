@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,11 +18,10 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use codec::HasCompact;
 use primitives::traits::{Hash, As, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
-use srml_support::{StorageValue, StorageMap, IsSubType};
+use srml_support::{StorageValue, StorageMap, IsSubType, decl_module, decl_storage, decl_event, ensure};
 use {system, democracy};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::ensure_signed;
@@ -33,7 +32,7 @@ pub trait Trait: CouncilTrait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		fn propose(origin, proposal: Box<T::Proposal>) {
 			let who = ensure_signed(origin)?;
@@ -95,12 +94,12 @@ decl_module! {
 			}
 		}
 
-		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) {
-			<CooloffPeriod<T>>::put(blocks.into());
+		fn set_cooloff_period(#[compact] blocks: T::BlockNumber) {
+			<CooloffPeriod<T>>::put(blocks);
 		}
 
-		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) {
-			<VotingPeriod<T>>::put(blocks.into());
+		fn set_voting_period(#[compact] blocks: T::BlockNumber) {
+			<VotingPeriod<T>>::put(blocks);
 		}
 
 		fn on_finalise(n: T::BlockNumber) {
@@ -118,7 +117,7 @@ decl_storage! {
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
 		/// Number of blocks by which to delay enactment of successful, non-unanimous-council-instigated referendum proposals.
 		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
-		pub Proposals get(proposals) build(|_| vec![0u8; 0]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
 		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
 		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
 		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
@@ -233,9 +232,9 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ::tests::*;
-	use ::tests::{Call, Origin};
-	use srml_support::Hashable;
+	use crate::tests::*;
+	use crate::tests::{Call, Origin};
+	use srml_support::{Hashable, assert_ok, assert_noop};
 	use democracy::{ReferendumInfo, VoteThreshold};
 
 	#[test]
@@ -259,7 +258,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
 	}
 
 	fn cancel_referendum_proposal(id: u32) -> Call {

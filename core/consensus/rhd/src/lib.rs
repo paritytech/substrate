@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,42 +31,13 @@
 //! set for this block height.
 
 #![cfg(feature="rhd")]
-// FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
-
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate substrate_client as client;
-extern crate substrate_consensus_common as consensus;
-extern crate substrate_transaction_pool as transaction_pool;
-extern crate srml_system;
-extern crate srml_support as runtime_support;
-extern crate sr_primitives as runtime_primitives;
-extern crate sr_version as runtime_version;
-extern crate sr_io as runtime_io;
-
-extern crate parking_lot;
-extern crate rhododendron;
-extern crate futures;
-extern crate exit_future;
-extern crate tokio;
-
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate error_chain;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[cfg(test)]
-extern crate substrate_keyring;
+// FIXME #1020 doesn't compile
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{self, Instant, Duration};
 
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use consensus::offline_tracker::OfflineTracker;
 use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
@@ -460,7 +431,6 @@ impl<B, P, I, InStream, OutSink> Drop for BftFuture<B, P, I, InStream, OutSink> 
 	OutSink: Sink<SinkItem=Communication<B>, SinkError=Error>,
 {
 	fn drop(&mut self) {
-		// TODO: have a trait member to pass misbehavior reports into.
 		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
 		self.inner.context().proposer.import_misbehavior(misbehavior);
 	}
@@ -494,7 +464,7 @@ pub struct BftService<B: Block, P, I> {
 	live_agreement: Mutex<Option<(B::Header, AgreementHandle)>>,
 	round_cache: Arc<Mutex<RoundCache<B::Hash>>>,
 	round_timeout_multiplier: u64,
-	key: Arc<ed25519::Pair>, // TODO: key changing over time.
+	key: Arc<ed25519::Pair>,
 	factory: P,
 }
 
@@ -516,14 +486,13 @@ impl<B, P, I> BftService<B, P, I>
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: key, // TODO: key changing over time.
+			key: key,
 			factory,
 		}
 	}
 
 	/// Get the local Authority ID.
 	pub fn local_id(&self) -> AuthorityId {
-		// TODO: based on a header and some keystore.
 		self.key.public().into()
 	}
 
@@ -793,7 +762,7 @@ fn check_justification_signed_message<H>(
 		let auth_id = sig.signer.clone().into();
 		if !authorities.contains(&auth_id) { return None }
 
-		if ed25519::verify_strong(&sig.signature, message, &sig.signer) {
+		if ed25519::Pair::verify(&sig.signature, message, &sig.signer) {
 			Some(sig.signer.0)
 		} else {
 			None
@@ -869,7 +838,7 @@ pub fn check_vote<B: Block>(
 
 fn check_action<B: Block>(action: Action<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
 	let message = localized_encode(*parent_hash, action);
-	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
+	if ed25519::Pair::verify(&sig.signature, &message, &sig.signer) {
 		Ok(())
 	} else {
 		Err(CommonErrorKind::InvalidSignature(sig.signature.into(), sig.signer.clone().into()).into())
@@ -1112,7 +1081,6 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 				self.transaction_pool.ready(|pending_iterator| {
 					let mut pending_size = 0;
 					for pending in pending_iterator {
-						// TODO [ToDr] Probably get rid of it, and validate in runtime.
 						let encoded_size = pending.data.encode().len();
 						if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 
@@ -1347,9 +1315,7 @@ mod tests {
 
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use self::keyring::Keyring;
-
-	extern crate substrate_keyring as keyring;
+	use keyring::AuthorityKeyring;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -1454,7 +1420,7 @@ mod tests {
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: Arc::new(Keyring::One.into()),
+			key: Arc::new(AuthorityKeyring::One.into()),
 			factory: DummyFactory
 		}
 	}
@@ -1480,10 +1446,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public().into(),
-				Keyring::Two.to_raw_public().into(),
-				Keyring::Alice.to_raw_public().into(),
-				Keyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1527,17 +1493,17 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			Keyring::One.to_raw_public().into(),
-			Keyring::Two.to_raw_public().into(),
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::One.into(),
+			AuthorityKeyring::Two.into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let authorities_keys = vec![
-			Keyring::One.into(),
-			Keyring::Two.into(),
-			Keyring::Alice.into(),
-			Keyring::Eve.into(),
+			AuthorityKeyring::One.into(),
+			AuthorityKeyring::Two.into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
@@ -1588,8 +1554,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let block = TestBlock {
@@ -1597,7 +1563,7 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
+		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &AuthorityKeyring::Alice.pair(), parent_hash);;
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
@@ -1611,7 +1577,7 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
+		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &AuthorityKeyring::Bob.pair(), parent_hash);;
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
@@ -1625,8 +1591,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
@@ -1652,10 +1618,10 @@ mod tests {
 	fn drop_bft_future_does_not_deadlock() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public().into(),
-				Keyring::Two.to_raw_public().into(),
-				Keyring::Alice.to_raw_public().into(),
-				Keyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1677,10 +1643,10 @@ mod tests {
 	fn bft_can_build_though_skipped() {
 		let client = FakeClient {
 			authorities: vec![
-				Keyring::One.to_raw_public().into(),
-				Keyring::Two.to_raw_public().into(),
-				Keyring::Alice.to_raw_public().into(),
-				Keyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};

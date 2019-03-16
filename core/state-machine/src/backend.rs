@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,10 +20,11 @@ use std::{error, fmt};
 use std::cmp::Ord;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use log::warn;
 use hash_db::Hasher;
-use trie_backend::TrieBackend;
-use trie_backend_essence::TrieBackendStorage;
-use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
+use crate::trie_backend::TrieBackend;
+use crate::trie_backend_essence::TrieBackendStorage;
+use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
 use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
@@ -40,10 +41,15 @@ pub trait Backend<H: Hasher> {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
-	/// Get keyed storage associated with specific address, or None if there is nothing associated.
+	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-	/// Get keyed child storage associated with specific address, or None if there is nothing associated.
+	/// Get keyed storage value hash or None if there is nothing associated.
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
+	}
+
+	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// true if a key exists in storage.
@@ -81,6 +87,9 @@ pub trait Backend<H: Hasher> {
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
+	/// Get all keys with given prefix
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>>;
+
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
 }
@@ -110,7 +119,7 @@ impl<H: Hasher> Consolidate for MemoryDB<H> {
 }
 
 /// Error impossible.
-// TODO: use `!` type when stabilized.
+// FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
 #[derive(Debug)]
 pub enum Void {}
 
@@ -278,8 +287,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone()))).collect()
 	}
 
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		self.inner.get(&None).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
+	}
+
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
-		let mut mdb = MemoryDB::default();	// TODO: should be more correct and use ::new()
+		let mut mdb = MemoryDB::default();
 		let mut root = None;
 		for (storage_key, map) in self.inner {
 			if storage_key != None {

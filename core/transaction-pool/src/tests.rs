@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,10 +17,9 @@
 
 use super::*;
 
-use keyring::Keyring::{self, *};
 use parity_codec::Encode;
 use txpool::{self, Pool};
-use test_client::runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer};
+use test_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
 use sr_primitives::{
 	generic::{self, BlockId},
 	traits::{Hash as HashT, BlakeTwo256},
@@ -40,20 +39,20 @@ impl txpool::ChainApi for TestApi {
 	type Hash = Hash;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
 		let expected = index(at);
-		let requires = if expected == uxt.transfer.nonce {
+		let requires = if expected == uxt.transfer().nonce {
 			vec![]
 		} else {
-			vec![vec![uxt.transfer.nonce as u8 - 1]]
+			vec![vec![uxt.transfer().nonce as u8 - 1]]
 		};
-		let provides = vec![vec![uxt.transfer.nonce as u8]];
+		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
 		Ok(TransactionValidity::Valid {
 			priority: 1,
 			requires,
 			provides,
-			longevity: 64
+			longevity: 64,
 		})
 	}
 
@@ -68,8 +67,9 @@ impl txpool::ChainApi for TestApi {
 		})
 	}
 
-	fn hash(&self, ex: &txpool::ExtrinsicFor<Self>) -> Self::Hash {
-		BlakeTwo256::hash(&ex.encode())
+	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		let encoded = ex.encode();
+		(BlakeTwo256::hash(&encoded), encoded.len())
 	}
 
 }
@@ -85,18 +85,15 @@ fn number_of(at: &BlockId<Block>) -> u64 {
 	}
 }
 
-fn uxt(who: Keyring, nonce: Index) -> Extrinsic {
+fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let transfer = Transfer {
-		from: who.to_raw_public().into(),
+		from: who.into(),
 		to: AccountId::default(),
 		nonce,
 		amount: 1,
 	};
 	let signature = transfer.using_encoded(|e| who.sign(e));
-	Extrinsic {
-		transfer,
-		signature: signature.into(),
-	}
+	Extrinsic::Transfer(transfer, signature.into())
 }
 
 fn pool() -> Pool<TestApi> {
@@ -109,7 +106,7 @@ fn submission_should_work() {
 	assert_eq!(209, index(&BlockId::number(0)));
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
 
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209]);
 }
 
@@ -119,7 +116,7 @@ fn multiple_submission_should_work() {
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
 
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 }
 
@@ -128,7 +125,7 @@ fn early_nonce_should_be_culled() {
 	let pool = pool();
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 208)).unwrap();
 
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 }
 
@@ -137,11 +134,11 @@ fn late_nonce_should_be_queued() {
 	let pool = pool();
 
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 }
 
@@ -151,12 +148,12 @@ fn prune_tags_should_work() {
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
 
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 
-	pool.prune_tags(&BlockId::number(1), vec![vec![209]]).unwrap();
+	pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![]).unwrap();
 
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![210]);
 }
 
@@ -169,7 +166,7 @@ fn should_ban_invalid_transactions() {
 	pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap_err();
 
 	// when
-	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
 	// then

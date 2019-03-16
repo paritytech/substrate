@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.
@@ -339,20 +339,20 @@ mod tests {
 	#[test]
 	fn build_pairs_fails_when_no_enough_blocks() {
 		assert!(build_pairs::<Header, _>(SIZE, 0,
-			::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize / 2)).is_err());
+			::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1)))).take(SIZE as usize / 2)).is_err());
 	}
 
 	#[test]
 	fn build_pairs_fails_when_missing_block() {
-		assert!(build_pairs::<Header, _>(SIZE, 0, ::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize / 2)
+		assert!(build_pairs::<Header, _>(SIZE, 0, ::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1)))).take(SIZE as usize / 2)
 			.chain(::std::iter::once(Ok(None)))
-			.chain(::std::iter::repeat_with(|| Ok(Some(2.into()))).take(SIZE as usize / 2 - 1))).is_err());
+			.chain(::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(2)))).take(SIZE as usize / 2 - 1))).is_err());
 	}
 
 	#[test]
 	fn compute_root_works() {
 		assert!(compute_root::<Header, Blake2Hasher, _>(SIZE, 42,
-			::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_ok());
+			::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1)))).take(SIZE as usize)).is_ok());
 	}
 
 	#[test]
@@ -360,14 +360,14 @@ mod tests {
 	fn build_proof_panics_when_querying_wrong_block() {
 		assert!(build_proof::<Header, Blake2Hasher, _, _>(
 			SIZE, 0, vec![(SIZE * 1000) as u64],
-				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_err());
+				::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1)))).take(SIZE as usize)).is_err());
 	}
 
 	#[test]
 	fn build_proof_works() {
 		assert!(build_proof::<Header, Blake2Hasher, _, _>(
 			SIZE, 0, vec![(SIZE / 2) as u64],
-				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_ok());
+				::std::iter::repeat_with(|| Ok(Some(H256::from_low_u64_be(1)))).take(SIZE as usize)).is_ok());
 	}
 
 	#[test]

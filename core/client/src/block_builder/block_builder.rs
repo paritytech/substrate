@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,32 +16,31 @@
 
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
-use std::marker::PhantomData;
-use codec::Encode;
-use blockchain::HeaderBackend;
+use parity_codec::Encode;
+use crate::blockchain::HeaderBackend;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
 };
 use primitives::H256;
 use runtime_primitives::generic::BlockId;
-use runtime_api::Core;
-use error;
-use runtime_primitives::ApplyOutcome;
+use crate::runtime_api::Core;
+use crate::error;
+use runtime_primitives::{ApplyOutcome, ExecutionContext};
+
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block, InherentData, A: ProvideRuntimeApi> where Block: BlockT {
+pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
-	_marker: PhantomData<InherentData>,
 }
 
-impl<'a, Block, A, InherentData> BlockBuilder<'a, Block, InherentData, A>
+impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderApi<Block, InherentData>,
+	A::Api: BlockBuilderApi<Block>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -57,7 +56,6 @@ where
 
 		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
-
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
@@ -65,49 +63,41 @@ where
 			parent_hash,
 			Default::default()
 		);
-
 		let api = api.runtime_api();
-		api.initialise_block(block_id, &header)?;
-
+		api.initialise_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
 			api,
 			block_id: *block_id,
-			_marker: PhantomData,
 		})
 	}
 
-	/// Push onto the block's list of extrinsics. This will ensure the extrinsic
-	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
-	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
+	/// Push onto the block's list of extrinsics.
+	///
+	/// This will ensure the extrinsic can be validly executed (by executing it);
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		fn impl_push<'a, T, Block: BlockT, InherentData>(
-			api: &mut ApiRef<'a, T>,
-			block_id: &BlockId<Block>,
-			xt: Block::Extrinsic,
-			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T: BlockBuilderApi<Block, InherentData> {
-			api.map_api_result(|api| {
-				match api.apply_extrinsic(block_id, &xt)? {
-					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(e) => {
-						Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
-					}
-				}
-			})
-		}
+		use crate::runtime_api::ApiExt;
 
-		//FIXME: Please NLL, help me!
-		impl_push(&mut self.api, &self.block_id, xt, &mut self.extrinsics)
+		let block_id = &self.block_id;
+		let extrinsics = &mut self.extrinsics;
+
+		self.api.map_api_result(|api| {
+			match api.apply_extrinsic_with_context(block_id, ExecutionContext::BlockConstruction, xt.clone())? {
+				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
+					extrinsics.push(xt);
+					Ok(())
+				}
+				Err(e) => {
+					Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
+				}
+			}
+		})
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.finalise_block(&self.block_id)?;
+		self.header = self.api.finalise_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

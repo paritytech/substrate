@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,52 +17,25 @@
 //! Rust implementation of Substrate contracts.
 
 use std::collections::HashMap;
+use tiny_keccak;
+use secp256k1;
 
 use wasmi::{
-	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder
+	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 };
-use wasmi::RuntimeValue::{I32, I64};
-use wasmi::memory_units::{Pages, Bytes};
+use wasmi::RuntimeValue::{I32, I64, self};
+use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
-use error::{Error, ErrorKind, Result};
-use wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519};
+use crate::error::{Error, ErrorKind, Result};
+use crate::wasm_utils::UserError;
+use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
-use sandbox;
-
-
-struct Heap {
-	end: u32,
-}
-
-impl Heap {
-	/// Construct new `Heap` struct with a given number of pages.
-	///
-	/// Returns `Err` if the heap couldn't allocate required
-	/// number of pages.
-	///
-	/// This could mean that wasm binary specifies memory
-	/// limit and we are trying to allocate beyond that limit.
-	fn new(memory: &MemoryRef, pages: usize) -> Result<Self> {
-		let prev_page_count = memory.initial();
-		memory.grow(Pages(pages)).map_err(|_| Error::from(ErrorKind::Runtime))?;
-		Ok(Heap {
-			end: Bytes::from(prev_page_count).0 as u32,
-		})
-	}
-
-	fn allocate(&mut self, size: u32) -> u32 {
-		let r = self.end;
-		self.end += size;
-		r
-	}
-
-	fn deallocate(&mut self, _offset: u32) {
-	}
-}
+use crate::sandbox;
+use crate::allocator;
+use log::trace;
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -75,7 +48,7 @@ macro_rules! debug_trace {
 
 struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 	sandbox_store: sandbox::Store,
-	heap: Heap,
+	heap: allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	ext: &'e mut E,
@@ -83,10 +56,10 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 }
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: Heap::new(&m, heap_pages)?,
+			heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
 			memory: m,
 			table: t,
 			ext: e,
@@ -102,10 +75,10 @@ impl<'e, E: Externalities<Blake2Hasher>> sandbox::SandboxCapabilities for Functi
 	fn store_mut(&mut self) -> &mut sandbox::Store {
 		&mut self.sandbox_store
 	}
-	fn allocate(&mut self, len: u32) -> u32 {
+	fn allocate(&mut self, len: u32) -> ::std::result::Result<u32, UserError> {
 		self.heap.allocate(len)
 	}
-	fn deallocate(&mut self, ptr: u32) {
+	fn deallocate(&mut self, ptr: u32) -> ::std::result::Result<(), UserError> {
 		self.heap.deallocate(ptr)
 	}
 	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), UserError> {
@@ -140,7 +113,6 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
-// TODO: this macro does not support `where` clauses and that seems somewhat tricky to add
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
@@ -161,12 +133,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
-		let r = this.heap.allocate(size);
+		let r = this.heap.allocate(size)?;
 		debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
-		this.heap.deallocate(addr);
+		this.heap.deallocate(addr)?;
 		debug_trace!(target: "sr-io", "free {}", addr);
 		Ok(())
 	},
@@ -280,7 +252,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		);
 
 		if let Some(value) = maybe_value {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_storage"))?;
@@ -319,7 +291,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		);
 
 		if let Some(value) = maybe_value {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_child_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_child_storage"))?;
@@ -401,7 +373,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let r = this.ext.child_storage_root(&storage_key);
 		if let Some(value) = r {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
@@ -421,10 +393,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| UserError("Invalid attempt to get parent_hash in ext_storage_changes_root"))?;
 		parent_hash.as_mut().copy_from_slice(&raw_parent_hash[..]);
 		let r = this.ext.storage_changes_root(parent_hash, parent_number);
-		if let Some(ref r) = r {
+		if let Some(r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
+			Ok(1)
+		} else {
+			Ok(0)
 		}
-		Ok(if r.is_some() { 1u32 } else { 0u32 })
 	},
 	ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
@@ -445,7 +419,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(this.ext.chain_id())
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 16] = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
 			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
@@ -469,7 +443,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			twox_256(&[0u8; 0])
 		} else {
 			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
@@ -478,12 +452,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			blake2_256(&[0u8; 0])
 		} else {
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		Ok(())
+	},
+	ext_keccak_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result: [u8; 32] = if len == 0 {
+			tiny_keccak::keccak256(&[0u8; 0])
+		} else {
+			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak_256"))?)
+		};
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak_256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
@@ -493,11 +476,49 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_ed25519_verify"))?;
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_ed25519_verify"))?;
 
-		Ok(if ed25519::verify(&sig, &msg, &pubkey) {
+		Ok(if ed25519::Pair::verify_weak(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
 		})
+	},
+	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+		let mut sig = [0u8; 64];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_sr25519_verify"))?;
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_sr25519_verify"))?;
+		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_sr25519_verify"))?;
+
+		Ok(if sr25519::Pair::verify_weak(&sig, &msg, &pubkey) {
+			0
+		} else {
+			5
+		})
+	},
+	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
+		let mut sig = [0u8; 65];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_secp256k1_ecdsa_recover"))?;
+		let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
+			Ok(rs) => rs,
+			_ => return Ok(1),
+		};
+		let v = match secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8) {
+			Ok(v) => v,
+			_ => return Ok(2),
+		};
+
+
+		let mut msg = [0u8; 32];
+		this.memory.get_into(msg_data, &mut msg[..]).map_err(|_| UserError("Invalid attempt to get message in ext_secp256k1_ecdsa_recover"))?;
+
+		let pubkey = match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
+			Ok(pk) => pk,
+			_ => return Ok(3),
+		};
+
+		this.memory.set(pubkey_data, &pubkey.serialize()[1..65]).map_err(|_| UserError("Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover"))?;
+
+		Ok(0)
 	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
@@ -536,7 +557,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
-		use codec::{Decode, Encode};
+		use parity_codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -618,17 +639,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 ///
 /// Executes the provided code in a sandboxed wasm runtime.
 #[derive(Debug, Clone)]
-pub struct WasmExecutor {
-}
+pub struct WasmExecutor;
 
 impl WasmExecutor {
 
 	/// Create a new instance.
 	pub fn new() -> Self {
-		WasmExecutor{}
+		WasmExecutor
 	}
 
 	/// Call a given method in the given code.
+	///
+	/// Signature of this method needs to be `(I32, I32) -> I64`.
+	///
 	/// This should be used for tests only.
 	pub fn call<E: Externalities<Blake2Hasher>>(
 		&self,
@@ -637,75 +660,154 @@ impl WasmExecutor {
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-		) -> Result<Vec<u8>> {
-		let module = ::wasmi::Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-		self.call_in_wasm_module(ext, heap_pages, &module, method, data)
+	) -> Result<Vec<u8>> {
+		let module = ::wasmi::Module::from_buffer(code)?;
+		let module = self.prepare_module(ext, heap_pages, &module)?;
+		self.call_in_wasm_module(ext, &module, method, data)
+	}
+
+	/// Call a given method with a custom signature in the given code.
+	///
+	/// This should be used for tests only.
+	pub fn call_with_custom_signature<
+		E: Externalities<Blake2Hasher>,
+		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+		R,
+	>(
+		&self,
+		ext: &mut E,
+		heap_pages: usize,
+		code: &[u8],
+		method: &str,
+		create_parameters: F,
+		filter_result: FR,
+	) -> Result<R> {
+		let module = wasmi::Module::from_buffer(code)?;
+		let module = self.prepare_module(ext, heap_pages, &module)?;
+		self.call_in_wasm_module_with_custom_signature(ext, &module, method, create_parameters, filter_result)
+	}
+
+	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
+		Ok(module
+			.export_by_name("memory")
+			.ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
+			.as_memory()
+			.ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
+			.clone())
 	}
 
 	/// Call a given method in the given wasm-module runtime.
 	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		module: &Module,
+		module_instance: &ModuleRef,
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
+		self.call_in_wasm_module_with_custom_signature(
+			ext,
+			module_instance,
+			method,
+			|alloc| {
+				let offset = alloc(data)?;
+				Ok(vec![I32(offset as i32), I32(data.len() as i32)])
+			},
+			|res, memory| {
+				if let Some(I64(r)) = res {
+					let offset = r as u32;
+					let length = (r as u64 >> 32) as usize;
+					memory.get(offset, length).map_err(|_| ErrorKind::Runtime.into()).map(Some)
+				} else {
+					Ok(None)
+				}
+			}
+		)
+	}
+
+	/// Call a given method in the given wasm-module runtime.
+	fn call_in_wasm_module_with_custom_signature<
+		E: Externalities<Blake2Hasher>,
+		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+		R,
+	>(
+		&self,
+		ext: &mut E,
+		module_instance: &ModuleRef,
+		method: &str,
+		create_parameters: F,
+		filter_result: FR,
+	) -> Result<R> {
+		// extract a reference to a linear memory, optional reference to a table
+		// and then initialize FunctionExecutor.
+		let memory = Self::get_mem_instance(module_instance)?;
+		let table: Option<TableRef> = module_instance
+			.export_by_name("__indirect_function_table")
+			.and_then(|e| e.as_table().cloned());
+
+		let low = memory.lowest_used();
+		let used_mem = memory.used_size();
+		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+		let parameters = create_parameters(&mut |data: &[u8]| {
+			let offset = fec.heap.allocate(data.len() as u32).map_err(|_| ErrorKind::Runtime)?;
+			memory.set(offset, &data)?;
+			Ok(offset)
+		})?;
+
+		let result = module_instance.invoke_export(
+			method,
+			&parameters,
+			&mut fec
+		);
+		let result = match result {
+			Ok(val) => match filter_result(val, &memory)? {
+				Some(val) => Ok(val),
+				None => Err(ErrorKind::InvalidReturn.into()),
+			},
+			Err(e) => {
+				trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);
+				Err(e.into())
+			},
+		};
+
+		// cleanup module instance for next use
+		let new_low = memory.lowest_used();
+		if new_low < low {
+			memory.zero(new_low as usize, (low - new_low) as usize)?;
+			memory.reset_lowest_used(low);
+		}
+		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
+		result
+	}
+
+	/// Prepare module instance
+	pub fn prepare_module<E: Externalities<Blake2Hasher>>(
+		&self,
+		ext: &mut E,
+		heap_pages: usize,
+		module: &Module,
+		) -> Result<ModuleRef>
+	{
 		// start module instantiation. Don't run 'start' function yet.
 		let intermediate_instance = ModuleInstance::new(
 			module,
 			&ImportsBuilder::new()
-				.with_resolver("env", FunctionExecutor::<E>::resolver())
+			.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
 
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
-		let memory = intermediate_instance
-			.not_started_instance()
-			.export_by_name("memory")
-			// TODO: with code coming from the blockchain it isn't strictly been compiled with rustc anymore.
-			// these assumptions are probably not true anymore
-			.expect("all modules compiled with rustc should have an export named 'memory'; qed")
-			.as_memory()
-			.expect("in module generated by rustc export named 'memory' should be a memory; qed")
-			.clone();
+		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
+		memory.grow(Pages(heap_pages)).map_err(|_| Error::from(ErrorKind::Runtime))?;
 		let table: Option<TableRef> = intermediate_instance
 			.not_started_instance()
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
-
-		let mut fec = FunctionExecutor::new(memory.clone(), heap_pages, table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
-		let instance = intermediate_instance.run_start(&mut fec)?;
-		let size = data.len() as u32;
-		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data)?;
-
-		let result = instance.invoke_export(
-			method,
-			&[
-				I32(offset as i32),
-				I32(size as i32)
-			],
-			&mut fec
-		);
-		let returned = match result {
-			Ok(x) => x,
-			Err(e) => {
-				trace!(target: "wasm-executor", "Failed to execute code with {} pages", heap_pages);
-				return Err(e.into())
-			},
-		};
-
-		if let Some(I64(r)) = returned {
-			let offset = r as u32;
-			let length = (r >> 32) as u32 as usize;
-			memory.get(offset, length)
-				.map_err(|_| ErrorKind::Runtime.into())
-		} else {
-			Err(ErrorKind::InvalidReturn.into())
-		}
+		Ok(intermediate_instance.run_start(&mut fec)?)
 	}
 }
 
@@ -713,8 +815,12 @@ impl WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
+
+	use parity_codec::Encode;
+
 	use state_machine::TestExternalities;
+	use hex_literal::{hex, hex_impl};
+	use primitives::map;
 
 	#[test]
 	fn returning_should_work() {
@@ -732,6 +838,9 @@ mod tests {
 
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
+
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
+		assert_eq!(output.unwrap(), vec![0u8; 0]);
 
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
@@ -824,7 +933,7 @@ mod tests {
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
+		let key = ed25519::Pair::from_seed(blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
@@ -847,6 +956,32 @@ mod tests {
 	}
 
 	#[test]
+	fn sr25519_verify_should_work() {
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let key = sr25519::Pair::from_seed(blake2_256(b"test"));
+		let sig = key.sign(b"all ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			vec![1]
+		);
+
+		let other_sig = key.sign(b"all is not ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(other_sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			vec![0]
+		);
+	}
+
+	#[test]
 	fn enumerated_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
@@ -855,6 +990,4 @@ mod tests {
 			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
 		);
 	}
-
-
 }

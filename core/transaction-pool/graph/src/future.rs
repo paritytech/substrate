@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,21 +17,35 @@
 use std::{
 	collections::{HashMap, HashSet},
 	hash,
+	sync::Arc,
+	time,
 };
 
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
 
-use base_pool::Transaction;
+use crate::base_pool::Transaction;
 
 /// Transaction with partially satisfied dependencies.
 #[derive(Debug)]
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
-	pub transaction: Transaction<Hash, Ex>,
+	pub transaction: Arc<Transaction<Hash, Ex>>,
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
+	/// Time of import to the Future Queue.
+	pub imported_at: time::Instant,
+}
+
+impl<Hash, Ex> Clone for WaitingTransaction<Hash, Ex> {
+	fn clone(&self) -> Self {
+		WaitingTransaction {
+			transaction: self.transaction.clone(),
+			missing_tags: self.missing_tags.clone(),
+			imported_at: self.imported_at.clone(),
+		}
+	}
 }
 
 impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
@@ -47,8 +61,9 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 			.collect();
 
 		WaitingTransaction {
-			transaction,
+			transaction: Arc::new(transaction),
 			missing_tags,
+			imported_at: time::Instant::now(),
 		}
 	}
 
@@ -104,7 +119,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 
 		// Add all tags that are missing
 		for tag in &tx.missing_tags {
-			let mut entry = self.wanted_tags.entry(tag.clone()).or_insert_with(HashSet::new);
+			let entry = self.wanted_tags.entry(tag.clone()).or_insert_with(HashSet::new);
 			entry.insert(tx.transaction.hash.clone());
 		}
 
@@ -115,6 +130,11 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Returns true if given hash is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
 		self.waiting.contains_key(hash)
+	}
+
+	/// Returns a list of known transactions
+	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+		hashes.iter().map(|h| self.waiting.get(h).map(|x| x.transaction.clone())).collect()
 	}
 
 	/// Satisfies provided tags in transactions that are waiting for them.
@@ -128,8 +148,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 			if let Some(hashes) = self.wanted_tags.remove(tag.as_ref()) {
 				for hash in hashes {
 					let is_ready = {
-						let mut tx = self.waiting.get_mut(&hash)
-							.expect(WAITING_PROOF);
+						let tx = self.waiting.get_mut(&hash).expect(WAITING_PROOF);
 						tx.satisfy_tag(tag.as_ref());
 						tx.is_ready()
 					};
@@ -148,13 +167,13 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Removes transactions for given list of hashes.
 	///
 	/// Returns a list of actually removed transactions.
-	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Transaction<Hash, Ex>> {
+	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		for hash in hashes {
 			if let Some(waiting_tx) = self.waiting.remove(hash) {
 				// remove from wanted_tags as well
 				for tag in waiting_tx.missing_tags {
-					let remove = if let Some(mut wanted) = self.wanted_tags.get_mut(&tag) {
+					let remove = if let Some(wanted) = self.wanted_tags.get_mut(&tag) {
 						wanted.remove(hash);
 						wanted.is_empty()
 					} else { false };
@@ -169,13 +188,25 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 		removed
 	}
 
+	/// Fold a list of future transactions to compute a single value.
+	pub fn fold<R, F: FnMut(Option<R>, &WaitingTransaction<Hash, Ex>) -> Option<R>>(&mut self, f: F) -> Option<R> {
+		self.waiting
+			.values()
+			.fold(None, f)
+	}
+
 	/// Returns iterator over all future transactions
 	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
-		self.waiting.values().map(|waiting| &waiting.transaction)
+		self.waiting.values().map(|waiting| &*waiting.transaction)
 	}
 
 	/// Returns number of transactions in the Future queue.
 	pub fn len(&self) -> usize {
 		self.waiting.len()
+	}
+
+	/// Returns sum of encoding lengths of all transactions in this queue.
+	pub fn bytes(&self) -> usize {
+		self.waiting.values().fold(0, |acc, tx| acc + tx.transaction.bytes)
 	}
 }

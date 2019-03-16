@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Structures and functions to return blocks whose changes are to be included
 //! in given block' changes trie.
 
-use changes_trie::Configuration;
+use crate::changes_trie::Configuration;
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
 /// changes trie of given block.

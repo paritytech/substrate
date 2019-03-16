@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ use futures::{
 	Stream,
 	sync::mpsc,
 };
+use serde_derive::{Serialize, Deserialize};
 
 /// Possible extrinsic status events
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

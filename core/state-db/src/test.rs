@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use primitives::H256;
-use {DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -46,6 +46,7 @@ impl HashDb for TestDb {
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
 		self.data.extend(commit.data.inserted.iter().cloned());
+		self.meta.extend(commit.meta.inserted.iter().cloned());
 		for k in commit.data.deleted.iter() {
 			self.data.remove(k);
 		}

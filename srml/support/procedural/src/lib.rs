@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,16 +21,6 @@
 #![recursion_limit="256"]
 
 extern crate proc_macro;
-extern crate proc_macro2;
-
-#[macro_use]
-extern crate syn;
-
-#[macro_use]
-extern crate quote;
-
-#[macro_use]
-extern crate srml_support_procedural_tools;
 
 mod storage;
 
@@ -40,7 +30,7 @@ use proc_macro::TokenStream;
 ///
 /// ## Example
 ///
-/// ```compile_fail
+/// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Dummy get(dummy) config(): Option<T::Balance>;
@@ -53,6 +43,33 @@ use proc_macro::TokenStream;
 /// storage item. This allows you to gain access to publicly visible storage items from a
 /// module type. Currently you must disambiguate by using `<Module as Store>::Item` rather than
 /// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
+///
+/// An optional `GenesisConfig` struct for storage initialization can be defined, either specifically as in :
+/// ```nocompile
+/// decl_storage! {
+/// 	trait Store for Module<T: Trait> as Example {
+/// 	}
+///		add_extra_genesis {
+///			config(genesis_field): GenesisFieldType;
+///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
+///			})
+///		}
+/// }
+/// ```
+/// or when at least one storage field requires default initialization (both `get` and `config` or `build`).
+/// This struct can be expose as `Config` by `decl_runtime` macro.
+///
+/// ### Module with instances
+///
+/// `decl_storage!` macro support building modules with instances with the following syntax: (DefaultInstance type
+/// is optionnal)
+/// ```nocompile
+/// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
+/// ```
+///
+/// Then the genesis config is generated with two generic parameter `GenesisConfig<T, I>`
+/// and storages are now accessible using two generic parameters like:
+/// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

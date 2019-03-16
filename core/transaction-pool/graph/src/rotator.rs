@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,11 +22,12 @@
 use std::{
 	collections::HashMap,
 	hash,
+	iter,
 	time::{Duration, Instant},
 };
 use parking_lot::RwLock;
 
-use base_pool::Transaction;
+use crate::base_pool::Transaction;
 
 /// Expected size of the banned extrinsics cache.
 const EXPECTED_SIZE: usize = 2048;
@@ -58,11 +59,11 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	}
 
 	/// Bans given set of hashes.
-	pub fn ban(&self, now: &Instant, hashes: &[Hash]) {
+	pub fn ban(&self, now: &Instant, hashes: impl IntoIterator<Item=Hash>) {
 		let mut banned = self.banned_until.write();
 
 		for hash in hashes {
-			banned.insert(hash.clone(), *now + self.ban_time);
+			banned.insert(hash, *now + self.ban_time);
 		}
 
 		if banned.len() > 2 * EXPECTED_SIZE {
@@ -83,7 +84,7 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 			return false;
 		}
 
-		self.ban(now, &[xt.hash.clone()]);
+		self.ban(now, iter::once(xt.hash.clone()));
 		true
 	}
 
@@ -113,6 +114,7 @@ mod tests {
 		let hash = 5u64;
 		let tx = Transaction {
 			data: (),
+			bytes: 1,
 			hash: hash.clone(),
 			priority: 5,
 			valid_till: 1,
@@ -177,6 +179,7 @@ mod tests {
 			let hash = i;
 			Transaction {
 				data: (),
+				bytes: 2,
 				hash,
 				priority: 5,
 				valid_till,

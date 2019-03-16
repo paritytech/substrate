@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,19 +20,18 @@
 #![allow(missing_docs)]
 
 use std::sync::Arc;
-use keyring::Keyring;
 use consensus::BlockOrigin;
 use primitives::Blake2Hasher;
-use ::TestClient;
+use crate::{TestClient, AccountKeyring};
 use runtime_primitives::traits::Block as BlockT;
-use backend;
-use blockchain::{Backend as BlockChainBackendT, HeaderBackend};
-use ::BlockBuilderExt;
+use crate::backend;
+use crate::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
+use crate::{BlockBuilderExt, new_with_backend};
 use runtime::{self, Transfer};
 use runtime_primitives::generic::BlockId;
 
 /// helper to test the `leaves` implementation for various backends
-pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
+pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	// block tree:
@@ -41,7 +40,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let client = ::new_with_backend(backend.clone(), false);
+	let client = new_with_backend(backend.clone(), false);
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
@@ -88,8 +87,8 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder.push_transfer(Transfer {
-		from: Keyring::Alice.to_raw_public().into(),
-		to: Keyring::Ferdie.to_raw_public().into(),
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
 		amount: 41,
 		nonce: 0,
 	}).unwrap();
@@ -117,8 +116,8 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder.push_transfer(Transfer {
-		from: Keyring::Alice.to_raw_public().into(),
-		to: Keyring::Ferdie.to_raw_public().into(),
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
 		amount: 1,
 		nonce: 1,
 	}).unwrap();
@@ -132,8 +131,8 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder.push_transfer(Transfer {
-		from: Keyring::Alice.to_raw_public().into(),
-		to: Keyring::Ferdie.to_raw_public().into(),
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
 		amount: 1,
 		nonce: 0,
 	}).unwrap();
@@ -144,8 +143,8 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 		vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
 }
 
-
-pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
+/// helper to test the `children` implementation for various backends
+pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	// block tree:
@@ -153,7 +152,8 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 	//		A1 -> B2 -> B3 -> B4
 	//			  B2 -> C3
 	//		A1 -> D2
-	let client = ::new_with_backend(backend, false);
+
+	let client = new_with_backend(backend.clone(), false);
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();
@@ -179,8 +179,8 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder.push_transfer(Transfer {
-		from: Keyring::Alice.to_raw_public().into(),
-		to: Keyring::Ferdie.to_raw_public().into(),
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
 		amount: 41,
 		nonce: 0,
 	}).unwrap();
@@ -199,8 +199,8 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder.push_transfer(Transfer {
-		from: Keyring::Alice.to_raw_public().into(),
-		to: Keyring::Ferdie.to_raw_public().into(),
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
 		amount: 1,
 		nonce: 1,
 	}).unwrap();
@@ -211,8 +211,97 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder.push_transfer(Transfer {
-		from: Keyring::Alice.to_raw_public().into(),
-		to: Keyring::Ferdie.to_raw_public().into(),
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 1,
+		nonce: 0,
+	}).unwrap();
+	let d2 = builder.bake().unwrap();
+	client.import(BlockOrigin::Own, d2.clone()).unwrap();
+
+	let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+	let children1 = backend.blockchain().children(a4.hash()).unwrap();
+	assert_eq!(vec![a5.hash()], children1);
+
+	let children2 = backend.blockchain().children(a1.hash()).unwrap();
+	assert_eq!(vec![a2.hash(), b2.hash(), d2.hash()], children2);
+
+	let children3 = backend.blockchain().children(genesis_hash).unwrap();
+	assert_eq!(vec![a1.hash()], children3);
+
+	let children4 = backend.blockchain().children(b2.hash()).unwrap();
+	assert_eq!(vec![b3.hash(), c3.hash()], children4);
+}
+
+pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B>) where
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+{
+	// block tree:
+	// G -> A1 -> A2 -> A3 -> A4 -> A5
+	//		A1 -> B2 -> B3 -> B4
+	//			  B2 -> C3
+	//		A1 -> D2
+	let client = new_with_backend(backend, false);
+
+	// G -> A1
+	let a1 = client.new_block().unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+	// A1 -> A2
+	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+	// A2 -> A3
+	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, a3.clone()).unwrap();
+
+	// A3 -> A4
+	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, a4.clone()).unwrap();
+
+	// A4 -> A5
+	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, a5.clone()).unwrap();
+
+	// A1 -> B2
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
+	builder.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 41,
+		nonce: 0,
+	}).unwrap();
+	let b2 = builder.bake().unwrap();
+	client.import(BlockOrigin::Own, b2.clone()).unwrap();
+
+	// B2 -> B3
+	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, b3.clone()).unwrap();
+
+	// B3 -> B4
+	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, b4.clone()).unwrap();
+
+	// // B2 -> C3
+	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
+	builder.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 1,
+		nonce: 1,
+	}).unwrap();
+	let c3 = builder.bake().unwrap();
+	client.import(BlockOrigin::Own, c3.clone()).unwrap();
+
+	// A1 -> D2
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
+	builder.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
 		amount: 1,
 		nonce: 0,
 	}).unwrap();

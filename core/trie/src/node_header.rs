@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -34,10 +34,10 @@ impl Encode for NodeHeader {
 	fn encode_to<T: Output>(&self, output: &mut T) {
 		match self {
 			NodeHeader::Null => output.push_byte(EMPTY_TRIE),
-			
+
 			NodeHeader::Branch(true) => output.push_byte(BRANCH_NODE_WITH_VALUE),
 			NodeHeader::Branch(false) => output.push_byte(BRANCH_NODE_NO_VALUE),
-			
+
 			NodeHeader::Leaf(nibble_count) if *nibble_count < LEAF_NODE_THRESHOLD as usize =>
 				output.push_byte(LEAF_NODE_OFFSET + *nibble_count as u8),
 			NodeHeader::Leaf(nibble_count) => {
@@ -72,8 +72,6 @@ impl Decode for NodeHeader {
 
 			BRANCH_NODE_NO_VALUE => NodeHeader::Branch(false),		// 254
 			BRANCH_NODE_WITH_VALUE => NodeHeader::Branch(true),		// 255
-
-			_ => unreachable!(),
 		})
 	}
 }

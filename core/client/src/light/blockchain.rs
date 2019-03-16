@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,16 +21,15 @@ use std::sync::Weak;
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
-use primitives::AuthorityId;
 use runtime_primitives::{Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
-use backend::{AuxStore, NewBlockState};
-use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
+use crate::backend::{AuxStore, NewBlockState};
+use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
-use cht;
-use error::{ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::fetcher::{Fetcher, RemoteHeaderRequest};
+use crate::cht;
+use crate::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
@@ -41,10 +40,13 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
+
+	/// Set an existing block as new best block.
+	fn set_head(&self, block: BlockId<Block>) -> ClientResult<()>;
 
 	/// Mark historic header as finalized.
 	fn finalize_header(&self, block: BlockId<Block>) -> ClientResult<()>;
@@ -142,7 +144,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 
 impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: BlockT, S: Storage<Block>, F: Fetcher<Block> {
 	fn body(&self, _id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
-		// TODO [light]: fetch from remote node
+		// TODO: #1445 fetch from remote node
 		Ok(None)
 	}
 
@@ -161,26 +163,32 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 	fn leaves(&self) -> ClientResult<Vec<Block::Hash>> {
 		unimplemented!()
 	}
+
+	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
+		unimplemented!()
+	}
 }
 
 #[cfg(test)]
 pub mod tests {
 	use std::collections::HashMap;
 	use test_client::runtime::{Hash, Block, Header};
-	use blockchain::Info;
-	use light::fetcher::tests::OkCallFetcher;
+	use crate::blockchain::Info;
+	use crate::light::fetcher::tests::OkCallFetcher;
 	use super::*;
 
 	pub type DummyBlockchain = Blockchain<DummyStorage, OkCallFetcher>;
 
 	pub struct DummyStorage {
 		pub changes_tries_cht_roots: HashMap<u64, Hash>,
+		pub aux_store: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 	}
 
 	impl DummyStorage {
 		pub fn new() -> Self {
 			DummyStorage {
 				changes_tries_cht_roots: HashMap::new(),
+				aux_store: Mutex::new(HashMap::new()),
 			}
 		}
 	}
@@ -198,12 +206,20 @@ pub mod tests {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn number(&self, _hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn number(&self, hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
+			if hash == Default::default() {
+				Ok(Some(Default::default()))
+			} else {
+				Err(ClientErrorKind::Backend("Test error".into()).into())
+			}
 		}
 
-		fn hash(&self, _number: u64) -> ClientResult<Option<Hash>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn hash(&self, number: u64) -> ClientResult<Option<Hash>> {
+			if number == 0 {
+				Ok(Some(Default::default()))
+			} else {
+				Err(ClientErrorKind::Backend("Test error".into()).into())
+			}
 		}
 	}
 
@@ -214,12 +230,15 @@ pub mod tests {
 			'c: 'a,
 			I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 			D: IntoIterator<Item=&'a &'b [u8]>,
-		>(&self, _insert: I, _delete: D) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		>(&self, insert: I, _delete: D) -> ClientResult<()> {
+			for (k, v) in insert.into_iter() {
+				self.aux_store.lock().insert(k.to_vec(), v.to_vec());
+			}
+			Ok(())
 		}
 
-		fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+			Ok(self.aux_store.lock().get(key).cloned())
 		}
 	}
 
@@ -227,10 +246,14 @@ pub mod tests {
 		fn import_header(
 			&self,
 			_header: Header,
-			_authorities: Option<Vec<AuthorityId>>,
+			_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
+			Ok(())
+		}
+
+		fn set_head(&self, _block: BlockId<Block>) -> ClientResult<()> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,72 +14,192 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Timestamp manager: provides means to find out the current time.
+//! # Timestamp Module
+//! 
+//! The timestamp module provides functionality to get and set the on-chain time. 
+//! To use it in your module, you need to implement the timestamp [`Trait`]. 
+//! The supported dispatchable functions are documented as part of the [`Call`] enum.
+//! 
+//! ## Overview
+//! 
+//! The timestamp module allows the validators to set and validate a timestamp with each block. 
 //!
-//! It is expected that the timestamp is set by the validator in the
-//! beginning of each block, typically one of the first extrinsics. The timestamp
-//! can be set only once per block and must be set each block.
+//! It uses inherents for timestamp data, which is provided by the block author and validated/verified by other validators. 
+//! The timestamp can be set only once per block and must be set each block. There could be a constraint on how much time must pass before setting the new timestamp.
+//! 
+//! **NOTE:** The timestamp module is the recommended way to query the on-chain time instead of using an approach based on block numbers. 
+//! The block numbers based time measurement can cause issues because of cummulative calculation errors and hence it should be avoided.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable functions ([`Call`])
+//! 
+//! * `set` - Sets the current time.
+//! 
+//! ### Public functions ([`Module`])
+//! 
+//! * `get` - Gets the current time for the current block. If this function is called prior the setting to timestamp, it will return the timestamp of the previous block.
+//! 
+//! * `block_period` - Gets the minimum (and advised) period between blocks for the chain.
+//! 
+//! ## Usage
+//! 
+//! The following example shows how to use the timestamp module in your custom module to query the current timestamp.
+//! 
+//! ### Prerequisites
+//! 
+//! Import the `timestamp` module in your custom module and derive the module configuration trait from the `timestamp` trait.
+//! 
+//! ### Get current timestamp
+//! 
+//! ```ignore
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! 
+//! pub trait Trait: timestamp::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _now = <timestamp::Module<T>>::get();
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! ```
+//! 
+//! ### Example from SRML
+//! 
+//! The [`Session` module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses the `timestamp` module for session management.
+//! 
+//! ## Related Modules
+//! 
+//! * [`System`](https://crates.parity.io/srml_system/index.html)
+//! * [`Session`](https://crates.parity.io/srml_session/index.html)
 //!
-//! Note, that there might be a constraint on how much time must pass
-//! before setting the new timestamp, specified by the `tim:block_period`
-//! storage entry.
-//!
-//! # Interaction with the system
-//!
-//! ## Finalization
-//!
-//! This module should be hooked up to the finalization routine.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as runtime_primitives;
-extern crate srml_system as system;
-extern crate srml_consensus as consensus;
-extern crate parity_codec as codec;
-
-use codec::HasCompact;
-use runtime_support::{StorageValue, Parameter};
-use runtime_primitives::CheckInherentError;
-use runtime_primitives::traits::{
-	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
-};
+use parity_codec::Encode;
+#[cfg(feature = "std")]
+use parity_codec::Decode;
+#[cfg(feature = "std")]
+use inherents::ProvideInherentData;
+use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
+use srml_support::for_each_tuple;
+use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
-use rstd::{result, ops::{Mul, Div}, vec::Vec};
+use rstd::{result, ops::{Mul, Div}, cmp};
+use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+
+/// The identifier for the `timestamp` inherent.
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
+/// The type of the inherent.
+pub type InherentType = u64;
+
+/// Errors that can occur while checking the timestamp inherent.
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Decode))]
+pub enum InherentError {
+	/// The timestamp is valid in the future.
+	/// This is a non-fatal-error and will not stop checking the inherents.
+	ValidAtTimestamp(InherentType),
+	/// Some other error.
+	Other(RuntimeString),
+}
+
+impl IsFatalError for InherentError {
+	fn is_fatal_error(&self) -> bool {
+		match self {
+			InherentError::ValidAtTimestamp(_) => false,
+			InherentError::Other(_) => true,
+		}
+	}
+}
+
+impl InherentError {
+	/// Try to create an instance ouf of the given identifier and data.
+	#[cfg(feature = "std")]
+	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
+		if id == &INHERENT_IDENTIFIER {
+			<InherentError as parity_codec::Decode>::decode(&mut &data[..])
+		} else {
+			None
+		}
+	}
+}
+
+/// Auxiliary trait to extract timestamp inherent data.
+pub trait TimestampInherentData {
+	/// Get timestamp inherent data.
+	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString>;
+}
+
+impl TimestampInherentData for InherentData {
+	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString> {
+		self.get_data(&INHERENT_IDENTIFIER)
+			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
+	}
+}
+
+#[cfg(feature = "std")]
+pub struct InherentDataProvider;
+
+#[cfg(feature = "std")]
+impl ProvideInherentData for InherentDataProvider {
+	fn inherent_identifier(&self) -> &'static InherentIdentifier {
+		&INHERENT_IDENTIFIER
+	}
+
+	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
+		use std::time::SystemTime;
+
+		let now = SystemTime::now();
+		now.duration_since(SystemTime::UNIX_EPOCH)
+			.map_err(|_| {
+				"Current time is before unix epoch".into()
+			}).and_then(|d| {
+				let duration: InherentType = d.as_secs();
+				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
+			})
+	}
+
+	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
+	}
+}
 
 /// A trait which is called when the timestamp is set.
 pub trait OnTimestampSet<Moment> {
 	fn on_timestamp_set(moment: Moment);
 }
 
-impl<Moment> OnTimestampSet<Moment> for () {
-	fn on_timestamp_set(_moment: Moment) { }
-}
+macro_rules! impl_timestamp_set {
+	() => (
+		impl<Moment> OnTimestampSet<Moment> for () {
+			fn on_timestamp_set(_: Moment) {}
+		}
+	);
 
-impl<A, B, Moment: Clone> OnTimestampSet<Moment> for (A, B)
-	where A: OnTimestampSet<Moment>, B: OnTimestampSet<Moment>
-{
-	fn on_timestamp_set(moment: Moment) {
-		A::on_timestamp_set(moment.clone());
-		B::on_timestamp_set(moment);
+	( $($t:ident)* ) => {
+		impl<Moment: Clone, $($t: OnTimestampSet<Moment>),*> OnTimestampSet<Moment> for ($($t,)*) {
+			fn on_timestamp_set(moment: Moment) {
+				$($t::on_timestamp_set(moment.clone());)*
+			}
+		}
 	}
 }
 
-pub trait Trait: consensus::Trait + system::Trait {
-	/// The position of the required timestamp-set extrinsic.
-	const TIMESTAMP_SET_POSITION: u32;
+for_each_tuple!(impl_timestamp_set);
 
+/// The module configuration trait
+pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment>;
+	type Moment: Parameter + Default + SimpleArithmetic
+		+ Mul<Self::BlockNumber, Output = Self::Moment>
+		+ Div<Self::BlockNumber, Output = Self::Moment>;
+
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
 }
@@ -88,22 +208,15 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Set the current time.
 		///
-		/// Extrinsic with this call should be placed at the specific position in the each block
-		/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
 		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-		fn set(origin, now: <T::Moment as HasCompact>::Type) {
+		/// 
+		/// The dispatch origin for this call must be `Inherent`.
+		fn set(origin, #[compact] now: T::Moment) {
 			ensure_inherent(origin)?;
-			let now = now.into();
-
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-			assert!(
-				<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
-				"Timestamp extrinsic must be at position {} in the block",
-				T::TIMESTAMP_SET_POSITION
-			);
 			assert!(
 				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
 				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
@@ -124,6 +237,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
 		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
+
 		/// The minimum (and advised) period between blocks.
 		pub BlockPeriod get(block_period) config(period): T::Moment = T::Moment::sa(5);
 
@@ -133,10 +247,9 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
 	/// Get the current time for the current block.
 	///
-	/// NOTE: if this function is called prior the setting the timestamp,
+	/// NOTE: if this function is called prior to setting the timestamp,
 	/// it will return the timestamp of the previous block.
 	pub fn get() -> T::Moment {
 		Self::now()
@@ -149,33 +262,39 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
-	type Inherent = T::Moment;
-	type Call = Call<T>;
+fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
+	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
+		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
+}
 
-	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		let next_time = ::rstd::cmp::max(data, Self::now() + Self::block_period());
-		vec![(T::TIMESTAMP_SET_POSITION, Call::set(next_time.into()))]
+impl<T: Trait> ProvideInherent for Module<T> {
+	type Call = Call<T>;
+	type Error = InherentError;
+	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+		let data = extract_inherent_data(data).expect("Gets and decodes timestamp inherent data");
+
+		let next_time = cmp::max(As::sa(data), Self::now() + Self::block_period());
+		Some(Call::set(next_time.into()))
 	}
 
-	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-			block: &Block, data: Self::Inherent, extract_function: &F
-	) -> result::Result<(), CheckInherentError> {
+	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		const MAX_TIMESTAMP_DRIFT: u64 = 60;
 
-		let xt = block.extrinsics().get(T::TIMESTAMP_SET_POSITION as usize)
-			.ok_or_else(|| CheckInherentError::Other("No valid timestamp inherent in block".into()))?;
+		let t = match call {
+			Call::set(ref t) => t.clone(),
+			_ => return Ok(()),
+		}.as_();
 
-		let t = match (xt.is_signed(), extract_function(&xt)) {
-			(Some(false), Some(Call::set(ref t))) => t.clone(),
-			_ => return Err(CheckInherentError::Other("No valid timestamp inherent in block".into())),
-		}.into().as_();
+		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
 		let minimum = (Self::now() + Self::block_period()).as_();
-		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
-			Err(CheckInherentError::Other("Timestamp too far in future to accept".into()))
+		if t > data + MAX_TIMESTAMP_DRIFT {
+			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
-			Err(CheckInherentError::ValidAtTimestamp(minimum))
+			Err(InherentError::ValidAtTimestamp(minimum))
 		} else {
 			Ok(())
 		}
@@ -186,10 +305,11 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
+	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::BlakeTwo256;
+	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
@@ -206,18 +326,12 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
 	}
-	impl consensus::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
-		type Log = DigestItem;
-		type SessionKey = u64;
-		type InherentOfflineReport = ();
-	}
 	impl Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 		type OnTimestampSet = ();
 	}
@@ -232,7 +346,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -247,8 +361,8 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
-			let _ = Timestamp::dispatch(Call::set(70.into()), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
 		});
 	}
 
@@ -262,7 +376,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46.into()), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});
 	}
 }

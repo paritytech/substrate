@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,10 +18,11 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
+use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
+use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use {Trait, Module, consensus, system, timestamp};
+use crate::{Trait, Module};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -32,9 +33,8 @@ impl_outer_origin!{
 pub struct Test;
 
 impl consensus::Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
-	type SessionKey = u64;
+	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
 }
 
@@ -46,14 +46,13 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 
 impl timestamp::Trait for Test {
-	const TIMESTAMP_SET_POSITION: u32 = 0;
-
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 }
@@ -66,7 +65,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
-		authorities,
+		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 1,

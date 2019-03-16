@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -29,23 +29,18 @@
 //! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until pruning
 //! constraints are satisfied.
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate parity_codec_derive;
-extern crate parking_lot;
-extern crate parity_codec as codec;
-#[cfg(test)]
-extern crate substrate_primitives as primitives;
-
 mod noncanonical;
 mod pruning;
 #[cfg(test)] mod test;
 
 use std::fmt;
 use parking_lot::RwLock;
+use parity_codec as codec;
 use codec::Codec;
 use std::collections::HashSet;
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
+use log::trace;
 
 /// Database value type.
 pub type DBValue = Vec<u8>;
@@ -62,7 +57,6 @@ pub trait MetaDb {
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 }
 
-
 /// Backend database trait. Read-only.
 pub trait HashDb {
 	type Hash: Hash;
@@ -78,8 +72,12 @@ pub enum Error<E: fmt::Debug> {
 	Db(E),
 	/// `Codec` decoding error.
 	Decoding,
-	/// NonCanonical error.
-	NonCanonical,
+	/// Trying to canonicalize invalid block.
+	InvalidBlock,
+	/// Trying to insert block with invalid number.
+	InvalidBlockNumber,
+	/// Trying to insert block with unknown parent.
+	InvalidParent,
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
@@ -87,7 +85,9 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
-			Error::NonCanonical => write!(f, "Error processing non-canonical data"),
+			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
+			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
+			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
 		}
 	}
 }
@@ -190,12 +190,6 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
-		if number == 0 {
-			return Ok(CommitSet {
-				data: changeset,
-				meta: Default::default(),
-			})
-		}
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
@@ -211,35 +205,42 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn canonicalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
-		// clear the temporary overlay from the previous canonicalization.
-		self.non_canonical.clear_overlay();
+	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = match self.mode {
 			PruningMode::ArchiveAll => {
 				CommitSet::default()
 			},
 			PruningMode::ArchiveCanonical => {
-				let mut commit = self.non_canonical.canonicalize(hash);
+				let mut commit = self.non_canonical.canonicalize(hash)?;
 				commit.data.deleted.clear();
 				commit
 			},
 			PruningMode::Constrained(_) => {
-				self.non_canonical.canonicalize(hash)
+				self.non_canonical.canonicalize(hash)?
 			},
 		};
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_canonical(hash, &mut commit);
 		}
 		self.prune(&mut commit);
-		commit
+		Ok(commit)
 	}
 
-	pub fn best_canonical(&self) -> u64 {
+	pub fn best_canonical(&self) -> Option<u64> {
 		return self.non_canonical.last_canonicalized_block_number()
 	}
 
-	pub fn is_pruned(&self, number: u64) -> bool {
-		self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending())
+	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
+		match self.mode {
+			PruningMode::ArchiveAll => false,
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
+					!self.non_canonical.have_block(hash)
+				} else {
+					self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+				}
+			}
+		}
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) {
@@ -290,6 +291,27 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 		db.get(key).map_err(|e| Error::Db(e))
 	}
+
+	pub fn apply_pending(&mut self) {
+		self.non_canonical.apply_pending();
+		if let Some(pruning) = &mut self.pruning {
+			pruning.apply_pending();
+		}
+		trace!(target: "forks", "First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
+			self.pruning.as_ref().and_then(|p| p.next_hash()),
+			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
+			self.non_canonical.last_canonicalized_hash(),
+			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),
+			self.non_canonical.top_level(),
+		);
+	}
+
+	pub fn revert_pending(&mut self) {
+		if let Some(pruning) = &mut self.pruning {
+			pruning.revert_pending();
+		}
+		self.non_canonical.revert_pending();
+	}
 }
 
 /// State DB maintenance. See module description.
@@ -312,7 +334,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Finalize a previously inserted block.
-	pub fn canonicalize_block(&self, hash: &BlockHash) -> CommitSet<Key> {
+	pub fn canonicalize_block<E: fmt::Debug>(&self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().canonicalize_block(hash)
 	}
 
@@ -339,13 +361,23 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Returns last finalized block number.
-	pub fn best_canonical(&self) -> u64 {
+	pub fn best_canonical(&self) -> Option<u64> {
 		return self.db.read().best_canonical()
 	}
 
 	/// Check if block is pruned away.
-	pub fn is_pruned(&self, number: u64) -> bool {
-		return self.db.read().is_pruned(number)
+	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
+		return self.db.read().is_pruned(hash, number)
+	}
+
+	/// Apply all pending changes
+	pub fn apply_pending(&self) {
+		self.db.write().apply_pending();
+	}
+
+	/// Revert all pending changes
+	pub fn revert_pending(&self) {
+		self.db.write().revert_pending();
 	}
 }
 
@@ -353,8 +385,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 mod tests {
 	use std::io;
 	use primitives::H256;
-	use {StateDb, PruningMode, Constraints};
-	use test::{make_db, make_changeset, TestDb};
+	use crate::{StateDb, PruningMode, Constraints};
+	use crate::test::{make_db, make_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
@@ -400,7 +432,9 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(1)));
+		state_db.apply_pending();
+		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1)).unwrap());
+		state_db.apply_pending();
 		db.commit(
 			&state_db
 				.insert_block::<io::Error>(
@@ -411,16 +445,20 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(21)));
-		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(3)));
+		state_db.apply_pending();
+		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21)).unwrap());
+		state_db.apply_pending();
+		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3)).unwrap());
+		state_db.apply_pending();
 
 		(db, state_db)
 	}
 
 	#[test]
 	fn full_archive_keeps_everything() {
-		let (db, _) = make_test_db(PruningMode::ArchiveAll);
+		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
+		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
 
 	#[test]
@@ -444,9 +482,10 @@ mod tests {
 			max_blocks: Some(1),
 			max_mem: None,
 		}));
-		assert!(sdb.is_pruned(0));
-		assert!(sdb.is_pruned(1));
-		assert!(!sdb.is_pruned(2));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(0), 0));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(1), 1));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
 	}
 
@@ -456,8 +495,10 @@ mod tests {
 			max_blocks: Some(2),
 			max_mem: None,
 		}));
-		assert!(sdb.is_pruned(0));
-		assert!(!sdb.is_pruned(1));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(0), 0));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(1), 1));
+		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
 	}
 }

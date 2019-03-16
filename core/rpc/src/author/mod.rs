@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,8 +18,9 @@
 
 use std::sync::Arc;
 
+use log::warn;
 use client::{self, Client};
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -30,12 +31,12 @@ use transaction_pool::{
 		watcher::Status,
 	},
 };
-use jsonrpc_macros::pubsub;
-use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{Bytes, Blake2Hasher, H256};
-use rpc::futures::{Sink, Stream, Future};
+use crate::rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
-use subscriptions::Subscriptions;
+use crate::subscriptions::Subscriptions;
 
 pub mod error;
 
@@ -44,30 +45,27 @@ mod tests;
 
 use self::error::Result;
 
-build_rpc_trait! {
-	/// Substrate authoring RPC API
-	pub trait AuthorApi<Hash, BlockHash> {
-		type Metadata;
+/// Substrate authoring RPC API
+#[rpc]
+pub trait AuthorApi<Hash, BlockHash> {
+	/// RPC metadata
+	type Metadata;
 
-		/// Submit hex-encoded extrinsic for inclusion in block.
-		#[rpc(name = "author_submitExtrinsic")]
-		fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
+	/// Submit hex-encoded extrinsic for inclusion in block.
+	#[rpc(name = "author_submitExtrinsic")]
+	fn submit_extrinsic(&self, extrinsic: Bytes) -> Result<Hash>;
 
-		/// Returns all pending extrinsics, potentially grouped by sender.
-		#[rpc(name = "author_pendingExtrinsics")]
-		fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
+	/// Returns all pending extrinsics, potentially grouped by sender.
+	#[rpc(name = "author_pendingExtrinsics")]
+	fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
 
-		#[pubsub(name = "author_extrinsicUpdate")] {
-			/// Submit an extrinsic to watch.
-			#[rpc(name = "author_submitAndWatchExtrinsic")]
-			fn watch_extrinsic(&self, Self::Metadata, pubsub::Subscriber<Status<Hash, BlockHash>>, Bytes);
+	/// Submit an extrinsic to watch.
+	#[pubsub(subscription = "author_extrinsicUpdate", subscribe, name = "author_submitAndWatchExtrinsic")]
+	fn watch_extrinsic(&self, metadata: Self::Metadata, subscriber: Subscriber<Status<Hash, BlockHash>>, bytes: Bytes);
 
-			/// Unsubscribe from extrinsic watching.
-			#[rpc(name = "author_unwatchExtrinsic")]
-			fn unwatch_extrinsic(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
-		}
-
-	}
+	/// Unsubscribe from extrinsic watching.
+	#[pubsub(subscription = "author_extrinsicUpdate", unsubscribe, name = "author_unwatchExtrinsic")]
+	fn unwatch_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
 /// Authoring API
@@ -103,7 +101,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	P::Error: 'static,
 	RA: Send + Sync + 'static
 {
-	type Metadata = ::metadata::Metadata;
+	type Metadata = crate::metadata::Metadata;
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
 		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
@@ -120,7 +118,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
@@ -149,7 +147,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		})
 	}
 
-	fn unwatch_extrinsic(&self, _metadata: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+	fn unwatch_extrinsic(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 }

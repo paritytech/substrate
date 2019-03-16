@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -52,8 +52,10 @@ pub struct NetworkConfiguration {
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
-	/// Client identifier
+	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
+	/// Name of the node. Sent over the wire for debugging purposes.
+	pub node_name: String,
 }
 
 impl Default for NetworkConfiguration {
@@ -68,11 +70,7 @@ impl NetworkConfiguration {
 		NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
-			listen_addresses: vec![
-				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(Protocol::Tcp(30333)))
-					.collect()
-			],
+			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			use_secret: None,
@@ -80,7 +78,8 @@ impl NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			client_version: "Parity-network".into(),		// TODO: meh
+			client_version: "unknown".into(),
+			node_name: "unknown".into(),
 		}
 	}
 
@@ -97,21 +96,21 @@ impl NetworkConfiguration {
 }
 
 /// The severity of misbehaviour of a peer that is reported.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Severity<'a> {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Severity {
 	/// Peer is timing out. Could be bad connectivity of overload of work on either of our sides.
 	Timeout,
 	/// Peer has been notably useless. E.g. unable to answer a request that we might reasonably consider
 	/// it could answer.
-	Useless(&'a str),
+	Useless(String),
 	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
 	/// must have taken concrete action in order to behave in such a way which is wantanly invalid.
-	Bad(&'a str),
+	Bad(String),
 }
 
-impl<'a> fmt::Display for Severity<'a> {
+impl fmt::Display for Severity {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
+		match self {
 			Severity::Timeout => write!(fmt, "Timeout"),
 			Severity::Useless(r) => write!(fmt, "Useless ({})", r),
 			Severity::Bad(r) => write!(fmt, "Bad ({})", r),

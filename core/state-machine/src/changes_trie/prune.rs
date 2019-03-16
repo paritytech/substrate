@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,11 +18,28 @@
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use substrate_trie::Recorder;
-use proving_backend::ProvingBackendEssence;
-use trie_backend_essence::TrieBackendEssence;
-use changes_trie::{AnchorBlockId, Configuration, Storage};
-use changes_trie::storage::TrieBackendAdapter;
+use trie::Recorder;
+use log::warn;
+use crate::proving_backend::ProvingBackendEssence;
+use crate::trie_backend_essence::TrieBackendEssence;
+use crate::changes_trie::{AnchorBlockId, Configuration, Storage};
+use crate::changes_trie::storage::TrieBackendAdapter;
+
+/// Get number of oldest block for which changes trie is not pruned
+/// given changes trie configuration, pruning parameter and number of
+/// best finalized block.
+pub fn oldest_non_pruned_trie(
+	config: &Configuration,
+	min_blocks_to_keep: u64,
+	best_finalized_block: u64,
+) -> u64 {
+	let max_digest_interval = config.max_digest_interval();
+	let max_digest_block = best_finalized_block - best_finalized_block % max_digest_interval;
+	match pruning_range(config, min_blocks_to_keep, max_digest_block) {
+		Some((_, last_pruned_block)) => last_pruned_block + 1,
+		None => 1,
+	}
+}
 
 /// Prune obslete changes tries. Puning happens at the same block, where highest
 /// level digest is created. Pruning guarantees to save changes tries for last
@@ -46,7 +63,7 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	};
 
 	// delete changes trie for every block in range
-	// TODO: limit `max_digest_interval` so that this cycle won't involve huge ranges
+	// FIXME: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	for block in first..last+1 {
 		let root = match storage.root(current_block, block) {
 			Ok(Some(root)) => root,
@@ -136,8 +153,8 @@ mod tests {
 	use std::collections::HashSet;
 	use trie::MemoryDB;
 	use primitives::Blake2Hasher;
-	use backend::insert_into_memory_db;
-	use changes_trie::storage::InMemoryStorage;
+	use crate::backend::insert_into_memory_db;
+	use crate::changes_trie::storage::InMemoryStorage;
 	use super::*;
 
 	fn config(interval: u64, levels: u32) -> Configuration {
@@ -267,5 +284,24 @@ mod tests {
 		assert_eq!(max_digest_intervals_to_keep(1024, 512), 2);
 		assert_eq!(max_digest_intervals_to_keep(1024, 511), 2);
 		assert_eq!(max_digest_intervals_to_keep(1024, 100), 10);
+	}
+
+	#[test]
+	fn oldest_non_pruned_trie_works() {
+		// when digests are not created at all
+		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100, 10), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100, 110), 11);
+
+		// when only l1 digests are created
+		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100, 50), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100, 110), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100, 210), 101);
+
+		// when l2 digests are created
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 50), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 110), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 210), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 10110), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 20110), 10001);
 	}
 }

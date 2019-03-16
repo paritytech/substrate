@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with

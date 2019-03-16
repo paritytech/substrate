@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,44 +18,94 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(unused_imports)]
-#[macro_use]
-extern crate sr_std as rstd;
+pub use timestamp;
 
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-extern crate srml_timestamp as timestamp;
-extern crate srml_staking as staking;
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate srml_consensus as consensus;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-#[cfg(test)]
-#[macro_use]
-extern crate lazy_static;
-
-#[cfg(test)]
-extern crate parking_lot;
-
-use rstd::prelude::*;
-use runtime_support::storage::StorageValue;
-use runtime_support::dispatch::Result;
+use rstd::{result, prelude::*};
+use srml_support::storage::StorageValue;
+use srml_support::{decl_storage, decl_module};
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
+#[cfg(feature = "std")]
+use timestamp::TimestampInherentData;
+use parity_codec::{Encode, Decode};
+use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+#[cfg(feature = "std")]
+use inherents::{InherentDataProviders, ProvideInherentData};
 
 mod mock;
 mod tests;
+
+/// The aura inherent identifier.
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
+
+/// The type of the aura inherent.
+pub type InherentType = u64;
+
+/// Auxiliary trait to extract aura inherent data.
+pub trait AuraInherentData {
+	/// Get aura inherent data.
+	fn aura_inherent_data(&self) -> result::Result<InherentType, RuntimeString>;
+	/// Replace aura inherent data.
+	fn aura_replace_inherent_data(&mut self, new: InherentType);
+}
+
+impl AuraInherentData for InherentData {
+	fn aura_inherent_data(&self) -> result::Result<InherentType, RuntimeString> {
+		self.get_data(&INHERENT_IDENTIFIER)
+			.and_then(|r| r.ok_or_else(|| "Aura inherent data not found".into()))
+	}
+
+	fn aura_replace_inherent_data(&mut self, new: InherentType) {
+		self.replace_data(INHERENT_IDENTIFIER, &new);
+	}
+}
+
+/// Provides the slot duration inherent data for `Aura`.
+#[cfg(feature = "std")]
+pub struct InherentDataProvider {
+	slot_duration: u64,
+}
+
+#[cfg(feature = "std")]
+impl InherentDataProvider {
+	pub fn new(slot_duration: u64) -> Self {
+		Self {
+			slot_duration
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl ProvideInherentData for InherentDataProvider {
+	fn on_register(
+		&self,
+		providers: &InherentDataProviders,
+	) -> result::Result<(), RuntimeString> {
+		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
+			// Add the timestamp inherent data provider, as we require it.
+			providers.register_provider(timestamp::InherentDataProvider)
+		} else {
+			Ok(())
+		}
+	}
+
+	fn inherent_identifier(&self) -> &'static inherents::InherentIdentifier {
+		&INHERENT_IDENTIFIER
+	}
+
+	fn provide_inherent_data(
+		&self,
+		inherent_data: &mut InherentData,
+	) -> result::Result<(), RuntimeString> {
+		let timestamp = inherent_data.timestamp_inherent_data()?;
+		let slot_num = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
+	}
+
+	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		RuntimeString::decode(&mut &error[..]).map(Into::into)
+	}
+}
 
 /// Something which can handle Aura consensus reports.
 pub trait HandleReport {
@@ -98,28 +148,13 @@ impl AuraReport {
 	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
 		where F: FnMut(usize, usize)
 	{
-		let start_slot = self.start_slot % validator_count;
-
-		// the number of times everyone was skipped.
-		let skipped_all = self.skipped / validator_count;
-		// the number of validators who were skipped once after that.
-		let skipped_after = self.skipped % validator_count;
-
-		let iter = (start_slot..validator_count).into_iter()
-			.chain(0..start_slot)
-			.enumerate();
-
-		for (rel_index, actual_index) in iter {
-			let slash_count = skipped_all + if rel_index < skipped_after {
-				1
-			} else {
-				// avoid iterating over all authorities when skipping a couple.
-				if skipped_all == 0 { break }
-				0
-			};
-
-			if slash_count > 0 {
-				punish_with(actual_index, slash_count);
+		// If all validators have been skipped, then it implies some sort of 
+		// systematic problem common to all rather than a minority of validators
+		// unfulfilling their specific duties. In this case, it doesn't make
+		// sense to punish anyone, so we guard against it.
+		if self.skipped < validator_count {
+			for index in 0..self.skipped {
+				punish_with((self.start_slot + index) % validator_count, 1);
 			}
 		}
 	}
@@ -131,20 +166,6 @@ impl<T: Trait> Module<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<timestamp::Module<T>>::block_period().as_().saturating_mul(2)
-	}
-
-	/// Verify an inherent slot that is used in a block seal against a timestamp
-	/// extracted from the block.
-	// TODO: ensure `ProvideInherent` can deal with dependencies like this.
-	// https://github.com/paritytech/substrate/issues/1228
-	pub fn verify_inherent(timestamp: T::Moment, seal_slot: u64) -> Result {
-		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
-
-		if timestamp_based_slot == seal_slot {
-			Ok(())
-		} else {
-			Err("timestamp set in block doesn't match slot in seal".into())
-		}
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
@@ -186,7 +207,7 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = staking::Module::<T>::validators();
+		let validators = session::Module::<T>::validators();
 
 		report.punish(
 			validators.len(),
@@ -195,5 +216,32 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 				staking::Module::<T>::on_offline_validator(v, slash_count);
 			}
 		);
+	}
+}
+
+impl<T: Trait> ProvideInherent for Module<T> {
+	type Call = timestamp::Call<T>;
+	type Error = MakeFatalError<RuntimeString>;
+	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
+		None
+	}
+
+	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
+		let timestamp = match call {
+			timestamp::Call::set(ref timestamp) => timestamp.clone(),
+			_ => return Ok(()),
+		};
+
+		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
+
+		let seal_slot = data.aura_inherent_data()?;
+
+		if timestamp_based_slot == seal_slot {
+			Ok(())
+		} else {
+			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())
+		}
 	}
 }

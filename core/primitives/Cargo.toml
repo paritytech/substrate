@@ -2,56 +2,69 @@
 name = "substrate-primitives"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
-crunchy = { version = "0.2", default-features = false }
-sr-std = { path = "../sr-std", default-features = false }
-parity-codec = { version = "2.1", default-features = false }
-parity-codec-derive = { version = "2.1", default-features = false }
-fixed-hash = { version = "0.3.0", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+parity-codec = { version = "3.2", default-features = false, features = ["derive"] }
 rustc-hex = { version = "2.0", default-features = false }
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
-uint = { version = "0.5.0-beta", default-features = false }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default-features = false }
-wasmi = { version = "0.4.2", optional = true }
-hash-db = { git = "https://github.com/paritytech/trie", default-features = false }
-hash256-std-hasher = { git = "https://github.com/paritytech/trie", default-features = false }
-ring = { version = "0.12", optional = true }
-untrusted = { version = "0.5", optional = true }
+primitive-types = { version = "0.2", default-features = false, features = ["codec"] }
+impl-serde = { version = "0.1", optional = true }
+wasmi = { version = "0.4.3", optional = true }
+hash-db = { version = "0.11", default-features = false }
+hash256-std-hasher = { version = "0.11", default-features = false }
+ring = { version = "0.14", optional = true }
+untrusted = { version = "0.6", optional = true }
 hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
+schnorrkel = { git = "https://github.com/w3f/schnorrkel", optional = true, commit = "d3289df76b8ae6dfb68e733204c5c009df5343a9" }
+rand = { version = "0.6", optional = true }
+sha2 = { version = "0.8", optional = true }
+substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39", optional = true }
+tiny-bip39 = { version = "0.6.0", optional = true }
+hex = { version = "0.3", optional = true }
+regex = {version = "1.1", optional = true }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
-pretty_assertions = "0.4"
+pretty_assertions = "0.5"
 heapsize = "0.4"
 
 [features]
 default = ["std"]
 std = [
-	"crunchy/std",
 	"wasmi",
-	"uint/std",
-	"fixed-hash/std",
-	"fixed-hash/heapsize",
-	"fixed-hash/byteorder",
-	"fixed-hash/rustc-hex",
-	"fixed-hash/libc",
+	"primitive-types/std",
+	"primitive-types/serde",
+	"primitive-types/heapsize",
+	"primitive-types/byteorder",
+	"primitive-types/rustc-hex",
+	"primitive-types/libc",
+	"impl-serde",
 	"parity-codec/std",
 	"hash256-std-hasher/std",
 	"hash-db/std",
-	"sr-std/std",
-	"serde/std",
+	"rstd/std",
+	"serde",
 	"rustc-hex/std",
 	"twox-hash",
 	"blake2-rfc",
 	"ring",
 	"untrusted",
 	"hex-literal",
+	"hex",
 	"base58",
+	"substrate-bip39",
+	"tiny-bip39",
 	"serde_derive",
 	"byteorder/std",
+	"rand",
+	"sha2",
+	"schnorrkel",
+	"regex",
 ]

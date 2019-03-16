@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,38 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use error::{Error, ErrorKind, Result};
+use std::{borrow::BorrowMut, result, cell::{RefMut, RefCell}};
+use crate::error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
-use wasm_executor::WasmExecutor;
-use wasmi::Module as WasmModule;
+use crate::wasm_executor::WasmExecutor;
+use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
-use std::collections::HashMap;
-use codec::Decode;
-use primitives::hashing::blake2_256;
-use parking_lot::{Mutex, MutexGuard};
-use RuntimeInfo;
-use primitives::Blake2Hasher;
+use std::{collections::HashMap, panic::UnwindSafe};
+use parity_codec::{Decode, Encode};
+use crate::RuntimeInfo;
+use primitives::{Blake2Hasher, NativeOrEncoded};
+use primitives::storage::well_known_keys;
+use log::trace;
+
+/// Default num of pages for the heap
+const DEFAULT_HEAP_PAGES: u64 = 1024;
 
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule
 
 enum RuntimePreproc {
 	InvalidCode,
-	ValidCode(WasmModule, Option<RuntimeVersion>),
+	ValidCode(WasmModuleInstanceRef, Option<RuntimeVersion>),
 }
 
 type CacheType = HashMap<[u8; 32], RuntimePreproc>;
 
-lazy_static! {
-	static ref RUNTIMES_CACHE: Mutex<CacheType> = Mutex::new(HashMap::new());
-}
-
-// helper function to generate low-over-head caching_keys
-// it is asserted that part of the audit process that any potential on-chain code change
-// will have done is to ensure that the two-x hash is different to that of any other
-// :code value from the same chain
-fn gen_cache_key(code: &[u8]) -> [u8; 32] {
-	blake2_256(code)
+thread_local! {
+	static RUNTIMES_CACHE: RefCell<CacheType> = RefCell::new(HashMap::new());
 }
 
 /// fetch a runtime version from the cache or if there is no cached version yet, create
@@ -53,45 +49,65 @@ fn gen_cache_key(code: &[u8]) -> [u8; 32] {
 /// can be used by comparing returned RuntimeVersion to `ref_version`
 fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 	wasm_executor: &WasmExecutor,
-	cache: &'a mut MutexGuard<CacheType>,
+	cache: &'a mut RefMut<CacheType>,
 	ext: &mut E,
-	heap_pages: usize,
-	code: &[u8]
-) -> Result<(&'a WasmModule, &'a Option<RuntimeVersion>)> {
-	let maybe_runtime_preproc = cache.entry(gen_cache_key(code))
-		.or_insert_with(|| match WasmModule::from_buffer(code) {
-			Ok(module) => {
-				let version = wasm_executor.call_in_wasm_module(ext, heap_pages, &module, "Core_version", &[])
-					.ok()
-					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-				RuntimePreproc::ValidCode(module, version)
-			}
-			Err(e) => {
-				trace!(target: "executor", "Invalid code presented to executor ({:?})", e);
-				RuntimePreproc::InvalidCode
+	default_heap_pages: Option<u64>,
+) -> Result<(&'a WasmModuleInstanceRef, &'a Option<RuntimeVersion>)> {
+
+	let code_hash = match ext.storage_hash(well_known_keys::CODE) {
+		Some(code_hash) => code_hash,
+		None => return Err(ErrorKind::InvalidCode(vec![]).into()),
+	};
+	let maybe_runtime_preproc = cache.borrow_mut().entry(code_hash.into())
+		.or_insert_with(|| {
+			let code = match ext.storage(well_known_keys::CODE) {
+				Some(code) => code,
+				None => return RuntimePreproc::InvalidCode,
+			};
+			let heap_pages = ext.storage(well_known_keys::HEAP_PAGES)
+				.and_then(|pages| u64::decode(&mut &pages[..]))
+				.or(default_heap_pages)
+				.unwrap_or(DEFAULT_HEAP_PAGES);
+			match WasmModule::from_buffer(code)
+				.map_err(|_| ErrorKind::InvalidCode(vec![]).into())
+				.and_then(|module| wasm_executor.prepare_module(ext, heap_pages as usize, &module))
+			{
+				Ok(module) => {
+					let version = wasm_executor.call_in_wasm_module(ext, &module, "Core_version", &[])
+						.ok()
+						.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+					RuntimePreproc::ValidCode(module, version)
+				}
+				Err(e) => {
+					trace!(target: "executor", "Invalid code presented to executor ({:?})", e);
+					RuntimePreproc::InvalidCode
+				}
 			}
 		});
 	match maybe_runtime_preproc {
-		RuntimePreproc::InvalidCode => Err(ErrorKind::InvalidCode(code.into()).into()),
-		RuntimePreproc::ValidCode(m, v) => Ok((m, v)),
+		RuntimePreproc::InvalidCode => {
+			let code = ext.storage(well_known_keys::CODE).unwrap_or(vec![]);
+			Err(ErrorKind::InvalidCode(code).into())
+		},
+		RuntimePreproc::ValidCode(m, v) => {
+			Ok((m, v))
+		}
 	}
 }
 
 fn safe_call<F, U>(f: F) -> Result<U>
-	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+	where F: UnwindSafe + FnOnce() -> U
 {
-	// Substrate uses custom panic hook that terminates process on panic. Disable it for the native call.
-	let hook = ::std::panic::take_hook();
-	let result = ::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into());
-	::std::panic::set_hook(hook);
-	result
+	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
+	let _guard = panic_handler::AbortGuard::new(false);
+	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
 pub fn with_native_environment<F, U>(ext: &mut Externalities<Blake2Hasher>, f: F) -> Result<U>
-where F: ::std::panic::UnwindSafe + FnOnce() -> U
+	where F: UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -110,7 +126,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	fn native_version() -> NativeVersion;
 
 	/// Construct corresponding `NativeExecutor`
-	fn new() -> NativeExecutor<Self> where Self: Sized;
+	fn new(default_heap_pages: Option<u64>) -> NativeExecutor<Self> where Self: Sized;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -123,15 +139,18 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 	fallback: WasmExecutor,
 	/// Native runtime version info.
 	native_version: NativeVersion,
+	/// The default number of 64KB pages to allocate for Wasm execution.
+	default_heap_pages: Option<u64>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance.
-	pub fn new() -> Self {
+	pub fn new(default_heap_pages: Option<u64>) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
 			fallback: WasmExecutor::new(),
 			native_version: D::native_version(),
+			default_heap_pages,
 		}
 	}
 }
@@ -142,6 +161,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 			_dummy: Default::default(),
 			fallback: self.fallback.clone(),
 			native_version: D::native_version(),
+			default_heap_pages: self.default_heap_pages,
 		}
 	}
 }
@@ -154,43 +174,94 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version<E: Externalities<Blake2Hasher>>(
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
 	) -> Option<RuntimeVersion> {
-		fetch_cached_runtime_version(&self.fallback, &mut RUNTIMES_CACHE.lock(), ext, heap_pages, code).ok()?.1.clone()
+		RUNTIMES_CACHE.with(|c|
+			fetch_cached_runtime_version(&self.fallback, &mut c.borrow_mut(), ext, self.default_heap_pages)
+				.ok()?.1.clone()
+		)
 	}
 }
 
 impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call<E: Externalities<Blake2Hasher>>(
+	fn call
+	<
+		E: Externalities<Blake2Hasher>,
+		R:Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+	>(
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
 		method: &str,
 		data: &[u8],
 		use_native: bool,
-	) -> (Result<Vec<u8>>, bool) {
-		let mut c = RUNTIMES_CACHE.lock();
-		let (module, onchain_version) = match fetch_cached_runtime_version(&self.fallback, &mut c, ext, heap_pages, code) {
-			Ok((module, onchain_version)) => (module, onchain_version),
-			Err(_) => return (Err(ErrorKind::InvalidCode(code.into()).into()), false),
-		};
-		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&self.native_version.runtime_version))) {
-			(_, false) => {
-				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", self.native_version.runtime_version, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
-				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>>, bool) {
+		RUNTIMES_CACHE.with(|c| {
+			let mut c = c.borrow_mut();
+			let (module, onchain_version) = match fetch_cached_runtime_version(
+				&self.fallback, &mut c, ext, self.default_heap_pages) {
+					Ok((module, onchain_version)) => (module, onchain_version),
+					Err(e) => return (Err(e), false),
+			};
+			match (
+				use_native,
+				onchain_version
+					.as_ref()
+					.map_or(false, |v| v.can_call_with(&self.native_version.runtime_version)),
+				native_call,
+			) {
+				(_, false, _) => {
+					trace!(
+						target: "executor",
+						"Request for native execution failed (native: {}, chain: {})",
+						self.native_version.runtime_version,
+						onchain_version
+							.as_ref()
+							.map_or_else(||"<None>".into(), |v| format!("{}", v))
+					);
+					(
+						self.fallback
+							.call_in_wasm_module(ext, module, method, data)
+							.map(NativeOrEncoded::Encoded),
+						false
+					)
+				}
+				(false, _, _) => {
+					(
+						self.fallback
+							.call_in_wasm_module(ext, module, method, data)
+							.map(NativeOrEncoded::Encoded),
+						false
+					)
+				}
+				(true, true, Some(call)) => {
+					trace!(
+						target: "executor",
+						"Request for native execution with native call succeeded (native: {}, chain: {}).",
+						self.native_version.runtime_version,
+						onchain_version
+							.as_ref()
+							.map_or_else(||"<None>".into(), |v| format!("{}", v))
+					);
+					(
+						with_native_environment(ext, move || (call)())
+							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Into::into)),
+						true
+					)
+				}
+				_ => {
+					trace!(
+						target: "executor",
+						"Request for native execution succeeded (native: {}, chain: {})",
+						self.native_version.runtime_version,
+						onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v))
+					);
+					(D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded), true)
+				}
 			}
-			(false, _) => {
-				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
-			}
-			_ => {
-				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", self.native_version.runtime_version, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
-				(D::dispatch(ext, method, data), true)
-			}
-		}
+		})
 	}
 }
 
@@ -202,15 +273,13 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
-		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
-		use primitives::Blake2Hasher as _Blake2Hasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			fn native_equivalent() -> &'static [u8] {
 				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-			fn dispatch(ext: &mut $crate::Externalities<_Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+			fn dispatch(ext: &mut $crate::Externalities<$crate::Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
@@ -219,8 +288,8 @@ macro_rules! native_executor_instance {
 				$version()
 			}
 
-			fn new() -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::new()
+			fn new(default_heap_pages: Option<u64>) -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::new(default_heap_pages)
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ use sr_primitives::{
 	transaction_validity::TransactionValidity,
 };
 
-use error;
+use crate::error;
 
 /// The transaction pool logic
 pub struct ChainApi<T, Block> {
@@ -63,11 +63,10 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	type Hash = H256;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
 		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
 	}
 
-	// TODO [toDr] Use proper lbock number type
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
 		Ok(self.client.block_number_from_id(at)?)
 	}
@@ -76,7 +75,9 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 		Ok(self.client.block_hash_from_id(at)?)
 	}
 
-	fn hash(&self, ex: &txpool::ExtrinsicFor<Self>) -> Self::Hash {
-		Blake2Hasher::hash(&ex.encode())
+	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		ex.using_encoded(|x| {
+			(Blake2Hasher::hash(x), x.len())
+		})
 	}
 }

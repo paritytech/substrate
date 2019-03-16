@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,11 +16,12 @@
 
 //! Trie-based state machine backend.
 
+use log::{warn, debug};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::{TrieDB, TrieError, Trie, MemoryDB, delta_trie_root, default_child_trie_root, child_delta_trie_root};
-use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
-use {Backend};
+use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
+use crate::Backend;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -82,7 +83,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		let mut read_overlay = MemoryDB::default();	// TODO: use new for correctness
+		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
@@ -105,6 +106,26 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		}
 	}
 
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+
+		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
+			let mut v = Vec::new();
+			for x in trie.iter()? {
+				let (key, _) = x?;
+				if key.starts_with(prefix) {
+					v.push(key.to_vec());
+				}
+			}
+
+			Ok(v)
+		};
+
+		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -117,7 +138,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match delta_trie_root::<H, _, _, _>(&mut eph, root, delta) {
+			match delta_trie_root::<H, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -148,7 +169,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<H, _, _, _>(storage_key, &mut eph, root.clone(), delta) {
+			match child_delta_trie_root::<H, _, _, _, _>(storage_key, &mut eph, root.clone(), delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -173,7 +194,7 @@ pub mod tests {
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to be more correct
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -210,7 +231,7 @@ pub mod tests {
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
 		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher>::new(
-			MemoryDB::default(),	// TODO: use new() to be more correct
+			MemoryDB::default(),
 			Default::default(),
 		).pairs().is_empty());
 	}

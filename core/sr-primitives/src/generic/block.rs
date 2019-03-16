@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,13 +20,12 @@
 use std::fmt;
 
 #[cfg(feature = "std")]
-use serde::{Deserialize, Deserializer};
-#[cfg(feature = "std")]
-use codec::Decode;
+use serde_derive::Serialize;
+
 use rstd::prelude::*;
-use codec::Codec;
-use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
-use ::Justification;
+use crate::codec::{Codec, Encode, Decode};
+use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
+use crate::Justification;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone)]
@@ -73,17 +72,6 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-// TODO: Remove Deserialize for Block once RPC no longer needs it #1098
-#[cfg(feature = "std")]
-impl<'a, Header: 'a, Extrinsic: 'a + MaybeSerialize> Deserialize<'a> for Block<Header, Extrinsic> where
-	Block<Header, Extrinsic>: Decode,
-{
-	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		let r = <Vec<u8>>::deserialize(de)?;
-		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
-	}
-}
-
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
@@ -117,17 +105,4 @@ pub struct SignedBlock<Block> {
 	pub block: Block,
 	/// Block justification.
 	pub justification: Option<Justification>,
-}
-
-// TODO: Remove Deserialize for SignedBlock once RPC no longer needs it #1098
-#[cfg(feature = "std")]
-impl<'a, Block: BlockT,> Deserialize<'a> for SignedBlock<Block> where
-	Block::Header: 'a,
-	Block::Extrinsic: 'a + Codec + MaybeSerialize,
-	SignedBlock<Block>: Decode,
-{
-	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		let r = <Vec<u8>>::deserialize(de)?;
-		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
-	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,21 +19,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use error;
-use backend::{self, NewBlockState};
-use light;
-use primitives::{AuthorityId, storage::well_known_keys};
+use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem};
-use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
-use blockchain::{self, BlockStatus, HeaderBackend};
+	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
+use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
-use state_machine::InMemoryChangesTrieStorage;
+use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use leaves::LeafSet;
 use trie::MemoryDB;
+
+use crate::error;
+use crate::backend::{self, NewBlockState};
+use crate::light;
+use crate::leaves::LeafSet;
+use crate::blockchain::{self, BlockStatus, HeaderBackend};
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -108,7 +109,7 @@ pub struct Blockchain<Block: BlockT> {
 
 struct Cache<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<AuthorityId>>>>,
+	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<AuthorityIdFor<Block>>>>>,
 }
 
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
@@ -166,60 +167,33 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) -> ::error::Result<()> {
+	) -> crate::error::Result<()> {
 		let number = header.number().clone();
-		let best_tree_route = match new_state.is_best() {
-			false => None,
-			true => {
-				let best_hash = self.storage.read().best_hash;
-				if &best_hash == header.parent_hash() {
-					None
-				} else {
-					let route = ::blockchain::tree_route(
-						self,
-						BlockId::Hash(best_hash),
-						BlockId::Hash(*header.parent_hash()),
-					)?;
-					Some(route)
-				}
-			}
-		};
-
-		let mut storage = self.storage.write();
-
-		storage.leaves.import(hash.clone(), number.clone(), header.parent_hash().clone());
-
 		if new_state.is_best() {
-			if let Some(tree_route) = best_tree_route {
-				// apply retraction and enaction when reorganizing up to parent hash
-				let enacted = tree_route.enacted();
+			self.apply_head(&header)?;
+		}
 
-				for entry in enacted {
-					storage.hashes.insert(entry.number, entry.hash);
-				}
+		{
+			let mut storage = self.storage.write();
+			storage.leaves.import(hash.clone(), number.clone(), header.parent_hash().clone());
+			storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 
-				for entry in tree_route.retracted().iter().skip(enacted.len()) {
-					storage.hashes.remove(&entry.number);
-				}
+			if let NewBlockState::Final = new_state {
+				storage.finalized_hash = hash;
+				storage.finalized_number = number.clone();
 			}
 
-			storage.best_hash = hash.clone();
-			storage.best_number = number.clone();
-			storage.hashes.insert(number, hash.clone());
-		}
-
-		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
-
-		if let NewBlockState::Final = new_state {
-			storage.finalized_hash = hash;
-			storage.finalized_number = number.clone();
-		}
-
-		if number == Zero::zero() {
-			storage.genesis_hash = hash;
+			if number == Zero::zero() {
+				storage.genesis_hash = hash;
+			}
 		}
 
 		Ok(())
+	}
+
+	/// Get total number of blocks.
+	pub fn blocks_count(&self) -> usize {
+		self.storage.read().blocks.len()
 	}
 
 	/// Compare this blockchain with another in-mem blockchain
@@ -240,6 +214,58 @@ impl<Block: BlockT> Blockchain<Block> {
 	/// Insert header CHT root.
 	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
 		self.storage.write().header_cht_roots.insert(block, cht_root);
+	}
+
+	/// Set an existing block as head.
+	pub fn set_head(&self, id: BlockId<Block>) -> error::Result<()> {
+		let header = match self.header(id)? {
+			Some(h) => h,
+			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+		};
+
+		self.apply_head(&header)
+	}
+
+	fn apply_head(&self, header: &<Block as BlockT>::Header) -> error::Result<()> {
+		let hash = header.hash();
+		let number = header.number();
+
+		// Note: this may lock storage, so it must happen before obtaining storage
+		// write lock.
+		let best_tree_route = {
+			let best_hash = self.storage.read().best_hash;
+			if &best_hash == header.parent_hash() {
+				None
+			} else {
+				let route = crate::blockchain::tree_route(
+					self,
+					BlockId::Hash(best_hash),
+					BlockId::Hash(*header.parent_hash()),
+				)?;
+				Some(route)
+			}
+		};
+
+		let mut storage = self.storage.write();
+
+		if let Some(tree_route) = best_tree_route {
+			// apply retraction and enaction when reorganizing up to parent hash
+			let enacted = tree_route.enacted();
+
+			for entry in enacted {
+				storage.hashes.insert(entry.number, entry.hash);
+			}
+
+			for entry in tree_route.retracted().iter().skip(enacted.len()) {
+				storage.hashes.remove(&entry.number);
+			}
+		}
+
+		storage.best_hash = hash.clone();
+		storage.best_number = number.clone();
+		storage.hashes.insert(number.clone(), hash.clone());
+
+		Ok(())
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
@@ -336,6 +362,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
 		Ok(self.storage.read().leaves.hashes())
 	}
+
+	fn children(&self, _parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
+		unimplemented!()
+	}
 }
 
 impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
@@ -368,7 +398,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<()> {
@@ -381,6 +411,10 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 
 		self.write_aux(aux_ops);
 		Ok(())
+	}
+
+	fn set_head(&self, id: BlockId<Block>) -> error::Result<()> {
+		Blockchain::set_head(self, id)
 	}
 
 	fn last_finalized(&self) -> error::Result<Block::Hash> {
@@ -409,11 +443,13 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
-	pending_authorities: Option<Vec<AuthorityId>>,
+	pending_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
-	aux: Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
+	set_head: Option<BlockId<Block>>,
 }
 
 impl<Block, H> backend::BlockImportOperation<Block, H> for BlockImportOperation<Block, H>
@@ -444,11 +480,11 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
 		self.pending_authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, update: <InMemory<H> as StateBackend<H>>::Transaction) -> error::Result<()> {
+	fn update_db_storage(&mut self, update: <InMemory<H> as StateBackend<H>>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
@@ -458,18 +494,12 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out> {
-		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-			return Err(error::ErrorKind::GenesisInvalid.into());
-		}
+	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
+		check_genesis_storage(&top, &children)?;
 
 		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
 
 		for (child_key, child_map) in children {
-			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(error::ErrorKind::GenesisInvalid.into());
-			}
-
 			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
 			transaction.consolidate(update);
 
@@ -485,10 +515,25 @@ where
 		Ok(root)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux = Some(ops.into_iter().collect());
+		self.aux.append(&mut ops.into_iter().collect());
+		Ok(())
+	}
+
+	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()> {
+		Ok(())
+	}
+
+	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+		self.finalized_blocks.push((block, justification));
+		Ok(())
+	}
+
+	fn mark_head(&mut self, block: BlockId<Block>) -> error::Result<()> {
+		assert!(self.pending_block.is_none(), "Only one set block per operation is allowed");
+		self.set_head = Some(block);
 		Ok(())
 	}
 }
@@ -501,7 +546,7 @@ where
 	H::Out: HeapSizeOf + Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
-	changes_trie_storage: InMemoryChangesTrieStorage<H>,
+	changes_trie_storage: ChangesTrieStorage<H>,
 	blockchain: Blockchain<Block>,
 }
 
@@ -515,7 +560,7 @@ where
 	pub fn new() -> Backend<Block, H> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
-			changes_trie_storage: InMemoryChangesTrieStorage::new(),
+			changes_trie_storage: ChangesTrieStorage(InMemoryChangesTrieStorage::new()),
 			blockchain: Blockchain::new(),
 		}
 	}
@@ -551,25 +596,34 @@ where
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = ChangesTrieStorage<H>;
 
-	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
-		let state = match block {
-			BlockId::Hash(ref h) if h.clone() == Default::default() => Self::State::default(),
-			_ => self.state_at(block)?,
-		};
-
+	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
+		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
 			pending_authorities: None,
-			old_state: state,
+			old_state,
 			new_state: None,
 			changes_trie_update: None,
-			aux: None,
+			aux: Default::default(),
+			finalized_blocks: Default::default(),
+			set_head: None,
 		})
 	}
 
+	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()> {
+		operation.old_state = self.state_at(block)?;
+		Ok(())
+	}
+
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
+		if !operation.finalized_blocks.is_empty() {
+			for (block, justification) in operation.finalized_blocks {
+				self.blockchain.finalize_header(block, justification)?;
+			}
+		}
+
 		if let Some(pending_block) = operation.pending_block {
 			let old_state = &operation.old_state;
 			let (header, body, justification) = pending_block.block.into_inner();
@@ -583,7 +637,7 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
 				}
 			}
 
@@ -594,9 +648,14 @@ where
 			}
 		}
 
-		if let Some(ops) = operation.aux {
-			self.blockchain.write_aux(ops);
+		if !operation.aux.is_empty() {
+			self.blockchain.write_aux(operation.aux);
 		}
+
+		if let Some(set_head) = operation.set_head {
+			self.blockchain.set_head(set_head)?;
+		}
+
 		Ok(())
 	}
 
@@ -613,6 +672,13 @@ where
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
+		match block {
+			BlockId::Hash(h) if h == Default::default() => {
+				return Ok(Self::State::default());
+			},
+			_ => {},
+		}
+
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
 			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
@@ -631,14 +697,27 @@ where
 	H::Out: HeapSizeOf + Ord,
 {}
 
+impl<Block, H> backend::RemoteBackend<Block, H> for Backend<Block, H>
+where
+	Block: BlockT,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
+{
+	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
+		self.blockchain.expect_block_number_from_id(block)
+			.map(|num| num.is_zero())
+			.unwrap_or(false)
+	}
+}
+
 impl<Block: BlockT> Cache<Block> {
-	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityId>>) {
+	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityIdFor<Block>>>) {
 		self.authorities_at.write().insert(at, authorities);
 	}
 }
 
 impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>> {
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>> {
 		let hash = match block {
 			BlockId::Hash(hash) => hash,
 			BlockId::Number(number) => self.storage.read().hashes.get(&number).cloned()?,
@@ -648,13 +727,46 @@ impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
 	}
 }
 
+/// Prunable in-memory changes trie storage.
+pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>) where H::Out: HeapSizeOf;
+impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn oldest_changes_trie_block(&self, _config: &ChangesTrieConfiguration, _best_finalized: u64) -> u64 {
+		0
+	}
+}
+
+impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn root(&self, anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+		self.0.root(anchor, block)
+	}
+}
+
+impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn get(&self, key: &H::Out) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key)
+	}
+}
+
 /// Insert authorities entry into in-memory blockchain cache. Extracted as a separate function to use it in tests.
 pub fn cache_authorities_at<Block: BlockT>(
 	blockchain: &Blockchain<Block>,
 	at: Block::Hash,
-	authorities: Option<Vec<AuthorityId>>
+	authorities: Option<Vec<AuthorityIdFor<Block>>>
 ) {
 	blockchain.cache.insert(at, authorities);
+}
+
+/// Check that genesis storage is valid.
+pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> error::Result<()> {
+	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+		return Err(error::ErrorKind::GenesisInvalid.into());
+	}
+
+	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
+		return Err(error::ErrorKind::GenesisInvalid.into());
+	}
+
+	Ok(())
 }
 
 #[cfg(test)]

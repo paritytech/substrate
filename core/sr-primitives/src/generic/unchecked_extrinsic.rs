@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,8 +20,8 @@
 use std::fmt;
 
 use rstd::prelude::*;
-use codec::{Decode, Encode, Codec, Input, HasCompact};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
+use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -92,8 +92,8 @@ where
 			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);
 				let signed = context.lookup(signed)?;
-				if !::verify_encoded_lazy(&signature, &payload, &signed) {
-					return Err("bad signature in extrinsic")
+				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
+					return Err(crate::BAD_SIGNATURE)
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
@@ -152,11 +152,10 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+		self.using_encoded(|bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
-/// TODO: use derive when possible.
 #[cfg(feature = "std")]
 impl<Address, Index, Signature, Call> fmt::Debug
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
@@ -173,7 +172,7 @@ where
 
 #[cfg(test)]
 mod test {
-	use codec::{Decode, Encode};
+	use crate::codec::{Decode, Encode};
 	use super::UncheckedExtrinsic;
 
 	#[test]
@@ -185,5 +184,15 @@ mod test {
 		assert_eq!(decoded, ex);
 		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(as_vec.encode(), encoded);
+	}
+
+
+	#[test]
+	#[cfg(feature = "std")]
+	fn serialization_of_unchecked_extrinsics() {
+		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32>;
+		let ex = Extrinsic::new_unsigned(42);
+
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x14002a000000\"");
 	}
 }

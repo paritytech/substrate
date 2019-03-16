@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,33 +14,48 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use libp2p::{self, PeerId, Transport, mplex, secio, yamux};
-use libp2p::core::{either, upgrade, transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::transport_timeout::TransportTimeout;
-use std::time::Duration;
-use std::usize;
+use futures::prelude::*;
+use libp2p::{
+	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
+	mplex, secio, yamux, tcp, dns, websocket, bandwidth
+};
+use libp2p::core::{self, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use std::{io, sync::Arc, time::Duration, usize};
+
+pub use self::bandwidth::BandwidthSinks;
 
 /// Builds the transport that serves as a common ground for all connections.
+///
+/// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
+/// the connections spawned with this transport.
 pub fn build_transport(
 	local_private_key: secio::SecioKeyPair
-) -> Boxed<(PeerId, StreamMuxerBox)> {
+) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
 
-	let base = libp2p::CommonTransport::new()
+	let transport = tcp::TcpConfig::new();
+	let transport = websocket::WsConfig::new(transport.clone()).or_transport(transport);
+	let transport = dns::DnsConfig::new(transport);
+	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
+
+	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
+	let transport = transport
 		.with_upgrade(secio::SecioConfig::new(local_private_key))
 		.and_then(move |out, endpoint| {
-			let upgrade = upgrade::or(
-				upgrade::map(yamux::Config::default(), either::EitherOutput::First),
-				upgrade::map(mplex_config, either::EitherOutput::Second),
-			);
 			let peer_id = out.remote_key.into_peer_id();
-			let upgrade = upgrade::map(upgrade, move |muxer| (peer_id, muxer));
-			upgrade::apply(out.stream, upgrade, endpoint.into())
-		})
-		.map(|(id, muxer), _| (id, StreamMuxerBox::new(muxer)));
+			let peer_id2 = peer_id.clone();
+			let upgrade = core::upgrade::SelectUpgrade::new(yamux::Config::default(), mplex_config)
+				.map_inbound(move |muxer| (peer_id, muxer))
+				.map_outbound(move |muxer| (peer_id2, muxer));
 
-	TransportTimeout::new(base, Duration::from_secs(20))
-		.boxed()
+			core::upgrade::apply(out.stream, upgrade, endpoint)
+				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
+		})
+		.with_timeout(Duration::from_secs(20))
+		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+		.boxed();
+
+	(transport, sinks)
 }

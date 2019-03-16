@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@
 use consensus::error::{Error as CommonError, ErrorKind as CommonErrorKind};
 use primitives::AuthorityId;
 use client;
+use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+	impl_extract_backtrace, impl_error_chain_kind};
 
 error_chain! {
 	links {

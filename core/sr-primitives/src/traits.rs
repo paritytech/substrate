@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,17 +17,18 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result};
+use rstd::{self, result, marker::PhantomData};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
-use substrate_primitives;
-use substrate_primitives::Blake2Hasher;
-use codec::{Codec, Encode, HasCompact};
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
+use substrate_primitives::{self, Hasher, Blake2Hasher};
+use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{
-	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+pub use num_traits::{
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, Saturating
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -36,6 +37,9 @@ use rstd::ops::{
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
+	/// Get a reference to the underlying value.
+	///
+	/// This will compute the value if the function is invoked for the first time.
 	fn get(&mut self) -> &T;
 }
 
@@ -51,10 +55,26 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+impl Verify for substrate_primitives::ed25519::Signature {
+	type Signer = substrate_primitives::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
+impl Verify for substrate_primitives::sr25519::Signature {
+	type Signer = substrate_primitives::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
 	type Success;
-	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, &'static str>;
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -65,6 +85,35 @@ pub trait Lookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+/// Means of changing one type into another in a manner dependent on the source type.
+/// This variant is different to `Lookup` in that it doesn't (can cannot) require any
+/// context.
+pub trait StaticLookup {
+	/// Type to lookup from.
+	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	/// Type to lookup into.
+	type Target;
+	/// Attempt a lookup.
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	/// Convert from Target back to Source.
+	fn unlookup(t: Self::Target) -> Self::Source;
+}
+
+/// A lookup implementation returning the input value.
+#[derive(Default)]
+pub struct IdentityLookup<T>(PhantomData<T>);
+impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+	type Source = T;
+	type Target = T;
+	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+	fn unlookup(x: T) -> T { x }
+}
+impl<T> Lookup for IdentityLookup<T> {
+	type Source = T;
+	type Target = T;
+	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
 }
 
 /// Get the "current" block number.
@@ -93,21 +142,20 @@ pub trait BlockNumberToHash {
 	}
 }
 
-/// Simple payment making trait, operating on a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return true iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
 	fn convert(a: A) -> B;
+}
+
+impl<A, B: Default> Convert<A, B> for () {
+	fn convert(_: A) -> B { Default::default() }
+}
+
+/// A structure that performs identity conversion.
+pub struct Identity;
+impl<T> Convert<T, T> for Identity {
+	fn convert(a: T) -> T { a }
 }
 
 /// Simple trait similar to `Into`, except that it can be used to convert numerics between each
@@ -116,7 +164,7 @@ pub trait As<T> {
 	/// Convert forward (ala `Into::into`).
 	fn as_(self) -> T;
 	/// Convert backward (ala `From::from`).
-	fn sa(T) -> Self;
+	fn sa(_: T) -> Self;
 }
 
 macro_rules! impl_numerics {
@@ -137,21 +185,7 @@ macro_rules! impl_numerics {
 
 impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
-pub struct Identity;
-impl<T> Convert<T, T> for Identity {
-	fn convert(a: T) -> T { a }
-}
-impl<T> Convert<T, ()> for () {
-	fn convert(_: T) -> () { () }
-}
-
-pub trait RefInto<T> {
-	fn ref_into(&self) -> &T;
-}
-impl<T> RefInto<T> for T {
-	fn ref_into(&self) -> &T { &self }
-}
-
+/// A meta trait for arithmetic.
 pub trait SimpleArithmetic:
 	Zero + One + IntegerSquareRoot + As<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
@@ -166,7 +200,8 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord +
+	Saturating +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 {}
 impl<T:
@@ -183,7 +218,8 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord +
+	Saturating +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 > SimpleArithmetic for T {}
 
@@ -202,6 +238,7 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 	fn clear() -> Self { Default::default() }
 }
 
+/// A meta trait for all bit ops.
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
@@ -224,11 +261,25 @@ pub trait OnFinalise<BlockNumber> {
 
 impl<N> OnFinalise<N> for () {}
 
+/// The block initialisation trait. Implementing this lets you express what should happen
+/// for your module when the block is beginning (right before the first extrinsic is executed).
+pub trait OnInitialise<BlockNumber> {
+	/// The block is being initialised. Implement to have something happen.
+	fn on_initialise(_n: BlockNumber) {}
+}
+
+impl<N> OnInitialise<N> for () {}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
 			fn on_finalise(n: Number) {
 				$one::on_finalise(n);
+			}
+		}
+		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
+			fn on_initialise(n: Number) {
+				$one::on_initialise(n);
 			}
 		}
 	};
@@ -243,6 +294,16 @@ macro_rules! tuple_impl {
 				$($rest::on_finalise(n);)+
 			}
 		}
+		impl<
+			Number: Copy,
+			$first: OnInitialise<Number>,
+			$($rest: OnInitialise<Number>),+
+		> OnInitialise<Number> for ($first, $($rest),+) {
+			fn on_initialise(n: Number) {
+				$first::on_initialise(n);
+				$($rest::on_initialise(n);)+
+			}
+		}
 		tuple_impl!($($rest,)+);
 	}
 }
@@ -254,7 +315,10 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+
+	/// The associated hash_db Hasher type.
+	type Hasher: Hasher<Out=Self::Output>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -294,6 +358,7 @@ pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
+	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
@@ -323,6 +388,7 @@ impl Hash for BlakeTwo256 {
 
 /// Something that can be checked for equality and printed out to a debug channel if bad.
 pub trait CheckEqual {
+	/// Perform the equality check.
 	fn check_equal(&self, other: &Self);
 }
 
@@ -363,66 +429,80 @@ impl<I> CheckEqual for I where I: DigestItem {
 	}
 }
 
+/// A type that implements Serialize and Debug when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + Debug> MaybeSerializeDebugButNotDeserialize for T {}
 
+/// A type that implements Serialize and Debug when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebugButNotDeserialize {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebugButNotDeserialize for T {}
 
+/// A type that implements Serialize when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeSerialize: Serialize {}
 #[cfg(feature = "std")]
 impl<T: Serialize> MaybeSerialize for T {}
 
+/// A type that implements Serialize when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerialize {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerialize for T {}
 
+/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
 
+/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebug for T {}
 
+/// A type that implements Debug when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeDebug: Debug {}
 #[cfg(feature = "std")]
 impl<T: Debug> MaybeDebug for T {}
 
+/// A type that implements Debug when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDebug for T {}
 
+/// A type that implements Display when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeDisplay: Display {}
 #[cfg(feature = "std")]
 impl<T: Display> MaybeDisplay for T {}
 
+/// A type that implements Display when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
+/// A type that implements Hash when in std environment.
 #[cfg(feature = "std")]
-pub trait MaybeDecode: ::codec::Decode {}
+pub trait MaybeHash: ::rstd::hash::Hash {}
 #[cfg(feature = "std")]
-impl<T: ::codec::Decode> MaybeDecode for T {}
+impl<T: ::rstd::hash::Hash> MaybeHash for T {}
 
+/// A type that implements Hash when in std environment.
 #[cfg(not(feature = "std"))]
-pub trait MaybeDecode {}
+pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
-impl<T> MaybeDecode for T {}
+impl<T> MaybeHash for T {}
 
+
+/// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
@@ -431,12 +511,17 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+	/// Header number.
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	/// Header hash type
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Digest<Hash = Self::Hash>;
+	/// Digest type
+	type Digest: Digest<Hash = Self::Hash> + Codec;
 
+	/// Creates new header.
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -445,23 +530,34 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 		digest: Self::Digest
 	) -> Self;
 
+	/// Returns a reference to the header number.
 	fn number(&self) -> &Self::Number;
-	fn set_number(&mut self, Self::Number);
+	/// Sets the header number.
+	fn set_number(&mut self, number: Self::Number);
 
+	/// Returns a reference to the extrinsics root.
 	fn extrinsics_root(&self) -> &Self::Hash;
-	fn set_extrinsics_root(&mut self, Self::Hash);
+	/// Sets the extrinsic root.
+	fn set_extrinsics_root(&mut self, root: Self::Hash);
 
+	/// Returns a reference to the state root.
 	fn state_root(&self) -> &Self::Hash;
-	fn set_state_root(&mut self, Self::Hash);
+	/// Sets the state root.
+	fn set_state_root(&mut self, root: Self::Hash);
 
+	/// Returns a reference to the parent hash.
 	fn parent_hash(&self) -> &Self::Hash;
-	fn set_parent_hash(&mut self, Self::Hash);
+	/// Sets the parent hash.
+	fn set_parent_hash(&mut self, hash: Self::Hash);
 
+	/// Returns a reference to the digest.
 	fn digest(&self) -> &Self::Digest;
 	/// Get a mutable reference to the digest.
 	fn digest_mut(&mut self) -> &mut Self::Digest;
-	fn set_digest(&mut self, Self::Digest);
+	/// Sets the digest.
+	fn set_digest(&mut self, digest: Self::Digest);
 
+	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
 		<Self::Hashing as Hash>::hash_of(self)
 	}
@@ -471,15 +567,23 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+	/// Type of extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
+	/// Block hash type.
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
+	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
+	/// Returns a reference to the list of extrinsics.
 	fn extrinsics(&self) -> &[Self::Extrinsic];
+	/// Split the block into header and list of extrinsics.
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
+	/// Creates new block from header and extrinsics.
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
+	/// Returns the hash of the block.
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
@@ -500,6 +604,8 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+/// Extract the authority ID type for a block.
+pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -534,24 +640,32 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
-/// enact a piece of extrinsic information by marshalling and dispatching to a named functioon
+/// enact a piece of extrinsic information by marshalling and dispatching to a named function
 /// call.
 ///
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
+	/// Id of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
+	/// Index allowing to disambiguate other `Applyable`s from the same `AccountId`.
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
+	/// Function call.
 	type Call: Member;
+	/// Returns a reference to the index if any.
 	fn index(&self) -> Option<&Self::Index>;
+	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
+	/// Deconstructs into function call and sender.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
 pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
-	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
+	/// Hash of the items.
+	type Hash: Member;
+	/// Digest item type.
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -562,7 +676,7 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
-	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+	fn log<T: ?Sized, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
 		self.logs().iter()
 			.filter_map(predicate)
 			.next()
@@ -574,34 +688,16 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
-	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
-	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
+	/// `ChangesTrieRoot` payload.
+	type Hash: Member;
+	/// `AuthorityChange` payload.
+	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
 
 	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
-}
-
-/// Something that provides an inherent for a runtime.
-pub trait ProvideInherent {
-	/// The inherent that is provided.
-	type Inherent: Encode + MaybeDecode;
-	/// The call for setting the inherent.
-	type Call: Encode + MaybeDecode;
-
-	/// Create the inherent extrinsics.
-	///
-	/// # Return
-	///
-	/// Returns a vector with tuples containing the index for the extrinsic and the extrinsic itself.
-	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)>;
-
-	/// Check that the given inherent is valid.
-	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> Result<(), super::CheckInherentError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

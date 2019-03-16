@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,12 +16,11 @@
 
 //! Substrate blockchain trait
 
-use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
 
-use error::{ErrorKind, Result};
+use crate::error::{ErrorKind, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
@@ -85,24 +84,15 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// in other words, that have no children, are chain heads.
 	/// Results must be ordered best (longest, heighest) chain first.
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
+
+	/// Return hashes of all blocks that are children of the block with `parent_hash`.
+	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 }
 
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>>;
-}
-
-/// Block import outcome
-pub enum ImportResult<E> {
-	/// Imported successfully.
-	Imported,
-	/// Block already exists, skippped.
-	AlreadyInChain,
-	/// Unknown parent.
-	UnknownParent,
-	/// Other errror.
-	Err(E),
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>>;
 }
 
 /// Blockchain info

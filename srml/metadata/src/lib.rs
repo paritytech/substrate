@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,25 +22,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-extern crate sr_std as rstd;
-extern crate substrate_primitives as primitives;
-
 #[cfg(feature = "std")]
-extern crate serde;
+use serde_derive::Serialize;
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-use codec::{Encode, Output};
-#[cfg(feature = "std")]
-use codec::{Decode, Input};
+use parity_codec::{Decode, Input};
+use parity_codec::{Encode, Output};
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
+
+/// Curent prefix of metadata
+pub const META_RESERVED: u32 = 0x6174656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
 /// So, if someone tries to decode this stuff on `no_std`, they will get a compilation error.
@@ -110,8 +103,8 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 		O: serde::Serialize + 'static,
 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+		where
+				S: serde::Serializer,
 	{
 		match self {
 			DecodeDifferent::Encode(b) => b.serialize(serializer),
@@ -120,34 +113,17 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 	}
 }
 
-type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
+pub type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
 
 #[cfg(feature = "std")]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[cfg(not(feature = "std"))]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 
-/// All the metadata about a module.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct ModuleMetadata {
-	pub name: DecodeDifferentStr,
-	pub call: CallMetadata,
-}
-
-/// All the metadata about a call.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct CallMetadata {
-	pub name: DecodeDifferentStr,
-	pub functions: DecodeDifferentArray<FunctionMetadata>,
-}
-
 /// All the metadata about a function.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionMetadata {
-	pub id: u16,
 	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<FunctionArgumentMetadata>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
@@ -187,8 +163,8 @@ impl<E: Encode + ::std::fmt::Debug> std::fmt::Debug for FnEncode<E> {
 #[cfg(feature = "std")]
 impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+		where
+				S: serde::Serializer,
 	{
 		self.0().serialize(serializer)
 	}
@@ -218,7 +194,6 @@ pub struct EventMetadata {
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct StorageMetadata {
-	pub prefix: DecodeDifferentStr,
 	pub functions: DecodeDifferentArray<StorageFunctionMetadata>,
 }
 
@@ -229,7 +204,53 @@ pub struct StorageFunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
+	pub default: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+}
+
+/// A technical trait to store lazy initiated vec value as static dyn pointer.
+pub trait DefaultByte {
+	fn default_byte(&self) -> Vec<u8>;
+}
+
+/// Wrapper over dyn pointer for accessing a cached once byte value.
+#[derive(Clone)]
+pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
+
+/// Decode different for static lazy initiated byte value.
+pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
+
+impl Encode for DefaultByteGetter {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.0.default_byte().encode_to(dest)
+	}
+}
+
+impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
+	fn eq(&self, other: &DefaultByteGetter) -> bool {
+		let left = self.0.default_byte();
+		let right = other.0.default_byte();
+		left.eq(&right)
+	}
+}
+
+impl Eq for DefaultByteGetter { }
+
+#[cfg(feature = "std")]
+impl serde::Serialize for DefaultByteGetter {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+				S: serde::Serializer,
+	{
+		self.0.default_byte().serialize(serializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for DefaultByteGetter {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.0.default_byte().fmt(f)
+	}
 }
 
 /// A storage function type.
@@ -264,30 +285,71 @@ pub struct OuterDispatchMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct OuterDispatchCall {
 	pub name: DecodeDifferentStr,
-	pub prefix: DecodeDifferentStr,
 	pub index: u16,
+}
+
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+/// Metadata prefixed by a u32 for reserved usage
+pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
+
+/// The metadata of a runtime.
+/// The version ID encoded/decoded through
+/// the enum nature of `RuntimeMetadata`.
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub enum RuntimeMetadata {
+	/// Unused; enum filler.
+	V0(RuntimeMetadataDeprecated),
+	/// Version 1 for runtime metadata.
+	V1(RuntimeMetadataV1),
+}
+
+/// Enum that should fail.
+#[derive(Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+pub enum RuntimeMetadataDeprecated { }
+
+impl Encode for RuntimeMetadataDeprecated {
+	fn encode_to<W: Output>(&self, _dest: &mut W) {
+	}
+}
+
+#[cfg(feature = "std")]
+impl Decode for RuntimeMetadataDeprecated {
+	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
+		unimplemented!()
+	}
+}
+
+/// The metadata of a runtime version 1.
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct RuntimeMetadataV1 {
+	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeModuleMetadata {
-	pub prefix: DecodeDifferentStr,
-	pub module: DecodeDifferent<FnEncode<ModuleMetadata>, ModuleMetadata>,
-	pub storage: Option<DecodeDifferent<FnEncode<StorageMetadata>, StorageMetadata>>,
+pub struct ModuleMetadata {
+	pub name: DecodeDifferentStr,
+	pub prefix: DecodeDifferent<FnEncode<&'static str>, StringBuf>,
+	pub storage: ODFnA<StorageFunctionMetadata>,
+	pub calls: ODFnA<FunctionMetadata>,
+	pub event: ODFnA<EventMetadata>,
 }
 
-/// The metadata of a runtime.
-#[derive(Eq, Encode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadata {
-	pub outer_event: OuterEventMetadata,
-	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
-	pub outer_dispatch: OuterDispatchMetadata,
-}
+type ODFnA<T> = Option<DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>>;
 
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {
 		primitives::OpaqueMetadata::new(self.encode())
+	}
+}
+
+impl Into<RuntimeMetadataPrefixed> for RuntimeMetadata {
+	fn into(self) -> RuntimeMetadataPrefixed {
+		RuntimeMetadataPrefixed(META_RESERVED, self)
 	}
 }

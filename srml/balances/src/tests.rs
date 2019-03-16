@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,66 +21,135 @@
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System};
 use runtime_io::with_externalities;
+use srml_support::{
+	assert_noop, assert_ok, assert_err,
+	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons, Currency, TransferAsset}
+};
+
+const ID_1: LockIdentifier = *b"1       ";
+const ID_2: LockIdentifier = *b"2       ";
+const ID_3: LockIdentifier = *b"3       ";
 
 #[test]
-fn reward_should_work() {
+fn basic_locking_should_work() {
 	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
-		assert_eq!(Balances::total_balance(&1), 10);
-		assert_ok!(Balances::reward(&1, 10));
-		assert_eq!(Balances::total_balance(&1), 20);
-		assert_eq!(<TotalIssuance<Runtime>>::get(), 110);
+		assert_eq!(Balances::free_balance(&1), 10);
+		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 5), "account liquidity restrictions prevent withdrawal");
 	});
 }
 
 #[test]
-fn indexing_lookup_should_work() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(10)
-			.monied(true)
-			.build(),
-		|| {
-			assert_eq!(Balances::lookup_index(0), Some(1));
-			assert_eq!(Balances::lookup_index(1), Some(2));
-			assert_eq!(Balances::lookup_index(2), Some(3));
-			assert_eq!(Balances::lookup_index(3), Some(4));
-			assert_eq!(Balances::lookup_index(4), None);
-		},
-	);
+fn partial_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
 }
 
 #[test]
-fn default_indexing_on_new_accounts_should_work() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(10)
-			.monied(true)
-			.build(),
-		|| {
-			assert_eq!(Balances::lookup_index(4), None);
-			assert_ok!(Balances::transfer(Some(1).into(), 5.into(), 10.into()));
-			assert_eq!(Balances::lookup_index(4), Some(5));
-		},
-	);
+fn lock_removal_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+		Balances::remove_lock(ID_1, &1);
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
 }
 
 #[test]
-fn default_indexing_on_new_accounts_should_work2() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(10)
-			.creation_fee(50)
-			.monied(true)
-			.build(),
-		|| {
-			assert_eq!(Balances::lookup_index(4), None);
-			// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 10
-			assert_ok!(Balances::transfer(Some(1).into(), 5.into(), 10.into()));
-			assert_eq!(Balances::lookup_index(4), Some(5));
+fn lock_replacement_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
 
-			assert_eq!(Balances::free_balance(&1), 256 * 10 - 10 - 50); // 10 is value, 50 is creation_free
-		},
-	);
+#[test]
+fn double_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_2, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn combination_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, u64::max_value(), 0, WithdrawReasons::none());
+		Balances::set_lock(ID_2, &1, 0, u64::max_value(), WithdrawReasons::none());
+		Balances::set_lock(ID_3, &1, 0, 0, WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn lock_value_extension_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 3), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn lock_reasons_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
+		assert_ok!(<Balances as Currency<_>>::reserve(&1, 1));
+		assert_ok!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment));
+
+		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+		assert_noop!(<Balances as Currency<_>>::reserve(&1, 1), "account liquidity restrictions prevent withdrawal");
+		assert_ok!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment));
+
+		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::reserve(&1, 1));
+		assert_noop!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn lock_block_number_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
+
+		System::set_block_number(2);
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn lock_block_number_extension_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		System::set_block_number(2);
+		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 3), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn lock_reasons_extension_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+	});
 }
 
 #[test]
@@ -92,16 +161,62 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 			.monied(true)
 			.build(),
 		|| {
-			assert_eq!(Balances::lookup_index(4), None);
+			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 			// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 9, not satisfies for ext_deposit
 			assert_noop!(
-				Balances::transfer(Some(1).into(), 5.into(), 9.into()),
+				Balances::transfer(Some(1).into(), 5, 9),
 				"value too low to create account"
 			);
-			assert_eq!(Balances::lookup_index(4), None); // account 5 should not exist
+			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 			assert_eq!(Balances::free_balance(&1), 256 * 10);
 		},
 	);
+}
+
+#[test]
+fn reserved_balance_should_prevent_reclaim_count() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(256 * 1)
+			.monied(true)
+			.build(),
+		|| {
+			System::inc_account_nonce(&2);
+			assert_eq!(Balances::is_dead_account(&2), false);
+			assert_eq!(Balances::is_dead_account(&5), true);
+			assert_eq!(Balances::total_balance(&2), 256 * 20);
+
+			assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
+			assert_eq!(Balances::free_balance(&2), 0); // "free" account deleted."
+			assert_eq!(Balances::total_balance(&2), 256 * 19 + 1); // reserve still exists.
+			assert_eq!(Balances::is_dead_account(&2), false);
+			assert_eq!(System::account_nonce(&2), 1);
+
+			assert_ok!(Balances::transfer(Some(4).into(), 5, 256 * 1 + 0x69)); // account 4 tries to take index 1 for account 5.
+			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
+			assert_eq!(Balances::is_dead_account(&5), false);
+
+			assert_eq!(Balances::slash(&2, 256 * 18 + 2), None); // account 2 gets slashed
+			assert_eq!(Balances::total_balance(&2), 0); // "reserve" account reduced to 255 (below ED) so account deleted
+			assert_eq!(System::account_nonce(&2), 0);	// nonce zero
+			assert_eq!(Balances::is_dead_account(&2), true);
+
+			assert_ok!(Balances::transfer(Some(4).into(), 6, 256 * 1 + 0x69)); // account 4 tries to take index 1 again for account 6.
+			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
+			assert_eq!(Balances::is_dead_account(&6), false);
+		},
+	);
+}
+
+
+#[test]
+fn reward_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		assert_eq!(Balances::total_balance(&1), 10);
+		assert_ok!(Balances::reward(&1, 10));
+		assert_eq!(Balances::total_balance(&1), 20);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 110);
+	});
 }
 
 #[test]
@@ -116,7 +231,7 @@ fn dust_account_removal_should_work() {
 			assert_eq!(System::account_nonce(&2), 1);
 			assert_eq!(Balances::total_balance(&2), 256 * 20);
 
-			assert_ok!(Balances::transfer(Some(2).into(), 5.into(), (256 * 10 + 1).into())); // index 1 (account 2) becomes zombie
+			assert_ok!(Balances::transfer(Some(2).into(), 5, 256 * 10 + 1)); // index 1 (account 2) becomes zombie
 			assert_eq!(Balances::total_balance(&2), 0);
 			assert_eq!(Balances::total_balance(&5), 256 * 10 + 1);
 			assert_eq!(System::account_nonce(&2), 0);
@@ -136,122 +251,10 @@ fn dust_account_removal_should_work2() {
 			System::inc_account_nonce(&2);
 			assert_eq!(System::account_nonce(&2), 1);
 			assert_eq!(Balances::total_balance(&2), 256 * 20);
-			assert_ok!(Balances::transfer(Some(2).into(), 5.into(), (256 * 10).into())); // index 1 (account 2) becomes zombie for 256*10 + 50(fee) < 256 * 10 (ext_deposit)
+			assert_ok!(Balances::transfer(Some(2).into(), 5, 256 * 10)); // index 1 (account 2) becomes zombie for 256*10 + 50(fee) < 256 * 10 (ext_deposit)
 			assert_eq!(Balances::total_balance(&2), 0);
 			assert_eq!(Balances::total_balance(&5), 256 * 10);
 			assert_eq!(System::account_nonce(&2), 0);
-		},
-	);
-}
-
-#[test]
-fn reclaim_indexing_on_new_accounts_should_work() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(256 * 1)
-			.monied(true)
-			.build(),
-		|| {
-			assert_eq!(Balances::lookup_index(1), Some(2));
-			assert_eq!(Balances::lookup_index(4), None);
-			assert_eq!(Balances::total_balance(&2), 256 * 20);
-
-			assert_ok!(Balances::transfer(Some(2).into(), 5.into(), (256 * 20).into())); // account 2 becomes zombie freeing index 1 for reclaim)
-			assert_eq!(Balances::total_balance(&2), 0);
-
-			assert_ok!(Balances::transfer(Some(5).into(), 6.into(), (256 * 1 + 0x69).into())); // account 6 takes index 1.
-			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
-			assert_eq!(Balances::lookup_index(1), Some(6));
-		},
-	);
-}
-
-#[test]
-fn reclaim_indexing_on_new_accounts_should_work2() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(256 * 1)
-			.monied(true)
-			.build(),
-		|| {
-			assert_eq!(Balances::lookup_index(1), Some(2));
-			assert_eq!(Balances::lookup_index(4), None);
-			assert_eq!(Balances::total_balance(&2), 256 * 20);
-
-			assert_ok!(Balances::transfer(Some(2).into(), 5.into(), (256 * 20 - 50).into())); // account 2 becomes zombie freeing index 1 for reclaim) 50 is creation fee
-			assert_eq!(Balances::total_balance(&2), 0);
-
-			assert_ok!(Balances::transfer(Some(5).into(), 6.into(), (256 * 1 + 0x69).into())); // account 6 takes index 1.
-			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
-			assert_eq!(Balances::lookup_index(1), Some(6));
-		},
-	);
-}
-
-#[test]
-fn reserved_balance_should_prevent_reclaim_count() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(256 * 1)
-			.monied(true)
-			.build(),
-		|| {
-			System::inc_account_nonce(&2);
-			assert_eq!(Balances::lookup_index(1), Some(2));
-			assert_eq!(Balances::lookup_index(4), None);
-			assert_eq!(Balances::total_balance(&2), 256 * 20);
-
-			assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
-			assert_eq!(Balances::free_balance(&2), 0); // "free" account deleted."
-			assert_eq!(Balances::total_balance(&2), 256 * 19 + 1); // reserve still exists.
-			assert_eq!(System::account_nonce(&2), 1);
-
-			assert_ok!(Balances::transfer(Some(4).into(), 5.into(), (256 * 1 + 0x69).into())); // account 4 tries to take index 1 for account 5.
-			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
-			assert_eq!(Balances::lookup_index(1), Some(2)); // but fails.
-			assert_eq!(System::account_nonce(&2), 1);
-
-			assert_eq!(Balances::slash(&2, 256 * 18 + 2), None); // account 2 gets slashed
-			assert_eq!(Balances::total_balance(&2), 0); // "free" account deleted."
-			assert_eq!(System::account_nonce(&2), 0);
-
-			assert_ok!(Balances::transfer(Some(4).into(), 6.into(), (256 * 1 + 0x69).into())); // account 4 tries to take index 1 again for account 6.
-			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
-			assert_eq!(Balances::lookup_index(1), Some(6)); // and succeeds.
-		},
-	);
-}
-
-#[test]
-fn reserved_balance_should_prevent_reclaim_count2() {
-	with_externalities(
-		&mut ExtBuilder::default()
-			.existential_deposit(256 * 1)
-			.monied(true)
-			.build(),
-		|| {
-			System::inc_account_nonce(&2);
-			assert_eq!(Balances::lookup_index(1), Some(2));
-			assert_eq!(Balances::lookup_index(4), None);
-			assert_eq!(Balances::total_balance(&2), 256 * 20);
-
-			assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
-			assert_eq!(Balances::free_balance(&2), 0); // "free" account deleted."
-			assert_eq!(Balances::total_balance(&2), 256 * 19 + 1); // reserve still exists.
-			assert_eq!(System::account_nonce(&2), 1);
-
-			assert_ok!(Balances::transfer(Some(4).into(), 5.into(), (256 * 1 + 0x69).into())); // account 4 tries to take index 1 for account 5.
-			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
-			assert_eq!(Balances::lookup_index(1), Some(2)); // but fails.
-			assert_eq!(System::account_nonce(&2), 1);
-
-			assert_eq!(Balances::slash(&2, 256 * 18 + 2), None); // account 2 gets slashed
-			assert_eq!(Balances::total_balance(&2), 0); // "free" account deleted."
-			assert_eq!(System::account_nonce(&2), 0);
-
-			assert_ok!(Balances::transfer(Some(4).into(), 6.into(), (256 * 1 + 0x69).into())); // account 4 tries to take index 1 again for account 6.
-			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
-			assert_eq!(Balances::lookup_index(1), Some(6)); // and succeeds.
 		},
 	);
 }
@@ -274,20 +277,9 @@ fn balance_transfer_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
 		Balances::increase_total_stake_by(111);
-		assert_ok!(Balances::transfer(Some(1).into(), 2.into(), 69.into()));
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
-	});
-}
-
-#[test]
-fn balance_reduction_works() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
-		Balances::increase_total_stake_by(111);
-		assert_ok!(Balances::decrease_free_balance(&1, 69).map(|_| ()));
-		assert_eq!(Balances::total_balance(&1), 42);
-		assert_noop!(Balances::decrease_free_balance(&1, 69).map(|_| ()), "account has too few funds");
 	});
 }
 
@@ -313,7 +305,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
-		assert_noop!(Balances::transfer(Some(1).into(), 2.into(), 69.into()), "balance too low to send value");
+		assert_noop!(Balances::transfer(Some(1).into(), 2, 69), "balance too low to send value");
 	});
 }
 
@@ -444,7 +436,7 @@ fn transferring_too_high_value_should_not_panic() {
 		<FreeBalance<Runtime>>::insert(2, 1);
 
 		assert_err!(
-			Balances::transfer(Some(1).into(), 2.into(), u64::max_value().into()),
+			Balances::transfer(Some(1).into(), 2, u64::max_value()),
 			"destination balance too high to receive value"
 		);
 
@@ -472,7 +464,7 @@ fn account_removal_on_free_too_low() {
 			// Transfer funds from account 1 of such amount that after this transfer
 			// the balance of account 1 will be below the exsistential threshold.
 			// This should lead to the removal of all balance of this account.
-			assert_ok!(Balances::transfer(Some(1).into(), 2.into(), 20.into()));
+			assert_ok!(Balances::transfer(Some(1).into(), 2, 20));
 
 			// Verify free balance removal of account 1.
 			assert_eq!(Balances::free_balance(&1), 0);
@@ -492,9 +484,113 @@ fn transfer_overflow_isnt_exploitable() {
 			let evil_value = u64::max_value() - 49;
 
 			assert_err!(
-				Balances::transfer(Some(1).into(), 5.into(), evil_value.into()),
+				Balances::transfer(Some(1).into(), 5, evil_value),
 				"got overflow after adding a fee to value"
 			);
+		}
+	);
+}
+
+#[test]
+fn check_vesting_status() {
+		with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.monied(true)
+			.vesting(true)
+			.build(),
+		|| {
+			assert_eq!(System::block_number(), 1);
+			let user1_free_balance = Balances::free_balance(&1);
+			let user2_free_balance = Balances::free_balance(&2);
+			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
+			assert_eq!(user2_free_balance, 256 * 20); // Account 2 has free balance
+			let user1_vesting_schedule = VestingSchedule {
+				offset: 256 * 10,
+				per_block: 256,
+			};
+			let user2_vesting_schedule = VestingSchedule {
+				offset: 256 * 30,
+				per_block: 256,
+			};
+			assert_eq!(Balances::vesting(&1), Some(user1_vesting_schedule)); // Account 1 has a vesting schedule
+			assert_eq!(Balances::vesting(&2), Some(user2_vesting_schedule)); // Account 2 has a vesting schedule
+
+			assert_eq!(Balances::vesting_balance(&1), user1_free_balance - 256); // Account 1 has only 256 units vested at block 1
+
+			System::set_block_number(10);
+			assert_eq!(System::block_number(), 10);
+
+			assert_eq!(Balances::vesting_balance(&1), 0); // Account 1 has fully vested by block 10
+			assert_eq!(Balances::vesting_balance(&2), user2_free_balance); // Account 2 has started vesting by block 10
+
+			System::set_block_number(30);
+			assert_eq!(System::block_number(), 30);
+
+			assert_eq!(Balances::vesting_balance(&1), 0); // Account 1 is still fully vested, and not negative
+			assert_eq!(Balances::vesting_balance(&2), 0); // Account 2 has fully vested by block 30
+
+		}
+	);
+}
+
+#[test]
+fn unvested_balance_should_not_transfer() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.monied(true)
+			.vesting(true)
+			.build(),
+		|| {
+			assert_eq!(System::block_number(), 1);
+			let user1_free_balance = Balances::free_balance(&1);
+			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
+			assert_eq!(Balances::vesting_balance(&1), user1_free_balance - 256); // Account 1 has only 256 units vested at block 1
+			assert_noop!(
+				Balances::transfer(Some(1).into(), 2, 256 * 2),
+				"vesting balance too high to send value"
+			); // Account 1 cannot send more than vested amount
+		}
+	);
+}
+
+#[test]
+fn vested_balance_should_transfer() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.monied(true)
+			.vesting(true)
+			.build(),
+		|| {
+			System::set_block_number(5);
+			assert_eq!(System::block_number(), 5);
+			let user1_free_balance = Balances::free_balance(&1);
+			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
+
+			assert_eq!(Balances::vesting_balance(&1), user1_free_balance - 256 * 5); // Account 1 has 256 * 5 units vested at block 5
+			assert_ok!(Balances::transfer(Some(1).into(), 2, 256 * 2)); // Account 1 can now send vested value
+		}
+	);
+}
+
+#[test]
+fn extra_balance_should_transfer() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.monied(true)
+			.vesting(true)
+			.build(),
+		|| {
+			assert_eq!(System::block_number(), 1);
+			assert_ok!(Balances::transfer(Some(3).into(), 1, 256 * 10));
+			let user1_free_balance = Balances::free_balance(&1);
+			assert_eq!(user1_free_balance, 256 * 20); // Account 1 has 2560 more free balance than normal
+
+			assert_eq!(Balances::vesting_balance(&1), 256 * 10 - 256); // Account 1 has 256 units vested at block 1
+			assert_ok!(Balances::transfer(Some(1).into(), 2, 256 * 5)); // Account 1 can send extra units gained
 		}
 	);
 }

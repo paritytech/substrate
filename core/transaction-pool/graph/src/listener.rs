@@ -1,5 +1,5 @@
 
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ use std::{
 	hash,
 };
 use serde::Serialize;
-use watcher;
+use crate::watcher;
 use sr_primitives::traits;
+use log::warn;
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, H2> {

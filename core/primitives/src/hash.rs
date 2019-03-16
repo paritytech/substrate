@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,65 +16,7 @@
 
 //! A fixed hash type.
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-
-#[cfg(feature = "std")]
-use bytes;
-
-macro_rules! impl_rest {
-	($name: ident, $len: expr) => {
-		#[cfg(feature = "std")]
-		impl Serialize for $name {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-				bytes::serialize(&self.0, serializer)
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl<'de> Deserialize<'de> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Exact($len))
-					.map(|x| $name::from_slice(&x))
-			}
-		}
-
-		impl ::codec::Encode for $name {
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				self.0.using_encoded(f)
-			}
-		}
-		impl ::codec::Decode for $name {
-			fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-				<[u8; $len] as ::codec::Decode>::decode(input).map($name)
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl From<u64> for $name {
-			fn from(val: u64) -> Self {
-				Self::from_low_u64_be(val)
-			}
-		}
-	}
-}
-
-construct_fixed_hash!{
-	/// Fixed-size uninterpreted hash type with 20 bytes (160 bits) size.
-	pub struct H160(20);
-}
-construct_fixed_hash!{
-	/// Fixed-size uninterpreted hash type with 32 bytes (256 bits) size.
-	pub struct H256(32);
-}
-construct_fixed_hash!{
-	/// Fixed-size uninterpreted hash type with 64 bytes (512 bits) size.
-	pub struct H512(64);
-}
-
-impl_rest!(H160, 20);
-impl_rest!(H256, 32);
-impl_rest!(H512, 64);
+pub use primitive_types::{H160, H256, H512};
 
 /// Hash conversion. Used to convert between unbound associated hash types in traits,
 /// implemented by the same hash type.
@@ -95,12 +37,12 @@ mod tests {
 	fn test_h160() {
 		let tests = vec![
 			(Default::default(), "0x0000000000000000000000000000000000000000"),
-			(H160::from(2), "0x0000000000000000000000000000000000000002"),
-			(H160::from(15), "0x000000000000000000000000000000000000000f"),
-			(H160::from(16), "0x0000000000000000000000000000000000000010"),
-			(H160::from(1_000), "0x00000000000000000000000000000000000003e8"),
-			(H160::from(100_000), "0x00000000000000000000000000000000000186a0"),
-			(H160::from(u64::max_value()), "0x000000000000000000000000ffffffffffffffff"),
+			(H160::from_low_u64_be(2), "0x0000000000000000000000000000000000000002"),
+			(H160::from_low_u64_be(15), "0x000000000000000000000000000000000000000f"),
+			(H160::from_low_u64_be(16), "0x0000000000000000000000000000000000000010"),
+			(H160::from_low_u64_be(1_000), "0x00000000000000000000000000000000000003e8"),
+			(H160::from_low_u64_be(100_000), "0x00000000000000000000000000000000000186a0"),
+			(H160::from_low_u64_be(u64::max_value()), "0x000000000000000000000000ffffffffffffffff"),
 		];
 
 		for (number, expected) in tests {
@@ -113,12 +55,12 @@ mod tests {
 	fn test_h256() {
 		let tests = vec![
 			(Default::default(), "0x0000000000000000000000000000000000000000000000000000000000000000"),
-			(H256::from(2), "0x0000000000000000000000000000000000000000000000000000000000000002"),
-			(H256::from(15), "0x000000000000000000000000000000000000000000000000000000000000000f"),
-			(H256::from(16), "0x0000000000000000000000000000000000000000000000000000000000000010"),
-			(H256::from(1_000), "0x00000000000000000000000000000000000000000000000000000000000003e8"),
-			(H256::from(100_000), "0x00000000000000000000000000000000000000000000000000000000000186a0"),
-			(H256::from(u64::max_value()), "0x000000000000000000000000000000000000000000000000ffffffffffffffff"),
+			(H256::from_low_u64_be(2), "0x0000000000000000000000000000000000000000000000000000000000000002"),
+			(H256::from_low_u64_be(15), "0x000000000000000000000000000000000000000000000000000000000000000f"),
+			(H256::from_low_u64_be(16), "0x0000000000000000000000000000000000000000000000000000000000000010"),
+			(H256::from_low_u64_be(1_000), "0x00000000000000000000000000000000000000000000000000000000000003e8"),
+			(H256::from_low_u64_be(100_000), "0x00000000000000000000000000000000000000000000000000000000000186a0"),
+			(H256::from_low_u64_be(u64::max_value()), "0x000000000000000000000000000000000000000000000000ffffffffffffffff"),
 		];
 
 		for (number, expected) in tests {

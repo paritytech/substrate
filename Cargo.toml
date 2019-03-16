@@ -4,18 +4,19 @@ path = "node/src/main.rs"
 
 [package]
 name = "substrate"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
-node-cli = { path = "node/cli" }
+cli = { package = "node-cli", path = "node/cli" }
 futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 
 [build-dependencies]
-vergen = "2"
+vergen = "3"
 
 [workspace]
 members = [
@@ -30,19 +31,33 @@ members = [
 	"core/finality-grandpa/primitives",
 	"core/keyring",
 	"core/network",
+	"core/panic-handler",
 	"core/primitives",
 	"core/rpc",
 	"core/rpc-servers",
+	"core/serializer",
+	"core/service",
+	"core/service/test",
+	"core/sr-api-macros",
 	"core/sr-io",
+	"core/sr-primitives",
 	"core/sr-sandbox",
 	"core/sr-std",
 	"core/sr-version",
+	"core/state-machine",
+	"core/test-runtime",
+	"core/telemetry",
+	"core/trie",
+	"core/keystore",
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
+	"core/inherents",
+	"core/util/fork-tree",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
 	"srml/support/procedural/tools/derive",
+	"srml/support/test",
 	"srml/assets",
 	"srml/aura",
 	"srml/balances",
@@ -52,28 +67,23 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/fees",
+	"srml/finality-tracker",
 	"srml/grandpa",
+	"srml/indices",
 	"srml/metadata",
-	"core/sr-primitives",
 	"srml/session",
 	"srml/staking",
+	"srml/sudo",
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
 	"srml/upgrade-key",
-	"core/serializer",
-	"core/service",
-	"core/service/test",
-	"core/sr-api-macros",
-	"core/state-machine",
-	"core/test-runtime",
-	"core/telemetry",
-	"core/trie",
-	"core/keystore",
 	"node/cli",
 	"node/executor",
 	"node/primitives",
 	"node/runtime",
+	"node-template",
 	"subkey",
 ]
 exclude = [

@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,18 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate vergen;
+use vergen::{ConstantsFlags, generate_cargo_keys};
 
-use vergen::{ConstantsFlags, Vergen};
-
-const ERROR_MSG: &'static str = "Failed to generate metadata files";
+const ERROR_MSG: &str = "Failed to generate metadata files";
 
 fn main() {
-	let vergen = Vergen::new(ConstantsFlags::all()).expect(ERROR_MSG);
-
-	for (k, v) in vergen.build_info() {
-		println!("cargo:rustc-env={}={}", k.name(), v);
-	}
-
+	generate_cargo_keys(ConstantsFlags::all()).expect(ERROR_MSG);
 	println!("cargo:rerun-if-changed=.git/HEAD");
 }

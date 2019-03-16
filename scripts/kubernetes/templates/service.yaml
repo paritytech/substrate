@@ -1,0 +1,39 @@
+# see:
+# https://kubernetes.io/docs/tutorials/services/
+# https://kubernetes.io/docs/concepts/services-networking/service/
+# headless service for rpc
+apiVersion: v1
+kind: Service
+metadata:
+  name: substrate-rpc
+  labels:
+    app: substrate
+spec:
+  ports:
+  - port: 9933
+    name: http-rpc
+  - port: 9944
+    name: websocket-rpc
+  selector:
+    app: substrate
+  sessionAffinity: None
+  type: ClusterIP
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: substrate
+spec:
+  ports:
+  - port: 30333
+    name: p2p
+    nodePort: 30333
+    protocol: TCP
+  selector:
+    app: substrate
+  sessionAffinity: None
+  type: NodePort
+  # don't route exteral traffic to non-local pods
+  externalTrafficPolicy: Local
+

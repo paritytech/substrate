@@ -281,6 +281,18 @@ This function serializes the address of the caller into the scratch buffer.
 
 **complexity**: Assuming that the address is of constant size, this function has constant complexity.
 
+## ext_random_seed
+
+This function serializes the current block's random seed into the scratch buffer.
+
+**complexity**: Assuming that the random seed is of constant size, this function has constant complexity.
+
+## ext_now
+
+This function serializes the current block's timestamp into the scratch buffer.
+
+**complexity**: Assuming that the timestamp is of constant size, this function has constant complexity.
+
 ## ext_input_size
 
 **complexity**: This function is of constant complexity.

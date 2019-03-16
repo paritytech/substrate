@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,53 +17,90 @@
 #![allow(missing_docs)]
 
 #[cfg(test)]
+mod block_import;
+#[cfg(test)]
 mod sync;
 
-use std::collections::{VecDeque, HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
 
-use parking_lot::RwLock;
+use log::trace;
 use client;
-use client::error::Error as ClientError;
 use client::block_builder::BlockBuilder;
+use crate::config::ProtocolConfig;
+use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
+use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
+use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
+use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
+use crate::consensus_gossip::ConsensusGossip;
+use crossbeam_channel::{self as channel, Sender, select};
+use futures::Future;
+use futures::sync::{mpsc, oneshot};
+use crate::message::{Message, ConsensusEngineId};
+use network_libp2p::{NodeIndex, ProtocolId, PeerId};
+use parity_codec::Encode;
+use parking_lot::{Mutex, RwLock};
+use primitives::{H256, ed25519::Public as AuthorityId};
+use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
-use io::SyncIo;
-use protocol::{Context, Protocol, ProtocolContext};
-use config::ProtocolConfig;
-use service::TransactionPool;
-use network_libp2p::{NodeIndex, PeerId, Severity};
-use keyring::Keyring;
-use codec::Encode;
-use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
-use consensus::BlockOrigin;
-use specialization::NetworkSpecialization;
-use consensus_gossip::ConsensusGossip;
-use import_queue::{BlockImport, ImportQueue};
-use service::ExecuteInContext;
-use test_client;
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
+use runtime_primitives::Justification;
+use crate::service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
+use crate::specialization::NetworkSpecialization;
+use test_client::{self, AccountKeyring};
 
-pub use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
+pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
 
-struct DummyContextExecutor(Arc<Protocol<Block, DummySpecialization, Hash>>, Arc<RwLock<VecDeque<TestPacket>>>);
-unsafe impl Send for DummyContextExecutor {}
-unsafe impl Sync for DummyContextExecutor {}
+#[cfg(any(test, feature = "test-helpers"))]
+/// A Verifier that accepts all blocks and passes them on with the configured
+/// finality to be imported.
+pub struct PassThroughVerifier(pub bool);
 
-impl ExecuteInContext<Block> for DummyContextExecutor {
-	fn execute_in_context<F: Fn(&mut Context<Block>)>(&self, closure: F) {
-		let mut io = TestIo::new(&self.1, None);
-		let mut context = ProtocolContext::new(&self.0.context_data(), &mut io);
-		closure(&mut context);
+#[cfg(any(test, feature = "test-helpers"))]
+/// This Verifiyer accepts all data as valid
+impl<B: BlockT> Verifier<B> for PassThroughVerifier {
+	fn verify(
+		&self,
+		origin: BlockOrigin,
+		header: B::Header,
+		justification: Option<Justification>,
+		body: Option<Vec<B::Extrinsic>>
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
+			.map(|auth| auth.iter().cloned().collect());
+
+		Ok((ImportBlock {
+			origin,
+			header,
+			body,
+			finalized: self.0,
+			justification,
+			post_digests: vec![],
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}, new_authorities))
 	}
 }
 
+/// A link implementation that does nothing.
+pub struct NoopLink { }
+
+impl<B: BlockT> Link<B> for NoopLink { }
+
 /// The test specialization.
-pub struct DummySpecialization { }
+#[derive(Clone)]
+pub struct DummySpecialization;
 
 impl NetworkSpecialization<Block> for DummySpecialization {
-	fn status(&self) -> Vec<u8> { vec![] }
+	fn status(&self) -> Vec<u8> {
+		vec![]
+	}
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: crate::message::Status<Block>) {
 	}
 
 	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
@@ -73,222 +110,373 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		&mut self,
 		_ctx: &mut Context<Block>,
 		_peer_id: NodeIndex,
-		_message: &mut Option<::message::Message<Block>>
+		_message: &mut Option<crate::message::Message<Block>>,
 	) {
 	}
 }
 
-pub struct TestIo<'p> {
-	queue: &'p RwLock<VecDeque<TestPacket>>,
-	pub to_disconnect: HashSet<NodeIndex>,
-	packets: Vec<TestPacket>,
-	_sender: Option<NodeIndex>,
+pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
+
+#[derive(Clone)]
+/// A Link that can wait for a block to have been imported.
+pub struct TestLink<S: NetworkSpecialization<Block> + Clone> {
+	import_done: Arc<AtomicBool>,
+	hash: Arc<Mutex<Hash>>,
+	link: NetworkLink<Block, S>,
 }
 
-impl<'p> TestIo<'p> where {
-	pub fn new(queue: &'p RwLock<VecDeque<TestPacket>>, sender: Option<NodeIndex>) -> TestIo<'p> {
-		TestIo {
-			queue: queue,
-			_sender: sender,
-			to_disconnect: HashSet::new(),
-			packets: Vec::new(),
+impl<S: NetworkSpecialization<Block> + Clone> TestLink<S> {
+	fn new(
+		protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_sender: NetworkChan<Block>
+	) -> TestLink<S> {
+		TestLink {
+			import_done: Arc::new(AtomicBool::new(false)),
+			hash: Arc::new(Mutex::new(Default::default())),
+			link: NetworkLink {
+				protocol_sender,
+				network_sender,
+			}
+		}
+	}
+
+	/// Set the hash which will be awaited for import.
+	fn with_hash(&self, hash: Hash) {
+		self.import_done.store(false, Ordering::SeqCst);
+		*self.hash.lock() = hash;
+	}
+
+	/// Simulate a synchronous import.
+	fn wait_for_import(&self) {
+		while !self.import_done.load(Ordering::SeqCst) {
+			thread::sleep(Duration::from_millis(20));
 		}
 	}
 }
 
-impl<'p> Drop for TestIo<'p> {
-	fn drop(&mut self) {
-		self.queue.write().extend(self.packets.drain(..));
+impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
+	fn block_imported(&self, hash: &Hash, number: NumberFor<Block>) {
+		if hash == &*self.hash.lock() {
+			self.import_done.store(true, Ordering::SeqCst);
+		}
+		self.link.block_imported(hash, number);
+	}
+
+	fn blocks_processed(&self, processed_blocks: Vec<Hash>, has_error: bool) {
+		self.link.blocks_processed(processed_blocks, has_error);
+	}
+
+	fn justification_imported(&self, who: NodeIndex, hash: &Hash, number:NumberFor<Block>, success: bool) {
+		self.link.justification_imported(who, hash, number, success);
+	}
+
+	fn request_justification(&self, hash: &Hash, number: NumberFor<Block>) {
+		self.link.request_justification(hash, number);
+	}
+
+	fn useless_peer(&self, who: NodeIndex, reason: &str) {
+		self.link.useless_peer(who, reason);
+	}
+
+	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
+		self.link.note_useless_and_restart_sync(who, reason);
+	}
+
+	fn restart(&self) {
+		self.link.restart();
 	}
 }
 
-impl<'p> SyncIo for TestIo<'p> {
-	fn report_peer(&mut self, who: NodeIndex, _reason: Severity) {
-		self.to_disconnect.insert(who);
-	}
-
-	fn send(&mut self, who: NodeIndex, data: Vec<u8>) {
-		self.packets.push(TestPacket {
-			data: data,
-			recipient: who,
-		});
-	}
-
-	fn peer_debug_info(&self, _who: NodeIndex) -> String {
-		"unknown".to_string()
-	}
-
-	fn peer_id(&self, _peer_id: NodeIndex) -> Option<PeerId> {
-		None
-	}
-}
-
-/// Mocked subprotocol packet
-pub struct TestPacket {
-	data: Vec<u8>,
-	recipient: NodeIndex,
-}
-
-pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
-
-pub struct Peer<V: Verifier<Block>, D> {
+pub struct Peer<D, S: NetworkSpecialization<Block> + Clone> {
+	pub is_offline: Arc<AtomicBool>,
+	pub is_major_syncing: Arc<AtomicBool>,
+	pub peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>>,
 	client: Arc<PeersClient>,
-	pub sync: Arc<Protocol<Block, DummySpecialization, Hash>>,
-	pub queue: Arc<RwLock<VecDeque<TestPacket>>>,
-	import_queue: Arc<SyncImportQueue<Block, V>>,
-	executor: Arc<DummyContextExecutor>,
-	/// Some custom data set up at initialization time.
+	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+	pub protocol_sender: Sender<ProtocolMsg<Block, S>>,
+	network_link: TestLink<S>,
+	network_port: Arc<Mutex<NetworkPort<Block>>>,
+	pub import_queue: Box<ImportQueue<Block>>,
 	pub data: D,
+	best_hash: Mutex<Option<H256>>,
+	finalized_hash: Mutex<Option<H256>>,
 }
 
-impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
+impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	fn new(
+		is_offline: Arc<AtomicBool>,
+		is_major_syncing: Arc<AtomicBool>,
+		peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>>,
 		client: Arc<PeersClient>,
-		sync: Arc<Protocol<Block, DummySpecialization, Hash>>,
-		queue: Arc<RwLock<VecDeque<TestPacket>>>,
-		import_queue: Arc<SyncImportQueue<Block, V>>,
+		import_queue: Box<ImportQueue<Block>>,
+		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+		protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_sender: NetworkChan<Block>,
+		network_port: NetworkPort<Block>,
 		data: D,
 	) -> Self {
-		let executor = Arc::new(DummyContextExecutor(sync.clone(), queue.clone()));
-		Peer { client, sync, queue, import_queue, executor, data }
+		let network_port = Arc::new(Mutex::new(network_port));
+		let network_link = TestLink::new(protocol_sender.clone(), network_sender.clone());
+		import_queue.start(Box::new(network_link.clone())).expect("Test ImportQueue always starts");
+		Peer {
+			is_offline,
+			is_major_syncing,
+			peers,
+			client,
+			network_to_protocol_sender,
+			protocol_sender,
+			import_queue,
+			network_link,
+			network_port,
+			data,
+			best_hash: Mutex::new(None),
+			finalized_hash: Mutex::new(None),
+		}
 	}
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
-		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
-		let network_link = ::import_queue::NetworkLink {
-			sync: Arc::downgrade(self.sync.sync()),
-			context: Arc::downgrade(&self.executor),
-		};
+		let header = self
+			.client
+			.header(&BlockId::Hash(info.chain.best_hash))
+			.unwrap()
+			.unwrap();
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::BlockImported(info.chain.best_hash, header));
+	}
 
-		self.import_queue.start(network_link).expect("Test ImportQueue always starts");
-		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
+	pub fn on_block_imported(
+		&self,
+		hash: <Block as BlockT>::Hash,
+		header: &<Block as BlockT>::Header,
+	) {
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::BlockImported(hash, header.clone()));
+	}
+
+	// SyncOracle: are we connected to any peer?
+	fn is_offline(&self) -> bool {
+		self.is_offline.load(Ordering::Relaxed)
+	}
+
+	// SyncOracle: are we in the process of catching-up with the chain?
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: NodeIndex) {
-		self.sync.on_peer_connected(&mut TestIo::new(&self.queue, Some(other)), other);
-	}
-
-	pub fn consensus_gossip(&self) -> &RwLock<ConsensusGossip<Block>> {
-		self.sync.consensus_gossip()
+		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::PeerConnected(PeerId::random(), other, String::new()));
 	}
 
 	/// Called on disconnect from other indicated peer.
 	fn on_disconnect(&self, other: NodeIndex) {
-		let mut io = TestIo::new(&self.queue, Some(other));
-		self.sync.on_peer_disconnected(&mut io, other);
+		let _ = self
+			.network_to_protocol_sender
+			.send(FromNetworkMsg::PeerDisconnected(other, String::new()));
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
-	fn receive_message(&self, from: NodeIndex, msg: TestPacket) -> HashSet<NodeIndex> {
-		let mut io = TestIo::new(&self.queue, Some(from));
-		self.sync.handle_packet(&mut io, from, &msg.data);
-		self.flush();
-		io.to_disconnect.clone()
-	}
-
-	#[cfg(test)]
-	fn with_io<'a, F, U>(&'a self, f: F) -> U where F: FnOnce(&mut TestIo<'a>) -> U {
-		let mut io = TestIo::new(&self.queue, None);
-		f(&mut io)
+	fn receive_message(&self, from: NodeIndex, msg: Message<Block>) {
+		let _ = self
+			.network_to_protocol_sender
+			.send(FromNetworkMsg::CustomMessage(from, msg));
 	}
 
 	/// Produce the next pending message to send to another peer.
-	fn pending_message(&self) -> Option<TestPacket> {
-		self.flush();
-		self.queue.write().pop_front()
+	fn pending_message(&self) -> Option<NetworkMsg<Block>> {
+		select! {
+			recv(self.network_port.lock().receiver()) -> msg => return msg.ok(),
+			// If there are no messages ready, give protocol a change to send one.
+			recv(channel::after(Duration::from_millis(100))) -> _ => return None,
+		}
+	}
+
+	/// Produce the next pending message to send to another peer, without waiting.
+	fn pending_message_fast(&self) -> Option<NetworkMsg<Block>> {
+		self.network_port.lock().receiver().try_recv().ok()
 	}
 
 	/// Whether this peer is done syncing (has no messages to send).
 	fn is_done(&self) -> bool {
-		self.queue.read().is_empty()
+		self.network_port.lock().receiver().is_empty()
 	}
 
 	/// Execute a "sync step". This is called for each peer after it sends a packet.
 	fn sync_step(&self) {
-		self.flush();
-		self.sync.tick(&mut TestIo::new(&self.queue, None));
+		let _ = self.protocol_sender.send(ProtocolMsg::Tick);
 	}
 
 	/// Send block import notifications.
 	fn send_import_notifications(&self) {
 		let info = self.client.info().expect("In-mem client does not fail");
+
+		let mut best_hash = self.best_hash.lock();
+		match *best_hash {
+			None => {},
+			Some(hash) if hash != info.chain.best_hash => {},
+			_ => return,
+		}
+
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
-		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::BlockImported(info.chain.best_hash, header));
+
+		*best_hash = Some(info.chain.best_hash);
+	}
+
+	/// Send block finalization notifications.
+	pub fn send_finality_notifications(&self) {
+		let info = self.client.info().expect("In-mem client does not fail");
+
+		let mut finalized_hash = self.finalized_hash.lock();
+		match *finalized_hash {
+			None => {},
+			Some(hash) if hash != info.chain.finalized_hash => {},
+			_ => return,
+		}
+
+		let header = self.client.header(&BlockId::Hash(info.chain.finalized_hash)).unwrap().unwrap();
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::BlockFinalized(info.chain.finalized_hash, header.clone()));
+
+		*finalized_hash = Some(info.chain.finalized_hash);
 	}
 
 	/// Restart sync for a peer.
 	fn restart_sync(&self) {
-		self.sync.abort();
-	}
-
-	fn flush(&self) {
+		let _ = self.protocol_sender.send(ProtocolMsg::Abort);
 	}
 
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>, broadcast: bool) {
-		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
+	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, engine_id: ConsensusEngineId, data: Vec<u8>) {
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data));
+	}
+
+	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
+		self.with_gossip(move |gossip, _| gossip.collect_garbage())
+	}
+
+	/// access the underlying consensus gossip handler
+	pub fn consensus_gossip_messages_for(
+		&self,
+		engine_id: ConsensusEngineId,
+		topic: <Block as BlockT>::Hash,
+	) -> mpsc::UnboundedReceiver<Vec<u8>> {
+		let (tx, rx) = oneshot::channel();
+		self.with_gossip(move |gossip, _| {
+			let inner_rx = gossip.messages_for(engine_id, topic);
+			let _ = tx.send(inner_rx);
+		});
+		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")
+	}
+
+	/// Execute a closure with the consensus gossip.
+	pub fn with_gossip<F>(&self, f: F)
+		where F: FnOnce(&mut ConsensusGossip<Block>, &mut Context<Block>) + Send + 'static
+	{
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
+	}
+
+	/// Announce a block to peers.
+	pub fn announce_block(&self, block: Hash) {
+		let _ = self.protocol_sender.send(ProtocolMsg::AnnounceBlock(block));
+	}
+
+	/// Request a justification for the given block.
+	#[cfg(test)]
+	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-		where F: FnMut(BlockBuilder<Block, (), PeersClient>) -> Block
+	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
+		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
-		use blocks::BlockData;
+		let best_hash = self.client.info().unwrap().chain.best_hash;
+		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block)
+	}
 
+	/// Add blocks to the peer -- edit the block before adding. The chain will
+	/// start at the given block iD.
+	pub fn generate_blocks_at<F>(&self, at: BlockId<Block>, count: usize, origin: BlockOrigin, mut edit_block: F) -> H256
+		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
+	{
+		let mut at = self.client.header(&at).unwrap().unwrap().hash();
 		for _  in 0..count {
-			let builder = self.client.new_block().unwrap();
+			let builder = self.client.new_block_at(&BlockId::Hash(at)).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
-			trace!("Generating {}, (#{}, parent={})", hash, block.header.number, block.header.parent_hash);
+			trace!(
+				"Generating {}, (#{}, parent={})",
+				hash,
+				block.header.number,
+				block.header.parent_hash
+			);
 			let header = block.header.clone();
-
-			// NOTE: if we use a non-synchronous queue in the test-net in the future,
-			// this may not work.
-		 	self.import_queue.import_blocks(origin, vec![BlockData {
-				origin: None,
-				block: ::message::BlockData::<Block> {
+			at = hash;
+			self.network_link.with_hash(hash);
+			self.import_queue.import_blocks(
+				origin,
+				vec![IncomingBlock {
+					origin: None,
 					hash,
 					header: Some(header),
 					body: Some(block.extrinsics),
-					receipt: None,
-					message_queue: None,
 					justification: None,
-				},
-			}]);
+				}],
+			);
+			// Simulate a sync import.
+			self.network_link.wait_for_import();
 		}
-
+		at
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_blocks(&self, count: usize, with_tx: bool) {
+	pub fn push_blocks(&self, count: usize, with_tx: bool) -> H256 {
+		let best_hash = self.client.info().unwrap().chain.best_hash;
+		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
+	}
+
+	/// Push blocks to the peer (simplified: with or without a TX) starting from
+	/// given hash.
+	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
-			self.generate_blocks(count, BlockOrigin::File, |mut builder| {
+			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
 				let transfer = Transfer {
-					from: Keyring::Alice.to_raw_public().into(),
-					to: Keyring::Alice.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Alice.into(),
 					amount: 1,
 					nonce,
 				};
-				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
-				builder.push(Extrinsic { transfer, signature }).unwrap();
+				let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
+				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
-			});
+			})
 		} else {
-			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
+			self.generate_blocks_at(at, count, BlockOrigin::File, |builder| builder.bake().unwrap())
 		}
 	}
 
-	/// Execute a function with specialization for this peer.
-	pub fn with_spec<F, U>(&self, f: F) -> U
-		where F: FnOnce(&mut DummySpecialization, &mut Context<Block>) -> U
-	{
-		self.sync.with_spec(&mut TestIo::new(&self.queue, None), f)
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) -> H256 {
+		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
+			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
+			builder.bake().unwrap()
+		})
 	}
 
 	/// Get a reference to the client.
@@ -311,7 +499,18 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
 
+pub trait SpecializationFactory {
+    fn create() -> Self;
+}
+
+impl SpecializationFactory for DummySpecialization {
+	fn create() -> DummySpecialization {
+		DummySpecialization
+	}
+}
+
 pub trait TestNetFactory: Sized {
+	type Specialization: NetworkSpecialization<Block> + Clone + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
 
@@ -319,20 +518,19 @@ pub trait TestNetFactory: Sized {
 	fn from_config(config: &ProtocolConfig) -> Self;
 	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig) -> Arc<Self::Verifier>;
 
-
 	/// Get reference to peer.
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier, Self::PeerData>;
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>;
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>)>(&mut self, closure: F);
+	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization>;
+	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>;
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
 	fn set_started(&mut self, now: bool);
 
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ClientError> + Send + Sync>, Self::PeerData)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Self::PeerData)
 	{
-		(client, Default::default())
+		(client, None, Default::default())
 	}
 
 	fn default_config() -> ProtocolConfig {
@@ -355,29 +553,45 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, data) = self.make_block_import(client.clone());
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
+		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
-		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import));
-		let specialization = DummySpecialization { };
-		let sync = Protocol::new(
+		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
+		let status_sinks = Arc::new(Mutex::new(Vec::new()));
+		let is_offline = Arc::new(AtomicBool::new(true));
+		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let specialization = self::SpecializationFactory::create();
+		let peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>> = Arc::new(Default::default());
+
+		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
+			status_sinks,
+			is_offline.clone(),
+			is_major_syncing.clone(),
+			peers.clone(),
+			network_sender.clone(),
 			config.clone(),
 			client.clone(),
 			import_queue.clone(),
 			None,
 			tx_pool,
-			specialization
+			specialization,
 		).unwrap();
 
 		let peer = Arc::new(Peer::new(
+			is_offline,
+			is_major_syncing,
+			peers,
 			client,
-			Arc::new(sync),
-			Arc::new(RwLock::new(VecDeque::new())),
 			import_queue,
+			network_to_protocol_sender,
+			protocol_sender,
+			network_sender,
+			network_port,
 			data,
 		));
 
 		self.mut_peers(|peers| {
-			peers.push(peer.clone())
+			peers.push(peer)
 		});
 	}
 
@@ -396,44 +610,58 @@ pub trait TestNetFactory: Sized {
 				}
 			}
 		});
+		self.route(None);
 		self.set_started(true);
 	}
 
 	/// Do one step of routing.
-	fn route(&mut self) {
+	fn route(&mut self, disconnected: Option<HashSet<NodeIndex>>) {
 		self.mut_peers(move |peers| {
+			let mut to_disconnect = HashSet::new();
 			for peer in 0..peers.len() {
 				let packet = peers[peer].pending_message();
-				if let Some(packet) = packet {
-					let disconnecting = {
-						let recipient = packet.recipient;
-						trace!(target: "sync", "--- {} -> {} ---", peer, recipient);
-						let to_disconnect = peers[recipient].receive_message(peer as NodeIndex, packet);
-						for d in &to_disconnect {
-							// notify this that disconnecting peers are disconnecting
-							peers[recipient].on_disconnect(*d as NodeIndex);
+				match packet {
+					None => continue,
+					Some(NetworkMsg::Outgoing(recipient, packet)) => {
+						if let Some(disconnected) = disconnected.as_ref() {
+							let mut current = HashSet::new();
+							current.insert(peer);
+							current.insert(recipient);
+							// Not routing message between "disconnected" nodes.
+							if disconnected.is_subset(&current) {
+								continue;
+							}
 						}
-						to_disconnect
-					};
-					for d in &disconnecting {
-						// notify other peers that this peer is disconnecting
-						peers[*d].on_disconnect(peer as NodeIndex);
+						peers[recipient].receive_message(peer as NodeIndex, packet)
 					}
+					Some(NetworkMsg::ReportPeer(who, _)) => {
+						to_disconnect.insert(who);
+					}
+					Some(_msg) => continue,
+				}
+			}
+			for d in to_disconnect {
+				for peer in 0..peers.len() {
+					peers[peer].on_disconnect(d);
 				}
 			}
 		});
 	}
 
-	/// Route messages between peers until all queues are empty.
-	fn route_until_complete(&mut self) {
-		while !self.done() {
-			self.route()
-		}
+	/// Route all pending outgoing messages, without waiting or disconnecting.
+	fn route_fast(&mut self) {
+		self.mut_peers(move |peers| {
+			for peer in 0..peers.len() {
+				while let Some(NetworkMsg::Outgoing(recipient, packet)) = peers[peer].pending_message_fast() {
+					peers[recipient].receive_message(peer as NodeIndex, packet)
+				}
+			}
+		});
 	}
 
 	/// Do a step of synchronization.
 	fn sync_step(&mut self) {
-		self.route();
+		self.route(None);
 
 		self.mut_peers(|peers| {
 			for peer in peers {
@@ -451,21 +679,53 @@ pub trait TestNetFactory: Sized {
 		})
 	}
 
+	/// Send block finalization notifications for all peers.
+	fn send_finality_notifications(&mut self) {
+		self.mut_peers(|peers| {
+			for peer in peers {
+				peer.send_finality_notifications();
+			}
+		})
+	}
+
 	/// Restart sync for a peer.
 	fn restart_peer(&mut self, i: usize) {
 		self.peers()[i].restart_sync();
 	}
 
-	/// Perform synchronization until complete.
-	fn sync(&mut self) -> u32 {
+	/// Perform synchronization until complete, if provided the
+	/// given nodes set are excluded from sync.
+	fn sync_with(&mut self, disconnected: Option<HashSet<NodeIndex>>) -> u32 {
 		self.start();
 		let mut total_steps = 0;
-		while !self.done() {
+		let mut done = 0;
+
+		loop {
+			if done > 3 { break; }
+			if self.done() {
+				done += 1;
+			} else {
+				done = 0;
+			}
+
 			self.sync_step();
+			self.route(disconnected.clone());
+
 			total_steps += 1;
-			self.route();
 		}
+
 		total_steps
+	}
+
+	/// Perform synchronization until complete.
+	fn sync(&mut self) -> u32 {
+		self.sync_with(None)
+	}
+
+	/// Perform synchronization until complete,
+	/// excluding sync between certain nodes.
+	fn sync_with_disconnected(&mut self, disconnected: HashSet<NodeIndex>) -> u32 {
+		self.sync_with(Some(disconnected))
 	}
 
 	/// Do the given amount of sync steps.
@@ -483,11 +743,12 @@ pub trait TestNetFactory: Sized {
 }
 
 pub struct TestNet {
-	peers: Vec<Arc<Peer<PassThroughVerifier, ()>>>,
-	started: bool
+	peers: Vec<Arc<Peer<(), DummySpecialization>>>,
+	started: bool,
 }
 
 impl TestNetFactory for TestNet {
+	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
 
@@ -505,15 +766,15 @@ impl TestNetFactory for TestNet {
 		Arc::new(PassThroughVerifier(false))
 	}
 
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+	fn peer(&self, i: usize) -> &Peer<(), Self::Specialization> {
 		&self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+	fn peers(&self) -> &Vec<Arc<Peer<(), Self::Specialization>>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F ) {
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<(), Self::Specialization>>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -523,5 +784,65 @@ impl TestNetFactory for TestNet {
 
 	fn set_started(&mut self, new: bool) {
 		self.started = new;
+	}
+}
+
+pub struct ForceFinalized(Arc<PeersClient>);
+
+impl JustificationImport<Block> for ForceFinalized {
+	type Error = ConsensusError;
+
+	fn import_justification(
+		&self,
+		hash: H256,
+		_number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+	}
+}
+
+pub struct JustificationTestNet(TestNet);
+
+impl TestNetFactory for JustificationTestNet {
+	type Specialization = DummySpecialization;
+	type Verifier = PassThroughVerifier;
+	type PeerData = ();
+
+	fn from_config(config: &ProtocolConfig) -> Self {
+		JustificationTestNet(TestNet::from_config(config))
+	}
+
+	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig)
+		-> Arc<Self::Verifier>
+	{
+		self.0.make_verifier(client, config)
+	}
+
+	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization> {
+		self.0.peer(i)
+	}
+
+	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>> {
+		self.0.peers()
+	}
+
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F ) {
+		self.0.mut_peers(closure)
+	}
+
+	fn started(&self) -> bool {
+		self.0.started()
+	}
+
+	fn set_started(&mut self, new: bool) {
+		self.0.set_started(new)
+	}
+
+	fn make_block_import(&self, client: Arc<PeersClient>)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Self::PeerData)
+	{
+		(client.clone(), Some(Arc::new(ForceFinalized(client))), Default::default())
 	}
 }

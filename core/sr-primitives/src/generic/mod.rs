@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@
 
 mod unchecked_extrinsic;
 mod unchecked_mortal_extrinsic;
+mod unchecked_mortal_compact_extrinsic;
 mod era;
 mod checked_extrinsic;
 mod header;
@@ -30,13 +31,14 @@ mod tests;
 
 pub use self::unchecked_extrinsic::UncheckedExtrinsic;
 pub use self::unchecked_mortal_extrinsic::UncheckedMortalExtrinsic;
+pub use self::unchecked_mortal_compact_extrinsic::UncheckedMortalCompactExtrinsic;
 pub use self::era::Era;
 pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{Digest, DigestItem, DigestItemRef};
 
-use codec::Encode;
+use crate::codec::Encode;
 use rstd::prelude::*;
 
 fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8> {

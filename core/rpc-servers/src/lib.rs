@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,18 +18,10 @@
 
 #[warn(missing_docs)]
 
-pub extern crate substrate_rpc as apis;
-
-extern crate jsonrpc_http_server as http;
-extern crate jsonrpc_pubsub as pubsub;
-extern crate jsonrpc_ws_server as ws;
-extern crate serde;
-extern crate sr_primitives;
-
-#[macro_use]
-extern crate log;
+pub use substrate_rpc as apis;
 
 use std::io;
+use log::error;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
 /// Maximal payload accepted by RPC servers
@@ -49,11 +41,10 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 ) -> RpcHandler where
 	Block: BlockT + 'static,
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
-	SignedBlock<Block>: serde::Serialize + sr_primitives::DeserializeOwned,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>, Metadata=Metadata>,
+	C: apis::chain::ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>, Metadata=Metadata>,
 	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
-	Y: apis::system::SystemApi,
+	Y: apis::system::SystemApi<Block::Hash, NumberFor<Block>>,
 {
 	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());

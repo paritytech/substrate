@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,13 +17,14 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
+use log::debug;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
 use trie::{Recorder, MemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
-use trie_backend::TrieBackend;
-use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use {Error, ExecutionError, Backend};
+use crate::trie_backend::TrieBackend;
+use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
+use crate::{Error, ExecutionError, Backend};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -47,7 +48,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
+		read_trie_value_with::<H, _, Ephemeral<S, H>>(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
 	}
 
 	pub fn child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
@@ -73,7 +74,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			record_all_keys::<H>(&eph, root, &mut *self.proof_recorder)
+			record_all_keys::<H, _>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {
@@ -146,6 +147,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.pairs()
 	}
 
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		self.backend.keys(prefix)
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -191,7 +196,7 @@ where
 	H: Hasher,
 	H::Out: HeapSizeOf,
 {
-	let mut db = MemoryDB::default();	// TODO: use new for correctness
+	let mut db = MemoryDB::default();
 	for item in proof {
 		db.insert(&item);
 	}
@@ -200,8 +205,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use backend::{InMemory};
-	use trie_backend::tests::test_trie;
+	use crate::backend::{InMemory};
+	use crate::trie_backend::tests::test_trie;
 	use super::*;
 	use primitives::{Blake2Hasher};
 

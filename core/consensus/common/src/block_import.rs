@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,24 +16,50 @@
 
 //! Block import helpers.
 
-use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, DigestItemFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
+	/// Block imported.
+	Imported(ImportedAux),
 	/// Already in the blockchain.
 	AlreadyInChain,
 	/// Block or parent is known to be bad.
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
+}
+
+/// Auxiliary data associated with an imported block result.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImportedAux {
+	/// Clear all pending justification requests.
+	pub clear_justification_requests: bool,
+	/// Request a justification for the given block.
+	pub needs_justification: bool,
+	/// Received a bad justification.
+	pub bad_justification: bool,
+}
+
+impl Default for ImportedAux {
+	fn default() -> ImportedAux {
+		ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+			bad_justification: false,
+		}
+	}
+}
+
+impl ImportResult {
+	/// Returns default value for `ImportResult::Imported` with both
+	/// `clear_justification_requests` and `needs_justification` set to false.
+	pub fn imported() -> ImportResult {
+		ImportResult::Imported(ImportedAux::default())
+	}
 }
 
 /// Block data origin.
@@ -51,6 +77,15 @@ pub enum BlockOrigin {
 	Own,
 	/// Block was imported from a file.
 	File,
+}
+
+/// Fork choice strategy.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ForkChoiceStrategy {
+	/// Longest chain fork choice.
+	LongestChain,
+	/// Custom fork choice rule, where true indicates the new block should be the best block.
+	Custom(bool),
 }
 
 /// Data required to import a Block
@@ -83,6 +118,8 @@ pub struct ImportBlock<Block: BlockT> {
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	/// Fork choice strategy of this import.
+	pub fork_choice: ForkChoiceStrategy,
 }
 
 impl<Block: BlockT> ImportBlock<Block> {
@@ -127,14 +164,37 @@ impl<Block: BlockT> ImportBlock<Block> {
 	}
 }
 
-
-
 /// Block import trait.
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
-	/// Import a Block alongside the new authorities valid form this block forward
-	fn import_block(&self,
-		block: ImportBlock<B>,
-		new_authorities: Option<Vec<AuthorityId>>
+
+	/// Check block preconditions.
+	fn check_block(
+		&self,
+		hash: B::Hash,
+		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error>;
+
+	/// Import a Block alongside the new authorities valid from this block forward
+	fn import_block(
+		&self,
+		block: ImportBlock<B>,
+		new_authorities: Option<Vec<AuthorityIdFor<B>>>,
+	) -> Result<ImportResult, Self::Error>;
+}
+
+/// Justification import trait
+pub trait JustificationImport<B: BlockT> {
+	type Error: ::std::error::Error + Send + 'static;
+
+	/// Called by the import queue when it is started.
+	fn on_start(&self, _link: &crate::import_queue::Link<B>) { }
+
+	/// Import a Block justification and finalize the given block.
+	fn import_justification(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification,
+	) -> Result<(), Self::Error>;
 }

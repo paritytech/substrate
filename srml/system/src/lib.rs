@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,32 +19,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_primitives;
-
-#[cfg_attr(any(feature = "std", test), macro_use)]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as primitives;
-extern crate safe_mix;
-
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
 use rstd::prelude::*;
+#[cfg(any(feature = "std", test))]
+use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug};
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
-use runtime_support::{storage, StorageValue, StorageMap, Parameter};
+use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;
-
-#[cfg(any(feature = "std", test))]
-use codec::Encode;
+use parity_codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -52,9 +38,31 @@ use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::ChangesTrieConfiguration;
 
+/// Handler for when a new account has been created.
+pub trait OnNewAccount<AccountId> {
+	/// A new account `who` has been registered.
+	fn on_new_account(who: &AccountId);
+}
+
+impl<AccountId> OnNewAccount<AccountId> for () {
+	fn on_new_account(_who: &AccountId) {}
+}
+
+/// Determinator to say whether a given account is unused.
+pub trait IsDeadAccount<AccountId> {
+	/// Is the given account dead?
+	fn is_dead_account(who: &AccountId) -> bool;
+}
+
+impl<AccountId> IsDeadAccount<AccountId> for () {
+	fn is_dead_account(_who: &AccountId) -> bool {
+		true
+	}
+}
+
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
+pub fn extrinsics_root<H: Hash, E: parity_codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(parity_codec::Encode::encode).collect())
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
@@ -63,7 +71,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::enumerated_trie_root(&xts)
 }
 
-pub trait Trait: Eq + Clone {
+pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
@@ -71,6 +79,7 @@ pub trait Trait: Eq + Clone {
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+	type Lookup: StaticLookup<Target = Self::AccountId>;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
@@ -176,10 +185,18 @@ impl<Hash: Member> RawLog<Hash> {
 impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
 	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
 		match log {
-			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot
-				::<substrate_primitives::H256, u64>(root),
+			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot(root),
 		}
 	}
+}
+
+// Create a Hash with 69 for each byte,
+// only used to build genesis config
+#[cfg(feature = "std")]
+fn hash69<T: AsMut<[u8]> + Default>() -> T {
+	let mut h = T::default();
+	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
+	h
 }
 
 decl_storage! {
@@ -188,12 +205,13 @@ decl_storage! {
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 
 		ExtrinsicCount: Option<u32>;
-		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
+		AllExtrinsicsLen: Option<u32>;
+		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;
+		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| 1u64): T::BlockNumber;
-		ParentHash get(parent_hash) build(|_| [69u8; 32]): T::Hash;
+		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
+		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
 		Digest get(digest): T::Digest;
 
@@ -202,8 +220,8 @@ decl_storage! {
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
-			use codec::Encode;
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
@@ -261,6 +279,16 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
+	/// Gets extrinsics count.
+	pub fn extrinsic_count() -> u32 {
+		<ExtrinsicCount<T>>::get().unwrap_or_default()
+	}
+
+	/// Gets a total length of all executed extrinsics.
+	pub fn all_extrinsics_len() -> u32 {
+		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
@@ -277,6 +305,7 @@ impl<T: Trait> Module<T> {
 	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
 		<ExtrinsicCount<T>>::kill();
+		<AllExtrinsicsLen<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -295,8 +324,7 @@ impl<T: Trait> Module<T> {
 
 		// <Events<T>> stays to be inspected by the client.
 
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root,
-			parent_hash, digest)
+		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -322,9 +350,9 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
+			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
 			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
 		])
 	}
@@ -363,19 +391,25 @@ impl<T: Trait> Module<T> {
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
+	///
+	/// NOTE this function is called only when the block is being constructed locally.
+	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
 		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
+
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		<AllExtrinsicsLen<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -401,10 +435,10 @@ impl<T> Default for ChainContext<T> {
 }
 
 impl<T: Trait> Lookup for ChainContext<T> {
-	type Source = T::AccountId;
-	type Target = T::AccountId;
+	type Source = <T::Lookup as StaticLookup>::Source;
+	type Target = <T::Lookup as StaticLookup>::Target;
 	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
-		Ok(s)
+		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }
 
@@ -429,8 +463,9 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
-	use primitives::traits::BlakeTwo256;
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
+	use srml_support::impl_outer_origin;
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -446,6 +481,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = u16;
 		type Log = DigestItem;
@@ -477,8 +513,8 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()));
-			System::note_applied_extrinsic(&Err(""));
+			System::note_applied_extrinsic(&Ok(()), 0);
+			System::note_applied_extrinsic(&Err(""), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();

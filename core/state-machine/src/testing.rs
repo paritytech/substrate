@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,9 +21,10 @@ use std::iter::FromIterator;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::trie_root;
-use backend::InMemory;
-use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
-use primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG;
+use crate::backend::InMemory;
+use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
+use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
+use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
@@ -31,11 +32,17 @@ pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
 	changes: OverlayedChanges,
+	code: Option<Vec<u8>>,
 }
 
 impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_code(&[], inner)
+	}
+
+	/// Create a new instance of `TestExternalities`
+	pub fn new_with_code(code: &[u8], mut inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		super::set_changes_trie_config(
 			&mut overlay,
@@ -43,10 +50,13 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
+		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+
 		TestExternalities {
 			inner,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: overlay,
+			code: Some(code.to_vec()),
 		}
 	}
 
@@ -71,9 +81,7 @@ impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf {
 impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
-		for i in iter {
-			t.inner.insert(i.0, i.1);
-		}
+		t.inner.extend(iter);
 		t
 	}
 }
@@ -94,13 +102,17 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 			inner: hashmap,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: Default::default(),
+			code: None,
 		}
 	}
 }
 
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.inner.get(key).map(|x| x.to_vec())
+		match key {
+			CODE => self.code.clone(),
+			_ => self.inner.get(key).cloned(),
+		}
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> Option<Vec<u8>> {
@@ -109,9 +121,14 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		self.changes.set_storage(key.clone(), maybe_value.clone());
-		match maybe_value {
-			Some(value) => { self.inner.insert(key, value); }
-			None => { self.inner.remove(&key); }
+		match key.as_ref() {
+			CODE => self.code = maybe_value,
+			_ => {
+				match maybe_value {
+					Some(value) => { self.inner.insert(key, value); }
+					None => { self.inner.remove(&key); }
+				}
+			}
 		}
 	}
 
@@ -150,6 +167,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, H256};
+	use hex_literal::{hex, hex_impl};
 
 	#[test]
 	fn commit_should_work() {
@@ -157,7 +175,17 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
+		const ROOT: [u8; 32] = hex!("0b33ed94e74e0f8e92a55923bece1ed02d16cf424e124613ddebc53ac3eeeabe");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
+	}
+
+	#[test]
+	fn set_and_retrieve_code() {
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+
+		let code = vec![1, 2, 3];
+		ext.set_storage(CODE.to_vec(), code.clone());
+
+		assert_eq!(&ext.storage(CODE).unwrap(), &code);
 	}
 }

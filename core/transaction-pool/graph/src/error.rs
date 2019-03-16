@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,18 +17,21 @@
 //! Transaction pool errors.
 
 use sr_primitives::transaction_validity::TransactionPriority as Priority;
+use error_chain::{
+	error_chain, error_chain_processing, impl_error_chain_processed, impl_extract_backtrace, impl_error_chain_kind
+};
 
 error_chain! {
 	errors {
 		/// Transaction is not verifiable yet, but might be in the future.
-		UnknownTransactionValidity {
+		UnknownTransactionValidity(e: i8) {
 			description("Runtime cannot determine validity of the transaction yet."),
-			display("Unkown Transaction Validity"),
+			display("Unkown Transaction Validity. Error code: {}", e),
 		}
 		/// Transaction is invalid
-		InvalidTransaction {
+		InvalidTransaction(e: i8) {
 			description("Runtime check for the transaction failed."),
-			display("Invalid Transaction"),
+			display("Invalid Transaction. Error Code: {}", e),
 		}
 		/// The transaction is temporarily baned
 		TemporarilyBanned {
@@ -36,9 +39,9 @@ error_chain! {
 			display("Temporarily Banned"),
 		}
 		/// The transaction is already in the pool.
-		AlreadyImported {
-			description("Transaction is already in the pool."),
-			display("Already imported"),
+		AlreadyImported(hash: Box<::std::any::Any + Send>) {
+			description("Transaction is already in the pool"),
+			display("[{:?}] Already imported", hash),
 		}
 		/// The transaction cannot be imported cause it's a replacement and has too low priority.
 		TooLowPriority(old: Priority, new: Priority) {
@@ -49,6 +52,11 @@ error_chain! {
 		CycleDetected {
 			description("Transaction was not imported because of detected cycle."),
 			display("Cycle Detected"),
+		}
+		/// Transaction was dropped immediately after it got inserted.
+		ImmediatelyDropped {
+			description("Transaction couldn't enter the pool because of the limit."),
+			display("Immediately Dropped"),
 		}
 	}
 }

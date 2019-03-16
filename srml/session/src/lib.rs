@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,29 +19,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_consensus as consensus;
-extern crate srml_system as system;
-extern crate srml_timestamp as timestamp;
-
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
-use codec::HasCompact;
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
+use srml_support::{dispatch::Result, traits::OnFreeBalanceZero};
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -49,17 +30,6 @@ use rstd::ops::Mul;
 pub trait OnSessionChange<T> {
 	/// Session has changed.
 	fn on_session_change(time_elapsed: T, should_reward: bool);
-}
-
-macro_rules! for_each_tuple {
-	($m:ident) => {
-		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
-	};
-	(@IMPL $m:ident !!) => { $m! { } };
-	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
-		$m! { $h $($t)* }
-		for_each_tuple! { @IMPL $m !! $($t,)* }
-	}
 }
 
 macro_rules! impl_session_change {
@@ -80,16 +50,15 @@ macro_rules! impl_session_change {
 
 for_each_tuple!(impl_session_change);
 
-
-pub trait Trait: timestamp::Trait {
-	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
+pub trait Trait: timestamp::Trait + consensus::Trait {
+	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Option<Self::SessionKey>>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 		/// session.
@@ -100,8 +69,8 @@ decl_module! {
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
-		fn set_length(new: <T::BlockNumber as HasCompact>::Type) {
-			<NextSessionLength<T>>::put(new.into());
+		fn set_length(#[compact] new: T::BlockNumber) {
+			<NextSessionLength<T>>::put(new);
 		}
 
 		/// Forces a new session.
@@ -126,7 +95,6 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
-
 		/// The current set of validators.
 		pub Validators get(validators) config(): Vec<T::AccountId>;
 		/// Current length of the session.
@@ -142,16 +110,21 @@ decl_storage! {
 		/// Block at which the session length last changed.
 		LastLengthChange: Option<T::BlockNumber>;
 		/// The next key for a given validator.
-		NextKeyFor: map T::AccountId => Option<T::SessionKey>;
+		NextKeyFor build(|config: &GenesisConfig<T>| {
+			config.keys.clone()
+		}): map T::AccountId => Option<T::SessionKey>;
 		/// The next session length.
 		NextSessionLength: Option<T::BlockNumber>;
+	}
+	add_extra_genesis {
+		config(keys): Vec<(T::AccountId, T::SessionKey)>;
 	}
 }
 
 impl<T: Trait> Module<T> {
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
-		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
+		<Validators<T>>::get().len() as u32
 	}
 
 	/// The last length change, if there was one, zero if not.
@@ -168,13 +141,10 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of validators.
 	///
-	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
+	/// Called by `staking::new_era()` only. `rotate_session` must be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
-		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
-		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
-		);
+		<Validators<T>>::put(&new.to_vec());
 	}
 
 	/// Hook to be called after transaction processing.
@@ -214,14 +184,17 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
-
 		// Update any changes in session keys.
-		Self::validators().iter().enumerate().for_each(|(i, v)| {
-			if let Some(n) = <NextKeyFor<T>>::take(v) {
-				<consensus::Module<T>>::set_authority(i as u32, &n);
-			}
-		});
+		for (i, v) in Self::validators().into_iter().enumerate() {
+			<consensus::Module<T>>::set_authority(
+				i as u32,
+				&<NextKeyFor<T>>::get(&v)
+					.or_else(|| T::ConvertAccountIdToSessionKey::convert(v))
+					.unwrap_or_default()
+			);
+		};
+
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
@@ -242,14 +215,21 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		<NextKeyFor<T>>::remove(who);
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Identity, BlakeTwo256};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
+	use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -258,9 +238,8 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl consensus::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
-		type SessionKey = u64;
+		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
 	}
 	impl system::Trait for Test {
@@ -271,17 +250,17 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
 	}
 	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 		type OnTimestampSet = ();
 	}
 	impl Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
+		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 		type OnSessionChange = ();
 		type Event = ();
 	}
@@ -294,7 +273,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
-			authorities: vec![1, 2, 3],
+			authorities: vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)],
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
@@ -302,6 +281,7 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
+			keys: vec![],
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
@@ -309,7 +289,7 @@ mod tests {
 	#[test]
 	fn simple_setup_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
@@ -319,7 +299,7 @@ mod tests {
 	fn should_work_with_early_exit() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(10.into()));
+			assert_ok!(Session::set_length(10));
 			assert_eq!(Session::blocks_remaining(), 1);
 			Session::check_rotate_session(1);
 
@@ -354,14 +334,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(3.into()));
+			assert_ok!(Session::set_length(3));
 			Session::check_rotate_session(1);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
-			assert_ok!(Session::set_length(3.into()));
+			assert_ok!(Session::set_length(3));
 			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -374,7 +354,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
-			assert_ok!(Session::set_length(2.into()));
+			assert_ok!(Session::set_length(2));
 			Session::check_rotate_session(4);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -405,25 +385,25 @@ mod tests {
 			// Block 1: No change
 			System::set_block_number(1);
 			Session::check_rotate_session(1);
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 2: Session rollover, but no change.
 			System::set_block_number(2);
 			Session::check_rotate_session(2);
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			assert_ok!(Session::set_key(Origin::signed(2), 5));
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_ok!(Session::set_key(Origin::signed(2), UintAuthorityId(5)));
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			Session::check_rotate_session(3);
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 4: Session rollover, authority 2 changes.
 			System::set_block_number(4);
 			Session::check_rotate_session(4);
-			assert_eq!(Consensus::authorities(), vec![1, 5, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
 		});
 	}
 }

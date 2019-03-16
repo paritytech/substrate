@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,31 +16,18 @@
 
 //! Service integration test utils.
 
-#[macro_use]
-extern crate log;
-extern crate tempdir;
-extern crate tokio;
-extern crate futures;
-extern crate env_logger;
-extern crate fdlimit;
-extern crate substrate_service as service;
-extern crate substrate_network as network;
-extern crate substrate_primitives as primitives;
-extern crate substrate_client as client;
-extern crate substrate_consensus_common as consensus;
-extern crate sr_primitives;
 use std::iter;
 use std::sync::Arc;
 use std::net::Ipv4Addr;
 use std::time::Duration;
-use futures::Stream;
+use log::info;
+use futures::{Future, Stream};
 use tempdir::TempDir;
 use tokio::runtime::Runtime;
 use tokio::timer::Interval;
 use primitives::blake2_256;
 use service::{
 	ServiceFactory,
-	ExecutionStrategy,
 	Configuration,
 	FactoryFullConfiguration,
 	FactoryChainSpec,
@@ -112,6 +99,7 @@ fn node_config<F: ServiceFactory> (
 		reserved_nodes: vec![],
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
+		node_name: "unknown".to_owned(),
 	};
 
 	Configuration {
@@ -129,17 +117,17 @@ fn node_config<F: ServiceFactory> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		block_execution_strategy: ExecutionStrategy::NativeWhenPossible,
-		api_execution_strategy: ExecutionStrategy::NativeWhenPossible,
+		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
-		telemetry_url: None,
+		telemetry_endpoints: None,
+		default_heap_pages: None,
 	}
 }
 
 impl<F: ServiceFactory> TestNet<F> {
 	fn new(temp: &TempDir, spec: FactoryChainSpec<F>, full: u32, light: u32, authorities: Vec<String>, base_port: u16) -> TestNet<F> {
-		::env_logger::init().ok();
+		let _ = ::env_logger::try_init();
 		::fdlimit::raise_fd_limit();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
 		let mut net = TestNet {
@@ -181,14 +169,11 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-pub fn connectivity<F: ServiceFactory, Inherent>(spec: FactoryChainSpec<F>) where
-	<F as ServiceFactory>::RuntimeApi:
-		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block, Inherent>
-{
+pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	const NUM_NODES: u32 = 10;
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
-		{
+		let runtime = {
 			let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30400);
 			info!("Checking star topology");
 			let first_address = network.full_nodes[0].1.network().node_id().expect("No node address");
@@ -196,15 +181,19 @@ pub fn connectivity<F: ServiceFactory, Inherent>(spec: FactoryChainSpec<F>) wher
 				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(|_index, service|
-				service.network().status().num_peers == NUM_NODES as usize - 1
+				service.network().peers().len() == NUM_NODES as usize - 1
 			);
-		}
+			network.runtime
+		};
+
+		runtime.shutdown_on_idle().wait().expect("Error shutting down runtime");
+
 		temp.close().expect("Error removing temp dir");
 	}
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
-			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES, 0, vec![], 30500);
+			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES, 0, vec![], 30400);
 			info!("Checking linked topology");
 			let mut address = network.full_nodes[0].1.network().node_id().expect("No node address");
 			for (_, service) in network.full_nodes.iter().skip(1) {
@@ -212,7 +201,7 @@ pub fn connectivity<F: ServiceFactory, Inherent>(spec: FactoryChainSpec<F>) wher
 				address = service.network().node_id().expect("No node address");
 			}
 			network.run_until_all_full(|_index, service| {
-				service.network().status().num_peers == NUM_NODES as usize - 1
+				service.network().peers().len() == NUM_NODES as usize - 1
 			});
 		}
 		temp.close().expect("Error removing temp dir");
@@ -224,9 +213,6 @@ where
 	F: ServiceFactory,
 	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
-	<F as ServiceFactory>::RuntimeApi:
-		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block, ()> +
-		client::runtime_api::TaggedTransactionQueue<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;
@@ -261,10 +247,8 @@ where
 }
 
 pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
-where
-	F: ServiceFactory,
-	<F as ServiceFactory>::RuntimeApi:
-		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block, ()>
+	where
+		F: ServiceFactory,
 {
 	const NUM_NODES: u32 = 20;
 	const NUM_BLOCKS: u64 = 200;

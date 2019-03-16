@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,18 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-#[allow(unused_imports)]
-#[macro_use]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate sr_primitives as runtime_primitives;
-
+use serde_derive::Serialize;
 #[cfg(feature = "std")]
 use std::fmt;
 #[cfg(feature = "std")]
@@ -38,6 +27,9 @@ use std::collections::HashSet;
 #[cfg(feature = "std")]
 use runtime_primitives::traits::RuntimeApiInfo;
 
+use parity_codec::Encode;
+#[cfg(feature = "std")]
+use parity_codec::Decode;
 use runtime_primitives::RuntimeString;
 pub use runtime_primitives::create_runtime_str;
 
@@ -71,7 +63,8 @@ macro_rules! create_apis_vec {
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
 #[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize, Decode))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Decode))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
 	/// A different on-chain spec_name to that of the native runtime would normally result
@@ -103,6 +96,7 @@ pub struct RuntimeVersion {
 	pub impl_version: u32,
 
 	/// List of supported API "features" along with their versions.
+	#[cfg_attr(feature = "std", serde(serialize_with = "apis_serialize::serialize"))]
 	pub apis: ApisVec,
 }
 
@@ -134,6 +128,16 @@ impl RuntimeVersion {
 			s == &A::ID && *v == A::VERSION
 		})
 	}
+
+	/// Check if the given api is implemented and the version passes a predicate.
+	pub fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+		&self,
+		pred: P,
+	) -> bool {
+		self.apis.iter().any(|(s, v)| {
+			s == &A::ID && pred(*v)
+		})
+	}
 }
 
 #[cfg(feature = "std")]
@@ -152,5 +156,35 @@ impl NativeVersion {
 		self.runtime_version.spec_name == other.spec_name &&
 			(self.runtime_version.authoring_version == other.authoring_version ||
 			self.can_author_with.contains(&other.authoring_version))
+	}
+}
+
+#[cfg(feature = "std")]
+mod apis_serialize {
+	use super::*;
+	use impl_serde::serialize as bytes;
+	use serde::{Serializer, ser::SerializeTuple};
+
+	#[derive(Serialize)]
+	struct ApiId<'a>(
+		#[serde(serialize_with="serialize_bytesref")] &'a super::ApiId,
+		&'a u32,
+	);
+
+	pub fn serialize<S>(apis: &ApisVec, ser: S) -> Result<S::Ok, S::Error> where
+		S: Serializer,
+	{
+		let len = apis.len();
+		let mut seq = ser.serialize_tuple(len)?;
+		for (api, ver) in &**apis {
+			seq.serialize_element(&ApiId(api, ver))?;
+		}
+		seq.end()
+	}
+
+	pub fn serialize_bytesref<S>(apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
+		S: Serializer,
+	{
+		bytes::serialize(*apis, ser)
 	}
 }

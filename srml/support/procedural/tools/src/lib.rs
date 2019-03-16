@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,17 +18,12 @@
 //! Proc macro helpers for procedural macros
 // end::description[]
 
-extern crate syn;
-#[macro_use]
-extern crate quote;
-extern crate proc_macro2;
-
-extern crate proc_macro;
-
-#[macro_use] extern crate srml_support_procedural_tools_derive;
-
 // reexport proc macros
 pub use srml_support_procedural_tools_derive::*;
+
+use proc_macro_crate::crate_name;
+use syn::parse::Error;
+use quote::quote;
 
 pub mod syn_ext;
 
@@ -56,10 +51,7 @@ macro_rules! custom_keyword {
 	}
 }
 
-
-// TODO following functions are copied from sr-api-macros : do a merge to get a unique procedural
-// macro tooling crate (this crate path does not look good for it)
-
+// FIXME #1569, remove the following functions, which are copied from sr-api-macros
 use proc_macro2::{TokenStream, Span};
 use syn::Ident;
 
@@ -67,28 +59,57 @@ fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
 	Ident::new(&format!("sr_api_hidden_includes_{}", unique_id), Span::call_site())
 }
 
-/// Generates the access to the `subtrate_client` crate.
+/// Generates the access to the `srml-support` crate.
 pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	if ::std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		quote!( crate )
+		quote::quote!( crate )
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!( self::#mod_name::hidden_include )
-	}.into()
+		quote::quote!( self::#mod_name::hidden_include )
+	}
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
-pub fn generate_hidden_includes(unique_id: &str, def_crate: &str, crate_id: &str) -> TokenStream {
-	let crate_id = Ident::new(crate_id, Span::call_site());
+pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
 	if ::std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!(
-			#[doc(hidden)]
-			mod #mod_name {
-				pub extern crate #crate_id as hidden_include;
+
+		match crate_name(def_crate) {
+			Ok(name) => {
+				let name = Ident::new(&name, Span::call_site());
+				quote::quote!(
+					#[doc(hidden)]
+					mod #mod_name {
+						pub extern crate #name as hidden_include;
+					}
+				)
+			},
+			Err(e) => {
+				let err = Error::new(Span::call_site(), &e).to_compile_error();
+				quote!( #err )
 			}
-		)
-	}.into()
+		}
+
+	}
+}
+
+// fn to remove white spaces arount string types
+// (basically whitespaces arount tokens)
+pub fn clean_type_string(input: &str) -> String {
+	input
+		.replace(" ::", "::")
+		.replace(":: ", "::")
+		.replace(" ,", ",")
+		.replace(" ;", ";")
+		.replace(" [", "[")
+		.replace("[ ", "[")
+		.replace(" ]", "]")
+		.replace(" (", "(")
+		.replace("( ", "(")
+		.replace(" )", ")")
+		.replace(" <", "<")
+		.replace("< ", "<")
+		.replace(" >", ">")
 }

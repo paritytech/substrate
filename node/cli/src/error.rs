@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,6 +17,9 @@
 //! Initialization errors.
 
 use client;
+use error_chain::{
+	error_chain, error_chain_processing, impl_error_chain_processed
+};
 
 error_chain! {
 	foreign_links {
