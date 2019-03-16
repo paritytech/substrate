@@ -27,7 +27,6 @@ use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{
 	impl_outer_origin, impl_outer_event,
-	traits::{ArithmeticType, TransferAsset, WithdrawReason}
 };
 use crate::{GenesisConfig, Module, Trait, system};
 
@@ -41,22 +40,8 @@ mod fees {
 
 impl_outer_event!{
 	pub enum TestEvent for Test {
-		fees<T>,
+		balances<T>, fees<T>,
 	}
-}
-
-pub struct TransferAssetMock;
-
-impl<AccountId> TransferAsset<AccountId> for TransferAssetMock {
-	type Amount = u64;
-
-	fn transfer(_: &AccountId, _: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn withdraw(_: &AccountId, _: Self::Amount, _: WithdrawReason) -> Result<(), &'static str> { Ok(()) }
-	fn deposit(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl ArithmeticType for TransferAssetMock {
-	type Type = u64;
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -75,13 +60,20 @@ impl system::Trait for Test {
 	type Event = TestEvent;
 	type Log = DigestItem;
 }
+impl balances::Trait for Test {
+	type Balance = u64;
+	type OnFreeBalanceZero = ();
+	type OnNewAccount = ();
+	type Event = TestEvent;
+}
 impl Trait for Test {
 	type Event = TestEvent;
-	type TransferAsset = TransferAssetMock;
+	type TransferAsset = Balances;
 }
 
 pub type System = system::Module<Test>;
 pub type Fees = Module<Test>;
+pub type Balances = balances::Module<Test>;
 
 pub struct ExtBuilder {
 	transaction_base_fee: u64,
@@ -106,6 +98,13 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(balances::GenesisConfig::<Test>{
+			balances: vec![(0, 1000)],
+			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			vesting: vec![],
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test> {
 			transaction_base_fee: self.transaction_base_fee,
 			transaction_byte_fee: self.transaction_byte_fee,

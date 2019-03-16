@@ -20,11 +20,21 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use runtime_primitives::traits::{OnFinalise};
 use system::{EventRecord, Phase};
 
-use mock::{Fees, System, ExtBuilder};
+use mock::{Fees, System, ExtBuilder, Balances};
 use srml_support::{assert_ok, assert_err};
+
+fn get_events() -> Vec<EventRecord<mock::TestEvent>> {
+	System::events()
+		.into_iter()
+		.filter(|e| match e.event {
+			mock::TestEvent::fees(_) => true,
+			mock::TestEvent::balances(_) => true,
+			_ => false,
+		})
+		.collect()
+}
 
 #[test]
 fn charge_base_bytes_fee_should_work() {
@@ -35,16 +45,25 @@ fn charge_base_bytes_fee_should_work() {
 			.build(),
 		|| {
 			System::set_extrinsic_index(0);
+			let fee = 3 + 5 * 7;
 			assert_ok!(Fees::charge_base_bytes_fee(&0, 7));
-			assert_eq!(Fees::current_transaction_fee(0), 3 + 5 * 7);
+			assert_eq!(Balances::free_balance(&0), 1000 - fee);
 
 			System::set_extrinsic_index(1);
+			let fee2 = 3 + 5 * 11;
 			assert_ok!(Fees::charge_base_bytes_fee(&0, 11));
-			assert_eq!(Fees::current_transaction_fee(1), 3 + 5 * 11);
+			assert_eq!(Balances::free_balance(&0), 1000 - fee - fee2);
 
-			System::set_extrinsic_index(3);
-			assert_ok!(Fees::charge_base_bytes_fee(&0, 13));
-			assert_eq!(Fees::current_transaction_fee(3), 3 + 5 * 13);
+			assert_eq!(get_events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: RawEvent::Charged(0, fee).into(),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: RawEvent::Charged(0, fee2).into(),
+				},
+			]);
 		}
 	);
 }
@@ -58,11 +77,12 @@ fn charge_base_bytes_fee_should_not_work_if_bytes_fee_overflow() {
 			.transaction_byte_fee(u64::max_value())
 			.build(),
 		|| {
-			System::set_extrinsic_index(0);
 			assert_err!(
 				Fees::charge_base_bytes_fee(&0, 2),
 				"bytes fee overflow"
 			);
+
+			assert_eq!(get_events(), Vec::new());
 		}
 	);
 }
@@ -76,11 +96,12 @@ fn charge_base_bytes_fee_should_not_work_if_overall_fee_overflow() {
 			.transaction_byte_fee(1)
 			.build(),
 		|| {
-			System::set_extrinsic_index(0);
 			assert_err!(
 				Fees::charge_base_bytes_fee(&0, 1),
 				"bytes fee overflow"
 			);
+
+			assert_eq!(get_events(), Vec::new());
 		}
 	);
 }
@@ -88,86 +109,55 @@ fn charge_base_bytes_fee_should_not_work_if_overall_fee_overflow() {
 #[test]
 fn charge_fee_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		System::set_extrinsic_index(0);
 		assert_ok!(Fees::charge_fee(&0, 2));
+		assert_eq!(Balances::free_balance(0), 1000 - 2);
 		assert_ok!(Fees::charge_fee(&0, 3));
-		assert_eq!(Fees::current_transaction_fee(0), 2 + 3);
+		assert_eq!(Balances::free_balance(0), 1000 - 2 - 3);
 
-		System::set_extrinsic_index(2);
-		assert_ok!(Fees::charge_fee(&0, 5));
-		assert_ok!(Fees::charge_fee(&0, 7));
-		assert_eq!(Fees::current_transaction_fee(2), 5 + 7);
+		assert_eq!(get_events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: RawEvent::Charged(0, 2).into(),
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: RawEvent::Charged(0, 3).into(),
+			},
+		]);
 	});
 }
 
 #[test]
-fn charge_fee_when_overflow_should_not_work() {
+fn charge_fee_without_enough_balance_should_not_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		System::set_extrinsic_index(0);
-		assert_ok!(Fees::charge_fee(&0, u64::max_value()));
-		assert_err!(Fees::charge_fee(&0, 1), "fee got overflow after charge");
+		assert_err!(Fees::charge_fee(&0, 1001), "account has too few funds");
+		assert_err!(Fees::charge_fee(&1, 1), "account has too few funds");
+
+		assert_eq!(get_events(), Vec::new());
 	});
 }
 
 #[test]
 fn refund_fee_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		System::set_extrinsic_index(0);
 		assert_ok!(Fees::charge_fee(&0, 5));
 		assert_ok!(Fees::refund_fee(&0, 3));
-		assert_eq!(Fees::current_transaction_fee(0), 5 - 3);
-	});
-}
+		assert_eq!(Balances::free_balance(0), 1000 - 5 + 3);
+		assert_ok!(Fees::refund_fee(&0, 2));
+		assert_eq!(Balances::free_balance(0), 1000 - 5 + 3 + 2);
 
-#[test]
-fn refund_fee_when_underflow_should_not_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		System::set_extrinsic_index(0);
-		assert_err!(Fees::refund_fee(&0, 1), "fee got underflow after refund");
-	});
-}
-
-#[test]
-fn on_finalise_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		// charge fees in extrinsic index 3
-		System::set_extrinsic_index(3);
-		assert_ok!(Fees::charge_fee(&0, 1));
-		System::note_applied_extrinsic(&Ok(()), 1);
-		// charge fees in extrinsic index 5
-		System::set_extrinsic_index(5);
-		assert_ok!(Fees::charge_fee(&0, 1));
-		System::note_applied_extrinsic(&Ok(()), 1);
-		System::note_finished_extrinsics();
-
-		// `current_transaction_fee`, `extrinsic_count` should be as expected.
-		assert_eq!(Fees::current_transaction_fee(3), 1);
-		assert_eq!(Fees::current_transaction_fee(5), 1);
-		assert_eq!(System::extrinsic_count(), 5 + 1);
-
-		<Fees as OnFinalise<u64>>::on_finalise(1);
-
-		// When finalised, `CurrentTransactionFee` records should be cleared.
-		assert_eq!(Fees::current_transaction_fee(3), 0);
-		assert_eq!(Fees::current_transaction_fee(5), 0);
-
-		// When finalised, if any fee charged in a extrinsic, a `Charged` event should be deposited
-		// for it.
-		let fee_charged_events: Vec<EventRecord<mock::TestEvent>> = System::events()
-			.into_iter()
-			.filter(|e| match e.event {
-				mock::TestEvent::fees(RawEvent::Charged(_, _)) => return true,
-				_ => return false,
-			})
-			.collect();
-		assert_eq!(fee_charged_events, vec![
+		assert_eq!(get_events(), vec![
 			EventRecord {
-				phase: Phase::Finalization,
-				event: RawEvent::Charged(3, 1).into(),
+				phase: Phase::ApplyExtrinsic(0),
+				event: RawEvent::Charged(0, 5).into(),
 			},
 			EventRecord {
-				phase: Phase::Finalization,
-				event: RawEvent::Charged(5, 1).into(),
+				phase: Phase::ApplyExtrinsic(0),
+				event: RawEvent::Refunded(0, 3).into(),
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: RawEvent::Refunded(0, 2).into(),
 			},
 		]);
 	});

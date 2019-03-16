@@ -16,6 +16,9 @@ runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitiv
 srml-support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
+[dev-dependencies]
+balances = { package = "srml-balances", path = "../balances" }
+
 [features]
 default = ["std"]
 std = [
