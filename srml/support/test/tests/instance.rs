@@ -24,7 +24,7 @@ use srml_support::rstd as rstd;
 use srml_support::codec::{Encode, Decode};
 use srml_support::runtime_primitives::{generic, BuildStorage};
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify, Digest};
-use srml_support::{Parameter, construct_runtime, decl_module, decl_storage, decl_event};
+use srml_support::{Parameter, construct_runtime, decl_dispatch, decl_storage, decl_event};
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
@@ -50,7 +50,7 @@ mod system {
 
 	pub type DigestItemOf<T> = <<T as Trait>::Digest as Digest>::Item;
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			pub fn deposit_event(_event: T::Event) {
 			}
@@ -122,7 +122,7 @@ mod module1 {
 		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, I>() = default;
 
@@ -207,7 +207,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, I>() = default;
 		}
@@ -275,7 +275,7 @@ mod module3 {
 		type Currency2: Currency;
 	}
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		}
 	}

@@ -25,7 +25,7 @@ use runtime_io::with_storage;
 use rstd::{prelude::*, result};
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
-use srml_support::{decl_module, decl_event, decl_storage, ensure};
+use srml_support::{decl_dispatch, decl_event, decl_storage, ensure};
 use srml_support::traits::{
 	Currency, OnDilution, OnFreeBalanceZero, ArithmeticType,
 	LockIdentifier, LockableCurrency, WithdrawReasons
@@ -304,7 +304,7 @@ decl_storage! {
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 

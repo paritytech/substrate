@@ -166,7 +166,7 @@ mod tests {
 
 		use super::Trait;
 
-		decl_module! {
+		decl_dispatch! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 
 			}

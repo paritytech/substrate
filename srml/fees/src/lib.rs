@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use srml_support::{
-	dispatch::Result, StorageMap, decl_event, decl_storage, decl_module,
+	dispatch::Result, StorageMap, decl_event, decl_storage, decl_dispatch,
 	traits::{ArithmeticType, ChargeBytesFee, ChargeFee, TransferAsset, WithdrawReason}
 };
 use runtime_primitives::traits::{
@@ -41,7 +41,7 @@ pub trait Trait: system::Trait {
 	type TransferAsset: ArithmeticType + TransferAsset<Self::AccountId, Amount=AssetOf<Self>>;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 

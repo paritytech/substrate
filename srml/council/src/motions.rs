@@ -21,7 +21,7 @@ use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Dispatchable, Parameter};
-use srml_support::{StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{StorageValue, StorageMap, decl_dispatch, decl_event, decl_storage, ensure};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{self, ensure_signed};
 
@@ -64,7 +64,7 @@ decl_event!(
 	}
 );
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;
 		fn propose(origin, #[compact] threshold: u32, proposal: Box<<T as Trait>::Proposal>) {

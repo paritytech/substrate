@@ -73,7 +73,7 @@ use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
+use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_dispatch, decl_event, decl_storage};
 use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
@@ -147,7 +147,7 @@ impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeCom
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;

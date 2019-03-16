@@ -8,7 +8,7 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/gav-template/srml/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
+use support::{decl_dispatch, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
 
 /// The module's configuration trait.
@@ -29,7 +29,7 @@ decl_storage! {
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing events

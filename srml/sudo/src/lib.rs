@@ -21,7 +21,7 @@
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{StorageValue, Parameter, Dispatchable, decl_dispatch, decl_event, decl_storage, ensure};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -32,7 +32,7 @@ pub trait Trait: system::Trait {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 }
 
-decl_module! {
+decl_dispatch! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;

@@ -77,7 +77,7 @@ use system::{self, ensure_signed};
 // after each vote as all but K entries are cleared. newly registering candidates must use cleared
 // entries before they increase the capacity.
 
-use srml_support::{decl_module, traits::ArithmeticType};
+use srml_support::{decl_dispatch, traits::ArithmeticType};
 
 pub type VoteIndex = u32;
 
@@ -87,7 +87,7 @@ pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 

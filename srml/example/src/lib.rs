@@ -20,7 +20,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
+use srml_support::{StorageValue, dispatch::Result, decl_dispatch, decl_storage, decl_event};
 use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -113,7 +113,7 @@ decl_event!(
 // against them as the first thing you do in your function. There are three convenience calls
 // in system that do the matching for you and return a convenient result: `ensure_signed`,
 // `ensure_root` and `ensure_inherent`.
-decl_module! {
+decl_dispatch! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.

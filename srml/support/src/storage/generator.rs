@@ -628,7 +628,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -949,7 +949,7 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -984,7 +984,7 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 	crate::decl_storage! {

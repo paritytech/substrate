@@ -36,7 +36,7 @@ use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode};
 use fg_primitives::ScheduledChange;
-use srml_support::{Parameter, decl_event, decl_storage, decl_module};
+use srml_support::{Parameter, decl_event, decl_storage, decl_dispatch};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
@@ -212,7 +212,7 @@ decl_storage! {
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 

@@ -53,12 +53,12 @@
 //! ### Get current timestamp
 //! 
 //! ```ignore
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_dispatch, dispatch::Result};
 //! use system::ensure_signed;
 //! 
 //! pub trait Trait: timestamp::Trait {}
 //! 
-//! decl_module! {
+//! decl_dispatch! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn get_time(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
@@ -86,7 +86,7 @@ use parity_codec::Encode;
 use parity_codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
+use srml_support::{StorageValue, Parameter, decl_storage, decl_dispatch};
 use srml_support::for_each_tuple;
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
@@ -204,7 +204,7 @@ pub trait Trait: system::Trait {
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Set the current time.
 		///

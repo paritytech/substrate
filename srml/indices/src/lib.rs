@@ -21,7 +21,7 @@
 
 use rstd::{prelude::*, result, marker::PhantomData};
 use parity_codec::{Encode, Decode, Codec, Input, Output};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_dispatch, decl_event, decl_storage};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
 use system::{IsDeadAccount, OnNewAccount};
 
@@ -69,7 +69,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 	}

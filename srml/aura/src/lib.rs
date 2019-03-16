@@ -22,7 +22,7 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
-use srml_support::{decl_storage, decl_module};
+use srml_support::{decl_storage, decl_dispatch};
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -128,7 +128,7 @@ decl_storage! {
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
 }
 

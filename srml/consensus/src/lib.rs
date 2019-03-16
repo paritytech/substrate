@@ -23,7 +23,7 @@ use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode};
-use srml_support::{storage, Parameter, decl_storage, decl_module};
+use srml_support::{storage, Parameter, decl_storage, decl_dispatch};
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, Member};
@@ -180,7 +180,7 @@ decl_storage! {
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Report some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) {

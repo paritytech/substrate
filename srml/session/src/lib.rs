@@ -21,7 +21,7 @@
 
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
-use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
+use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_dispatch, decl_event, decl_storage};
 use srml_support::{dispatch::Result, traits::OnFreeBalanceZero};
 use system::ensure_signed;
 use rstd::ops::Mul;
@@ -56,7 +56,7 @@ pub trait Trait: timestamp::Trait + consensus::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 

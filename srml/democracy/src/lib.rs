@@ -23,7 +23,7 @@ use rstd::result;
 use primitives::traits::{Zero, As, Bounded};
 use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
-use srml_support::{decl_module, decl_storage, decl_event, ensure};
+use srml_support::{decl_dispatch, decl_storage, decl_event, ensure};
 use srml_support::traits::{Currency, LockableCurrency, WithdrawReason, ArithmeticType, LockIdentifier};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
@@ -77,7 +77,7 @@ pub trait Trait: system::Trait + Sized {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 

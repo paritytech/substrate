@@ -27,7 +27,7 @@
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use parity_codec::{Codec, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_dispatch, ensure};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, TransferAsset,
 	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency
@@ -178,7 +178,7 @@ decl_storage! {
 	extra_genesis_skip_phantom_data_field;
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 		fn deposit_event<T, I>() = default;
 

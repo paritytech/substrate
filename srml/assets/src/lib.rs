@@ -19,7 +19,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_dispatch, decl_event, decl_storage, ensure};
 use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 
@@ -33,7 +33,7 @@ pub trait Trait: system::Trait {
 
 type AssetId = u32;
 
-decl_module! {
+decl_dispatch! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;

@@ -21,7 +21,7 @@
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
-use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
+use srml_support::{StorageValue, StorageMap, decl_dispatch, decl_storage, decl_event, ensure};
 use srml_support::traits::{Currency, OnDilution, ArithmeticType};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec::{Encode, Decode};
@@ -52,7 +52,7 @@ type ProposalIndex = u32;
 
 // The module declaration. This states the entry points that we handle. The
 // macro takes care of the marshalling of arguments and dispatch.
-decl_module! {
+decl_dispatch! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;

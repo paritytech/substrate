@@ -112,7 +112,7 @@ decl_storage! {
 	}
 }
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.

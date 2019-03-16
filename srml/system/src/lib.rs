@@ -28,7 +28,7 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
-use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_dispatch, decl_event, decl_storage};
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
 
@@ -91,7 +91,7 @@ pub trait Trait: 'static + Eq + Clone {
 
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
-decl_module! {
+decl_dispatch! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposits an event onto this block's event record.
 		pub fn deposit_event(event: T::Event) {
