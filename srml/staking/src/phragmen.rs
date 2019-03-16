@@ -85,14 +85,14 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	FN: Fn() -> Box<dyn Iterator<
 		Item =(T::AccountId, Vec<T::AccountId>)
 	>>,
-	FS: Fn(T::AccountId) -> BalanceOf<T>,
+	for <'r> FS: Fn(&'r T::AccountId) -> BalanceOf<T>,
 {
 	let rounds = get_rounds();
 	let mut elected_candidates;
 	
 	// 1- Pre-process candidates and place them in a container
 	let mut candidates = get_validators().map(|(who, _)| {
-		let stash_balance = stash_of(who.clone());
+		let stash_balance = stash_of(&who);
 		Candidate {
 			who,
 			exposure: Exposure { total: stash_balance, own: stash_balance, others: vec![] },
@@ -106,7 +106,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
 	let mut nominations = get_nominators().map(|(who, nominees)| {
-		let nominator_stake = stash_of(who.clone());
+		let nominator_stake = stash_of(&who);
 		for n in &nominees {
 			candidates.iter_mut().filter(|i| i.who == *n).for_each(|c| {
 				c.approval_stake += nominator_stake;
@@ -119,9 +119,19 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				.map(|n| Vote { who: n, ..Default::default() })
 				.collect::<Vec<Vote<T::AccountId, BalanceOf<T>>>>(),
 			stake: nominator_stake,
-			load : Perquintill::zero(),
+			load: Perquintill::zero(),
 		}
 	}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
+
+	// 2.1- Add self-vote
+	candidates.iter().for_each(|v| {
+		nominations.push(Nominations {
+			who: v.who.clone(),
+			nominees: vec![Vote { who: v.who.clone(), ..Default::default() }],
+			stake: v.exposure.total,
+			load: Perquintill::zero(), 
+		})
+	});
 	
 	// 3- optimization:
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
@@ -171,9 +181,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 
 		// 4.1- Update backing stake of candidates and nominators
 		for n in &mut nominations {
+			let nominator = n.who.clone();
 			for v in &mut n.nominees {
 				// if the target of this vote is among the winners, otherwise let go.
-				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who) {
+				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who && c.who != nominator) {
 					v.backing_stake = <BalanceOf<T> as As<u64>>::sa(n.stake.as_() * *v.load / *n.load);
 					c.exposure.total += v.backing_stake;
 					// Update IndividualExposure of those who nominated and their vote won
@@ -189,8 +200,9 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			elected_candidates = candidates;
 			// `Exposure.others` still needs an update
 			for n in &mut nominations {
+				let nominator = n.who.clone();
 				for v in &mut n.nominees {
-					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who) {
+					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who && c.who != nominator) {
 						c.exposure.total += n.stake;
 						c.exposure.others.push(
 							IndividualExposure { who: n.who.clone(), value: n.stake }

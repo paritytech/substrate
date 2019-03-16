@@ -246,9 +246,12 @@ const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
 // Indicates the initial status of the staker
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub enum StakerStatus<AccountId> { 
+pub enum StakerStatus<AccountId> {
+	// Chilling.
 	Idle,
+	// Declared state in validating or already participating in it.
 	Validator,
+	// Nominating for a group of other stakers.
 	Nominator(Vec<AccountId>),
 }
 
@@ -872,7 +875,7 @@ impl<T: Trait> Module<T> {
 		let rounds = || <ValidatorCount<T>>::get() as usize;
 		let validators = || <Validators<T>>::enumerate();
 		let nominators = || <Nominators<T>>::enumerate();
-		let stash_of = |w| Self::stash_balance(&w);
+		let stash_of = |w: &T::AccountId| -> BalanceOf<T> { Self::stash_balance(w) };
 		let min_validator_count = Self::minimum_validator_count() as usize;
 		let elected_candidates = phragmen::elect::<T, _, _, _, _>(
 			rounds,

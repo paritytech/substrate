@@ -1447,7 +1447,7 @@ fn phragmen_election_works() {
 		let rounds =     || 2 as usize;
 		let validators = || <Validators<Test>>::enumerate();
 		let nominators = || <Nominators<Test>>::enumerate();
-		let stash_of =  |w| Staking::stash_balance(&w);
+		let stash_of = |w: &u64| -> u64 { Staking::stash_balance(w) };
 		let min_validator_count = Staking::minimum_validator_count() as usize;
 
 		let winners = phragmen::elect::<Test, _, _, _, _>(
