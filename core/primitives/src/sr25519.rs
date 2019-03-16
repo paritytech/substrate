@@ -22,8 +22,6 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use blake2_rfc;
-#[cfg(feature = "std")]
 use rand::rngs::OsRng;
 #[cfg(feature = "std")]
 use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
@@ -366,7 +364,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(signing_context(b"SchnorrRistrettoHDKD").bytes(&cc[..])).expand()
+	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand()
 }
 
 #[cfg(feature = "std")]
