@@ -11,7 +11,7 @@ clap = { version = "~2.32", features = ["yaml"] }
 tiny-bip39 = "0.6.0"
 rustc-hex = "2.0"
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39" }
-schnorrkel = { git = "https://github.com/w3f/schnorrkel" }
+schnorrkel = { git = "https://github.com/w3f/schnorrkel", commit = "d3289df76b8ae6dfb68e733204c5c009df5343a9" }
 hex = "0.3"
 
 [features]
