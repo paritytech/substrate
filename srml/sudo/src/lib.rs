@@ -41,7 +41,7 @@
 //! 
 //! To use the sudo module in your runtime, you must implement the following trait in your runtime:
 //! 
-//! ```
+//! ```ignore
 //! impl sudo::Trait for Runtime {
 //! 	/// The uniquitous event type.
 //! 	type Event = Event;
@@ -51,7 +51,7 @@
 //! 
 //! You can then import the sudo module in your `construct_runtime!` macro with:
 //! 
-//! ```
+//! ```ignore
 //! Sudo: sudo,
 //! ```
 //! 
@@ -61,7 +61,7 @@
 //! 
 //! For example:
 //! 
-//! ```rust,ignore
+//! ```ignore
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_root;
 //! 
@@ -87,7 +87,7 @@
 //! 
 //! The consensus module exposes a `set_code()` function which requires a `Root` call and allows you to set the on-chain Wasm runtime code:
 //! 
-//! ```
+//! ```ignore
 //! /// Set the new code.
 //! pub fn set_code(new: Vec<u8>) {
 //!     storage::unhashed::put_raw(well_known_keys::CODE, &new);
@@ -100,7 +100,7 @@
 //! 
 //! To use the sudo module, you need to include an initial superuser account to be set as the sudo `key`.
 //! 
-//! ```
+//! ```ignore
 //! GenesisConfig {
 //!     sudo: Some(SudoConfig {
 //!         key: AccountId,
