@@ -501,6 +501,10 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::fees(fees::RawEvent::Charged(alice().into(), 1))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
 						alice().into(),
 						bob().into(),
@@ -524,10 +528,6 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::fees(fees::RawEvent::Charged(1, 1))
-				}
 			]);
 		});
 
@@ -552,6 +552,10 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::fees(fees::RawEvent::Charged(bob().into(), 1))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
 							bob().into(),
@@ -564,6 +568,10 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(2),
+					event: Event::fees(fees::RawEvent::Charged(alice().into(), 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
@@ -604,14 +612,6 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::fees(fees::RawEvent::Charged(1, 1))
-				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::fees(fees::RawEvent::Charged(2, 1))
-				}
 			]);
 		});
 	}
