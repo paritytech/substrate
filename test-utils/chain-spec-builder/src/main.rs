@@ -16,11 +16,11 @@ fn genesis_constructor() -> chain_spec::GenesisConfig {
 		.map(chain_spec::get_authority_id_from_seed)
 		.collect();
 
-	let upgrade_key_seed = matches.value_of("upgrade_key_seed").unwrap();
-	let upgrade_key = chain_spec::get_authority_id_from_seed(upgrade_key_seed);
+	let sudo_key_seed = matches.value_of("sudo_key_seed").unwrap();
+	let sudo_key = chain_spec::get_authority_id_from_seed(sudo_key_seed);
 	chain_spec::testnet_genesis(
 		authorities,
-		upgrade_key.into(),
+		sudo_key.into(),
 		Some(endowed_accounts),
 	)
 }

@@ -78,7 +78,6 @@ members = [
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
-	"srml/upgrade-key",
 	"node/cli",
 	"node/executor",
 	"node/primitives",
