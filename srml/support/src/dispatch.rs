@@ -71,7 +71,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// Usually used as follows:
 ///
-/// decl_module! {
+/// decl_dispatch! {
 ///		pub struct Module<T: Trait> for enum Call where origin: T::Origin
 ///{}
 ///	}
@@ -94,13 +94,26 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ### Module with instances
 ///
-/// decl_module! support modules with instances with the following syntax: (DefaultInstance type is
+/// decl_dispatch! support modules with instances with the following syntax: (DefaultInstance type is
 /// optionnal)
 /// ```nocompile
 /// pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {}
 /// ```
 #[macro_export]
+#[doc(hidden)]
+#[deprecated(since = "1.0",
+	note = "The `decl_module!` macro has been renamed to `decl_dispatch!`. \
+		`decl_module!` will be removed in Substrate v1.1.")]
 macro_rules! decl_module {
+	(
+		$($t:tt)*
+	) => {
+		$crate::decl_dispatch!($($t)*);
+	};
+}
+
+#[macro_export]
+macro_rules! decl_dispatch {
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
 	// form)
 	(
@@ -110,7 +123,7 @@ macro_rules! decl_module {
 			$($t:tt)*
 		}
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = system
@@ -128,7 +141,7 @@ macro_rules! decl_module {
 			$($t:tt)*
 		}
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -152,7 +165,7 @@ macro_rules! decl_module {
 		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* () = default;
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -177,7 +190,7 @@ macro_rules! decl_module {
 		) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -200,7 +213,7 @@ macro_rules! decl_module {
 		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -223,7 +236,7 @@ macro_rules! decl_module {
 		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -248,7 +261,7 @@ macro_rules! decl_module {
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -320,7 +333,7 @@ macro_rules! decl_module {
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_dispatch!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
@@ -347,7 +360,7 @@ macro_rules! decl_module {
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 	) => {
-		decl_module!(@imp
+		$crate::decl_dispatch!(@imp
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system {
@@ -572,19 +585,19 @@ macro_rules! decl_module {
 		#[cfg(not(feature = "std"))]
 		pub struct $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable $( = $module_default_instance)?)?>(::core::marker::PhantomData<($trait_instance $(, $instance)?)>);
 
-		decl_module! {
+		$crate::decl_dispatch! {
 			@impl_on_initialise
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$( $on_initialise )*
 		}
 
-		decl_module! {
+		$crate::decl_dispatch! {
 			@impl_on_finalise
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$( $on_finalise )*
 		}
 
-		decl_module! {
+		$crate::decl_dispatch! {
 			@impl_deposit_event
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$system;
@@ -596,7 +609,7 @@ macro_rules! decl_module {
 		/// [`Call`]: enum.Call.html
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
 			$(
-				decl_module! {
+				$crate::decl_dispatch! {
 					@impl_function
 					$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
 					$origin_type;
@@ -713,7 +726,7 @@ macro_rules! decl_module {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
-							$crate::decl_module!(
+							$crate::decl_dispatch!(
 								@call
 								$from
 								$mod_type<$trait_instance $(, $fn_instance)?> $fn_name _origin $system [ $( $param_name ),* ]
@@ -1075,7 +1088,7 @@ mod tests {
 		}
 	}
 
-	decl_module! {
+	decl_dispatch! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(_origin) -> Result { unreachable!() }
