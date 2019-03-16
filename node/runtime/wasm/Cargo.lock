@@ -804,7 +804,6 @@ dependencies = [
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
  "srml-treasury 0.1.0",
- "srml-upgrade-key 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
  "substrate-keyring 0.1.0",
@@ -1829,19 +1828,6 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-balances 0.1.0",
- "srml-support 0.1.0",
- "srml-system 0.1.0",
-]
-
-[[package]]
-name = "srml-upgrade-key"
-version = "0.1.0"
-dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 0.1.0",
- "sr-std 0.1.0",
- "srml-consensus 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
 ]
