@@ -2768,7 +2768,7 @@ dependencies = [
 [[package]]
 name = "schnorrkel"
 version = "0.0.0"
-source = "git+https://github.com/w3f/schnorrkel#0a0de4294b475ef6abdeebb50067f213ca79b3c7"
+source = "git+https://github.com/w3f/schnorrkel#d3289df76b8ae6dfb68e733204c5c009df5343a9"
 dependencies = [
  "clear_on_drop 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "curve25519-dalek 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
