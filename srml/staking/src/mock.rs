@@ -84,6 +84,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
+	fare: bool,
 }
 
 impl Default for ExtBuilder {
@@ -98,6 +99,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
+			fare: true
 		}
 	}
 }
@@ -136,6 +138,10 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
+	pub fn fare(mut self, is_fare: bool) -> Self {
+		self.fare = is_fare;
+		self
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -164,9 +170,9 @@ impl ExtBuilder {
 					(20, balance_factor),
 					(21, balance_factor * 2000),
 					(30, balance_factor),
-					(31, balance_factor * 3000),
+					(31, balance_factor * 2000),
 					(40, balance_factor),
-					(41, balance_factor * 4000),
+					(41, balance_factor * 2000),
 					(100, 2000 * balance_factor),
 					(101, 2000 * balance_factor),
 			],
@@ -181,16 +187,16 @@ impl ExtBuilder {
 			stakers: if self.validator_pool {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
-					(31, 30, balance_factor * 3000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
-					(41, 40, balance_factor * 4000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(31, 30, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					(41, 40, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					// nominator
 					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			} else {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
 					// nominator
 					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]

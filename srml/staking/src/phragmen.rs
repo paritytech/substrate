@@ -103,9 +103,21 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	// Just to be used when we are below minimum validator count
 	let original_candidates = candidates.clone();
 	
+	// 1.1- Add phantom votes.
+	let mut nominations: Vec<Nominations<T::AccountId, BalanceOf<T>>> = Vec::with_capacity(candidates.len());
+	candidates.iter_mut().for_each(|c| {
+		c.approval_stake += c.exposure.total;
+		nominations.push(Nominations {
+			who: c.who.clone(),
+			nominees: vec![ Vote { who: c.who.clone(), ..Default::default() }],
+			stake: c.exposure.total,
+			load: Perquintill::zero(),
+		})
+	});
+
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
-	let mut nominations = get_nominators().map(|(who, nominees)| {
+	nominations.extend(get_nominators().map(|(who, nominees)| {
 		let nominator_stake = stash_of(&who);
 		for n in &nominees {
 			candidates.iter_mut().filter(|i| i.who == *n).for_each(|c| {
@@ -121,18 +133,11 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			stake: nominator_stake,
 			load: Perquintill::zero(),
 		}
-	}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
+	}));
 
-	// 2.1- Add self-vote
-	candidates.iter().for_each(|v| {
-		nominations.push(Nominations {
-			who: v.who.clone(),
-			nominees: vec![Vote { who: v.who.clone(), ..Default::default() }],
-			stake: v.exposure.total,
-			load: Perquintill::zero(), 
-		})
-	});
-	
+	println!("Candidates : {:?}", candidates);
+	println!("Nominations: {:?}", nominations);
+
 	// 3- optimization:
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
 	let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
@@ -215,6 +220,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			elected_candidates = original_candidates;
 		}
 	}
-
+	
+	println!("Elected : {:?}", elected_candidates);
 	elected_candidates
 }
