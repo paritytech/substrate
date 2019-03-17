@@ -44,26 +44,25 @@ pub struct Nominations<AccountId, Balance: HasCompact> {
 	// The nominator's account.
 	who: AccountId,
 	// List of validators proposed by this nominator.
-	nominees: Vec<Vote<AccountId, Balance>>,
+	edges: Vec<Edge<AccountId, Balance>>,
 	// the stake amount proposed by the nominator as a part of the vote.
-	// Same as `nom.budget` in Phragmén reference.
-	stake: Balance,
+	budget: Balance,
 	// Incremented each time a nominee that this nominator voted for has been elected.
 	load: Perquintill,
 }
 
-// Wrapper around a nominator vote and the load of that vote.
-// 
-// Referred to as 'edge' in the Phragmén reference implementation.
+// Wrapper around a nominator vote and the load of that vote. 
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Default))]
-pub struct Vote<AccountId, Balance: HasCompact> {
+pub struct Edge<AccountId, Balance: HasCompact> {
 	// Account being voted for
 	who: AccountId,
 	// Load of this vote.
 	load: Perquintill,
 	// Final backing stake of this vote.
-	backing_stake: Balance
+	backing_stake: Balance,
+	// Reference to the target candidate object
+	// candidate: &'a Candidate<AccountId, Balance>,
 }
 
 /// Perform election based on Phragmén algorithm.
@@ -109,8 +108,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		c.approval_stake += c.exposure.total;
 		nominations.push(Nominations {
 			who: c.who.clone(),
-			nominees: vec![ Vote { who: c.who.clone(), ..Default::default() }],
-			stake: c.exposure.total,
+			edges: vec![ Edge { who: c.who.clone(), ..Default::default() }],
+			budget: c.exposure.total,
 			load: Perquintill::zero(),
 		})
 	});
@@ -119,18 +118,18 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	// Also collect approval stake along the way.
 	nominations.extend(get_nominators().map(|(who, nominees)| {
 		let nominator_stake = stash_of(&who);
+		let mut edges: Vec<Edge<T::AccountId, BalanceOf<T>>> = Vec::with_capacity(nominees.len());
 		for n in &nominees {
-			candidates.iter_mut().filter(|i| i.who == *n).for_each(|c| {
+			if let Some(c) = candidates.iter_mut().find(|i| i.who == *n) {
 				c.approval_stake += nominator_stake;
-			});
+				edges.push(Edge { who: n.clone(), ..Default::default() });
+			}
 		}
-
+		
 		Nominations {
 			who,
-			nominees: nominees.into_iter()
-				.map(|n| Vote { who: n, ..Default::default() })
-				.collect::<Vec<Vote<T::AccountId, BalanceOf<T>>>>(),
-			stake: nominator_stake,
+			edges: edges, 
+			budget: nominator_stake,
 			load: Perquintill::zero(),
 		}
 	}));
@@ -150,17 +149,17 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		for _round in 0..rounds {
 			// Loop 1: initialize score
 			for nomination in &nominations {
-				for vote in &nomination.nominees {
-					if let Some(c) = candidates.iter_mut().find(|i| i.who == vote.who) {
+				for edge in &nomination.edges {
+					if let Some(c) = candidates.iter_mut().find(|i| i.who == edge.who) {
 						c.score = Perquintill::from_xth(c.approval_stake.as_());
 					}
 				}
 			}
 			// Loop 2: increment score.
 			for nomination in &nominations {
-				for vote in &nomination.nominees {
-					if let Some(c) = candidates.iter_mut().find(|i| i.who == vote.who) {
-						let temp = nomination.stake.as_() * *nomination.load / c.approval_stake.as_();
+				for edge in &nomination.edges {
+					if let Some(c) = candidates.iter_mut().find(|i| i.who == edge.who) {
+						let temp = nomination.budget.as_() * *nomination.load / c.approval_stake.as_();
 						c.score = Perquintill::from_quintillionths(*c.score + temp);
 					}
 				}
@@ -173,7 +172,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			// loop 3: update nominator and vote load
 			let winner = candidates.remove(winner_index);
 			for n in &mut nominations {
-				for v in &mut n.nominees {
+				for v in &mut n.edges {
 					if v.who == winner.who {
 						v.load = Perquintill::from_quintillionths(*winner.score - *n.load);
 						n.load = winner.score;
@@ -187,10 +186,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		// 4.1- Update backing stake of candidates and nominators
 		for n in &mut nominations {
 			let nominator = n.who.clone();
-			for v in &mut n.nominees {
+			for v in &mut n.edges {
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who && c.who != nominator) {
-					v.backing_stake = <BalanceOf<T> as As<u64>>::sa(n.stake.as_() * *v.load / *n.load);
+					v.backing_stake = <BalanceOf<T> as As<u64>>::sa(n.budget.as_() * *v.load / *n.load);
 					c.exposure.total += v.backing_stake;
 					// Update IndividualExposure of those who nominated and their vote won
 					c.exposure.others.push(
@@ -206,11 +205,11 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			// `Exposure.others` still needs an update
 			for n in &mut nominations {
 				let nominator = n.who.clone();
-				for v in &mut n.nominees {
-					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who && c.who != nominator) {
-						c.exposure.total += n.stake;
+				for e in &mut n.edges {
+					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who && c.who != nominator) {
+						c.exposure.total += n.budget;
 						c.exposure.others.push(
-							IndividualExposure { who: n.who.clone(), value: n.stake }
+							IndividualExposure { who: n.who.clone(), value: n.budget }
 						);
 					}
 				}
