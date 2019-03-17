@@ -314,7 +314,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		if transactor != dest {
 			Self::set_free_balance(transactor, new_from_balance);
-			Self::decrease_total_stake_by(fee);
+			Self::decrease_total_issuance_by(fee);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
@@ -335,7 +335,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Kill an account's free portion.
 	fn on_free_too_low(who: &T::AccountId) {
-		Self::decrease_total_stake_by(Self::free_balance(who));
+		Self::decrease_total_issuance_by(Self::free_balance(who));
 		<FreeBalance<T, I>>::remove(who);
 		<Locks<T, I>>::remove(who);
 
@@ -348,7 +348,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Kill an account's reserved portion.
 	fn on_reserved_too_low(who: &T::AccountId) {
-		Self::decrease_total_stake_by(Self::reserved_balance(who));
+		Self::decrease_total_issuance_by(Self::reserved_balance(who));
 		<ReservedBalance<T, I>>::remove(who);
 
 		if Self::free_balance(who).is_zero() {
@@ -357,13 +357,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Increase TotalIssuance by Value.
-	pub fn increase_total_stake_by(value: T::Balance) {
+	pub fn increase_total_issuance_by(value: T::Balance) {
 		if let Some(v) = <Module<T, I>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T, I>>::put(v);
 		}
 	}
 	/// Decrease TotalIssuance by Value.
-	pub fn decrease_total_stake_by(value: T::Balance) {
+	pub fn decrease_total_issuance_by(value: T::Balance) {
 		if let Some(v) = <Module<T, I>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T, I>>::put(v);
 		}
@@ -441,7 +441,7 @@ where
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
-		Self::decrease_total_stake_by(free_slash);
+		Self::decrease_total_issuance_by(free_slash);
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
 		} else {
@@ -454,7 +454,7 @@ where
 			return Err("beneficiary account must pre-exist");
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
-		Self::increase_total_stake_by(value);
+		Self::increase_total_issuance_by(value);
 		Ok(())
 	}
 
@@ -490,7 +490,7 @@ where
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
 		Self::set_reserved_balance(who, b - slash);
-		Self::decrease_total_stake_by(slash);
+		Self::decrease_total_issuance_by(slash);
 		if value == slash {
 			None
 		} else {
@@ -605,13 +605,13 @@ impl<T: Trait<I>, I: Instance> TransferAsset<T::AccountId> for Module<T, I> {
 		let new_balance = b - value;
 		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
 		Self::set_free_balance(who, new_balance);
-		Self::decrease_total_stake_by(value);
+		Self::decrease_total_issuance_by(value);
 		Ok(())
 	}
 
 	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
-		Self::increase_total_stake_by(value);
+		Self::increase_total_issuance_by(value);
 		Ok(())
 	}
 }

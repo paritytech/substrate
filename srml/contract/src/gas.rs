@@ -224,7 +224,7 @@ pub fn buy_gas<T: Trait>(
 	}
 
 	<balances::Module<T>>::set_free_balance(transactor, b - cost);
-	<balances::Module<T>>::decrease_total_stake_by(cost);
+	<balances::Module<T>>::decrease_total_issuance_by(cost);
 	Ok(GasMeter {
 		limit: gas_limit,
 		gas_left: gas_limit,
@@ -246,7 +246,7 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	let b = <balances::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
 	<balances::Module<T>>::set_free_balance(transactor, b + refund);
-	<balances::Module<T>>::increase_total_stake_by(refund);
+	<balances::Module<T>>::increase_total_issuance_by(refund);
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units
