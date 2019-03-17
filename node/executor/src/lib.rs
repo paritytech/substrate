@@ -501,7 +501,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::fees(fees::RawEvent::Charged(alice().into(), 1))
+					event: Event::fees(fees::RawEvent::TransactionPayment(alice().into(), 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -552,7 +552,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::fees(fees::RawEvent::Charged(bob().into(), 1))
+					event: Event::fees(fees::RawEvent::TransactionPayment(bob().into(), 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -571,7 +571,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::fees(fees::RawEvent::Charged(alice().into(), 1))
+					event: Event::fees(fees::RawEvent::TransactionPayment(alice().into(), 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),

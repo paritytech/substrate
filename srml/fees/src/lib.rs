@@ -21,7 +21,7 @@
 
 use srml_support::{
 	dispatch::Result, decl_event, decl_storage, decl_module,
-	traits::{ArithmeticType, ChargeBytesFee, ChargeFee, TransferAsset, WithdrawReason}
+	traits::{ArithmeticType, MakeTransactionPayment, TransferAsset, WithdrawReason}
 };
 use runtime_primitives::traits::{
 	As, CheckedAdd, CheckedMul
@@ -58,39 +58,20 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::AccountId, Amount = AssetOf<T> {
-		/// Fee charged (transactor, fee_amount)
-		Charged(AccountId, Amount),
-		Refunded(AccountId, Amount),
+		/// Transaction payment charged (transactor, fee_amount)
+		TransactionPayment(AccountId, Amount),
 	}
 );
 
-impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
-	fn charge_base_bytes_fee(transactor: &T::AccountId, encoded_len: usize) -> Result {
+impl<T: Trait> MakeTransactionPayment<T::AccountId> for Module<T> {
+	fn make_transaction_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let bytes_fee = Self::transaction_byte_fee().checked_mul(
 			&<AssetOf<T> as As<u64>>::sa(encoded_len as u64)
 		).ok_or_else(|| "bytes fee overflow")?;
 		let overall = Self::transaction_base_fee().checked_add(&bytes_fee).ok_or_else(|| "bytes fee overflow")?;
 
 		T::TransferAsset::withdraw(transactor, overall, WithdrawReason::TransactionPayment)?;
-		Self::deposit_event(RawEvent::Charged(transactor.clone(), overall));
-
-		Ok(())
-	}
-}
-
-impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
-	type Amount = AssetOf<T>;
-
-	fn charge_fee(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
-		T::TransferAsset::withdraw(transactor, amount, WithdrawReason::Reserve)?;
-		Self::deposit_event(RawEvent::Charged(transactor.clone(), amount));
-
-		Ok(())
-	}
-
-	fn refund_fee(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
-		T::TransferAsset::deposit(transactor, amount)?;
-		Self::deposit_event(RawEvent::Refunded(transactor.clone(), amount));
+		Self::deposit_event(RawEvent::TransactionPayment(transactor.clone(), overall));
 
 		Ok(())
 	}

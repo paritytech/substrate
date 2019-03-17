@@ -46,22 +46,22 @@ fn charge_base_bytes_fee_should_work() {
 		|| {
 			System::set_extrinsic_index(0);
 			let fee = 3 + 5 * 7;
-			assert_ok!(Fees::charge_base_bytes_fee(&0, 7));
+			assert_ok!(Fees::make_transaction_payment(&0, 7));
 			assert_eq!(Balances::free_balance(&0), 1000 - fee);
 
 			System::set_extrinsic_index(1);
 			let fee2 = 3 + 5 * 11;
-			assert_ok!(Fees::charge_base_bytes_fee(&0, 11));
+			assert_ok!(Fees::make_transaction_payment(&0, 11));
 			assert_eq!(Balances::free_balance(&0), 1000 - fee - fee2);
 
 			assert_eq!(get_events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: RawEvent::Charged(0, fee).into(),
+					event: RawEvent::TransactionPayment(0, fee).into(),
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: RawEvent::Charged(0, fee2).into(),
+					event: RawEvent::TransactionPayment(0, fee2).into(),
 				},
 			]);
 		}
@@ -78,7 +78,7 @@ fn charge_base_bytes_fee_should_not_work_if_bytes_fee_overflow() {
 			.build(),
 		|| {
 			assert_err!(
-				Fees::charge_base_bytes_fee(&0, 2),
+				Fees::make_transaction_payment(&0, 2),
 				"bytes fee overflow"
 			);
 
@@ -97,68 +97,11 @@ fn charge_base_bytes_fee_should_not_work_if_overall_fee_overflow() {
 			.build(),
 		|| {
 			assert_err!(
-				Fees::charge_base_bytes_fee(&0, 1),
+				Fees::make_transaction_payment(&0, 1),
 				"bytes fee overflow"
 			);
 
 			assert_eq!(get_events(), Vec::new());
 		}
 	);
-}
-
-#[test]
-fn charge_fee_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		assert_ok!(Fees::charge_fee(&0, 2));
-		assert_eq!(Balances::free_balance(0), 1000 - 2);
-		assert_ok!(Fees::charge_fee(&0, 3));
-		assert_eq!(Balances::free_balance(0), 1000 - 2 - 3);
-
-		assert_eq!(get_events(), vec![
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RawEvent::Charged(0, 2).into(),
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RawEvent::Charged(0, 3).into(),
-			},
-		]);
-	});
-}
-
-#[test]
-fn charge_fee_without_enough_balance_should_not_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		assert_err!(Fees::charge_fee(&0, 1001), "account has too few funds");
-		assert_err!(Fees::charge_fee(&1, 1), "account has too few funds");
-
-		assert_eq!(get_events(), Vec::new());
-	});
-}
-
-#[test]
-fn refund_fee_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		assert_ok!(Fees::charge_fee(&0, 5));
-		assert_ok!(Fees::refund_fee(&0, 3));
-		assert_eq!(Balances::free_balance(0), 1000 - 5 + 3);
-		assert_ok!(Fees::refund_fee(&0, 2));
-		assert_eq!(Balances::free_balance(0), 1000 - 5 + 3 + 2);
-
-		assert_eq!(get_events(), vec![
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RawEvent::Charged(0, 5).into(),
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RawEvent::Refunded(0, 3).into(),
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RawEvent::Refunded(0, 2).into(),
-			},
-		]);
-	});
 }

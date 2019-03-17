@@ -25,7 +25,7 @@ use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT
 };
-use srml_support::{Dispatchable, traits::ChargeBytesFee};
+use srml_support::{Dispatchable, traits::MakeTransactionPayment};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -64,7 +64,7 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: ChargeBytesFee<System::AccountId>,
+	Payment: MakeTransactionPayment<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -85,7 +85,7 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: ChargeBytesFee<System::AccountId>,
+	Payment: MakeTransactionPayment<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -214,7 +214,7 @@ impl<
 			) }
 
 			// pay any fees.
-			Payment::charge_base_bytes_fee(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::make_transaction_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -286,7 +286,7 @@ impl<
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
-			if Payment::charge_base_bytes_fee(sender, encoded_len).is_err() {
+			if Payment::make_transaction_payment(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 

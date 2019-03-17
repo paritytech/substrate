@@ -207,23 +207,11 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 }
 
-/// Charge bytes fee trait
-pub trait ChargeBytesFee<AccountId> {
+/// Make transaction payment trait
+pub trait MakeTransactionPayment<AccountId> {
 	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
 	/// `encoded_len` bytes. Return Ok if the payment was successful.
-	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-/// Charge fee trait
-pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
-	/// The type of fee amount.
-	type Amount;
-
-	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
-	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Refund `amount` of previous charged fees from `transactor`. Return Ok if the refund was successful.
-	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+	fn make_transaction_payment(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 }
 
 bitmask! {
@@ -258,15 +246,8 @@ pub trait TransferAsset<AccountId> {
 	fn deposit(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 
-impl<T> ChargeBytesFee<T> for () {
-	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> ChargeFee<T> for () {
-	type Amount = ();
-
-	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+impl<T> MakeTransactionPayment<T> for () {
+	fn make_transaction_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
 }
 
 impl<T> TransferAsset<T> for () {
