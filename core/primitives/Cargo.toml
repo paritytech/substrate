@@ -22,7 +22,7 @@ untrusted = { version = "0.6", optional = true }
 hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
-schnorrkel = { git = "https://github.com/w3f/schnorrkel", optional = true, commit = "d3289df76b8ae6dfb68e733204c5c009df5343a9" }
+schnorrkel = { version = "0.1", optional = true }
 rand = { version = "0.6", optional = true }
 sha2 = { version = "0.8", optional = true }
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39", optional = true }
