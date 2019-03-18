@@ -19,6 +19,7 @@
 use super::{CodeHash, CodeHashOf, Trait, AccountInfo, KeySpace, AccountInfoOf};
 use {balances, system};
 use rstd::cell::RefCell;
+use rstd::rc::Rc;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child};
@@ -74,12 +75,6 @@ impl<A: Clone + Ord> AccountKeySpaceMapping<A> {
 pub trait AccountDb<T: Trait> {
 	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo>;
 	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace;
-	// this function is borderline (impl specific to overlaydb). An alternate
-	// design is to use rc internally (instead of optional cache) for 
-	// overlaydb. It avoid querying the cache through a recursive call,
-	// but make `get_subtrie` and `get_or_create_keyspace` recursive call
-	// awkward : multiple query or insert (unless we specify top overlaydb instance).
-	fn get_account_from_reg_ks(&self, ks: &KeySpace) -> Option<T::AccountId>;
 	fn get_storage(&self, key_space: &KeySpace, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
@@ -98,12 +93,6 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		<Self as AccountDb<T>>::get_account_info(self, account)
 			.map(|s|s.key_space)
 			.unwrap_or_else(||<T as Trait>::KeySpaceGenerator::key_space(account))
-	}
-	fn get_account_from_reg_ks(&self, _: &KeySpace) -> Option<T::AccountId> {
-		// very borderline implementation that consider actual usage of accountdb 
-		// this function being kind of helper of get_storage function
-		// weak design here (for overlayaccountdb it make sense for top level cache)
-		None
 	}
 	fn get_storage(&self, key_space: &KeySpace, location: &[u8]) -> Option<Vec<u8>> {
 		child::get_raw(key_space, location)
@@ -146,16 +135,26 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 }
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	local: RefCell<ChangeSet<T>>,
-	keyspace_account: Option<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>>,
+	keyspace_account: Rc<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>>,
+	keyspace_account_cache: bool,
 	underlying: &'a AccountDb<T>,
 }
 impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	pub fn new(underlying: &'a AccountDb<T>, keyspace_account: Option<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>>) -> OverlayAccountDb<'a, T> {
+	pub fn new(
+		underlying: &'a AccountDb<T>,
+		keyspace_account: Rc<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>>,
+		keyspace_account_cache: bool,
+	) -> OverlayAccountDb<'a, T> {
 		OverlayAccountDb {
 			local: RefCell::new(ChangeSet::new()),
 			keyspace_account,
+			keyspace_account_cache,
 			underlying,
 		}
+	}
+
+	pub fn reg_cache_new_rc(&self) -> Rc<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>> {
+		self.keyspace_account.clone()
 	}
 
 	pub fn into_change_set(self) -> ChangeSet<T> {
@@ -194,37 +193,33 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo> {
 		let v = self.underlying.get_account_info(account);
-		v.as_ref().map(|v|
-			self.keyspace_account.as_ref().map(|ka|
-				ka.borrow_mut().insert(account.clone(), v.key_space.clone())));
+		if self.keyspace_account_cache {
+			v.as_ref().map(|v|self.keyspace_account.as_ref().borrow_mut().insert(account.clone(), v.key_space.clone()));
+		}
 		v
 	}
 	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace {
-		self.keyspace_account.as_ref()
-			.map(|ka| {
-				let mut ka_mut = ka.borrow_mut();
-				if let Some(v) = ka_mut.get_keyspace(account) {
-					v.clone()
-				} else {
-					let v = self.underlying.get_or_create_keyspace(account);
-					ka_mut.insert(account.clone(), v.clone());
-					v
-				}
-			})
-			.unwrap_or_else(||self.underlying.get_or_create_keyspace(account))
+		if self.keyspace_account_cache {
+			let mut ka_mut = self.keyspace_account.as_ref().borrow_mut();
+			if let Some(v) = ka_mut.get_keyspace(account) {
+				v.clone()
+			} else {
+				let v = self.underlying.get_or_create_keyspace(account);
+				ka_mut.insert(account.clone(), v.clone());
+				v
+			}
+		} else {
+			let res = self.keyspace_account.as_ref().borrow().get_keyspace(account).map(|v|v.clone());
+			res.unwrap_or_else(||self.underlying.get_or_create_keyspace(account))
+		}
 	}
-	fn get_account_from_reg_ks(&self, ks: &KeySpace) -> Option<T::AccountId> {
-		self.keyspace_account.as_ref()
-			.map(|ka| ka.borrow().get_account(ks).cloned())
-			.unwrap_or_else(|| self.underlying.get_account_from_reg_ks(ks))
-	}
-	fn get_storage(&self, key_space: &KeySpace, location: &[u8]) -> Option<Vec<u8>> {
-		self.get_account_from_reg_ks(key_space).and_then(|account| self.local
+	fn get_storage(&self, ks: &KeySpace, location: &[u8]) -> Option<Vec<u8>> {
+		self.keyspace_account.as_ref().borrow().get_account(ks).and_then(|account| self.local
 			.borrow()
 			.get(&account)
 			.and_then(|a| a.storage.get(location))
 			.cloned()
-			.unwrap_or_else(|| self.underlying.get_storage(key_space, location)))
+			.unwrap_or_else(|| self.underlying.get_storage(ks, location)))
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local

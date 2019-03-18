@@ -20,6 +20,7 @@ use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
 use rstd::cell::RefCell;
+use rstd::rc::Rc;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 use srml_support::traits::WithdrawReason;
 use timestamp;
@@ -246,7 +247,7 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
-		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb, Some(RefCell::new(AccountKeySpaceMapping::new())));
+		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb, Rc::new(RefCell::new(AccountKeySpaceMapping::new())), true);
 		let self_keyspace = overlay.get_or_create_keyspace(&origin);
 		ExecutionContext {
 			self_account: origin,
@@ -301,7 +302,7 @@ where
 
 		let (change_set, events, calls) = {
 			let mut nested = self.nested(
-				OverlayAccountDb::new(&self.overlay, None),
+				OverlayAccountDb::new(&self.overlay, self.overlay.reg_cache_new_rc(), false),
 				dest.clone()
 			);
 
@@ -376,7 +377,8 @@ where
 		}
 
 		let (change_set, events, calls) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay, None);
+			let mut overlay = OverlayAccountDb::new(&self.overlay, self.overlay.reg_cache_new_rc(), false);
+				
 			overlay.set_code(&dest, Some(code_hash.clone()));
 			let mut nested = self.nested(overlay, dest.clone());
 
@@ -645,9 +647,9 @@ mod tests {
 	use crate::{CodeHash, Config};
 	use runtime_io::with_externalities;
 	use std::cell::RefCell;
+	use std::rc::Rc;
 	use std::collections::HashMap;
 	use std::marker::PhantomData;
-	use std::rc::Rc;
 	use assert_matches::assert_matches;
 
 	const ALICE: u64 = 1;
