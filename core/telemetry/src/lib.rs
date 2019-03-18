@@ -56,7 +56,7 @@ pub const SUBSTRATE_INFO: &str = "0";
 pub const CONSENSUS_TRACE: &str = "9";
 pub const CONSENSUS_DEBUG: &str = "5";
 pub const CONSENSUS_WARN: &str = "4";
-pub const CONSENSUS_INFO: &str = "3";
+pub const CONSENSUS_INFO: &str = "0";
 
 /// Multiply logging to all drains. This is similar to `slog::Duplicate`, which is
 /// limited to two drains though and doesn't support dynamic nesting at runtime.
