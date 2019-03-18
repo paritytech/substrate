@@ -170,7 +170,7 @@ use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 mod mock;
 mod tests;
 
-pub trait Trait: system::Trait {
+pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
@@ -184,7 +184,7 @@ pub trait Trait: system::Trait {
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 }
 
 impl<T: Trait> ArithmeticType for Module<T> {
@@ -192,9 +192,9 @@ impl<T: Trait> ArithmeticType for Module<T> {
 }
 
 decl_event!(
-	pub enum Event<T> where
+	pub enum Event<T, I: Instance = DefaultInstance> where
 		<T as system::Trait>::AccountId,
-		<T as Trait>::Balance
+		<T as Trait<I>>::Balance
 	{
 		/// A new account was created.
 		NewAccount(AccountId, Balance),
@@ -236,9 +236,9 @@ pub struct BalanceLock<Balance, BlockNumber> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Balances {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
-		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T>| {
+		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T, I>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
 		/// The minimum amount required to keep an account open.
@@ -249,7 +249,7 @@ decl_storage! {
 		pub CreationFee get(creation_fee) config(): T::Balance;
 
 		/// Information regarding the vesting of a given account.
-		pub Vesting get(vesting) build(|config: &GenesisConfig<T>| {
+		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
 			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
 				let begin: u64 = begin.as_();
 				let length: u64 = length.as_();
@@ -280,8 +280,8 @@ decl_storage! {
 		/// the deleted account.
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
-		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
-		pub FreeBalance get(free_balance) build(|config: &GenesisConfig<T>| config.balances.clone()): map T::AccountId => T::Balance;
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		pub FreeBalance get(free_balance) build(|config: &GenesisConfig<T, I>| config.balances.clone()): map T::AccountId => T::Balance;
 
 		/// The amount of the balance of a given account that is externally reserved; this can still get
 		/// slashed, but gets slashed last of all.
@@ -303,11 +303,12 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber)>;		// begin, length
 	}
+	extra_genesis_skip_phantom_data_field;
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		fn deposit_event<T, I>() = default;
 
 		/// Transfer some liquid free balance to another account.
 		///
@@ -348,7 +349,7 @@ decl_module! {
 }
 
 /// The functions in this implementation affect storage.
-impl<T: Trait> Module<T> {
+impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Get the amount that is currently being vested and cannot be transfered out of this account.
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
@@ -366,11 +367,11 @@ impl<T: Trait> Module<T> {
 	/// is known that the account already exists.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
-			<ReservedBalance<T>>::insert(who, balance);
+			<ReservedBalance<T, I>>::insert(who, balance);
 			Self::on_reserved_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
-			<ReservedBalance<T>>::insert(who, balance);
+			<ReservedBalance<T, I>>::insert(who, balance);
 			UpdateBalanceOutcome::Updated
 		}
 	}
@@ -384,11 +385,11 @@ impl<T: Trait> Module<T> {
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
-			<FreeBalance<T>>::insert(who, balance);
+			<FreeBalance<T, I>>::insert(who, balance);
 			Self::on_free_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
-			<FreeBalance<T>>::insert(who, balance);
+			<FreeBalance<T, I>>::insert(who, balance);
 			UpdateBalanceOutcome::Updated
 		}
 	}
@@ -402,12 +403,13 @@ impl<T: Trait> Module<T> {
 	///
 	/// See documentation on `FreeBalance` and `ReservedBalance` storage items for their differences
 	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		let ed = <Module<T>>::existential_deposit();
+		let ed = <Module<T, I>>::existential_deposit();
+
 		if balance < ed {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
-			if !<FreeBalance<T>>::exists(who) {
+			if !<FreeBalance<T, I>>::exists(who) {
 				Self::new_account(&who, balance);
 			}
 			Self::set_free_balance(who, balance);
@@ -475,8 +477,8 @@ impl<T: Trait> Module<T> {
 	/// Kill an account's free portion.
 	fn on_free_too_low(who: &T::AccountId) {
 		Self::decrease_total_stake_by(Self::free_balance(who));
-		<FreeBalance<T>>::remove(who);
-		<Locks<T>>::remove(who);
+		<FreeBalance<T, I>>::remove(who);
+		<Locks<T, I>>::remove(who);
 
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
@@ -488,7 +490,7 @@ impl<T: Trait> Module<T> {
 	/// Kill an account's reserved portion.
 	fn on_reserved_too_low(who: &T::AccountId) {
 		Self::decrease_total_stake_by(Self::reserved_balance(who));
-		<ReservedBalance<T>>::remove(who);
+		<ReservedBalance<T, I>>::remove(who);
 
 		if Self::free_balance(who).is_zero() {
 			Self::reap_account(who);
@@ -497,15 +499,15 @@ impl<T: Trait> Module<T> {
 
 	/// Increase total issuance by `value`.
 	pub fn increase_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
-			<TotalIssuance<T>>::put(v);
+		if let Some(v) = <Module<T, I>>::total_issuance().checked_add(&value) {
+			<TotalIssuance<T, I>>::put(v);
 		}
 	}
 
 	/// Decrease total issuance by `value`.
 	pub fn decrease_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
-			<TotalIssuance<T>>::put(v);
+		if let Some(v) = <Module<T, I>>::total_issuance().checked_sub(&value) {
+			<TotalIssuance<T, I>>::put(v);
 		}
 	}
 
@@ -539,7 +541,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Currency<T::AccountId> for Module<T>
+impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDebug
 {
@@ -562,7 +564,7 @@ where
 	}
 
 	fn total_issuance() -> Self::Balance {
-		<TotalIssuance<T>>::get()
+		<TotalIssuance<T, I>>::get()
 	}
 
 	fn minimum_balance() -> Self::Balance {
@@ -570,11 +572,11 @@ where
 	}
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
-		<FreeBalance<T>>::get(who)
+		<FreeBalance<T, I>>::get(who)
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
-		<ReservedBalance<T>>::get(who)
+		<ReservedBalance<T, I>>::get(who)
 	}
 
 	fn slash(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
@@ -658,7 +660,7 @@ where
 	}
 }
 
-impl<T: Trait> LockableCurrency<T::AccountId> for Module<T>
+impl<T: Trait<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDebug
 {
@@ -684,7 +686,7 @@ where
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
-		<Locks<T>>::insert(who, locks);
+		<Locks<T, I>>::insert(who, locks);
 	}
 
 	fn extend_lock(
@@ -714,7 +716,7 @@ where
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
-		<Locks<T>>::insert(who, locks);
+		<Locks<T, I>>::insert(who, locks);
 	}
 
 	fn remove_lock(
@@ -728,11 +730,11 @@ where
 			} else {
 				None
 			}).collect::<Vec<_>>();
-		<Locks<T>>::insert(who, locks);
+		<Locks<T, I>>::insert(who, locks);
 	}
 }
 
-impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
+impl<T: Trait<I>, I: Instance> TransferAsset<T::AccountId> for Module<T, I> {
 	type Amount = T::Balance;
 
 	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
@@ -756,7 +758,7 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T>
+impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDebug
 {

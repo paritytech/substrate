@@ -317,7 +317,7 @@ where
 	config.impl_commit = version.commit;
 	config.impl_version = version.version;
 
-	config.name = match cli.name {
+	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
 		None => generate_node_name(),
 		Some(name) => name,
 	};
@@ -387,7 +387,11 @@ where
 	}
 
 	if cli.shared_params.dev {
-		config.keys.push("Alice".into());
+		config.keys.push("//Alice".into());
+	}
+
+	if let Some(account) = cli.keyring.account {
+		config.keys.push(format!("//{}", account));
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
@@ -574,22 +578,27 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-
 	let db_path = config.database_path;
-	print!("Are you sure to remove {:?}? (y/n)", &db_path);
-	stdout().flush().expect("failed to flush stdout");
 
-	let mut input = String::new();
-	stdin().read_line(&mut input)?;
-	let input = input.trim();
+	if cli.yes == false {
+		print!("Are you sure to remove {:?}? (y/n)", &db_path);
+		stdout().flush().expect("failed to flush stdout");
 
-	match input.chars().nth(0) {
-		Some('y') | Some('Y') => {
-			fs::remove_dir_all(&db_path)?;
-			println!("{:?} removed.", &db_path);
-		},
-		_ => println!("Aborted"),
+		let mut input = String::new();
+		stdin().read_line(&mut input)?;
+		let input = input.trim();
+
+		match input.chars().nth(0) {
+			Some('y') | Some('Y') => {},
+			_ => {
+				println!("Aborted");
+				return Ok(());
+			},
+		}
 	}
+
+	fs::remove_dir_all(&db_path)?;
+	println!("{:?} removed.", &db_path);
 
 	Ok(())
 }

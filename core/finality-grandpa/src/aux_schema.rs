@@ -16,20 +16,20 @@
 
 //! Schema for stuff in the aux-db.
 
+use std::fmt::Debug;
+use std::sync::Arc;
 use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError, ErrorKind as ClientErrorKind};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
-use substrate_primitives::Ed25519AuthorityId;
 use log::{info, warn};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::NewAuthoritySet;
 
-use std::fmt::Debug;
-use std::sync::Arc;
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
@@ -61,7 +61,7 @@ type V0VoterSetState<H, N> = (u64, RoundState<H, N>);
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 struct V0PendingChange<H, N> {
-	next_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	next_authorities: Vec<(AuthorityId, u64)>,
 	delay: N,
 	canon_height: N,
 	canon_hash: H,
@@ -69,7 +69,7 @@ struct V0PendingChange<H, N> {
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 struct V0AuthoritySet<H, N> {
-	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	current_authorities: Vec<(AuthorityId, u64)>,
 	set_id: u64,
 	pending_changes: Vec<V0PendingChange<H, N>>,
 }
@@ -141,7 +141,7 @@ pub(crate) fn load_persistent<B, H, N, G>(
 		B: AuxStore,
 		H: Debug + Decode + Encode + Clone + PartialEq,
 		N: Debug + Decode + Encode + Clone + Ord,
-		G: FnOnce() -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>
+		G: FnOnce() -> ClientResult<Vec<(AuthorityId, u64)>>
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 	let consensus_changes = load_decode(backend, CONSENSUS_CHANGES_KEY)?

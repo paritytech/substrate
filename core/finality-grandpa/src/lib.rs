@@ -68,8 +68,8 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use substrate_primitives::{ed25519, H256, Blake2Hasher, Pair};
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 use srml_finality_tracker;
 
@@ -106,6 +106,8 @@ pub use finality_proof::{prove_finality, check_finality_proof};
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 
+use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+
 #[cfg(test)]
 mod tests;
 
@@ -118,8 +120,8 @@ pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Bl
 pub type SignedMessage<Block> = grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	ed25519::Signature,
-	Ed25519AuthorityId,
+	AuthoritySignature,
+	AuthorityId,
 >;
 
 /// Grandpa gossip message type.
@@ -148,15 +150,15 @@ pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFo
 pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	ed25519::Signature,
-	Ed25519AuthorityId
+	AuthoritySignature,
+	AuthorityId
 >;
 /// A compact commit message for this chain's block type.
 pub type CompactCommit<Block> = grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	ed25519::Signature,
-	Ed25519AuthorityId
+	AuthoritySignature,
+	AuthorityId
 >;
 
 /// Network level commit message with topic information.
@@ -386,6 +388,17 @@ impl<Block: BlockT> GossipValidator<Block> {
 		}
 
 		let topic = commit_topic::<Block>(full.set_id);
+
+		let precommits_signed_by: Vec<String> = full.message.auth_data.iter().map(move |(_, a)| {
+			format!("{}", a)
+		}).collect();
+		telemetry!(CONSENSUS_INFO; "afg.received_commit_msg";
+			"contains_precommits_signed_by" => ?precommits_signed_by,
+			"round" => ?full.round,
+			"set_id" => ?full.set_id,
+			"topic" => ?topic,
+			"block_hash" => ?full.message,
+		);
 		network_gossip::ValidationResult::Valid(topic)
 	}
 }
@@ -560,7 +573,7 @@ pub(crate) struct NewAuthoritySet<H, N> {
 	pub(crate) canon_number: N,
 	pub(crate) canon_hash: H,
 	pub(crate) set_id: u64,
-	pub(crate) authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub(crate) authorities: Vec<(AuthorityId, u64)>,
 }
 
 /// Commands issued to the voter.
@@ -684,16 +697,16 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
-	voters: &Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (
 	impl Stream<
-		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, ed25519::Signature, Ed25519AuthorityId>),
+		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
 		Error = CommandOrError<H256, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, ed25519::Signature, Ed25519AuthorityId>),
+		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
 		SinkError = CommandOrError<H256, NumberFor<Block>>,
 	>,
 ) where
@@ -702,7 +715,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 {
 	// verification stream
 	let commit_in = crate::communication::checked_commit_stream::<Block, _>(
@@ -748,7 +761,13 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
 				match client.backend().blockchain().info() {
 					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
-					Ok(info) => Ok(info.finalized_number),
+					Ok(info) => {
+						telemetry!(CONSENSUS_INFO; "afg.finalized";
+							"finalized_number" => ?info.finalized_number,
+							"finalized_hash" => ?info.finalized_hash,
+						);
+						Ok(info.finalized_number)
+					},
 				}
 			}))
 			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
@@ -773,7 +792,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};
@@ -860,6 +879,16 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let handle_voter_command = move |command: VoterCommand<_, _>, voter_commands_rx| {
 			match command {
 				VoterCommand::ChangeAuthorities(new) => {
+					let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
+						format!("{}", a)
+					}).collect();
+					telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
+						"number" => ?new.canon_number,
+						"hash" => ?new.canon_hash,
+						"voters" => ?voters,
+						"set_id" => ?new.set_id,
+					);
+
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));

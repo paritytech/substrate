@@ -17,27 +17,24 @@
 use super::*;
 
 use std::sync::Arc;
-use hex_literal::{hex, hex_impl};
 use assert_matches::assert_matches;
 use parity_codec::Encode;
 use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
 };
-use primitives::H256;
-use test_client::keyring::Keyring;
-use test_client::runtime::{Extrinsic, Transfer};
-use test_client;
+use primitives::{H256, blake2_256, hexdisplay::HexDisplay};
+use test_client::{self, AccountKeyring, runtime::{Extrinsic, Transfer}};
 use tokio::runtime;
 
-fn uxt(sender: Keyring, nonce: u64) -> Extrinsic {
+fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	let tx = Transfer {
 		amount: Default::default(),
 		nonce,
-		from: sender.to_raw_public().into(),
+		from: sender.into(),
 		to: Default::default(),
 	};
-	let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+	let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 	Extrinsic::Transfer(tx, signature)
 }
 
@@ -50,14 +47,15 @@ fn submit_transaction_should_not_cause_error() {
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let h: H256 = hex!("81897a4890fb7554e7f77c533a865846a11583a56a8ad5e307543188d55e64f1").into();
+	let xt = uxt(AccountKeyring::Alice, 1).encode();
+	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 1).encode().into()),
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 1).encode().into()).is_err()
+		AuthorApi::submit_extrinsic(&p, xt.into()).is_err()
 	);
 }
 
@@ -70,14 +68,15 @@ fn submit_rich_transaction_should_not_cause_error() {
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let h: H256 = hex!("9ec8469b5dcfe29cc274ac1d07ad73d80be57566ace0fcdbe51ebcf4b51e925b").into();
+	let xt = uxt(AccountKeyring::Alice, 0).encode();
+	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 0).encode().into()),
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 0).encode().into()).is_err()
+		AuthorApi::submit_extrinsic(&p, xt.into()).is_err()
 	);
 }
 
@@ -95,7 +94,7 @@ fn should_watch_extrinsic() {
 	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(Keyring::Alice, 0).encode().into());
+	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
 
 	// then
 	assert_eq!(runtime.block_on(id_rx), Ok(Ok(1.into())));
@@ -104,10 +103,10 @@ fn should_watch_extrinsic() {
 		let tx = Transfer {
 			amount: 5,
 			nonce: 0,
-			from: Keyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
-		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	};
 	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).unwrap();
@@ -116,9 +115,10 @@ fn should_watch_extrinsic() {
 		res,
 		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":"ready","subscription":1}}"#.into())
 	);
+	let h = blake2_256(&replacement.encode());
 	assert_eq!(
 		runtime.block_on(data.into_future()).unwrap().0,
-		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":"0x53daed816610aa6b22dedbcee43aba44a7ca7155cc71f2919c5e79ebbc7de58c"},"subscription":1}}"#.into())
+		Some(format!(r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":1}}}}"#, HexDisplay::from(&h)))
 	);
 }
 
@@ -132,7 +132,7 @@ fn should_return_pending_extrinsics() {
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let ex = uxt(Keyring::Alice, 0);
+	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
  	assert_matches!(
 		p.pending_extrinsics(),

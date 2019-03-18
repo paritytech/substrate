@@ -37,6 +37,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::InherentData;
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -252,6 +253,10 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
+		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+			"number" => ?block.header().number(),
+			"hash" => ?<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
 			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
@@ -273,17 +278,16 @@ mod tests {
 	use codec::Encode;
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
-	use test_client::keyring::Keyring;
-	use test_client::{self, runtime::{Extrinsic, Transfer}};
+	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		let tx = Transfer {
 			amount: Default::default(),
 			nonce,
-			from: Keyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
-		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	}
 

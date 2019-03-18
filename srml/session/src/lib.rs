@@ -51,7 +51,7 @@ macro_rules! impl_session_change {
 for_each_tuple!(impl_session_change);
 
 pub trait Trait: timestamp::Trait + consensus::Trait {
-	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
+	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Option<Self::SessionKey>>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -184,16 +184,17 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
-
 		// Update any changes in session keys.
 		for (i, v) in Self::validators().into_iter().enumerate() {
 			<consensus::Module<T>>::set_authority(
 				i as u32,
 				&<NextKeyFor<T>>::get(&v)
-					.unwrap_or_else(|| T::ConvertAccountIdToSessionKey::convert(v))
+					.or_else(|| T::ConvertAccountIdToSessionKey::convert(v))
+					.unwrap_or_default()
 			);
 		};
+
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.

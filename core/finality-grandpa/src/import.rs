@@ -36,13 +36,15 @@ use runtime_primitives::traits::{
 	Block as BlockT, DigestFor, DigestItemFor, DigestItem,
 	Header as HeaderT, NumberFor, ProvideRuntimeApi,
 };
-use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
+use substrate_primitives::{H256, ed25519, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{finalize_block, is_descendent_of};
 use crate::justification::GrandpaJustification;
+
+use ed25519::Public as AuthorityId;
 
 /// A block-import handler for GRANDPA.
 ///
@@ -67,7 +69,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
@@ -161,7 +163,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
-	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
@@ -379,14 +381,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();
@@ -458,7 +460,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		match justification {
 			Some(justification) => {
-				self.import_justification(hash, number, justification, needs_justification)?;
+				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
+					debug!(target: "finality", "Imported block #{} that enacts authority set change with \
+						invalid justification: {:?}, requesting justification from peers.", number, err);
+					imported_aux.bad_justification = true;
+					imported_aux.needs_justification = true;
+				});
 			},
 			None => {
 				if needs_justification {
@@ -474,7 +481,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				if enacts_consensus_change {
 					self.consensus_changes.lock().note_change((number, hash));
 				}
-
 				imported_aux.needs_justification = true;
 			}
 		}

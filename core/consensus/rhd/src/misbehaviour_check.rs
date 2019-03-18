@@ -74,8 +74,7 @@ pub fn evaluate_misbehavior<B: Codec, H: Codec + Copy>(
 mod tests {
 	use super::*;
 
-	use keyring::ed25519;
-	use keyring::Keyring;
+	use keyring::AuthorityKeyring;
 	use rhododendron;
 
 	use runtime_primitives::testing::{H256, Block as RawBlock};
@@ -110,7 +109,7 @@ mod tests {
 
 	#[test]
 	fn evaluates_double_prepare() {
-		let key: ed25519::Pair = Keyring::One.into();
+		let key = AuthorityKeyring::One.pair();
 		let parent_hash = [0xff; 32].into();
 		let hash_1 = [0; 32].into();
 		let hash_2 = [1; 32].into();
@@ -127,7 +126,7 @@ mod tests {
 
 		// same signature twice is not misbehavior.
 		let signed = sign_prepare(&key, 1, hash_1, parent_hash);
-		assert!(evaluate_misbehavior::<Block, H256>(
+		assert!(!evaluate_misbehavior::<Block, H256>(
 			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
@@ -135,23 +134,23 @@ mod tests {
 				signed,
 				signed,
 			)
-		) == false);
+		));
 
 		// misbehavior has wrong target.
-		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public().into(),
+		assert!(!evaluate_misbehavior::<Block, H256>(
+			&AuthorityKeyring::Two.into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
 				sign_prepare(&key, 1, hash_1, parent_hash),
 				sign_prepare(&key, 1, hash_2, parent_hash),
 			)
-		) == false);
+		));
 	}
 
 	#[test]
 	fn evaluates_double_commit() {
-		let key: ed25519::Pair = Keyring::One.into();
+		let key = AuthorityKeyring::One.pair();
 		let parent_hash = [0xff; 32].into();
 		let hash_1 = [0; 32].into();
 		let hash_2 = [1; 32].into();
@@ -168,7 +167,7 @@ mod tests {
 
 		// same signature twice is not misbehavior.
 		let signed = sign_commit(&key, 1, hash_1, parent_hash);
-		assert!(evaluate_misbehavior::<Block, H256>(
+		assert!(!evaluate_misbehavior::<Block, H256>(
 			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
@@ -176,17 +175,17 @@ mod tests {
 				signed,
 				signed,
 			)
-		) == false);
+		));
 
 		// misbehavior has wrong target.
-		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public().into(),
+		assert!(!evaluate_misbehavior::<Block, H256>(
+			&AuthorityKeyring::Two.into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,
 				sign_commit(&key, 1, hash_1, parent_hash),
 				sign_commit(&key, 1, hash_2, parent_hash),
 			)
-		) == false);
+		));
 	}
 }

@@ -26,7 +26,7 @@ use primitives::storage::well_known_keys::is_child_storage_key;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
 use heapsize::HeapSizeOf;
 
-const EXT_NOT_ALLOWED_TO_FAIL: &'static str = "Externalities not allowed to fail within runtime";
+const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
