@@ -160,7 +160,11 @@ pub(crate) fn load_persistent<B, H, N, G>(
 				backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
 				let set_state = match load_decode::<_, V0VoterSetState<H, N>>(backend, SET_STATE_KEY)? {
-					Some((number, state)) => VoterSetState::Live(number, state),
+					Some((number, state)) => {
+						let set_state = VoterSetState::Live(number, state);
+						backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
+						set_state
+					},
 					None => VoterSetState::Live(0, make_genesis_round()),
 				};
 
