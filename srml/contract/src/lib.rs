@@ -122,17 +122,14 @@ impl<T: Trait> KeySpaceGenerator<T::AccountId> for KeySpaceFromParentCounter<T>
 where
 	T::AccountId: AsRef<[u8]> {
 	fn key_space(account_id: &T::AccountId) -> KeySpace {
-		let new_seed = <AccountCounter<T>>::get().wrapping_add(1);
+    // note that skipping a value due to error is not an issue here.
+    // we only need uniqueness, not sequence.
+		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
 
 		let mut buf = Vec::new();
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
-		// this line is yelling use Hash instead of vec: would require making KeySpace a subtype of
-		// Trait
-		let res = T::Hashing::hash(&buf[..]).as_ref().into();
-	
-		<AccountCounter<T>>::put(new_seed);
-		res
+		T::Hashing::hash(&buf[..]).as_ref().into()
 	}
 }
 

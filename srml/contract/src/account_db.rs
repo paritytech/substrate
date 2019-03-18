@@ -21,8 +21,7 @@ use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child, storage::unhashed};
-use substrate_primitives::storage::well_known_keys;
+use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -91,7 +90,6 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo> {
-		use parity_codec::KeyedVec;
 		let res: Option<AccountInfo> = AccountInfoOf::<T>::get(account);
 		res
 	}
