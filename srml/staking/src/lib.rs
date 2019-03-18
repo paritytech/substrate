@@ -25,8 +25,8 @@ use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnDilution, OnFreeBalanceZero, ArithmeticType,
-	LockIdentifier, LockableCurrency, WithdrawReasons
+	Currency, OnUnbalancedIncrease, OnFreeBalanceZero, ArithmeticType, OnDilution,
+	LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalancedDecrease
 };
 use session::OnSessionChange;
 use primitives::{Perbill};
@@ -178,6 +178,12 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	/// Handler for the unbalanced reduction when slashing a staker.
+	type Slash: OnUnbalancedDecrease<BalanceOf<Self>>;
+
+	/// Handler for the unbalanced increment when rewarding a staker.
+	type Reward: OnUnbalancedIncrease<BalanceOf<Self>>;
 }
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -538,7 +544,7 @@ impl<T: Trait> Module<T> {
 		let slash = slash.min(exposure.total);
 		// The amount we'll slash from the validator's stash directly.
 		let own_slash = exposure.own.min(slash);
-		let own_slash = own_slash - T::Currency::slash(v, own_slash).unwrap_or_default();
+		let own_slash = own_slash - T::Currency::slash::<T::Slash>(v, own_slash).unwrap_or_default();
 		// The amount remaining that we can't slash from the validator, that must be taken from the nominators.
 		let rest_slash = slash - own_slash;
 		if !rest_slash.is_zero() {
@@ -547,7 +553,7 @@ impl<T: Trait> Module<T> {
 			if !total.is_zero() {
 				let safe_mul_rational = |b| b * rest_slash / total;// FIXME #1572 avoid overflow
 				for i in exposure.others.iter() {
-					let _ = T::Currency::slash(&i.who, safe_mul_rational(i.value));	// best effort - not much that can be done on fail.
+					let _ = T::Currency::slash::<T::Slash>(&i.who, safe_mul_rational(i.value));	// best effort - not much that can be done on fail.
 				}
 			}
 		}
@@ -558,16 +564,16 @@ impl<T: Trait> Module<T> {
 	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) {
 		match Self::payee(who) {
 			RewardDestination::Controller => {
-				let _ = T::Currency::reward(&who, amount);
+				let _ = T::Currency::reward::<T::Reward>(&who, amount);
 			}
 			RewardDestination::Stash => {
-				let _ = Self::ledger(who).map(|l| T::Currency::reward(&l.stash, amount));
+				let _ = Self::ledger(who).map(|l| T::Currency::reward::<T::Reward>(&l.stash, amount));
 			}
 			RewardDestination::Staked =>
 				if let Some(mut l) = Self::ledger(who) {
 					l.active += amount;
 					l.total += amount;
-					let _ = T::Currency::reward(&l.stash, amount);
+					let _ = T::Currency::reward::<T::Reward>(&l.stash, amount);
 					Self::update_ledger(who, l);
 				},
 		}

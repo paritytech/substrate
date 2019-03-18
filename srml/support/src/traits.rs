@@ -167,12 +167,18 @@ pub trait Currency<AccountId> {
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
-	fn slash(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
+	fn slash<S: OnUnbalancedDecrease<Self::Balance>>(
+		who: &AccountId,
+		value: Self::Balance
+	) -> Option<Self::Balance>;
 
 	/// Mints `value` to the free balance of `who`, increasing the total issuance of the currency.
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
-	fn reward(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
+	fn reward<S: OnUnbalancedIncrease<Self::Balance>>(
+		who: &AccountId,
+		value: Self::Balance
+	) -> result::Result<(), &'static str>;
 
 	/// Adds up to `value` to the free balance of `who`.
 	///
@@ -182,7 +188,10 @@ pub trait Currency<AccountId> {
 	///
 	/// NOTE: This does not affect total issuance: it is assumed that the resultant imbalance will be
 	/// handled appropriately by the caller.
-	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
+	fn increase_free_balance_creating<S: OnUnbalancedIncrease<Self::Balance>>(
+		who: &AccountId,
+		value: Self::Balance
+	) -> UpdateBalanceOutcome;
 
 	/// Moves `value` from balance to reserved balance.
 	///
@@ -202,7 +211,10 @@ pub trait Currency<AccountId> {
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
-	fn slash_reserved(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
+	fn slash_reserved<S: OnUnbalancedDecrease<Self::Balance>>(
+		who: &AccountId,
+		value: Self::Balance
+	) -> Option<Self::Balance>;
 
 	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be

@@ -22,7 +22,7 @@
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnDilution, ArithmeticType};
+use srml_support::traits::{Currency, OnDilution, ArithmeticType, OnUnbalancedIncrease, OnUnbalancedDecrease};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
@@ -46,6 +46,12 @@ pub trait Trait: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	/// Handler for the unbalanced increase when minting cash from the "Pot".
+	type MintedForSpending: OnUnbalancedIncrease<BalanceOf<Self>>;
+
+	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
+	type ProposalRejection: OnUnbalancedDecrease<BalanceOf<Self>>;
 }
 
 type ProposalIndex = u32;
@@ -103,7 +109,7 @@ decl_module! {
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 
 			let value = proposal.bond;
-			let _ = T::Currency::slash_reserved(&proposal.proposer, value);
+			let _ = T::Currency::slash_reserved::<T::ProposalRejection>(&proposal.proposer, value);
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -214,7 +220,7 @@ impl<T: Trait> Module<T> {
 						let _ = T::Currency::unreserve(&p.proposer, p.bond);
 
 						// provide the allocation.
-						T::Currency::increase_free_balance_creating(&p.beneficiary, p.value);
+						T::Currency::increase_free_balance_creating::<T::MintedForSpending>(&p.beneficiary, p.value);
 
 						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
 						false
@@ -288,12 +294,17 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = ();
+		type TransactionPayment = balances::BurnAndMint<Test>;
+		type TransferFee = balances::BurnAndMint<Test>;
+		type DustRemoval = balances::BurnAndMint<Test>;
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Test>;
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
+		type MintedForSpending = balances::BurnAndMint<Test>;
+		type ProposalRejection = balances::BurnAndMint<Test>;
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;

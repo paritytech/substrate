@@ -196,7 +196,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
 			assert_eq!(Balances::is_dead_account(&5), false);
 
-			assert_eq!(Balances::slash(&2, 256 * 18 + 2), None); // account 2 gets slashed
+			assert_eq!(Balances::slash::<BurnAndMint<Runtime>>(&2, 256 * 18 + 2), None); // account 2 gets slashed
 			assert_eq!(Balances::total_balance(&2), 0); // "reserve" account reduced to 255 (below ED) so account deleted
 			assert_eq!(System::account_nonce(&2), 0);	// nonce zero
 			assert_eq!(Balances::is_dead_account(&2), true);
@@ -213,7 +213,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 fn reward_should_work() {
 	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
 		assert_eq!(Balances::total_balance(&1), 10);
-		assert_ok!(Balances::reward(&1, 10));
+		assert_ok!(Balances::reward::<BurnAndMint<Runtime>>(&1, 10));
 		assert_eq!(Balances::total_balance(&1), 20);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 110);
 	});
@@ -276,7 +276,7 @@ fn balance_works() {
 fn balance_transfer_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
-		Balances::increase_total_stake_by(111);
+		assert_ok!(Balances::increase_total_stake_by(111));
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
@@ -333,9 +333,9 @@ fn refunding_balance_should_work() {
 fn slashing_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
-		Balances::increase_total_stake_by(111);
+		assert_ok!(Balances::increase_total_stake_by(111));
 		assert_ok!(Balances::reserve(&1, 69));
-		assert!(Balances::slash(&1, 69).is_none());
+		assert!(Balances::slash::<BurnAndMint<Runtime>>(&1, 69).is_none());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 42);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 44);
@@ -346,9 +346,9 @@ fn slashing_balance_should_work() {
 fn slashing_incomplete_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 42);
-		Balances::increase_total_stake_by(42);
+		assert_ok!(Balances::increase_total_stake_by(42));
 		assert_ok!(Balances::reserve(&1, 21));
-		assert!(Balances::slash(&1, 69).is_some());
+		assert!(Balances::slash::<BurnAndMint<Runtime>>(&1, 69).is_some());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 2);
@@ -370,9 +370,9 @@ fn unreserving_balance_should_work() {
 fn slashing_reserved_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
-		Balances::increase_total_stake_by(111);
+		assert_ok!(Balances::increase_total_stake_by(111));
 		assert_ok!(Balances::reserve(&1, 111));
-		assert!(Balances::slash_reserved(&1, 42).is_none());
+		assert!(Balances::slash_reserved::<BurnAndMint<Runtime>>(&1, 42).is_none());
 		assert_eq!(Balances::reserved_balance(&1), 69);
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
@@ -383,9 +383,9 @@ fn slashing_reserved_balance_should_work() {
 fn slashing_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
-		Balances::increase_total_stake_by(111);
+		assert_ok!(Balances::increase_total_stake_by(111));
 		assert_ok!(Balances::reserve(&1, 42));
-		assert!(Balances::slash_reserved(&1, 69).is_some());
+		assert!(Balances::slash_reserved::<BurnAndMint<Runtime>>(&1, 69).is_some());
 		assert_eq!(Balances::free_balance(&1), 69);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
@@ -453,10 +453,10 @@ fn account_removal_on_free_too_low() {
 			// Setup two accounts with free balance above the exsistential threshold.
 			{
 				Balances::set_free_balance(&1, 110);
-				Balances::increase_total_stake_by(110);
+				assert_ok!(Balances::increase_total_stake_by(110));
 
 				Balances::set_free_balance(&2, 110);
-				Balances::increase_total_stake_by(110);
+				assert_ok!(Balances::increase_total_stake_by(110));
 
 				assert_eq!(<TotalIssuance<Runtime>>::get(), 732);
 			}

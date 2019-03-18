@@ -77,6 +77,9 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = Event;
+		type TransactionPayment = balances::BurnAndMint<Test>;
+		type TransferFee = balances::BurnAndMint<Test>;
+		type DustRemoval = balances::BurnAndMint<Test>;
 	}
 	impl democracy::Trait for Test {
 		type Currency = balances::Module<Self>;
@@ -85,6 +88,8 @@ mod tests {
 	}
 	impl seats::Trait for Test {
 		type Event = Event;
+		type BadPresentation = balances::BurnAndMint<Test>;
+		type BadReaper = balances::BurnAndMint<Test>;
 	}
 	impl motions::Trait for Test {
 		type Origin = Origin;

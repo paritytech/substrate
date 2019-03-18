@@ -57,6 +57,13 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// Handler for the unbalanced reduction when taking transaction fees.
 	type TransactionPayment: OnUnbalancedDecrease<Self::Balance>;
 
+	/// Handler for the unbalanced reduction when taking fees associated with balance
+	/// transfer (which may also include account creation).
+	type TransferFee: OnUnbalancedDecrease<Self::Balance>;
+
+	/// Handler for the unbalanced reduction when removing a dust account.
+	type DustRemoval: OnUnbalancedDecrease<Self::Balance>;
+
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 }
@@ -229,6 +236,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// Will enforce ExistentialDeposit law, anulling the account as needed.
 	/// In that case it will return `AccountKilled`.
+	///
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
 			<ReservedBalance<T, I>>::insert(who, balance);
@@ -247,6 +257,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// is known that the account already exists.
 	///
 	/// Returns if the account was successfully updated or update has led to killing of the account.
+	///
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for no - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
@@ -267,6 +280,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Returns if the account was successfully updated or update has led to killing of the account.
 	///
 	/// [`set_free_balance`]: #method.set_free_balance
+	///
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
 	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		let ed = <Module<T, I>>::existential_deposit();
 		// If the balance is too low, then the account is reaped.
@@ -293,6 +309,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Transfer some liquid free balance to another staker.
+	///
+	/// This is a high-level function; it will ensure all appropriate fees are paid and
+	/// that total issuance is maintained.
 	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
@@ -320,7 +339,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		};
 
 		if transactor != dest {
-			Self::decrease_total_stake_by(fee)?;
+			T::TransferFee::on_unbalanced_decrease(fee)?;
 			Self::set_free_balance(transactor, new_from_balance);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
@@ -330,23 +349,33 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Register a new account (with existential balance).
+	///
+	/// This just calls appropriate hooks. It doesn't (necessarily) make any state changes.
 	fn new_account(who: &T::AccountId, balance: T::Balance) {
 		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(RawEvent::NewAccount(who.clone(), balance.clone()));
 	}
 
+	/// Unregister an account.
+	///
+	/// This just removes the nonce and leaves an event.
 	fn reap_account(who: &T::AccountId) {
 		<system::AccountNonce<T>>::remove(who);
 		Self::deposit_event(RawEvent::ReapedAccount(who.clone()));
 	}
 
-	/// Kill an account's free portion.
+	/// Account's free balance has dropped below existential deposit. Kill its
+	/// free side and the account completely if its reserved size is already dead.
+	///
+	/// Will maintain total issuance.
 	fn on_free_too_low(who: &T::AccountId) {
-		// underflow should never happen, but if it does, there's not much we can do about it.
-		let _ = Self::decrease_total_stake_by(Self::free_balance(who));
-
-		<FreeBalance<T, I>>::remove(who);
+		let dust = <FreeBalance<T, I>>::take(who);
 		<Locks<T, I>>::remove(who);
+
+		// underflow should never happen, but if it does, there's not much we can do about it.
+		if !dust.is_zero() {
+			let _ = T::DustRemoval::on_unbalanced_decrease(dust);
+		}
 
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
@@ -355,25 +384,37 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Kill an account's reserved portion.
+	/// Account's reserved balance has dropped below existential deposit. Kill its
+	/// reserved side and the account completely if its free size is already dead.
+	///
+	/// Will maintain total issuance.
 	fn on_reserved_too_low(who: &T::AccountId) {
-		// underflow should never happen, but it if does, there's nothing to be done here.
-		let _ = Self::decrease_total_stake_by(Self::reserved_balance(who));
+		let dust = <ReservedBalance<T, I>>::take(who);
 
-		<ReservedBalance<T, I>>::remove(who);
+		// underflow should never happen, but it if does, there's nothing to be done here.
+		if !dust.is_zero() {
+			let _ = T::DustRemoval::on_unbalanced_decrease(dust);
+		}
 
 		if Self::free_balance(who).is_zero() {
 			Self::reap_account(who);
 		}
 	}
 
-	/// Increase TotalIssuance by Value.
+	/// Increase total issuance by given `value`.
+	///
+	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
+	/// increases.
 	pub fn increase_total_stake_by(value: T::Balance) -> Result {
 		let v = <Module<T, I>>::total_issuance().checked_add(&value).ok_or("issuance overflow")?;
 		<TotalIssuance<T, I>>::put(v);
 		Ok(())
 	}
-	/// Decrease TotalIssuance by Value.
+
+	/// Decrease total issuance by given `value`.
+	///
+	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
+	/// decreases.
 	pub fn decrease_total_stake_by(value: T::Balance) -> Result {
 		let v = <Module<T, I>>::total_issuance().checked_sub(&value).ok_or("issuance underflow")?;
 		<TotalIssuance<T, I>>::put(v);
@@ -382,7 +423,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
 	/// for the given reason.
-	/// 
+	///
 	/// `Err(...)` with the reason why not otherwise.
 	pub fn ensure_account_can_withdraw(
 		who: &T::AccountId,
@@ -408,25 +449,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			Err("account liquidity restrictions prevent withdrawal")
 		}
 	}
-
-	// TODO: Are these needed any more?
-	/*
-	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
-		let b = Self::free_balance(who);
-		ensure!(b >= value, "account has too few funds");
-		let new_balance = b - value;
-		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
-		Self::set_free_balance(who, new_balance);
-		Self::decrease_total_stake_by(value)?;
-		Ok(())
-	}
-
-	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
-		Self::increase_total_stake_by(value)?;
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
-		Ok(())
-	}
-*/
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -467,29 +489,49 @@ where
 		<ReservedBalance<T, I>>::get(who)
 	}
 
-	fn slash(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
+	fn slash<S: OnUnbalancedDecrease<Self::Balance>>(
+		who: &T::AccountId,
+		value: Self::Balance
+	) -> Option<Self::Balance> {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
-		// underflow should never happen, but it if does, there's nothing to be done here.
-		let _ = Self::decrease_total_stake_by(free_slash);
 		Self::set_free_balance(who, free_balance - free_slash);
-		if free_slash < value {
-			Self::slash_reserved(who, value - free_slash)
+		let res = if free_slash < value {
+			let b = Self::reserved_balance(who);
+			let slash = cmp::min(b, value - free_slash);
+			Self::set_reserved_balance(who, b - slash);
+			if slash < value {
+				Some(value - slash)
+			} else {
+				None
+			}
 		} else {
 			None
-		}
+		};
+
+		// underflow should never happen, but it if does, there's nothing to be done here.
+		let _ = S::on_unbalanced_decrease(value - res.unwrap_or_default());
+		res
 	}
 
-	fn reward(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
+	fn reward<S: OnUnbalancedIncrease<Self::Balance>>(
+		who: &T::AccountId,
+		value: Self::Balance
+	) -> result::Result<(), &'static str> {
 		if Self::total_balance(who).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
-		Self::increase_total_stake_by(value)?;
+		S::on_unbalanced_increase(value)?;
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(())
 	}
 
-	fn increase_free_balance_creating(who: &T::AccountId, value: Self::Balance) -> UpdateBalanceOutcome {
+	fn increase_free_balance_creating<S: OnUnbalancedIncrease<Self::Balance>>(
+		who: &T::AccountId,
+		value: Self::Balance
+	) -> UpdateBalanceOutcome {
+		// Should be infallible if our state isn't corruption. Not much we can do if state it corrupted.
+		let _ = S::on_unbalanced_increase(value);
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
 	}
 
@@ -517,11 +559,14 @@ where
 		}
 	}
 
-	fn slash_reserved(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
+	fn slash_reserved<S: OnUnbalancedDecrease<Self::Balance>>(
+		who: &T::AccountId,
+		value: Self::Balance
+	) -> Option<Self::Balance> {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
 		// underflow should never happen, but it if does, there's nothing to be done here.
-		let _ = Self::decrease_total_stake_by(slash);
+		let _ = S::on_unbalanced_decrease(slash);
 		Self::set_reserved_balance(who, b - slash);
 		if value == slash {
 			None

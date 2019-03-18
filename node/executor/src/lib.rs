@@ -31,7 +31,7 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::{AccountKeyring, AuthorityKeyring};
+	use keyring::{AuthorityKeyring, AccountKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,

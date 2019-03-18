@@ -103,6 +103,8 @@ impl balances::Trait for Runtime {
 	type OnNewAccount = Indices;
 	type Event = Event;
 	type TransactionPayment = balances::BurnAndMint<Runtime>;
+	type DustRemoval = balances::BurnAndMint<Runtime>;
+	type TransferFee = balances::BurnAndMint<Runtime>;
 }
 
 impl consensus::Trait for Runtime {
@@ -129,6 +131,8 @@ impl staking::Trait for Runtime {
 	type Currency = balances::Module<Self>;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
+	type Slash = balances::BurnAndMint<Runtime>;
+	type Reward = balances::BurnAndMint<Runtime>;
 }
 
 impl democracy::Trait for Runtime {
@@ -139,6 +143,8 @@ impl democracy::Trait for Runtime {
 
 impl council::Trait for Runtime {
 	type Event = Event;
+	type BadPresentation = balances::BurnAndMint<Runtime>;
+	type BadReaper = balances::BurnAndMint<Runtime>;
 }
 
 impl council::voting::Trait for Runtime {
@@ -156,6 +162,8 @@ impl treasury::Trait for Runtime {
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
+	type MintedForSpending = balances::BurnAndMint<Runtime>;
+	type ProposalRejection = balances::BurnAndMint<Runtime>;
 }
 
 impl contract::Trait for Runtime {

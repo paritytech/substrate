@@ -51,6 +51,8 @@ impl Trait for Runtime {
 	type OnNewAccount = ();
 	type Event = ();
 	type TransactionPayment = BurnAndMint<Runtime>;
+	type DustRemoval = BurnAndMint<Runtime>;
+	type TransferFee = BurnAndMint<Runtime>;
 }
 
 pub struct ExtBuilder {

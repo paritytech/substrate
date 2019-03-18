@@ -58,6 +58,9 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
+	type TransactionPayment = balances::BurnAndMint<Test>;
+	type TransferFee = balances::BurnAndMint<Test>;
+	type DustRemoval = balances::BurnAndMint<Test>;
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
@@ -72,6 +75,8 @@ impl Trait for Test {
 	type Currency = balances::Module<Self>;
 	type OnRewardMinted = ();
 	type Event = ();
+	type Slash = balances::BurnAndMint<Test>;
+	type Reward = balances::BurnAndMint<Test>;
 }
 
 pub struct ExtBuilder {

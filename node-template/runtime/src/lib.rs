@@ -171,6 +171,8 @@ impl balances::Trait for Runtime {
 	type Event = Event;
 
 	type TransactionPayment = balances::BurnAndMint<Runtime>;
+	type DustRemoval = balances::BurnAndMint<Runtime>;
+	type TransferFee = balances::BurnAndMint<Runtime>;
 }
 
 impl sudo::Trait for Runtime {
