@@ -61,7 +61,7 @@
 //! ### Executing Privileged Functions
 //! 
 //! The Sudo module itself is not intended to be used within other modules.
-//! Instead, you can build "privileged functions" in other modules which require `Root` origin.
+//! Instead, you can build "privileged functions" in other modules that require `Root` origin.
 //! You can execute these privileged functions by calling `sudo()` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
 //! 
@@ -69,7 +69,7 @@
 //! 
 //! ### Simple Code Snippet
 //! 
-//! This is an example of a module which exposes a privileged function:
+//! This is an example of a module that exposes a privileged function:
 //! 
 //! ```ignore
 //! use support::{decl_module, dispatch::Result};
