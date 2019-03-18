@@ -873,7 +873,7 @@ mod tests {
 		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), None);
 	}
 
-	// #[test] TODO this is currently broken it requires key isolation for child storage
+	// #[test] TODO this fails behind #2035 substrate issue
 	fn child_storage_keyspace() {
 		use crate::trie_backend::tests::test_trie;
 		//let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
