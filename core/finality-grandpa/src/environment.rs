@@ -50,16 +50,22 @@ use crate::until_imported::UntilVoteTargetImported;
 use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.
-pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub struct CompletedRound<Block: BlockT> {
+	pub number: u64,
+	pub state: RoundState<Block::Hash, NumberFor<Block>>,
+	pub base: (Block::Hash, NumberFor<Block>),
+	pub votes: Vec<SignedMessage<Block>>,
+}
 
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub enum VoterSetState<Block: BlockT> {
 	Live {
-		last_completed_round: CompletedRound<Block::Hash, NumberFor<Block>>,
+		last_completed_round: CompletedRound<Block>,
 		current_round: HasVoted<Block>,
 	},
 	Paused {
-		last_completed_round: CompletedRound<Block::Hash, NumberFor<Block>>,
+		last_completed_round: CompletedRound<Block>,
 	},
 }
 
@@ -135,7 +141,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Read the last completed round.
-	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block::Hash, NumberFor<Block>> {
+	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
 		match &*self.inner.read() {
 			VoterSetState::Live { last_completed_round, .. } =>
 				last_completed_round.clone(),
@@ -430,8 +436,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		&self,
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
-		_base: (Block::Hash, NumberFor<Block>),
-		_votes: Vec<SignedMessage<Block>>,
+		base: (Block::Hash, NumberFor<Block>),
+		votes: Vec<SignedMessage<Block>>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -444,7 +450,12 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 		self.voter_set_state.with(|voter_set_state| {
 			let set_state = VoterSetState::<Block>::Live {
-				last_completed_round: (round, state.clone()),
+				last_completed_round: CompletedRound {
+					number: round,
+					state: state.clone(),
+					base,
+					votes,
+				},
 				current_round: HasVoted::No,
 			};
 
