@@ -39,6 +39,7 @@ use crate::{
 };
 use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -116,11 +117,13 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 	}
 }
 
+static KEY_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 pub struct DummyKeySpaceGenerator;
 impl KeySpaceGenerator<u64> for DummyKeySpaceGenerator {
 	fn key_space(account_id: &u64) -> KeySpace {
-		let mut res = Vec::new();
-		res.extend_from_slice(&account_id.to_be_bytes()[..]);
+		let mut res = KEY_COUNTER.fetch_add(1,Ordering::Relaxed).to_le_bytes().to_vec();
+		res.extend_from_slice(&account_id.to_le_bytes());
 		res
 	}
 }

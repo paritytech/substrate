@@ -84,7 +84,7 @@ pub type CodeHash<T> = <T as system::Trait>::Hash;
 pub type KeySpace = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
-pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
+pub trait ContractAddressFor<CodeHash, AccountId> {
 	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
 }
 
@@ -106,7 +106,7 @@ pub struct SubTrie {
 /// Get a key space (key space must be unique and collision resistant depending upon its context)
 /// Note that it is different than encode because key space should have collision resistance
 /// property (being a proper uniqueid).
-pub trait KeySpaceGenerator<AccountId: Sized> {
+pub trait KeySpaceGenerator<AccountId> {
 	/// get a keyspace for an account, using reference to parent account keyspace to ensure
 	/// uniqueness of keyspace
 	/// The implementation must ensure every new key space is unique: two consecutive call with the
@@ -127,7 +127,7 @@ where
 
 		let mut buf = Vec::new();
 		buf.extend_from_slice(account_id.as_ref());
-		buf.extend_from_slice(&new_seed.to_be_bytes()[..]);
+		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 		// this line is yelling use Hash instead of vec: would require making KeySpace a subtype of
 		// Trait
 		let res = T::Hashing::hash(&buf[..]).as_ref().into();
@@ -389,7 +389,7 @@ decl_storage! {
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
-		/// The subtrie counter associated with an account id
+		/// The subtrie counter
 		pub AccountCounter: u64 = 0;
 	}
 }
