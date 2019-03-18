@@ -468,6 +468,8 @@ mod tests {
 	fn new_test_ext_with_public_delay(public_delay: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			existential_deposit: 0,
 			transfer_fee: 0,

@@ -65,6 +65,49 @@ pub trait ArithmeticType {
 	type Type: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
 }
 
+/// Simple payment making trait, operating on a single generic `AccountId` type.
+pub trait MakePayment<AccountId> {
+	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
+	/// `encoded_len` bytes. Return true iff the payment was successful.
+	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
+}
+
+impl<T> MakePayment<T> for () {
+	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+}
+
+/// Handler for when some currency "account" increased in balance for some reason.
+///
+/// The only reason at present would be for validator rewards, but there may be other
+/// reasons in the future or for other chains.
+///
+/// Typically just increases the total issuance of the currency, but could possibly
+/// draw down some other account.
+pub trait OnUnbalancedIncrease<Balance> {
+	/// Handler for the event.
+	///
+	/// May return an error if something "impossible" went wrong, but should be
+	/// infallible.
+	fn on_unbalanced_increase(amount: Balance) -> Result<(), &'static str>;
+}
+
+/// Handler for when some currency account decreased in balance for some reason.
+///
+/// Potential reasons are:
+///
+/// - Someone got slashed.
+/// - Someone paid for a transaction to be included.
+///
+/// Typically just reduces the total issuance of the currency, but could also pay
+/// into some other account.
+pub trait OnUnbalancedDecrease<Balance> {
+	/// Handler for the event.
+	///
+	/// May return an error if something "impossible" went wrong, but should be
+	/// infallible.
+	fn on_unbalanced_decrease(amount: Balance) -> Result<(), &'static str>;
+}
+
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
@@ -120,13 +163,13 @@ pub trait Currency<AccountId> {
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
-	/// free balance. This function cannot fail.
+	/// free balance and decreasing the total issuance of the currency. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	fn slash(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
-	/// Adds up to `value` to the free balance of `who`.
+	/// Mints `value` to the free balance of `who`, increasing the total issuance of the currency.
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
 	fn reward(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
@@ -137,7 +180,8 @@ pub trait Currency<AccountId> {
 	///
 	/// Returns if the account was successfully updated or update has led to killing of the account.
 	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation.
+	/// NOTE: This does not affect total issuance: it is assumed that the resultant imbalance will be
+	/// handled appropriately by the caller.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
 
 	/// Moves `value` from balance to reserved balance.
@@ -153,7 +197,8 @@ pub trait Currency<AccountId> {
 	/// NOTE: This is different to `reserve`.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
-	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
+	/// Deducts up to `value` from reserved balance of `who`, decreasing the total amount
+	/// issued of the currency. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
@@ -207,25 +252,6 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 }
 
-/// Charge bytes fee trait
-pub trait ChargeBytesFee<AccountId> {
-	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return Ok if the payment was successful.
-	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-/// Charge fee trait
-pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
-	/// The type of fee amount.
-	type Amount;
-
-	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
-	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Refund `amount` of previous charged fees from `transactor`. Return Ok if the refund was successful.
-	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
 bitmask! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
@@ -241,38 +267,4 @@ bitmask! {
 		/// In order to reserve some funds for a later return or repatriation
 		Reserve = 0b00000100,
 	}
-}
-
-/// Transfer fungible asset trait
-pub trait TransferAsset<AccountId> {
-	/// The type of asset amount.
-	type Amount;
-
-	/// Transfer asset from `from` account to `to` account with `amount` of asset.
-	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Remove asset from `who` account by deducting `amount` in the account balances.
-	fn withdraw(who: &AccountId, amount: Self::Amount, reason: WithdrawReason) -> Result<(), &'static str>;
-
-	/// Add asset to `who` account by increasing `amount` in the account balances.
-	fn deposit(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-impl<T> ChargeBytesFee<T> for () {
-	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> ChargeFee<T> for () {
-	type Amount = ();
-
-	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> TransferAsset<T> for () {
-	type Amount = ();
-
-	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn withdraw(_: &T, _: Self::Amount, _: WithdrawReason) -> Result<(), &'static str> { Ok(()) }
-	fn deposit(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }

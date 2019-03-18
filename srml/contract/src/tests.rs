@@ -27,7 +27,6 @@ use runtime_io;
 use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
-use fees;
 use {wabt, balances, consensus};
 use hex_literal::*;
 use assert_matches::assert_matches;
@@ -45,7 +44,7 @@ mod contract {
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {
-		balances<T>, contract<T>, fees<T>,
+		balances<T>, contract<T>,
 	}
 }
 impl_outer_origin! {
@@ -78,6 +77,7 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type Event = MetaEvent;
+	type TransactionPayment = balances::BurnAndMint<Test>;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
@@ -87,10 +87,6 @@ impl consensus::Trait for Test {
 	type Log = DigestItem;
 	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
-}
-impl fees::Trait for Test {
-	type Event = MetaEvent;
-	type TransferAsset = Balances;
 }
 impl Trait for Test {
 	type Call = Call;
@@ -168,6 +164,8 @@ impl ExtBuilder {
 			.0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
+				transaction_base_fee: 0,
+				transaction_byte_fee: 0,
 				balances: vec![],
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,

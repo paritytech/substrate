@@ -27,9 +27,9 @@
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use parity_codec::{Codec, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, TransferAsset,
+	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalancedDecrease, OnUnbalancedIncrease,
 	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency
 };
 use srml_support::dispatch::Result;
@@ -53,6 +53,9 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
+
+	/// Handler for the unbalanced reduction when taking transaction fees.
+	type TransactionPayment: OnUnbalancedDecrease<Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
@@ -118,6 +121,10 @@ decl_storage! {
 		pub TransferFee get(transfer_fee) config(): T::Balance;
 		/// The fee required to create an account. At least as big as ReclaimRebate.
 		pub CreationFee get(creation_fee) config(): T::Balance;
+		/// The fee to be paid for making a transaction; the base.
+		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
 
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
@@ -401,6 +408,25 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			Err("account liquidity restrictions prevent withdrawal")
 		}
 	}
+
+	// TODO: Are these needed any more?
+	/*
+	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
+		let b = Self::free_balance(who);
+		ensure!(b >= value, "account has too few funds");
+		let new_balance = b - value;
+		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
+		Self::set_free_balance(who, new_balance);
+		Self::decrease_total_stake_by(value)?;
+		Ok(())
+	}
+
+	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
+		Self::increase_total_stake_by(value)?;
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+		Ok(())
+	}
+*/
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -598,26 +624,33 @@ where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> TransferAsset<T::AccountId> for Module<T, I> {
-	type Amount = T::Balance;
+/// Simple implementation of OnUnbalancedDecrease/OnUnbalancedIncrease that
+/// just burns and mints tokens as necessary.
+pub struct BurnAndMint<T: Trait>(rstd::marker::PhantomData<T>);
 
-	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::make_transfer(from, to, amount)
+impl<T: Trait> OnUnbalancedDecrease<T::Balance> for BurnAndMint<T> {
+	fn on_unbalanced_decrease(amount: T::Balance) -> Result {
+		<Module<T>>::decrease_total_stake_by(amount)
 	}
+}
 
-	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
-		let b = Self::free_balance(who);
-		ensure!(b >= value, "account has too few funds");
-		let new_balance = b - value;
-		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
-		Self::decrease_total_stake_by(value)?;
-		Self::set_free_balance(who, new_balance);
-		Ok(())
+impl<T: Trait> OnUnbalancedIncrease<T::Balance> for BurnAndMint<T> {
+	fn on_unbalanced_increase(amount: T::Balance) -> Result {
+		<Module<T>>::increase_total_stake_by(amount)
 	}
+}
 
-	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
-		Self::increase_total_stake_by(value)?;
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
+	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
+		let b = Self::free_balance(transactor);
+		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
+		if b < transaction_fee + Self::existential_deposit() {
+			return Err("not enough funds for transaction fee");
+		}
+		let new_balance = b - transaction_fee;
+		Self::ensure_account_can_withdraw(transactor, transaction_fee, WithdrawReason::TransactionPayment, new_balance)?;
+		T::TransactionPayment::on_unbalanced_decrease(transaction_fee)?;
+		Self::set_free_balance(transactor, new_balance);
 		Ok(())
 	}
 }
@@ -630,3 +663,4 @@ where
 		Self::total_balance(who).is_zero()
 	}
 }
+

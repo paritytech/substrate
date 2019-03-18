@@ -78,7 +78,6 @@ use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;
-use fees;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 
@@ -92,7 +91,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
+pub trait Trait: balances::Trait + timestamp::Trait {
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
 
@@ -136,14 +135,14 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// implementation of `ChargeBytesFee` for fees module does.
+/// implementation of `MakePayment` for balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
 		let encoded_len = call.using_encoded(|encoded| encoded.len());
-		let base_fee = <fees::Module<T>>::transaction_base_fee();
-		let byte_fee = <fees::Module<T>>::transaction_byte_fee();
-		<T::Balance as As<u64>>::sa(base_fee.as_() + byte_fee.as_() * encoded_len as u64)
+		let base_fee = <balances::Module<T>>::transaction_base_fee();
+		let byte_fee = <balances::Module<T>>::transaction_byte_fee();
+		base_fee + byte_fee * <T::Balance as As<u64>>::sa(encoded_len as u64)
 	}
 }
 

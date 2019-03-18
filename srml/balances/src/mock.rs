@@ -23,7 +23,7 @@ use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
-use crate::{GenesisConfig, Module, Trait};
+use crate::{GenesisConfig, Module, Trait, BurnAndMint};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -50,9 +50,12 @@ impl Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
+	type TransactionPayment = BurnAndMint<Runtime>;
 }
 
 pub struct ExtBuilder {
+	transaction_base_fee: u64,
+	transaction_byte_fee: u64,
 	existential_deposit: u64,
 	transfer_fee: u64,
 	creation_fee: u64,
@@ -62,6 +65,8 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -84,6 +89,11 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
+	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
+		self.transaction_base_fee = base_fee;
+		self.transaction_byte_fee = byte_fee;
+		self
+	}
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
 		self
@@ -100,6 +110,8 @@ impl ExtBuilder {
 			1
 		};
 		t.extend(GenesisConfig::<Runtime> {
+			transaction_base_fee: self.transaction_base_fee,
+			transaction_byte_fee: self.transaction_byte_fee,
 			balances: if self.monied {
 				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
 			} else {
