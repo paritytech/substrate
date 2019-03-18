@@ -35,7 +35,7 @@ use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
 	Trait, ComputeDispatchFee, KeySpaceGenerator, KeySpace,
-	SubTrie,
+	AccountInfo, AccountInfoOf,
 };
 use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
@@ -242,8 +242,7 @@ fn account_removal_removes_storage() {
 			{
 				Balances::set_free_balance(&1, 110);
 				Balances::increase_total_stake_by(110);
-				let contract_id1 = 1u64.to_keyed_vec(well_known_keys::CONTRACT_SUBTRIE);
-				unhashed::put(&contract_id1[..], &SubTrie{
+				AccountInfoOf::<Test>::insert(1, &AccountInfo {
 					key_space: unique_id1.to_vec(),
 					current_mem_stored: 0,
 				});
@@ -253,12 +252,10 @@ fn account_removal_removes_storage() {
 
 				Balances::set_free_balance(&2, 110);
 				Balances::increase_total_stake_by(110);
-				let contract_id2 = 2u64.to_keyed_vec(well_known_keys::CONTRACT_SUBTRIE);
-				unhashed::put(&contract_id2[..], &SubTrie{
+				AccountInfoOf::<Test>::insert(2, &AccountInfo {
 					key_space: unique_id2.to_vec(),
 					current_mem_stored: 0,
 				});
-				unhashed::put(&contract_id2[..], &unique_id2.to_vec());
 				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
 				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
 			}

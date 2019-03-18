@@ -16,7 +16,7 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, Trait, SubTrie, KeySpace};
+use super::{CodeHash, CodeHashOf, Trait, AccountInfo, KeySpace, AccountInfoOf};
 use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
@@ -73,7 +73,7 @@ impl<A: Clone + Ord> AccountKeySpaceMapping<A> {
 }
 
 pub trait AccountDb<T: Trait> {
-	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie>;
+	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo>;
 	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace;
 	// this function is borderline (impl specific to overlaydb). An alternate
 	// design is to use rc internally (instead of optional cache) for 
@@ -90,16 +90,14 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie> {
+	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo> {
 		use parity_codec::KeyedVec;
-		// warn slow to_keyed_vec
-		let keyed_account = account.to_keyed_vec(well_known_keys::CONTRACT_SUBTRIE);
-		let res: Option<SubTrie> = unhashed::get(&keyed_account[..]);
+		let res: Option<AccountInfo> = AccountInfoOf::<T>::get(account);
 		res
 	}
 	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace {
 		use super::KeySpaceGenerator;
-		<Self as AccountDb<T>>::get_subtrie(self, account)
+		<Self as AccountDb<T>>::get_account_info(self, account)
 			.map(|s|s.key_space)
 			.unwrap_or_else(||<T as Trait>::KeySpaceGenerator::key_space(account))
 	}
@@ -196,8 +194,8 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie> {
-		let v = self.underlying.get_subtrie(account);
+	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo> {
+		let v = self.underlying.get_account_info(account);
 		v.as_ref().map(|v|
 			self.keyspace_account.as_ref().map(|ka|
 				ka.borrow_mut().insert(account.clone(), v.key_space.clone())));

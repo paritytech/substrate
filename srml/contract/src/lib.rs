@@ -93,9 +93,9 @@ pub trait ComputeDispatchFee<Call, Balance> {
 }
 
 #[derive(Encode,Decode,Clone,Debug)]
-/// Information for managing a sub trie abstraction.
+/// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
-pub struct SubTrie {
+pub struct AccountInfo {
 	/// unique ID for the subtree encoded as a byte
 	pub key_space: KeySpace,
 	/// the size of stored value in octet
@@ -390,13 +390,15 @@ decl_storage! {
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
 		/// The subtrie counter
 		pub AccountCounter: u64 = 0;
+		/// The code associated with a given account.
+		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<DirectAccountDb as AccountDb<T>>::get_subtrie(&DirectAccountDb, who).map(|subtrie| {
+		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
 			child::kill_storage(&subtrie.key_space);
 		});
 	}
