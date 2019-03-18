@@ -497,11 +497,12 @@ where
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
 		let res = if free_slash < value {
-			let b = Self::reserved_balance(who);
-			let slash = cmp::min(b, value - free_slash);
-			Self::set_reserved_balance(who, b - slash);
-			if slash < value {
-				Some(value - slash)
+			let remaining_slash = value - free_slash;
+			let reserved_balance = Self::reserved_balance(who);
+			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
+			Self::set_reserved_balance(who, reserved_balance - reserved_slash);
+			if reserved_slash < remaining_slash {
+				Some(remaining_slash - reserved_slash)
 			} else {
 				None
 			}
