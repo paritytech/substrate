@@ -74,7 +74,7 @@ use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
-use srml_support::traits::OnFreeBalanceZero;
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalancedDecrease};
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;
@@ -109,6 +109,9 @@ pub trait Trait: balances::Trait + timestamp::Trait {
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
+
+	/// Handler for the unbalanced reduction when making a gas payment.
+	type GasPayment: OnUnbalancedDecrease<<Self as balances::Trait>::Balance>;
 }
 
 /// Simple contract address determintator.

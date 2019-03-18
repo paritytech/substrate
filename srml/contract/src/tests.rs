@@ -96,6 +96,7 @@ impl Trait for Test {
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
+	type GasPayment = balances::BurnAndMint<Test>;
 }
 
 type Balances = balances::Module<Test>;

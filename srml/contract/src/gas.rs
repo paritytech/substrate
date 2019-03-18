@@ -18,7 +18,7 @@ use crate::{GasSpent, Module, Trait};
 use balances;
 use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
-use srml_support::StorageValue;
+use srml_support::{StorageValue, traits::OnUnbalancedDecrease};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -236,21 +236,22 @@ pub fn buy_gas<T: Trait>(
 
 /// Refund the unused gas.
 pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
+	let gas_spent = gas_meter.spent();
+	let gas_left = gas_meter.gas_left();
+
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
 	// also has T::Gas type.
-	let gas_spent = <Module<T>>::gas_spent() + gas_meter.spent();
-	<GasSpent<T>>::put(gas_spent);
+	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought.
 	let b = <balances::Module<T>>::free_balance(transactor);
-	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
+	let refund = <T::Gas as As<T::Balance>>::as_(gas_left) * gas_meter.gas_price;
+	let fee = <T::Gas as As<T::Balance>>::as_(gas_spent) * gas_meter.gas_price;
 
-	// this should be infallible since we just charged for it this block. nonetheless, we play it
-	// safe and only issue the refund if issuance doesn't overflow.
-	if let Ok(_) = <balances::Module<T>>::increase_total_stake_by(refund) {
-		<balances::Module<T>>::set_free_balance(transactor, b + refund);
-	}
+	// this should be infallible since we just charged for it this block.
+	let _ = T::GasPayment::on_unbalanced_decrease(fee);
+	<balances::Module<T>>::set_free_balance(transactor, b + refund);
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units
