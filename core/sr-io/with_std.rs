@@ -26,7 +26,7 @@ pub use tiny_keccak::keccak256 as keccak_256;
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, BasicExternalities, TestExternalities};
 
-use environmental::{environmental, thread_local_impl};
+use environmental::environmental;
 use primitives::{hexdisplay::HexDisplay, H256};
 use hash_db::Hasher;
 
