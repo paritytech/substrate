@@ -14,21 +14,70 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Timestamp manager: provides means to find out the current time.
+//! # Timestamp Module
+//! 
+//! The timestamp module provides functionality to get and set the on-chain time. 
+//! To use it in your module, you need to implement the timestamp [`Trait`]. 
+//! The supported dispatchable functions are documented as part of the [`Call`] enum.
+//! 
+//! ## Overview
+//! 
+//! The timestamp module allows the validators to set and validate a timestamp with each block. 
 //!
-//! It is expected that the timestamp is set by the validator in the
-//! beginning of each block, typically one of the first extrinsics. The timestamp
-//! can be set only once per block and must be set each block.
+//! It uses inherents for timestamp data, which is provided by the block author and validated/verified by other validators. 
+//! The timestamp can be set only once per block and must be set each block. There could be a constraint on how much time must pass before setting the new timestamp.
+//! 
+//! **NOTE:** The timestamp module is the recommended way to query the on-chain time instead of using an approach based on block numbers. 
+//! The block numbers based time measurement can cause issues because of cummulative calculation errors and hence it should be avoided.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable functions ([`Call`])
+//! 
+//! * `set` - Sets the current time.
+//! 
+//! ### Public functions ([`Module`])
+//! 
+//! * `get` - Gets the current time for the current block. If this function is called prior the setting to timestamp, it will return the timestamp of the previous block.
+//! 
+//! * `block_period` - Gets the minimum (and advised) period between blocks for the chain.
+//! 
+//! ## Usage
+//! 
+//! The following example shows how to use the timestamp module in your custom module to query the current timestamp.
+//! 
+//! ### Prerequisites
+//! 
+//! Import the `timestamp` module in your custom module and derive the module configuration trait from the `timestamp` trait.
+//! 
+//! ### Get current timestamp
+//! 
+//! ```ignore
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! 
+//! pub trait Trait: timestamp::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _now = <timestamp::Module<T>>::get();
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! ```
+//! 
+//! ### Example from SRML
+//! 
+//! The [`Session` module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses the `timestamp` module for session management.
+//! 
+//! ## Related Modules
+//! 
+//! * [`System`](https://crates.parity.io/srml_system/index.html)
+//! * [`Session`](https://crates.parity.io/srml_session/index.html)
 //!
-//! Note, that there might be a constraint on how much time must pass
-//! before setting the new timestamp, specified by the `tim:block_period`
-//! storage entry.
-//!
-//! # Interaction with the system
-//!
-//! ## Finalization
-//!
-//! This module should be hooked up to the finalization routine.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -144,11 +193,13 @@ macro_rules! impl_timestamp_set {
 
 for_each_tuple!(impl_timestamp_set);
 
+/// The module configuration trait
 pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
 		+ Mul<Self::BlockNumber, Output = Self::Moment>
 		+ Div<Self::BlockNumber, Output = Self::Moment>;
+
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
 }
@@ -157,12 +208,12 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Set the current time.
 		///
-		/// Extrinsic with this call should be placed at the specific position in the each block
-		/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
 		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
+		/// 
+		/// The dispatch origin for this call must be `Inherent`.
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_inherent(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -186,6 +237,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
 		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
+
 		/// The minimum (and advised) period between blocks.
 		pub BlockPeriod get(block_period) config(period): T::Moment = T::Moment::sa(5);
 
@@ -195,10 +247,9 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
 	/// Get the current time for the current block.
 	///
-	/// NOTE: if this function is called prior the setting the timestamp,
+	/// NOTE: if this function is called prior to setting the timestamp,
 	/// it will return the timestamp of the previous block.
 	pub fn get() -> T::Moment {
 		Self::now()
