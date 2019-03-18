@@ -72,6 +72,9 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
 		}
 	}
+	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
+	}
 }
 
 #[derive(Serialize, Deserialize)]

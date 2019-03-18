@@ -390,12 +390,13 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number
 pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
-	use keyring::Keyring;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
-	use test_client::{self, TestClient, blockchain::HeaderBackend};
-	use test_client::runtime::{self, Hash, Block, Header};
+	use test_client::{
+		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
+		runtime::{self, Hash, Block, Header}
+	};
 	use consensus::BlockOrigin;
 
 	use crate::in_mem::{Blockchain as InMemoryBlockchain};
@@ -583,7 +584,7 @@ pub mod tests {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
-		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
@@ -695,7 +696,7 @@ pub mod tests {
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
-		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:

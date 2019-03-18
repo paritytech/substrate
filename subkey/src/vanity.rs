@@ -104,13 +104,14 @@ pub(super) fn generate_key<C: Crypto<Seed=[u8; 32]>>(desired: &str) -> Result<Ke
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use super::super::OriginalEd25519;
+	use super::super::Ed25519;
+	use substrate_primitives::Pair;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
 	#[test]
 	fn test_generation_with_single_char() {
-		assert!(generate_key::<OriginalEd25519>("j").unwrap().pair.public().to_ss58check().contains("j"));
+		assert!(generate_key::<Ed25519>("j").unwrap().pair.public().to_ss58check().contains("j"));
 	}
 
 	#[test]

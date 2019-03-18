@@ -29,9 +29,9 @@ pub use client::ExecutionStrategies;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
-pub use keyring;
 pub use runtime;
 pub use consensus;
+pub use keyring::{AuthorityKeyring, AccountKeyring};
 
 use std::sync::Arc;
 use futures::future::FutureResult;
@@ -39,7 +39,6 @@ use primitives::Blake2Hasher;
 use runtime_primitives::StorageOverlay;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use keyring::Keyring;
 use state_machine::ExecutionStrategy;
 use client::LocalCallExecutor;
 
@@ -165,10 +164,16 @@ pub fn new_with_backend<B>(
 
 fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 	GenesisConfig::new(support_changes_trie, vec![
-		Keyring::Alice.to_raw_public().into(),
-		Keyring::Bob.to_raw_public().into(),
-		Keyring::Charlie.to_raw_public().into(),
-	], 1000)
+		AuthorityKeyring::Alice.into(),
+		AuthorityKeyring::Bob.into(),
+		AuthorityKeyring::Charlie.into(),
+	], vec![
+		AccountKeyring::Alice.into(),
+		AccountKeyring::Bob.into(),
+		AccountKeyring::Charlie.into(),
+	],
+		1000
+	)
 }
 
 fn genesis_storage(support_changes_trie: bool) -> StorageOverlay {

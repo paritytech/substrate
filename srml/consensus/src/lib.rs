@@ -34,7 +34,7 @@ use inherents::{
 };
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519::Public as AuthorityId;
 
 mod mock;
 mod tests;
@@ -135,7 +135,7 @@ impl<SessionKey: Member> RawLog<SessionKey> {
 
 // Implementation for tests outside of this crate.
 #[cfg(any(feature = "std", test))]
-impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<Ed25519AuthorityId> {
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<AuthorityId> {
 	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>

@@ -112,25 +112,25 @@ impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::Ed25519AuthorityId;
+	use primitives::ed25519::Public as AuthorityId;
 
 	#[test]
 	fn validator_offline() {
-		let mut tracker = OfflineTracker::<Ed25519AuthorityId>::new();
-		let v = [0; 32].into();
-		let v2 = [1; 32].into();
-		let v3 = [2; 32].into();
-		tracker.note_round_end(v, true);
-		tracker.note_round_end(v2, true);
-		tracker.note_round_end(v3, true);
+		let mut tracker = OfflineTracker::<AuthorityId>::new();
+		let v = AuthorityId::from_raw([0; 32]);
+		let v2 = AuthorityId::from_raw([1; 32]);
+		let v3 = AuthorityId::from_raw([2; 32]);
+		tracker.note_round_end(v.clone(), true);
+		tracker.note_round_end(v2.clone(), true);
+		tracker.note_round_end(v3.clone(), true);
 
 		let slash_time = REPORT_TIME + Duration::from_secs(5);
 		tracker.observed.get_mut(&v).unwrap().offline_since -= slash_time;
 		tracker.observed.get_mut(&v2).unwrap().offline_since -= slash_time;
 
-		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0, 1]);
+		assert_eq!(tracker.reports(&[v.clone(), v2.clone(), v3.clone()]), vec![0, 1]);
 
-		tracker.note_new_block(&[v, v3]);
+		tracker.note_new_block(&[v.clone(), v3.clone()]);
 		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0]);
 	}
 }

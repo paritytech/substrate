@@ -42,7 +42,9 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, One,
 };
-use substrate_primitives::{Ed25519AuthorityId, H256};
+use substrate_primitives::{ed25519, H256};
+use ed25519::Public as AuthorityId;
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::justification::GrandpaJustification;
 
@@ -169,14 +171,14 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		}
 	}
 
-	// check that the last header in finalization path is the jsutification target block
+	// check that the last header in finalization path is the justification target block
 	let just_block = proof.justification.target_block();
 	{
 		let finalized_header = proof.finalization_path.last()
 			.expect("checked above that proof.finalization_path is not empty; qed");
 		if *finalized_header.number() != just_block.0 || finalized_header.hash() != just_block.1 {
 			return Err(ClientErrorKind::BadJustification(
-				"finality proof: target jsutification block is not a part of finalized path".into()
+				"finality proof: target justification block is not a part of finalized path".into()
 			).into());
 		}
 	}
@@ -189,12 +191,14 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		call_data: vec![],
 		retry_count: None,
 	})?;
-	let grandpa_authorities: Vec<(Ed25519AuthorityId, u64)> = Decode::decode(&mut &grandpa_authorities[..])
+	let grandpa_authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &grandpa_authorities[..])
 		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode GRANDPA authorities set proof".into()))?;
 
 	// and now check justification
 	proof.justification.verify(set_id, &grandpa_authorities.into_iter().collect())?;
 
+	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
+		"set_id" => ?set_id, "finalized_header_hash" => ?block.1);
 	Ok(proof.finalization_path)
 }
 
@@ -222,7 +226,7 @@ trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	fn target_block(&self) -> (Header::Number, Header::Hash);
 
 	/// Verify justification with respect to authorities set and authorities set id.
-	fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()>;
+	fn verify(&self, set_id: u64, authorities: &VoterSet<AuthorityId>) -> ClientResult<()>;
 }
 
 impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJustification<Block>
@@ -233,7 +237,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 		(self.commit.target_number, self.commit.target_hash)
 	}
 
-	fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
+	fn verify(&self, set_id: u64, authorities: &VoterSet<AuthorityId>) -> ClientResult<()> {
 		GrandpaJustification::verify(self, set_id, authorities)
 	}
 }
@@ -253,12 +257,12 @@ mod tests {
 	impl ProvableJustification<Header> for ValidFinalityProof {
 		fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
-		fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
+		fn verify(&self, set_id: u64, authorities: &VoterSet<AuthorityId>) -> ClientResult<()> {
 			assert_eq!(set_id, 1);
 			assert_eq!(authorities, &vec![
-				(Ed25519AuthorityId([1u8; 32]), 1),
-				(Ed25519AuthorityId([2u8; 32]), 2),
-				(Ed25519AuthorityId([3u8; 32]), 3),
+				(AuthorityId([1u8; 32]), 1),
+				(AuthorityId([2u8; 32]), 2),
+				(AuthorityId([3u8; 32]), 3),
 			].into_iter().collect());
 			Ok(())
 		}
@@ -387,7 +391,7 @@ mod tests {
 		impl ProvableJustification<Header> for InvalidFinalityProof {
 			fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
-			fn verify(&self, _set_id: u64, _authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
+			fn verify(&self, _set_id: u64, _authorities: &VoterSet<AuthorityId>) -> ClientResult<()> {
 				Err(ClientErrorKind::Backend("test error".into()).into())
 			}
 		}
@@ -415,9 +419,9 @@ mod tests {
 			.unwrap().unwrap();
 		assert_eq!(do_check_finality_proof::<Block, _, ValidFinalityProof>(
 			|_| Ok(vec![
-				(Ed25519AuthorityId([1u8; 32]), 1u64),
-				(Ed25519AuthorityId([2u8; 32]), 2u64),
-				(Ed25519AuthorityId([3u8; 32]), 3u64),
+				(AuthorityId([1u8; 32]), 1u64),
+				(AuthorityId([2u8; 32]), 2u64),
+				(AuthorityId([3u8; 32]), 3u64),
 			].encode()),
 			header(1),
 			(2, header(2).hash()),

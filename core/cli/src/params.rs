@@ -338,6 +338,10 @@ impl_get_log_filter!(RevertCmd);
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
+	/// Skip interactive prompt by answering yes automatically.
+	#[structopt(short = "y")]
+	pub yes: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,

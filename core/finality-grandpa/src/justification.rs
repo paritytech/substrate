@@ -25,10 +25,12 @@ use grandpa::VoterSet;
 use grandpa::{Error as GrandpaError};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
+use substrate_primitives::{H256, ed25519, Blake2Hasher};
 
 use crate::{Commit, Error};
 use crate::communication;
+
+use ed25519::Public as AuthorityId;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -95,7 +97,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	pub(crate) fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-		voters: &VoterSet<Ed25519AuthorityId>,
+		voters: &VoterSet<AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -106,7 +108,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<Ed25519AuthorityId>) -> Result<(), ClientError>
+	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<AuthorityId>) -> Result<(), ClientError>
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{

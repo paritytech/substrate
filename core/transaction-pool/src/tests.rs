@@ -17,10 +17,9 @@
 
 use super::*;
 
-use keyring::Keyring::{self, *};
 use parity_codec::Encode;
 use txpool::{self, Pool};
-use test_client::runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer};
+use test_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
 use sr_primitives::{
 	generic::{self, BlockId},
 	traits::{Hash as HashT, BlakeTwo256},
@@ -86,9 +85,9 @@ fn number_of(at: &BlockId<Block>) -> u64 {
 	}
 }
 
-fn uxt(who: Keyring, nonce: Index) -> Extrinsic {
+fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let transfer = Transfer {
-		from: who.to_raw_public().into(),
+		from: who.into(),
 		to: AccountId::default(),
 		nonce,
 		amount: 1,

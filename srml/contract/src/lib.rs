@@ -67,6 +67,7 @@ use crate::account_db::AccountDb;
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
+use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
@@ -120,7 +121,7 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
-	T::AccountId: From<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
@@ -130,7 +131,7 @@ where
 		buf.extend_from_slice(data_hash.as_ref());
 		buf.extend_from_slice(origin.as_ref());
 
-		T::Hashing::hash(&buf[..]).into()
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf[..]))
 	}
 }
 

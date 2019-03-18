@@ -54,7 +54,7 @@ pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
 	}.into()
 }
 
-/// Generates the access to the `subtrate_client` crate.
+/// Generates the access to the `substrate_client` crate.
 pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-client" {
 		quote!( crate )
