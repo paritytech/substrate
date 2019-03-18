@@ -313,8 +313,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		};
 
 		if transactor != dest {
+			Self::decrease_total_stake_by(fee)?;
 			Self::set_free_balance(transactor, new_from_balance);
-			Self::decrease_total_stake_by(fee);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
@@ -335,7 +335,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Kill an account's free portion.
 	fn on_free_too_low(who: &T::AccountId) {
-		Self::decrease_total_stake_by(Self::free_balance(who));
+		// underflow should never happen, but if it does, there's not much we can do about it.
+		let _ = Self::decrease_total_stake_by(Self::free_balance(who));
+
 		<FreeBalance<T, I>>::remove(who);
 		<Locks<T, I>>::remove(who);
 
@@ -348,7 +350,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Kill an account's reserved portion.
 	fn on_reserved_too_low(who: &T::AccountId) {
-		Self::decrease_total_stake_by(Self::reserved_balance(who));
+		// underflow should never happen, but it if does, there's nothing to be done here.
+		let _ = Self::decrease_total_stake_by(Self::reserved_balance(who));
+
 		<ReservedBalance<T, I>>::remove(who);
 
 		if Self::free_balance(who).is_zero() {
@@ -357,16 +361,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Increase TotalIssuance by Value.
-	pub fn increase_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T, I>>::total_issuance().checked_add(&value) {
-			<TotalIssuance<T, I>>::put(v);
-		}
+	pub fn increase_total_stake_by(value: T::Balance) -> Result {
+		let v = <Module<T, I>>::total_issuance().checked_add(&value).ok_or("issuance overflow")?;
+		<TotalIssuance<T, I>>::put(v);
+		Ok(())
 	}
 	/// Decrease TotalIssuance by Value.
-	pub fn decrease_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T, I>>::total_issuance().checked_sub(&value) {
-			<TotalIssuance<T, I>>::put(v);
-		}
+	pub fn decrease_total_stake_by(value: T::Balance) -> Result {
+		let v = <Module<T, I>>::total_issuance().checked_sub(&value).ok_or("issuance underflow")?;
+		<TotalIssuance<T, I>>::put(v);
+		Ok(())
 	}
 
 	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
@@ -440,8 +444,9 @@ where
 	fn slash(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
+		// underflow should never happen, but it if does, there's nothing to be done here.
+		let _ = Self::decrease_total_stake_by(free_slash);
 		Self::set_free_balance(who, free_balance - free_slash);
-		Self::decrease_total_stake_by(free_slash);
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
 		} else {
@@ -453,8 +458,8 @@ where
 		if Self::total_balance(who).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
+		Self::increase_total_stake_by(value)?;
 		Self::set_free_balance(who, Self::free_balance(who) + value);
-		Self::increase_total_stake_by(value);
 		Ok(())
 	}
 
@@ -489,8 +494,9 @@ where
 	fn slash_reserved(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
+		// underflow should never happen, but it if does, there's nothing to be done here.
+		let _ = Self::decrease_total_stake_by(slash);
 		Self::set_reserved_balance(who, b - slash);
-		Self::decrease_total_stake_by(slash);
 		if value == slash {
 			None
 		} else {
@@ -604,14 +610,14 @@ impl<T: Trait<I>, I: Instance> TransferAsset<T::AccountId> for Module<T, I> {
 		ensure!(b >= value, "account has too few funds");
 		let new_balance = b - value;
 		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
+		Self::decrease_total_stake_by(value)?;
 		Self::set_free_balance(who, new_balance);
-		Self::decrease_total_stake_by(value);
 		Ok(())
 	}
 
 	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
+		Self::increase_total_stake_by(value)?;
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
-		Self::increase_total_stake_by(value);
 		Ok(())
 	}
 }

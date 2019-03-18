@@ -223,8 +223,8 @@ pub fn buy_gas<T: Trait>(
 		return Err("not enough funds for transaction fee");
 	}
 
+	<balances::Module<T>>::decrease_total_stake_by(cost)?;
 	<balances::Module<T>>::set_free_balance(transactor, b - cost);
-	<balances::Module<T>>::decrease_total_stake_by(cost);
 	Ok(GasMeter {
 		limit: gas_limit,
 		gas_left: gas_limit,
@@ -245,8 +245,12 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	// Refund gas left by the price it was bought.
 	let b = <balances::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
-	<balances::Module<T>>::set_free_balance(transactor, b + refund);
-	<balances::Module<T>>::increase_total_stake_by(refund);
+
+	// this should be infallible since we just charged for it this block. nonetheless, we play it
+	// safe and only issue the refund if issuance doesn't overflow.
+	if let Ok(_) = <balances::Module<T>>::increase_total_stake_by(refund) {
+		<balances::Module<T>>::set_free_balance(transactor, b + refund);
+	}
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units
