@@ -283,6 +283,7 @@ impl TopicTracker {
 			);
 			return true;
 		}
+
 		false
 	}
 }
@@ -358,6 +359,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		use grandpa::Message as GrandpaMessage;
+
 		if self.is_expired(full.round, full.set_id) {
 			return network_gossip::ValidationResult::Expired;
 		}
@@ -392,6 +394,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let precommits_signed_by: Vec<String> = full.message.auth_data.iter().map(move |(_, a)| {
 			format!("{}", a)
 		}).collect();
+
 		telemetry!(CONSENSUS_INFO; "afg.received_commit_msg";
 			"contains_precommits_signed_by" => ?precommits_signed_by,
 			"round" => ?full.round,
