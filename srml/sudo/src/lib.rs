@@ -18,7 +18,10 @@
 //!
 //! ## Overview
 //! 
-//! The sudo module allows for a single account to be set as the sudo key of your blockchain. The sudo key can execute dispatchable functions which require a `Root` call or assign a new account to replace them as the sudo key.
+//! The Sudo module allows for a single account (called the "sudo key")
+//! to execute dispatchable functions that require a `Root` call
+//! or designate a new account to replace them as the sudo key.
+//! Only one account can be the sudo key at a time.
 //! 
 //! You can start using the Sudo module by implementing the sudo [`Trait`].
 //! 
@@ -31,7 +34,7 @@
 //! Only the sudo key can call the dispatchable functions from the Sudo module.
 //! 
 //! * `sudo` - Make a `Root` call to a dispatchable function.
-//! * `set_key` - Assign a new account to be the key of the superuser
+//! * `set_key` - Assign a new account to be the key of the superuser.
 //! 
 //! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
 //!
@@ -39,7 +42,7 @@
 //! 
 //! ### Prerequisites
 //! 
-//! To use the sudo module in your runtime, you must implement the following trait in your runtime:
+//! To use the Sudo module in your runtime, you must implement the following trait in your runtime:
 //! 
 //! ```ignore
 //! impl sudo::Trait for Runtime {
@@ -49,17 +52,24 @@
 //! }
 //! ```
 //! 
-//! You can then import the sudo module in your `construct_runtime!` macro with:
+//! You can then import the Sudo module in your `construct_runtime!` macro with:
 //! 
 //! ```ignore
 //! Sudo: sudo,
 //! ```
 //! 
+//! ### Executing Privileged Functions
+//! 
+//! The Sudo module itself is not intended to be used within other modules.
+//! Instead, you can build "privileged functions" in other modules which require `Root` origin.
+//! You can execute these privileged functions by calling `sudo()` with the sudo key account.
+//! Privileged functions cannot be directly executed via an extrinsic.
+//! 
+//! Learn more about privileged functions and `Root` origin in the [`Origin`] type documentation.
+//! 
 //! ### Simple Code Snippet
 //! 
-//! The Sudo module itself is not intended to be used within other modules. However, you can build other dispatchable functions to take advantage of this sudo module by requiring the function only accept calls from `Root`.
-//! 
-//! For example:
+//! This is an example of a module which exposes a privileged function:
 //! 
 //! ```ignore
 //! use support::{decl_module, dispatch::Result};
@@ -80,12 +90,10 @@
 //! }
 //! ```
 //! 
-//! This `privileged_function()` can not directly be executed via an extrinsic, but can be called via `sudo()` function.
-//! 
-//! 
 //! ### Example from SRML
 //! 
-//! The consensus module exposes a `set_code()` function which requires a `Root` call and allows you to set the on-chain Wasm runtime code:
+//! The consensus module exposes a `set_code()` privileged function
+//! that allows you to set the on-chain Wasm runtime code:
 //! 
 //! ```ignore
 //! /// Set the new code.
@@ -94,11 +102,9 @@
 //! }
 //! ```
 //! 
-//! Note that this function does not include the `origin` parameter, so the `decl_module` macro adds `origin` and the `ensure_root` check automatically.
-//! 
 //! ## Genesis Config
 //! 
-//! To use the sudo module, you need to include an initial superuser account to be set as the sudo `key`.
+//! To use the Sudo module, you need to include an initial superuser account to be set as the sudo `key`.
 //! 
 //! ```ignore
 //! GenesisConfig {
@@ -110,8 +116,8 @@
 //! 
 //! ## Related Modules
 //! 
-//! * Consensus
-//! * Democracy
+//! * [Consensus]
+//! * [Democracy]
 //! 
 //! ## References
 
@@ -135,7 +141,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Allow the sudo key to make a `Root` call to a dispatchable function
+		/// Authenticates the sudo key and dispatches a function call with `Root` origin
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		fn sudo(origin, proposal: Box<T::Proposal>) {
@@ -147,7 +153,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::Sudid(ok));
 		}
 
-		/// Allow the current sudo key to set an AccountId as the new sudo key
+		/// Authenticates the current sudo key and sets the given AccountId as the new sudo key
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
