@@ -46,7 +46,7 @@
 //! 
 //! ```ignore
 //! impl sudo::Trait for Runtime {
-//! 	/// The uniquitous event type.
+//! 	/// The ubiquitous event type.
 //! 	type Event = Event;
 //! 	type Proposal = Call;
 //! }
@@ -116,8 +116,8 @@
 //! 
 //! ## Related Modules
 //! 
-//! * [Consensus]
-//! * [Democracy]
+//! * [Consensus](https://crates.parity.io/srml_consensus/index.html)
+//! * [Democracy](https://crates.parity.io/srml_democracy/index.html)
 //! 
 //! ## References
 
