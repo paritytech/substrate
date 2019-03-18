@@ -130,12 +130,12 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 			if rebroadcast {
 				let SetId(set_id) = self.set_id;
 				if let Some((Round(c_round), ref c_commit)) = self.last_commit {
-					self.network.send_commit(c_round, set_id, c_commit.clone());
+					self.network.send_commit(c_round, set_id, c_commit.clone(), true);
 				}
 
 				let Round(round) = self.round_messages.0;
 				for message in self.round_messages.1.iter().cloned() {
-					self.network.send_message(round, set_id, message);
+					self.network.send_message(round, set_id, message, true);
 				}
 
 				for (&announce_hash, &Round(round)) in &self.announcements {
@@ -143,6 +143,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 				}
 			}
 		}
+
 		loop {
 			match self.incoming_broadcast.poll().expect("UnboundedReceiver does not yield errors; qed") {
 				Async::NotReady => return Ok(Async::NotReady),
@@ -168,7 +169,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_commit(round.0, self.set_id.0, commit);
+							self.network.send_commit(round.0, self.set_id.0, commit, false);
 						}
 						Broadcast::Message(round, set_id, message) => {
 							if self.set_id == set_id {
@@ -182,7 +183,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_message(round.0, set_id.0, message);
+							self.network.send_message(round.0, set_id.0, message, false);
 						}
 						Broadcast::Announcement(round, set_id, hash) => {
 							if self.set_id == set_id {
@@ -215,7 +216,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.messages_for(round, set_id)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Message(Round(round), SetId(set_id), message));
 	}
 
@@ -231,7 +232,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.commit_messages(set_id)
 	}
 
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Commit(Round(round), SetId(set_id), message));
 	}
 
@@ -350,7 +351,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			// announce our block hash to peers and propagate the
 			// message.
 			self.network.announce(self.round, self.set_id, target_hash);
-			self.network.send_message(self.round, self.set_id, message.encode());
+			self.network.send_message(self.round, self.set_id, message.encode(), false);
 
 			// forward the message to the inner sender.
 			let _ = self.sender.unbounded_send(signed);
@@ -526,7 +527,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			message: compact_commit,
 		});
 
-		self.network.send_commit(round, self.set_id, Encode::encode(&message));
+		self.network.send_commit(round, self.set_id, Encode::encode(&message), false);
 
 		Ok(AsyncSink::Ready)
 	}

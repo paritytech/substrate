@@ -138,12 +138,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		message_hash: B::Hash,
 		get_message: F,
+		force: bool,
 	)
 		where F: Fn() -> ConsensusMessage,
 	{
 		let mut non_authorities: Vec<_> = self.peers.iter()
 			.filter_map(|(id, ref peer)|
-				if !peer.is_authority && !peer.known_messages.contains(&message_hash) {
+				if !peer.is_authority && (!peer.known_messages.contains(&message_hash) || force) {
 					Some(*id)
 				} else {
 					None
@@ -160,17 +161,15 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.is_authority {
-				if peer.known_messages.insert(message_hash.clone()) {
+				if peer.known_messages.insert(message_hash.clone()) || force {
 					let message = get_message();
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
 					protocol.send_message(*id, Message::Consensus(message));
 				}
 			} else if non_authorities.contains(&id) {
-				if peer.known_messages.insert(message_hash.clone()) {
-					let message = get_message();
-					trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-					protocol.send_message(*id, Message::Consensus(message));
-				}
+				let message = get_message();
+				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+				protocol.send_message(*id, Message::Consensus(message));
 			}
 		}
 	}
@@ -348,7 +347,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					entry.remove_entry();
 				}
 			}
-			self.multicast_inner(protocol, message_hash, topic, status, || message.clone());
+			self.multicast_inner(protocol, message_hash, topic, status, || message.clone(), false);
 			Some((topic, message))
 		} else {
 			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -362,9 +361,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		topic: B::Hash,
 		message: ConsensusMessage,
+		force: bool,
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
-		self.multicast_inner(protocol, message_hash, topic, Status::Live, || message.clone());
+		self.multicast_inner(protocol, message_hash, topic, Status::Live, || message.clone(), force);
 	}
 
 	fn multicast_inner<F>(
@@ -374,18 +374,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 		topic: B::Hash,
 		status: Status,
 		get_message: F,
+		force: bool,
 	)
 		where F: Fn() -> ConsensusMessage
 	{
 		self.register_message(message_hash, topic, status, &get_message);
 		if let Status::Live = status {
-			self.propagate(protocol, message_hash, get_message);
+			self.propagate(protocol, message_hash, get_message, force);
 		}
-	}
-
-	/// Note new consensus session.
-	pub fn new_session(&mut self, _parent_hash: B::Hash) {
-		self.collect_garbage();
 	}
 }
 
