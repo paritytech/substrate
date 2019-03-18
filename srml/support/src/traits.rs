@@ -176,7 +176,7 @@ pub trait Currency<AccountId> {
 /// they can be individually replaced or removed.
 pub type LockIdentifier = [u8; 8];
 
-/// A currency whose accounts can have liquidity restructions.
+/// A currency whose accounts can have liquidity restrictions.
 pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
@@ -210,7 +210,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 /// Charge bytes fee trait
 pub trait ChargeBytesFee<AccountId> {
 	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return Ok iff the payment was successful.
+	/// `encoded_len` bytes. Return Ok if the payment was successful.
 	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 }
 
@@ -222,7 +222,7 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
 	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
-	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
+	/// Refund `amount` of previous charged fees from `transactor`. Return Ok if the refund was successful.
 	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 

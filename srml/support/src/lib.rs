@@ -64,6 +64,21 @@ pub use runtime_io::print;
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
 
+pub mod lazy {
+	use spin::Once;
+
+	pub struct Lazy<T: Sync>(Once<T>);
+
+	impl <T: Sync> Lazy<T> {
+		pub const INIT: Self = Lazy(Once::INIT);
+
+		#[inline(always)]
+		pub fn get<F>(&'static self, builder: F) -> &T where F: FnOnce() -> T {
+			self.0.call_once(builder)
+		}
+	}
+}
+
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{

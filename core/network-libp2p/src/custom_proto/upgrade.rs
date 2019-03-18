@@ -388,7 +388,11 @@ where TSubstream: AsyncRead + AsyncWrite,
 		socket: TSubstream,
 		info: Self::Info,
 	) -> Self::Future {
-		let framed = Framed::new(socket, UviBytes::default());
+		let framed = {
+			let mut codec = UviBytes::default();
+			codec.set_max_len(16 * 1024 * 1024);		// 16 MiB hard limit for packets.
+			Framed::new(socket, codec)
+		};
 
 		future::ok(RegisteredProtocolSubstream {
 			is_closing: false,

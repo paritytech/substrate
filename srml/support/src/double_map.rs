@@ -121,7 +121,7 @@ pub trait StorageDoubleMap {
 	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8>;
 
 	/// Returns a compound key that consist of the two parts: (prefix, `k1`) and `k2`.
-	/// The first part is hased and then concatenated with a hash of `k2`.
+	/// The first part is hashed and then concatenated with a hash of `k2`.
 	fn full_key<Q, R>(k1: &Q, k2: &R) -> Vec<u8>
 	where
 		Self::Key1: Borrow<Q>,

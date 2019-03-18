@@ -76,9 +76,6 @@ const NODE_KEY_SECP256K1_FILE: &str = "secret";
 /// is specified in combination with `--node-key-type=ed25519`.
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
-/// The root phrase for our development network keys.
-pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
-
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
 	/// Implemtation name.
@@ -449,7 +446,7 @@ where
 	}
 
 	if cli.shared_params.dev {
-		config.keys.push(format!("{}//Alice", DEV_PHRASE));
+		config.keys.push("//Alice".into());
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
@@ -633,22 +630,27 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-
 	let db_path = config.database_path;
-	print!("Are you sure to remove {:?}? (y/n)", &db_path);
-	stdout().flush().expect("failed to flush stdout");
 
-	let mut input = String::new();
-	stdin().read_line(&mut input)?;
-	let input = input.trim();
+	if cli.yes == false {
+		print!("Are you sure to remove {:?}? (y/n)", &db_path);
+		stdout().flush().expect("failed to flush stdout");
 
-	match input.chars().nth(0) {
-		Some('y') | Some('Y') => {
-			fs::remove_dir_all(&db_path)?;
-			println!("{:?} removed.", &db_path);
-		},
-		_ => println!("Aborted"),
+		let mut input = String::new();
+		stdin().read_line(&mut input)?;
+		let input = input.trim();
+
+		match input.chars().nth(0) {
+			Some('y') | Some('Y') => {},
+			_ => {
+				println!("Aborted");
+				return Ok(());
+			},
+		}
 	}
+
+	fs::remove_dir_all(&db_path)?;
+	println!("{:?} removed.", &db_path);
 
 	Ok(())
 }
