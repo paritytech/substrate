@@ -282,11 +282,13 @@ macro_rules! __decl_generic_event {
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),* $(, $instance)? > {
-			#[doc(hidden)]
-			$(PhantomData($crate::rstd::marker::PhantomData<$instance>),)?
 			$(
 				$events
 			)*
+			$(
+				#[doc(hidden)]
+				PhantomData($crate::rstd::marker::PhantomData<$instance>),
+			)?
 		}
 		impl<$( $generic_param ),* $(, $instance)? > From<RawEvent<$( $generic_param ),* $(, $instance)?>> for () {
 			fn from(_: RawEvent<$( $generic_param ),* $(, $instance)?>) -> () { () }
