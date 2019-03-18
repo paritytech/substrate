@@ -523,7 +523,7 @@ impl Pair {
 mod test {
 	use super::*;
 	use hex_literal::{hex, hex_impl};
-	use crate::{Pair as _Pair, crypto::DEV_PHRASE};
+	use crate::{Pair as PairT, crypto::DEV_PHRASE};
 
 	#[test]
 	fn default_phrase_should_be_used() {
