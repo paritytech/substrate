@@ -405,7 +405,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
 	/// increases.
-	pub fn increase_total_stake_by(value: T::Balance) -> Result {
+	pub fn increase_total_issuance_by(value: T::Balance) -> Result {
 		let v = <Module<T, I>>::total_issuance().checked_add(&value).ok_or("issuance overflow")?;
 		<TotalIssuance<T, I>>::put(v);
 		Ok(())
@@ -415,7 +415,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
 	/// decreases.
-	pub fn decrease_total_stake_by(value: T::Balance) -> Result {
+	pub fn decrease_total_issuance_by(value: T::Balance) -> Result {
 		let v = <Module<T, I>>::total_issuance().checked_sub(&value).ok_or("issuance underflow")?;
 		<TotalIssuance<T, I>>::put(v);
 		Ok(())
@@ -676,13 +676,13 @@ pub struct BurnAndMint<T: Trait>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait> OnUnbalancedDecrease<T::Balance> for BurnAndMint<T> {
 	fn on_unbalanced_decrease(amount: T::Balance) -> Result {
-		<Module<T>>::decrease_total_stake_by(amount)
+		<Module<T>>::decrease_total_issuance_by(amount)
 	}
 }
 
 impl<T: Trait> OnUnbalancedIncrease<T::Balance> for BurnAndMint<T> {
 	fn on_unbalanced_increase(amount: T::Balance) -> Result {
-		<Module<T>>::increase_total_stake_by(amount)
+		<Module<T>>::increase_total_issuance_by(amount)
 	}
 }
 
