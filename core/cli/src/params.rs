@@ -17,7 +17,7 @@
 use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
+use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
 /// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
@@ -227,7 +227,6 @@ pub struct RunCmd {
 	)]
 	pub other_execution: ExecutionStrategy,
 
-	
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -239,6 +238,80 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub keyring: Keyring,
+}
+
+/// Stores all required Cli values for a keyring test account.
+struct KeyringTestAccountCliValues {
+	help: String,
+	conflicts_with: Vec<String>,
+	name: String,
+	variant: keyring::AuthorityKeyring,
+}
+
+lazy_static::lazy_static! {
+	/// The Cli values for all test accounts.
+	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
+		keyring::AuthorityKeyring::iter().map(|a| {
+			let help = format!("Shortcut for `--key //{} --name {}`.", a, a);
+			let conflicts_with = keyring::AuthorityKeyring::iter()
+				.filter(|b| a != *b)
+				.map(|b| b.to_string().to_lowercase())
+				.chain(["name", "key"].iter().map(|s| s.to_string()))
+				.collect::<Vec<_>>();
+			let name = a.to_string().to_lowercase();
+
+			KeyringTestAccountCliValues {
+				help,
+				conflicts_with,
+				name,
+				variant: a,
+			}
+		}).collect()
+	};
+}
+
+/// Wrapper for exposing the keyring test accounts into the Cli.
+#[derive(Debug, Clone)]
+pub struct Keyring {
+	pub account: Option<keyring::AuthorityKeyring>,
+}
+
+impl StructOpt for Keyring {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		unimplemented!("Should not be called for `TestAccounts`.")
+	}
+
+	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
+		Keyring {
+			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
+		}
+	}
+}
+
+impl AugmentClap for Keyring {
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
+			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+			app.arg(
+				Arg::with_name(&a.name)
+					.long(&a.name)
+					.help(&a.help)
+					.conflicts_with_all(&conflicts_with_strs)
+					.takes_value(false)
+			)
+		})
+	}
+}
+
+impl Keyring {
+	fn is_subcommand() -> bool {
+		false
+	}
 }
 
 /// Default to verbosity level 0, if none is provided.
