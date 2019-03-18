@@ -478,6 +478,13 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	(
+		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+	) => {
+		#[cfg(any(feature = "std", test))]
+		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
+		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+	};
+	(
 		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
@@ -504,12 +511,12 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident > )*, )*
+			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
+		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
 		#[cfg(any(feature = "std", test))]
-		#[derive(Serialize, Deserialize)]
+		#[derive($crate::serde_derive::Serialize, $crate::serde_derive::Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		pub struct $main {
@@ -551,7 +558,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident( $( $sitem:ident ),* ) ),*
+			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -564,13 +571,13 @@ macro_rules! impl_outer_log {
 
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
 			$(
-				$module($module::Log<$trait>),
+				$module($module::Log<$trait $(, $instance)? >),
 			)*
 		}
 
@@ -648,16 +655,16 @@ macro_rules! impl_outer_log {
 		}
 
 		$(
-			impl From<$module::Log<$trait>> for $name {
+			impl From<$module::Log<$trait $(, $instance)? >> for $name {
 				/// Converts single module log item into `$name`.
-				fn from(x: $module::Log<$trait>) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					$name(x.into())
 				}
 			}
 
-			impl From<$module::Log<$trait>> for InternalLog {
+			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
 				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait>) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					InternalLog::$module(x)
 				}
 			}
