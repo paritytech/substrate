@@ -317,7 +317,7 @@ where
 	config.impl_commit = version.commit;
 	config.impl_version = version.version;
 
-	config.name = match cli.name {
+	config.name = match cli.name.or(cli.keyring.account.map(|a| a.to_string())) {
 		None => generate_node_name(),
 		Some(name) => name,
 	};
@@ -388,6 +388,10 @@ where
 
 	if cli.shared_params.dev {
 		config.keys.push("//Alice".into());
+	}
+
+	if let Some(account) = cli.keyring.account {
+		config.keys.push(format!("//{}", account));
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
