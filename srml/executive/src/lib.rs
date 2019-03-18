@@ -66,7 +66,11 @@ impl<
 	Context: Default,
 	Payment: ChargeBytesFee<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules>
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
+	Block::Extrinsic: Checkable<Context> + Codec,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	fn execute_block(block: Block) {
 		Self::execute_block(block);
