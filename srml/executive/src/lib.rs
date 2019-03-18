@@ -22,7 +22,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
-	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
+	Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT
 };
 use srml_support::{Dispatchable, traits::ChargeBytesFee};
@@ -62,15 +62,11 @@ pub struct Executive<System, Block, Context, Payment, AllModules>(
 
 impl<
 	System: system::Trait,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
+	Block: BlockT<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: ChargeBytesFee<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
-	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules>
 {
 	fn execute_block(block: Block) {
 		Self::execute_block(block);
@@ -83,7 +79,7 @@ impl<
 
 impl<
 	System: system::Trait,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
+	Block: BlockT<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: ChargeBytesFee<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
