@@ -223,7 +223,7 @@ pub fn buy_gas<T: Trait>(
 		return Err("not enough funds for transaction fee");
 	}
 
-	<balances::Module<T>>::decrease_total_stake_by(cost)?;
+	// We don't reduce the total amount yet - instead we wait until the refund.
 	<balances::Module<T>>::set_free_balance(transactor, b - cost);
 	Ok(GasMeter {
 		limit: gas_limit,
