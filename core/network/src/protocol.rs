@@ -486,13 +486,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					msg,
 				);
 			}
-			GenericMessage::ConsensusStatus(msg) => {
-				self.consensus_gossip.on_status(
-					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
-					who,
-					msg,
-				);
-			}
 			other => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 				who,

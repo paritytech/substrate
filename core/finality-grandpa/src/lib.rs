@@ -390,8 +390,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 }
 
-impl<Block: BlockT> network_gossip::Validator<Block::Hash> for GossipValidator<Block> {
-	fn validate(&self, mut data: &[u8]) -> network_gossip::ValidationResult<Block::Hash> {
+impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
+	fn validate(&self, _context: &mut network_gossip::ValidatorContext<Block>, mut data: &[u8])
+		-> network_gossip::ValidationResult<Block::Hash>
+	{
 		match GossipMessage::<Block>::decode(&mut data) {
 			Some(GossipMessage::VoteOrPrecommit(message)) => self.validate_round_message(message),
 			Some(GossipMessage::Commit(message)) => self.validate_commit_message(message),
