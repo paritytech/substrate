@@ -510,7 +510,7 @@ where
 					node {:?}", peer_id),
 
 			Some(PeerState::Disabled { open, .. }) => {
-				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was disabled
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was disabled \
 					(through {:?})", peer_id, endpoint);
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
@@ -524,7 +524,7 @@ where
 			}
 
 			Some(PeerState::Enabled { open, .. }) => {
-				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was enabled
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was enabled \
 					(through {:?})", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id);
@@ -544,7 +544,7 @@ where
 			// corresponding Accept/Reject.
 			Some(PeerState::Incoming { .. }) => {
 				if let Some(state) = self.incoming.iter_mut().find(|i| i.peer_id == *peer_id) {
-					debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was in incoming
+					debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was in incoming \
 						mode (id {:?}, through {:?})", peer_id, state.incoming_id, endpoint);
 					state.alive = false;
 				} else {
@@ -555,23 +555,16 @@ where
 		}
 	}
 
-	fn inject_dial_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn error::Error) {
-		let peer_id = if let Some(peer_id) = peer_id {
-			peer_id
-		} else {
-			// This code path is only reached if `peer_id` is None, which means that we dialed an
-			// address without knowing the `PeerId` to expect. We don't currently do that in
-			// Substrate.
-			error!(target: "sub-libp2p", "Received dial failure with no peer ID");
-			return
-		};
+	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn error::Error) {
+		debug!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
+	}
 
+	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
 		if let Entry::Occupied(entry) = self.peers.entry(peer_id.clone()) {
 			match entry.get() {
 				// "Basic" situation: we failed to reach a node that the peerset requested.
 				PeerState::Requested => {
-					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?} through {:?}: \
-						{:?}", peer_id, addr, error);
+					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 					entry.remove();
 					self.peerset.dropped(peer_id)
@@ -581,14 +574,12 @@ where
 				// as an extra diagnostic for an earlier attempt.
 				PeerState::Disabled { .. } | PeerState::Enabled { .. } |
 					PeerState::Incoming { .. } =>
-					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?} through {:?}: \
-						{:?}", peer_id, addr, error),
+					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id),
 			}
 
 		} else {
 			// The node is not in our list.
-			trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?} through {:?}: \
-				{:?}", peer_id, addr, error);
+			trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 		}
 	}
 
@@ -674,7 +665,6 @@ where
 			CustomProtoHandlerOut::ProtocolError { error, .. } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
-				warn!(target: "sub-libp2p", "Protocol error from {:?}: {:?}", source, error);
 				self.disconnect_peer_inner(&source);
 			}
 		}

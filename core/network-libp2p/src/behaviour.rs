@@ -63,14 +63,20 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 
 		let custom_protocols = CustomProto::new(protocol, peerset);
 
+		let mut kademlia = Kademlia::without_init(local_public_key.into_peer_id());
+		for (peer_id, addr) in &known_addresses {
+			kademlia.add_connected_address(peer_id, addr.clone());
+		}
+		kademlia.initialize();
+
 		Behaviour {
 			ping: Ping::new(),
 			custom_protocols,
 			discovery: DiscoveryBehaviour {
 				user_defined: known_addresses,
-				kademlia: Kademlia::without_init(local_public_key.into_peer_id()),
+				kademlia,
 				next_kad_random_query: Delay::new(Instant::now()),
-				duration_to_next_kad: Duration::from_secs(1),
+				duration_to_next_kad: Duration::from_secs(60),
 			},
 			identify,
 			events: Vec::new(),
