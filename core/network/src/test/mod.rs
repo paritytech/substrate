@@ -355,10 +355,16 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, engine_id: ConsensusEngineId, data: Vec<u8>) {
+	pub fn gossip_message(
+		&self,
+		topic: <Block as BlockT>::Hash,
+		engine_id: ConsensusEngineId,
+		data: Vec<u8>,
+		force: bool,
+	) {
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data));
+			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, force));
 	}
 
 	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
