@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::custom_proto::handler::{CustomProtosHandler, CustomProtosHandlerOut, CustomProtosHandlerIn};
+use crate::custom_proto::handler::{CustomProtoHandler, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::topology::NetTopology;
-use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocols};
-use crate::{NetworkConfiguration, NonReservedPeerMode, ProtocolId};
+use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
+use crate::{NetworkConfiguration, NonReservedPeerMode};
 use crate::parse_str_addr;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
@@ -35,22 +35,22 @@ const NODES_FILE: &str = "nodes.json";
 const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
-pub struct CustomProtos<TMessage, TSubstream> {
+pub struct CustomProto<TMessage, TSubstream> {
 	/// List of protocols to open with peers. Never modified.
-	registered_protocols: RegisteredProtocols<TMessage>,
+	protocol: RegisteredProtocol<TMessage>,
 
 	/// Topology of the network.
 	topology: NetTopology,
 
-	/// List of custom protocols that we have open with remotes.
-	open_protocols: Vec<(PeerId, ProtocolId)>,
+	/// List of peers for which the custom protocol is open.
+	opened_peers: FnvHashSet<PeerId>,
 
 	/// List of peer handlers that were enabled.
 	///
 	/// Note that it is possible for a peer to be in the shutdown process, in which case it will
-	/// not be in this list but will be present in `open_protocols`.
+	/// not be in this list but will be present in `opened_peers`.
 	/// It is also possible that we have *just* enabled a peer, in which case it will be in this
-	/// list but not in `open_protocols`.
+	/// list but not in `opened_peers`.
 	enabled_peers: FnvHashSet<PeerId>,
 
 	/// Maximum number of incoming non-reserved connections, taken from the config. Never modified.
@@ -76,19 +76,17 @@ pub struct CustomProtos<TMessage, TSubstream> {
 	next_connect_to_nodes: Delay,
 
 	/// Events to produce from `poll()`.
-	events: SmallVec<[NetworkBehaviourAction<CustomProtosHandlerIn<TMessage>, CustomProtosOut<TMessage>>; 4]>,
+	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn<TMessage>, CustomProtoOut<TMessage>>; 4]>,
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
 }
 
-/// Event that can be emitted by the `CustomProtos`.
+/// Event that can be emitted by the `CustomProto`.
 #[derive(Debug)]
-pub enum CustomProtosOut<TMessage> {
+pub enum CustomProtoOut<TMessage> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
-		/// Identifier of the protocol.
-		protocol_id: ProtocolId,
 		/// Version of the protocol that has been opened.
 		version: u8,
 		/// Id of the node we have opened a connection with.
@@ -101,8 +99,6 @@ pub enum CustomProtosOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Identifier of the protocol.
-		protocol_id: ProtocolId,
 		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
 		result: io::Result<()>,
 	},
@@ -111,8 +107,6 @@ pub enum CustomProtosOut<TMessage> {
 	CustomMessage {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
-		/// Protocol which generated the message.
-		protocol_id: ProtocolId,
 		/// Message that has been received.
 		message: TMessage,
 	},
@@ -122,16 +116,14 @@ pub enum CustomProtosOut<TMessage> {
 	Clogged {
 		/// Id of the peer which is clogged.
 		peer_id: PeerId,
-		/// Protocol which has a problem.
-		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
 		messages: Vec<TMessage>,
 	},
 }
 
-impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
-	/// Creates a `CustomProtos`.
-	pub fn new(config: &NetworkConfiguration, local_peer_id: &PeerId, registered_protocols: RegisteredProtocols<TMessage>) -> Self {
+impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
+	/// Creates a `CustomProto`.
+	pub fn new(config: &NetworkConfiguration, local_peer_id: &PeerId, protocol: RegisteredProtocol<TMessage>) -> Self {
 		// Initialize the topology of the network.
 		let mut topology = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
@@ -157,11 +149,8 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			.saturating_add(max_outgoing_connections)
 			.saturating_add(4); // We add an arbitrary number for reserved peers slots
 
-		// Expected maximum number of substreams.
-		let open_protos_cap = connec_cap.saturating_mul(registered_protocols.len());
-
-		CustomProtos {
-			registered_protocols,
+		CustomProto {
+			protocol,
 			topology,
 			max_incoming_connections,
 			max_outgoing_connections,
@@ -169,7 +158,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			connected_peers: Default::default(),
 			reserved_peers: Default::default(),
 			banned_peers: Vec::new(),
-			open_protocols: Vec::with_capacity(open_protos_cap),
+			opened_peers: FnvHashSet::with_capacity_and_hasher(connec_cap, Default::default()),
 			enabled_peers: FnvHashSet::with_capacity_and_hasher(connec_cap, Default::default()),
 			next_connect_to_nodes: Delay::new(Instant::now()),
 			events: SmallVec::new(),
@@ -232,7 +221,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			}
 			events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::Disable,
+				event: CustomProtoHandlerIn::Disable,
 			});
 			false
 		})
@@ -248,7 +237,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		if self.enabled_peers.remove(peer) {
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer.clone(),
-				event: CustomProtosHandlerIn::Disable,
+				event: CustomProtoHandlerIn::Disable,
 			});
 		}
 	}
@@ -273,7 +262,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		if self.enabled_peers.remove(&peer_id) {
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id,
-				event: CustomProtosHandlerIn::Disable,
+				event: CustomProtoHandlerIn::Disable,
 			});
 		}
 	}
@@ -288,25 +277,21 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		self.enabled_peers.contains(peer_id)
 	}
 
-	/// Returns the list of protocols we have open with the given peer.
-	pub fn open_protocols<'a>(&'a self, peer_id: &'a PeerId) -> impl Iterator<Item = ProtocolId> + 'a {
-		self.open_protocols
-			.iter()
-			.filter(move |(p, _)| p == peer_id)
-			.map(|(_, proto)| *proto)
+	/// Returns true if we have opened a protocol with the given peer.
+	pub fn is_open(&self, peer_id: &PeerId) -> bool {
+		self.opened_peers.contains(peer_id)
 	}
 
-	/// Sends a message to a peer using the given custom protocol.
+	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
 	///
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, protocol_id: ProtocolId, message: TMessage) {
+	pub fn send_packet(&mut self, target: &PeerId, message: TMessage) {
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: CustomProtosHandlerIn::SendCustomMessage {
-				protocol: protocol_id,
+			event: CustomProtoHandlerIn::SendCustomMessage {
 				message,
 			}
 		});
@@ -408,7 +393,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			num_to_open -= 1;
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
+				event: CustomProtoHandlerIn::Enable(Endpoint::Dialer),
 			});
 		}
 
@@ -443,16 +428,16 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviour for CustomProtos<TMessage, TSubstream>
+impl<TMessage, TSubstream> NetworkBehaviour for CustomProto<TMessage, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 	TMessage: CustomMessage,
 {
-	type ProtocolsHandler = CustomProtosHandler<TMessage, TSubstream>;
-	type OutEvent = CustomProtosOut<TMessage>;
+	type ProtocolsHandler = CustomProtoHandler<TMessage, TSubstream>;
+	type OutEvent = CustomProtoOut<TMessage>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		CustomProtosHandler::new(self.registered_protocols.clone())
+		CustomProtoHandler::new(self.protocol.clone())
 	}
 
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -470,7 +455,7 @@ where
 			debug!(target: "sub-libp2p", "Ignoring {:?} because we're in reserved mode", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::Disable,
+				event: CustomProtoHandlerIn::Disable,
 			});
 			return
 		}
@@ -482,7 +467,7 @@ where
 					debug!(target: "sub-libp2p", "Ignoring banned peer {:?}", peer_id);
 					self.events.push(NetworkBehaviourAction::SendEvent {
 						peer_id: peer_id.clone(),
-						event: CustomProtosHandlerIn::Disable,
+						event: CustomProtoHandlerIn::Disable,
 					});
 					return
 				}
@@ -501,7 +486,7 @@ where
 				if num_outgoing == self.max_outgoing_connections {
 					self.events.push(NetworkBehaviourAction::SendEvent {
 						peer_id: peer_id.clone(),
-						event: CustomProtosHandlerIn::Disable,
+						event: CustomProtoHandlerIn::Disable,
 					});
 					return
 				}
@@ -518,7 +503,7 @@ where
 						we're full", peer_id);
 					self.events.push(NetworkBehaviourAction::SendEvent {
 						peer_id: peer_id.clone(),
-						event: CustomProtosHandlerIn::Disable,
+						event: CustomProtoHandlerIn::Disable,
 					});
 					return
 				}
@@ -533,13 +518,13 @@ where
 			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (active)", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
+				event: CustomProtoHandlerIn::Enable(Endpoint::Dialer),
 			});
 		} else {
 			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (passive)", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::Enable(Endpoint::Listener),
+				event: CustomProtoHandlerIn::Enable(Endpoint::Listener),
 			});
 		}
 
@@ -553,11 +538,8 @@ where
 
 		self.topology.set_disconnected(peer_id, &endpoint);
 
-		while let Some(pos) = self.open_protocols.iter().position(|(p, _)| p == peer_id) {
-			let (_, protocol_id) = self.open_protocols.remove(pos);
-
-			let event = CustomProtosOut::CustomProtocolClosed {
-				protocol_id,
+		if self.opened_peers.remove(&peer_id) {
+			let event = CustomProtoOut::CustomProtocolClosed {
 				peer_id: peer_id.clone(),
 				result: Ok(()),
 			};
@@ -596,35 +578,23 @@ where
 		event: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
 	) {
 		match event {
-			CustomProtosHandlerOut::CustomProtocolClosed { protocol_id, result } => {
-				let pos = self.open_protocols.iter().position(|(s, p)|
-					s == &source && p == &protocol_id
-				);
+			CustomProtoHandlerOut::CustomProtocolClosed { result } => {
+				self.opened_peers.remove(&source);
 
-				if let Some(pos) = pos {
-					self.open_protocols.remove(pos);
-				} else {
-					debug_assert!(false, "Couldn't find protocol in open_protocols");
-				}
-
-				let event = CustomProtosOut::CustomProtocolClosed {
-					protocol_id,
+				let event = CustomProtoOut::CustomProtocolClosed {
 					result,
 					peer_id: source,
 				};
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
-			CustomProtosHandlerOut::CustomProtocolOpen { protocol_id, version } => {
-				debug_assert!(!self.open_protocols.iter().any(|(s, p)|
-					s == &source && p == &protocol_id
-				));
-				self.open_protocols.push((source.clone(), protocol_id));
+			CustomProtoHandlerOut::CustomProtocolOpen { version } => {
+				debug_assert!(!self.is_open(&source));
+				self.opened_peers.insert(source.clone());
 
 				let endpoint = self.connected_peers.get(&source)
 					.expect("We only receive events from connected nodes; QED").clone();
-				let event = CustomProtosOut::CustomProtocolOpen {
-					protocol_id,
+				let event = CustomProtoOut::CustomProtocolOpen {
 					version,
 					peer_id: source,
 					endpoint,
@@ -632,38 +602,32 @@ where
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
-			CustomProtosHandlerOut::CustomMessage { protocol_id, message } => {
-				debug_assert!(self.open_protocols.iter().any(|(s, p)|
-					s == &source && p == &protocol_id
-				));
-				let event = CustomProtosOut::CustomMessage {
+			CustomProtoHandlerOut::CustomMessage { message } => {
+				debug_assert!(self.is_open(&source));
+				let event = CustomProtoOut::CustomMessage {
 					peer_id: source,
-					protocol_id,
 					message,
 				};
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
-			CustomProtosHandlerOut::Clogged { protocol_id, messages } => {
-				debug_assert!(self.open_protocols.iter().any(|(s, p)|
-					s == &source && p == &protocol_id
-				));
-				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} (protocol: {:?}) is \
-					pretty large", source, protocol_id);
-				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtosOut::Clogged {
+			CustomProtoHandlerOut::Clogged { messages } => {
+				debug_assert!(self.is_open(&source));
+				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
+					pretty large", source);
+				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtoOut::Clogged {
 					peer_id: source,
-					protocol_id,
 					messages,
 				}));
 			}
-			CustomProtosHandlerOut::ProtocolError { protocol_id, error, is_severe } => {
+			CustomProtoHandlerOut::ProtocolError { error, is_severe } => {
 				if is_severe {
-					warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
-						{:?}: {:?}", source, protocol_id, error);
+					warn!(target: "sub-libp2p", "Network misbehaviour from {:?}: {:?}",
+						source, error);
 					self.ban_peer(source);
 				} else {
-					debug!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
-						{:?}: {:?}", source, protocol_id, error);
+					debug!(target: "sub-libp2p", "Network misbehaviour from {:?}: {:?}",
+						source, error);
 					self.disconnect_peer(&source);
 				}
 			}

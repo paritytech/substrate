@@ -134,8 +134,9 @@ pub struct NetworkStatePeer {
 	/// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
 	/// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
 	pub enabled: bool,
-	/// List of protocols that we have open with the given peer.
-	pub open_protocols: HashSet<ProtocolId>,
+	/// If true, the peer is "open", which means that we have a Substrate-related protocol
+	/// with this peer.
+	pub open: bool,
 	/// List of addresses known for this node, with its reputation score.
 	pub known_addresses: HashMap<Multiaddr, u32>,
 }
