@@ -366,9 +366,9 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = MetaEvent;
-		type TransactionPayment = balances::BurnAndMint<Runtime>;
-		type DustRemoval = balances::BurnAndMint<Runtime>;
-		type TransferPayment = balances::BurnAndMint<Runtime>;
+		type TransactionPayment = ();
+		type DustRemoval = ();
+		type TransferPayment = ();
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;

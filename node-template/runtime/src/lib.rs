@@ -170,9 +170,9 @@ impl balances::Trait for Runtime {
 	/// The uniquitous event type.
 	type Event = Event;
 
-	type TransactionPayment = balances::BurnAndMint<Runtime>;
-	type DustRemoval = balances::BurnAndMint<Runtime>;
-	type TransferPayment = balances::BurnAndMint<Runtime>;
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 
 impl sudo::Trait for Runtime {

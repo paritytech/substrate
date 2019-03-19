@@ -24,8 +24,9 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
-use substrate_primitives::{Blake2Hasher};
+use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch,
+	impl_outer_origin, traits::Currency};
+use substrate_primitives::Blake2Hasher;
 use system::{self, Phase, EventRecord};
 use {wabt, balances, consensus};
 use hex_literal::*;
@@ -77,9 +78,9 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type Event = MetaEvent;
-	type TransactionPayment = balances::BurnAndMint<Test>;
-	type DustRemoval = balances::BurnAndMint<Test>;
-	type TransferPayment = balances::BurnAndMint<Test>;
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
@@ -96,7 +97,7 @@ impl Trait for Test {
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
-	type GasPayment = balances::BurnAndMint<Test>;
+	type GasPayment = ();
 }
 
 type Balances = balances::Module<Test>;
@@ -200,8 +201,7 @@ impl ExtBuilder {
 #[test]
 fn refunds_unused_gas() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&0, 100_000_000);
-		Balances::increase_total_issuance_by(100_000_000);
+		Balances::deposit_creating(&0, 100_000_000);
 
 		assert_ok!(Contract::call(
 			Origin::signed(0),
@@ -222,13 +222,11 @@ fn account_removal_removes_storage() {
 		|| {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
-				Balances::set_free_balance(&1, 110);
-				Balances::increase_total_issuance_by(110);
+				Balances::deposit_creating(&1, 110);
 				<StorageOf<Test>>::insert(&1, &b"foo".to_vec(), b"1".to_vec());
 				<StorageOf<Test>>::insert(&1, &b"bar".to_vec(), b"2".to_vec());
 
-				Balances::set_free_balance(&2, 110);
-				Balances::increase_total_issuance_by(110);
+				Balances::deposit_creating(&2, 110);
 				<StorageOf<Test>>::insert(&2, &b"hello".to_vec(), b"3".to_vec());
 				<StorageOf<Test>>::insert(&2, &b"world".to_vec(), b"4".to_vec());
 			}
@@ -289,8 +287,7 @@ fn instantiate_and_call() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
-			Balances::set_free_balance(&ALICE, 1_000_000);
-			Balances::increase_total_issuance_by(1_000_000);
+			Balances::deposit_creating(&ALICE, 1_000_000);
 
 			assert_ok!(Contract::put_code(
 				Origin::signed(ALICE),
@@ -360,8 +357,7 @@ fn dispatch_call() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
-			Balances::set_free_balance(&ALICE, 1_000_000);
-			Balances::increase_total_issuance_by(1_000_000);
+			Balances::deposit_creating(&ALICE, 1_000_000);
 
 			assert_ok!(Contract::put_code(
 				Origin::signed(ALICE),

@@ -511,9 +511,9 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();
-		type TransactionPayment = balances::BurnAndMint<Test>;
-		type TransferPayment = balances::BurnAndMint<Test>;
-		type DustRemoval = balances::BurnAndMint<Test>;
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Self>;

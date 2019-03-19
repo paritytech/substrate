@@ -97,6 +97,7 @@ impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
 	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
+/// Does
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ExistenceRequirement {
 	KeepAlive,
