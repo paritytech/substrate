@@ -261,6 +261,7 @@ pub enum StorageFunctionType {
 	Map {
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
+		is_linked: bool,
 	}
 }
 
