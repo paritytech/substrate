@@ -16,7 +16,7 @@
 
 use crate::ProtocolId;
 use bytes::Bytes;
-use libp2p::core::{Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
+use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
 use log::warn;
 use std::{collections::VecDeque, io, iter, marker::PhantomData, vec::IntoIter as VecIntoIter};
@@ -92,7 +92,7 @@ pub struct RegisteredProtocolSubstream<TMessage, TSubstream> {
 	/// If true, we should call `poll_complete` on the inner sink.
 	requires_poll_complete: bool,
 	/// The underlying substream.
-	inner: stream::Fuse<Framed<TSubstream, UviBytes<Vec<u8>>>>,
+	inner: stream::Fuse<Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>>,
 	/// Id of the protocol.
 	protocol_id: ProtocolId,
 	/// Version of the protocol that was negotiated.
@@ -385,7 +385,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 
 	fn upgrade_inbound(
 		self,
-		socket: TSubstream,
+		socket: Negotiated<TSubstream>,
 		info: Self::Info,
 	) -> Self::Future {
 		let framed = {
@@ -418,7 +418,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 
 	fn upgrade_outbound(
 		self,
-		socket: TSubstream,
+		socket: Negotiated<TSubstream>,
 		info: Self::Info,
 	) -> Self::Future {
 		let framed = Framed::new(socket, UviBytes::default());

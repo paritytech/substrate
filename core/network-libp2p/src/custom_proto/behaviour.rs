@@ -249,7 +249,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 
 	/// Indicates to the peerset that we have discovered new addresses for a given node.
 	pub fn add_discovered_node(&mut self, peer_id: &PeerId) {
-		trace!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+		debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
 		self.peerset.discovered(peer_id.clone())
 	}
 
@@ -556,7 +556,7 @@ where
 	}
 
 	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn error::Error) {
-		debug!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
+		trace!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
 	}
 
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
