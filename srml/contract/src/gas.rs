@@ -202,7 +202,7 @@ impl<T: Trait> GasMeter<T> {
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: T::Gas,
-) -> Result<(GasMeter<T>, balances::NegativeImbalance<Trait>), &'static str> {
+) -> Result<(GasMeter<T>, balances::NegativeImbalance<T>), &'static str> {
 	// Check if the specified amount of gas is available in the current block.
 	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
 	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
@@ -239,7 +239,7 @@ pub fn buy_gas<T: Trait>(
 pub fn refund_unused_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_meter: GasMeter<T>,
-	imbalance: balances::NegativeImbalance<Trait>,
+	imbalance: balances::NegativeImbalance<T>,
 ) {
 	let gas_spent = gas_meter.spent();
 	let gas_left = gas_meter.gas_left();
@@ -252,8 +252,9 @@ pub fn refund_unused_gas<T: Trait>(
 	// Refund gas left by the price it was bought.
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_left) * gas_meter.gas_price;
 	let refund_imbalance = <balances::Module<T>>::deposit_creating(transactor, refund);
-	let imbalance = imbalance.offset(refund_imbalance);
-	T::GasPayment::on_unbalanced(imbalance);
+	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
+		T::GasPayment::on_unbalanced(imbalance);
+	}
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units

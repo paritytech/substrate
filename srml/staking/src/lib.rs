@@ -25,11 +25,11 @@ use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnFreeBalanceZero, ArithmeticType, OnDilution,
-	LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced
+	Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency, WithdrawReasons,
+	OnUnbalanced, Imbalance
 };
 use session::OnSessionChange;
-use primitives::{Perbill};
+use primitives::Perbill;
 use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -164,15 +164,14 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
-type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency>::PositiveImbalance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
 	type Currency:
-		ArithmeticType +
-		Currency<Self::AccountId, Balance=BalanceOf<Self>> +
+		Currency<Self::AccountId> +
 		LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	/// Some tokens minted.
@@ -557,18 +556,18 @@ impl<T: Trait> Module<T> {
 				let safe_mul_rational = |b| b * rest_slash / total;// FIXME #1572 avoid overflow
 				for i in exposure.others.iter() {
 					// best effort - not much that can be done on fail.
-					imbalance = imbalance.merge(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
+					imbalance.subsume(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
 				}
 			}
 		}
-		let _ = imbalance.handle::<T::Slash>();
+		T::Slash::on_unbalanced(imbalance);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
-	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) -> Option<T::Currency::PositiveImbalance> {
+	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		match Self::payee(who) {
-			RewardDestination::Controller => Some(T::Currency::deposit_into_existing(&who, amount)),
+			RewardDestination::Controller => T::Currency::deposit_into_existing(&who, amount).ok(),
 			RewardDestination::Stash => Self::ledger(who)
 				.and_then(|l| T::Currency::deposit_into_existing(&l.stash, amount).ok()),
 			RewardDestination::Staked =>
@@ -587,7 +586,7 @@ impl<T: Trait> Module<T> {
 	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
 		let off_the_table = reward.min(Self::validators(who).validator_payment);
 		let reward = reward - off_the_table;
-		let mut imbalance = T::Currency::PositiveImbalance::zero();
+		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
 		} else {

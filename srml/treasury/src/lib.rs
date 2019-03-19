@@ -22,12 +22,14 @@
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnDilution, ArithmeticType, OnUnbalanced, Imbalance};
+use srml_support::traits::{Currency, OnDilution, OnUnbalanced, Imbalance};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -36,15 +38,7 @@ type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Currency: ArithmeticType + Currency<
-		Self::AccountId,
-		Balance=<<Self as Trait>::Currency as ArithmeticType>::Type,
-		PositiveImbalance=Self::PositiveImbalance,
-		NegativeImbalance=Self::NegativeImbalance,
-	>;
-
-	type PositiveImbalance: Imbalance<<<Self as Trait>::Currency as ArithmeticType>::Type>;
-	type NegativeImbalance: Imbalance<<<Self as Trait>::Currency as ArithmeticType>::Type>;
+	type Currency: Currency<Self::AccountId>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
@@ -56,10 +50,10 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Handler for the unbalanced increase when minting cash from the "Pot".
-	type MintedForSpending: OnUnbalanced<Self::PositiveImbalance>;
+	type MintedForSpending: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
-	type ProposalRejection: OnUnbalanced<Self::NegativeImbalance>;
+	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 type ProposalIndex = u32;
@@ -217,7 +211,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
-		let mut imbalance = T::PositiveImbalance::zero();
+		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		<Approvals<T>>::mutate(|v| {
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
@@ -315,8 +309,6 @@ mod tests {
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
-		type PositiveImbalance = <balances::Module<Test> as Currency<u64>>::PositiveImbalance;
-		type NegativeImbalance = <balances::Module<Test> as Currency<u64>>::NegativeImbalance;
 		type MintedForSpending = ();
 		type ProposalRejection = ();
 	}

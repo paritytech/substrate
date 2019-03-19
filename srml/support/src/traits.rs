@@ -117,6 +117,11 @@ pub trait Imbalance<Balance>: Sized {
 		}
 	}
 	fn subsume(&mut self, other: Self);
+	fn maybe_subsume(&mut self, other: Option<Self>) {
+		if let Some(o) = other {
+			self.subsume(o)
+		}
+	}
 	fn offset(self, other: Self::Opposite) -> Result<Self, Self::Opposite>;
 	fn value(&self) -> Balance;
 	fn handle<T: OnUnbalanced<Self>>(self) { T::on_unbalanced(self) }
@@ -125,7 +130,7 @@ pub trait Imbalance<Balance>: Sized {
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance;
+	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.

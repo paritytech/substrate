@@ -24,7 +24,7 @@ use primitives::traits::{Zero, As, Bounded};
 use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, LockableCurrency, WithdrawReason, ArithmeticType, LockIdentifier};
+use srml_support::traits::{Currency, LockableCurrency, WithdrawReason, LockIdentifier};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -69,10 +69,10 @@ impl Vote {
 	}
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 pub trait Trait: system::Trait + Sized {
-	type Currency: ArithmeticType + LockableCurrency<<Self as system::Trait>::AccountId, Moment=Self::BlockNumber, Balance=BalanceOf<Self>>;
+	type Currency: LockableCurrency<<Self as system::Trait>::AccountId, Moment=Self::BlockNumber>;
 
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 

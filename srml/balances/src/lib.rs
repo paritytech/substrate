@@ -30,7 +30,7 @@ use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
-	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency, ExistenceRequirement,
+	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 	Imbalance
 };
 use srml_support::dispatch::Result;
@@ -81,10 +81,6 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
-}
-
-impl<T: Trait> ArithmeticType for Module<T> {
-	type Type = <T as Trait>::Balance;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -475,12 +471,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 /// Opaque, move-only struct with private fields that serves as a token denoting that
 /// there are more funds in the system than is accounted for in total issuance.
 #[must_use]
-pub struct PositiveImbalance<T: Subtrait<I>, I: Instance>(T::Balance);
+pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that
 /// there are more funds in the system than is accounted for in total issuance.
 #[must_use]
-pub struct NegativeImbalance<T: Subtrait<I>, I: Instance>(T::Balance);
+pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
 impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
 	type Opposite = NegativeImbalance<T, I>;
