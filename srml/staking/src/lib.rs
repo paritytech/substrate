@@ -17,105 +17,105 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Staking Module
-//! 
+//!
 //! <!-- Original author of paragraph: @gavofyork -->
 //! The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others)
 //! are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under
-//! normal operation but are held at pain of "slash" (expropriation) should the staked maintainer be found not to be 
-//! discharging their duties properly. 
+//! normal operation but are held at pain of "slash" (expropriation) should the staked maintainer be found not to be
+//! discharging their duties properly.
 //! You can start using the Staking module by implementing the staking [`Trait`].
-//! 
-//! ## Overview 
-//! 
+//!
+//! ## Overview
+//!
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
-//! 
+//!
 //! - Staking: The process of locking up funds for some time, placing them at risk of slashing (loss) in order to become a rewarded maintainer of the network.
 //! - Validating: The process of running a node to actively maintain the network, either by producing blocks or guaranteeing finality of the chain.
 //! - Nominating: The process of placing staked funds behind one or more validators in order to share in any reward, and punishment, they take.
 //! - Stash account: The account holding an owner's funds used for staking.
 //! - Controller account: The account which controls an owner's funds for staking.
 //! - Era: A (whole) number of sessions, which is the period that the validator set (and each validator's active nominator set) is recalculated and where rewards are paid out.
-//! - Slash: The punishment of a staker by reducing their funds ([reference](#references)). 
-//! 
+//! - Slash: The punishment of a staker by reducing their funds ([reference](#references)).
+//!
 //! ### Goals
 //! <!-- Original author of paragraph: @gavofyork -->
-//! 
+//!
 //! The staking system in Substrate NPoS is designed to achieve three goals:
 //! - It should be possible to stake funds that are controlled by a cold wallet.
 //! - It should be possible to withdraw some, or deposit more, funds without interrupting the role of an entity.
 //! - It should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
-//! 
+//!
 //! ### Scenarios
-//! 
-//! #### Staking 
-//! 
-//! Almost any interaction with the staking module requires at least one account to become **bonded**, also known as 
+//!
+//! #### Staking
+//!
+//! Almost any interaction with the staking module requires at least one account to become **bonded**, also known as
 //! being a **staker**. For this, all that it is needed is a secondary _**stash account**_ which will hold the staked funds.
 //! Henceforth, the former account that initiated the interest is called the **controller** and the latter, holding the
-//! funds, is named the **stash**. Also, note that this implies that entering the staking process requires an _account 
-//! pair_, one to take the role of the controller and one to be the frozen stash account (any value locked in 
-//! stash cannot be used, hence called _frozen_). This process in the public API is mostly referred to as _bonding_ via 
-//! the `bond()` function. 
-//! 
-//! Any account pair successfully placed at stake can accept three possible roles, namely: `validate`, `nominate` or 
+//! funds, is named the **stash**. Also, note that this implies that entering the staking process requires an _account
+//! pair_, one to take the role of the controller and one to be the frozen stash account (any value locked in
+//! stash cannot be used, hence called _frozen_). This process in the public API is mostly referred to as _bonding_ via
+//! the `bond()` function.
+//!
+//! Any account pair successfully placed at stake can accept three possible roles, namely: `validate`, `nominate` or
 //! simply `chill`. Note that during the process of accepting these roles, the _controller_ account is always responsible
-//! for declaring interest and the _stash_ account stays untouched, without directly interacting in any operation. 
-//! 
+//! for declaring interest and the _stash_ account stays untouched, without directly interacting in any operation.
+//!
 //! #### Validating
-//! 
-//! A **validator** takes the role of either validating blocks or ensuring their finality, maintaining the veracity of 
+//!
+//! A **validator** takes the role of either validating blocks or ensuring their finality, maintaining the veracity of
 //! the network. A validator should avoid both any sort of malicious misbehavior and going offline.
 //! Bonded accounts that state interest in being a validator do NOT get immediately chosen as a validator. Instead, they
 //! are declared as a _candidate_ and they _might_ get elected at the _next **era**_ as a validator. The result of the
 //! election is determined by nominators and their votes. An account can become a validator via the `validate()` call.
-//! 
-//! #### Nomination 
-//! 
+//!
+//! #### Nomination
+//!
 //! A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on a set of validators
 //! to be elected. Once interest in nomination is stated by an account, it takes effect _immediately_, meaning that its
 //! votes will be taken into account at the next election round. As mentioned above, a nominator must also place some
 //! funds in a stash account, essentially indicating the _weight_ of its vote. In some sense, the nominator bets on the
-//! honesty of a set of validators by voting for them, with the goal of having a share of the reward granted to them. 
-//! Any rewards given to a validator is shared among that validator and all of the nominators that voted for it. The 
-//! same logic applies to the slash of a validator; if a validator misbehaves all of its nominators also get slashed. 
+//! honesty of a set of validators by voting for them, with the goal of having a share of the reward granted to them.
+//! Any rewards given to a validator is shared among that validator and all of the nominators that voted for it. The
+//! same logic applies to the slash of a validator; if a validator misbehaves all of its nominators also get slashed.
 //! This rule incentivizes the nominators to NOT vote for the misbehaving/offline validators as much as possible, simply
-//! because the nominators will also lose funds if they vote poorly. An account can become a nominator via the 
+//! because the nominators will also lose funds if they vote poorly. An account can become a nominator via the
 //! `nominate()` call.
-//! 
+//!
 //! #### Rewards and Slash
-//! 
-//! The **reward and slashing** procedure are the core of the staking module, attempting to _embrace valid behavior_ 
-//! while _punishing any misbehavior or lack of availability_. Slashing can occur at any point in time, once 
+//!
+//! The **reward and slashing** procedure are the core of the staking module, attempting to _embrace valid behavior_
+//! while _punishing any misbehavior or lack of availability_. Slashing can occur at any point in time, once
 //! misbehavior is reported. One such misbehavior is a validator being detected as offline more than a certain number of
-//! times. Once slashing is determined, a value is deducted from the balance of the validator and all the nominators who 
-//! voted for this validator. Same rules apply to the rewards in the sense of being shared among a validator and its 
-//! associated nominators. 
-//! 
-//! Finally, any of the roles above can choose to step back temporarily and just chill for a while. This means that if 
-//! they are a nominator, they will not be considered as voters anymore and if they are validators, they will no longer 
-//! be a candidate for the next election (again, both effects apply at the beginning of the next era). An account can 
+//! times. Once slashing is determined, a value is deducted from the balance of the validator and all the nominators who
+//! voted for this validator. Same rules apply to the rewards in the sense of being shared among a validator and its
+//! associated nominators.
+//!
+//! Finally, any of the roles above can choose to step back temporarily and just chill for a while. This means that if
+//! they are a nominator, they will not be considered as voters anymore and if they are validators, they will no longer
+//! be a candidate for the next election (again, both effects apply at the beginning of the next era). An account can
 //! step back via the `chill()` call.
-//! 
+//!
 //! ## Interface
-//! 
+//!
 //! ### Types
-//! 
+//!
 //! - `Currency`: Used as the measurement means of staking and funds management.		
-//!  
+//! 
 //! ### Dispatchable
-//! 
-//! The Dispatchable functions of the staking module enable the steps needed for entities to accept and change their 
+//!
+//! The Dispatchable functions of the staking module enable the steps needed for entities to accept and change their
 //! role, alongside some helper functions to get/set the metadata of the module.
-//! 
+//!
 //! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
-//! 
-//! ### Public 
+//!
+//! ### Public
 //! The staking module contains many public storage items and (im)mutable functions. Please refer to the [struct list](#structs)
 //!  below and the [`Module`](https://crates.parity.io/srml_staking/struct.Module.html) struct definition for more details.
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! 
 //! ### Snippet: Bonding and Accepting Roles
 //! 
@@ -210,9 +210,9 @@
 //! - [**Balances**](https://crates.parity.io/srml_balances/index.html): Used to manage values at stake.
 //! - [**Sessions**](https://crates.parity.io/srml_session/index.html): Used to manage sessions. Also, a list of new validators is also stored in the sessions module's `Validators` at the end of each era.
 //! - [**System**](https://crates.parity.io/srml_system/index.html): Used to obtain block number and time, among other details.
-//! 
+//!
 //! # References
-//! 
+//!
 //! 1. This document is written as a more verbose version of the original [Staking.md](../Staking.md) file. Some sections, are taken directly from the aforementioned document.
 
 
@@ -897,7 +897,9 @@ impl<T: Trait> Module<T> {
 		// Populate Stakers and figure out the minimum stake behind a slot.
 		let mut slot_stake = elected_candidates[0].exposure.total;
 		for candidate in &elected_candidates {
-			if candidate.exposure.total < slot_stake { slot_stake = candidate.exposure.total; }
+			if candidate.exposure.total < slot_stake {
+				slot_stake = candidate.exposure.total;
+			}
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
 		}
 		<SlotStake<T>>::put(&slot_stake);
@@ -906,7 +908,7 @@ impl<T: Trait> Module<T> {
 		<session::Module<T>>::set_validators(
 			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);
-		
+
 		slot_stake
 	}
 
