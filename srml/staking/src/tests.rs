@@ -1516,7 +1516,12 @@ fn phragmen_election_works_example_2() {
 			validators,
 			nominators,
 			stash_of,
-			min_validator_count
+			min_validator_count,
+			ElectionConfig::<BalanceOf<Test>> {
+				equalise: true,
+				tolerance: <BalanceOf<Test>>::sa(10 as u64),
+				iterations: 10,
+			}
 		);
 
 		// 10 and 30 must be the winners

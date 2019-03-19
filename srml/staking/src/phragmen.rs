@@ -22,6 +22,18 @@ use primitives::traits::{Zero, One, As, CheckedAdd, CheckedDiv, CheckedMul, Chec
 use parity_codec::{HasCompact, Encode, Decode};
 use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
+
+// Configure the behavior of the Phragmen election.
+// Might be deprecated.
+pub struct ElectionConfig<Balance: HasCompact> {
+	// Perform equalise?.
+	pub equalise: bool,
+	// Number of equalise iterations.
+	pub iterations: usize,
+	// Tolerance of max change per equalise iteration.
+	pub tolerance: Balance,
+}
+
 // Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Default))]
@@ -81,6 +93,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		get_nominators: FN,
 		stash_of: FS,
 		minimum_validator_count: usize,
+		config: ElectionConfig<BalanceOf<T>>,
 ) -> Vec<Candidate<T::AccountId, BalanceOf<T>>> where
 	FR: Fn() -> usize,
 	FV: Fn() -> Box<dyn Iterator<
@@ -208,16 +221,24 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			}
 		}
 
-		// equalise?
-		let do_equalise = true;
-		if do_equalise {
-			let tolerance = <BalanceOf<T>>::sa(10);
-			let equalise_iterations = 2;
+		// Optionally perform equalise post-processing.
+		if config.equalise {
+			let tolerance = config.tolerance;
+			let equalise_iterations = config.iterations;
+
+			// Fix indexes
+			nominators.iter_mut().for_each(|n| {
+				n.edges.iter_mut().for_each(|e| {
+					if let Some(idx) = elected_candidates.iter().position(|c| c.who == e.who) {
+						e.elected_idx = idx;
+					}
+				});
+			});
+
 			for _ in 0..equalise_iterations {
 				let mut max_diff = <BalanceOf<T>>::zero();
-				nominators.iter().for_each(|n| {
-					// TODO: equalise should accept a reference to a nominator maybe?
-					let diff = equalise::<T>(n.clone(), &mut elected_candidates, tolerance);
+				nominators.iter_mut().for_each(|mut n| {
+					let diff = equalise::<T>(&mut n, &mut elected_candidates, tolerance);
 					if diff > max_diff {
 						max_diff = diff;
 					}
@@ -255,26 +276,15 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 }
 
 pub fn equalise<T: Trait + 'static>(
-	mut nominator: Nominator<T::AccountId, BalanceOf<T>>,
+	nominator: &mut Nominator<T::AccountId, BalanceOf<T>>,
 	elected_candidates: &mut Vec<Candidate<T::AccountId, BalanceOf<T>>>,
 	tolerance: BalanceOf<T>
 ) -> BalanceOf<T> {
-	// TODO: Might be more efficinet to do this once? maybe...
-	// update indexes.
-	nominator.edges.iter_mut().for_each(|e| {
-		if let Some(idx) = elected_candidates.iter().position(|c| c.who == e.who) {
-			e.elected_idx = idx;
-		}
-	});
 
-	// TODO: double check the direction of the sort.
-	nominator.edges.sort_unstable_by_key(|e| elected_candidates[e.elected_idx].exposure.total);
-
-	// TODO: clone and into is not really optimal.
-	let mut elected_edges = nominator.edges.clone()
-		.into_iter()
+	let mut elected_edges = nominator.edges
+		.iter_mut()
 		.filter(|e| e.elected)
-		.collect::<Vec<Edge<T::AccountId, BalanceOf<T>>>>();
+		.collect::<Vec<&mut Edge<T::AccountId, BalanceOf<T>>>>();
 	if elected_edges.len() == 0 { return <BalanceOf<T>>::zero(); }
 	let stake_used = elected_edges
 		.iter()
@@ -317,31 +327,36 @@ pub fn equalise<T: Trait + 'static>(
 		e.backing_stake = <BalanceOf<T>>::zero();
 	});
 
+	elected_edges.sort_unstable_by_key(|e| elected_candidates[e.elected_idx].exposure.total);
+
 	let mut cumulative_stake = <BalanceOf<T>>::zero();
 	let mut last_index = elected_edges.len() - 1;
-
+	let budget = nominator.budget;
 	elected_edges.iter_mut().enumerate().for_each(|(idx, e)| {
 		let stake = elected_candidates[e.elected_idx].exposure.total;
 
 		let stake_mul = stake.checked_mul(&<BalanceOf<T>>::sa(idx as u64)).unwrap_or(<BalanceOf<T>>::one());
 		let stake_sub = stake_mul.checked_sub(&cumulative_stake).unwrap_or_default();
-		if stake_sub > nominator.budget {
-			last_index = idx.checked_sub(1).unwrap_or(0);
+		if stake_sub > budget {
+			last_index = idx.clone().checked_sub(1).unwrap_or(0);
 			return
 		}
 		cumulative_stake += stake;
 	});
 
+	// TODO: safe arithmatic here.
 	let last_stake = elected_candidates[elected_edges[last_index].elected_idx].exposure.total;
 	let split_ways = last_index + 1;
 	let excess = nominator.budget + cumulative_stake - last_stake * <BalanceOf<T>>::sa(split_ways as u64);
+	let nominator_address = nominator.who.clone();
 	elected_edges.iter_mut().take(split_ways).for_each(|e| {
 		let c = &mut elected_candidates[e.elected_idx];
 		e.backing_stake = excess / <BalanceOf<T>>::sa(split_ways as u64) + last_stake -c.exposure.total;
 		c.exposure.total += e.backing_stake;
-		if let Some(i_expo) = c.exposure.others.iter_mut().find(|i| i.who == nominator.who) {
+		if let Some(i_expo) = c.exposure.others.iter_mut().find(|i| i.who == nominator_address) {
 			i_expo.value = e.backing_stake;
 		}
 	});
+
 	difference
 }

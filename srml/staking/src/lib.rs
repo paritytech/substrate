@@ -239,6 +239,8 @@ mod mock;
 mod tests;
 mod phragmen;
 
+use phragmen::{elect, ElectionConfig};
+
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -871,18 +873,23 @@ impl<T: Trait> Module<T> {
 	/// Returns the new SlotStake value.
 	fn select_validators() -> BalanceOf<T> {
 		// Map of (would-be) validator account to amount of stake backing it.
-		
+
 		let rounds = || <ValidatorCount<T>>::get() as usize;
 		let validators = || <Validators<T>>::enumerate();
 		let nominators = || <Nominators<T>>::enumerate();
 		let stash_of = |w: &T::AccountId| -> BalanceOf<T> { Self::stash_balance(w) };
 		let min_validator_count = Self::minimum_validator_count() as usize;
-		let elected_candidates = phragmen::elect::<T, _, _, _, _>(
+		let elected_candidates = elect::<T, _, _, _, _>(
 			rounds,
 			validators,
 			nominators,
 			stash_of,
-			min_validator_count
+			min_validator_count,
+			ElectionConfig::<BalanceOf<T>> {
+				equalise: true,
+				tolerance: <BalanceOf<T>>::sa(10 as u64),
+				iterations: 10,
+			}
 		);
 
 		// Clear Stakers and reduce their slash_count.
