@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::custom_proto::{CustomProtos, CustomProtosOut, RegisteredProtocols};
-use crate::{NetworkConfiguration, ProtocolId};
+use crate::custom_proto::{CustomProto, CustomProtoOut, RegisteredProtocol};
+use crate::NetworkConfiguration;
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
@@ -37,7 +37,7 @@ pub struct Behaviour<TMessage, TSubstream> {
 	/// Periodically ping nodes, and close the connection if it's unresponsive.
 	ping: Ping<TSubstream>,
 	/// Custom protocols (dot, bbq, sub, etc.).
-	custom_protocols: CustomProtos<TMessage, TSubstream>,
+	custom_protocols: CustomProto<TMessage, TSubstream>,
 	/// Discovers nodes of the network. Defined below.
 	discovery: DiscoveryBehaviour<TSubstream>,
 	/// Periodically identifies the remote and responds to incoming requests.
@@ -51,7 +51,7 @@ pub struct Behaviour<TMessage, TSubstream> {
 impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	/// Builds a new `Behaviour`.
 	// TODO: redundancy between config and local_public_key (https://github.com/libp2p/rust-libp2p/issues/745)
-	pub fn new(config: &NetworkConfiguration, local_public_key: PublicKey, protocols: RegisteredProtocols<TMessage>) -> Self {
+	pub fn new(config: &NetworkConfiguration, local_public_key: PublicKey, protocols: RegisteredProtocol<TMessage>) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
 			let user_agent = format!("{} ({})", config.client_version, config.node_name);
@@ -59,7 +59,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		};
 
 		let local_peer_id = local_public_key.into_peer_id();
-		let custom_protocols = CustomProtos::new(config, &local_peer_id, protocols);
+		let custom_protocols = CustomProto::new(config, &local_peer_id, protocols);
 
 		Behaviour {
 			ping: Ping::new(),
@@ -70,15 +70,15 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		}
 	}
 
-	/// Sends a message to a peer using the given custom protocol.
+	/// Sends a message to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
 	///
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
 	#[inline]
-	pub fn send_custom_message(&mut self, target: &PeerId, protocol_id: ProtocolId, data: TMessage) {
-		self.custom_protocols.send_packet(target, protocol_id, data)
+	pub fn send_custom_message(&mut self, target: &PeerId, data: TMessage) {
+		self.custom_protocols.send_packet(target, data)
 	}
 
 	/// Returns the number of peers in the topology.
@@ -149,9 +149,9 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		self.custom_protocols.is_enabled(peer_id)
 	}
 
-	/// Returns the list of protocols we have open with the given peer.
-	pub fn open_protocols<'a>(&'a self, peer_id: &'a PeerId) -> impl Iterator<Item = ProtocolId> + 'a {
-		self.custom_protocols.open_protocols(peer_id)
+	/// Returns true if we have an open protocol with the given peer.
+	pub fn is_open(&self, peer_id: &PeerId) -> bool {
+		self.custom_protocols.is_open(peer_id)
 	}
 
 	/// Disconnects the custom protocols from a peer.
@@ -184,8 +184,6 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 pub enum BehaviourOut<TMessage> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
-		/// Identifier of the protocol.
-		protocol_id: ProtocolId,
 		/// Version of the protocol that has been opened.
 		version: u8,
 		/// Id of the node we have opened a connection with.
@@ -198,8 +196,6 @@ pub enum BehaviourOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Identifier of the protocol.
-		protocol_id: ProtocolId,
 		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
 		result: io::Result<()>,
 	},
@@ -208,8 +204,6 @@ pub enum BehaviourOut<TMessage> {
 	CustomMessage {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
-		/// Protocol which generated the message.
-		protocol_id: ProtocolId,
 		/// Message that has been received.
 		message: TMessage,
 	},
@@ -218,8 +212,6 @@ pub enum BehaviourOut<TMessage> {
 	Clogged {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
-		/// Protocol which generated the message.
-		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
 		messages: Vec<TMessage>,
 	},
@@ -241,20 +233,20 @@ pub enum BehaviourOut<TMessage> {
 	},
 }
 
-impl<TMessage> From<CustomProtosOut<TMessage>> for BehaviourOut<TMessage> {
-	fn from(other: CustomProtosOut<TMessage>) -> BehaviourOut<TMessage> {
+impl<TMessage> From<CustomProtoOut<TMessage>> for BehaviourOut<TMessage> {
+	fn from(other: CustomProtoOut<TMessage>) -> BehaviourOut<TMessage> {
 		match other {
-			CustomProtosOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint } => {
-				BehaviourOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint }
+			CustomProtoOut::CustomProtocolOpen { version, peer_id, endpoint } => {
+				BehaviourOut::CustomProtocolOpen { version, peer_id, endpoint }
 			}
-			CustomProtosOut::CustomProtocolClosed { protocol_id, peer_id, result } => {
-				BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }
+			CustomProtoOut::CustomProtocolClosed { peer_id, result } => {
+				BehaviourOut::CustomProtocolClosed { peer_id, result }
 			}
-			CustomProtosOut::CustomMessage { protocol_id, peer_id, message } => {
-				BehaviourOut::CustomMessage { protocol_id, peer_id, message }
+			CustomProtoOut::CustomMessage { peer_id, message } => {
+				BehaviourOut::CustomMessage { peer_id, message }
 			}
-			CustomProtosOut::Clogged { protocol_id, peer_id, messages } => {
-				BehaviourOut::Clogged { protocol_id, peer_id, messages }
+			CustomProtoOut::Clogged { peer_id, messages } => {
+				BehaviourOut::Clogged { peer_id, messages }
 			}
 		}
 	}
@@ -266,8 +258,8 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviou
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviourEventProcess<CustomProtosOut<TMessage>> for Behaviour<TMessage, TSubstream> {
-	fn inject_event(&mut self, event: CustomProtosOut<TMessage>) {
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<CustomProtoOut<TMessage>> for Behaviour<TMessage, TSubstream> {
+	fn inject_event(&mut self, event: CustomProtoOut<TMessage>) {
 		self.events.push(event.into());
 	}
 }

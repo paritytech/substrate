@@ -18,8 +18,8 @@ use crate::{
 	behaviour::Behaviour, behaviour::BehaviourOut,
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
-use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols};
-use crate::{NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
+use crate::custom_proto::{CustomMessage, RegisteredProtocol};
+use crate::{NetworkConfiguration, NodeIndex, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
@@ -37,12 +37,11 @@ use tokio_timer::Interval;
 /// Starts the substrate libp2p service.
 ///
 /// Returns a stream that must be polled regularly in order for the networking to function.
-pub fn start_service<TProtos, TMessage>(
+pub fn start_service<TMessage>(
 	config: NetworkConfiguration,
-	registered_custom: TProtos,
+	registered_custom: RegisteredProtocol<TMessage>,
 ) -> Result<Service<TMessage>, IoError>
-where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
-	TMessage: CustomMessage + Send + 'static {
+where TMessage: CustomMessage + Send + 'static {
 
 	if let Some(ref path) = config.net_config_path {
 		fs::create_dir_all(Path::new(path))?;
@@ -55,7 +54,6 @@ where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
 
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
-		let registered_custom = RegisteredProtocols(registered_custom.into_iter().collect());
 		let behaviour = Behaviour::new(&config, local_public, registered_custom);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
@@ -118,8 +116,6 @@ pub enum ServiceEvent<TMessage> {
 		peer_id: PeerId,
 		/// Index of the node.
 		node_index: NodeIndex,
-		/// Protocol that has been opened.
-		protocol: ProtocolId,
 		/// Version of the protocol that was opened.
 		version: u8,
 		/// Node debug info
@@ -130,20 +126,6 @@ pub enum ServiceEvent<TMessage> {
 	ClosedCustomProtocol {
 		/// Index of the node.
 		node_index: NodeIndex,
-		/// Protocol that has been closed.
-		protocol: ProtocolId,
-		/// Node debug info
-		debug_info: String,
-	},
-
-	/// Sustom protocol substreams has been closed.
-	///
-	/// Same as `ClosedCustomProtocol` but with multiple protocols.
-	ClosedCustomProtocols {
-		/// Index of the node.
-		node_index: NodeIndex,
-		/// Protocols that have been closed.
-		protocols: Vec<ProtocolId>,
 		/// Node debug info
 		debug_info: String,
 	},
@@ -152,8 +134,6 @@ pub enum ServiceEvent<TMessage> {
 	CustomMessage {
 		/// Index of the node.
 		node_index: NodeIndex,
-		/// Protocol which generated the message.
-		protocol_id: ProtocolId,
 		/// Message that has been received.
 		message: TMessage,
 	},
@@ -162,8 +142,6 @@ pub enum ServiceEvent<TMessage> {
 	Clogged {
 		/// Index of the node.
 		node_index: NodeIndex,
-		/// Protocol which generated the message.
-		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
 		messages: Vec<TMessage>,
 	},
@@ -224,7 +202,7 @@ where TMessage: CustomMessage + Send + 'static {
 					version_string: info.client_version.clone(),
 					latest_ping_time: info.latest_ping,
 					enabled: swarm.is_enabled(&info.peer_id),
-					open_protocols: swarm.open_protocols(&info.peer_id).collect(),
+					open: swarm.is_open(&info.peer_id),
 					known_addresses,
 				})
 			}).collect()
@@ -340,11 +318,10 @@ where TMessage: CustomMessage + Send + 'static {
 	pub fn send_custom_message(
 		&mut self,
 		node_index: NodeIndex,
-		protocol: ProtocolId,
 		message: TMessage
 	) {
 		if let Some(peer_id) = self.nodes_info.get(&node_index).map(|info| &info.peer_id) {
-			self.swarm.send_custom_message(peer_id, protocol, message);
+			self.swarm.send_custom_message(peer_id, message);
 		} else {
 			warn!(target: "sub-libp2p", "Tried to send message to unknown node: {:}", node_index);
 		}
@@ -416,39 +393,35 @@ where TMessage: CustomMessage + Send + 'static {
 	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { protocol_id, peer_id, version, endpoint }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { peer_id, version, endpoint }))) => {
 					debug!(target: "sub-libp2p", "Opened custom protocol with {:?}", peer_id);
 					let node_index = self.index_of_peer_or_assign(peer_id.clone(), endpoint);
 					break Ok(Async::Ready(Some(ServiceEvent::OpenedCustomProtocol {
 						peer_id,
 						node_index,
-						protocol: protocol_id,
 						version,
 						debug_info: self.peer_debug_info(node_index),
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { peer_id, result }))) => {
 					debug!(target: "sub-libp2p", "Custom protocol with {:?} closed: {:?}", peer_id, result);
 					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
 						node_index,
-						protocol: protocol_id,
 						debug_info: self.peer_debug_info(node_index),
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::CustomMessage { protocol_id, peer_id, message }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomMessage { peer_id, message }))) => {
 					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
 					break Ok(Async::Ready(Some(ServiceEvent::CustomMessage {
 						node_index,
-						protocol_id,
 						message,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::Clogged { protocol_id, peer_id, messages }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::Clogged { peer_id, messages }))) => {
 					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
 					break Ok(Async::Ready(Some(ServiceEvent::Clogged {
 						node_index,
-						protocol_id,
 						messages,
 					})))
 				}

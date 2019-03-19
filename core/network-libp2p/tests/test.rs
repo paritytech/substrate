@@ -16,8 +16,8 @@
 
 use futures::{future, stream, prelude::*, try_ready};
 use rand::seq::SliceRandom;
-use std::{io, iter};
-use substrate_network_libp2p::{CustomMessage, ServiceEvent, multiaddr::Protocol, build_multiaddr};
+use std::io;
+use substrate_network_libp2p::{CustomMessage, multiaddr::Protocol, ServiceEvent, build_multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
@@ -41,7 +41,7 @@ fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
 		};
 
 		let proto = substrate_network_libp2p::RegisteredProtocol::new(*b"tst", &[1]);
-		result.push(substrate_network_libp2p::start_service(config, iter::once(proto)).unwrap());
+		result.push(substrate_network_libp2p::start_service(config, proto).unwrap());
 	}
 
 	result
@@ -58,8 +58,7 @@ fn basic_two_nodes_connectivity() {
 
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		match try_ready!(service1.poll()) {
-			Some(ServiceEvent::OpenedCustomProtocol { protocol, version, .. }) => {
-				assert_eq!(protocol, *b"tst");
+			Some(ServiceEvent::OpenedCustomProtocol { version, .. }) => {
 				assert_eq!(version, 1);
 				Ok(Async::Ready(()))
 			},
@@ -69,8 +68,7 @@ fn basic_two_nodes_connectivity() {
 
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		match try_ready!(service2.poll()) {
-			Some(ServiceEvent::OpenedCustomProtocol { protocol, version, .. }) => {
-				assert_eq!(protocol, *b"tst");
+			Some(ServiceEvent::OpenedCustomProtocol { version, .. }) => {
 				assert_eq!(version, 1);
 				Ok(Async::Ready(()))
 			},
@@ -101,9 +99,9 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { node_index, protocol, .. }) => {
+				Some(ServiceEvent::OpenedCustomProtocol { node_index, .. }) => {
 					for n in 0 .. NUM_PACKETS {
-						service1.send_custom_message(node_index, protocol, vec![(n % 256) as u8]);
+						service1.send_custom_message(node_index, vec![(n % 256) as u8]);
 					}
 				},
 				_ => panic!(),
@@ -231,9 +229,9 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { node_index, protocol, .. }) => {
+				Some(ServiceEvent::OpenedCustomProtocol { node_index, .. }) => {
 					for msg in to_send.drain(..) {
-						service1.send_custom_message(node_index, protocol, msg);
+						service1.send_custom_message(node_index, msg);
 					}
 				},
 				_ => panic!(),

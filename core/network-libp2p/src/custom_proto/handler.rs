@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::ProtocolId;
-use crate::custom_proto::upgrade::{CustomMessage, CustomMessageId, RegisteredProtocol, RegisteredProtocols};
+use crate::custom_proto::upgrade::{CustomMessage, CustomMessageId, RegisteredProtocol};
 use crate::custom_proto::upgrade::{RegisteredProtocolEvent, RegisteredProtocolSubstream};
 use futures::prelude::*;
 use libp2p::core::{
@@ -63,32 +62,26 @@ use void::Void;
 /// happens on one substream, we consider that we are disconnected. Re-enabling is performed by
 /// opening an outbound substream.
 ///
-pub struct CustomProtosHandler<TMessage, TSubstream> {
-	/// Fields individual to each protocol that we support.
-	protocols: SmallVec<[PerProtocol<TMessage, TSubstream>; 1]>,
+pub struct CustomProtoHandler<TMessage, TSubstream> {
+	/// Configuration for the protocol upgrade to negotiate.
+	protocol: RegisteredProtocol<TMessage>,
+
+	/// State of the communications with the remote.
+	state: ProtocolState<TMessage, TSubstream>,
 
 	/// Queue of events to send to the outside.
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, ProtocolId, CustomProtosHandlerOut<TMessage>>; 16]>,
+	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, (), CustomProtoHandlerOut<TMessage>>; 16]>,
 
 	/// We have a warm-up period after creating the handler during which we don't shut down the
 	/// connection.
 	warm_up_end: Instant,
 }
 
-/// Fields individual to each protocol that we support.
-struct PerProtocol<TMessage, TSubstream> {
-	/// Configuration for the protocol upgrade to negotiate.
-	protocol: RegisteredProtocol<TMessage>,
-
-	/// State of the communications with the remote.
-	state: PerProtocolState<TMessage, TSubstream>,
-}
-
-/// State of the handler for a specific protocol.
-enum PerProtocolState<TMessage, TSubstream> {
+/// State of the handler.
+enum ProtocolState<TMessage, TSubstream> {
 	/// Waiting for the behaviour to tell the handler whether it is enabled or disabled.
 	Init {
 		/// List of substreams opened by the remote but that haven't been processed yet.
@@ -160,261 +153,6 @@ struct PerProtocolNormalState<TMessage, TSubstream> {
 	shutdown: SmallVec<[RegisteredProtocolSubstream<TMessage, TSubstream>; 4]>,
 }
 
-impl<TMessage, TSubstream> PerProtocol<TMessage, TSubstream>
-where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
-	/// Enables the protocol. Returns an optional event to emit.
-	/// Must be passed the endpoint of the connection.
-	#[must_use]
-	fn enable(&mut self, endpoint: Endpoint)
-		-> Option<ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, ProtocolId, CustomProtosHandlerOut<TMessage>>> {
-
-		let return_value;
-
-		self.state = match mem::replace(&mut self.state, PerProtocolState::Poisoned) {
-			PerProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
-				return_value = None;
-				PerProtocolState::Poisoned
-			}
-
-			PerProtocolState::Init { substreams: incoming, .. } => {
-				if incoming.is_empty() {
-					if let Endpoint::Dialer = endpoint {
-						return_value = Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							upgrade: self.protocol.clone(),
-							info: self.protocol.id(),
-						});
-					} else {
-						return_value = None;
-					}
-					PerProtocolState::Opening {
-						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
-					}
-
-				} else if incoming.iter().any(|s| s.is_multiplex()) {
-					let event = CustomProtosHandlerOut::CustomProtocolOpen {
-						protocol_id: self.protocol.id(),
-						version: incoming[0].protocol_version()
-					};
-					return_value = Some(ProtocolsHandlerEvent::Custom(event));
-					PerProtocolState::Normal(PerProtocolNormalState {
-						outgoing_substream: None,
-						incoming_substreams: incoming.into_iter().collect(),
-						pending_response: SmallVec::new(),
-						pending_send_back: SmallVec::new(),
-						pending_messages: SmallVec::new(),
-						shutdown: SmallVec::new(),
-					})
-
-				} else {
-					let event = CustomProtosHandlerOut::CustomProtocolOpen {
-						protocol_id: self.protocol.id(),
-						version: incoming[0].protocol_version()
-					};
-					return_value = Some(ProtocolsHandlerEvent::Custom(event));
-					PerProtocolState::BackCompat {
-						substream: incoming.into_iter().next()
-							.expect("We have a check above that incoming isn't empty; QED"),
-						shutdown: SmallVec::new()
-					}
-				}
-			}
-
-			st @ PerProtocolState::Opening { .. } => { return_value = None; st }
-			st @ PerProtocolState::BackCompat { .. } => { return_value = None; st }
-			st @ PerProtocolState::Normal { .. } => { return_value = None; st }
-			PerProtocolState::Disabled { shutdown, .. } => {
-				return_value = None;
-				PerProtocolState::Disabled { shutdown, reenable: true }
-			}
-		};
-
-		return_value
-	}
-
-	/// Disables the protocol. Returns `true` if the protocol was closed, `false` if it was already
-	/// closed or not open yet.
-	fn disable(&mut self) -> bool {
-		let mut return_value = false;
-
-		self.state = match mem::replace(&mut self.state, PerProtocolState::Poisoned) {
-			PerProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
-				PerProtocolState::Poisoned
-			}
-
-			PerProtocolState::Init { substreams: mut shutdown, .. } => {
-				for s in &mut shutdown {
-					s.shutdown();
-				}
-				PerProtocolState::Disabled { shutdown, reenable: false }
-			}
-
-			PerProtocolState::Opening { .. } => {
-				PerProtocolState::Disabled { shutdown: SmallVec::new(), reenable: false }
-			}
-
-			PerProtocolState::BackCompat { mut substream, mut shutdown } => {
-				substream.shutdown();
-				shutdown.push(substream);
-				return_value = true;
-				PerProtocolState::Disabled {
-					shutdown: shutdown.into_iter().collect(),
-					reenable: false
-				}
-			}
-
-			PerProtocolState::Normal(state) => {
-				let mut out: SmallVec<[_; 6]> = SmallVec::new();
-				out.extend(state.outgoing_substream.into_iter());
-				out.extend(state.incoming_substreams.into_iter());
-				out.extend(state.pending_response.into_iter().map(|(_, s)| s));
-				out.extend(state.pending_send_back.into_iter().map(|(_, s)| s));
-				for s in &mut out {
-					s.shutdown();
-				}
-				out.extend(state.shutdown.into_iter());
-				return_value = true;
-				PerProtocolState::Disabled { shutdown: out, reenable: false }
-			}
-
-			PerProtocolState::Disabled { shutdown, .. } =>
-				PerProtocolState::Disabled { shutdown, reenable: false },
-		};
-
-		return_value
-	}
-
-	/// Polls the state for events. Optionally returns an event to produce.
-	#[must_use]
-	fn poll(&mut self)
-		-> Option<ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, ProtocolId, CustomProtosHandlerOut<TMessage>>> {
-
-		let return_value;
-		self.state = match mem::replace(&mut self.state, PerProtocolState::Poisoned) {
-			PerProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state; shutting down");
-				return_value = None;
-				PerProtocolState::Poisoned
-			}
-
-			PerProtocolState::Init { substreams, mut init_deadline } => {
-				match init_deadline.poll() {
-					Ok(Async::Ready(())) =>
-						error!(target: "sub-libp2p", "Handler initialization process is too long"),
-					Ok(Async::NotReady) => {}
-					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
-				}
-
-				return_value = None;
-				PerProtocolState::Init { substreams, init_deadline }
-			}
-
-			PerProtocolState::Opening { mut deadline } => {
-				match deadline.poll() {
-					Ok(Async::Ready(())) => {
-						deadline.reset(Instant::now() + Duration::from_secs(60));
-						let event = CustomProtosHandlerOut::ProtocolError {
-							protocol_id: self.protocol.id(),
-							is_severe: false,
-							error: "Timeout when opening protocol".to_string().into(),
-						};
-						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						PerProtocolState::Opening { deadline }
-					},
-					Ok(Async::NotReady) => {
-						return_value = None;
-						PerProtocolState::Opening { deadline }
-					},
-					Err(_) => {
-						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline.reset(Instant::now() + Duration::from_secs(60));
-						return_value = None;
-						PerProtocolState::Opening { deadline }
-					},
-				}
-			}
-
-			PerProtocolState::BackCompat { mut substream, shutdown } => {
-				match substream.poll() {
-					Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
-						let event = CustomProtosHandlerOut::CustomMessage {
-							protocol_id: substream.protocol_id(),
-							message
-						};
-						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						PerProtocolState::BackCompat { substream, shutdown }
-					},
-					Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { messages }))) => {
-						let event = CustomProtosHandlerOut::Clogged {
-							protocol_id: substream.protocol_id(),
-							messages,
-						};
-						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						PerProtocolState::BackCompat { substream, shutdown }
-					}
-					Ok(Async::NotReady) => {
-						return_value = None;
-						PerProtocolState::BackCompat { substream, shutdown }
-					}
-					Ok(Async::Ready(None)) => {
-						let event = CustomProtosHandlerOut::CustomProtocolClosed {
-							protocol_id: substream.protocol_id(),
-							result: Ok(())
-						};
-						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						PerProtocolState::Disabled {
-							shutdown: shutdown.into_iter().collect(),
-							reenable: false
-						}
-					}
-					Err(err) => {
-						let event = CustomProtosHandlerOut::CustomProtocolClosed {
-							protocol_id: substream.protocol_id(),
-							result: Err(err),
-						};
-						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						PerProtocolState::Disabled {
-							shutdown: shutdown.into_iter().collect(),
-							reenable: false
-						}
-					}
-				}
-			}
-
-			PerProtocolState::Normal(mut norm_state) => {
-				if let Some(event) = norm_state.poll(self.protocol.id()) {
-					return_value = Some(ProtocolsHandlerEvent::Custom(event));
-				} else {
-					return_value = None;
-				}
-
-				PerProtocolState::Normal(norm_state)
-			}
-
-			PerProtocolState::Disabled { mut shutdown, reenable } => {
-				shutdown_list(&mut shutdown);
-				// If `reenable` is `true`, that means we should open the substreams system again
-				// after all the substreams are closed.
-				if reenable && shutdown.is_empty() {
-					return_value = Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						upgrade: self.protocol.clone(),
-						info: self.protocol.id(),
-					});
-					PerProtocolState::Opening {
-						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
-					}
-				} else {
-					return_value = None;
-					PerProtocolState::Disabled { shutdown, reenable }
-				}
-			}
-		};
-
-		return_value
-	}
-}
-
 impl<TMessage, TSubstream> PerProtocolNormalState<TMessage, TSubstream>
 where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 	/// Polls for things that are new. Same API constraints as `Future::poll()`.
@@ -423,22 +161,20 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 	/// API note: Ideally we wouldn't need to be passed a `ProtocolId`, and we would return a
 	/// 	different enum that doesn't contain any `protocol_id`, and the caller would inject
 	/// 	the ID itself, but that's a ton of code for not much gain.
-	fn poll(&mut self, protocol_id: ProtocolId) -> Option<CustomProtosHandlerOut<TMessage>> {
+	fn poll(&mut self) -> Option<CustomProtoHandlerOut<TMessage>> {
 		for n in (0..self.pending_response.len()).rev() {
 			let (request_id, mut substream) = self.pending_response.swap_remove(n);
 			match substream.poll() {
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
 					if message.request_id() == CustomMessageId::Response(request_id) {
-						let event = CustomProtosHandlerOut::CustomMessage {
-							protocol_id: substream.protocol_id(),
+						let event = CustomProtoHandlerOut::CustomMessage {
 							message
 						};
 						self.shutdown.push(substream);
 						return Some(event);
 					} else {
 						self.shutdown.push(substream);
-						let event = CustomProtosHandlerOut::ProtocolError {
-							protocol_id,
+						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
 							error: format!("Request ID doesn't match substream: expected {:?}, \
 								got {:?}", request_id, message.request_id()).into(),
@@ -452,8 +188,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 					self.pending_response.push((request_id, substream)),
 				Ok(Async::Ready(None)) => {
 					self.shutdown.push(substream);
-					let event = CustomProtosHandlerOut::ProtocolError {
-						protocol_id,
+					let event = CustomProtoHandlerOut::ProtocolError {
 						is_severe: false,
 						error: format!("Request ID {:?} didn't receive an answer", request_id).into(),
 					};
@@ -461,8 +196,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				}
 				Err(err) => {
 					self.shutdown.push(substream);
-					let event = CustomProtosHandlerOut::ProtocolError {
-						protocol_id,
+					let event = CustomProtoHandlerOut::ProtocolError {
 						is_severe: false,
 						error: format!("Error while waiting for an answer for {:?}: {}",
 							request_id, err).into(),
@@ -476,26 +210,26 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 			let mut substream = self.incoming_substreams.swap_remove(n);
 			match substream.poll() {
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
-					let protocol_id = substream.protocol_id();
-					if let CustomMessageId::Request(id) = message.request_id() {
-						self.pending_send_back.push((id, substream));
-						return Some(CustomProtosHandlerOut::CustomMessage {
-							protocol_id,
-							message
-						});
-					} else if let CustomMessageId::OneWay = message.request_id() {
-						self.shutdown.push(substream);
-						return Some(CustomProtosHandlerOut::CustomMessage {
-							protocol_id,
-							message
-						});
-					} else {
-						self.shutdown.push(substream);
-						return Some(CustomProtosHandlerOut::ProtocolError {
-							protocol_id,
-							is_severe: true,
-							error: format!("Received response in new substream").into(),
-						});
+					return match message.request_id() {
+						CustomMessageId::Request(id) => {
+							self.pending_send_back.push((id, substream));
+							Some(CustomProtoHandlerOut::CustomMessage {
+								message
+							})
+						}
+						CustomMessageId::OneWay => {
+							self.shutdown.push(substream);
+							Some(CustomProtoHandlerOut::CustomMessage {
+								message
+							})
+						}
+						_ => {
+							self.shutdown.push(substream);
+							Some(CustomProtoHandlerOut::ProtocolError {
+								is_severe: true,
+								error: format!("Received response in new substream").into(),
+							})
+						}
 					}
 				},
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { .. }))) =>
@@ -505,8 +239,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				Ok(Async::Ready(None)) => {}
 				Err(err) => {
 					self.shutdown.push(substream);
-					return Some(CustomProtosHandlerOut::ProtocolError {
-						protocol_id,
+					return Some(CustomProtoHandlerOut::ProtocolError {
 						is_severe: false,
 						error: format!("Error in incoming substream: {}", err).into(),
 					});
@@ -519,9 +252,9 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 	}
 }
 
-/// Event that can be received by a `CustomProtosHandler`.
+/// Event that can be received by a `CustomProtoHandler`.
 #[derive(Debug)]
-pub enum CustomProtosHandlerIn<TMessage> {
+pub enum CustomProtoHandlerIn<TMessage> {
 	/// The node should start using custom protocols. Contains whether we are the dialer or the
 	/// listener of the connection.
 	Enable(Endpoint),
@@ -531,36 +264,28 @@ pub enum CustomProtosHandlerIn<TMessage> {
 
 	/// Sends a message through a custom protocol substream.
 	SendCustomMessage {
-		/// The protocol to use.
-		protocol: ProtocolId,
 		/// The message to send.
 		message: TMessage,
 	},
 }
 
-/// Event that can be emitted by a `CustomProtosHandler`.
+/// Event that can be emitted by a `CustomProtoHandler`.
 #[derive(Debug)]
-pub enum CustomProtosHandlerOut<TMessage> {
+pub enum CustomProtoHandlerOut<TMessage> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
-		/// Identifier of the protocol.
-		protocol_id: ProtocolId,
 		/// Version of the protocol that has been opened.
 		version: u8,
 	},
 
 	/// Closed a custom protocol with the remote.
 	CustomProtocolClosed {
-		/// Identifier of the protocol.
-		protocol_id: ProtocolId,
 		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
 		result: io::Result<()>,
 	},
 
 	/// Receives a message on a custom protocol substream.
 	CustomMessage {
-		/// Protocol which generated the message.
-		protocol_id: ProtocolId,
 		/// Message that has been received.
 		message: TMessage,
 	},
@@ -568,16 +293,12 @@ pub enum CustomProtosHandlerOut<TMessage> {
 	/// A substream to the remote is clogged. The send buffer is very large, and we should print
 	/// a diagnostic message and/or avoid sending more data.
 	Clogged {
-		/// Protocol which is clogged.
-		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
 		messages: Vec<TMessage>,
 	},
 
 	/// An error has happened on the protocol level with this node.
 	ProtocolError {
-		/// Protocol for which the error happened.
-		protocol_id: ProtocolId,
 		/// If true the error is severe, such as a protocol violation.
 		is_severe: bool,
 		/// The error that happened.
@@ -585,48 +306,255 @@ pub enum CustomProtosHandlerOut<TMessage> {
 	},
 }
 
-impl<TMessage, TSubstream> CustomProtosHandler<TMessage, TSubstream>
+impl<TMessage, TSubstream> CustomProtoHandler<TMessage, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 	TMessage: CustomMessage,
 {
-	/// Builds a new `CustomProtosHandler`.
-	pub fn new(protocols: RegisteredProtocols<TMessage>) -> Self {
-		CustomProtosHandler {
-			protocols: protocols.0.into_iter().map(|protocol| {
-				PerProtocol {
-					protocol,
-					state: PerProtocolState::Init {
-						substreams: SmallVec::new(),
-						init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
-					},
-				}
-			}).collect(),
+	/// Builds a new `CustomProtoHandler`.
+	pub fn new(protocol: RegisteredProtocol<TMessage>) -> Self {
+		CustomProtoHandler {
+			protocol,
+			state: ProtocolState::Init {
+				substreams: SmallVec::new(),
+				init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
+			},
 			events_queue: SmallVec::new(),
 			warm_up_end: Instant::now() + Duration::from_secs(5),
 		}
 	}
 
-	/// Enables the handler for all protocols.
+	/// Enables the handler.
 	fn enable(&mut self, endpoint: Endpoint) {
-		for protocol in &mut self.protocols {
-			if let Some(message) = protocol.enable(endpoint) {
-				self.events_queue.push(message);
+		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
+			ProtocolState::Poisoned => {
+				error!(target: "sub-libp2p", "Handler is in poisoned state");
+				ProtocolState::Poisoned
+			}
+
+			ProtocolState::Init { substreams: incoming, .. } => {
+				if incoming.is_empty() {
+					if let Endpoint::Dialer = endpoint {
+						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+							upgrade: self.protocol.clone(),
+							info: (),
+						});
+					}
+					ProtocolState::Opening {
+						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
+					}
+
+				} else if incoming.iter().any(|s| s.is_multiplex()) {
+					let event = CustomProtoHandlerOut::CustomProtocolOpen {
+						version: incoming[0].protocol_version()
+					};
+					self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+					ProtocolState::Normal(PerProtocolNormalState {
+						outgoing_substream: None,
+						incoming_substreams: incoming.into_iter().collect(),
+						pending_response: SmallVec::new(),
+						pending_send_back: SmallVec::new(),
+						pending_messages: SmallVec::new(),
+						shutdown: SmallVec::new(),
+					})
+
+				} else {
+					let event = CustomProtoHandlerOut::CustomProtocolOpen {
+						version: incoming[0].protocol_version()
+					};
+					self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+					ProtocolState::BackCompat {
+						substream: incoming.into_iter().next()
+							.expect("We have a check above that incoming isn't empty; QED"),
+						shutdown: SmallVec::new()
+					}
+				}
+			}
+
+			st @ ProtocolState::Opening { .. } => st,
+			st @ ProtocolState::BackCompat { .. } => st,
+			st @ ProtocolState::Normal { .. } => st,
+			ProtocolState::Disabled { shutdown, .. } => {
+				ProtocolState::Disabled { shutdown, reenable: true }
 			}
 		}
 	}
 
-	/// Disables the handler for all protocols.
+	/// Disables the handler.
 	fn disable(&mut self) {
-		for protocol in &mut self.protocols {
-			if protocol.disable() {
-				let event = CustomProtosHandlerOut::CustomProtocolClosed {
-					protocol_id: protocol.protocol.id(),
+		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
+			ProtocolState::Poisoned => {
+				error!(target: "sub-libp2p", "Handler is in poisoned state");
+				ProtocolState::Poisoned
+			}
+
+			ProtocolState::Init { substreams: mut shutdown, .. } => {
+				for s in &mut shutdown {
+					s.shutdown();
+				}
+				ProtocolState::Disabled { shutdown, reenable: false }
+			}
+
+			ProtocolState::Opening { .. } => {
+				ProtocolState::Disabled { shutdown: SmallVec::new(), reenable: false }
+			}
+
+			ProtocolState::BackCompat { mut substream, mut shutdown } => {
+				substream.shutdown();
+				shutdown.push(substream);
+				let event = CustomProtoHandlerOut::CustomProtocolClosed {
 					result: Ok(())
 				};
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+				ProtocolState::Disabled {
+					shutdown: shutdown.into_iter().collect(),
+					reenable: false
+				}
 			}
-		}
+
+			ProtocolState::Normal(state) => {
+				let mut out: SmallVec<[_; 6]> = SmallVec::new();
+				out.extend(state.outgoing_substream.into_iter());
+				out.extend(state.incoming_substreams.into_iter());
+				out.extend(state.pending_response.into_iter().map(|(_, s)| s));
+				out.extend(state.pending_send_back.into_iter().map(|(_, s)| s));
+				for s in &mut out {
+					s.shutdown();
+				}
+				out.extend(state.shutdown.into_iter());
+				let event = CustomProtoHandlerOut::CustomProtocolClosed {
+					result: Ok(())
+				};
+				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+				ProtocolState::Disabled { shutdown: out, reenable: false }
+			}
+
+			ProtocolState::Disabled { shutdown, .. } =>
+				ProtocolState::Disabled { shutdown, reenable: false },
+		};
+	}
+
+	/// Polls the state for events. Optionally returns an event to produce.
+	#[must_use]
+	fn poll_state(&mut self)
+		-> Option<ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, (), CustomProtoHandlerOut<TMessage>>> {
+		let return_value;
+		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
+			ProtocolState::Poisoned => {
+				error!(target: "sub-libp2p", "Handler is in poisoned state; shutting down");
+				return_value = None;
+				ProtocolState::Poisoned
+			}
+
+			ProtocolState::Init { substreams, mut init_deadline } => {
+				match init_deadline.poll() {
+					Ok(Async::Ready(())) =>
+						error!(target: "sub-libp2p", "Handler initialization process is too long"),
+					Ok(Async::NotReady) => {}
+					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
+				}
+
+				return_value = None;
+				ProtocolState::Init { substreams, init_deadline }
+			}
+
+			ProtocolState::Opening { mut deadline } => {
+				match deadline.poll() {
+					Ok(Async::Ready(())) => {
+						deadline.reset(Instant::now() + Duration::from_secs(60));
+						let event = CustomProtoHandlerOut::ProtocolError {
+							is_severe: false,
+							error: "Timeout when opening protocol".to_string().into(),
+						};
+						return_value = Some(ProtocolsHandlerEvent::Custom(event));
+						ProtocolState::Opening { deadline }
+					},
+					Ok(Async::NotReady) => {
+						return_value = None;
+						ProtocolState::Opening { deadline }
+					},
+					Err(_) => {
+						error!(target: "sub-libp2p", "Tokio timer has errored");
+						deadline.reset(Instant::now() + Duration::from_secs(60));
+						return_value = None;
+						ProtocolState::Opening { deadline }
+					},
+				}
+			}
+
+			ProtocolState::BackCompat { mut substream, shutdown } => {
+				match substream.poll() {
+					Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
+						let event = CustomProtoHandlerOut::CustomMessage {
+							message
+						};
+						return_value = Some(ProtocolsHandlerEvent::Custom(event));
+						ProtocolState::BackCompat { substream, shutdown }
+					},
+					Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { messages }))) => {
+						let event = CustomProtoHandlerOut::Clogged {
+							messages,
+						};
+						return_value = Some(ProtocolsHandlerEvent::Custom(event));
+						ProtocolState::BackCompat { substream, shutdown }
+					}
+					Ok(Async::NotReady) => {
+						return_value = None;
+						ProtocolState::BackCompat { substream, shutdown }
+					}
+					Ok(Async::Ready(None)) => {
+						let event = CustomProtoHandlerOut::CustomProtocolClosed {
+							result: Ok(())
+						};
+						return_value = Some(ProtocolsHandlerEvent::Custom(event));
+						ProtocolState::Disabled {
+							shutdown: shutdown.into_iter().collect(),
+							reenable: false
+						}
+					}
+					Err(err) => {
+						let event = CustomProtoHandlerOut::CustomProtocolClosed {
+							result: Err(err),
+						};
+						return_value = Some(ProtocolsHandlerEvent::Custom(event));
+						ProtocolState::Disabled {
+							shutdown: shutdown.into_iter().collect(),
+							reenable: false
+						}
+					}
+				}
+			}
+
+			ProtocolState::Normal(mut norm_state) => {
+				if let Some(event) = norm_state.poll() {
+					return_value = Some(ProtocolsHandlerEvent::Custom(event));
+				} else {
+					return_value = None;
+				}
+
+				ProtocolState::Normal(norm_state)
+			}
+
+			ProtocolState::Disabled { mut shutdown, reenable } => {
+				shutdown_list(&mut shutdown);
+				// If `reenable` is `true`, that means we should open the substreams system again
+				// after all the substreams are closed.
+				if reenable && shutdown.is_empty() {
+					return_value = Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+						upgrade: self.protocol.clone(),
+						info: (),
+					});
+					ProtocolState::Opening {
+						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
+					}
+				} else {
+					return_value = None;
+					ProtocolState::Disabled { shutdown, reenable }
+				}
+			}
+		};
+
+		return_value
 	}
 
 	/// Called by `inject_fully_negotiated_inbound` and `inject_fully_negotiated_outbound`.
@@ -634,39 +562,29 @@ where
 		&mut self,
 		mut substream: RegisteredProtocolSubstream<TMessage, TSubstream>
 	) {
-		let state = match self.protocols.iter_mut().find(|p| p.protocol.id() == substream.protocol_id()) {
-			Some(p) => &mut p.state,
-			None => {
-				error!(target: "sub-libp2p", "Found unknown protocol ID {:?}",
-					substream.protocol_id());
-				return
-			},
-		};
-
-		*state = match mem::replace(state, PerProtocolState::Poisoned) {
-			PerProtocolState::Poisoned => {
+		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
+			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler is in poisoned state");
-				PerProtocolState::Poisoned
+				ProtocolState::Poisoned
 			}
 
-			PerProtocolState::Init { mut substreams, init_deadline } => {
+			ProtocolState::Init { mut substreams, init_deadline } => {
 				if substream.endpoint() == Endpoint::Dialer {
 					error!(target: "sub-libp2p", "Opened dialing substream before initialization");
 				}
 				substreams.push(substream);
-				PerProtocolState::Init { substreams, init_deadline }
+				ProtocolState::Init { substreams, init_deadline }
 			}
 
-			PerProtocolState::Opening { .. } => {
-				let event = CustomProtosHandlerOut::CustomProtocolOpen {
-					protocol_id: substream.protocol_id(),
+			ProtocolState::Opening { .. } => {
+				let event = CustomProtoHandlerOut::CustomProtocolOpen {
 					version: substream.protocol_version()
 				};
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
 
 				match (substream.endpoint(), substream.is_multiplex()) {
 					(Endpoint::Dialer, true) => {
-						PerProtocolState::Normal(PerProtocolNormalState {
+						ProtocolState::Normal(PerProtocolNormalState {
 							outgoing_substream: Some(substream),
 							incoming_substreams: SmallVec::new(),
 							pending_response: SmallVec::new(),
@@ -676,7 +594,7 @@ where
 						})
 					},
 					(Endpoint::Listener, true) => {
-						PerProtocolState::Normal(PerProtocolNormalState {
+						ProtocolState::Normal(PerProtocolNormalState {
 							outgoing_substream: None,
 							incoming_substreams: smallvec![substream],
 							pending_response: SmallVec::new(),
@@ -686,7 +604,7 @@ where
 						})
 					},
 					(_, false) => {
-						PerProtocolState::BackCompat {
+						ProtocolState::BackCompat {
 							substream,
 							shutdown: SmallVec::new()
 						}
@@ -694,15 +612,15 @@ where
 				}
 			}
 
-			PerProtocolState::BackCompat { substream: existing, mut shutdown } => {
+			ProtocolState::BackCompat { substream: existing, mut shutdown } => {
 				warn!(target: "sub-libp2p", "Received extra substream after having already one \
 					open in backwards-compatibility mode");
 				substream.shutdown();
 				shutdown.push(substream);
-				PerProtocolState::BackCompat { substream: existing, shutdown }
+				ProtocolState::BackCompat { substream: existing, shutdown }
 			}
 
-			PerProtocolState::Normal(mut state) => {
+			ProtocolState::Normal(mut state) => {
 				if substream.endpoint() == Endpoint::Listener {
 					state.incoming_substreams.push(substream);
 				} else if !state.pending_messages.is_empty() {
@@ -720,49 +638,39 @@ where
 					state.shutdown.push(substream);
 				}
 
-				PerProtocolState::Normal(state)
+				ProtocolState::Normal(state)
 			}
 
-			PerProtocolState::Disabled { mut shutdown, .. } => {
+			ProtocolState::Disabled { mut shutdown, .. } => {
 				substream.shutdown();
 				shutdown.push(substream);
-				PerProtocolState::Disabled { shutdown, reenable: false }
+				ProtocolState::Disabled { shutdown, reenable: false }
 			}
 		};
 	}
 
 	/// Sends a message to the remote.
-	fn send_message(&mut self, protocol: ProtocolId, message: TMessage) {
-		let (protocol, state) = match self.protocols.iter_mut().find(|p| p.protocol.id() == protocol) {
-			Some(p) => (&mut p.protocol, &mut p.state),
-			None => {
-				error!(target: "sub-libp2p", "Tried to send message over unknown protocol ID {:?}",
-					protocol);
-				return
-			},
-		};
-
-		match *state {
-			PerProtocolState::BackCompat { ref mut substream, .. } =>
+	fn send_message(&mut self, message: TMessage) {
+		match self.state {
+			ProtocolState::BackCompat { ref mut substream, .. } =>
 				substream.send_message(message),
 
-			PerProtocolState::Normal(ref mut state) => {
+			ProtocolState::Normal(ref mut state) => {
 				if let CustomMessageId::Request(request_id) = message.request_id() {
 					if let Some(mut outgoing_substream) = state.outgoing_substream.take() {
 						outgoing_substream.send_message(message);
 						state.pending_response.push((request_id, outgoing_substream));
 					} else {
 						if state.pending_messages.len() >= 2048 {
-							let event = CustomProtosHandlerOut::Clogged {
+							let event = CustomProtoHandlerOut::Clogged {
 								messages: Vec::new(),
-								protocol_id: protocol.id()
 							};
 							self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
 						}
 						state.pending_messages.push(message);
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							upgrade: protocol.clone(),
-							info: protocol.id()
+							upgrade: self.protocol.clone(),
+							info: ()
 						});
 					}
 				} else if let CustomMessageId::Response(request_id) = message.request_id() {
@@ -779,16 +687,15 @@ where
 					state.shutdown.push(outgoing_substream);
 				} else {
 					if state.pending_messages.len() >= 2048 {
-						let event = CustomProtosHandlerOut::Clogged {
+						let event = CustomProtoHandlerOut::Clogged {
 							messages: Vec::new(),
-							protocol_id: protocol.id()
 						};
 						self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
 					}
 					state.pending_messages.push(message);
 					self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						upgrade: protocol.clone(),
-						info: protocol.id()
+						upgrade: self.protocol.clone(),
+						info: ()
 					});
 				}
 			}
@@ -798,19 +705,18 @@ where
 	}
 }
 
-impl<TMessage, TSubstream> ProtocolsHandler for CustomProtosHandler<TMessage, TSubstream>
+impl<TMessage, TSubstream> ProtocolsHandler for CustomProtoHandler<TMessage, TSubstream>
 where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
-	type InEvent = CustomProtosHandlerIn<TMessage>;
-	type OutEvent = CustomProtosHandlerOut<TMessage>;
+	type InEvent = CustomProtoHandlerIn<TMessage>;
+	type OutEvent = CustomProtoHandlerOut<TMessage>;
 	type Substream = TSubstream;
 	type Error = Void;
-	type InboundProtocol = RegisteredProtocols<TMessage>;
+	type InboundProtocol = RegisteredProtocol<TMessage>;
 	type OutboundProtocol = RegisteredProtocol<TMessage>;
-	type OutboundOpenInfo = ProtocolId;
+	type OutboundOpenInfo = ();
 
-	#[inline]
 	fn listen_protocol(&self) -> Self::InboundProtocol {
-		RegisteredProtocols(self.protocols.iter().map(|p| p.protocol.clone()).collect())
+		self.protocol.clone()
 	}
 
 	fn inject_fully_negotiated_inbound(
@@ -820,7 +726,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 		self.inject_fully_negotiated(proto);
 	}
 
-	#[inline]
 	fn inject_fully_negotiated_outbound(
 		&mut self,
 		proto: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
@@ -829,24 +734,23 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 		self.inject_fully_negotiated(proto);
 	}
 
-	fn inject_event(&mut self, message: CustomProtosHandlerIn<TMessage>) {
+	fn inject_event(&mut self, message: CustomProtoHandlerIn<TMessage>) {
 		match message {
-			CustomProtosHandlerIn::Disable => self.disable(),
-			CustomProtosHandlerIn::Enable(endpoint) => self.enable(endpoint),
-			CustomProtosHandlerIn::SendCustomMessage { protocol, message } =>
-				self.send_message(protocol, message),
+			CustomProtoHandlerIn::Disable => self.disable(),
+			CustomProtoHandlerIn::Enable(endpoint) => self.enable(endpoint),
+			CustomProtoHandlerIn::SendCustomMessage { message } =>
+				self.send_message(message),
 		}
 	}
 
 	#[inline]
-	fn inject_dial_upgrade_error(&mut self, protocol_id: Self::OutboundOpenInfo, err: ProtocolsHandlerUpgrErr<io::Error>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
 			_ => false,
 		};
 
-		self.events_queue.push(ProtocolsHandlerEvent::Custom(CustomProtosHandlerOut::ProtocolError {
-			protocol_id,
+		self.events_queue.push(ProtocolsHandlerEvent::Custom(CustomProtoHandlerOut::ProtocolError {
 			is_severe,
 			error: Box::new(err),
 		}));
@@ -863,14 +767,11 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 
 		let mut keep_forever = false;
 
-		for protocol in self.protocols.iter() {
-			match protocol.state {
-				PerProtocolState::Init { .. } | PerProtocolState::Opening { .. } => {}
-				PerProtocolState::BackCompat { .. } | PerProtocolState::Normal { .. } =>
-					keep_forever = true,
-				PerProtocolState::Disabled { .. } |
-				PerProtocolState::Poisoned => return KeepAlive::Now,
-			}
+		match self.state {
+			ProtocolState::Init { .. } | ProtocolState::Opening { .. } => {}
+			ProtocolState::BackCompat { .. } | ProtocolState::Normal { .. } =>
+				keep_forever = true,
+			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::Now,
 		}
 
 		if keep_forever {
@@ -893,22 +794,20 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 		}
 
 		// Process all the substreams.
-		for protocol in self.protocols.iter_mut() {
-			if let Some(event) = protocol.poll() {
-				return Ok(Async::Ready(event))
-			}
+		if let Some(event) = self.poll_state() {
+			return Ok(Async::Ready(event))
 		}
 
 		Ok(Async::NotReady)
 	}
 }
 
-impl<TMessage, TSubstream> fmt::Debug for CustomProtosHandler<TMessage, TSubstream>
+impl<TMessage, TSubstream> fmt::Debug for CustomProtoHandler<TMessage, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		f.debug_struct("CustomProtosHandler")
+		f.debug_struct("CustomProtoHandler")
 			.finish()
 	}
 }
