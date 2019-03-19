@@ -399,7 +399,7 @@ pub trait ProvideInherent {
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
 	/// Check the given inherent if it is valid.
-	/// Checking the inherent is optional and can be ommitted.
+	/// Checking the inherent is optional and can be omitted.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}

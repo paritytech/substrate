@@ -21,9 +21,6 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
-#[cfg(feature = "std")]
-use support::{Serialize, Deserialize};
 use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
@@ -61,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 35,
-	impl_version: 36,
+	spec_version: 37,
+	impl_version: 40,
 	apis: RUNTIME_API_VERSIONS,
 };
 

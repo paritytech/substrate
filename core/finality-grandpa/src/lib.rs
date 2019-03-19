@@ -69,7 +69,7 @@ use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Blake2Hasher, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 use srml_finality_tracker;
 
@@ -388,6 +388,17 @@ impl<Block: BlockT> GossipValidator<Block> {
 		}
 
 		let topic = commit_topic::<Block>(full.set_id);
+
+		let precommits_signed_by: Vec<String> = full.message.auth_data.iter().map(move |(_, a)| {
+			format!("{}", a)
+		}).collect();
+		telemetry!(CONSENSUS_INFO; "afg.received_commit_msg";
+			"contains_precommits_signed_by" => ?precommits_signed_by,
+			"round" => ?full.round,
+			"set_id" => ?full.set_id,
+			"topic" => ?topic,
+			"block_hash" => ?full.message,
+		);
 		network_gossip::ValidationResult::Valid(topic)
 	}
 }
@@ -750,7 +761,13 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
 				match client.backend().blockchain().info() {
 					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
-					Ok(info) => Ok(info.finalized_number),
+					Ok(info) => {
+						telemetry!(CONSENSUS_INFO; "afg.finalized";
+							"finalized_number" => ?info.finalized_number,
+							"finalized_hash" => ?info.finalized_hash,
+						);
+						Ok(info.finalized_number)
+					},
 				}
 			}))
 			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
@@ -862,6 +879,16 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let handle_voter_command = move |command: VoterCommand<_, _>, voter_commands_rx| {
 			match command {
 				VoterCommand::ChangeAuthorities(new) => {
+					let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
+						format!("{}", a)
+					}).collect();
+					telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
+						"number" => ?new.canon_number,
+						"hash" => ?new.canon_hash,
+						"voters" => ?voters,
+						"set_id" => ?new.set_id,
+					);
+
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
