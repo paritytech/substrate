@@ -16,14 +16,13 @@
 
 //! Support code for the runtime. A set of test accounts.
 
-use std::collections::HashMap;
-use std::ops::Deref;
+use std::{collections::HashMap, ops::Deref};
 use lazy_static::lazy_static;
 use substrate_primitives::{ed25519::{Pair, Public, Signature}, Pair as _Pair, H256};
 pub use substrate_primitives::ed25519;
 
 /// Set of test accounts.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
 pub enum Keyring {
 	Alice,
 	Bob,
@@ -79,6 +78,11 @@ impl Keyring {
 		Pair::from_string(&format!("//{}", <&'static str>::from(self)), None)
 			.expect("static values are known good; qed")
 	}
+
+	/// Returns an interator over all test accounts.
+	pub fn iter() -> impl Iterator<Item=Keyring> {
+		<Self as strum::IntoEnumIterator>::iter()
+	}
 }
 
 impl From<Keyring> for &'static str {
@@ -98,16 +102,7 @@ impl From<Keyring> for &'static str {
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter().map(|&i| (i, i.pair())).collect()
+		Keyring::iter().map(|i| (i, i.pair())).collect()
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
