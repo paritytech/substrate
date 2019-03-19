@@ -39,13 +39,19 @@ struct StorageDefinition {
 	pub module_ident: Ident,
 	pub mod_lt_token: Token![<],
 	pub mod_param: syn::GenericParam,
+	pub mod_instance_param_token: Option<Token![,]>,
+	pub mod_instance: Option<syn::Ident>,
+	pub mod_instantiable_token: Option<Token![:]>,
+	pub mod_instantiable: Option<syn::Ident>,
+	pub mod_default_instance_token: Option<Token![=]>,
+	pub mod_default_instance: Option<syn::Ident>,
 	pub mod_gt_token: Token![>],
 	pub as_token: Token![as],
 	pub crate_ident: Ident,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: Option<AddExtraGenesis>,
+	pub extra_genesis_skip_phantom_data_field: Option<ExtraGenesisSkipPhantomDataField>,
 }
-
 
 #[derive(Parse, ToTokens, Debug)]
 struct SpecificHiddenCrate {
@@ -57,6 +63,12 @@ struct SpecificHiddenCrate {
 struct AddExtraGenesis {
 	pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
 	pub content: ext::Braces<AddExtraGenesisContent>,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct ExtraGenesisSkipPhantomDataField {
+	pub genesis_phantom_keyword: ext::CustomToken<ExtraGenesisSkipPhantomDataField>,
+	pub token: Token![;],
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -176,3 +188,4 @@ custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
 custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
 custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
 custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");
+custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
