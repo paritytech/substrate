@@ -73,9 +73,10 @@ use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
+use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
+use runtime_io::{blake2_256, twox_128};
 use timestamp;
 use fees;
 
@@ -389,6 +390,28 @@ decl_storage! {
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
 		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
+	}
+}
+
+/// The storage items associated with a prefix space in a tree
+/// TODO can we remove it, seems usefull for inner implementation
+/// just not in the right place
+pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
+impl<T: Trait> StorageDoubleMap for StorageOf<T> {
+	const PREFIX: &'static [u8] = b"con:sto:";
+	type Key1 = T::AccountId;
+	type Key2 = Vec<u8>;
+	type Value = Vec<u8>;
+
+	/// Hashed by XX
+	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8> {
+		twox_128(&key1_data).to_vec()
+	}
+
+	/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
+	/// thus will be susceptible for a untrusted input.
+	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8> {
+		blake2_256(&key2_data).to_vec()
 	}
 }
 

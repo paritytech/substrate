@@ -52,11 +52,13 @@ pub mod metadata;
 mod runtime;
 #[macro_use]
 pub mod inherent;
+mod double_map;
 pub mod traits;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::double_map::StorageDoubleMap;
 pub use runtime_io::print;
 
 #[doc(inline)]
