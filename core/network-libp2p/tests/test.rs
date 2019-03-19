@@ -17,7 +17,7 @@
 use futures::{future, stream, prelude::*, try_ready};
 use rand::seq::SliceRandom;
 use std::{io, iter};
-use substrate_network_libp2p::{CustomMessage, Protocol, ServiceEvent, build_multiaddr};
+use substrate_network_libp2p::{CustomMessage, ServiceEvent, multiaddr::Protocol, build_multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
