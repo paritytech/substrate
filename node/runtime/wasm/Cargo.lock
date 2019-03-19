@@ -1467,7 +1467,6 @@ dependencies = [
  "serde_derive 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-std 0.1.0",
- "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 

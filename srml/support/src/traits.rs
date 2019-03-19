@@ -97,19 +97,54 @@ impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
 	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
-/// Does
+/// Simple boolean for whether an account needs to be kept in existence.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ExistenceRequirement {
+	/// Operation must not result in the account going out of existence.
 	KeepAlive,
-	AllowDead,
+	/// Operation may result in account going out of existence.
+	AllowDeath,
 }
 
+/// A trait for a not-quite Linear Type that tracks an imbalance.
+///
+/// Imbalances can either be Positive (funds were added somewhere without
+/// being subtracted elsewhere - e.g. a reward) or Negative.(funds deducted
+/// somewhere without an equal and opposite addition - e.g. a slash or
+/// system fee payment).
+///
+/// Since they are unsigned, the actual type is always Positive or Negative.
+/// The trait makes no distinction except to define the `Opposite` type.
+///
+/// New instances of zero value can be created (`zero`) and destroyed
+/// (`drop_zero`).
+///
+/// Existing instances can be `split` and merged either consuming `self` with
+/// `merge` or mutating `self` with `subsume`. If the target is an `Option`,
+/// then `maybe_merge` and `maybe_subsume` might work better. Instances can
+/// also be `offset` with an `Opposite` that is less than or equal to in value.
+///
+/// You can always retrieve the raw balance value using `value`.
 pub trait Imbalance<Balance>: Sized {
+	/// The oppositely imbalanced type. They come in pairs.
 	type Opposite: Imbalance<Balance>;
+
+	/// The zero imbalance. Can be destroyed with `drop_zero`.
 	fn zero() -> Self;
+
+	/// Drop an instance cleanly. Only works if its `value()` is zero.
 	fn drop_zero(self) -> Result<(), Self>;
+
+	/// Consume `self` and return two independent instances; the first
+	/// is guaranteed to be at most `amount` and the second will be the remainder.
 	fn split(self, amount: Balance) -> (Self, Self);
+
+	/// Consume `self` and an `other` to return a new instance that combines
+	/// both.
 	fn merge(self, other: Self) -> Self;
+
+	/// Consume `self` and maybe an `other` to return a new instance that combines
+	/// both.
 	fn maybe_merge(self, other: Option<Self>) -> Self {
 		if let Some(o) = other {
 			self.merge(o)
@@ -117,15 +152,30 @@ pub trait Imbalance<Balance>: Sized {
 			self
 		}
 	}
+
+	/// Consume an `other` to mutate `self` into a new instance that combines
+	/// both.
 	fn subsume(&mut self, other: Self);
+
+	/// Maybe consume an `other` to mutate `self` into a new instance that combines
+	/// both.
 	fn maybe_subsume(&mut self, other: Option<Self>) {
 		if let Some(o) = other {
 			self.subsume(o)
 		}
 	}
+
+	/// Consume self and along with an opposite counterpart to return
+	/// a combined result.
+	///
+	/// Returns `Ok` along with a new instance of `Self` if this instance has a
+	/// greater value than the `other`. Otherwise returns `Err` with an instance of
+	/// the `Opposite`. In both cases the value represents the combination of `self`
+	/// and `other`.
 	fn offset(self, other: Self::Opposite) -> Result<Self, Self::Opposite>;
-	fn value(&self) -> Balance;
-	fn handle<T: OnUnbalanced<Self>>(self) { T::on_unbalanced(self) }
+
+	/// The raw value of self.
+	fn peek(&self) -> Balance;
 }
 
 /// Abstraction over a fungible assets system.

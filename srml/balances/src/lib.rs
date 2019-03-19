@@ -509,7 +509,7 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I>
 			Err(NegativeImbalance(other.0 - self.0))
 		}
 	}
-	fn value(&self) -> T::Balance {
+	fn peek(&self) -> T::Balance {
 		self.0.clone()
 	}
 }
@@ -545,7 +545,7 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I>
 			Err(PositiveImbalance(other.0 - self.0))
 		}
 	}
-	fn value(&self) -> T::Balance {
+	fn peek(&self) -> T::Balance {
 		self.0.clone()
 	}
 }

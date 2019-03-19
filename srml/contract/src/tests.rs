@@ -306,6 +306,10 @@ fn instantiate_and_call() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
 				},
 				EventRecord {
@@ -370,6 +374,10 @@ fn dispatch_call() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
 				},
 			]);
@@ -391,6 +399,10 @@ fn dispatch_call() {
 			));
 
 			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
