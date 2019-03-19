@@ -21,11 +21,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use grandpa::VoterSet;
+use grandpa::Message::{Prevote, Precommit};
 use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
@@ -283,6 +285,24 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 						debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 						return Ok(None);
 					}
+
+					match &msg.message.message {
+						Prevote(prevote) => {
+							telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+								"voter" => ?format!("{}", msg.message.id),
+								"target_number" => ?prevote.target_number,
+								"target_hash" => ?prevote.target_hash,
+							);
+						},
+						Precommit(precommit) => {
+							telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+								"voter" => ?format!("{}", msg.message.id),
+								"target_number" => ?precommit.target_number,
+								"target_hash" => ?precommit.target_hash,
+							);
+						},
+					};
+
 					Ok(Some(msg.message))
 				}
 				_ => {
@@ -436,6 +456,15 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 			match msg {
 				GossipMessage::Commit(msg) => {
 					let round = msg.round;
+					let precommits_signed_by: Vec<String> =
+						msg.message.auth_data.iter().map(move |(_, a)| {
+							format!("{}", a)
+						}).collect();
+					telemetry!(CONSENSUS_INFO; "afg.received_commit";
+						"contains_precommits_signed_by" => ?precommits_signed_by,
+						"target_number" => ?msg.message.target_number,
+						"target_hash" => ?msg.message.target_hash,
+					);
 					check_compact_commit::<Block>(msg.message, &*voters).map(move |c| (round, c))
 				},
 				_ => {
@@ -477,6 +506,9 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		}
 
 		let (round, commit) = input;
+		telemetry!(CONSENSUS_INFO; "afg.commit_issued";
+			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
+		);
 		let (precommits, auth_data) = commit.precommits.into_iter()
 			.map(|signed| (signed.precommit, (signed.signature, signed.id)))
 			.unzip();

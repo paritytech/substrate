@@ -125,11 +125,6 @@ enum ProtocolState<TMessage, TSubstream> {
 		reenable: bool,
 	},
 
-	/// We are trying to shut down the connection and thus should refuse any incoming connection.
-	/// Contains substreams that are being closed. Once all the substreams are closed, we close
-	/// the connection.
-	ShuttingDown(SmallVec<[RegisteredProtocolSubstream<TMessage, TSubstream>; 6]>),
-
 	/// We sometimes temporarily switch to this state during processing. If we are in this state
 	/// at the beginning of a method, that means something bad happend in the source code.
 	Poisoned,
@@ -382,9 +377,6 @@ where
 			ProtocolState::Disabled { shutdown, .. } => {
 				ProtocolState::Disabled { shutdown, reenable: true }
 			}
-			ProtocolState::ShuttingDown(list) => {
-				ProtocolState::ShuttingDown(list)
-			}
 		}
 	}
 
@@ -439,8 +431,6 @@ where
 
 			ProtocolState::Disabled { shutdown, .. } =>
 				ProtocolState::Disabled { shutdown, reenable: false },
-			ProtocolState::ShuttingDown(list) =>
-				ProtocolState::ShuttingDown(list),
 		};
 	}
 
@@ -452,7 +442,7 @@ where
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler is in poisoned state; shutting down");
-				return_value = Some(ProtocolsHandlerEvent::Shutdown);
+				return_value = None;
 				ProtocolState::Poisoned
 			}
 
@@ -562,12 +552,6 @@ where
 					ProtocolState::Disabled { shutdown, reenable }
 				}
 			}
-
-			ProtocolState::ShuttingDown(mut list) => {
-				shutdown_list(&mut list);
-				return_value = None;
-				ProtocolState::ShuttingDown(list)
-			}
 		};
 
 		return_value
@@ -661,12 +645,6 @@ where
 				substream.shutdown();
 				shutdown.push(substream);
 				ProtocolState::Disabled { shutdown, reenable: false }
-			}
-
-			ProtocolState::ShuttingDown(mut list) => {
-				substream.shutdown();
-				list.push(substream);
-				ProtocolState::ShuttingDown(list)
 			}
 		};
 	}
@@ -766,9 +744,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	}
 
 	#[inline]
-	fn inject_inbound_closed(&mut self) {}
-
-	#[inline]
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
@@ -796,64 +771,13 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			ProtocolState::Init { .. } | ProtocolState::Opening { .. } => {}
 			ProtocolState::BackCompat { .. } | ProtocolState::Normal { .. } =>
 				keep_forever = true,
-			ProtocolState::Disabled { .. } | ProtocolState::ShuttingDown(_) |
-			ProtocolState::Poisoned => return KeepAlive::Now,
+			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::Now,
 		}
 
 		if keep_forever {
 			KeepAlive::Forever
 		} else {
 			KeepAlive::Now
-		}
-	}
-
-	fn shutdown(&mut self) {
-		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
-			ProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
-				ProtocolState::Poisoned
-			}
-
-			ProtocolState::Init { substreams: mut list, .. } => {
-				for s in &mut list { s.shutdown(); }
-				ProtocolState::ShuttingDown(list)
-			}
-
-			ProtocolState::Opening { .. } => {
-				ProtocolState::ShuttingDown(SmallVec::new())
-			}
-
-			ProtocolState::BackCompat { mut substream, mut shutdown } => {
-				substream.shutdown();
-				shutdown.push(substream);
-				let event = CustomProtoHandlerOut::CustomProtocolClosed {
-					result: Ok(())
-				};
-				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
-				ProtocolState::ShuttingDown(shutdown.into_iter().collect())
-			}
-
-			ProtocolState::Normal(state) => {
-				let mut out: SmallVec<[_; 6]> = SmallVec::new();
-				out.extend(state.outgoing_substream.into_iter());
-				out.extend(state.incoming_substreams.into_iter());
-				out.extend(state.pending_response.into_iter().map(|(_, s)| s));
-				out.extend(state.pending_send_back.into_iter().map(|(_, s)| s));
-				for s in &mut out {
-					s.shutdown();
-				}
-				out.extend(state.shutdown.into_iter());
-				let event = CustomProtoHandlerOut::CustomProtocolClosed {
-					result: Ok(())
-				};
-				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
-				ProtocolState::ShuttingDown(out)
-			}
-
-			ProtocolState::Disabled { shutdown, .. } =>
-				ProtocolState::ShuttingDown(shutdown),
-			ProtocolState::ShuttingDown(list) =>
-				ProtocolState::ShuttingDown(list),
 		}
 	}
 
@@ -872,13 +796,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 		// Process all the substreams.
 		if let Some(event) = self.poll_state() {
 			return Ok(Async::Ready(event))
-		}
-
-		// Shut down the node if everything is closed.
-		match self.state {
-			ProtocolState::ShuttingDown(ref list) if list.is_empty() =>
-				return Ok(Async::Ready(ProtocolsHandlerEvent::Shutdown)),
-			_ => ()
 		}
 
 		Ok(Async::NotReady)

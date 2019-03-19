@@ -580,7 +580,7 @@ pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 
 /// Verify and recover a SECP256k1 ECDSA signature.
 /// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-/// - returns `None` if the signatue is bad, the 64-byte pubkey (doesn't include the 0x04 prefix).
+/// - returns `None` if the signature is bad, the 64-byte pubkey (doesn't include the 0x04 prefix).
 pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
 	let mut pubkey = [0u8; 64];
 	match unsafe {
