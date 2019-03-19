@@ -48,6 +48,9 @@ pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>
 pub struct AccountKeySpaceMapping<A: Ord> {
 	to_account: BTreeMap<KeySpace, A>,
 	to_key: BTreeMap<A, KeySpace>,
+	// this lock is related to the way overlaydb stack
+	// if set it must be unset at the lower level
+	lock: bool,
 }
 
 impl<A: Clone + Ord> AccountKeySpaceMapping<A> {
@@ -56,17 +59,26 @@ impl<A: Clone + Ord> AccountKeySpaceMapping<A> {
 		AccountKeySpaceMapping {
 			to_account: BTreeMap::new(),
 			to_key: BTreeMap::new(),
+			lock: false,
 		}
 	}
 
+	pub fn lock(&mut self) {
+		self.lock = true;
+	}
+	pub fn unlock(&mut self) {
+		self.lock = false;
+	}
 	pub fn insert(&mut self, account: A, ks: KeySpace) {
 		self.to_account.insert(ks.clone(), account.clone());
 		self.to_key.insert(account, ks);
 	}
 	pub fn get_keyspace(&self, account: &A) -> Option<&KeySpace> {
+		if self.lock { return None }
 		self.to_key.get(account)
 	}
 	pub fn get_account(&self, ks: &KeySpace) -> Option<&A> {
+		if self.lock { return None }
 		self.to_account.get(ks)
 	}
 
@@ -204,13 +216,17 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			if let Some(v) = ka_mut.get_keyspace(account) {
 				v.clone()
 			} else {
+				ka_mut.unlock();
 				let v = self.underlying.get_or_create_keyspace(account);
 				ka_mut.insert(account.clone(), v.clone());
 				v
 			}
 		} else {
 			let res = self.keyspace_account.as_ref().borrow().get_keyspace(account).map(|v|v.clone());
-			res.unwrap_or_else(||self.underlying.get_or_create_keyspace(account))
+			res.unwrap_or_else(||{
+				self.keyspace_account.as_ref().borrow_mut().lock();
+				self.underlying.get_or_create_keyspace(account)
+			})
 		}
 	}
 	fn get_storage(&self, ks: &KeySpace, location: &[u8]) -> Option<Vec<u8>> {
