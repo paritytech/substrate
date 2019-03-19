@@ -65,34 +65,6 @@
 //! 
 //! * `current_schedule` - Gets the current cost schedule for contracts.
 //! 
-//! ## Usage
-//! 
-//! The following example shows how to use the contract module in your custom module to create a contract.
-//! 
-//! ### Prerequisites
-//! 
-//! Import the `contract` module in your custom module and derive the module configuration trait from the `contract` trait.
-//!
-//! ### Deploy a smart-contract
-//!
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
-//! use system::ensure_signed;
-//! 
-//! pub trait Trait: contract::Trait {}
-//! 
-//! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn deploy_my_contract(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			<contract::Module<T>>::put_code(origin, GAS_LIMIT, WASM_CODE);
-//! 			<contract::Module<T>>::create(origin, ENDOWMENT, GAS_LIMIT, CODE_HASH, DATA);
-//! 			Ok(())
-//! 		}	
-//! 	}
-//! }
-//! ```
-//! 
 //! ### Example from SRML
 //! 
 //! ## Related Modules
