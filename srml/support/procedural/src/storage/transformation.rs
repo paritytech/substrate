@@ -479,12 +479,12 @@ fn decl_storage_items(
 
 			let type_infos = get_type_infos(storage_type);
 
-			let const_name = syn::Ident::new(&format!("PREFIX_FOR_{}", name.to_string()), proc_macro2::Span::call_site());
+			let const_name = syn::Ident::new(&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
 			let partial_const_value = prefix.clone();
 			const_names.push((const_name, partial_const_value));
 
 			if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
-				let const_name = syn::Ident::new(&format!("HEAD_KEY_FOR_{}", name.to_string()), proc_macro2::Span::call_site());
+				let const_name = syn::Ident::new(&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site());
 				let partial_const_value = format!("head of {}", prefix);
 				const_names.push((const_name, partial_const_value));
 			}
