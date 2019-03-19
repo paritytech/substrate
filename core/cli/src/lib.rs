@@ -32,7 +32,8 @@ use service::{
 	FactoryGenesis, PruningMode, ChainSpec,
 };
 use network::{
-	Protocol, config::{NetworkConfiguration, NonReservedPeerMode, Secret},
+	self, multiaddr::Protocol,
+	config::{NetworkConfiguration, NonReservedPeerMode, NodeKeyConfig},
 	build_multiaddr,
 };
 use primitives::H256;
@@ -50,6 +51,7 @@ pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, SharedParams, MergeParameters, TransactionPoolParams,
+	NodeKeyParams, NodeKeyType
 };
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
@@ -61,7 +63,18 @@ use lazy_static::lazy_static;
 use futures::Future;
 use substrate_telemetry::TelemetryEndpoints;
 
-const MAX_NODE_NAME_LENGTH: usize = 32;
+/// The maximum number of characters for a node name.
+const NODE_NAME_MAX_LENGTH: usize = 32;
+
+/// The file name of the node's Secp256k1 secret key inside the chain-specific
+/// network config directory, if neither `--node-key` nor `--node-key-file`
+/// is specified in combination with `--node-key-type=secp256k1`.
+const NODE_KEY_SECP256K1_FILE: &str = "secret";
+
+/// The file name of the node's Ed25519 secret key inside the chain-specific
+/// network config directory, if neither `--node-key` nor `--node-key-file`
+/// is specified in combination with `--node-key-type=ed25519`.
+const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
@@ -101,7 +114,7 @@ fn generate_node_name() -> String {
 		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
 		let count = node_name.chars().count();
 
-		if count < MAX_NODE_NAME_LENGTH {
+		if count < NODE_NAME_MAX_LENGTH {
 			break node_name
 		}
 	};
@@ -133,14 +146,14 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 		)
 }
 
-fn create_input_err<T: Into<String>>(msg: T) -> error::Error {
+fn input_err<T: Into<String>>(msg: T) -> error::Error {
 	error::ErrorKind::Input(msg.into()).into()
 }
 
 /// Check whether a node name is considered as valid
 fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
-	if name.chars().count() >= MAX_NODE_NAME_LENGTH {
+	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long");
 	}
 
@@ -231,12 +244,58 @@ where
 	}
 }
 
-fn parse_node_key(key: Option<String>) -> error::Result<Option<Secret>> {
-	match key.map(|k| H256::from_str(&k)) {
-		Some(Ok(secret)) => Ok(Some(secret.into())),
-		Some(Err(err)) => Err(create_input_err(format!("Error parsing node key: {}", err))),
-		None => Ok(None),
+/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
+/// of an optional network config storage directory.
+fn node_key_config<P>(params: NodeKeyParams, net_config_dir: &Option<P>)
+	-> error::Result<NodeKeyConfig>
+where
+	P: AsRef<Path>
+{
+	match params.node_key_type {
+		NodeKeyType::Secp256k1 =>
+			params.node_key.as_ref().map(parse_secp256k1_secret).unwrap_or_else(||
+				Ok(params.node_key_file
+					.or_else(|| net_config_file(net_config_dir, NODE_KEY_SECP256K1_FILE))
+					.map(network::Secret::File)
+					.unwrap_or(network::Secret::New)))
+				.map(NodeKeyConfig::Secp256k1),
+
+		NodeKeyType::Ed25519 =>
+			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
+				Ok(params.node_key_file
+					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
+					.map(network::Secret::File)
+					.unwrap_or(network::Secret::New)))
+				.map(NodeKeyConfig::Ed25519)
 	}
+}
+
+fn net_config_file<P>(net_config_dir: &Option<P>, name: &str) -> Option<PathBuf>
+where
+	P: AsRef<Path>
+{
+	net_config_dir.as_ref().map(|d| d.as_ref().join(name))
+}
+
+/// Create an error caused by an invalid node key argument.
+fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
+	input_err(format!("Invalid node key: {}", e))
+}
+
+/// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
+fn parse_secp256k1_secret(hex: &String) -> error::Result<network::Secp256k1Secret> {
+	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes|
+		network::identity::secp256k1::SecretKey::from_bytes(bytes)
+			.map(network::Secret::Input)
+			.map_err(invalid_node_key))
+}
+
+/// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
+fn parse_ed25519_secret(hex: &String) -> error::Result<network::Ed25519Secret> {
+	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
+		network::identity::ed25519::SecretKey::from_bytes(bytes)
+			.map(network::Secret::Input)
+			.map_err(invalid_node_key))
 }
 
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
@@ -295,7 +354,7 @@ fn fill_network_configuration(
 	config.public_addresses = Vec::new();
 
 	config.client_version = client_id;
-	config.use_secret = parse_node_key(cli.node_key)?;
+	config.node_key = node_key_config(cli.node_key_params, &config.net_config_path)?;
 
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
@@ -324,7 +383,7 @@ where
 	match is_node_name_valid(&config.name) {
 		Ok(_) => (),
 		Err(msg) => bail!(
-			create_input_err(
+			input_err(
 				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
 					config.name,
 					msg
@@ -347,7 +406,7 @@ where
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
 		Some(s) => PruningMode::keep_blocks(
-			s.parse().map_err(|_| create_input_err("Invalid pruning mode specified"))?
+			s.parse().map_err(|_| input_err("Invalid pruning mode specified"))?
 		),
 	};
 
@@ -443,23 +502,19 @@ where
 // 9926-9949		Unassigned
 
 fn with_default_boot_node<F>(
-	mut spec: ChainSpec<FactoryGenesis<F>>,
-	cli: &BuildSpecCmd,
+	spec: &mut ChainSpec<FactoryGenesis<F>>,
+	cli: BuildSpecCmd,
 	version: &VersionInfo,
-) -> error::Result<ChainSpec<FactoryGenesis<F>>>
+) -> error::Result<()>
 where
 	F: ServiceFactory
 {
 	if spec.boot_nodes().is_empty() {
-		let network_path =
-			Some(network_path(&base_path(&cli.shared_params, version), spec.id()).to_string_lossy().into());
-		let network_key = parse_node_key(cli.node_key.clone())?;
-
-		let network_keys =
-			network::obtain_private_key(&network_key, &network_path)
-				.map_err(|err| format!("Error obtaining network key: {}", err))?;
-
-		let peer_id = network_keys.to_peer_id();
+		let base_path = base_path(&cli.shared_params, version);
+		let storage_path = network_path(&base_path, spec.id());
+		let node_key = node_key_config(cli.node_key_params, &Some(storage_path))?;
+		let keys = node_key.into_keypair()?;
+		let peer_id = keys.public().into_peer_id();
 		let addr = build_multiaddr![
 			Ip4([127, 0, 0, 1]),
 			Tcp(30333u16),
@@ -467,7 +522,7 @@ where
 		];
 		spec.add_boot_node(addr)
 	}
-	Ok(spec)
+	Ok(())
 }
 
 fn build_spec<F, S>(
@@ -480,9 +535,10 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	info!("Building chain spec");
-	let spec = load_spec(&cli.shared_params, spec_factory)?;
-	let spec = with_default_boot_node::<F>(spec, &cli, version)?;
-	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, cli.raw)?;
+	let raw_output = cli.raw;
+	let mut spec = load_spec(&cli.shared_params, spec_factory)?;
+	with_default_boot_node::<F>(&mut spec, cli, version)?;
+	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, raw_output)?;
 
 	print!("{}", json);
 
@@ -707,6 +763,8 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use tempdir::TempDir;
+	use network::identity::{secp256k1, ed25519};
 
 	#[test]
 	fn tests_node_name_good() {
@@ -721,5 +779,112 @@ mod tests {
 		assert!(is_node_name_valid("https://visit.me").is_err());
 		assert!(is_node_name_valid("www.visit.me").is_err());
 		assert!(is_node_name_valid("email@domain").is_err());
+	}
+
+	#[test]
+	fn test_node_key_config_input() {
+		fn secret_input(net_config_dir: Option<String>) -> error::Result<()> {
+			NodeKeyType::variants().into_iter().try_for_each(|t| {
+				let node_key_type = NodeKeyType::from_str(t).unwrap();
+				let sk = match node_key_type {
+					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().as_ref().to_vec(),
+					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
+				};
+				let params = NodeKeyParams {
+					node_key_type,
+					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
+					node_key_file: None
+				};
+				node_key_config(params, &net_config_dir).and_then(|c| match c {
+					NodeKeyConfig::Secp256k1(network::Secret::Input(ref ski))
+						if node_key_type == NodeKeyType::Secp256k1 &&
+							&sk[..] == ski.as_ref() => Ok(()),
+					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
+						if node_key_type == NodeKeyType::Ed25519 &&
+							&sk[..] == ski.as_ref() => Ok(()),
+					_ => Err(input_err("Unexpected node key config"))
+				})
+			})
+		}
+
+		assert!(secret_input(None).is_ok());
+		assert!(secret_input(Some("x".to_string())).is_ok());
+	}
+
+	#[test]
+	fn test_node_key_config_file() {
+		fn secret_file(net_config_dir: Option<String>) -> error::Result<()> {
+			NodeKeyType::variants().into_iter().try_for_each(|t| {
+				let node_key_type = NodeKeyType::from_str(t).unwrap();
+				let tmp = TempDir::new("alice")?;
+				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
+				let params = NodeKeyParams {
+					node_key_type,
+					node_key: None,
+					node_key_file: Some(file.clone())
+				};
+				node_key_config(params, &net_config_dir).and_then(|c| match c {
+					NodeKeyConfig::Secp256k1(network::Secret::File(ref f))
+						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
+					NodeKeyConfig::Ed25519(network::Secret::File(ref f))
+						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
+					_ => Err(input_err("Unexpected node key config"))
+				})
+			})
+		}
+
+		assert!(secret_file(None).is_ok());
+		assert!(secret_file(Some("x".to_string())).is_ok());
+	}
+
+	#[test]
+	fn test_node_key_config_default() {
+		fn with_def_params<F>(f: F) -> error::Result<()>
+		where
+			F: Fn(NodeKeyParams) -> error::Result<()>
+		{
+			NodeKeyType::variants().into_iter().try_for_each(|t| {
+				let node_key_type = NodeKeyType::from_str(t).unwrap();
+				f(NodeKeyParams {
+					node_key_type,
+					node_key: None,
+					node_key_file: None
+				})
+			})
+		}
+
+		fn no_config_dir() -> error::Result<()> {
+			with_def_params(|params| {
+				let typ = params.node_key_type;
+				node_key_config::<String>(params, &None)
+					.and_then(|c| match c {
+						NodeKeyConfig::Secp256k1(network::Secret::New)
+							if typ == NodeKeyType::Secp256k1 => Ok(()),
+						NodeKeyConfig::Ed25519(network::Secret::New)
+							if typ == NodeKeyType::Ed25519 => Ok(()),
+						_ => Err(input_err("Unexpected node key config"))
+					})
+			})
+		}
+
+		fn some_config_dir(net_config_dir: String) -> error::Result<()> {
+			with_def_params(|params| {
+				let dir = PathBuf::from(net_config_dir.clone());
+				let typ = params.node_key_type;
+				node_key_config(params, &Some(net_config_dir.clone()))
+					.and_then(move |c| match c {
+						NodeKeyConfig::Secp256k1(network::Secret::File(ref f))
+							if typ == NodeKeyType::Secp256k1 &&
+								f == &dir.join(NODE_KEY_SECP256K1_FILE) => Ok(()),
+						NodeKeyConfig::Ed25519(network::Secret::File(ref f))
+							if typ == NodeKeyType::Ed25519 &&
+								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
+						_ => Err(input_err("Unexpected node key config"))
+				})
+			})
+		}
+
+		assert!(no_config_dir().is_ok());
+		assert!(some_config_dir("x".to_string()).is_ok());
 	}
 }
