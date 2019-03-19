@@ -59,7 +59,7 @@ impl balances::Trait for Test {
 	type OnNewAccount = ();
 	type Event = ();
 	type TransactionPayment = balances::BurnAndMint<Test>;
-	type TransferFee = balances::BurnAndMint<Test>;
+	type TransferPayment = balances::BurnAndMint<Test>;
 	type DustRemoval = balances::BurnAndMint<Test>;
 }
 impl session::Trait for Test {

@@ -78,7 +78,7 @@ mod tests {
 		type OnNewAccount = ();
 		type Event = Event;
 		type TransactionPayment = balances::BurnAndMint<Test>;
-		type TransferFee = balances::BurnAndMint<Test>;
+		type TransferPayment = balances::BurnAndMint<Test>;
 		type DustRemoval = balances::BurnAndMint<Test>;
 	}
 	impl democracy::Trait for Test {

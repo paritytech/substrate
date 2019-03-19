@@ -65,10 +65,12 @@ pub trait ArithmeticType {
 	type Type: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
 }
 
-/// Simple payment making trait, operating on a single generic `AccountId` type.
+/// Simple trait designed for hooking into a transaction payment.
+///
+/// It operates over a single generic `AccountId` type.
 pub trait MakePayment<AccountId> {
-	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return true iff the payment was successful.
+	/// Make transaction payment from `who` for an extrinsic of encoded length
+	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
 	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 }
 
@@ -91,6 +93,10 @@ pub trait OnUnbalancedIncrease<Balance> {
 	fn on_unbalanced_increase(amount: Balance) -> Result<(), &'static str>;
 }
 
+impl<B> OnUnbalancedIncrease<B> for () {
+	fn on_unbalanced_increase(_amount: B) -> Result<(), &'static str> { Ok(()) }
+}
+
 /// Handler for when some currency account decreased in balance for some reason.
 ///
 /// Potential reasons are:
@@ -106,6 +112,16 @@ pub trait OnUnbalancedDecrease<Balance> {
 	/// May return an error if something "impossible" went wrong, but should be
 	/// infallible.
 	fn on_unbalanced_decrease(amount: Balance) -> Result<(), &'static str>;
+}
+
+impl<B> OnUnbalancedDecrease<B> for () {
+	fn on_unbalanced_decrease(_amount: B) -> Result<(), &'static str> { Ok(()) }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum ExistenceRequirement {
+	KeepAlive,
+	AllowDead,
 }
 
 /// Abstraction over a fungible assets system.
@@ -163,7 +179,7 @@ pub trait Currency<AccountId> {
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
-	/// free balance and decreasing the total issuance of the currency. This function cannot fail.
+	/// free balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
@@ -172,7 +188,7 @@ pub trait Currency<AccountId> {
 		value: Self::Balance
 	) -> Option<Self::Balance>;
 
-	/// Mints `value` to the free balance of `who`, increasing the total issuance of the currency.
+	/// Mints `value` to the free balance of `who`.
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
 	fn reward<S: OnUnbalancedIncrease<Self::Balance>>(
@@ -180,14 +196,21 @@ pub trait Currency<AccountId> {
 		value: Self::Balance
 	) -> result::Result<(), &'static str>;
 
-	/// Adds up to `value` to the free balance of `who`.
+	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is `KeepAlive`,
+	/// then no less than `ExistentialDeposit` must be left remaining.
 	///
-	/// If `who` doesn't exist, it is created
+	/// This checks any locks, vesting and liquidity requirements. If the removal is not possible, then it
+	/// returns `Err`.
+	fn withdraw<S: OnUnbalancedDecrease<Self::Balance>>(
+		who: &AccountId,
+		value: Self::Balance,
+		reason: WithdrawReason,
+		liveness: ExistenceRequirement,
+	) -> result::Result<(), &'static str>;
+
+	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created
 	///
 	/// Returns if the account was successfully updated or update has led to killing of the account.
-	///
-	/// NOTE: This does not affect total issuance: it is assumed that the resultant imbalance will be
-	/// handled appropriately by the caller.
 	fn increase_free_balance_creating<S: OnUnbalancedIncrease<Self::Balance>>(
 		who: &AccountId,
 		value: Self::Balance
@@ -206,8 +229,7 @@ pub trait Currency<AccountId> {
 	/// NOTE: This is different to `reserve`.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
-	/// Deducts up to `value` from reserved balance of `who`, decreasing the total amount
-	/// issued of the currency. This function cannot fail.
+	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
@@ -278,5 +300,7 @@ bitmask! {
 		Transfer = 0b00000010,
 		/// In order to reserve some funds for a later return or repatriation
 		Reserve = 0b00000100,
+		/// In order to pay some other (higher-level) fees.
+		Fee = 0b00001000,
 	}
 }

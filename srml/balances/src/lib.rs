@@ -30,7 +30,7 @@ use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalancedDecrease, OnUnbalancedIncrease,
-	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency
+	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency, ExistenceRequirement
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -59,7 +59,7 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// Handler for the unbalanced reduction when taking fees associated with balance
 	/// transfer (which may also include account creation).
-	type TransferFee: OnUnbalancedDecrease<Self::Balance>;
+	type TransferPayment: OnUnbalancedDecrease<Self::Balance>;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalancedDecrease<Self::Balance>;
@@ -339,7 +339,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		};
 
 		if transactor != dest {
-			T::TransferFee::on_unbalanced_decrease(fee)?;
+			T::TransferPayment::on_unbalanced_decrease(fee)?;
 			Self::set_free_balance(transactor, new_from_balance);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
@@ -487,6 +487,25 @@ where
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
 		<ReservedBalance<T, I>>::get(who)
+	}
+
+	fn withdraw<S: OnUnbalancedDecrease<Self::Balance>>(
+		who: &T::AccountId,
+		value: Self::Balance,
+		reason: WithdrawReason,
+		liveness: ExistenceRequirement,
+	) -> result::Result<(), &'static str> {
+		if let Some(new_balance) = Self::free_balance(who).checked_sub(&value) {
+			if liveness == ExistenceRequirement::KeepAlive && new_balance < Self::existential_deposit() {
+				return Err("payment would kill account")
+			}
+			Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
+			S::on_unbalanced_decrease(value)?;
+			Self::set_free_balance(who, new_balance);
+			Ok(())
+		} else {
+			Err("too few free funds in account")
+		}
 	}
 
 	fn slash<S: OnUnbalancedDecrease<Self::Balance>>(

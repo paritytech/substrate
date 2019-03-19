@@ -18,7 +18,7 @@ use crate::{GasSpent, Module, Trait};
 use balances;
 use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
-use srml_support::{StorageValue, traits::OnUnbalancedDecrease};
+use srml_support::{StorageValue, traits::{OnUnbalancedDecrease, ExistenceRequirement, WithdrawReason, Currency}};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -213,18 +213,14 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let b = <balances::Module<T>>::free_balance(transactor);
 	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;
 
-	let new_balance = b.checked_sub(&cost);
-	if new_balance < Some(<balances::Module<T>>::existential_deposit()) {
-		return Err("not enough funds for transaction fee");
-	}
-
 	// We don't reduce the total amount yet - instead we wait until the refund.
-	<balances::Module<T>>::set_free_balance(transactor, b - cost);
+	// So we pass `()` so that the imbalance is left.
+	<balances::Module<T>>::withdraw::<()>(transactor, cost, WithdrawReason::Fee, ExistenceRequirement::KeepAlive)?;
+
 	Ok(GasMeter {
 		limit: gas_limit,
 		gas_left: gas_limit,

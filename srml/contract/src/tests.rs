@@ -79,7 +79,7 @@ impl balances::Trait for Test {
 	type Event = MetaEvent;
 	type TransactionPayment = balances::BurnAndMint<Test>;
 	type DustRemoval = balances::BurnAndMint<Test>;
-	type TransferFee = balances::BurnAndMint<Test>;
+	type TransferPayment = balances::BurnAndMint<Test>;
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;

@@ -172,7 +172,7 @@ impl balances::Trait for Runtime {
 
 	type TransactionPayment = balances::BurnAndMint<Runtime>;
 	type DustRemoval = balances::BurnAndMint<Runtime>;
-	type TransferFee = balances::BurnAndMint<Runtime>;
+	type TransferPayment = balances::BurnAndMint<Runtime>;
 }
 
 impl sudo::Trait for Runtime {
