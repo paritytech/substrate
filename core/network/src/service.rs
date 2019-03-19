@@ -116,6 +116,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		));
 	}
 
+	fn finality_proof_imported(&self, who: NodeIndex, hash: &B::Hash, number: NumberFor<B>, success: bool) {
+		let _ = self.protocol_sender.send(ProtocolMsg::FinalityProofImportResult(hash.clone(), number, success));
+		if !success {
+			let reason = Severity::Bad(format!("Invalid finality proof provided for #{}", hash).to_string());
+			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
+		}
+	}
+
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {
 		trace!(target:"sync", "Useless peer {}, {}", who, reason);
 		self.network_sender.send(NetworkMsg::ReportPeer(who, Severity::Useless(reason.to_string())));
