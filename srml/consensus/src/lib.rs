@@ -17,7 +17,7 @@
 //! ## Overview
 //! 
 //! The consensus module manages the authority set for the native code. It provides support for reporting offline behavior among validators and logging changes in the validator authority set.
-//! 
+//!
 //! ## Interface
 //! 
 //! ### Dispatchable
@@ -90,9 +90,9 @@
 //! 
 //! ## Related Modules
 //! 
-//! - `aura`: this module does not relate directly to `consensus`, but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method
-//! - `grandpa`: this module uses `consensus` to track and manage changes in the validator set in the context of the GRANDPA consensus algorithm
-//! - `staking`: this module uses `consensus` to monitor offline reporting amongst validators
+//! - [`staking`](https://crates.parity.io/srml_staking/index.html): this module uses `consensus` to monitor offline reporting amongst validators
+//! - [`aura`](https://crates.parity.io/srml_aura/index.html): this module does not relate directly to `consensus`, but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method
+//! - [`grandpa`](https://crates.parity.io/srml_grandpa/index.html): although GRANDPA does its own voter-set managing, it has a mode where it can track `consensus`, if desired
 //! 
 //! ## References
 //! 
