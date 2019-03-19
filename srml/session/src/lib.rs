@@ -151,7 +151,7 @@ impl<T: Trait> Module<T> {
 	pub fn check_rotate_session(block_number: T::BlockNumber) {
 		// do this last, after the staking system has had chance to switch out the authorities for the
 		// new set.
-		// check block number and call next_session if necessary.
+		// check block number and call rotate_session if necessary.
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
 		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
 			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));

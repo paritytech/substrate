@@ -14,7 +14,89 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus module for runtime; manages the authority set ready for the native code.
+//! ## Overview
+//! 
+//! The consensus module manages the authority set for the native code. It provides support for reporting offline behavior among validators and logging changes in the validator authority set.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable
+//! 
+//! The `Call` enum is documented [here](https://crates.parity.io/srml_consensus/enum.Call.html).
+//! 
+//! - `report_misbehavior` - Report some misbehaviour. The origin of this call must be signed.
+//! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of this call must be an inherent.
+//! - `remark` - Make some on-chain remark. The origin of this call must be signed.
+//! - `set_heap_pages` - Set the number of pages in the WebAssembly environment's heap.
+//! - `set_code` - Set the new code.
+//! - `set_storage(Vec<KeyValue>)` - Set some items of storage.
+//! 
+//! ### Public
+//! 
+//! See the [module](https://crates.parity.io/srml_consensus/struct.Module.html) for details on publicly available functions.
+//! 
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! 
+//! ## Usage
+//! 
+//! ### Prerequisites
+//! 
+//! To use a functionality from the `consensus` module, call the specific Trait or function that you are invoking from the module with the Rust syntax for doing so, ie
+//! ```rust,ignore
+//! impl<T> for consensus::SomeTrait for Module<T> {
+//! 	/// required functions and types for trait included here
+//! 	/// more comprehensive example included below
+//! }
+//! ```
+//! 
+//! Alternatively, to just set the authorities (presumably for testing purposes with a changing validator set)
+//! ```rust,ignore
+//! consensus::set_authorities(&[<authorities>]) // example included below
+//! ```
+//! 
+//! ### Simple Code Snippet
+//! 
+//! Set authorities
+//! ```rust,ignore
+//! consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)])
+//! ```
+//! 
+//! Log changes in the authorities set
+//! ```rust,ignore
+//! consensus::on_finalise(5); // finalize UintAuthorityId(5)
+//! ```
+//! 
+//! ### Example from SRML
+//! 
+//! In `staking`, the `consensus::OnOfflineReport` is implemented to monitor offline reporting amongst validators:
+//! ```rust,ignore
+//! impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
+//! 	fn handle_report(reported_indices: Vec<u32>) {
+//! 		for validator_index in reported_indices {
+//! 			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+//! 			Self::on_offline_validator(v, 1);
+//! 		}
+//! 	}
+//! }
+//! ```
+//! 
+//! In `grandpa`, we use `consensus` to get the set of `next_authorities` before changing this set according to the consensus algorithm (which does not rotate sessions in the *normal* way):
+//! ```rust,ignore
+//! let next_authorities = <consensus::Module<T>>::authorities()
+//! 			.into_iter()
+//! 			.map(|key| (key, 1)) // evenly-weighted.
+//! 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
+//! ```
+//! 
+//! ## Related Modules
+//! 
+//! - `aura`: this module does not relate directly to `consensus`, but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method
+//! - `grandpa`: this module uses `consensus` to track and manage changes in the validator set in the context of the GRANDPA consensus algorithm
+//! - `staking`: this module uses `consensus` to monitor offline reporting amongst validators
+//! 
+//! ## References
+//! 
+//! If you're interested in hacking on this module, it is useful to understand the interaction with `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -216,6 +298,7 @@ decl_module! {
 			}
 		}
 
+		/// Log changes in the set of authorities
 		fn on_finalise() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
@@ -235,7 +318,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of authorities' session keys.
 	///
-	/// Called by `next_session` only.
+	/// Called by `rotate_session` only.
 	pub fn set_authorities(authorities: &[T::SessionKey]) {
 		let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
 		if current_authorities != authorities {
@@ -245,6 +328,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set a single authority by index.
+	///
+	/// Called by `rotate_session` only.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		let current_authority = AuthorityStorageVec::<T::SessionKey>::item(index);
 		if current_authority != *key {
@@ -270,11 +355,16 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// Implementing `ProvideInherent` enables this module to create and check inherents
 impl<T: Trait> ProvideInherent for Module<T> {
+	/// The call type of the module
 	type Call = Call<T>;
+	/// The error returned by `check_inherent`
 	type Error = MakeFatalError<RuntimeString>;
+	/// The inherent identifier used by this inherent
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
+	/// Creates an inherent from the `InherentData`
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		if let Ok(Some(data)) =
 			data.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent>(
@@ -291,6 +381,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		}
 	}
 
+	/// Verify the validity of the given inherent
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> Result<(), Self::Error> {
 		let offline = match call {
 			Call::note_offline(ref offline) => offline,
