@@ -589,6 +589,7 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 			CustomProtoHandlerOut::CustomProtocolOpen { version } => {
+				debug_assert!(!self.is_open(&source));
 				self.opened_peers.insert(source.clone());
 
 				let endpoint = self.connected_peers.get(&source)
@@ -611,6 +612,7 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 			CustomProtoHandlerOut::Clogged { messages } => {
+				debug_assert!(self.is_open(&source));
 				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
 					pretty large", source);
 				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtoOut::Clogged {
