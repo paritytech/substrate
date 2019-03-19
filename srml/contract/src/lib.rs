@@ -394,8 +394,6 @@ decl_storage! {
 }
 
 /// The storage items associated with a prefix space in a tree
-/// TODO can we remove it, seems usefull for inner implementation
-/// just not in the right place
 pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
 impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";
