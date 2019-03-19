@@ -40,21 +40,29 @@
 //! ## Interface
 //! 
 //! ### Dispatchable functions ([`Call`])
-//! 
-//! * `update_schedule` - Updates the cost schedule to meter contract gas costs. Only dispatchable via governance mechanism.
+//!  
 //! * `put_code` - Stores code in the contract account storage.
+//! 
 //! * `call` - Makes a call to an account, optionally transferring some balance.
+//! 
 //! * `create` - Creates a new contract, optionally transferring some balance.
 //!
 //! ### Public functions ([`Module`])
 //! 
 //! * `contract_fee` - Gets the fee required to create a contract
+//! 
 //! * `call_base_fee` - Gets the fee required for a call into a contract.
+//! 
 //! * `create_base_fee` - Gets the fee required for a create of a contract. 
+//! 
 //! * `gas_price` - Gets the price of one unit of gas.
+//! 
 //! * `max_depth` - Gets the max nesting level of a call/create stack.
+//! 
 //! * `block_gas_limit` - Gets the max gas amount that could be expended per block.
+//! 
 //! * `gas_spent` - Gets the gas spent so far in this block
+//! 
 //! * `current_schedule` - Gets the current cost schedule for contracts.
 //! 
 //! ## Usage
