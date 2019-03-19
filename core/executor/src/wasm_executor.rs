@@ -23,7 +23,7 @@ use secp256k1;
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 };
-use wasmi::RuntimeValue::{I32, I64};
+use wasmi::RuntimeValue::{I32, I64, self};
 use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
@@ -393,10 +393,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| UserError("Invalid attempt to get parent_hash in ext_storage_changes_root"))?;
 		parent_hash.as_mut().copy_from_slice(&raw_parent_hash[..]);
 		let r = this.ext.storage_changes_root(parent_hash, parent_number);
-		if let Some(ref r) = r {
+		if let Some(r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
+			Ok(1)
+		} else {
+			Ok(0)
 		}
-		Ok(if r.is_some() { 1u32 } else { 0u32 })
 	},
 	ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
@@ -637,17 +639,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 ///
 /// Executes the provided code in a sandboxed wasm runtime.
 #[derive(Debug, Clone)]
-pub struct WasmExecutor {
-}
+pub struct WasmExecutor;
 
 impl WasmExecutor {
 
 	/// Create a new instance.
 	pub fn new() -> Self {
-		WasmExecutor{}
+		WasmExecutor
 	}
 
 	/// Call a given method in the given code.
+	///
+	/// Signature of this method needs to be `(I32, I32) -> I64`.
+	///
 	/// This should be used for tests only.
 	pub fn call<E: Externalities<Blake2Hasher>>(
 		&self,
@@ -656,10 +660,32 @@ impl WasmExecutor {
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-		) -> Result<Vec<u8>> {
+	) -> Result<Vec<u8>> {
 		let module = ::wasmi::Module::from_buffer(code)?;
 		let module = self.prepare_module(ext, heap_pages, &module)?;
 		self.call_in_wasm_module(ext, &module, method, data)
+	}
+
+	/// Call a given method with a custom signature in the given code.
+	///
+	/// This should be used for tests only.
+	pub fn call_with_custom_signature<
+		E: Externalities<Blake2Hasher>,
+		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+		R,
+	>(
+		&self,
+		ext: &mut E,
+		heap_pages: usize,
+		code: &[u8],
+		method: &str,
+		create_parameters: F,
+		filter_result: FR,
+	) -> Result<R> {
+		let module = wasmi::Module::from_buffer(code)?;
+		let module = self.prepare_module(ext, heap_pages, &module)?;
+		self.call_in_wasm_module_with_custom_signature(ext, &module, method, create_parameters, filter_result)
 	}
 
 	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
@@ -679,6 +705,40 @@ impl WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
+		self.call_in_wasm_module_with_custom_signature(
+			ext,
+			module_instance,
+			method,
+			|alloc| {
+				let offset = alloc(data)?;
+				Ok(vec![I32(offset as i32), I32(data.len() as i32)])
+			},
+			|res, memory| {
+				if let Some(I64(r)) = res {
+					let offset = r as u32;
+					let length = (r as u64 >> 32) as usize;
+					memory.get(offset, length).map_err(|_| ErrorKind::Runtime.into()).map(Some)
+				} else {
+					Ok(None)
+				}
+			}
+		)
+	}
+
+	/// Call a given method in the given wasm-module runtime.
+	fn call_in_wasm_module_with_custom_signature<
+		E: Externalities<Blake2Hasher>,
+		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+		R,
+	>(
+		&self,
+		ext: &mut E,
+		module_instance: &ModuleRef,
+		method: &str,
+		create_parameters: F,
+		filter_result: FR,
+	) -> Result<R> {
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(module_instance)?;
@@ -689,26 +749,22 @@ impl WasmExecutor {
 		let low = memory.lowest_used();
 		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
-		let size = data.len() as u32;
-		let offset = fec.heap.allocate(size).map_err(|_| ErrorKind::Runtime)?;
-		memory.set(offset, &data)?;
+		let parameters = create_parameters(&mut |data: &[u8]| {
+			let offset = fec.heap.allocate(data.len() as u32).map_err(|_| ErrorKind::Runtime)?;
+			memory.set(offset, &data)?;
+			Ok(offset)
+		})?;
 
 		let result = module_instance.invoke_export(
 			method,
-			&[
-				I32(offset as i32),
-				I32(size as i32)
-			],
+			&parameters,
 			&mut fec
 		);
 		let result = match result {
-			Ok(Some(I64(r))) => {
-				let offset = r as u32;
-				let length = (r >> 32) as u32 as usize;
-				memory.get(offset, length)
-					.map_err(|_| ErrorKind::Runtime.into())
+			Ok(val) => match filter_result(val, &memory)? {
+				Some(val) => Ok(val),
+				None => Err(ErrorKind::InvalidReturn.into()),
 			},
-			Ok(_) => Err(ErrorKind::InvalidReturn.into()),
 			Err(e) => {
 				trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);
 				Err(e.into())
@@ -738,7 +794,7 @@ impl WasmExecutor {
 			module,
 			&ImportsBuilder::new()
 			.with_resolver("env", FunctionExecutor::<E>::resolver())
-			)?;
+		)?;
 
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
@@ -759,7 +815,7 @@ impl WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	
+
 	use parity_codec::Encode;
 
 	use state_machine::TestExternalities;

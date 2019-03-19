@@ -38,7 +38,7 @@ impl<'a> Input for IncrementalInput<'a> {
 	}
 }
 
- /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
+/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
 	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {

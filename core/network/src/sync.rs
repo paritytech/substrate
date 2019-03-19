@@ -25,7 +25,7 @@ use consensus::import_queue::{ImportQueue, IncomingBlock, SharedFinalityProofReq
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
 use crate::extra_requests::ExtraRequestsAggregator;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, CheckedSub};
 use runtime_primitives::generic::BlockId;
 use crate::message::{self, generic::Message as GenericMessage};
 use crate::config::Roles;
@@ -55,8 +55,18 @@ pub(crate) struct PeerSync<B: BlockT> {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum AncestorSearchState<B: BlockT> {
+	/// Use exponential backoff to find an ancestor, then switch to binary search.
+	/// We keep track of the exponent.
+	ExponentialBackoff(NumberFor<B>),
+	/// Using binary search to find the best ancestor.
+	/// We keep track of left and right bounds.
+	BinarySearch(NumberFor<B>, NumberFor<B>),
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum PeerSyncState<B: BlockT> {
-	AncestorSearch(NumberFor<B>),
+	AncestorSearch(NumberFor<B>, AncestorSearchState<B>),
 	Available,
 	DownloadingNew(NumberFor<B>),
 	DownloadingStale(B::Hash),
@@ -180,7 +190,8 @@ impl<B: BlockT> ChainSync<B> {
 		let previous_state = self.state(&previous_best_seen);
 
 		if let Some(info) = protocol.peer_info(who) {
-			match (block_status(&*protocol.client(), &self.queue_blocks, info.best_hash), info.best_number) {
+			let status = block_status(&*protocol.client(), &self.queue_blocks, info.best_hash);
+			match (status, info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
 					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
@@ -214,7 +225,7 @@ impl<B: BlockT> ChainSync<B> {
 							common_number: As::sa(0),
 							best_hash: info.best_hash,
 							best_number: info.best_number,
-							state: PeerSyncState::AncestorSearch(common_best),
+							state: PeerSyncState::AncestorSearch(common_best, AncestorSearchState::ExponentialBackoff(As::sa(1))),
 							recently_announced: Default::default(),
 						});
 						Self::request_ancestry(protocol, who, common_best)
@@ -261,6 +272,44 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	fn handle_ancestor_search_state(
+		state: AncestorSearchState<B>,
+		curr_block_num: NumberFor<B>,
+		block_hash_match: bool,
+	) -> Option<(AncestorSearchState<B>, NumberFor<B>)> {
+		match state {
+			AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
+				if block_hash_match && next_distance_to_tip == As::sa(1) {
+					// We found the ancestor in the first step so there is no need to execute binary search.
+					return None;
+				}
+				if block_hash_match {
+					let left = curr_block_num;
+					let right = left + next_distance_to_tip / As::sa(2);
+					let middle = left + (right - left) / As::sa(2);
+					Some((AncestorSearchState::BinarySearch(left, right), middle))
+				} else {
+					let next_block_num = curr_block_num.checked_sub(&next_distance_to_tip).unwrap_or(As::sa(0));
+					let next_distance_to_tip = next_distance_to_tip * As::sa(2);
+					Some((AncestorSearchState::ExponentialBackoff(next_distance_to_tip), next_block_num))
+				}
+			},
+			AncestorSearchState::BinarySearch(mut left, mut right) => {
+				if left >= curr_block_num {
+					return None;
+				}
+				if block_hash_match {
+					left = curr_block_num;
+				} else {
+					right = curr_block_num;
+				}
+				assert!(right >= left);
+				let middle = left + (right - left) / As::sa(2);
+				Some((AncestorSearchState::BinarySearch(left, right), middle))
+			},
+		}
+	}
+
 	/// Handle new block data.
 	pub(crate) fn on_block_data(
 		&mut self,
@@ -275,7 +324,8 @@ impl<B: BlockT> ChainSync<B> {
 				trace!(target: "sync", "Reversing incoming block list");
 				blocks.reverse();
 			}
-			match peer.state {
+			let peer_state = peer.state.clone();
+			match peer_state {
 				PeerSyncState::DownloadingNew(start_block) => {
 					self.blocks.clear_peer_download(who);
 					peer.state = PeerSyncState::Available;
@@ -305,43 +355,38 @@ impl<B: BlockT> ChainSync<B> {
 						}
 					}).collect()
 				},
-				PeerSyncState::AncestorSearch(n) => {
-					match blocks.get(0) {
-						Some(ref block) => {
-							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", n, block.hash, who);
-							match protocol.client().block_hash(n) {
-								Ok(Some(block_hash)) if block_hash == block.hash => {
-									if peer.common_number < n {
-										peer.common_number = n;
-									}
-									peer.state = PeerSyncState::Available;
-									trace!(target:"sync", "Found common ancestor for peer {}: {} ({})", who, block.hash, n);
-									vec![]
-								},
-								Ok(our_best) if n > As::sa(0) => {
-									trace!(target:"sync", "Ancestry block mismatch for peer {}: theirs: {} ({}), ours: {:?}", who, block.hash, n, our_best);
-									let n = n - As::sa(1);
-									peer.state = PeerSyncState::AncestorSearch(n);
-									Self::request_ancestry(protocol, who, n);
-									return;
-								},
-								Ok(_) => { // genesis mismatch
-									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
-									return;
-								},
-								Err(e) => {
-									let reason = format!("Error answering legitimate blockchain query: {:?}", e);
-									protocol.report_peer(who, Severity::Useless(reason));
-									return;
-								}
-							}
+				PeerSyncState::AncestorSearch(num, state) => {
+					let block_hash_match = match (blocks.get(0), protocol.client().block_hash(num)) {
+						(Some(ref block), Ok(maybe_our_block_hash)) => {
+							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", num, block.hash, who);
+							maybe_our_block_hash.map_or(false, |x| x == block.hash)
 						},
-						None => {
+						(None, _) => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
 							return;
-						}
+						},
+						(_, Err(e)) => {
+							let reason = format!("Error answering legitimate blockchain query: {:?}", e);
+							protocol.report_peer(who, Severity::Useless(reason));
+							return;
+						},
+					};
+					if block_hash_match && peer.common_number < num {
+						peer.common_number = num;
+					}
+					if !block_hash_match && num == As::sa(0) {
+						trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
+						protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
+						return;
+					}
+					if let Some((next_state, next_block_num)) = Self::handle_ancestor_search_state(state, num, block_hash_match) {
+						peer.state = PeerSyncState::AncestorSearch(next_block_num, next_state);
+						Self::request_ancestry(protocol, who, next_block_num);
+						return;
+					} else {
+						peer.state = PeerSyncState::Available;
+						vec![]
 					}
 				},
 				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) | PeerSyncState::DownloadingFinalityProof(..) => Vec::new(),
@@ -560,7 +605,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// Update common blocks
 		for (n, peer) in self.peers.iter_mut() {
-			if let PeerSyncState::AncestorSearch(_) = peer.state {
+			if let PeerSyncState::AncestorSearch(_, _) = peer.state {
 				// Abort search.
 				peer.state = PeerSyncState::Available;
 			}
@@ -597,7 +642,7 @@ impl<B: BlockT> ChainSync<B> {
 				peer.best_number = number;
 				peer.best_hash = hash;
 			}
-			if let PeerSyncState::AncestorSearch(_) = peer.state {
+			if let PeerSyncState::AncestorSearch(_, _) = peer.state {
 				return;
 			}
 			if header.parent_hash() == &self.best_queued_hash || known_parent {

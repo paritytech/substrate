@@ -164,7 +164,7 @@ pub const MEM_UNLIMITED: u32 = -1i32 as u32;
 /// For FFI purposes.
 pub const ERR_OK: u32 = 0;
 
-/// Validation or instantiation error occured when creating new
+/// Validation or instantiation error occurred when creating new
 /// sandboxed module instance.
 ///
 /// For FFI purposes.

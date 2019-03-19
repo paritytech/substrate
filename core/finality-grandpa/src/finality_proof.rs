@@ -46,6 +46,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{ed25519, H256, Blake2Hasher};
 use ed25519::Public as AuthorityId;
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::justification::GrandpaJustification;
 
@@ -462,10 +463,16 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 			proof_fragment)?;
 	}
 
-	Ok(authorities.extract_effects().expect("at least one loop iteration is guaranteed because proof is not empty;\
-		check_finality_proof_fragment is called on every iteration;\
-		check_finality_proof_fragment always returns FinalityEffects;\
-		qed"))
+	let effects = authorities.extract_effects().expect("at least one loop iteration is guaranteed
+			because proof is not empty;\
+			check_finality_proof_fragment is called on every iteration;\
+			check_finality_proof_fragment always returns FinalityEffects;\
+			qed");
+
+	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
+		"set_id" => ?effects.new_set_id, "finalized_header_hash" => ?effects.block);
+
+	Ok(effects)
 }
 
 /// Check finality proof for the single block.
@@ -488,7 +495,6 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 
 	// and now verify new authorities proof (if provided)
 	if let Some(new_authorities_proof) = proof_fragment.authorities_proof {
-
 		// it is safe to query header here, because its non-finality proves that it can't be pruned
 		let header = blockchain.expect_header(BlockId::Hash(proof_fragment.block))?;
 		let parent_hash = *header.parent_hash();
