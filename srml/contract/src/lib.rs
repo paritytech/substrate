@@ -22,22 +22,18 @@
 //! 
 //! ## Overview
 //! 
-//! The contract module allows the deployment and execution of smart-contracts expressed in WebAssembly.
-//! 
-//! This module provides an ability to create smart-contract accounts and send them messages.
-//! A smart-contract is an account with associated code and storage. When such an account receives a message,
-//! the code associated with that account gets executed.
-//!
-//! The smart-contract code is allowed to alter the storage entries of the associated account,
-//! create new smart-contracts, or send messages to existing smart-contracts.
+//! This module provides the ability to create smart-contract accounts and send them messages.
+//! A smart-contract is represented by an account with associated code and storage. 
+//! When an account receives a message, the associated code gets executed.
+//! This code is allowed to alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
 //!
 //! Fees must be paid (in gas) for any actions invoked by the smart-contracts.
-//! Gas is bought upfront up to the, specified in transaction, limit. 
-//! Any unused gas is refunded after the transaction, regardless of the execution outcome. 
-//! If all gas is used up, then changes made for the specific call or create are reverted (including balance transfers).
+//! Gas is charged upfront and is limited to what the sender specified in the transaction. 
+//! Unused gas is refunded after the transaction, regardless of the execution outcome. 
+//! However, if the transaction runs out of gas before call completion, then all changes or creates are reverted (including balance transfers).
 //! 
 //! When `staking` module determines that account is dead (e.g. account's balance fell below
-//! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
+//! existential deposit) then it reaps the account. That will lead to deletion of the associated
 //! code and storage of the account.
 //! 
 //! **NOTE:** Failures are typically not cascading. For example, if contract A calls B and B errors
@@ -47,7 +43,7 @@
 //! 
 //! ### Dispatchable functions ([`Call`])
 //! 
-//! * `update_schedule` - Updates the cost schedule to meter contract gas costs.
+//! * `update_schedule` - Updates the cost schedule to meter contract gas costs. Only dispatchable via governance mechanism.
 //! * `put-code` - Stores code in the contract account storage.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //! * `create` - Creates a new contract, optionally transferring some balance.
@@ -81,11 +77,12 @@
 //! 
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
+//! 		pub fn deploy_my_contract(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			TODO
+//! 			let _... = <contract::Module<T>>::put_code(origin, GAS_LIMIT, WASM_CODE);
+//! 			let _... = <contract::Module<T>>::create(origin, ENDOWMENT, GAS_LIMIT, CODE_HASH, DATA);
 //! 			Ok(())
-//! 		}
+//! 		}	
 //! 	}
 //! }
 //! ```
@@ -312,7 +309,7 @@ decl_module! {
 			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistant storage.
+				// Commit all changes that made it thus far into the persistent storage.
 				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.

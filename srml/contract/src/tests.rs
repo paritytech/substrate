@@ -219,7 +219,7 @@ fn account_removal_removes_storage() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
-			// Setup two accounts with free balance above than exsistential threshold.
+			// Setup two accounts with free balance above existential threshold.
 			{
 				Balances::set_free_balance(&1, 110);
 				Balances::increase_total_stake_by(110);
@@ -233,7 +233,7 @@ fn account_removal_removes_storage() {
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
-			// the balance of account 1 is will be below than exsistential threshold.
+			// the balance of account 1 will be below the existential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
 			assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
