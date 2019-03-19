@@ -221,7 +221,7 @@ fn decl_store_extra_genesis(
 					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key_type, #storage_type)>, )
 				},
 				DeclStorageTypeInfosKind::DoubleMap {key1_type, key2_type, .. } => {
-					quote!( pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
+					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
 				},
 			});
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
