@@ -17,29 +17,38 @@
 //! Networking layer of Substrate.
 
 mod behaviour;
+mod config;
 mod custom_proto;
-mod secret;
 mod service_task;
-mod traits;
 mod transport;
 
+pub use crate::behaviour::Severity;
+pub use crate::config::*;
 pub use crate::custom_proto::{CustomMessage, CustomMessageId, RegisteredProtocol};
-pub use crate::secret::obtain_private_key;
+pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 pub use crate::service_task::{start_service, Service, ServiceEvent};
-pub use crate::traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};
-pub use crate::traits::{ProtocolId, Secret, Severity};
-pub use libp2p::{Multiaddr, multiaddr::Error as MultiaddrError, multiaddr::Protocol, build_multiaddr, PeerId, core::PublicKey};
+pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
+pub use libp2p::{identity, PeerId, core::PublicKey};
 
 use libp2p::core::nodes::ConnectedPoint;
 use serde_derive::Serialize;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
+
+/// Protocol / handler id
+pub type ProtocolId = [u8; 3];
+
+/// Node public key
+pub type NodeId = PeerId;
+
+/// Local (temporary) peer session ID.
+pub type NodeIndex = usize;
 
 /// Parses a string address and returns the component, if valid.
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let mut addr: Multiaddr = addr_str.parse()?;
 
 	let who = match addr.pop() {
-		Some(Protocol::P2p(key)) => PeerId::from_multihash(key)
+		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
 			.map_err(|_| ParseErr::InvalidPeerId)?,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
@@ -51,7 +60,7 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 #[derive(Debug)]
 pub enum ParseErr {
 	/// Error while parsing the multiaddress.
-	MultiaddrParse(MultiaddrError),
+	MultiaddrParse(multiaddr::Error),
 	/// Multihash of the peer ID is invalid.
 	InvalidPeerId,
 	/// The peer ID is missing from the address.
@@ -78,8 +87,8 @@ impl error::Error for ParseErr {
     }
 }
 
-impl From<MultiaddrError> for ParseErr {
-	fn from(err: MultiaddrError) -> ParseErr {
+impl From<multiaddr::Error> for ParseErr {
+	fn from(err: multiaddr::Error) -> ParseErr {
 		ParseErr::MultiaddrParse(err)
 	}
 }

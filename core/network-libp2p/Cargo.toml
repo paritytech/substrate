@@ -13,7 +13,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { version = "0.4.0", default-features = false, features = ["secio-secp256k1", "libp2p-websocket"] }
+libp2p = { version = "0.5.0", default-features = false, features = ["secio-secp256k1", "libp2p-websocket"] }
 parking_lot = "0.7.1"
 lazy_static = "1.2"
 log = "0.4"
@@ -27,3 +27,7 @@ tokio-io = "0.1"
 tokio-timer = "0.2"
 unsigned-varint = { version = "0.2.1", features = ["codec"] }
 void = "1.0"
+
+[dev-dependencies]
+tempdir = "0.3"
+

@@ -33,3 +33,6 @@ substrate-telemetry = { path = "../../core/telemetry" }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 names = "0.11.0"
 structopt = "0.2"
+
+[dev-dependencies]
+tempdir = "0.3"
