@@ -83,8 +83,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("PREFIX_FOR_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
 		};
@@ -165,8 +165,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("PREFIX_FOR_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
 		};
@@ -240,16 +240,16 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("PREFIX_FOR_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
 		};
 
 		// make sure to use different prefix for head and elements.
 		let final_head_key = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_head_key_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("HEAD_KEY_FOR_{}", name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			let final_head_key = format!("head of {}", prefix);
 			quote!{ #final_head_key.as_bytes() }
