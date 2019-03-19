@@ -594,11 +594,11 @@ impl<T: Trait> Module<T> {
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for i in &exposure.others {
-				imbalance = imbalance.maybe_merge(Self::make_payout(&i.who, safe_mul_rational(i.value)));
+				imbalance.maybe_subsume(Self::make_payout(&i.who, safe_mul_rational(i.value)));
 			}
 			safe_mul_rational(exposure.own)
 		};
-		imbalance = imbalance.maybe_merge(Self::make_payout(who, validator_cut + off_the_table));
+		imbalance.maybe_subsume(Self::make_payout(who, validator_cut + off_the_table));
 		T::Reward::on_unbalanced(imbalance);
 	}
 
