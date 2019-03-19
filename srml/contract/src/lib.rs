@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,41 +14,88 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! Smart-contract module for runtime; Allows deployment and execution of smart-contracts
-//! expressed in WebAssembly.
-//!
+//! # Contract Module
+//! 
+//! The contract module provides functionality to deploy and execute smart-contracts expressed in WebAssembly.
+//! To use it in your module, you need to implement the contract [`Trait`].
+//! The supported dispatchable functions are documented as part of the [`Call`] enum.
+//! 
+//! ## Overview
+//! 
+//! The contract module allows the deployment and execution of smart-contracts expressed in WebAssembly.
+//! 
 //! This module provides an ability to create smart-contract accounts and send them messages.
 //! A smart-contract is an account with associated code and storage. When such an account receives a message,
 //! the code associated with that account gets executed.
 //!
-//! The code is allowed to alter the storage entries of the associated account,
-//! create smart-contracts or send messages to existing smart-contracts.
+//! The smart-contract code is allowed to alter the storage entries of the associated account,
+//! create new smart-contracts, or send messages to existing smart-contracts.
 //!
-//! For any actions invoked by the smart-contracts fee must be paid. The fee is paid in gas.
-//! Gas is bought upfront up to the, specified in transaction, limit. Any unused gas is refunded
-//! after the transaction (regardless of the execution outcome). If all gas is used,
-//! then changes made for the specific call or create are reverted (including balance transfers).
-//!
-//! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
-//! somehow, then A can decide if it should proceed or error.
-//!
-//! # Interaction with the system
-//!
-//! ## Finalization
-//!
-//! This module requires performing some finalization steps at the end of the block. If not performed
-//! the module will have incorrect behavior.
-//!
-//! Thus [`Module::on_finalise`] must be called at the end of the block. The order in relation to
-//! the other module doesn't matter.
-//!
-//! ## Account killing
-//!
+//! Fees must be paid (in gas) for any actions invoked by the smart-contracts.
+//! Gas is bought upfront up to the, specified in transaction, limit. 
+//! Any unused gas is refunded after the transaction, regardless of the execution outcome. 
+//! If all gas is used up, then changes made for the specific call or create are reverted (including balance transfers).
+//! 
 //! When `staking` module determines that account is dead (e.g. account's balance fell below
 //! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
 //! code and storage of the account.
+//! 
+//! **NOTE:** Failures are typically not cascading. For example, if contract A calls B and B errors
+//! somehow, A can still decide if it should proceed or error.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable functions ([`Call`])
+//! 
+//! * `update_schedule` - Updates the cost schedule to meter contract gas costs.
+//! * `put-code` - Stores code in the contract account storage.
+//! * `call` - Makes a call to an account, optionally transferring some balance.
+//! * `create` - Creates a new contract, optionally transferring some balance.
 //!
-//! [`Module::on_finalise`]: struct.Module.html#impl-OnFinalise
+//! ### Public functions ([`Module`])
+//! 
+//! * `contract_fee` - Gets the fee required to create a contract
+//! * `call_base_fee` - Gets the fee required for a call into a contract.
+//! * `create_base_fee` - Gets the fee required for a create of a contract. 
+//! * `gas_price` - Gets the price of one unit of gas.
+//! * `max_depth` - Gets the max nesting level of a call/create stack.
+//! * `block_gas_limit` - Gets the max gas amount that could be expended per block.
+//! * `gas_spent` - Gets the gas spent so far in this block
+//! * `current_schedule` - Gets the current cost schedule for contracts.
+//! 
+//! ## Usage
+//! 
+//! The following example shows how to use the contract module in your custom module to i) deploy a contract and ii) call a contract.
+//! 
+//! ### Prerequisites
+//! 
+//! Import the `contract` module in your custom module and derive the module configuration trait from the `contract` trait.
+//!
+//! ### Deploy a smart-contract
+//!
+//! ```ignore
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! 
+//! pub trait Trait: contract::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			TODO
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! ```
+//! 
+//! ### Example from SRML
+//! 
+//! ## Related Modules
+//! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
+//! * [`Staking`](https://crates.parity.io/srml_staking/index.html)
+//! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
