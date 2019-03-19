@@ -25,26 +25,24 @@
 //! This module provides the ability to create smart-contract accounts and send them messages.
 //! A smart-contract is represented by an account with associated code and storage. 
 //! When an account receives a message, the associated code gets executed.
-//! This code is allowed to alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
+//! This code can alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
 //!
-//! Fees must be paid (in gas) for any actions invoked by the smart-contracts.
-//! Gas is charged upfront and is limited to what the sender specified in the transaction. 
+//! Senders must specify a gas limit with every transaction, as all actions invoked by the smart-contract require gas spend.
 //! Unused gas is refunded after the transaction, regardless of the execution outcome. 
-//! However, if the transaction runs out of gas before call completion, then all changes or creates are reverted (including balance transfers).
+//! If the gas limit is reached, then all changes made at the specific transaction level are reverted (including balance transfers).
 //! 
-//! When `staking` module determines that account is dead (e.g. account's balance fell below
-//! existential deposit) then it reaps the account. That will lead to deletion of the associated
-//! code and storage of the account.
-//! 
-//! **NOTE:** Failures are typically not cascading. For example, if contract A calls B and B errors
+//! **NOTE:** Transaction failures are typically not cascading. For example, if contract A calls B and B errors
 //! somehow, A can still decide if it should proceed or error.
+//! 
+//! Finally, when the `staking` module determines an account is dead (i.e. account balance fell below the
+//! existential deposit), it reaps the account. This will delete the associated code and storage of the account.
 //! 
 //! ## Interface
 //! 
 //! ### Dispatchable functions ([`Call`])
 //! 
 //! * `update_schedule` - Updates the cost schedule to meter contract gas costs. Only dispatchable via governance mechanism.
-//! * `put-code` - Stores code in the contract account storage.
+//! * `put_code` - Stores code in the contract account storage.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //! * `create` - Creates a new contract, optionally transferring some balance.
 //!
@@ -61,7 +59,7 @@
 //! 
 //! ## Usage
 //! 
-//! The following example shows how to use the contract module in your custom module to i) deploy a contract and ii) call a contract.
+//! The following example shows how to use the contract module in your custom module to create a contract.
 //! 
 //! ### Prerequisites
 //! 
@@ -79,8 +77,8 @@
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn deploy_my_contract(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _... = <contract::Module<T>>::put_code(origin, GAS_LIMIT, WASM_CODE);
-//! 			let _... = <contract::Module<T>>::create(origin, ENDOWMENT, GAS_LIMIT, CODE_HASH, DATA);
+//! 			<contract::Module<T>>::put_code(origin, GAS_LIMIT, WASM_CODE);
+//! 			<contract::Module<T>>::create(origin, ENDOWMENT, GAS_LIMIT, CODE_HASH, DATA);
 //! 			Ok(())
 //! 		}	
 //! 	}
@@ -296,7 +294,7 @@ decl_module! {
 		) -> Result {
 			let origin = ensure_signed(origin)?;
 
-			// Pay for the gas upfront.
+			// Commit the gas upfront.
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
