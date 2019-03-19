@@ -523,6 +523,7 @@ impl Pair {
 mod test {
 	use super::*;
 	use hex_literal::{hex, hex_impl};
+	use crate::Pair as _Pair;
 
 	#[test]
 	fn test_vector_should_work() {
