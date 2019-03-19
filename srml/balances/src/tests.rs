@@ -196,7 +196,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
 			assert_eq!(Balances::is_dead_account(&5), false);
 
-			assert_eq!(Balances::slash::<BurnAndMint<Runtime>>(&2, 256 * 18 + 2), None); // account 2 gets slashed
+			assert!(Balances::slash(&2, 256 * 18 + 2).1.is_zero()); // account 2 gets slashed
 			assert_eq!(Balances::total_balance(&2), 0); // "reserve" account reduced to 255 (below ED) so account deleted
 			assert_eq!(System::account_nonce(&2), 0);	// nonce zero
 			assert_eq!(Balances::is_dead_account(&2), true);
@@ -213,7 +213,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 fn reward_should_work() {
 	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
 		assert_eq!(Balances::total_balance(&1), 10);
-		assert_ok!(Balances::reward::<BurnAndMint<Runtime>>(&1, 10));
+		assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
 		assert_eq!(Balances::total_balance(&1), 20);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 110);
 	});
@@ -262,7 +262,7 @@ fn dust_account_removal_should_work2() {
 #[test]
 fn balance_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 42);
+		let _ = Balances::deposit_creating(&1, 42);
 		assert_eq!(Balances::free_balance(&1), 42);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(Balances::total_balance(&1), 42);
@@ -275,8 +275,7 @@ fn balance_works() {
 #[test]
 fn balance_transfer_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
-		assert_ok!(Balances::increase_total_issuance_by(111));
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
@@ -286,7 +285,7 @@ fn balance_transfer_works() {
 #[test]
 fn reserving_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
+		let _ = Balances::deposit_creating(&1, 111);
 
 		assert_eq!(Balances::total_balance(&1), 111);
 		assert_eq!(Balances::free_balance(&1), 111);
@@ -303,7 +302,7 @@ fn reserving_balance_should_work() {
 #[test]
 fn balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_noop!(Balances::transfer(Some(1).into(), 2, 69), "balance too low to send value");
 	});
@@ -312,7 +311,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 #[test]
 fn deducting_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_eq!(Balances::free_balance(&1), 42);
 	});
@@ -321,7 +320,7 @@ fn deducting_balance_should_work() {
 #[test]
 fn refunding_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 42);
+		let _ = Balances::deposit_creating(&1, 42);
 		Balances::set_reserved_balance(&1, 69);
 		Balances::unreserve(&1, 69);
 		assert_eq!(Balances::free_balance(&1), 111);
@@ -332,10 +331,9 @@ fn refunding_balance_should_work() {
 #[test]
 fn slashing_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
-		assert_ok!(Balances::increase_total_issuance_by(111));
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
-		assert!(Balances::slash::<BurnAndMint<Runtime>>(&1, 69).is_none());
+		assert!(Balances::slash(&1, 69).1.is_zero());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 42);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 44);
@@ -345,10 +343,9 @@ fn slashing_balance_should_work() {
 #[test]
 fn slashing_incomplete_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 42);
-		assert_ok!(Balances::increase_total_issuance_by(42));
+		let _ = Balances::deposit_creating(&1, 42);
 		assert_ok!(Balances::reserve(&1, 21));
-		assert!(Balances::slash::<BurnAndMint<Runtime>>(&1, 69).is_some());
+		assert_eq!(Balances::slash(&1, 69).1, 27);
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 2);
@@ -358,7 +355,7 @@ fn slashing_incomplete_balance_should_work() {
 #[test]
 fn unreserving_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		Balances::unreserve(&1, 42);
 		assert_eq!(Balances::reserved_balance(&1), 69);
@@ -369,10 +366,9 @@ fn unreserving_balance_should_work() {
 #[test]
 fn slashing_reserved_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
-		assert_ok!(Balances::increase_total_issuance_by(111));
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
-		assert!(Balances::slash_reserved::<BurnAndMint<Runtime>>(&1, 42).is_none());
+		assert_eq!(Balances::slash_reserved(&1, 42).1, 0);
 		assert_eq!(Balances::reserved_balance(&1), 69);
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
@@ -382,10 +378,9 @@ fn slashing_reserved_balance_should_work() {
 #[test]
 fn slashing_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
-		assert_ok!(Balances::increase_total_issuance_by(111));
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 42));
-		assert!(Balances::slash_reserved::<BurnAndMint<Runtime>>(&1, 69).is_some());
+		assert_eq!(Balances::slash_reserved(&1, 69).1, 27);
 		assert_eq!(Balances::free_balance(&1), 69);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
@@ -395,10 +390,10 @@ fn slashing_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_reserved_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 110);
-		Balances::set_free_balance(&2, 1);
+		let _ = Balances::deposit_creating(&1, 110);
+		let _ = Balances::deposit_creating(&2, 1);
 		assert_ok!(Balances::reserve(&1, 110));
-		assert_ok!(Balances::repatriate_reserved(&1, &2, 41), None);
+		assert_ok!(Balances::repatriate_reserved(&1, &2, 41), 0);
 		assert_eq!(Balances::reserved_balance(&1), 69);
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&2), 0);
@@ -409,7 +404,7 @@ fn transferring_reserved_balance_should_work() {
 #[test]
 fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
+		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		assert_noop!(Balances::repatriate_reserved(&1, &2, 42), "beneficiary account must pre-exist");
 	});
@@ -418,10 +413,10 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 #[test]
 fn transferring_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 110);
-		Balances::set_free_balance(&2, 1);
+		let _ = Balances::deposit_creating(&1, 110);
+		let _ = Balances::deposit_creating(&2, 1);
 		assert_ok!(Balances::reserve(&1, 41));
-		assert!(Balances::repatriate_reserved(&1, &2, 69).unwrap().is_some());
+		assert_ok!(Balances::repatriate_reserved(&1, &2, 69), 28);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(Balances::free_balance(&1), 69);
 		assert_eq!(Balances::reserved_balance(&2), 0);
@@ -452,12 +447,8 @@ fn account_removal_on_free_too_low() {
 		|| {
 			// Setup two accounts with free balance above the exsistential threshold.
 			{
-				Balances::set_free_balance(&1, 110);
-				assert_ok!(Balances::increase_total_issuance_by(110));
-
-				Balances::set_free_balance(&2, 110);
-				assert_ok!(Balances::increase_total_issuance_by(110));
-
+				let _ = Balances::deposit_creating(&1, 110);
+				let _ = Balances::deposit_creating(&2, 110);
 				assert_eq!(<TotalIssuance<Runtime>>::get(), 732);
 			}
 

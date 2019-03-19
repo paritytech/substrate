@@ -23,7 +23,7 @@ use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
-use crate::{GenesisConfig, Module, Trait, BurnAndMint};
+use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -50,9 +50,9 @@ impl Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
-	type TransactionPayment = BurnAndMint<Runtime>;
-	type DustRemoval = BurnAndMint<Runtime>;
-	type TransferPayment = BurnAndMint<Runtime>;
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 
 pub struct ExtBuilder {

@@ -22,7 +22,7 @@
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnDilution, ArithmeticType, OnUnbalancedIncrease, OnUnbalancedDecrease};
+use srml_support::traits::{Currency, OnDilution, ArithmeticType, OnUnbalanced, Imbalance};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
@@ -36,7 +36,15 @@ type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=<<Self as Trait>::Currency as ArithmeticType>::Type>;
+	type Currency: ArithmeticType + Currency<
+		Self::AccountId,
+		Balance=<<Self as Trait>::Currency as ArithmeticType>::Type,
+		PositiveImbalance=Self::PositiveImbalance,
+		NegativeImbalance=Self::NegativeImbalance,
+	>;
+
+	type PositiveImbalance: Imbalance<<<Self as Trait>::Currency as ArithmeticType>::Type>;
+	type NegativeImbalance: Imbalance<<<Self as Trait>::Currency as ArithmeticType>::Type>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
@@ -48,10 +56,10 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Handler for the unbalanced increase when minting cash from the "Pot".
-	type MintedForSpending: OnUnbalancedIncrease<BalanceOf<Self>>;
+	type MintedForSpending: OnUnbalanced<Self::PositiveImbalance>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
-	type ProposalRejection: OnUnbalancedDecrease<BalanceOf<Self>>;
+	type ProposalRejection: OnUnbalanced<Self::NegativeImbalance>;
 }
 
 type ProposalIndex = u32;
@@ -109,7 +117,8 @@ decl_module! {
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 
 			let value = proposal.bond;
-			let _ = T::Currency::slash_reserved::<T::ProposalRejection>(&proposal.proposer, value);
+			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
+			T::ProposalRejection::on_unbalanced(imbalance);
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -208,6 +217,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
+		let mut imbalance = T::PositiveImbalance::zero();
 		<Approvals<T>>::mutate(|v| {
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
@@ -220,7 +230,7 @@ impl<T: Trait> Module<T> {
 						let _ = T::Currency::unreserve(&p.proposer, p.bond);
 
 						// provide the allocation.
-						T::Currency::increase_free_balance_creating::<T::MintedForSpending>(&p.beneficiary, p.value);
+						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
 
 						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
 						false
@@ -233,6 +243,8 @@ impl<T: Trait> Module<T> {
 				}
 			});
 		});
+
+		T::MintedForSpending::on_unbalanced(imbalance);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
@@ -294,17 +306,19 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = ();
-		type TransactionPayment = balances::BurnAndMint<Test>;
-		type TransferPayment = balances::BurnAndMint<Test>;
-		type DustRemoval = balances::BurnAndMint<Test>;
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Test>;
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
-		type MintedForSpending = balances::BurnAndMint<Test>;
-		type ProposalRejection = balances::BurnAndMint<Test>;
+		type PositiveImbalance = <balances::Module<Test> as Currency<u64>>::PositiveImbalance;
+		type NegativeImbalance = <balances::Module<Test> as Currency<u64>>::NegativeImbalance;
+		type MintedForSpending = ();
+		type ProposalRejection = ();
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;

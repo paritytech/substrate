@@ -25,8 +25,8 @@ use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnUnbalancedIncrease, OnFreeBalanceZero, ArithmeticType, OnDilution,
-	LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalancedDecrease
+	Currency, OnFreeBalanceZero, ArithmeticType, OnDilution,
+	LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced
 };
 use session::OnSessionChange;
 use primitives::{Perbill};
@@ -164,7 +164,9 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type; 
+type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency>::NegativeImbalance;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
@@ -180,10 +182,10 @@ pub trait Trait: system::Trait + session::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Handler for the unbalanced reduction when slashing a staker.
-	type Slash: OnUnbalancedDecrease<BalanceOf<Self>>;
+	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// Handler for the unbalanced increment when rewarding a staker.
-	type Reward: OnUnbalancedIncrease<BalanceOf<Self>>;
+	type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 }
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -544,7 +546,8 @@ impl<T: Trait> Module<T> {
 		let slash = slash.min(exposure.total);
 		// The amount we'll slash from the validator's stash directly.
 		let own_slash = exposure.own.min(slash);
-		let own_slash = own_slash - T::Currency::slash::<T::Slash>(v, own_slash).unwrap_or_default();
+		let (mut imbalance, missing) = T::Currency::slash(v, own_slash);
+		let own_slash = own_slash - missing;
 		// The amount remaining that we can't slash from the validator, that must be taken from the nominators.
 		let rest_slash = slash - own_slash;
 		if !rest_slash.is_zero() {
@@ -553,29 +556,29 @@ impl<T: Trait> Module<T> {
 			if !total.is_zero() {
 				let safe_mul_rational = |b| b * rest_slash / total;// FIXME #1572 avoid overflow
 				for i in exposure.others.iter() {
-					let _ = T::Currency::slash::<T::Slash>(&i.who, safe_mul_rational(i.value));	// best effort - not much that can be done on fail.
+					// best effort - not much that can be done on fail.
+					imbalance = imbalance.merge(T::Currency::slash(&i.who, safe_mul_rational(i.value)).0)
 				}
 			}
 		}
+		let _ = imbalance.handle::<T::Slash>();
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
-	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) {
+	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) -> Option<T::Currency::PositiveImbalance> {
 		match Self::payee(who) {
-			RewardDestination::Controller => {
-				let _ = T::Currency::reward::<T::Reward>(&who, amount);
-			}
-			RewardDestination::Stash => {
-				let _ = Self::ledger(who).map(|l| T::Currency::reward::<T::Reward>(&l.stash, amount));
-			}
+			RewardDestination::Controller => Some(T::Currency::deposit_into_existing(&who, amount)),
+			RewardDestination::Stash => Self::ledger(who)
+				.and_then(|l| T::Currency::deposit_into_existing(&l.stash, amount).ok()),
 			RewardDestination::Staked =>
-				if let Some(mut l) = Self::ledger(who) {
+				Self::ledger(who).and_then(|mut l| {
 					l.active += amount;
 					l.total += amount;
-					let _ = T::Currency::reward::<T::Reward>(&l.stash, amount);
+					let r = T::Currency::deposit_into_existing(&l.stash, amount).ok();
 					Self::update_ledger(who, l);
-				},
+					r
+				}),
 		}
 	}
 
@@ -584,6 +587,7 @@ impl<T: Trait> Module<T> {
 	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
 		let off_the_table = reward.min(Self::validators(who).validator_payment);
 		let reward = reward - off_the_table;
+		let mut imbalance = T::Currency::PositiveImbalance::zero();
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
 		} else {
@@ -591,11 +595,12 @@ impl<T: Trait> Module<T> {
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for i in &exposure.others {
-				Self::make_payout(&i.who, safe_mul_rational(i.value));
+				imbalance = imbalance.maybe_merge(Self::make_payout(&i.who, safe_mul_rational(i.value)));
 			}
 			safe_mul_rational(exposure.own)
 		};
-		Self::make_payout(who, validator_cut + off_the_table);
+		imbalance = imbalance.maybe_merge(Self::make_payout(who, validator_cut + off_the_table));
+		T::Reward::on_unbalanced(imbalance);
 	}
 
 	/// Get the reward for the session, assuming it ends with this block.

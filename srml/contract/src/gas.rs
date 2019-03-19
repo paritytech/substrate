@@ -18,7 +18,7 @@ use crate::{GasSpent, Module, Trait};
 use balances;
 use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
-use srml_support::{StorageValue, traits::{OnUnbalancedDecrease, ExistenceRequirement, WithdrawReason, Currency}};
+use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -202,7 +202,7 @@ impl<T: Trait> GasMeter<T> {
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: T::Gas,
-) -> Result<GasMeter<T>, &'static str> {
+) -> Result<(GasMeter<T>, balances::NegativeImbalance<Trait>), &'static str> {
 	// Check if the specified amount of gas is available in the current block.
 	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
 	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
@@ -219,19 +219,28 @@ pub fn buy_gas<T: Trait>(
 
 	// We don't reduce the total amount yet - instead we wait until the refund.
 	// So we pass `()` so that the imbalance is left.
-	<balances::Module<T>>::withdraw::<()>(transactor, cost, WithdrawReason::Fee, ExistenceRequirement::KeepAlive)?;
+	let imbalance = <balances::Module<T>>::withdraw(
+		transactor,
+		cost,
+		WithdrawReason::Fee,
+		ExistenceRequirement::KeepAlive
+	)?;
 
-	Ok(GasMeter {
+	Ok((GasMeter {
 		limit: gas_limit,
 		gas_left: gas_limit,
 		gas_price,
 		#[cfg(test)]
 		tokens: Vec::new(),
-	})
+	}, imbalance))
 }
 
 /// Refund the unused gas.
-pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
+pub fn refund_unused_gas<T: Trait>(
+	transactor: &T::AccountId,
+	gas_meter: GasMeter<T>,
+	imbalance: balances::NegativeImbalance<Trait>,
+) {
 	let gas_spent = gas_meter.spent();
 	let gas_left = gas_meter.gas_left();
 
@@ -241,13 +250,10 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought.
-	let b = <balances::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_left) * gas_meter.gas_price;
-	let fee = <T::Gas as As<T::Balance>>::as_(gas_spent) * gas_meter.gas_price;
-
-	// this should be infallible since we just charged for it this block.
-	let _ = T::GasPayment::on_unbalanced_decrease(fee);
-	<balances::Module<T>>::set_free_balance(transactor, b + refund);
+	let refund_imbalance = <balances::Module<T>>::deposit_creating(transactor, refund);
+	let imbalance = imbalance.offset(refund_imbalance);
+	T::GasPayment::on_unbalanced(imbalance);
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units

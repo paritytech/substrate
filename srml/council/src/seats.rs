@@ -20,8 +20,8 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
 use srml_support::{
-	StorageValue, StorageMap, dispatch::Result, decl_storage, decl_event, ensure, traits::{
-	Currency, OnUnbalancedDecrease}
+	StorageValue, StorageMap, dispatch::Result, decl_storage, decl_event, ensure,
+	traits::{Currency, OnUnbalanced}
 };
 use democracy;
 use system::{self, ensure_signed};
@@ -85,15 +85,16 @@ use srml_support::{decl_module, traits::ArithmeticType};
 pub type VoteIndex = u32;
 
 type BalanceOf<T> = <<T as democracy::Trait>::Currency as ArithmeticType>::Type;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency>::NegativeImbalance;
 
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Handler for the unbalanced reduction when slashing a validator.
-	type BadPresentation: OnUnbalancedDecrease<BalanceOf<Self>>;
+	type BadPresentation: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
-	type BadReaper: OnUnbalancedDecrease<BalanceOf<Self>>;
+	type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 decl_module! {
@@ -176,7 +177,8 @@ decl_module! {
 				T::Currency::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
-				T::Currency::slash_reserved::<T::BadReaper>(&reporter, Self::voting_bond());
+				let imbalance = T::Currency::slash_reserved(&reporter, Self::voting_bond()).0;
+				T::BadReaper::on_unbalanced(imbalance);
 				Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
 			}
 		}
@@ -275,7 +277,8 @@ decl_module! {
 			} else {
 				// we can rest assured it will be Ok since we checked `can_slash` earlier; still
 				// better safe than sorry.
-				let _ = T::Currency::slash::<T::BadPresentation>(&who, bad_presentation_punishment);
+				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
+				T::BadPresentation::on_unbalanced(imbalance);
 				Err(if dupe { "duplicate presentation" } else { "incorrect total" })
 			}
 		}

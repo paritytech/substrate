@@ -29,8 +29,9 @@ use rstd::{cmp, result};
 use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalancedDecrease, OnUnbalancedIncrease,
-	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency, ExistenceRequirement
+	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
+	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency, ExistenceRequirement,
+	Imbalance
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -40,6 +41,20 @@ use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
 mod tests;
+
+pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
+	/// The balance of an account.
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
+
+	/// A function which is invoked when the free-balance has fallen below the existential deposit and
+	/// has been reduced to zero.
+	///
+	/// Gives a chance to clean up resources associated with the given account.
+	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+
+	/// Handler for when a new account is created.
+	type OnNewAccount: OnNewAccount<Self::AccountId>;
+}
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -55,14 +70,14 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when taking transaction fees.
-	type TransactionPayment: OnUnbalancedDecrease<Self::Balance>;
+	type TransactionPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// Handler for the unbalanced reduction when taking fees associated with balance
 	/// transfer (which may also include account creation).
-	type TransferPayment: OnUnbalancedDecrease<Self::Balance>;
+	type TransferPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
-	type DustRemoval: OnUnbalancedDecrease<Self::Balance>;
+	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
@@ -70,6 +85,12 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 impl<T: Trait> ArithmeticType for Module<T> {
 	type Type = <T as Trait>::Balance;
+}
+
+impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
+	type Balance = T::Balance;
+	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+	type OnNewAccount = T::OnNewAccount;
 }
 
 decl_event!(
@@ -223,7 +244,7 @@ decl_module! {
 // For funding methods, see Currency trait
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 
-	/// Get the amount that is currently being vested and cannot be transfered out of this account.
+	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
 		if let Some(v) = Self::vesting(who) {
 			Self::free_balance(who).min(v.locked_at(<system::Module<T>>::block_number()))
@@ -234,7 +255,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Set the free balance of an account to some new value.
 	///
-	/// Will enforce ExistentialDeposit law, anulling the account as needed.
+	/// Will enforce ExistentialDeposit law, annulling the account as needed.
 	/// In that case it will return `AccountKilled`.
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
@@ -251,7 +272,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit
-	/// law anulling the account as needed.
+	/// law annulling the account as needed.
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
@@ -339,7 +360,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		};
 
 		if transactor != dest {
-			T::TransferPayment::on_unbalanced_decrease(fee)?;
+			T::TransferPayment::on_unbalanced(NegativeImbalance(fee));
 			Self::set_free_balance(transactor, new_from_balance);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
@@ -374,7 +395,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		// underflow should never happen, but if it does, there's not much we can do about it.
 		if !dust.is_zero() {
-			let _ = T::DustRemoval::on_unbalanced_decrease(dust);
+			T::DustRemoval::on_unbalanced(NegativeImbalance(dust));
 		}
 
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
@@ -393,7 +414,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		// underflow should never happen, but it if does, there's nothing to be done here.
 		if !dust.is_zero() {
-			let _ = T::DustRemoval::on_unbalanced_decrease(dust);
+			T::DustRemoval::on_unbalanced(NegativeImbalance(dust));
 		}
 
 		if Self::free_balance(who).is_zero() {
@@ -405,7 +426,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
 	/// increases.
-	pub fn increase_total_issuance_by(value: T::Balance) -> Result {
+	fn increase_total_issuance_by(value: T::Balance) -> Result {
 		let v = <Module<T, I>>::total_issuance().checked_add(&value).ok_or("issuance overflow")?;
 		<TotalIssuance<T, I>>::put(v);
 		Ok(())
@@ -415,7 +436,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
 	/// decreases.
-	pub fn decrease_total_issuance_by(value: T::Balance) -> Result {
+	fn decrease_total_issuance_by(value: T::Balance) -> Result {
 		let v = <Module<T, I>>::total_issuance().checked_sub(&value).ok_or("issuance underflow")?;
 		<TotalIssuance<T, I>>::put(v);
 		Ok(())
@@ -451,11 +472,151 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
+/// Opaque, move-only struct with private fields that serves as a token denoting that
+/// there are more funds in the system than is accounted for in total issuance.
+#[must_use]
+pub struct PositiveImbalance<T: Subtrait<I>, I: Instance>(T::Balance);
+
+/// Opaque, move-only struct with private fields that serves as a token denoting that
+/// there are more funds in the system than is accounted for in total issuance.
+#[must_use]
+pub struct NegativeImbalance<T: Subtrait<I>, I: Instance>(T::Balance);
+
+impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
+	type Opposite = NegativeImbalance<T, I>;
+
+	fn zero() -> Self {
+		Self(Zero::zero())
+	}
+	fn drop_zero(self) -> result::Result<(), Self> {
+		if self.0.is_zero() {
+			Ok(())
+		} else {
+			Err(self)
+		}
+	}
+	fn split(self, amount: T::Balance) -> (Self, Self) {
+		let first = self.0.min(amount);
+		let second = self.0 - amount;
+		(Self(first), Self(second))
+	}
+	fn merge(self, other: Self) -> Self {
+		Self(self.0 + other.0)
+	}
+	fn subsume(&mut self, other: Self) {
+		self.0 += other.0
+	}
+	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+		if self.0 >= other.0 {
+			Ok(Self(self.0 - other.0))
+		} else {
+			Err(NegativeImbalance(other.0 - self.0))
+		}
+	}
+	fn value(&self) -> T::Balance {
+		self.0.clone()
+	}
+}
+
+impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
+	type Opposite = PositiveImbalance<T, I>;
+
+	fn zero() -> Self {
+		Self(Zero::zero())
+	}
+	fn drop_zero(self) -> result::Result<(), Self> {
+		if self.0.is_zero() {
+			Ok(())
+		} else {
+			Err(self)
+		}
+	}
+	fn split(self, amount: T::Balance) -> (Self, Self) {
+		let first = self.0.min(amount);
+		let second = self.0 - amount;
+		(Self(first), Self(second))
+	}
+	fn merge(self, other: Self) -> Self {
+		Self(self.0 + other.0)
+	}
+	fn subsume(&mut self, other: Self) {
+		self.0 += other.0
+	}
+	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+		if self.0 >= other.0 {
+			Ok(Self(self.0 - other.0))
+		} else {
+			Err(PositiveImbalance(other.0 - self.0))
+		}
+	}
+	fn value(&self) -> T::Balance {
+		self.0.clone()
+	}
+}
+
+// Somewhat ugly hack in order to gain access to module's `increase_total_issuance_by`
+// using only the Subtrait (which defines only the types that are not dependent
+// on Positive/NegativeImbalance). Subtrait must be used otherwise we end up with a
+// circular dependency with Trait having some types be dependent on PositiveImbalance<Trait>
+// and PositiveImbalance itself depending back on Trait for its Drop impl (and thus
+// its type declaration).
+// This works as long as `increase_total_issuance_by` doesn't use the Imbalance
+// types (basically for charging feed).
+// This should eventually be refactored so that the three type items that do
+// depend on the Imbalance type (TransactionPayment, TransferPayment, DustRemoval)
+// are placed in their own SRML module.
+struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
+impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
+	fn clone(&self) -> Self { unimplemented!() }
+}
+impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
+	fn eq(&self, _: &Self) -> bool { unimplemented!() }
+}
+impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
+impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
+	type Origin = T::Origin;
+	type Index = T::Index;
+	type BlockNumber = T::BlockNumber;
+	type Hash = T::Hash;
+	type Hashing = T::Hashing;
+	type Digest = T::Digest;
+	type AccountId = T::AccountId;
+	type Lookup = T::Lookup;
+	type Header = T::Header;
+	type Event = ();
+	type Log = T::Log;
+}
+impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
+	type Balance = T::Balance;
+	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+	type OnNewAccount = T::OnNewAccount;
+	type Event = ();
+	type TransactionPayment = ();
+	type TransferPayment = ();
+	type DustRemoval = ();
+}
+
+impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
+	/// Basic drop handler will just square up the total issuance.
+	fn drop(&mut self) {
+		let _ = <Module<ElevatedTrait<T, I>, I>>::increase_total_issuance_by(self.0);
+	}
+}
+
+impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
+	/// Basic drop handler will just square up the total issuance.
+	fn drop(&mut self) {
+		let _ = <Module<ElevatedTrait<T, I>, I>>::decrease_total_issuance_by(self.0);
+	}
+}
+
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDebug
 {
 	type Balance = T::Balance;
+	type PositiveImbalance = PositiveImbalance<T, I>;
+	type NegativeImbalance = NegativeImbalance<T, I>;
 
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
 		Self::free_balance(who) + Self::reserved_balance(who)
@@ -489,70 +650,63 @@ where
 		<ReservedBalance<T, I>>::get(who)
 	}
 
-	fn withdraw<S: OnUnbalancedDecrease<Self::Balance>>(
+	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
 		reason: WithdrawReason,
 		liveness: ExistenceRequirement,
-	) -> result::Result<(), &'static str> {
+	) -> result::Result<Self::NegativeImbalance, &'static str> {
 		if let Some(new_balance) = Self::free_balance(who).checked_sub(&value) {
 			if liveness == ExistenceRequirement::KeepAlive && new_balance < Self::existential_deposit() {
 				return Err("payment would kill account")
 			}
 			Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
-			S::on_unbalanced_decrease(value)?;
 			Self::set_free_balance(who, new_balance);
-			Ok(())
+			Ok(NegativeImbalance(value))
 		} else {
 			Err("too few free funds in account")
 		}
 	}
 
-	fn slash<S: OnUnbalancedDecrease<Self::Balance>>(
+	fn slash(
 		who: &T::AccountId,
 		value: Self::Balance
-	) -> Option<Self::Balance> {
+	) -> (Self::NegativeImbalance, Self::Balance) {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
-		let res = if free_slash < value {
+		if free_slash < value {
 			let remaining_slash = value - free_slash;
 			let reserved_balance = Self::reserved_balance(who);
 			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
 			Self::set_reserved_balance(who, reserved_balance - reserved_slash);
 			if reserved_slash < remaining_slash {
-				Some(remaining_slash - reserved_slash)
+				(NegativeImbalance(free_slash + reserved_slash), remaining_slash - reserved_slash)
 			} else {
-				None
+				(NegativeImbalance(value), Zero::zero())
 			}
 		} else {
-			None
-		};
-
-		// underflow should never happen, but it if does, there's nothing to be done here.
-		let _ = S::on_unbalanced_decrease(value - res.unwrap_or_default());
-		res
+			(NegativeImbalance(value), Zero::zero())
+		}
 	}
 
-	fn reward<S: OnUnbalancedIncrease<Self::Balance>>(
+	fn deposit_into_existing(
 		who: &T::AccountId,
 		value: Self::Balance
-	) -> result::Result<(), &'static str> {
+	) -> result::Result<Self::PositiveImbalance, &'static str> {
 		if Self::total_balance(who).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
-		S::on_unbalanced_increase(value)?;
 		Self::set_free_balance(who, Self::free_balance(who) + value);
-		Ok(())
+		Ok(PositiveImbalance(value))
 	}
 
-	fn increase_free_balance_creating<S: OnUnbalancedIncrease<Self::Balance>>(
+	fn deposit_creating(
 		who: &T::AccountId,
-		value: Self::Balance
-	) -> UpdateBalanceOutcome {
-		// Should be infallible if our state isn't corruption. Not much we can do if state it corrupted.
-		let _ = S::on_unbalanced_increase(value);
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
+		value: Self::Balance,
+	) -> Self::PositiveImbalance {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+		PositiveImbalance(value)
 	}
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
@@ -567,39 +721,30 @@ where
 		Ok(())
 	}
 
-	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
+	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		let b = Self::reserved_balance(who);
 		let actual = cmp::min(b, value);
 		Self::set_free_balance(who, Self::free_balance(who) + actual);
 		Self::set_reserved_balance(who, b - actual);
-		if actual == value {
-			None
-		} else {
-			Some(value - actual)
-		}
+		value - actual
 	}
 
-	fn slash_reserved<S: OnUnbalancedDecrease<Self::Balance>>(
+	fn slash_reserved(
 		who: &T::AccountId,
 		value: Self::Balance
-	) -> Option<Self::Balance> {
+	) -> (Self::NegativeImbalance, Self::Balance) {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
 		// underflow should never happen, but it if does, there's nothing to be done here.
-		let _ = S::on_unbalanced_decrease(slash);
 		Self::set_reserved_balance(who, b - slash);
-		if value == slash {
-			None
-		} else {
-			Some(value - slash)
-		}
+		(NegativeImbalance(slash), value - slash)
 	}
 
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
-		value: Self::Balance
-	) -> result::Result<Option<Self::Balance>, &'static str> {
+		value: Self::Balance,
+	) -> result::Result<Self::Balance, &'static str> {
 		if Self::total_balance(beneficiary).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
@@ -607,11 +752,7 @@ where
 		let slash = cmp::min(b, value);
 		Self::set_free_balance(beneficiary, Self::free_balance(beneficiary) + slash);
 		Self::set_reserved_balance(slashed, b - slash);
-		if value == slash {
-			Ok(None)
-		} else {
-			Ok(Some(value - slash))
-		}
+		Ok(value - slash)
 	}
 }
 
@@ -689,33 +830,17 @@ where
 	}
 }
 
-/// Simple implementation of OnUnbalancedDecrease/OnUnbalancedIncrease that
-/// just burns and mints tokens as necessary.
-pub struct BurnAndMint<T: Trait>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> OnUnbalancedDecrease<T::Balance> for BurnAndMint<T> {
-	fn on_unbalanced_decrease(amount: T::Balance) -> Result {
-		<Module<T>>::decrease_total_issuance_by(amount)
-	}
-}
-
-impl<T: Trait> OnUnbalancedIncrease<T::Balance> for BurnAndMint<T> {
-	fn on_unbalanced_increase(amount: T::Balance) -> Result {
-		<Module<T>>::increase_total_issuance_by(amount)
-	}
-}
-
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
-		if b < transaction_fee + Self::existential_deposit() {
-			return Err("not enough funds for transaction fee");
-		}
-		let new_balance = b - transaction_fee;
-		Self::ensure_account_can_withdraw(transactor, transaction_fee, WithdrawReason::TransactionPayment, new_balance)?;
-		T::TransactionPayment::on_unbalanced_decrease(transaction_fee)?;
-		Self::set_free_balance(transactor, new_balance);
+		let encoded_len = <T::Balance as As<u64>>::sa(encoded_len as u64);
+		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
+		let imbalance = Self::withdraw(
+			transactor,
+			transaction_fee,
+			WithdrawReason::TransactionPayment,
+			ExistenceRequirement::KeepAlive
+		)?;
+		T::TransactionPayment::on_unbalanced(imbalance);
 		Ok(())
 	}
 }

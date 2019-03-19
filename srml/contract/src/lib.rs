@@ -74,7 +74,7 @@ use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
-use srml_support::traits::{OnFreeBalanceZero, OnUnbalancedDecrease};
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced};
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;
@@ -111,7 +111,7 @@ pub trait Trait: balances::Trait + timestamp::Trait {
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
-	type GasPayment: OnUnbalancedDecrease<<Self as balances::Trait>::Balance>;
+	type GasPayment: OnUnbalanced<balances::NegativeImbalance<Self>>;
 }
 
 /// Simple contract address determintator.
@@ -177,14 +177,14 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
 
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
 
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			result.map(|_| ())
 		}
@@ -204,7 +204,7 @@ decl_module! {
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
@@ -225,7 +225,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
@@ -258,7 +258,7 @@ decl_module! {
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
@@ -278,7 +278,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {

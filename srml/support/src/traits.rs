@@ -78,44 +78,23 @@ impl<T> MakePayment<T> for () {
 	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
 }
 
-/// Handler for when some currency "account" increased in balance for some reason.
+/// Handler for when some currency "account" decreased in balance for
+/// some reason.
 ///
-/// The only reason at present would be for validator rewards, but there may be other
-/// reasons in the future or for other chains.
+/// The only reason at present for an increase would be for validator rewards, but
+/// there may be other reasons in the future or for other chains.
 ///
-/// Typically just increases the total issuance of the currency, but could possibly
-/// draw down some other account.
-pub trait OnUnbalancedIncrease<Balance> {
-	/// Handler for the event.
-	///
-	/// May return an error if something "impossible" went wrong, but should be
-	/// infallible.
-	fn on_unbalanced_increase(amount: Balance) -> Result<(), &'static str>;
-}
-
-impl<B> OnUnbalancedIncrease<B> for () {
-	fn on_unbalanced_increase(_amount: B) -> Result<(), &'static str> { Ok(()) }
-}
-
-/// Handler for when some currency account decreased in balance for some reason.
-///
-/// Potential reasons are:
+/// Reasons for decreases include:
 ///
 /// - Someone got slashed.
 /// - Someone paid for a transaction to be included.
-///
-/// Typically just reduces the total issuance of the currency, but could also pay
-/// into some other account.
-pub trait OnUnbalancedDecrease<Balance> {
-	/// Handler for the event.
-	///
-	/// May return an error if something "impossible" went wrong, but should be
-	/// infallible.
-	fn on_unbalanced_decrease(amount: Balance) -> Result<(), &'static str>;
+pub trait OnUnbalanced<Imbalance> {
+	/// Handler for some imbalance. Infallible.
+	fn on_unbalanced(amount: Imbalance);
 }
 
-impl<B> OnUnbalancedDecrease<B> for () {
-	fn on_unbalanced_decrease(_amount: B) -> Result<(), &'static str> { Ok(()) }
+impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
+	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -124,10 +103,37 @@ pub enum ExistenceRequirement {
 	AllowDead,
 }
 
+pub trait Imbalance<Balance>: Sized {
+	type Opposite: Imbalance<Balance>;
+	fn zero() -> Self;
+	fn drop_zero(self) -> Result<(), Self>;
+	fn split(self, amount: Balance) -> (Self, Self);
+	fn merge(self, other: Self) -> Self;
+	fn maybe_merge(self, other: Option<Self>) -> Self {
+		if let Some(o) = other {
+			self.merge(o)
+		} else {
+			self
+		}
+	}
+	fn subsume(&mut self, other: Self);
+	fn offset(self, other: Self::Opposite) -> Result<Self, Self::Opposite>;
+	fn value(&self) -> Balance;
+	fn handle<T: OnUnbalanced<Self>>(self) { T::on_unbalanced(self) }
+}
+
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
 	type Balance;
+
+	/// The opaque token type for an imbalance. This is returned by unbalanced operations
+	/// and must be dealt with. It may be dropped but cannot be cloned.
+	type PositiveImbalance: Imbalance<Self::Balance>;
+
+	/// The opaque token type for an imbalance. This is returned by unbalanced operations
+	/// and must be dealt with. It may be dropped but cannot be cloned.
+	type NegativeImbalance: Imbalance<Self::Balance>;
 
 	// PUBLIC IMMUTABLES
 
@@ -181,40 +187,42 @@ pub trait Currency<AccountId> {
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///
+	/// The resulting imbalance is the first item of the tuple returned.
+	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
-	fn slash<S: OnUnbalancedDecrease<Self::Balance>>(
+	/// then a non-zero second item will be returned.
+	fn slash(
 		who: &AccountId,
 		value: Self::Balance
-	) -> Option<Self::Balance>;
+	) -> (Self::NegativeImbalance, Self::Balance);
 
 	/// Mints `value` to the free balance of `who`.
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
-	fn reward<S: OnUnbalancedIncrease<Self::Balance>>(
+	fn deposit_into_existing(
 		who: &AccountId,
 		value: Self::Balance
-	) -> result::Result<(), &'static str>;
+	) -> result::Result<Self::PositiveImbalance, &'static str>;
 
 	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is `KeepAlive`,
 	/// then no less than `ExistentialDeposit` must be left remaining.
 	///
 	/// This checks any locks, vesting and liquidity requirements. If the removal is not possible, then it
 	/// returns `Err`.
-	fn withdraw<S: OnUnbalancedDecrease<Self::Balance>>(
+	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
 		reason: WithdrawReason,
 		liveness: ExistenceRequirement,
-	) -> result::Result<(), &'static str>;
+	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
 	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created
 	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
-	fn increase_free_balance_creating<S: OnUnbalancedIncrease<Self::Balance>>(
+	/// Infallible.
+	fn deposit_creating(
 		who: &AccountId,
-		value: Self::Balance
-	) -> UpdateBalanceOutcome;
+		value: Self::Balance,
+	) -> Self::PositiveImbalance;
 
 	/// Moves `value` from balance to reserved balance.
 	///
@@ -225,30 +233,31 @@ pub trait Currency<AccountId> {
 	/// Moves up to `value` from reserved balance to balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
+	/// then non-zero will be returned.
+	///
 	/// NOTE: This is different to `reserve`.
-	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
+	fn unreserve(who: &AccountId, value: Self::Balance) -> Self::Balance;
 
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
-	fn slash_reserved<S: OnUnbalancedDecrease<Self::Balance>>(
+	/// then non-zero second item will be returned.
+	fn slash_reserved(
 		who: &AccountId,
 		value: Self::Balance
-	) -> Option<Self::Balance>;
+	) -> (Self::NegativeImbalance, Self::Balance);
 
 	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
 	/// returned.
 	///
-	/// As much funds up to `value` will be moved as possible. If this is less than `value`, then
-	/// `Ok(Some(remaining))` will be returned. Full completion is given by `Ok(None)`.
+	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
+	/// then `Ok(non_zero)` will be returned.
 	fn repatriate_reserved(
 		slashed: &AccountId,
 		beneficiary: &AccountId,
 		value: Self::Balance
-	) -> result::Result<Option<Self::Balance>, &'static str>;
+	) -> result::Result<Self::Balance, &'static str>;
 }
 
 /// An identifier for a lock. Used for disambiguating different locks so that
