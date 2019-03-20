@@ -702,15 +702,11 @@ fn store_functions_to_metadata (
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked } => {
 				let kty = clean_type_string(&quote!(#key_type).to_string());
-				let map = if is_linked {
-					quote!(#scrate::storage::generator::StorageFunctionType::LinkedMap)
-				} else {
-					quote!(#scrate::storage::generator::StorageFunctionType::Map)
-				};
 				quote!{
-					#map {
+					#scrate::storage::generator::StorageFunctionType::Map {
 						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
 						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+						is_linked: #is_linked,
 					}
 				}
 			},
