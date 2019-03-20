@@ -30,7 +30,7 @@ use proc_macro::TokenStream;
 ///
 /// ## Example
 ///
-/// ```nocompile rust
+/// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Foo get(foo) config(): u32=12;
@@ -71,7 +71,7 @@ use proc_macro::TokenStream;
 /// An optional `GenesisConfig` struct for storage initialization can be defined, either
 /// when at least one storage field requires default initialization
 /// (both `get` and `config` or `build`), or specifically as in :
-/// ```nocompile rust
+/// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 	}
@@ -91,7 +91,7 @@ use proc_macro::TokenStream;
 ///
 /// `decl_storage!` macro support building modules with instances with the following syntax: (DefaultInstance type
 /// is optionnal)
-/// ```nocompile rust
+/// ```nocompile
 /// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
 ///
