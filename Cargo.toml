@@ -101,5 +101,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
-[patch.crates-io]
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "substrate-tmp-2019-03-20" }
