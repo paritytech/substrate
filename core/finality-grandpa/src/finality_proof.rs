@@ -26,8 +26,9 @@
 //! that enacts new GRANDPA authorities set always comes with justification). It also
 //! means that the `set_id` is the same at blocks B and F.
 //!
-//! If authorities set changes several times in the (B; F] interval, multiple finality
-//! proof fragments are returned && each should be verified separately.
+//! Let U be the last finalized block known to caller. If authorities set has changed several
+//! times in the (U; F] interval, multiple finality proof fragments are returned && each should
+//! be verified separately.
 
 use std::sync::Arc;
 use log::{trace, warn};
