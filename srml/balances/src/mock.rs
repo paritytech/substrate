@@ -98,6 +98,9 @@ impl ExtBuilder {
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
+		if self.existential_deposit == 0 {
+			self.existential_deposit = 1;
+		}
 		self
 	}
 	pub fn vesting(mut self, vesting: bool) -> Self {
@@ -106,18 +109,13 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
-		let balance_factor = if self.existential_deposit > 0 {
-			256
-		} else {
-			1
-		};
 		t.extend(GenesisConfig::<Runtime> {
 			transaction_base_fee: self.transaction_base_fee,
 			transaction_byte_fee: self.transaction_byte_fee,
 			balances: if self.monied {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
 			} else {
-				vec![(10, balance_factor), (20, balance_factor)]
+				vec![]
 			},
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,

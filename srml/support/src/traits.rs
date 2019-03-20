@@ -61,10 +61,6 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
-pub trait ArithmeticType {
-	type Type: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
-}
-
 /// Simple trait designed for hooking into a transaction payment.
 ///
 /// It operates over a single generic `AccountId` type.
@@ -108,8 +104,17 @@ pub enum ExistenceRequirement {
 
 /// A trait for a not-quite Linear Type that tracks an imbalance.
 ///
+/// Functions that alter account balances return an object of this trait to
+/// express how much account balances have been altered in aggregate. If
+/// dropped, the currency system will take some default steps to deal with
+/// the imbalance (`balances` module simply reduces or increases its
+/// total issuance). Your module should generally handle it in some way,
+/// good practice is to do so in a configurable manner using an
+/// `OnUnbalanced` type for each situation in which your module needs to
+/// handle an imbalance.
+///
 /// Imbalances can either be Positive (funds were added somewhere without
-/// being subtracted elsewhere - e.g. a reward) or Negative.(funds deducted
+/// being subtracted elsewhere - e.g. a reward) or Negative (funds deducted
 /// somewhere without an equal and opposite addition - e.g. a slash or
 /// system fee payment).
 ///
@@ -124,7 +129,7 @@ pub enum ExistenceRequirement {
 /// then `maybe_merge` and `maybe_subsume` might work better. Instances can
 /// also be `offset` with an `Opposite` that is less than or equal to in value.
 ///
-/// You can always retrieve the raw balance value using `value`.
+/// You can always retrieve the raw balance value using `peek`.
 #[must_use]
 pub trait Imbalance<Balance>: Sized {
 	/// The oppositely imbalanced type. They come in pairs.
@@ -179,8 +184,11 @@ pub trait Imbalance<Balance>: Sized {
 	fn peek(&self) -> Balance;
 }
 
+/// Either a positive or a negative imbalance.
 pub enum SignedImbalance<B, P: Imbalance<B>>{
+	/// A positive imbalance (funds have been created but none destroyed).
 	Positive(P),
+	/// A negative imbalance (funds have been destroyed but none created).
 	Negative(P::Opposite),
 }
 
@@ -279,9 +287,30 @@ pub trait Currency<AccountId> {
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
 
-	// PUBLIC MUTABLES (DANGEROUS)
+	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
+	/// for the given reason. Basically, it's just a dry-run of `withdraw`.
+	///
+	/// `Err(...)` with the reason why not otherwise.
+	fn ensure_can_withdraw(
+		who: &AccountId,
+		_amount: Self::Balance,
+		reason: WithdrawReason,
+		new_balance: Self::Balance,
+	) -> result::Result<(), &'static str>;
 
-	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
+		// PUBLIC MUTABLES (DANGEROUS)
+
+	/// Transfer some liquid free balance to another staker.
+	///
+	/// This is a very high-level function. It will ensure all appropriate fees are paid
+	/// and no imbalance in the system remains.
+	fn transfer(
+		source: &AccountId,
+		dest: &AccountId,
+		value: Self::Balance,
+	) -> result::Result<(), &'static str>;
+
+		/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.

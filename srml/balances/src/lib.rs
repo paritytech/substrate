@@ -35,7 +35,8 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug
+	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub,
+	MaybeSerializeDebug, Saturating
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
@@ -221,7 +222,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			Self::make_transfer(&transactor, &dest, value)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
 		}
 
 		/// Set the balances of a given account.
@@ -240,6 +241,8 @@ decl_module! {
 // For funding methods, see Currency trait
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 
+	// PUBLIC IMMUTABLES
+
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
 		if let Some(v) = Self::vesting(who) {
@@ -248,6 +251,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			Zero::zero()
 		}
 	}
+
+	// PRIVATE MUTABLES
 
 	/// Set the free balance of an account to some new value.
 	///
@@ -288,46 +293,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			<FreeBalance<T, I>>::insert(who, balance);
 			UpdateBalanceOutcome::Updated
 		}
-	}
-
-	/// Transfer some liquid free balance to another staker.
-	///
-	/// This is a high-level function; it will ensure all appropriate fees are paid and
-	/// that total issuance is maintained.
-	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
-		let from_balance = Self::free_balance(transactor);
-		let to_balance = Self::free_balance(dest);
-		let would_create = to_balance.is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => return Err("got overflow after adding a fee to value"),
-		};
-
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => return Err("balance too low to send value"),
-			Some(b) => b,
-		};
-		if would_create && value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		Self::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
-
-		// NOTE: total stake being stored in the same type means that this could never overflow
-		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => return Err("destination balance too high to receive value"),
-		};
-
-		if transactor != dest {
-			T::TransferPayment::on_unbalanced(NegativeImbalance(fee));
-			Self::set_free_balance(transactor, new_from_balance);
-			Self::ensure_free_balance_is(dest, new_to_balance);
-			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
-		}
-
-		Ok(())
 	}
 
 	/// Register a new account (with existential balance).
@@ -382,64 +347,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			Self::reap_account(who);
 		}
 	}
-
-	/// Increase total issuance by given `value`.
-	///
-	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
-	/// increases.
-	fn increase_total_issuance_by(value: T::Balance) -> Result {
-		let v = <Module<T, I>>::total_issuance().checked_add(&value).ok_or("issuance overflow")?;
-		<TotalIssuance<T, I>>::put(v);
-		Ok(())
-	}
-
-	/// Decrease total issuance by given `value`.
-	///
-	/// This shouldn't be used directly, but only in the context of dealing with unbalanced account
-	/// decreases.
-	fn decrease_total_issuance_by(value: T::Balance) -> Result {
-		let v = <Module<T, I>>::total_issuance().checked_sub(&value).ok_or("issuance underflow")?;
-		<TotalIssuance<T, I>>::put(v);
-		Ok(())
-	}
-
-	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
-	/// for the given reason.
-	///
-	/// `Err(...)` with the reason why not otherwise.
-	pub fn ensure_account_can_withdraw(
-		who: &T::AccountId,
-		_amount: T::Balance,
-		reason: WithdrawReason,
-		new_balance: T::Balance,
-	) -> Result {
-		match reason {
-			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
-				return Err("vesting balance too high to send value"),
-			_ => {}
-		}
-		let locks = Self::locks(who);
-		if locks.is_empty() {
-			return Ok(())
-		}
-		let now = <system::Module<T>>::block_number();
-		if Self::locks(who).into_iter()
-			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
-		{
-			Ok(())
-		} else {
-			Err("account liquidity restrictions prevent withdrawal")
-		}
-	}
 }
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that
-/// there are more funds in the system than is accounted for in total issuance.
+/// funds have been created without any equal and opposite accounting.
 #[must_use]
 pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that
-/// there are more funds in the system than is accounted for in total issuance.
+/// funds have been destroyed without any equal and opposite accounting.
 #[must_use]
 pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
@@ -462,10 +378,10 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I>
 		(Self(first), Self(second))
 	}
 	fn merge(self, other: Self) -> Self {
-		Self(self.0 + other.0)
+		Self(self.0.saturating_add(other.0))
 	}
 	fn subsume(&mut self, other: Self) {
-		self.0 += other.0
+		self.0 = self.0.saturating_add(other.0)
 	}
 	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
 		if self.0 >= other.0 {
@@ -498,10 +414,10 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I>
 		(Self(first), Self(second))
 	}
 	fn merge(self, other: Self) -> Self {
-		Self(self.0 + other.0)
+		Self(self.0.saturating_add(other.0))
 	}
 	fn subsume(&mut self, other: Self) {
-		self.0 += other.0
+		self.0 = self.0.saturating_add(other.0)
 	}
 	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
 		if self.0 >= other.0 {
@@ -515,6 +431,7 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I>
 	}
 }
 
+// TODO: #2052
 // Somewhat ugly hack in order to gain access to module's `increase_total_issuance_by`
 // using only the Subtrait (which defines only the types that are not dependent
 // on Positive/NegativeImbalance). Subtrait must be used otherwise we end up with a
@@ -522,7 +439,7 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I>
 // and PositiveImbalance itself depending back on Trait for its Drop impl (and thus
 // its type declaration).
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
-// types (basically for charging feed).
+// types (basically for charging fees).
 // This should eventually be refactored so that the three type items that do
 // depend on the Imbalance type (TransactionPayment, TransferPayment, DustRemoval)
 // are placed in their own SRML module.
@@ -560,14 +477,14 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
 	/// Basic drop handler will just square up the total issuance.
 	fn drop(&mut self) {
-		let _ = <Module<ElevatedTrait<T, I>, I>>::increase_total_issuance_by(self.0);
+		<TotalIssuance<ElevatedTrait<T, I>, I>>::mutate(|v| *v = v.saturating_add(self.0));
 	}
 }
 
 impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
 	/// Basic drop handler will just square up the total issuance.
 	fn drop(&mut self) {
-		let _ = <Module<ElevatedTrait<T, I>, I>>::decrease_total_issuance_by(self.0);
+		<TotalIssuance<ElevatedTrait<T, I>, I>>::mutate(|v| *v = v.saturating_sub(self.0));
 	}
 }
 
@@ -591,7 +508,7 @@ where
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
 			)
 	}
 
@@ -611,6 +528,70 @@ where
 		<ReservedBalance<T, I>>::get(who)
 	}
 
+	fn ensure_can_withdraw(
+		who: &T::AccountId,
+		_amount: T::Balance,
+		reason: WithdrawReason,
+		new_balance: T::Balance,
+	) -> Result {
+		match reason {
+			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
+				return Err("vesting balance too high to send value"),
+			_ => {}
+		}
+		let locks = Self::locks(who);
+		if locks.is_empty() {
+			return Ok(())
+		}
+		let now = <system::Module<T>>::block_number();
+		if Self::locks(who).into_iter()
+			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
+		{
+			Ok(())
+		} else {
+			Err("account liquidity restrictions prevent withdrawal")
+		}
+	}
+
+	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+		let from_balance = Self::free_balance(transactor);
+		let to_balance = Self::free_balance(dest);
+		let would_create = to_balance.is_zero();
+		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let liability = match value.checked_add(&fee) {
+			Some(l) => l,
+			None => return Err("got overflow after adding a fee to value"),
+		};
+
+		let new_from_balance = match from_balance.checked_sub(&liability) {
+			None => return Err("balance too low to send value"),
+			Some(b) => b,
+		};
+		if would_create && value < Self::existential_deposit() {
+			return Err("value too low to create account");
+		}
+		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+
+		// NOTE: total stake being stored in the same type means that this could never overflow
+		// but better to be safe than sorry.
+		let new_to_balance = match to_balance.checked_add(&value) {
+			Some(b) => b,
+			None => return Err("destination balance too high to receive value"),
+		};
+
+		if transactor != dest {
+			Self::set_free_balance(transactor, new_from_balance);
+			if !<FreeBalance<T, I>>::exists(dest) {
+				Self::new_account(dest, new_to_balance);
+			}
+			Self::set_free_balance(dest, new_to_balance);
+			T::TransferPayment::on_unbalanced(NegativeImbalance(fee));
+			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
+		}
+
+		Ok(())
+	}
+
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
@@ -621,7 +602,7 @@ where
 			if liveness == ExistenceRequirement::KeepAlive && new_balance < Self::existential_deposit() {
 				return Err("payment would kill account")
 			}
-			Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
+			Self::ensure_can_withdraw(who, value, reason, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance(value))
 		} else {
@@ -662,8 +643,13 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
-		Self::ensure_free_balance_is(who, Self::free_balance(who) + value);
-		PositiveImbalance(value)
+		let (imbalance, _) = Self::ensure_free_balance_is(who, Self::free_balance(who) + value);
+		if let SignedImbalance::Positive(p) = imbalance {
+			p
+		} else {
+			// Impossible, but be defensive.
+			Self::PositiveImbalance::zero()
+		}
 	}
 
 	fn ensure_free_balance_is(who: &T::AccountId, balance: T::Balance) -> (
@@ -671,7 +657,7 @@ where
 		UpdateBalanceOutcome
 	) {
 		let original = Self::free_balance(who);
-		let imbalance = if original < balance {
+		let imbalance = if original <= balance {
 			SignedImbalance::Positive(PositiveImbalance(balance - original))
 		} else {
 			SignedImbalance::Negative(NegativeImbalance(original - balance))
@@ -705,7 +691,7 @@ where
 			return Err("not enough free funds")
 		}
 		let new_balance = b - value;
-		Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
+		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, new_balance);
 		Ok(())
