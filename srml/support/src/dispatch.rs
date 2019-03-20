@@ -521,35 +521,35 @@ macro_rules! decl_module {
 	};
 
 	(@impl_offchain
-		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
-			for $module<$trait_instance>
+			for $module<$trait_instance$(, $instance)?>
 		{
 			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
 		}
 	};
 
 	(@impl_offchain
-		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
-		impl<$trait_instance: $trait_name>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
-			for $module<$trait_instance>
+			for $module<$trait_instance$(, $instance)?>
 		{
 			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
 		}
 	};
 
 	(@impl_offchain
-		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 	) => {
-		impl<$trait_instance: $trait_name>
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
-			for $module<$trait_instance>
+			for $module<$trait_instance$(, $instance)?>
 		{}
 	};
 
@@ -663,7 +663,7 @@ macro_rules! decl_module {
 
 		decl_module! {
 			@impl_offchain
-			$mod_type<$trait_instance: $trait_name>;
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$( $offchain )*
 		}
 
