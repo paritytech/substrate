@@ -217,8 +217,6 @@ pub fn buy_gas<T: Trait>(
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;
 
-	// We don't reduce the total amount yet - instead we wait until the refund.
-	// So we pass `()` so that the imbalance is left.
 	let imbalance = <balances::Module<T>>::withdraw(
 		transactor,
 		cost,

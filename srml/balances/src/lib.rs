@@ -493,7 +493,7 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I>
 	}
 	fn split(self, amount: T::Balance) -> (Self, Self) {
 		let first = self.0.min(amount);
-		let second = self.0 - amount;
+		let second = self.0 - first;
 		(Self(first), Self(second))
 	}
 	fn merge(self, other: Self) -> Self {
@@ -529,7 +529,7 @@ impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I>
 	}
 	fn split(self, amount: T::Balance) -> (Self, Self) {
 		let first = self.0.min(amount);
-		let second = self.0 - amount;
+		let second = self.0 - first;
 		(Self(first), Self(second))
 	}
 	fn merge(self, other: Self) -> Self {
@@ -671,16 +671,12 @@ where
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
-		if free_slash < value {
-			let remaining_slash = value - free_slash;
+		let remaining_slash = value - free_slash;
+		if !remaining_slash.is_zero() {
 			let reserved_balance = Self::reserved_balance(who);
 			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
 			Self::set_reserved_balance(who, reserved_balance - reserved_slash);
-			if reserved_slash < remaining_slash {
-				(NegativeImbalance(free_slash + reserved_slash), remaining_slash - reserved_slash)
-			} else {
-				(NegativeImbalance(value), Zero::zero())
-			}
+			(NegativeImbalance(free_slash + reserved_slash), remaining_slash - reserved_slash)
 		} else {
 			(NegativeImbalance(value), Zero::zero())
 		}
