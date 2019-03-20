@@ -536,7 +536,9 @@ fn run_thread<B: BlockT + 'static>(
 				match severity {
 					Severity::Bad(message) => {
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
-						network_service_2.lock().drop_node(who)		// TODO: update code here
+						warn!(target: "sync", "Banning a node is a deprecated mechanism that \
+							should be removed");
+						network_service_2.lock().drop_node(who)
 					},
 					Severity::Useless(message) => {
 						info!(target: "sync", "Dropping {:?} because {:?}", who, message);

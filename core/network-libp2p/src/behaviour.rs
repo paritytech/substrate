@@ -24,7 +24,7 @@ use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut};
 use libp2p::ping::{Ping, PingEvent};
 use log::{debug, trace, warn};
-use std::{cmp, io, fmt, iter, time::Duration, time::Instant};
+use std::{cmp, io, fmt, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::Delay;
 use void;
@@ -96,8 +96,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 
 	/// Returns the list of nodes that we know exist in the network.
 	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
-		// TODO: get list from kademlia -https://github.com/libp2p/rust-libp2p/issues/1003
-		iter::empty()
+		self.discovery.kademlia.kbuckets_entries()
 	}
 
 	/// Returns true if we try to open protocols with the given peer.
