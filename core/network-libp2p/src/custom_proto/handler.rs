@@ -93,9 +93,10 @@ where
 {
 	type Handler = CustomProtoHandler<TMessage, TSubstream>;
 
-	fn into_handler(self, _: &PeerId) -> Self::Handler {
+	fn into_handler(self, remote_peer_id: &PeerId) -> Self::Handler {
 		CustomProtoHandler {
 			protocol: self.protocol,
+			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
 				init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
@@ -113,6 +114,10 @@ pub struct CustomProtoHandler<TMessage, TSubstream> {
 
 	/// State of the communications with the remote.
 	state: ProtocolState<TMessage, TSubstream>,
+
+	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
+	/// any influence on the behaviour.
+	remote_peer_id: PeerId,
 
 	/// Queue of events to send to the outside.
 	///
@@ -360,7 +365,8 @@ where
 	fn enable(&mut self, endpoint: Endpoint) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
+				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
+					self.remote_peer_id);
 				ProtocolState::Poisoned
 			}
 
@@ -416,7 +422,8 @@ where
 	fn disable(&mut self) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
+				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
+					self.remote_peer_id);
 				ProtocolState::Poisoned
 			}
 
@@ -473,7 +480,8 @@ where
 		let return_value;
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state; shutting down");
+				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
+					self.remote_peer_id);
 				return_value = None;
 				ProtocolState::Poisoned
 			}
@@ -481,7 +489,8 @@ where
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match init_deadline.poll() {
 					Ok(Async::Ready(())) =>
-						error!(target: "sub-libp2p", "Handler initialization process is too long"),
+						error!(target: "sub-libp2p", "Handler initialization process is too long \
+							with {:?}", self.remote_peer_id),
 					Ok(Async::NotReady) => {}
 					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
 				}
@@ -596,13 +605,15 @@ where
 	) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
+				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
+					self.remote_peer_id);
 				ProtocolState::Poisoned
 			}
 
 			ProtocolState::Init { mut substreams, init_deadline } => {
 				if substream.endpoint() == Endpoint::Dialer {
-					error!(target: "sub-libp2p", "Opened dialing substream before initialization");
+					error!(target: "sub-libp2p", "Opened dialing substream with {:?} before \
+						initialization", self.remote_peer_id);
 				}
 				substreams.push(substream);
 				ProtocolState::Init { substreams, init_deadline }
@@ -646,7 +657,7 @@ where
 
 			ProtocolState::BackCompat { substream: existing, mut shutdown } => {
 				warn!(target: "sub-libp2p", "Received extra substream after having already one \
-					open in backwards-compatibility mode");
+					open in backwards-compatibility mode with {:?}", self.remote_peer_id);
 				substream.shutdown();
 				shutdown.push(substream);
 				ProtocolState::BackCompat { substream: existing, shutdown }
@@ -665,7 +676,8 @@ where
 						state.shutdown.push(substream);
 					}
 				} else {
-					debug!(target: "sub-libp2p", "Opened spurious outbound substream");
+					debug!(target: "sub-libp2p", "Opened spurious outbound substream with {:?}",
+						self.remote_peer_id);
 					substream.shutdown();
 					state.shutdown.push(substream);
 				}
@@ -712,7 +724,7 @@ where
 						state.shutdown.push(substream);
 					} else {
 						warn!(target: "sub-libp2p", "Libp2p layer received response to a \
-							non-existing request ID {:?}", request_id);
+							non-existing request ID {:?} with {:?}", request_id, self.remote_peer_id);
 					}
 				} else if let Some(mut outgoing_substream) = state.outgoing_substream.take() {
 					outgoing_substream.send_message(message);
@@ -732,7 +744,8 @@ where
 				}
 			}
 
-			_ => debug!(target: "sub-libp2p", "Tried to send message over closed protocol")
+			_ => debug!(target: "sub-libp2p", "Tried to send message over closed protocol \
+				with {:?}", self.remote_peer_id)
 		}
 	}
 }
