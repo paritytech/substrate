@@ -261,11 +261,8 @@ pub enum StorageFunctionType {
 	Map {
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
+		is_linked: bool,
 	},
-	LinkedMap {
-		key: DecodeDifferentStr,
-		value: DecodeDifferentStr,
-	}
 }
 
 /// A storage function modifier.
