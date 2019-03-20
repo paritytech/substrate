@@ -31,7 +31,7 @@ pub struct Peerset {
 
 struct Inner {
 	/// List of nodes that we know exist but we are not connected to.
-	discovered: HashSet<PeerId>,
+	discovered: Vec<PeerId>,
 	/// List of reserved nodes.
 	reserved: HashSet<PeerId>,
 	/// If true, we only accept reserved nodes.
@@ -141,7 +141,9 @@ impl Peerset {
 
 		} else {
 			// All slots are filled with reserved peers.
-			inner.discovered.insert(peer_id);
+			if inner.discovered.iter().all(|p| *p != peer_id) {
+				inner.discovered.push(peer_id);
+			}
 		}
 	}
 
@@ -187,8 +189,8 @@ fn alloc_slots(inner: &mut Inner, tx: &mpsc::UnboundedSender<Message>) {
 			continue;
 		}
 
-		if let Some(elem) = inner.discovered.iter().cloned().next() {
-			inner.discovered.remove(&elem);
+		if !inner.discovered.is_empty() {
+			let elem = inner.discovered.remove(0);
 			*slot = Some(elem.clone());
 			let _ = tx.unbounded_send(Message::Connect(elem));
 		}
@@ -215,7 +217,9 @@ impl PeersetMut {
 			inner.slots[pos] = Some(peer_id);
 			let _ = self.parent.tx.unbounded_send(Message::Accept(index));
 		} else {
-			inner.discovered.insert(peer_id);
+			if inner.discovered.iter().all(|p| *p != peer_id) {
+				inner.discovered.push(peer_id);
+			}
 			let _ = self.parent.tx.unbounded_send(Message::Reject(index));
 		}
 	}
@@ -242,7 +246,9 @@ impl PeersetMut {
 
 		// Note: in this dummy implementation we consider that peers never expire. As soon as we
 		// are disconnected from a peer, we try again.
-		inner.discovered.insert(peer_id.clone());
+		if inner.discovered.iter().all(|p| p != peer_id) {
+			inner.discovered.push(peer_id.clone());
+		}
 		alloc_slots(&mut inner, &self.parent.tx);
 	}
 
@@ -257,7 +263,9 @@ impl PeersetMut {
 			return;
 		}
 
-		inner.discovered.insert(peer_id);
+		if inner.discovered.iter().all(|p| *p != peer_id) {
+			inner.discovered.push(peer_id);
+		}
 		alloc_slots(&mut inner, &self.parent.tx);
 	}
 }
