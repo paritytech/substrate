@@ -134,7 +134,7 @@ impl ExtBuilder {
 		self.reward = reward;
 		self
 	}
-	pub fn validator_pool(mut self, validator_pool: bool) -> Self { 
+	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
 		// NOTE: this should only be set to true with monied = false.
 		self.validator_pool = validator_pool;
 		self
@@ -205,7 +205,7 @@ impl ExtBuilder {
 			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
-		let _ = GenesisConfig::<Test>{
+		let _ = GenesisConfig::<Test> {
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
 			stakers: if self.validator_pool {
@@ -234,6 +234,7 @@ impl ExtBuilder {
 			current_offline_slash: 20,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
+			validate_timeout: 0,
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = timestamp::GenesisConfig::<Test>{
 			period: 5,

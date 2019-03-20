@@ -231,8 +231,8 @@ decl_storage! {
 		pub ValidatedAt get(validated_at): linked_map T::AccountId => T::BlockNumber;
 
 		/// The number of blocks validator preferences are considered valid for.
-		/// None is never.
-		pub ValidateTimeout get(validate_timeout) config(): Option<T::BlockNumber>;
+		/// 0 is never.
+		pub ValidateTimeout get(validate_timeout) config(): T::BlockNumber = Zero::zero();
 
 		/// The set of keys are all controllers that want to nominate.
 		///
@@ -683,12 +683,10 @@ impl<T: Trait> Module<T> {
 	/// _and_ are not currently validators.
 	fn prune_timed_out() {
 		let now = <system::Module<T>>::block_number();
-		let threshold = match Self::validate_timeout() {
-			None => return,
-			Some(timeout) if timeout >= now => return,
-			Some(timeout) => now - timeout,
-		};
+		let timeout = Self::validate_timeout();
+		if timeout == Zero::zero() || timeout >= now { return }
 
+		let threshold = now - timeout;
 		let session_validators = <session::Module<T>>::validators();
 
 		// it's invalid to edit the `ValidatedAt` map while enumerating.
