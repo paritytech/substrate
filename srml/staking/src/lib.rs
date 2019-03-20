@@ -227,6 +227,13 @@ decl_storage! {
 		/// The values are the preferences that a validator has.
 		pub Validators get(validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
+		/// The last block numbers when controllers registered they wanted to validate.
+		pub ValidatedAt get(validated_at): linked_map T::AccountId => T::BlockNumber;
+
+		/// The number of blocks validator preferences are considered valid for.
+		/// None is never.
+		pub ValidateTimeout get(validate_timeout) config(): Option<T::BlockNumber>;
+
 		/// The set of keys are all controllers that want to nominate.
 		///
 		/// The value are the nominations.
@@ -411,7 +418,8 @@ decl_module! {
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			ensure!(prefs.unstake_threshold <= MAX_UNSTAKE_THRESHOLD, "unstake threshold too large");
 			<Nominators<T>>::remove(&controller);
-			<Validators<T>>::insert(controller, prefs);
+			<Validators<T>>::insert(&controller, prefs);
+			<ValidatedAt<T>>::insert(controller, <system::Module<T>>::block_number());
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -429,6 +437,7 @@ decl_module! {
 				.collect::<result::Result<Vec<T::AccountId>, &'static str>>()?;
 
 			<Validators<T>>::remove(&controller);
+			<ValidatedAt<T>>::remove(&controller);
 			<Nominators<T>>::insert(controller, targets);
 		}
 
@@ -441,6 +450,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			<Validators<T>>::remove(&controller);
+			<ValidatedAt<T>>::remove(&controller);
 			<Nominators<T>>::remove(&controller);
 		}
 
@@ -658,6 +668,9 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
+		// prune validators who haven't re-registered after timeout.
+		Self::prune_timed_out();
+
 		// Reassign all Stakers.
 		let slot_stake = Self::select_validators();
 
@@ -666,12 +679,37 @@ impl<T: Trait> Module<T> {
 		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
 	}
 
+	/// Prune out any would-be validators who haven't re-registered since a timeout
+	/// _and_ are not currently validators.
+	fn prune_timed_out() {
+		let now = <system::Module<T>>::block_number();
+		let threshold = match Self::validate_timeout() {
+			None => return,
+			Some(timeout) if timeout >= now => return,
+			Some(timeout) => now - timeout,
+		};
+
+		// it's invalid to edit the `ValidatedAt` map while enumerating. But we
+		// can edit the `Validators` map in the first pass.
+		let to_prune = <ValidatedAt<T>>::enumerate()
+			.filter_map(|(validator, at)| if at <= threshold {
+				<Validators<T>>::remove(&validator);
+				Some(validator)
+			} else {
+				None
+			});
+
+		for validator in to_prune {
+			<ValidatedAt<T>>::remove(&validator);
+		}
+	}
+
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
 	/// @returns the new SlotStake value.
 	fn select_validators() -> BalanceOf<T> {
 		// Map of (would-be) validator account to amount of stake backing it.
-		
+
 		let rounds = || <ValidatorCount<T>>::get() as usize;
 		let validators = || <Validators<T>>::enumerate();
 		let nominators = || <Nominators<T>>::enumerate();
@@ -711,7 +749,7 @@ impl<T: Trait> Module<T> {
 		<session::Module<T>>::set_validators(
 			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);
-		
+
 		slot_stake
 	}
 
@@ -786,6 +824,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 			<Payee<T>>::remove(&controller);
 			<SlashCount<T>>::remove(&controller);
 			<Validators<T>>::remove(&controller);
+			<ValidatedAt<T>>::remove(&controller);
 			<Nominators<T>>::remove(&controller);
 		}
 	}

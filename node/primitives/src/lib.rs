@@ -59,7 +59,7 @@ pub type Hash = primitives::H256;
 pub type Timestamp = u64;
 
 /// Header type.
-/// 
+///
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, AuthorityId, AuthoritySignature>>;
 /// Block type.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
