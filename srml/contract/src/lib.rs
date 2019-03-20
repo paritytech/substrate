@@ -27,7 +27,7 @@
 //! When an account receives a message, the associated code gets executed.
 //! This code can alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
 //!
-//! Senders must specify a gas limit with every transaction, as all actions invoked by the smart-contract require gas spend.
+//! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
 //! Unused gas is refunded after the transaction, regardless of the execution outcome. 
 //! If the gas limit is reached, then all changes made at the specific transaction level are reverted (including balance transfers).
 //! 
