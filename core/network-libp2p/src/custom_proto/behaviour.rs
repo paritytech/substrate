@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::custom_proto::handler::{CustomProtoHandler, CustomProtoHandlerOut, CustomProtoHandlerIn};
+use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::topology::NetTopology;
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use crate::{NetworkConfiguration, NonReservedPeerMode};
@@ -22,7 +22,7 @@ use crate::parse_str_addr;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::core::{protocols_handler::ProtocolsHandler, Endpoint, Multiaddr, PeerId};
+use libp2p::core::{Endpoint, Multiaddr, PeerId};
 use log::{debug, trace, warn};
 use smallvec::SmallVec;
 use std::{cmp, error, io, marker::PhantomData, path::Path, time::Duration, time::Instant};
@@ -433,11 +433,11 @@ where
 	TSubstream: AsyncRead + AsyncWrite,
 	TMessage: CustomMessage,
 {
-	type ProtocolsHandler = CustomProtoHandler<TMessage, TSubstream>;
+	type ProtocolsHandler = CustomProtoHandlerProto<TMessage, TSubstream>;
 	type OutEvent = CustomProtoOut<TMessage>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		CustomProtoHandler::new(self.protocol.clone())
+		CustomProtoHandlerProto::new(self.protocol.clone())
 	}
 
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -575,7 +575,7 @@ where
 	fn inject_node_event(
 		&mut self,
 		source: PeerId,
-		event: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
+		event: CustomProtoHandlerOut<TMessage>,
 	) {
 		match event {
 			CustomProtoHandlerOut::CustomProtocolClosed { result } => {
@@ -639,7 +639,7 @@ where
 		params: &mut PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
-			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
+			CustomProtoHandlerIn<TMessage>,
 			Self::OutEvent,
 		>,
 	> {
