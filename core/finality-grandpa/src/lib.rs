@@ -283,6 +283,7 @@ impl TopicTracker {
 			);
 			return true;
 		}
+
 		false
 	}
 }
@@ -358,6 +359,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		use grandpa::Message as GrandpaMessage;
+
 		if self.is_expired(full.round, full.set_id) {
 			return network_gossip::ValidationResult::Expired;
 		}
@@ -392,6 +394,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let precommits_signed_by: Vec<String> = full.message.auth_data.iter().map(move |(_, a)| {
 			format!("{}", a)
 		}).collect();
+
 		telemetry!(CONSENSUS_INFO; "afg.received_commit_msg";
 			"contains_precommits_signed_by" => ?precommits_signed_by,
 			"round" => ?full.round,
@@ -442,7 +445,7 @@ pub trait Network<Block: BlockT>: Clone {
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In;
 
 	/// Send a message at a specific round out.
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>);
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool);
 
 	/// Clean up messages for a round.
 	fn drop_round_messages(&self, round: u64, set_id: u64);
@@ -455,7 +458,7 @@ pub trait Network<Block: BlockT>: Clone {
 	fn commit_messages(&self, set_id: u64) -> Self::In;
 
 	/// Send message over the commit channel.
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool);
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, round: u64, set_id: u64, block: Block::Hash);
@@ -508,9 +511,9 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		NetworkStream { outer: rx, inner: None }
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, force);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
@@ -533,9 +536,9 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		NetworkStream { outer: rx, inner: None }
 	}
 
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, force);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {

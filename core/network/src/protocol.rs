@@ -240,7 +240,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, bool),
 	/// Tell protocol to abort sync (does not stop protocol).
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -380,8 +380,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
-				self.gossip_consensus_message(topic, engine_id, message)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, force) => {
+				self.gossip_consensus_message(topic, engine_id, message, force)
 			}
 			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
 				self.sync.blocks_processed(hashes, has_error);
@@ -503,11 +503,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
+	fn gossip_consensus_message(
+		&mut self,
+		topic: B::Hash,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
+		force: bool,
+	) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
 			ConsensusMessage{ data: message, engine_id },
+			force,
 		);
 	}
 

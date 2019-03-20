@@ -39,7 +39,8 @@ const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 const CURRENT_VERSION: u32 = 1;
 
 /// The voter set state.
-#[derive(Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum VoterSetState<H, N> {
 	/// The voter set state, currently paused.
 	Paused(u64, RoundState<H, N>),
@@ -160,7 +161,11 @@ pub(crate) fn load_persistent<B, H, N, G>(
 				backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
 				let set_state = match load_decode::<_, V0VoterSetState<H, N>>(backend, SET_STATE_KEY)? {
-					Some((number, state)) => VoterSetState::Live(number, state),
+					Some((number, state)) => {
+						let set_state = VoterSetState::Live(number, state);
+						backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
+						set_state
+					},
 					None => VoterSetState::Live(0, make_genesis_round()),
 				};
 
@@ -272,4 +277,84 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 	-> Option<AuthoritySet<H, N>> {
 	load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY)
 		.expect("backend error")
+}
+
+#[cfg(test)]
+mod test {
+	use substrate_primitives::H256;
+	use test_client;
+	use super::*;
+
+	#[test]
+	fn load_decode_migrates_data_format() {
+		let client = test_client::new();
+
+		let authorities = vec![(AuthorityId::default(), 100)];
+		let set_id = 3;
+		let round_number = 42;
+		let round_state = RoundState::<H256, u64> {
+			prevote_ghost: None,
+			finalized: None,
+			estimate: None,
+			completable: false,
+		};
+
+		{
+			let authority_set = V0AuthoritySet::<H256, u64> {
+				current_authorities: authorities.clone(),
+				pending_changes: Vec::new(),
+				set_id,
+			};
+
+			let voter_set_state = (round_number, round_state.clone());
+
+			client.insert_aux(
+				&[
+					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+				],
+				&[],
+			).unwrap();
+		}
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			None,
+		);
+
+		// should perform the migration
+		load_persistent(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(1),
+		);
+
+		let PersistentData { authority_set, set_state, .. } = load_persistent(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			*authority_set.inner().read(),
+			AuthoritySet {
+				current_authorities: authorities,
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			},
+		);
+
+		assert_eq!(
+			set_state,
+			VoterSetState::Live(round_number, round_state),
+		);
+	}
 }
