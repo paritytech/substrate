@@ -305,7 +305,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
 	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
-	use crate::{Header, Extrinsic, Transfer};
+	use crate::{Header, Transfer};
 	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;

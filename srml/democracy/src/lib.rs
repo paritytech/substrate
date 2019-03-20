@@ -24,7 +24,7 @@ use primitives::traits::{Zero, As, Bounded};
 use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, LockableCurrency, WithdrawReason, ArithmeticType, LockIdentifier};
+use srml_support::traits::{Currency, LockableCurrency, WithdrawReason, LockIdentifier};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -69,10 +69,10 @@ impl Vote {
 	}
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 pub trait Trait: system::Trait + Sized {
-	type Currency: ArithmeticType + LockableCurrency<<Self as system::Trait>::AccountId, Moment=Self::BlockNumber, Balance=BalanceOf<Self>>;
+	type Currency: LockableCurrency<<Self as system::Trait>::AccountId, Moment=Self::BlockNumber>;
 
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 
@@ -511,6 +511,9 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Self>;
@@ -525,6 +528,8 @@ mod tests {
 	fn new_test_ext_with_public_delay(public_delay: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			existential_deposit: 0,
 			transfer_fee: 0,
