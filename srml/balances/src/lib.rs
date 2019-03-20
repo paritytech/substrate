@@ -664,8 +664,8 @@ where
 			// since this is an instance where we might account for a negative imbalance
 			// (in the dust cleaner of set_free_balance) before we account for its actual
 			// equal and opposite cause (returned as an Imbalance), then in the
-			// instance that there's no other accounts on the system at all, we'll
-			// underflow and our arithmetic will be off.
+			// instance that there's no other accounts on the system at all, we might
+			// underflow the issuance and our arithmetic will be off.
 			return (
 				SignedImbalance::Positive(Self::PositiveImbalance::zero()),
 				UpdateBalanceOutcome::AccountKilled,
