@@ -32,10 +32,17 @@ const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
 /// See module documentation.
 pub struct RefWindow<BlockHash: Hash, Key: Hash> {
+	/// A queue of keys that should be deleted for each block in the pruning window.
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
+	/// An index that maps each key from `death_rows` to block number.
 	death_index: HashMap<Key, u64>,
+	/// Block number that corresponts to the front of `death_rows`
 	pending_number: u64,
-	pending_finalizatons: usize,
+	/// Number of call of `note_canonical` after
+	/// last call `apply_pending` or `revert_pending`
+	pending_canonicalizations: usize,
+	/// Number of calls of `prune_one` after
+	/// last call `apply_pending` or `revert_pending`
 	pending_prunings: usize,
 }
 
@@ -70,7 +77,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			death_rows: Default::default(),
 			death_index: Default::default(),
 			pending_number: pending_number,
-			pending_finalizatons: 0,
+			pending_canonicalizations: 0,
 			pending_prunings: 0,
 		};
 		// read the journal
@@ -160,12 +167,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		let journal_key = to_journal_key(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
 		self.import(&journal_record.hash, journal_key, journal_record.inserted.into_iter(), journal_record.deleted);
-		self.pending_finalizatons += 1;
+		self.pending_canonicalizations += 1;
 	}
 
 	/// Apply all pending changes
 	pub fn apply_pending(&mut self) {
-		self.pending_finalizatons = 0;
+		self.pending_canonicalizations = 0;
 		for _ in 0 .. self.pending_prunings {
 			let pruned = self.death_rows.pop_front().expect("pending_prunings is always < death_rows.len()");
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
@@ -179,10 +186,14 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 
 	/// Revert all pending changes
 	pub fn revert_pending(&mut self) {
-		self.death_rows.truncate(self.death_rows.len() - self.pending_finalizatons);
+		// Revert pending deletions.
+		// Note that pending insertions might cause some existing deletions to be removed from `death_index`
+		// We don't bother to track and revert that for now. This means that a few nodes might end up no being
+		// deleted in case transaction fails and `revert_pending` is called.
+		self.death_rows.truncate(self.death_rows.len() - self.pending_canonicalizations);
 		let new_max_block = self.death_rows.len() as u64 + self.pending_number;
 		self.death_index.retain(|_, block| *block < new_max_block);
-		self.pending_finalizatons = 0;
+		self.pending_canonicalizations = 0;
 		self.pending_prunings = 0;
 	}
 }
@@ -220,7 +231,7 @@ mod tests {
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
 		assert!(pruning.pending_prunings == 0);
-		assert!(pruning.pending_finalizatons == 0);
+		assert!(pruning.pending_canonicalizations == 0);
 	}
 
 	#[test]
