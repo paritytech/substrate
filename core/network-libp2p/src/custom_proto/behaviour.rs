@@ -715,26 +715,31 @@ where
 	}
 
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		if let Entry::Occupied(entry) = self.peers.entry(peer_id.clone()) {
-			match entry.get() {
+		if let Entry::Occupied(mut entry) = self.peers.entry(peer_id.clone()) {
+			match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 				// The node is not in our list.
-				PeerState::Banned { .. } => {
+				st @ PeerState::Banned { .. } => {
 					trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
+					*entry.into_mut() = st;
 				},
 
 				// "Basic" situation: we failed to reach a node that the peerset requested.
 				PeerState::Requested | PeerState::PendingRequest { .. } => {
 					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
+					*entry.into_mut() = PeerState::Banned {
+						until: Instant::now() + Duration::from_secs(5)
+					};
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-					entry.remove();
 					self.peerset.dropped(peer_id)
 				},
 
 				// We can still get dial failures even if we are already connected to the node,
 				// as an extra diagnostic for an earlier attempt.
-				PeerState::Disabled { .. } | PeerState::Enabled { .. } |
-					PeerState::DisabledPendingEnable { .. } | PeerState::Incoming { .. } =>
-					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id),
+				st @ PeerState::Disabled { .. } | st @ PeerState::Enabled { .. } |
+					st @ PeerState::DisabledPendingEnable { .. } | st @ PeerState::Incoming { .. } => {
+					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
+					*entry.into_mut() = st;
+				},
 
 				PeerState::Poisoned =>
 					error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id),
