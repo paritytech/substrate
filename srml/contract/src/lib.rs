@@ -41,7 +41,7 @@
 //! 
 //! ### Dispatchable functions ([`Call`])
 //!  
-//! * `put_code` - Stores code in the contract account storage.
+//! * `PUT_CODE` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
 //! 
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //! 
