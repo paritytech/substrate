@@ -55,11 +55,11 @@ use proc_macro::TokenStream;
 /// `#vis #name get(#getter) config(#field_name) build(#closure): #type = #default;`
 /// * `#vis`: set the visibility of the structure
 /// * `#name`: name of the storage, used as a prefix in the storage
-/// * [optionnal] `get(#getter)`: implements the function #getter to `Module`
-/// * [optionnal] `config(#field_name)`: `field_name` is optionnal if get is set: include in `GenesisConfig`
-/// * [optionnal] `build(#closure)`: closure called with storage overlays
+/// * [optional] `get(#getter)`: implements the function #getter to `Module`
+/// * [optional] `config(#field_name)`: `field_name` is optional if get is set: include in `GenesisConfig`
+/// * [optional] `build(#closure)`: closure called with storage overlays
 /// * `#type`: storage type
-/// * [optionnal] `#default`: value returned when none
+/// * [optional] `#default`: value returned when none
 ///
 /// Storages are accessible in multiples ways, using:
 /// * the structure: `Foo::<T>`
@@ -90,7 +90,7 @@ use proc_macro::TokenStream;
 /// ## Module with instances
 ///
 /// `decl_storage!` macro support building modules with instances with the following syntax: (DefaultInstance type
-/// is optionnal)
+/// is optional)
 /// ```nocompile
 /// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
