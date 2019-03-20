@@ -16,9 +16,9 @@ args:
     takes_value: true
     multiple: true
     required: true
-- upgrade_key_seed:
+- sudo_key_seed:
     short: u
-    value_name: UPGRADE_KEY_SEED
-    help: Upgrade key seed
+    value_name: SUDO_KEY_SEED
+    help: Sudo key seed
     takes_value: true
     required: true

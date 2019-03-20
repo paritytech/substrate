@@ -213,7 +213,7 @@ pub trait DefaultByte {
 	fn default_byte(&self) -> Vec<u8>;
 }
 
-/// Wrapper over dyn pointer for accessing a cached once byet value.
+/// Wrapper over dyn pointer for accessing a cached once byte value.
 #[derive(Clone)]
 pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 

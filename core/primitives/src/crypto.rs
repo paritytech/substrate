@@ -25,6 +25,12 @@ use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
 
+/// The root phrase for our publically known keys.
+pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
+
+/// The address of the associated root phrase for our publically known keys.
+pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqAS7";
+
 /// The infallible type.
 #[derive(Debug)]
 pub enum Infallible {}
@@ -243,14 +249,16 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 
 	fn from_string(s: &str) -> Result<Self, PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d]+)(?P<path>(//?[^/]+)*)$")
+		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let re_junction = Regex::new(r"/(/?[^/]+)")
 			.expect("constructed from known-good static value; qed");
 		let path = re_junction.captures_iter(&cap["path"])
 			.map(|f| DeriveJunction::from(&f[1]));
-		Self::from_ss58check(&cap["ss58"])?.derive(path).ok_or(PublicError::InvalidPath)
+		Self::from_ss58check(cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS))?
+			.derive(path)
+			.ok_or(PublicError::InvalidPath)
 	}
 }
 
@@ -335,6 +343,9 @@ pub trait Pair: Sized {
 	///   - the phrase may be followed by one or more items delimited by `/` characters.
 	///   - the path may be followed by `///`, in which case everything after the `///` is treated
 	/// as a password.
+	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE` and
+	/// interpreted as above.
+	///
 	/// In this case they are interpreted as HDKD junctions; purely numeric items are interpreted as
 	/// integers, non-numeric items as strings. Junctions prefixed with `/` are interpreted as soft
 	/// junctions, and with `//` as hard junctions.
@@ -359,7 +370,7 @@ pub trait Pair: Sized {
 			}
 		}
 
-		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
+		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
 		let re_junction = Regex::new(r"/(/?[^/]+)")
@@ -367,7 +378,7 @@ pub trait Pair: Sized {
 		let path = re_junction.captures_iter(&cap["path"])
 			.map(|f| DeriveJunction::from(&f[1]));
 		Self::from_standard_components(
-			&cap["phrase"],
+			cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE),
 			password_override.or_else(|| cap.name("password").map(|m| m.as_str())),
 			path,
 		)

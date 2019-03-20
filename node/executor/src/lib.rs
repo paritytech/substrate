@@ -39,7 +39,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, staking, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -296,7 +296,11 @@ mod tests {
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				stakers: vec![(dave(), alice(), 111), (eve(), bob(), 101), (ferdie(), charlie(), 100)],
+				stakers: vec![
+					(dave(), alice(), 111, staking::StakerStatus::Validator),
+					(eve(), bob(), 100, staking::StakerStatus::Validator),
+					(ferdie(), charlie(), 100, staking::StakerStatus::Validator)
+				],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -441,7 +445,13 @@ mod tests {
 			]
 		);
 
-		let digest = generic::Digest::<Log>::default();
+		// let mut digest = generic::Digest::<Log>::default();
+		// digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
+		// 	(Keyring::Charlie.to_raw_public().into(), 1),
+		// 	(Keyring::Bob.to_raw_public().into(), 1),
+		// 	(Keyring::Alice.to_raw_public().into(), 1),
+		// ])));
+		let digest = generic::Digest::<Log>::default(); // TODO test this
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
 		(block1, block2)
@@ -574,6 +584,14 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))
 				},
+				// EventRecord { // TODO: this might be wrong.
+				// 	phase: Phase::Finalization,
+				// 	event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
+				// 		(Keyring::Charlie.to_raw_public().into(), 1),
+				// 		(Keyring::Bob.to_raw_public().into(), 1),
+				// 		(Keyring::Alice.to_raw_public().into(), 1),
+				// 	])),
+				// },
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Spending(0))

@@ -23,7 +23,10 @@ use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUi
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
-use crate::{GenesisConfig, Module, Trait};
+use crate::{GenesisConfig, Module, Trait, StakerStatus};
+
+// The AccountId alias in this test module.
+pub type AccountIdType = u64;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -44,7 +47,7 @@ impl system::Trait for Test {
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
-	type AccountId = u64;
+	type AccountId = AccountIdType;
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
@@ -78,17 +81,25 @@ pub struct ExtBuilder {
 	current_era: u64,
 	monied: bool,
 	reward: u64,
+	validator_pool: bool,
+	nominate: bool,
+	validator_count: u32,
+	minimum_validator_count: u32,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			session_length: 3,
-			sessions_per_era: 3,
+			session_length: 1,
+			sessions_per_era: 1,
 			current_era: 0,
 			monied: true,
 			reward: 10,
+			validator_pool: false,
+			nominate: true,
+			validator_count: 2,
+			minimum_validator_count: 0,
 		}
 	}
 }
@@ -118,6 +129,24 @@ impl ExtBuilder {
 		self.reward = reward;
 		self
 	}
+	pub fn validator_pool(mut self, validator_pool: bool) -> Self { 
+		// NOTE: this should only be set to true with monied = false.
+		self.validator_pool = validator_pool;
+		self
+	}
+	pub fn nominate(mut self, nominate: bool) -> Self {
+		// NOTE: this only sets a dummy nominator for tests that want 10 and 20 (default validators) to be chosen by default.
+		self.nominate = nominate;
+		self
+	}
+	pub fn validator_count(mut self, count: u32) -> Self {
+		self.validator_count = count;
+		self
+	}
+	pub fn minimum_validator_count(mut self, count: u32) -> Self {
+		self.minimum_validator_count = count;
+		self
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -131,7 +160,8 @@ impl ExtBuilder {
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = session::GenesisConfig::<Test>{
 			session_length: self.session_length,
-			validators: vec![10, 20],
+			// NOTE: if config.nominate == false then 100 is also selected in the initial round.
+			validators: if self.validator_pool { vec![10, 20, 30, 40] }  else { vec![10, 20] },
 			keys: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = balances::GenesisConfig::<Test>{
@@ -145,13 +175,23 @@ impl ExtBuilder {
 						(10, balance_factor),
 						(11, balance_factor * 1000),
 						(20, balance_factor),
-						(21, balance_factor * 2000)
+						(21, balance_factor * 2000),
+						(100, 2000 * balance_factor),
+						(101, 2000 * balance_factor),
 					]
 				} else {
-					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor)]
+					vec![
+						(1, 10 * balance_factor), (2, 20 * balance_factor),
+						(3, 300 * balance_factor), (4, 400 * balance_factor)
+					]
 				}
 			} else {
-				vec![(10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
+				vec![
+					(10, balance_factor), (11, balance_factor * 10),
+					(20, balance_factor), (21, balance_factor * 20),
+					(30, balance_factor), (31, balance_factor * 30),
+					(40, balance_factor), (41, balance_factor * 40)
+				]
 			},
 			existential_deposit: self.existential_deposit,
 			transfer_fee: 0,
@@ -161,9 +201,25 @@ impl ExtBuilder {
 		let _ = GenesisConfig::<Test>{
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
-			stakers: vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)],
-			validator_count: 2,
-			minimum_validator_count: 0,
+			stakers: if self.validator_pool {
+				vec![
+					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
+					(31, 30, balance_factor * 3000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					(41, 40, balance_factor * 4000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					// nominator
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
+				]
+			} else {
+				vec![
+					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
+					// nominator
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
+				]
+			},
+			validator_count: self.validator_count,
+			minimum_validator_count: self.minimum_validator_count,
 			bonding_duration: self.sessions_per_era * self.session_length * 3,
 			session_reward: Perbill::from_millionths((1000000 * self.reward / balance_factor) as u32),
 			offline_slash: if self.monied { Perbill::from_percent(40) } else { Perbill::zero() },

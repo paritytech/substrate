@@ -407,7 +407,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 }
 
 
-/// Auxilariy data structure that is used to convert `impl Api for Runtime` to
+/// Auxiliary data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
 /// This requires us to replace the runtime `Block` with the node `Block`,
 /// `impl Api for Runtime` with `impl Api for RuntimeApi` and replace the method implementations
@@ -483,7 +483,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				-> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>
 			);
 
-			// Generate the new method implementation that calls into the runime.
+			// Generate the new method implementation that calls into the runtime.
 			parse_quote!(
 				{
 					// Get the error to the user (if we have one).
