@@ -32,7 +32,8 @@
 //! If the gas limit is reached, then all changes made at the specific transaction level are reverted (including balance transfers).
 //! 
 //! **NOTE:** Transaction failures are typically not cascading. For example, if contract A calls B and B errors
-//! somehow, A can still decide if it should proceed or error.
+//! **NOTE:** Transaction failures are not always cascading. For example, if contract A calls contract B and B
+//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
 //! Finally, when the `staking` module determines an account is dead (i.e. account balance fell below the
 //! existential deposit), it reaps the account. This will delete the associated code and storage of the account.
