@@ -915,7 +915,7 @@ mod tests {
 			},
 			StorageFunctionMetadata {
 				name: DecodeDifferent::Encode("LINKEDMAPU32"),
-				modifier: StorageFunctionModifier::Default,
+				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
