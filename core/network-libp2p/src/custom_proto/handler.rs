@@ -18,23 +18,25 @@ use crate::custom_proto::upgrade::{CustomMessage, CustomMessageId, RegisteredPro
 use crate::custom_proto::upgrade::{RegisteredProtocolEvent, RegisteredProtocolSubstream};
 use futures::prelude::*;
 use libp2p::core::{
-	Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
+	PeerId, Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
+	protocols_handler::IntoProtocolsHandler,
 	protocols_handler::KeepAlive,
 	protocols_handler::ProtocolsHandlerUpgrErr,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
 };
 use log::{debug, error, warn};
 use smallvec::{smallvec, SmallVec};
-use std::{error, fmt, io, mem, time::Duration, time::Instant};
+use std::{error, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::Delay;
 use void::Void;
 
-/// Implements the `ProtocolsHandler` trait of libp2p.
+/// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
-/// Every time a connection with a remote is established, an instance of this struct is created and
-/// sent to a background task dedicated to this connection. It handles all communications that are
-/// specific to Substrate.
+/// Every time a connection with a remote starts, an instance of this struct is created and
+/// sent to a background task dedicated to this connection. Once the connection is established,
+/// it is turned into a `CustomProtoHandler`. It then handles all communications that are specific
+/// to Substrate on that connection.
 ///
 /// Note that there can be multiple instance of this struct simultaneously for same peer. However
 /// if that happens, only one main instance can communicate with the outer layers of the code.
@@ -62,6 +64,49 @@ use void::Void;
 /// happens on one substream, we consider that we are disconnected. Re-enabling is performed by
 /// opening an outbound substream.
 ///
+pub struct CustomProtoHandlerProto<TMessage, TSubstream> {
+	/// Configuration for the protocol upgrade to negotiate.
+	protocol: RegisteredProtocol<TMessage>,
+
+	/// Marker to pin the generic type.
+	marker: PhantomData<TSubstream>,
+}
+
+impl<TMessage, TSubstream> CustomProtoHandlerProto<TMessage, TSubstream>
+where
+	TSubstream: AsyncRead + AsyncWrite,
+	TMessage: CustomMessage,
+{
+	/// Builds a new `CustomProtoHandlerProto`.
+	pub fn new(protocol: RegisteredProtocol<TMessage>) -> Self {
+		CustomProtoHandlerProto {
+			protocol,
+			marker: PhantomData,
+		}
+	}
+}
+
+impl<TMessage, TSubstream> IntoProtocolsHandler for CustomProtoHandlerProto<TMessage, TSubstream>
+where
+	TSubstream: AsyncRead + AsyncWrite,
+	TMessage: CustomMessage,
+{
+	type Handler = CustomProtoHandler<TMessage, TSubstream>;
+
+	fn into_handler(self, _: &PeerId) -> Self::Handler {
+		CustomProtoHandler {
+			protocol: self.protocol,
+			state: ProtocolState::Init {
+				substreams: SmallVec::new(),
+				init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
+			},
+			events_queue: SmallVec::new(),
+			warm_up_end: Instant::now() + Duration::from_secs(5),
+		}
+	}
+}
+
+/// The actual handler once the connection has been established.
 pub struct CustomProtoHandler<TMessage, TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate.
 	protocol: RegisteredProtocol<TMessage>,
@@ -311,19 +356,6 @@ where
 	TSubstream: AsyncRead + AsyncWrite,
 	TMessage: CustomMessage,
 {
-	/// Builds a new `CustomProtoHandler`.
-	pub fn new(protocol: RegisteredProtocol<TMessage>) -> Self {
-		CustomProtoHandler {
-			protocol,
-			state: ProtocolState::Init {
-				substreams: SmallVec::new(),
-				init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
-			},
-			events_queue: SmallVec::new(),
-			warm_up_end: Instant::now() + Duration::from_secs(5),
-		}
-	}
-
 	/// Enables the handler.
 	fn enable(&mut self, endpoint: Endpoint) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
