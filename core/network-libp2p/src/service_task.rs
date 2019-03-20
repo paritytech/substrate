@@ -19,7 +19,7 @@ use crate::{
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomMessage, RegisteredProtocol};
-use crate::{NetworkConfiguration, NodeIndex, parse_str_addr};
+use crate::{NetworkConfiguration, NonReservedPeerMode, NodeIndex, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
 use libp2p::{multiaddr::Protocol, Multiaddr, core::swarm::NetworkBehaviour, PeerId};
@@ -49,6 +49,7 @@ where TMessage: CustomMessage + Send + 'static {
 	// List of multiaddresses that we know in the network.
 	let mut known_addresses = Vec::new();
 	let mut bootnodes = Vec::new();
+	let mut reserved_nodes = Vec::new();
 
 	// Process the bootnodes.
 	for bootnode in config.boot_nodes.iter() {
@@ -61,22 +62,24 @@ where TMessage: CustomMessage + Send + 'static {
 		}
 	}
 
-	// Build the peerset.
-	let (peerset, peerset_receiver) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
-		in_peers: 25,
-		out_peers: 25,
-		bootnodes,
-	});
-
 	// Initialize the reserved peers.
 	for reserved in config.reserved_nodes.iter() {
 		if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
-			peerset.add_reserved_peer(peer_id.clone());
+			reserved_nodes.push(peer_id.clone());
 			known_addresses.push((peer_id, addr));
 		} else {
 			warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
 		}
 	}
+
+	// Build the peerset.
+	let (peerset, peerset_receiver) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
+		in_peers: 25,
+		out_peers: 25,
+		bootnodes,
+		reserved_only: config.non_reserved_mode == NonReservedPeerMode::Deny,
+		reserved_nodes,
+	});
 
 	// Private and public keys configuration.
 	let local_identity = config.node_key.clone().into_keypair()?;

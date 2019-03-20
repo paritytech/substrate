@@ -82,6 +82,15 @@ pub struct PeersetConfig {
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
+
+	/// If true, we only accept reserved nodes.
+	pub reserved_only: bool,
+
+	/// List of nodes that we should always be connected to.
+	///
+	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
+	/// >			otherwise it will not be able to connect to them.
+	pub reserved_nodes: Vec<PeerId>,
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -101,7 +110,7 @@ impl Peerset {
 		let mut inner = Inner {
 			discovered: config.bootnodes.into_iter().collect(),
 			reserved: Default::default(),
-			reserved_only: false,
+			reserved_only: config.reserved_only,
 			slots: (0 .. (config.in_peers + config.out_peers)).map(|_| None).collect(),
 		};
 
@@ -116,6 +125,10 @@ impl Peerset {
 			parent: peerset.clone(),
 			rx,
 		};
+
+		for reserved in config.reserved_nodes {
+			peerset.add_reserved_peer(reserved);
+		}
 
 		(peerset, rx)
 	}
