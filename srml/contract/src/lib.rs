@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,15 +24,18 @@
 //! 
 //! This module provides the ability to create smart-contract accounts and send them messages.
 //! A smart-contract is represented by an account with associated code and storage. 
-//! When an account receives a message, the associated code gets executed.
+//! When a smart-contract account receives a message, the associated code gets executed.
 //! This code can alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
 //!
 //! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
-//! Unused gas is refunded after the transaction, regardless of the execution outcome. 
-//! If the gas limit is reached, then all changes made at the specific transaction level are reverted (including balance transfers).
+//! Unused gas is refunded after the call, regardless of the execution outcome. 
+
+//! **NOTE:** If the gas limit is reached, then all calls and state changes (including balance transfers) are only reverted at the current call's contract level.
+//! For example, if contract A calls B and B runs out of gas mid-call, then all of B's dispatched calls are reverted.
+//! Assuming correct error handling by contract A, A's other calls and state changes still persist. 
 //! 
-//! **NOTE:** Transaction failures are typically not cascading. For example, if contract A calls B and B errors
-//! somehow, A can still decide if it should proceed or error.
+//! **NOTE:** Call failures are also not always cascading. For example, if contract A calls contract B and B
+//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
 //! Finally, when the `staking` module determines an account is dead (i.e. account balance fell below the
 //! existential deposit), it reaps the account. This will delete the associated code and storage of the account.
@@ -40,12 +43,12 @@
 //! ## Interface
 //! 
 //! ### Dispatchable functions ([`Call`])
-//!  
+//! 
 //! * `PUT_CODE` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
 //! 
-//! * `call` - Makes a call to an account, optionally transferring some balance.
+//! * `CREATE` - Deploys a new contract from the given `codehash`, optionally transferring some balance. This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! 
-//! * `create` - Creates a new contract, optionally transferring some balance.
+//! * `CALL` - Makes a call to an account, optionally transferring some balance.
 //!
 //! ### Public functions ([`Module`])
 //! 
@@ -65,7 +68,12 @@
 //! 
 //! * `current_schedule` - Gets the current cost schedule for contracts.
 //! 
-//! ### Example from SRML
+//! ## Usage
+//! 
+//! The following examples show how to use the contract module. 
+//! * [`Balances`](https://crates.parity.io/srml_balances/index.html) ...
+//! * [`Staking`](https://crates.parity.io/srml_staking/index.html) [work in progres] 
+//! is a domain specific language...
 //! 
 //! ## Related Modules
 //! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
