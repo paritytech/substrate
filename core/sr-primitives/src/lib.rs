@@ -697,6 +697,7 @@ mod tests {
 	use substrate_primitives::hash::{H256, H512};
 	use crate::codec::{Encode, Decode};
 	use crate::traits::DigestItem;
+	use super::*;
 
 	pub trait RuntimeT {
 		type AuthorityId;
@@ -818,5 +819,14 @@ mod tests {
 	fn saturating_mul() {
 		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
 		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
+	}
+
+	#[test]
+	fn any_signature_encodes_same_as_expected() {
+		let key1 = sr25519::Public([222; 32]);
+		let key2 = ed25519::Public([222; 32]);
+
+		println!("sr: {:?}", key1.encode());
+		println!("ed: {:?}", key2.encode());
 	}
 }
