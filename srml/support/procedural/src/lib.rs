@@ -35,7 +35,7 @@ use proc_macro::TokenStream;
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Foo get(foo) config(): u32=12;
 /// 		Bar: map u32 => u32;
-/// 		pub Zed build(|config| vec![(0, 0])): linked_map u32 => u32;
+/// 		pub Zed build(|config| vec![(0, 0)]): linked_map u32 => u32;
 /// 	}
 /// }
 /// ```
