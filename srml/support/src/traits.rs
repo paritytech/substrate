@@ -125,6 +125,7 @@ pub enum ExistenceRequirement {
 /// also be `offset` with an `Opposite` that is less than or equal to in value.
 ///
 /// You can always retrieve the raw balance value using `value`.
+#[must_use]
 pub trait Imbalance<Balance>: Sized {
 	/// The oppositely imbalanced type. They come in pairs.
 	type Opposite: Imbalance<Balance>;
@@ -176,6 +177,46 @@ pub trait Imbalance<Balance>: Sized {
 
 	/// The raw value of self.
 	fn peek(&self) -> Balance;
+}
+
+pub enum SignedImbalance<B, P: Imbalance<B>>{
+	Positive(P),
+	Negative(P::Opposite),
+}
+
+impl<
+	P: Imbalance<B, Opposite=N>,
+	N: Imbalance<B, Opposite=P>,
+	B: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default,
+> SignedImbalance<B, P> {
+	pub fn zero() -> Self {
+		SignedImbalance::Positive(P::zero())
+	}
+
+	pub fn drop_zero(self) -> Result<(), Self> {
+		match self {
+			SignedImbalance::Positive(x) => x.drop_zero().map_err(SignedImbalance::Positive),
+			SignedImbalance::Negative(x) => x.drop_zero().map_err(SignedImbalance::Negative),
+		}
+	}
+
+	/// Consume `self` and an `other` to return a new instance that combines
+	/// both.
+	pub fn merge(self, other: Self) -> Self {
+		match (self, other) {
+			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) =>
+				SignedImbalance::Positive(one.merge(other)),
+			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) =>
+				SignedImbalance::Negative(one.merge(other)),
+			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) =>
+				if one.peek() > other.peek() {
+					SignedImbalance::Positive(one.offset(other).ok().unwrap_or_else(P::zero))
+				} else {
+					SignedImbalance::Negative(other.offset(one).ok().unwrap_or_else(N::zero))
+				},
+			(one, other) => other.merge(one),
+		}
+	}
 }
 
 /// Abstraction over a fungible assets system.
@@ -280,7 +321,20 @@ pub trait Currency<AccountId> {
 		value: Self::Balance,
 	) -> Self::PositiveImbalance;
 
-	/// Moves `value` from balance to reserved balance.
+	/// Ensure an account's free balance equals some value; this will create the account
+	/// if needed.
+	///
+	/// Returns a signed imbalance and status to indicate if the account was successfully updated or update
+	/// has led to killing of the account.
+	fn ensure_free_balance_is(
+		who: &AccountId,
+		balance: Self::Balance,
+	) -> (
+		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
+		UpdateBalanceOutcome,
+	);
+
+		/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
 	/// be returned to notify of this. This is different behaviour to `unreserve`.

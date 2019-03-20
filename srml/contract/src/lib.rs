@@ -214,7 +214,7 @@ decl_module! {
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistant storage.
+				// Commit all changes that made it thus far into the persistent storage.
 				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
@@ -236,7 +236,7 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Create a new contract, optionally transfering some balance to the created account.
+		/// Create a new contract, optionally transferring some balance to the created account.
 		///
 		/// Creation is executed as follows:
 		///

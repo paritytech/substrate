@@ -31,7 +31,7 @@ use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance
+	Imbalance, SignedImbalance
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -290,41 +290,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Set the free balance on an account to some new value.
-	///
-	/// Same as [`set_free_balance`], but will create a new account.
-	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
-	///
-	/// [`set_free_balance`]: #method.set_free_balance
-	///
-	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
-	/// the caller will do this.
-	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		let ed = <Module<T, I>>::existential_deposit();
-		// If the balance is too low, then the account is reaped.
-		// NOTE: There are two balances for every account: `reserved_balance` and
-		// `free_balance`. This contract subsystem only cares about the latter: whenever
-		// the term "balance" is used *here* it should be assumed to mean "free balance"
-		// in the rest of the module.
-		// Free balance can never be less than ED. If that happens, it gets reduced to zero
-		// and the account information relevant to this subsystem is deleted (i.e. the
-		// account is reaped).
-		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
-		// value of which makes even the `free_balance` unspendable.
-		if balance < ed {
-			Self::set_free_balance(who, balance);
-			UpdateBalanceOutcome::AccountKilled
-		} else {
-			if !<FreeBalance<T, I>>::exists(who) {
-				Self::new_account(&who, balance);
-			}
-			Self::set_free_balance(who, balance);
-
-			UpdateBalanceOutcome::Updated
-		}
-	}
-
 	/// Transfer some liquid free balance to another staker.
 	///
 	/// This is a high-level function; it will ensure all appropriate fees are paid and
@@ -358,7 +323,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if transactor != dest {
 			T::TransferPayment::on_unbalanced(NegativeImbalance(fee));
 			Self::set_free_balance(transactor, new_from_balance);
-			Self::set_free_balance_creating(dest, new_to_balance);
+			Self::ensure_free_balance_is(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
 
@@ -697,8 +662,41 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+		Self::ensure_free_balance_is(who, Self::free_balance(who) + value);
 		PositiveImbalance(value)
+	}
+
+	fn ensure_free_balance_is(who: &T::AccountId, balance: T::Balance) -> (
+		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
+		UpdateBalanceOutcome
+	) {
+		let original = Self::free_balance(who);
+		let imbalance = if original < balance {
+			SignedImbalance::Positive(PositiveImbalance(balance - original))
+		} else {
+			SignedImbalance::Negative(NegativeImbalance(original - balance))
+		};
+		// If the balance is too low, then the account is reaped.
+		// NOTE: There are two balances for every account: `reserved_balance` and
+		// `free_balance`. This contract subsystem only cares about the latter: whenever
+		// the term "balance" is used *here* it should be assumed to mean "free balance"
+		// in the rest of the module.
+		// Free balance can never be less than ED. If that happens, it gets reduced to zero
+		// and the account information relevant to this subsystem is deleted (i.e. the
+		// account is reaped).
+		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
+		// value of which makes even the `free_balance` unspendable.
+		let outcome = if balance < <Module<T, I>>::existential_deposit() {
+			Self::set_free_balance(who, balance);
+			UpdateBalanceOutcome::AccountKilled
+		} else {
+			if !<FreeBalance<T, I>>::exists(who) {
+				Self::new_account(&who, balance);
+			}
+			Self::set_free_balance(who, balance);
+			UpdateBalanceOutcome::Updated
+		};
+		(imbalance, outcome)
 	}
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
