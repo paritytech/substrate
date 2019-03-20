@@ -40,7 +40,7 @@ use client::ExecutionStrategies;
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
-use trie::MemoryDB;
+use trie::{MemoryDB, full_key};
 use parking_lot::RwLock;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
@@ -374,22 +374,23 @@ where Block: BlockT<Hash=H256>,
 
 struct StorageDb<Block: BlockT> {
 	pub db: Arc<KeyValueDB>,
-	pub state_db: StateDb<Block::Hash, H256>,
+	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
-	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
-		self.state_db.get(key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
+	fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		let key = full_key::<Blake2Hasher>(key, prefix);
+		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
 
-impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
+impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 	type Error = io::Error;
-	type Hash = H256;
+	type Key = [u8];
 
-	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.db.get(columns::STATE, key.as_bytes()).map(|r| r.map(|v| v.to_vec()))
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -405,7 +406,7 @@ impl DbGenesisStorage {
 }
 
 impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
-	fn get(&self, _key: &H256) -> Result<Option<DBValue>, String> {
+	fn get(&self, _key: &H256, _prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
 }
@@ -515,7 +516,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 }
 
 impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
-	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H256, _prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		self.db.get(columns::CHANGES_TRIE, &key[..])
 			.map_err(|err| format!("{}", err))
 	}
@@ -559,7 +560,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
-		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
+		let state_db: StateDb<_, _> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
 			state_db,
@@ -832,7 +833,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 			}
 
-			let mut changeset: state_db::ChangeSet<H256> = state_db::ChangeSet::default();
+			let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
 			for (key, (val, rc)) in operation.db_updates.drain() {
 				if rc > 0 {
 					changeset.inserted.push((key, val.to_vec()));
@@ -981,7 +982,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 }
 
-fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<H256>) {
+fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}

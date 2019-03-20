@@ -181,7 +181,7 @@ where
 {
 	let db = create_proof_check_backend_storage(proof);
 
-	if !db.contains(&root) {
+	if !db.contains(&root, &[]) {
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
@@ -198,7 +198,7 @@ where
 {
 	let mut db = MemoryDB::default();
 	for item in proof {
-		db.insert(&item);
+		db.insert(&[], &item);
 	}
 	db
 }

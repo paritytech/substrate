@@ -116,8 +116,8 @@ impl<H: Hasher> RootsStorage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf 
 }
 
 impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		MemoryDB::<H>::get(&self.data.read().mdb, key)
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
 
@@ -128,7 +128,7 @@ impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendAdapter<'a, H, S> {
 }
 
 impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, S> {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		self.storage.get(key)
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		self.storage.get(key, prefix)
 	}
 }

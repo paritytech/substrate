@@ -28,7 +28,7 @@ use crate::changes_trie::Storage as ChangesTrieStorage;
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
 }
 
 /// Patricia trie-based pairs storage essence.
@@ -190,7 +190,7 @@ impl<'a,
 		if let Some(val) = hash_db::PlainDB::get(self.overlay, key) {
 			Some(val)
 		} else {
-			match self.storage.get(&key) {
+			match self.storage.get(&key, &[]) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -231,11 +231,11 @@ impl<'a,
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		if let Some(val) = hash_db::HashDB::get(self.overlay, key) {
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<DBValue> {
+		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
-			match self.storage.get(&key) {
+			match self.storage.get(&key, prefix) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -245,20 +245,20 @@ impl<'a,
 		}
 	}
 
-	fn contains(&self, key: &H::Out) -> bool {
-		hash_db::HashDB::get(self, key).is_some()
+	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool {
+		hash_db::HashDB::get(self, key, prefix).is_some()
 	}
 
-	fn insert(&mut self, value: &[u8]) -> H::Out {
-		hash_db::HashDB::insert(self.overlay, value)
+	fn insert(&mut self, prefix: &[u8], value: &[u8]) -> H::Out {
+		hash_db::HashDB::insert(self.overlay, prefix, value)
 	}
 
-	fn emplace(&mut self, key: H::Out, value: DBValue) {
-		hash_db::HashDB::emplace(self.overlay, key, value)
+	fn emplace(&mut self, key: H::Out, prefix: &[u8], value: DBValue) {
+		hash_db::HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
-	fn remove(&mut self, key: &H::Out) {
-		hash_db::HashDB::remove(self.overlay, key)
+	fn remove(&mut self, key: &H::Out, prefix: &[u8]) {
+		hash_db::HashDB::remove(self.overlay, key, prefix)
 	}
 }
 
@@ -269,33 +269,33 @@ impl<'a,
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::HashDB::get(self, key) }
-	fn contains(&self, key: &H::Out) -> bool { hash_db::HashDB::contains(self, key) }
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<DBValue> { hash_db::HashDB::get(self, key, prefix) }
+	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool { hash_db::HashDB::contains(self, key, prefix) }
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Get the value stored at key.
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
 }
 
 // This implementation is used by normal storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Storage::<H>::get(self.deref(), key)
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		Storage::<H>::get(self.deref(), key, prefix)
 	}
 }
 
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(hash_db::PlainDB::get(self, key))
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
 
 // This implementation is used by changes trie clients.
 impl<'a, S, H: Hasher> TrieBackendStorage<H> for &'a S where S: ChangesTrieStorage<H> {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		ChangesTrieStorage::<H>::get(*self, key)
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		ChangesTrieStorage::<H>::get(*self, key, prefix)
 	}
 }

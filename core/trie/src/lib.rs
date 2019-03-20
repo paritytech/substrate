@@ -32,6 +32,8 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
+/// Various re-exports from the `memory-db` crate.
+pub use memory_db::full_key;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
