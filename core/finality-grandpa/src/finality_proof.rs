@@ -18,7 +18,7 @@
 //!
 //! Finality of block B is proved by providing:
 //! 1) the justification for the descendant block F;
-//! 2) headers sub-chain (U; F], where U is the last block known to the caller;
+//! 2) headers sub-chain (B; F] if B != F;
 //! 3) proof of GRANDPA::authorities() if the set changes at block F.
 //!
 //! Since earliest possible justification is returned, the GRANDPA authorities set
@@ -26,7 +26,7 @@
 //! that enacts new GRANDPA authorities set always comes with justification). It also
 //! means that the `set_id` is the same at blocks B and F.
 //!
-//! If authorities set changes several times in the (U; F] interval, multiple finality
+//! If authorities set changes several times in the (B; F] interval, multiple finality
 //! proof fragments are returned && each should be verified separately.
 
 use std::sync::Arc;
@@ -192,9 +192,9 @@ pub struct FinalityEffects<Header: HeaderT> {
 /// Single fragment of proof-of-finality.
 ///
 /// Finality for block B is proved by providing:
-/// 1) the justification for the descendant block F;
-/// 2) headers sub-chain (U; F], where U is the last block known to the caller;
-/// 3) proof of GRANDPA::authorities() if the set changes at block F.
+//! 1) the justification for the descendant block F;
+//! 2) headers sub-chain (B; F] if B != F;
+//! 3) proof of GRANDPA::authorities() if the set changes at block F.
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct FinalityProofFragment<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
