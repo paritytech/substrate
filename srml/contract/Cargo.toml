@@ -19,7 +19,6 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
-fees = { package = "srml-fees", path = "../fees", default-features = false }
 
 [dev-dependencies]
 wabt = "~0.7.4"
@@ -44,5 +43,4 @@ std = [
 	"timestamp/std",
 	"parity-wasm/std",
 	"pwasm-utils/std",
-	"fees/std",
 ]
