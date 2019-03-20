@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as _Pair, H256};
+use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, H256};
 pub use substrate_primitives::sr25519;
 
 /// Set of test accounts.
@@ -167,7 +167,7 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use substrate_primitives::{sr25519::Pair, Pair as _Pair};
+	use substrate_primitives::{sr25519::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {

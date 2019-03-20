@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 37,
-	impl_version: 41,
+	spec_version: 38,
+	impl_version: 38,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -102,11 +102,9 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
 	type Event = Event;
-}
-
-impl fees::Trait for Runtime {
-	type Event = Event;
-	type TransferAsset = Balances;
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 
 impl consensus::Trait for Runtime {
@@ -133,6 +131,8 @@ impl staking::Trait for Runtime {
 	type Currency = balances::Module<Self>;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
+	type Slash = ();
+	type Reward = ();
 }
 
 impl democracy::Trait for Runtime {
@@ -143,6 +143,8 @@ impl democracy::Trait for Runtime {
 
 impl council::Trait for Runtime {
 	type Event = Event;
+	type BadPresentation = ();
+	type BadReaper = ();
 }
 
 impl council::voting::Trait for Runtime {
@@ -160,6 +162,8 @@ impl treasury::Trait for Runtime {
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
+	type MintedForSpending = ();
+	type ProposalRejection = ();
 }
 
 impl contract::Trait for Runtime {
@@ -168,6 +172,7 @@ impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
+	type GasPayment = ();
 }
 
 impl sudo::Trait for Runtime {
@@ -209,7 +214,6 @@ construct_runtime!(
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
-		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -228,7 +232,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Fees, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Balances, AllModules>;
 
 impl_runtime_apis! {
 	impl client_api::Core<Block> for Runtime {

@@ -24,10 +24,10 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
-use substrate_primitives::{Blake2Hasher};
+use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch,
+	impl_outer_origin, traits::Currency};
+use substrate_primitives::Blake2Hasher;
 use system::{self, Phase, EventRecord};
-use fees;
 use {wabt, balances, consensus};
 use hex_literal::*;
 use assert_matches::assert_matches;
@@ -45,7 +45,7 @@ mod contract {
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {
-		balances<T>, contract<T>, fees<T>,
+		balances<T>, contract<T>,
 	}
 }
 impl_outer_origin! {
@@ -78,6 +78,9 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type Event = MetaEvent;
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 impl timestamp::Trait for Test {
 	type Moment = u64;
@@ -88,16 +91,13 @@ impl consensus::Trait for Test {
 	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
 }
-impl fees::Trait for Test {
-	type Event = MetaEvent;
-	type TransferAsset = Balances;
-}
 impl Trait for Test {
 	type Call = Call;
 	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
+	type GasPayment = ();
 }
 
 type Balances = balances::Module<Test>;
@@ -168,6 +168,8 @@ impl ExtBuilder {
 			.0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
+				transaction_base_fee: 0,
+				transaction_byte_fee: 0,
 				balances: vec![],
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,
@@ -199,8 +201,7 @@ impl ExtBuilder {
 #[test]
 fn refunds_unused_gas() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&0, 100_000_000);
-		Balances::increase_total_stake_by(100_000_000);
+		Balances::deposit_creating(&0, 100_000_000);
 
 		assert_ok!(Contract::call(
 			Origin::signed(0),
@@ -221,13 +222,11 @@ fn account_removal_removes_storage() {
 		|| {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
-				Balances::set_free_balance(&1, 110);
-				Balances::increase_total_stake_by(110);
+				Balances::deposit_creating(&1, 110);
 				<StorageOf<Test>>::insert(&1, &b"foo".to_vec(), b"1".to_vec());
 				<StorageOf<Test>>::insert(&1, &b"bar".to_vec(), b"2".to_vec());
 
-				Balances::set_free_balance(&2, 110);
-				Balances::increase_total_stake_by(110);
+				Balances::deposit_creating(&2, 110);
 				<StorageOf<Test>>::insert(&2, &b"hello".to_vec(), b"3".to_vec());
 				<StorageOf<Test>>::insert(&2, &b"world".to_vec(), b"4".to_vec());
 			}
@@ -288,8 +287,7 @@ fn instantiate_and_call() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
-			Balances::set_free_balance(&ALICE, 1_000_000);
-			Balances::increase_total_stake_by(1_000_000);
+			Balances::deposit_creating(&ALICE, 1_000_000);
 
 			assert_ok!(Contract::put_code(
 				Origin::signed(ALICE),
@@ -306,6 +304,10 @@ fn instantiate_and_call() {
 			));
 
 			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
@@ -359,8 +361,7 @@ fn dispatch_call() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
-			Balances::set_free_balance(&ALICE, 1_000_000);
-			Balances::increase_total_stake_by(1_000_000);
+			Balances::deposit_creating(&ALICE, 1_000_000);
 
 			assert_ok!(Contract::put_code(
 				Origin::signed(ALICE),
@@ -371,6 +372,10 @@ fn dispatch_call() {
 			// Let's keep this assert even though it's redundant. If you ever need to update the
 			// wasm source this test will fail and will show you the actual hash.
 			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
@@ -394,6 +399,10 @@ fn dispatch_call() {
 			));
 
 			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
