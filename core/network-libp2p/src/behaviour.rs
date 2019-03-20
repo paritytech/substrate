@@ -320,8 +320,13 @@ where
 		list.extend(self.kademlia.addresses_of_peer(peer_id));
 		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
 		if list.is_empty() {
-			debug!(target: "sub-libp2p", "Requested dialing to {:?}, but no address was found",
-				peer_id);
+			if self.kademlia.kbuckets_entries().any(|p| p == peer_id) {
+				debug!(target: "sub-libp2p", "Requested dialing to {:?} (peer in k-buckets), \
+					and no address was found", peer_id);
+			} else {
+				debug!(target: "sub-libp2p", "Requested dialing to {:?} (peer not in k-buckets), \
+					and no address was found", peer_id);
+			}
 		}
 		list
 	}
