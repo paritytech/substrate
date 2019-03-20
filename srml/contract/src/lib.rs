@@ -45,7 +45,7 @@
 //! 
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //! 
-//! * `create` - Creates a new contract, optionally transferring some balance.
+//! * `CREATE` - Deploys a new contract from the given `codehash`, optionally transferring some balance. This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //!
 //! ### Public functions ([`Module`])
 //! 
