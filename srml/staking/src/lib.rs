@@ -689,17 +689,19 @@ impl<T: Trait> Module<T> {
 			Some(timeout) => now - timeout,
 		};
 
-		// it's invalid to edit the `ValidatedAt` map while enumerating. But we
-		// can edit the `Validators` map in the first pass.
+		let session_validators = <session::Module<T>>::validators();
+
+		// it's invalid to edit the `ValidatedAt` map while enumerating.
 		let to_prune = <ValidatedAt<T>>::enumerate()
 			.filter_map(|(validator, at)| if at <= threshold {
-				<Validators<T>>::remove(&validator);
 				Some(validator)
 			} else {
 				None
-			});
+			})
+			.filter(|v| !session_validators.contains(&v));
 
 		for validator in to_prune {
+			<Validators<T>>::remove(&validator);
 			<ValidatedAt<T>>::remove(&validator);
 		}
 	}
