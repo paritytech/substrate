@@ -24,7 +24,7 @@
 //! 
 //! This module provides the ability to create smart-contract accounts and send them messages.
 //! A smart-contract is represented by an account with associated code and storage. 
-//! When an account receives a message, the associated code gets executed.
+//! When a smart-contract account receives a message, the associated code gets executed.
 //! This code can alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
 //!
 //! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
