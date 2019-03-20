@@ -32,7 +32,6 @@ consensus = { package = "substrate-consensus-aura", path = "../core/consensus/au
 substrate-client = {  path = "../core/client" }
 basic-authorship = { package = "substrate-basic-authorship", path = "../core/basic-authorship" }
 node-template-runtime = { path = "runtime" }
-node-executor = { path = "../node/executor" }
 
 [build-dependencies]
 vergen = "3"
