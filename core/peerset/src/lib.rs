@@ -197,6 +197,10 @@ impl Peerset {
 }
 
 fn alloc_slots(inner: &mut Inner, tx: &mpsc::UnboundedSender<Message>) {
+	if inner.reserved_only {
+		return;
+	}
+
 	for slot in inner.slots.iter_mut() {
 		if slot.is_some() {
 			continue;
