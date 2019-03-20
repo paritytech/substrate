@@ -34,21 +34,21 @@
 //!
 //! ## Terminology
 //!
-//! - **Asset issuance:** The process of an account issuing a total fixed supply of a new asset class.
-//! - **Asset transfer:** The process of an account transfering units of their holding of an asset to a recipient.
-//! - **Asset destruction:** The process of an account destroying their entire holding of an asset.
-//! - **Fungible asset:** An asset that may be interchanged into an identical equivalent.
-//! - **Non-fungible asset:** An asset that is scarce and offers unique characteristics.
+//! * **Asset issuance:** The process of an account issuing a total fixed supply of a new asset class.
+//! * **Asset transfer:** The process of an account transfering units of their holding of an asset to a recipient.
+//! * **Asset destruction:** The process of an account destroying their entire holding of an asset.
+//! * **Fungible asset:** An asset that may be interchanged into an identical equivalent.
+//! * **Non-fungible asset:** An asset that is scarce and offers unique characteristics.
 //!
 //! ## Goals
 //! <!-- Original inspiration of paragraph: @gavofyork / staking module documentation -->
 //! <!-- FIXME - assumptions only. require an expert to peer review (or re-write) -->
 //!
 //! The assets system in Substrate is designed to achieve the following goals:
-//! - It should be possible to create a unique fungible asset.
-//! - It should be possible to issue fungible assets that are controlled by a cold wallet.
-//! - It should be possible to transfer fungible assets between cold wallets.
-//! - It should be possible to destroy a proportion of fungible assets that are controlled by a cold wallet.
+//! * It should be possible to create a unique fungible asset.
+//! * It should be possible to issue fungible assets that are controlled by a cold wallet.
+//! * It should be possible to transfer fungible assets between cold wallets.
+//! * It should be possible to destroy a proportion of fungible assets that are controlled by a cold wallet.
 //!
 //! ## Interface
 //!
@@ -63,9 +63,7 @@
 //! ### Dispatchable Functions ([`Call`])
 //!
 //! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
-//!
 //! * `transfer` - Transfers an `amount` of units of a fungible asset `id` from the balance of the sender's account (`origin`) that called the function to a `target` account.
-//!
 //! * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account that called the function from its total supply.
 //! 
 //! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
@@ -74,7 +72,6 @@
 //! <!-- Original author of descriptions: @gavofyork -->
 //!
 //! * `balance` - Get the asset `id` balance of `who`.
-//!
 //! * `total_supply` - Get the total supply of an asset `id`.
 //!
 //! Please refer to the [`Module`] enum for details of publicly available functions.
@@ -85,9 +82,7 @@
 //! ### Storage Items:
 //!
 //! * Balances
-//!
 //! * NextAssetId
-//!
 //! * TotalSupply
 //!
 //! Please refer to the <a href="https://github.com/paritytech/substrate/blob/master/srml/assets/src/lib.rs#L99" target="_blank">`decl_storage!`</a> block in the Asset SRML source code for details of storage items.
@@ -95,9 +90,7 @@
 //! ### Events:
 //!
 //! * [`Issued`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
-//!
 //! * [`Transferred`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
-//!
 //! * [`Destroyed`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
 //!
 //! Please refer to the [`RawEvent`] enum and its associated variants for a detailed list of events.
@@ -105,9 +98,9 @@
 //! ## Usage
 //!
 //! The following example shows how to use the Asset Module in your custom module by exposing public functions to:
-//! - Issue a new fungible asset for a token distribution event (airdrop).
-//! - Query the fungible asset holding balance of an account.
-//! - Query the total supply of a fungible asset that has been issued.
+//! * Issue a new fungible asset for a token distribution event (airdrop).
+//! * Query the fungible asset holding balance of an account.
+//! * Query the total supply of a fungible asset that has been issued.
 //!
 //! ### Prerequisites
 //!
