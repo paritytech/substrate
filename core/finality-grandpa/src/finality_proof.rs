@@ -193,9 +193,9 @@ pub struct FinalityEffects<Header: HeaderT> {
 /// Single fragment of proof-of-finality.
 ///
 /// Finality for block B is proved by providing:
-//! 1) the justification for the descendant block F;
-//! 2) headers sub-chain (B; F] if B != F;
-//! 3) proof of GRANDPA::authorities() if the set changes at block F.
+/// 1) the justification for the descendant block F;
+/// 2) headers sub-chain (B; F] if B != F;
+/// 3) proof of GRANDPA::authorities() if the set changes at block F.
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct FinalityProofFragment<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
