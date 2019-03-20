@@ -377,7 +377,7 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1(
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V2(
 		RuntimeMetadataV2 {
 		modules: DecodeDifferent::Encode(&[
 			ModuleMetadata {
