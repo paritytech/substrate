@@ -22,16 +22,15 @@
 //! 
 //! ## Overview
 //! 
-//! This module provides the ability to create smart-contracts, with associated accounts, and send them messages.
-//! A smart-contract is represented by an account with associated code and storage. 
-//! When a smart-contract account receives a message, the associated code gets executed.
-//! This code can alter the storage entries of the associated account, create new smart-contracts, or send messages to existing smart-contracts.
-//!
+//! This module extends accounts with the ability to create smart-contracts and make calls to the contracts.
+//! Each smart-contract is associated with an account, which handles the code and storage. When a smart-contract is called, its associated code gets executed.
+//! This code can alter the storage entries of the associated account, create new smart-contracts, or call other smart-contracts.
+//! 
 //! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
 //! Unused gas is refunded after the call, regardless of the execution outcome. 
 //! 
 //! **NOTE:** If the gas limit is reached, then all calls and state changes (including balance transfers) are only reverted at the current call's contract level.
-//! For example, if contract A calls B and B runs out of gas mid-call, then all of B's dispatched calls are reverted.
+//! For example, if contract A calls B and B runs out of gas mid-call, then all of B's calls are reverted.
 //! Assuming correct error handling by contract A, A's other calls and state changes still persist. 
 //! 
 //! **NOTE:** Call failures are also not always cascading. For example, if contract A calls contract B and B
@@ -44,11 +43,11 @@
 //! 
 //! ### Dispatchable functions ([`Call`])
 //! 
-//! * `PUT_CODE` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
+//! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
 //! 
-//! * `CREATE` - Deploys a new contract from the given `codehash`, optionally transferring some balance. This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
+//! * `create` - Deploys a new contract from the given `codehash`, optionally transferring some balance. This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! 
-//! * `CALL` - Makes a call to an account, optionally transferring some balance.
+//! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
 //! ### Public functions ([`Module`])
 //! 
@@ -272,7 +271,7 @@ decl_module! {
 		/// - the smart-contract account is created at the computed address.
 		/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
 		///   after the execution is saved as the `code` of the account. That code will be invoked
-		///   upon any message received by this account.
+		///   upon any call received by this account.
 		/// - the contract is initialized
 		fn create(
 			origin,
@@ -331,7 +330,7 @@ decl_event! {
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
-		/// Transfer happened `from` -> `to` with given `value` as part of a `message-call` or `create`.
+		/// Transfer happened `from` -> `to` with given `value` as part of a `call` or `create`.
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
