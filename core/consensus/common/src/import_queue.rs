@@ -571,6 +571,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use libp2p::PeerId;
 	use test_client::runtime::{Block, Hash};
 
 	#[derive(Debug, PartialEq)]
@@ -638,15 +639,16 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown with peer and bad justification
+		let peer_id = PeerId::random();
 		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(),
 			ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: true },
-			Some(0))), Default::default())];
+			Some(peer_id.clone()))), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 
 		// Send an incomplete header
-		let results = vec![(Err(BlockImportError::IncompleteHeader(Some(Default::default()))), Default::default())];
+		let results = vec![(Err(BlockImportError::IncompleteHeader(Some(peer_id.clone()))), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
@@ -657,7 +659,7 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
 
 		// Send a verification failed
-		let results = vec![(Err(BlockImportError::VerificationFailed(Some(0), String::new())), Default::default())];
+		let results = vec![(Err(BlockImportError::VerificationFailed(Some(peer_id.clone()), String::new())), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
