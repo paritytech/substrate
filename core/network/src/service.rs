@@ -26,7 +26,7 @@ use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, S
 use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
 use peerset::Peerset;
 use consensus::import_queue::{ImportQueue, Link};
-use crate::consensus_gossip::ConsensusGossip;
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::{Message, ConsensusEngineId};
 use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
@@ -257,12 +257,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
 		message: Vec<u8>,
-		force: bool,
+		recipient: GossipMessageRecipient,
 	) {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::GossipConsensusMessage(
-				topic, engine_id, message, force,
+				topic, engine_id, message, recipient,
 			));
 	}
 

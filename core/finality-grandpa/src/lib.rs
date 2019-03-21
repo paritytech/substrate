@@ -515,7 +515,12 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, force);
+		let recipient = if force {
+			network_gossip::MessageRecipient::BroadcastToAll
+		} else {
+			network_gossip::MessageRecipient::BroadcastNew
+		};
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, recipient);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
@@ -540,7 +545,12 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, force);
+		let recipient = if force {
+			network_gossip::MessageRecipient::BroadcastToAll
+		} else {
+			network_gossip::MessageRecipient::BroadcastNew
+		};
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, recipient);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {

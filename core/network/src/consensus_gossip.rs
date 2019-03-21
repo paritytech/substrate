@@ -41,6 +41,16 @@ struct MessageEntry<B: BlockT> {
 	message: ConsensusMessage,
 }
 
+/// Consensus message destination.
+pub enum MessageRecipient {
+	/// Send to all peers.
+	BroadcastToAll,
+	/// Send to peers that don't have that message already.
+	BroadcastNew,
+	/// Send to specific peer.
+	Peer(NodeIndex),
+}
+
 /// Message validation result.
 pub enum ValidationResult<H> {
 	/// Message is valid with this topic.
