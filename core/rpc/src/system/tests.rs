@@ -61,8 +61,7 @@ impl network::SyncProvider<Block> for Status {
 		let mut peers = vec![];
 		for _peer in 0..self.peers {
 			peers.push(
-				(1, NetworkPeerInfo {
-					peer_id: self.peer_id.clone(),
+				(self.peer_id.clone(), NetworkPeerInfo {
 					roles: Roles::FULL,
 					protocol_version: 1,
 					best_hash: Default::default(),
@@ -187,7 +186,6 @@ fn system_peers() {
 			is_dev: true,
 		}).system_peers().unwrap(),
 		vec![PeerInfo {
-			index: 1,
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
 			protocol_version: 1,
