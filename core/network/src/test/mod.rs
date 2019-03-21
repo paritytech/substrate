@@ -40,7 +40,7 @@ use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use crate::message::{Message, ConsensusEngineId};
-use network_libp2p::{NodeIndex, ProtocolId, PeerId};
+use network_libp2p::{NodeIndex, PeerId};
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, ed25519::Public as AuthorityId};
@@ -355,10 +355,16 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, engine_id: ConsensusEngineId, data: Vec<u8>) {
+	pub fn gossip_message(
+		&self,
+		topic: <Block as BlockT>::Hash,
+		engine_id: ConsensusEngineId,
+		data: Vec<u8>,
+		force: bool,
+	) {
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data));
+			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, force));
 	}
 
 	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
@@ -554,7 +560,7 @@ pub trait TestNetFactory: Sized {
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(client.clone(), config);
 		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
+		let (network_sender, network_port) = network_channel();
 
 		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));

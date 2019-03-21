@@ -17,29 +17,38 @@
 //! Networking layer of Substrate.
 
 mod behaviour;
+mod config;
 mod custom_proto;
-mod secret;
 mod service_task;
-mod traits;
 mod transport;
 
+pub use crate::behaviour::Severity;
+pub use crate::config::*;
 pub use crate::custom_proto::{CustomMessage, CustomMessageId, RegisteredProtocol};
-pub use crate::secret::obtain_private_key;
+pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 pub use crate::service_task::{start_service, Service, ServiceEvent};
-pub use crate::traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};
-pub use crate::traits::{ProtocolId, Secret, Severity};
-pub use libp2p::{Multiaddr, multiaddr::Error as MultiaddrError, multiaddr::Protocol, build_multiaddr, PeerId, core::PublicKey};
+pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
+pub use libp2p::{identity, PeerId, core::PublicKey};
 
 use libp2p::core::nodes::ConnectedPoint;
 use serde_derive::Serialize;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
+
+/// Protocol / handler id
+pub type ProtocolId = [u8; 3];
+
+/// Node public key
+pub type NodeId = PeerId;
+
+/// Local (temporary) peer session ID.
+pub type NodeIndex = usize;
 
 /// Parses a string address and returns the component, if valid.
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let mut addr: Multiaddr = addr_str.parse()?;
 
 	let who = match addr.pop() {
-		Some(Protocol::P2p(key)) => PeerId::from_multihash(key)
+		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
 			.map_err(|_| ParseErr::InvalidPeerId)?,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
@@ -51,7 +60,7 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 #[derive(Debug)]
 pub enum ParseErr {
 	/// Error while parsing the multiaddress.
-	MultiaddrParse(MultiaddrError),
+	MultiaddrParse(multiaddr::Error),
 	/// Multihash of the peer ID is invalid.
 	InvalidPeerId,
 	/// The peer ID is missing from the address.
@@ -78,8 +87,8 @@ impl error::Error for ParseErr {
     }
 }
 
-impl From<MultiaddrError> for ParseErr {
-	fn from(err: MultiaddrError) -> ParseErr {
+impl From<multiaddr::Error> for ParseErr {
+	fn from(err: multiaddr::Error) -> ParseErr {
 		ParseErr::MultiaddrParse(err)
 	}
 }
@@ -97,12 +106,6 @@ pub struct NetworkState {
 	/// List of addresses the node is currently listening on.
 	pub listened_addresses: HashSet<Multiaddr>,
 	// TODO (https://github.com/libp2p/rust-libp2p/issues/978): external_addresses: Vec<Multiaddr>,
-	/// If true, we only accept reserved peers.
-	pub is_reserved_only: bool,
-	/// PeerIds of the nodes that are marked as reserved.
-	pub reserved_peers: HashSet<String>,
-	/// PeerIds of the nodes that are banned, and how long in the seconds the ban remains.
-	pub banned_peers: HashMap<String, u64>,
 	/// List of node we're connected to.
 	pub connected_peers: HashMap<String, NetworkStatePeer>,
 	/// List of node that we know of but that we're not connected to.
@@ -125,17 +128,18 @@ pub struct NetworkStatePeer {
 	/// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
 	/// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
 	pub enabled: bool,
-	/// List of protocols that we have open with the given peer.
-	pub open_protocols: HashSet<ProtocolId>,
-	/// List of addresses known for this node, with its reputation score.
-	pub known_addresses: HashMap<Multiaddr, u32>,
+	/// If true, the peer is "open", which means that we have a Substrate-related protocol
+	/// with this peer.
+	pub open: bool,
+	/// List of addresses known for this node.
+	pub known_addresses: HashSet<Multiaddr>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStateNotConnectedPeer {
-	/// List of addresses known for this node, with its reputation score.
-	pub known_addresses: HashMap<Multiaddr, u32>,
+	/// List of addresses known for this node.
+	pub known_addresses: HashSet<Multiaddr>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
