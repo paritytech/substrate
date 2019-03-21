@@ -36,7 +36,7 @@
 //! **NOTE:** Call failures are also not always cascading. For example, if contract A calls contract B and B
 //! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
-//! Finally, when the `staking` module determines an account is dead (i.e. account balance fell below the
+//! Finally, when the `balances` module determines an account is dead (i.e. account balance fell below the
 //! existential deposit), it reaps the account. This will delete the associated code and storage of the account.
 //! 
 //! ## Interface
@@ -76,7 +76,6 @@
 //! 
 //! ## Related Modules
 //! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
-//! * [`Staking`](https://crates.parity.io/srml_staking/index.html)
 //! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
