@@ -27,6 +27,7 @@ client = { package = "substrate-client", path = "../../core/client" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 parity-codec = { version = "3.2", features = ["derive"] }
 network_libp2p = { package = "substrate-network-libp2p", path = "../../core/network-libp2p" }
+peerset = { package = "substrate-peerset", path = "../../core/peerset" }
 tokio = "0.1.11"
 keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }
 test_client = { package = "substrate-test-client", path = "../../core/test-client", optional = true }

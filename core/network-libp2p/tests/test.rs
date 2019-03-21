@@ -41,7 +41,7 @@ fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
 		};
 
 		let proto = substrate_network_libp2p::RegisteredProtocol::new(*b"tst", &[1]);
-		result.push(substrate_network_libp2p::start_service(config, proto).unwrap());
+		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
 	}
 
 	result

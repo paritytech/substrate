@@ -799,10 +799,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			is_severe,
 			error: Box::new(err),
 		}));
-
-		// If we failed to open a substream, there is little chance that we manage to open any
-		// other substream ever again on this connection, and thus we disable the handler.
-		self.disable();
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
