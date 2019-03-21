@@ -33,7 +33,7 @@ use hex_literal::*;
 use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
-	Trait, ComputeDispatchFee, KeySpaceGenerator, KeySpace,
+	Trait, ComputeDispatchFee, TrieIdGenerator, TrieId,
 	AccountInfo, AccountInfoOf,
 };
 use substrate_primitives::storage::well_known_keys;
@@ -101,7 +101,7 @@ impl Trait for Test {
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
-	type KeySpaceGenerator = DummyKeySpaceGenerator;
+	type TrieIdGenerator = DummyTrieIdGenerator;
 	type GasPayment = ();
 }
 
@@ -118,9 +118,9 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 
 static KEY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-pub struct DummyKeySpaceGenerator;
-impl KeySpaceGenerator<u64> for DummyKeySpaceGenerator {
-	fn key_space(account_id: &u64) -> KeySpace {
+pub struct DummyTrieIdGenerator;
+impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
+	fn trie_id(account_id: &u64) -> TrieId {
 		let mut res = KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes().to_vec();
 		res.extend_from_slice(&account_id.to_le_bytes());
 		res
@@ -242,7 +242,7 @@ fn account_removal_removes_storage() {
 			{
 				Balances::deposit_creating(&1, 110);
 				AccountInfoOf::<Test>::insert(1, &AccountInfo {
-					key_space: unique_id1.to_vec(),
+					trie_id: unique_id1.to_vec(),
 					current_mem_stored: 0,
 				});
 				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
@@ -251,7 +251,7 @@ fn account_removal_removes_storage() {
 
 				Balances::deposit_creating(&2, 110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
-					key_space: unique_id2.to_vec(),
+					trie_id: unique_id2.to_vec(),
 					current_mem_stored: 0,
 				});
 				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());

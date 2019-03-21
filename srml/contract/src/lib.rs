@@ -79,7 +79,7 @@ use system::{ensure_signed, RawOrigin};
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
-pub type KeySpace = Vec<u8>;
+pub type TrieId = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
 pub trait ContractAddressFor<CodeHash, AccountId> {
@@ -96,32 +96,32 @@ pub trait ComputeDispatchFee<Call, Balance> {
 /// This is the required info to cache for an account
 pub struct AccountInfo {
 	/// unique ID for the subtree encoded as a byte
-	pub key_space: KeySpace,
+	pub trie_id: TrieId,
 	/// the size of stored value in octet
 	pub current_mem_stored: u64,
 }
 
-/// Get a key space (key space must be unique and collision resistant depending upon its context)
-/// Note that it is different than encode because key space should have collision resistance
+/// Get a trie id (trie id must be unique and collision resistant depending upon its context)
+/// Note that it is different than encode because trie id should have collision resistance
 /// property (being a proper uniqueid).
-pub trait KeySpaceGenerator<AccountId> {
-	/// get a keyspace for an account, using reference to parent account keyspace to ensure
-	/// uniqueness of keyspace
-	/// The implementation must ensure every new key space is unique: two consecutive call with the
-	/// same parameter needs to return different key space values.
-	fn key_space(account_id: &AccountId) -> KeySpace;
+pub trait TrieIdGenerator<AccountId> {
+	/// get a trie id for an account, using reference to parent account trie id to ensure
+	/// uniqueness of trie id 
+	/// The implementation must ensure every new trie id is unique: two consecutive call with the
+	/// same parameter needs to return different trie id values.
+	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
-/// Get key space from `account_id`
-pub struct KeySpaceFromParentCounter<T: Trait>(PhantomData<T>);
+/// Get trie id from `account_id`
+pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
 
 /// This generator use inner counter for account id and apply hash over `AccountId +
-/// parent_keyspace + accountid_counter`
-impl<T: Trait> KeySpaceGenerator<T::AccountId> for KeySpaceFromParentCounter<T>
+/// accountid_counter`
+impl<T: Trait> TrieIdGenerator<T::AccountId> for TrieIdFromParentCounter<T>
 where
 	T::AccountId: AsRef<[u8]>
 {
-	fn key_space(account_id: &T::AccountId) -> KeySpace {
+	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// note that skipping a value due to error is not an issue here.
 		// we only need uniqueness, not sequence.
 		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
@@ -151,8 +151,8 @@ pub trait Trait: balances::Trait + timestamp::Trait {
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
-	/// keyspace id generator
-	type KeySpaceGenerator: KeySpaceGenerator<Self::AccountId>;
+	/// trieid id generator
+	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
 	type GasPayment: OnUnbalanced<balances::NegativeImbalance<Self>>;
@@ -399,7 +399,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
 		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
-			child::kill_storage(&subtrie.key_space);
+			child::kill_storage(&subtrie.trie_id);
 		});
 	}
 }

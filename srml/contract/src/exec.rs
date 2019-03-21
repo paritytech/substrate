@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, KeySpace};
-use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb, AccountKeySpaceMapping};
+use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, TrieId};
+use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb, AccountTrieIdMapping};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
@@ -227,7 +227,7 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_account: T::AccountId,
-	pub self_keyspace: KeySpace,
+	pub self_trieid: TrieId,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
@@ -247,11 +247,11 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
-		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb, Rc::new(RefCell::new(AccountKeySpaceMapping::new())), true);
-		let self_keyspace = overlay.get_or_create_keyspace(&origin);
+		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb, Rc::new(RefCell::new(AccountTrieIdMapping::new())), true);
+		let self_trieid = overlay.get_or_create_trieid(&origin);
 		ExecutionContext {
 			self_account: origin,
-			self_keyspace,
+			self_trieid,
 			depth: 0,
 			overlay,
 			events: Vec::new(),
@@ -263,11 +263,11 @@ where
 	}
 
 	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
-		let self_keyspace = overlay.get_or_create_keyspace(&dest);
+		let self_trieid = overlay.get_or_create_trieid(&dest);
 		ExecutionContext {
 			overlay,
 			self_account: dest,
-			self_keyspace,
+			self_trieid,
 			depth: self.depth + 1,
 			events: Vec::new(),
 			calls: Vec::new(),
@@ -562,7 +562,7 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.ctx.overlay.get_storage(&self.ctx.self_keyspace, key)
+		self.ctx.overlay.get_storage(&self.ctx.self_trieid, key)
 	}
 
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
