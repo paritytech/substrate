@@ -50,9 +50,14 @@ impl Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 
 pub struct ExtBuilder {
+	transaction_base_fee: u64,
+	transaction_byte_fee: u64,
 	existential_deposit: u64,
 	transfer_fee: u64,
 	creation_fee: u64,
@@ -62,6 +67,8 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -84,8 +91,16 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
+	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
+		self.transaction_base_fee = base_fee;
+		self.transaction_byte_fee = byte_fee;
+		self
+	}
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
+		if self.existential_deposit == 0 {
+			self.existential_deposit = 1;
+		}
 		self
 	}
 	pub fn vesting(mut self, vesting: bool) -> Self {
@@ -94,16 +109,13 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
-		let balance_factor = if self.existential_deposit > 0 {
-			256
-		} else {
-			1
-		};
 		t.extend(GenesisConfig::<Runtime> {
+			transaction_base_fee: self.transaction_base_fee,
+			transaction_byte_fee: self.transaction_byte_fee,
 			balances: if self.monied {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
 			} else {
-				vec![(10, balance_factor), (20, balance_factor)]
+				vec![]
 			},
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,

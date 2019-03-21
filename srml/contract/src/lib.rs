@@ -74,11 +74,10 @@ use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage, storage::child};
-use srml_support::traits::OnFreeBalanceZero;
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced};
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;
-use fees;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 pub type KeySpace = Vec<u8>;
@@ -93,6 +92,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
+<<<<<<< HEAD
 #[derive(Encode,Decode,Clone,Debug)]
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
@@ -134,7 +134,7 @@ where
 	}
 }
 
-pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
+pub trait Trait: balances::Trait + timestamp::Trait {
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
 
@@ -154,6 +154,9 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
 	/// keyspace id generator
 	type KeySpaceGenerator: KeySpaceGenerator<Self::AccountId>;
+
+	/// Handler for the unbalanced reduction when making a gas payment.
+	type GasPayment: OnUnbalanced<balances::NegativeImbalance<Self>>;
 }
 
 /// Simple contract address determintator.
@@ -180,14 +183,14 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// implementation of `ChargeBytesFee` for fees module does.
+/// implementation of `MakePayment` for balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
 		let encoded_len = call.using_encoded(|encoded| encoded.len());
-		let base_fee = <fees::Module<T>>::transaction_base_fee();
-		let byte_fee = <fees::Module<T>>::transaction_byte_fee();
-		<T::Balance as As<u64>>::sa(base_fee.as_() + byte_fee.as_() * encoded_len as u64)
+		let base_fee = <balances::Module<T>>::transaction_base_fee();
+		let byte_fee = <balances::Module<T>>::transaction_byte_fee();
+		base_fee + byte_fee * <T::Balance as As<u64>>::sa(encoded_len as u64)
 	}
 }
 
@@ -219,14 +222,14 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
 
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
 
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			result.map(|_| ())
 		}
@@ -246,7 +249,7 @@ decl_module! {
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
@@ -256,8 +259,13 @@ decl_module! {
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
+<<<<<<< HEAD
 				// Commit all changes that made it thus far into the persistant storage.
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
+=======
+				// Commit all changes that made it thus far into the persistent storage.
+				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+>>>>>>> master
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -267,7 +275,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
@@ -278,7 +286,7 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Create a new contract, optionally transfering some balance to the created account.
+		/// Create a new contract, optionally transferring some balance to the created account.
 		///
 		/// Creation is executed as follows:
 		///
@@ -300,7 +308,7 @@ decl_module! {
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
@@ -320,7 +328,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {

@@ -25,7 +25,7 @@ use client;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use grandpa;
 use node_executor;
-use primitives::{Pair as _Pair, ed25519::Pair};
+use primitives::{Pair as PairT, ed25519::Pair};
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{

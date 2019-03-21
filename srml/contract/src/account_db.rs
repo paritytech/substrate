@@ -22,7 +22,9 @@ use rstd::cell::RefCell;
 use rstd::rc::Rc;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child};
+use runtime_primitives::traits::Zero;
+use srml_support::{StorageMap, StorageDoubleMap, traits::{UpdateBalanceOutcome,
+	SignedImbalance, Currency, Imbalance, storage::child}};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -116,12 +118,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		balances::Module::<T>::free_balance(account)
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
+		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			let keyspace = <Self as AccountDb<T>>::get_or_create_keyspace(&self, &address);
 			if let Some(balance) = changed.balance {
-				if let UpdateBalanceOutcome::AccountKilled =
-					balances::Module::<T>::set_free_balance_creating(&address, balance)
-				{
+				let (imbalance, outcome) = balances::Module::<T>::ensure_free_balance_is(&address, balance);
+				total_imbalance = total_imbalance.merge(imbalance);
+				if let UpdateBalanceOutcome::AccountKilled = outcome {
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
 					// which will make removal of CodeHashOf and AccountStorage for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.
@@ -142,6 +145,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					child::kill(&keyspace[..], &k);
 				}
 			}
+		}
+
+		match total_imbalance {
+			// If we've detected a positive imbalance as a result of our contract-level machinations
+			// then it's indicative of a buggy contracts system.
+			// Panicking is far from ideal as it opens up a DoS attack on block validators, however
+			// it's a less bad option than allowing arbitrary value to be created.
+			SignedImbalance::Positive(ref p) if !p.peek().is_zero() =>
+				panic!("contract subsystem resulting in positive imbalance!"),
+			_ => {}
 		}
 	}
 }
