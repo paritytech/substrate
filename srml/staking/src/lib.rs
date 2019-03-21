@@ -903,11 +903,11 @@ impl<T: Trait> Module<T> {
 
 		// Populate Stakers and figure out the minimum stake behind a slot.
 		let mut slot_stake = elected_candidates[0].exposure.total;
-		for candidate in &elected_candidates {
-			if candidate.exposure.total < slot_stake {
-				slot_stake = candidate.exposure.total;
+		for c in &elected_candidates {
+			if c.exposure.total < slot_stake {
+				slot_stake = c.exposure.total;
 			}
-			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
+			<Stakers<T>>::insert(c.who.clone(), c.exposure.clone());
 		}
 		<SlotStake<T>>::put(&slot_stake);
 
