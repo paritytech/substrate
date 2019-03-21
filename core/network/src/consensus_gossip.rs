@@ -53,8 +53,10 @@ pub enum MessageRecipient {
 
 /// Message validation result.
 pub enum ValidationResult<H> {
-	/// Message is valid with this topic.
-	Valid(H),
+	/// Message is valid with this topic and should be stored for repropagation.
+	ValidStored(H),
+	/// Message is valid and should not be tracked.
+	ValidOneHop,
 	/// Invalid message.
 	Invalid,
 	/// Obsolete message.
@@ -300,7 +302,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 				v.validate(&mut context, &message.data)
 			});
 		let topic = match validation {
-			Some(ValidationResult::Valid(topic)) => topic,
+			Some(ValidationResult::ValidStored(topic)) => Some(topic),
+			Some(ValidationResult::ValidOneHop) => None,
 			Some(ValidationResult::Invalid) => {
 				trace!(target:"gossip", "Invalid message from {}", who);
 				protocol.report_peer(
@@ -324,24 +327,29 @@ impl<B: BlockT> ConsensusGossip<B> {
 			}
 		};
 
-		if let Some(ref mut peer) = self.peers.get_mut(&who) {
-			use std::collections::hash_map::Entry;
-			peer.known_messages.insert(message_hash);
-			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
-				debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
-				entry.get_mut().retain(|sink| {
-					if let Err(e) = sink.unbounded_send(message.data.clone()) {
-						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+		if let Some(topic) = topic {
+			if let Some(ref mut peer) = self.peers.get_mut(&who) {
+				use std::collections::hash_map::Entry;
+				peer.known_messages.insert(message_hash);
+				if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
+					debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
+					entry.get_mut().retain(|sink| {
+						if let Err(e) = sink.unbounded_send(message.data.clone()) {
+							trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+						}
+						!sink.is_closed()
+					});
+					if entry.get().is_empty() {
+						entry.remove_entry();
 					}
-					!sink.is_closed()
-				});
-				if entry.get().is_empty() {
-					entry.remove_entry();
 				}
+				Some((topic, message))
+			} else {
+				trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
+				None
 			}
-			Some((topic, message))
 		} else {
-			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
+			trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
 			None
 		}
 	}
@@ -396,7 +404,7 @@ mod tests {
 	struct AllowAll;
 	impl Validator<Block> for AllowAll {
 		fn validate(&self, _context: &mut ValidatorContext<Block>, _data: &[u8]) -> ValidationResult<H256> {
-			ValidationResult::Valid(H256::default())
+			ValidationResult::ValidStored(H256::default())
 		}
 	}
 
@@ -406,7 +414,7 @@ mod tests {
 		impl Validator<Block> for AllowOne {
 			fn validate(&self, _context: &mut ValidatorContext<Block>, data: &[u8]) -> ValidationResult<H256> {
 				if data[0] == 1 {
-					ValidationResult::Valid(H256::default())
+					ValidationResult::ValidStored(H256::default())
 				} else {
 					ValidationResult::Expired
 				}

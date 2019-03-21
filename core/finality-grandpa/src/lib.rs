@@ -352,7 +352,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		}
 
 		let topic = message_topic::<Block>(full.round, full.set_id);
-		network_gossip::ValidationResult::Valid(topic)
+		network_gossip::ValidationResult::ValidStored(topic)
 	}
 
 	fn validate_commit_message(&self, full: FullCommitMessage<Block>)
@@ -402,7 +402,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			"topic" => ?topic,
 			"block_hash" => ?full.message,
 		);
-		network_gossip::ValidationResult::Valid(topic)
+		network_gossip::ValidationResult::ValidStored(topic)
 	}
 }
 
