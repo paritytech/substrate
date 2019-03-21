@@ -441,6 +441,36 @@ fn transferring_too_high_value_should_not_panic() {
 }
 
 #[test]
+fn account_create_on_free_too_low_with_other() {
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(100).build(),
+		|| {
+			let _ = Balances::deposit_creating(&1, 100);
+			assert_eq!(<TotalIssuance<Runtime>>::get(), 100);
+
+			// No-op.
+			let _ = Balances::deposit_creating(&2, 50);
+			assert_eq!(Balances::free_balance(&2), 0);
+			assert_eq!(<TotalIssuance<Runtime>>::get(), 100);
+		}
+	)
+}
+
+
+#[test]
+fn account_create_on_free_too_low() {
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(100).build(),
+		|| {
+			// No-op.
+			let _ = Balances::deposit_creating(&2, 50);
+			assert_eq!(Balances::free_balance(&2), 0);
+			assert_eq!(<TotalIssuance<Runtime>>::get(), 0);
+		}
+	)
+}
+
+#[test]
 fn account_removal_on_free_too_low() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
