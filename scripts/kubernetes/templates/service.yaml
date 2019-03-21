@@ -5,9 +5,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: substrate-rpc
-  labels:
-    app: substrate
+  name: {{ .Values.app }}-rpc
 spec:
   ports:
   - port: 9933
@@ -15,15 +13,16 @@ spec:
   - port: 9944
     name: websocket-rpc
   selector:
-    app: substrate
+    app: {{ .Values.GitlabEnvSlug | default .Values.app }}
   sessionAffinity: None
   type: ClusterIP
   clusterIP: None
 ---
+{{- if .Values.listen_node_port }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: substrate
+  name: {{ .Values.app }}
 spec:
   ports:
   - port: 30333
@@ -31,9 +30,27 @@ spec:
     nodePort: 30333
     protocol: TCP
   selector:
-    app: substrate
+    app: {{ .Values.GitlabEnvSlug | default .Values.app }}
   sessionAffinity: None
   type: NodePort
   # don't route exteral traffic to non-local pods
   externalTrafficPolicy: Local
-
+{{- else }}
+{{- if .Values.validator.keys }}
+{{- $root := . -}}
+{{- range until (int .Values.nodes.replicas) }}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ $root.Values.app }}-{{ . }}
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: {{ $root.Values.app }}-{{ . }}
+  ports:
+    - port: 30333
+      targetPort: 30333
+      protocol: TCP
+{{- end }}
+{{- end }}
+{{- end }}
