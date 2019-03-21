@@ -82,10 +82,8 @@ decl_module! {
 	}
 }
 
-/// An event in this module. Events are simple means of reporting specific conditions and
-/// circumstances that have happened that users, Dapps and/or chain explorers would find
-/// interesting and otherwise difficult to detect.
 decl_event!(
+	/// An event in this module.
 	pub enum Event<T> where <T as system::Trait>::AccountId, <T as Trait>::Balance {
 		/// Some assets were issued.
 		Issued(AssetId, AccountId, Balance),

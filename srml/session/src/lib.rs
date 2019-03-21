@@ -84,8 +84,8 @@ decl_module! {
 	}
 }
 
-/// An event in this module.
 decl_event!(
+	/// An event in this module.
 	pub enum Event<T> where <T as system::Trait>::BlockNumber {
 		/// New session has happened. Note that the argument is the session index, not the block
 		/// number as the type might suggest.

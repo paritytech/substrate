@@ -58,8 +58,8 @@ decl_module! {
 	}
 }
 
-/// An event in this module.
 decl_event!(
+	/// An event in this module.
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 		/// A sudo just took place.
 		Sudid(bool),
