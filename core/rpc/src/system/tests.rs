@@ -16,7 +16,7 @@
 
 use super::*;
 
-use network::{self, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo};
+use network::{self, ProtocolStatus, PeerId, PeerInfo as NetworkPeerInfo};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
@@ -57,7 +57,7 @@ impl network::SyncProvider<Block> for Status {
 		}
 	}
 
-	fn peers(&self) -> Vec<(NodeIndex, NetworkPeerInfo<Block>)> {
+	fn peers(&self) -> Vec<(PeerId, NetworkPeerInfo<Block>)> {
 		let mut peers = vec![];
 		for _peer in 0..self.peers {
 			peers.push(

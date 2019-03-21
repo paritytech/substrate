@@ -54,8 +54,6 @@ pub struct Health {
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerInfo<Hash, Number> {
-	/// Peer Node Index
-	pub index: usize,
 	/// Peer ID
 	pub peer_id: String,
 	/// Roles

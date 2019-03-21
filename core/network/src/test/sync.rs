@@ -18,7 +18,7 @@ use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::config::Roles;
 use consensus::BlockOrigin;
-use network_libp2p::NodeIndex;
+use network_libp2p::PeerId;
 use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
@@ -162,7 +162,7 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 fn ancestry_search_works_when_backoff_is_one() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
-	
+
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
@@ -362,8 +362,8 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 	// Only sync between 0 -> 1, and 1 -> 2
 	let mut disconnected = HashSet::new();
-	disconnected.insert(0 as NodeIndex);
-	disconnected.insert(2 as NodeIndex);
+	disconnected.insert(0 as PeerId);
+	disconnected.insert(2 as PeerId);
 	net.sync_with_disconnected(disconnected);
 
 	// peer 0 has the best chain

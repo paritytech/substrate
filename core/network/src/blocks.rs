@@ -20,7 +20,7 @@ use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use log::trace;
-use network_libp2p::NodeIndex;
+use network_libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
 use crate::message;
 
@@ -32,7 +32,7 @@ pub struct BlockData<B: BlockT> {
 	/// The Block Message from the wire
 	pub block: message::BlockData<B>,
 	/// The peer, we received this from
-	pub origin: Option<NodeIndex>,
+	pub origin: Option<PeerId>,
 }
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl<B: BlockT> BlockRangeState<B> {
 pub struct BlockCollection<B: BlockT> {
 	/// Downloaded blocks.
 	blocks: BTreeMap<NumberFor<B>, BlockRangeState<B>>,
-	peer_requests: HashMap<NodeIndex, NumberFor<B>>,
+	peer_requests: HashMap<PeerId, NumberFor<B>>,
 }
 
 impl<B: BlockT> BlockCollection<B> {
@@ -77,7 +77,7 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Insert a set of blocks into collection.
-	pub fn insert(&mut self, start: NumberFor<B>, blocks: Vec<message::BlockData<B>>, who: NodeIndex) {
+	pub fn insert(&mut self, start: NumberFor<B>, blocks: Vec<message::BlockData<B>>, who: PeerId) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -96,11 +96,11 @@ impl<B: BlockT> BlockCollection<B> {
 		}
 
 		self.blocks.insert(start, BlockRangeState::Complete(blocks.into_iter()
-			.map(|b| BlockData { origin: Some(who), block: b }).collect()));
+			.map(|b| BlockData { origin: Some(who.clone()), block: b }).collect()));
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, who: NodeIndex, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
+	pub fn needed_blocks(&mut self, who: PeerId, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
 		// First block number that we need to download
 		let first_different = common + As::sa(1);
 		let count = As::sa(count as u64);
@@ -166,8 +166,8 @@ impl<B: BlockT> BlockCollection<B> {
 		drained
 	}
 
-	pub fn clear_peer_download(&mut self, who: NodeIndex) {
-		match self.peer_requests.entry(who) {
+	pub fn clear_peer_download(&mut self, who: &PeerId) {
+		match self.peer_requests.entry(who.clone()) {
 			Entry::Occupied(entry) => {
 				let start = entry.remove();
 				let remove = match self.blocks.get_mut(&start) {
