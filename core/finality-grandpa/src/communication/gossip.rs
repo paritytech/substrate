@@ -25,6 +25,9 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::debug;
 
 use crate::{CompactCommit, SignedMessage};
+use super::{Round, SetId};
+
+use std::collections::HashMap;
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -39,34 +42,44 @@ pub enum Consider {
 
 /// A view of protocol state.
 pub struct View<N> {
-	round: u64, // the current round we are at.
-	set_id: u64, // the current voter set id.
+	round: Round, // the current round we are at.
+	set_id: SetId, // the current voter set id.
 	last_commit: Option<N>, // commit-finalized block height, if any.
+}
+
+impl<N> Default for View<N> {
+	fn default() -> Self {
+		View {
+			round: Round(0),
+			set_id: SetId(0),
+			last_commit: None,
+		}
+	}
 }
 
 impl<N: Ord> View<N> {
 	/// Update the set ID. implies a reset to round 0.
-	pub fn update_set(&mut self, set_id: u64) {
+	pub fn update_set(&mut self, set_id: SetId) {
 		self.set_id = set_id;
-		self.round = 0;
+		self.round = Round(0);
 	}
 
 	/// Consider a round and set ID combination under a current view.
-	pub fn consider_vote(&self, round: u64, set_id: u64) -> Consider {
+	pub fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
 		// only from current set
 		if set_id < self.set_id { return Consider::RejectPast }
 		if set_id > self.set_id { return Consider::RejectFuture }
 
 		// only r-1 ... r+1
-		if round > self.round.saturating_add(1) { return Consider::RejectFuture }
-		if round < self.round.saturating_sub(1) { return Consider::RejectPast }
+		if round.0 > self.round.0.saturating_add(1) { return Consider::RejectFuture }
+		if round.0 < self.round.0.saturating_sub(1) { return Consider::RejectPast }
 
 		Consider::Accept
 	}
 
 	/// Consider a commit. Rounds are not taken into account, but are implicitly
 	/// because we gate on finalization of a further block than a previous commit.
-	pub fn consider_commit(&self, set_id: u64, number: N) -> Consider {
+	pub fn consider_commit(&self, set_id: SetId, number: N) -> Consider {
 		// only from current set
 		if set_id < self.set_id { return Consider::RejectPast }
 		if set_id > self.set_id { return Consider::RejectFuture }
@@ -92,15 +105,17 @@ pub enum GossipMessage<Block: BlockT> {
 	VoteOrPrecommit(VoteOrPrecommitMessage<Block>),
 	/// Grandpa commit message with round and set info.
 	Commit(FullCommitMessage<Block>),
+	/// A neighbor packet. Not repropagated.
+	Neighbor(NeighborPacket<NumberFor<Block>>),
 }
 
 /// Network level message with topic information.
 #[derive(Debug, Encode, Decode)]
 pub struct VoteOrPrecommitMessage<Block: BlockT> {
 	/// The round this message is from.
-	pub round: u64,
+	pub round: Round,
 	/// The voter set ID this message is from.
-	pub set_id: u64,
+	pub set_id: SetId,
 	/// The message itself.
 	pub message: SignedMessage<Block>,
 }
@@ -109,16 +124,135 @@ pub struct VoteOrPrecommitMessage<Block: BlockT> {
 #[derive(Debug, Encode, Decode)]
 pub struct FullCommitMessage<Block: BlockT> {
 	/// The round this message is from.
-	pub round: u64,
+	pub round: Round,
 	/// The voter set ID this message is from.
-	pub set_id: u64,
+	pub set_id: SetId,
 	/// The compact commit message.
 	pub message: CompactCommit<Block>,
+}
+
+/// V1 neighbor packet. Neighbor packets are sent from nodes to their peers
+/// and are not repropagated. These contain information about the node's state.
+#[derive(Debug, Encode, Decode)]
+pub struct NeighborPacket<N> {
+	round: Round,
+	set_id: SetId,
+	finalized_height: N,
+	commit_finalized_height: N,
+}
+
+/// A versioned neighbor packet.
+#[derive(Debug, Encode, Decode)]
+pub enum VersionedNeighborPacket<N> {
+	#[codec(index = "1")]
+	V1(NeighborPacket<N>),
+}
+
+/// Misbehavior that peers can perform.
+///
+/// `cost` gives a cost that can be used to perform cost/benefit analysis of a
+/// peer.
+#[derive(Clone, Copy, Debug)]
+enum Misbehavior {
+	// invalid neighbor message, considering the last one.
+	InvalidViewChange,
+	// could not decode neighbor message. bytes-length of the packet.
+	UndecodablePacket(i32),
+	// Bad commit message
+	BadCommitMessage {
+		signatures_checked: i32,
+		blocks_loaded: i32,
+		equivocations_caught: i32,
+	},
+	// Commit message received that's behind local view.
+	OldCommitMessage,
+	// A message received that's from the future relative to our view.
+	// always misbehavior.
+	FutureMessage,
+}
+
+impl Misbehavior {
+	fn cost(&self) -> i32 {
+		use Misbehavior::*;
+
+		match *self {
+			InvalidViewChange => -500,
+			UndecodablePacket(bytes) =>  bytes.saturating_mul(-5),
+			BadCommitMessage { signatures_checked, blocks_loaded, equivocations_caught } => {
+				let cost = 25i32.saturating_mul(signatures_checked)
+					.saturating_add(10i32.saturating_mul(blocks_loaded));
+				let benefit = equivocations_caught.saturating_mul(10);
+
+				(benefit as i32).saturating_sub(cost as i32)
+			},
+			OldCommitMessage => -100,
+			FutureMessage => -500,
+		}
+	}
+}
+
+struct PeerInfo<N> {
+	view: View<N>,
+}
+
+impl<N> PeerInfo<N> {
+	fn new() -> Self {
+		PeerInfo {
+			view: View::default(),
+		}
+	}
+}
+
+/// The peers we're connected do in gossip.
+struct Peers<N> {
+	inner: HashMap<NodeIndex, PeerInfo<N>>,
+}
+
+impl<N: Ord> Peers<N> {
+	fn new_peer(&mut self, node_index: NodeIndex) {
+		self.inner.insert(node_index, PeerInfo { view: View::default() });
+	}
+
+	fn peer_disconnected(&mut self, node_index: &NodeIndex) {
+		self.inner.remove(node_index);
+	}
+
+	fn update_peer_state(&mut self, node_index: &NodeIndex, update: NeighborPacket<N>) -> Result<(), Misbehavior> {
+		let peer = match self.inner.get_mut(node_index) {
+			None => return Ok(()),
+			Some(p) => p,
+		};
+
+		let invalid_change = peer.view.set_id > update.set_id
+			|| peer.view.round > update.round && peer.view.set_id == peer.view.set_id
+			|| update.commit_finalized_height > update.finalized_height
+			|| peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
+
+		if invalid_change {
+			return Err(Misbehavior::InvalidViewChange);
+		}
+
+		peer.view = View {
+			round: update.round,
+			set_id: update.set_id,
+			last_commit: Some(update.commit_finalized_height),
+		};
+
+		Ok(())
+	}
+}
+
+enum Action<H>  {
+	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
+	Repropagate(H, i32),
+	// discard, applying cost/benefit to originator.
+	Discard(i32),
 }
 
 /// A validator for GRANDPA gossip messages.
 pub(crate) struct GossipValidator<Block: BlockT> {
 	local_view: parking_lot::RwLock<View<NumberFor<Block>>>,
+	peers: parking_lot::RwLock<Peers<NumberFor<Block>>>,
 	_marker: std::marker::PhantomData<Block>,
 }
 
@@ -126,17 +260,14 @@ impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
 	pub(crate) fn new() -> GossipValidator<Block> {
 		GossipValidator {
-			local_view: parking_lot::RwLock::new(View {
-				round: 0,
-				set_id: 0,
-				last_commit: None,
-			}),
+			local_view: parking_lot::RwLock::new(View::default()),
+			peers: parking_lot::RwLock::new(Peers { inner: Default::default() }),
 			_marker: Default::default(),
 		}
 	}
 
 	/// Note a round in a set has started.
-	pub(crate) fn note_round(&self, round: u64, set_id: u64) {
+	pub(crate) fn note_round(&self, round: Round, set_id: SetId) {
 		let mut view = self.local_view.write();
 		view.round = round;
 
@@ -149,7 +280,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(crate) fn note_set(&self, set_id: u64) {
+	pub(crate) fn note_set(&self, set_id: SetId) {
 		self.local_view.write().update_set(set_id);
 	}
 
@@ -159,48 +290,58 @@ impl<Block: BlockT> GossipValidator<Block> {
 		view.last_commit = std::cmp::max(view.last_commit, Some(finalized));
 	}
 
-	fn consider_vote(&self, round: u64, set_id: u64) -> Consider {
+	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
 		self.local_view.read().consider_vote(round, set_id)
 	}
 
-	fn consider_commit(&self, set_id: u64, number: NumberFor<Block>) -> Consider {
+	fn consider_commit(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
 		self.local_view.read().consider_commit(set_id, number)
 	}
 
-	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>)
-		-> network_gossip::ValidationResult<Block::Hash>
+	fn cost_past_rejection(&self, _who: &NodeIndex, _round: Round, _set_id: SetId) -> i32 {
+		-50 // hardcode for now.
+	}
+
+	fn report(&self, _who: NodeIndex, _cost_benefit: i32) {
+		// nothing yet.
+	}
+
+	fn validate_round_message(&self, who: &NodeIndex, full: &VoteOrPrecommitMessage<Block>)
+		-> Action<Block::Hash>
 	{
 		match self.consider_vote(full.round, full.set_id) {
-			Consider::RejectFuture | Consider::RejectPast =>
-				return network_gossip::ValidationResult::Expired,
-			_ => {},
+			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
+			Consider::RejectPast =>
+				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
+			Consider::Accept => {},
 		}
 
 		if let Err(()) = super::check_message_sig::<Block>(
 			&full.message.message,
 			&full.message.id,
 			&full.message.signature,
-			full.round,
-			full.set_id
+			full.round.0,
+			full.set_id.0,
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return network_gossip::ValidationResult::Invalid;
+			return Action::Discard(-100);
 		}
 
-		let topic = super::message_topic::<Block>(full.round, full.set_id);
-		network_gossip::ValidationResult::ValidStored(topic)
+		let topic = super::message_topic::<Block>(full.round.0, full.set_id.0);
+		Action::Repropagate(topic, 100)
 	}
 
-	fn validate_commit_message(&self, full: FullCommitMessage<Block>)
-		-> network_gossip::ValidationResult<Block::Hash>
+	fn validate_commit_message(&self, who: &NodeIndex, full: &FullCommitMessage<Block>)
+		-> Action<Block::Hash>
 	{
 		use grandpa::Message as GrandpaMessage;
 
 		match self.consider_commit(full.set_id, full.message.target_number) {
-			Consider::RejectFuture | Consider::RejectPast =>
-				return network_gossip::ValidationResult::Expired,
-			_ => {},
+			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
+			Consider::RejectPast =>
+				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
+			Consider::Accept => {},
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -210,48 +351,74 @@ impl<Block: BlockT> GossipValidator<Block> {
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
 			);
-			return network_gossip::ValidationResult::Invalid;
+			return Action::Discard(-1000);
 		}
 
 		// check signatures on all contained precommits.
-		for (precommit, &(ref sig, ref id)) in full.message.precommits.iter().zip(&full.message.auth_data) {
+		for (i, (precommit, &(ref sig, ref id))) in full.message.precommits.iter()
+			.zip(&full.message.auth_data)
+			.enumerate()
+		{
 			if let Err(()) = super::check_message_sig::<Block>(
 				&GrandpaMessage::Precommit(precommit.clone()),
 				id,
 				sig,
-				full.round,
-				full.set_id,
+				full.round.0,
+				full.set_id.0,
 			) {
 				debug!(target: "afg", "Bad commit message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
-				return network_gossip::ValidationResult::Invalid;
+				return Action::Discard(Misbehavior::BadCommitMessage {
+					signatures_checked: i as i32,
+					blocks_loaded: 0,
+					equivocations_caught: 0,
+				}.cost());
 			}
 		}
 
-		let topic = super::commit_topic::<Block>(full.set_id);
-		network_gossip::ValidationResult::ValidStored(topic)
+		let topic = super::commit_topic::<Block>(full.set_id.0);
+		Action::Repropagate(topic, 100)
 	}
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, _context: &mut ValidatorContext<Block>, _who: NodeIndex, _roles: Roles) {
-
+	fn new_peer(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex, _roles: Roles) {
+		self.peers.write().new_peer(who);
 	}
 
-	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, _who: NodeIndex) {
-
+	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex) {
+		self.peers.write().peer_disconnected(&who);
 	}
 
-	fn validate(&self, context: &mut ValidatorContext<Block>, mut data: &[u8])
+	fn validate(&self, context: &mut ValidatorContext<Block>, who: NodeIndex, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
-		match GossipMessage::<Block>::decode(&mut data) {
-			Some(GossipMessage::VoteOrPrecommit(message)) => self.validate_round_message(message),
-			Some(GossipMessage::Commit(message)) => self.validate_commit_message(message),
+		let action = match GossipMessage::<Block>::decode(&mut data) {
+			Some(GossipMessage::VoteOrPrecommit(ref message))
+				=> self.validate_round_message(&who, message),
+			Some(GossipMessage::Commit(ref message)) => self.validate_commit_message(&who, message),
+			Some(GossipMessage::Neighbor(_)) => unimplemented!(),
 			None => {
 				debug!(target: "afg", "Error decoding message");
 				telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
-				network_gossip::ValidationResult::Invalid
+
+				let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
+				Action::Discard(Misbehavior::UndecodablePacket(len).cost())
+			}
+		};
+
+		if let Action::Repropagate(ref topic, _) = action {
+			context.broadcast_message(*topic, data.to_vec(), false);
+		}
+
+		match action {
+			Action::Repropagate(topic, cb) => {
+				self.report(who, cb);
+				network_gossip::ValidationResult::ValidStored(topic)
+			}
+			Action::Discard(cb) => {
+				self.report(who, cb);
+				network_gossip::ValidationResult::ValidOneHop
 			}
 		}
 	}
@@ -271,6 +438,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				),
 				Some(GossipMessage::VoteOrPrecommit(full)) =>
 					rounds.consider_vote(full.round, full.set_id),
+				Some(GossipMessage::Neighbor(_)) => Consider::RejectPast,
 			};
 
 			consider == Consider::Accept
@@ -284,36 +452,36 @@ mod tests {
 
 	#[test]
 	fn view_vote_rules() {
-		let view = View { round: 100, set_id: 1, last_commit: Some((100, 1u64)) };
+		let view = View { round: Round(100), set_id: SetId(1), last_commit: Some(1000u64) };
 
-		assert_eq!(view.consider_vote(98, 1), Consider::RejectPast);
-		assert_eq!(view.consider_vote(1, 0), Consider::RejectPast);
-		assert_eq!(view.consider_vote(1000, 0), Consider::RejectPast);
+		assert_eq!(view.consider_vote(Round(98), SetId(1)), Consider::RejectPast);
+		assert_eq!(view.consider_vote(Round(1), SetId(0)), Consider::RejectPast);
+		assert_eq!(view.consider_vote(Round(1000), SetId(0)), Consider::RejectPast);
 
-		assert_eq!(view.consider_vote(99, 1), Consider::Accept);
-		assert_eq!(view.consider_vote(100, 1), Consider::Accept);
-		assert_eq!(view.consider_vote(101, 1), Consider::Accept);
+		assert_eq!(view.consider_vote(Round(99), SetId(1)), Consider::Accept);
+		assert_eq!(view.consider_vote(Round(100), SetId(1)), Consider::Accept);
+		assert_eq!(view.consider_vote(Round(101), SetId(1)), Consider::Accept);
 
-		assert_eq!(view.consider_vote(102, 1), Consider::RejectFuture);
-		assert_eq!(view.consider_vote(1, 2), Consider::RejectFuture);
-		assert_eq!(view.consider_vote(1000, 2), Consider::RejectFuture);
+		assert_eq!(view.consider_vote(Round(102), SetId(1)), Consider::RejectFuture);
+		assert_eq!(view.consider_vote(Round(1), SetId(2)), Consider::RejectFuture);
+		assert_eq!(view.consider_vote(Round(1000), SetId(2)), Consider::RejectFuture);
 	}
 
 	#[test]
 	fn commit_vote_rules() {
-		let view = View { round: 100, set_id: 2, last_commit: Some(1000u64) };
+		let view = View { round: Round(100), set_id: SetId(2), last_commit: Some(1000u64) };
 
-		assert_eq!(view.consider_commit(3, 1), Consider::RejectFuture);
-		assert_eq!(view.consider_commit(3, 1000), Consider::RejectFuture);
-		assert_eq!(view.consider_commit(3, 10000), Consider::RejectFuture);
+		assert_eq!(view.consider_commit(Round(3), SetId(1)), Consider::RejectFuture);
+		assert_eq!(view.consider_commit(Round(3), SetId(1000)), Consider::RejectFuture);
+		assert_eq!(view.consider_commit(Round(3), SetId(10000)), Consider::RejectFuture);
 
-		assert_eq!(view.consider_commit(1, 1), Consider::RejectPast);
-		assert_eq!(view.consider_commit(1, 1000), Consider::RejectPast);
-		assert_eq!(view.consider_commit(1, 10000), Consider::RejectPast);
+		assert_eq!(view.consider_commit(Round(1), SetId(1)), Consider::RejectPast);
+		assert_eq!(view.consider_commit(Round(1), SetId(1000)), Consider::RejectPast);
+		assert_eq!(view.consider_commit(Round(1), SetId(10000)), Consider::RejectPast);
 
-		assert_eq!(view.consider_commit(2, 1), Consider::RejectPast);
-		assert_eq!(view.consider_commit(2, 1000), Consider::RejectPast);
-		assert_eq!(view.consider_commit(2, 1001), Consider::Accept);
-		assert_eq!(view.consider_commit(2, 10000), Consider::Accept);
+		assert_eq!(view.consider_commit(Round(2), SetId(1)), Consider::RejectPast);
+		assert_eq!(view.consider_commit(Round(2), SetId(1000)), Consider::RejectPast);
+		assert_eq!(view.consider_commit(Round(2), SetId(1001)), Consider::Accept);
+		assert_eq!(view.consider_commit(Round(2), SetId(10000)), Consider::Accept);
 	}
 }

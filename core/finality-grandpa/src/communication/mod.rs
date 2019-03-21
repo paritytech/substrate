@@ -92,7 +92,7 @@ pub struct NetworkStream {
 }
 
 impl Stream for NetworkStream {
-		type Item = Vec<u8>;
+	type Item = Vec<u8>;
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -151,7 +151,7 @@ pub(crate) fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
 	type In = NetworkStream;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.validator.note_round(round, set_id);
+		self.validator.note_round(Round(round), SetId(set_id));
 		let (tx, rx) = oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, message_topic::<B>(round, set_id));
@@ -179,7 +179,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.validator.note_set(set_id);
+		self.validator.note_set(SetId(set_id));
 		let (tx, rx) = oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, commit_topic::<B>(set_id));
@@ -215,10 +215,13 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 	(message, round, set_id).encode()
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
-struct Round(u64);
-#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
-struct SetId(u64);
+/// Type-safe wrapper around u64 when indicating that it's a round number.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
+pub struct Round(pub u64);
+
+/// Type-safe wrapper around u64 when indicating that it's a set ID.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
+pub struct SetId(pub u64);
 
 enum Broadcast<Block: BlockT> {
 	// round, set id, encoded commit.
@@ -582,8 +585,8 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 			let message = GossipMessage::VoteOrPrecommit(VoteOrPrecommitMessage::<Block> {
 				message: signed.clone(),
-				round: self.round,
-				set_id: self.set_id,
+				round: Round(self.round),
+				set_id: SetId(self.set_id),
 			});
 
 			// announce our block hash to peers and propagate the
@@ -706,7 +709,7 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 						"target_number" => ?msg.message.target_number,
 						"target_hash" => ?msg.message.target_hash,
 					);
-					check_compact_commit::<Block>(msg.message, &*voters).map(move |c| (round, c))
+					check_compact_commit::<Block>(msg.message, &*voters).map(move |c| (round.0, c))
 				},
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
@@ -720,7 +723,7 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 /// An output sink for commit messages.
 pub(crate) struct CommitsOut<Block: BlockT, N: Network<Block>> {
 	network: N,
-	set_id: u64,
+	set_id: SetId,
 	_marker: ::std::marker::PhantomData<Block>,
 	is_voter: bool,
 }
@@ -730,7 +733,7 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	pub(crate) fn new(network: N, set_id: u64, is_voter: bool) -> Self {
 		CommitsOut {
 			network,
-			set_id,
+			set_id: SetId(set_id),
 			is_voter,
 			_marker: Default::default(),
 		}
@@ -747,6 +750,8 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		}
 
 		let (round, commit) = input;
+		let round = Round(round);
+
 		telemetry!(CONSENSUS_INFO; "afg.commit_issued";
 			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
 		);
@@ -767,7 +772,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			message: compact_commit,
 		});
 
-		self.network.send_commit(round, self.set_id, Encode::encode(&message), false);
+		self.network.send_commit(round.0, self.set_id.0, Encode::encode(&message), false);
 
 		Ok(AsyncSink::Ready)
 	}
@@ -778,6 +783,6 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 
 impl<Block: BlockT, N: Network<Block>> Drop for CommitsOut<Block, N> {
 	fn drop(&mut self) {
-		self.network.drop_set_messages(self.set_id);
+		self.network.drop_set_messages(self.set_id.0);
 	}
 }

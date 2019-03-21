@@ -111,7 +111,7 @@ pub trait Validator<B: BlockT> {
 	}
 
 	/// Validate consensus message.
-	fn validate(&self, context: &mut ValidatorContext<B>, data: &[u8]) -> ValidationResult<B::Hash>;
+	fn validate(&self, context: &mut ValidatorContext<B>, who: NodeIndex, data: &[u8]) -> ValidationResult<B::Hash>;
 
 	/// Filter out departing messages.
 	fn should_send_to(&self, _who: NodeIndex, _topic: &B::Hash, _data: &[u8]) -> bool {
@@ -299,7 +299,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			.cloned()
 			.map(|v| {
 				let mut context = ValidatorContext { gossip: self, protocol, engine_id };
-				v.validate(&mut context, &message.data)
+				v.validate(&mut context, who, &message.data)
 			});
 		let topic = match validation {
 			Some(ValidationResult::ValidStored(topic)) => Some(topic),
