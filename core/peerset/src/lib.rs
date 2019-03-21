@@ -121,7 +121,7 @@ impl Peerset {
 			inner: Mutex::new(inner),
 		});
 
-		let	rx = PeersetMut {
+		let rx = PeersetMut {
 			parent: peerset.clone(),
 			rx,
 		};
