@@ -30,7 +30,7 @@ use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use tokio::timer::Interval;
-use network::{ConsensusEngineId, Service as NetworkService};
+use network::{consensus_gossip as network_gossip, ConsensusEngineId, Service as NetworkService,};
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
 use gossip::{GossipMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator};
@@ -54,7 +54,10 @@ pub trait Network<Block: BlockT>: Clone {
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In;
 
 	/// Send a message at a specific round out.
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>);
+	///
+	/// Force causes it to be sent to all peers, even if they've seen it already.
+	/// Only should be used in case of consensus stall.
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool);
 
 	/// Clean up messages for a round.
 	fn drop_round_messages(&self, round: u64, set_id: u64);
@@ -67,7 +70,10 @@ pub trait Network<Block: BlockT>: Clone {
 	fn commit_messages(&self, set_id: u64) -> Self::In;
 
 	/// Send message over the commit channel.
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
+	///
+	/// Force causes it to be sent to all peers, even if they've seen it already.
+	/// Only should be used in case of consensus stall.
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool);
 
 	/// Note a block finalized in a commit message that has been successfully
 	/// imported.
@@ -154,9 +160,14 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		NetworkStream { outer: rx, inner: None }
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
+		let recipient = if force {
+			network_gossip::MessageRecipient::BroadcastToAll
+		} else {
+			network_gossip::MessageRecipient::BroadcastNew
+		};
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, recipient);
 	}
 
 	fn drop_round_messages(&self, _round: u64, _set_id: u64) {
@@ -177,9 +188,14 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		NetworkStream { outer: rx, inner: None }
 	}
 
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
+		let recipient = if force {
+			network_gossip::MessageRecipient::BroadcastToAll
+		} else {
+			network_gossip::MessageRecipient::BroadcastNew
+		};
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, recipient);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
@@ -294,12 +310,12 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 			if rebroadcast {
 				let SetId(set_id) = self.set_id;
 				if let Some((Round(c_round), ref c_commit)) = self.last_commit {
-					self.network.send_commit(c_round, set_id, c_commit.clone());
+					self.network.send_commit(c_round, set_id, c_commit.clone(), true);
 				}
 
 				let Round(round) = self.round_messages.0;
 				for message in self.round_messages.1.iter().cloned() {
-					self.network.send_message(round, set_id, message);
+					self.network.send_message(round, set_id, message, true);
 				}
 
 				for (&announce_hash, &Round(round)) in &self.announcements {
@@ -307,6 +323,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 				}
 			}
 		}
+
 		loop {
 			match self.incoming_broadcast.poll().expect("UnboundedReceiver does not yield errors; qed") {
 				Async::NotReady => return Ok(Async::NotReady),
@@ -332,7 +349,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_commit(round.0, self.set_id.0, commit);
+							self.network.send_commit(round.0, self.set_id.0, commit, false);
 						}
 						Broadcast::Message(round, set_id, message) => {
 							if self.set_id == set_id {
@@ -346,7 +363,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_message(round.0, set_id.0, message);
+							self.network.send_message(round.0, set_id.0, message, false);
 						}
 						Broadcast::Announcement(round, set_id, hash) => {
 							if self.set_id == set_id {
@@ -382,7 +399,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.messages_for(round, set_id)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Message(Round(round), SetId(set_id), message));
 	}
 
@@ -398,7 +415,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.commit_messages(set_id)
 	}
 
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Commit(Round(round), SetId(set_id), message));
 	}
 
@@ -572,7 +589,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			// announce our block hash to peers and propagate the
 			// message.
 			self.network.announce(self.round, self.set_id, target_hash);
-			self.network.send_message(self.round, self.set_id, message.encode());
+			self.network.send_message(self.round, self.set_id, message.encode(), false);
 
 			// forward the message to the inner sender.
 			let _ = self.sender.unbounded_send(signed);
@@ -750,7 +767,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			message: compact_commit,
 		});
 
-		self.network.send_commit(round, self.set_id, Encode::encode(&message));
+		self.network.send_commit(round, self.set_id, Encode::encode(&message), false);
 
 		Ok(AsyncSink::Ready)
 	}

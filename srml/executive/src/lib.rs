@@ -22,10 +22,10 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
-	Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
+	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT
 };
-use srml_support::{Dispatchable, traits::ChargeBytesFee};
+use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -62,11 +62,15 @@ pub struct Executive<System, Block, Context, Payment, AllModules>(
 
 impl<
 	System: system::Trait,
-	Block: BlockT<Header=System::Header, Hash=System::Hash>,
+	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: ChargeBytesFee<System::AccountId>,
+	Payment: MakePayment<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules>
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
+	Block::Extrinsic: Checkable<Context> + Codec,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	fn execute_block(block: Block) {
 		Self::execute_block(block);
@@ -79,9 +83,9 @@ impl<
 
 impl<
 	System: system::Trait,
-	Block: BlockT<Header=System::Header, Hash=System::Hash>,
+	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: ChargeBytesFee<System::AccountId>,
+	Payment: MakePayment<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -210,7 +214,7 @@ impl<
 			) }
 
 			// pay any fees.
-			Payment::charge_base_bytes_fee(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -282,7 +286,7 @@ impl<
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
-			if Payment::charge_base_bytes_fee(sender, encoded_len).is_err() {
+			if Payment::make_payment(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
@@ -328,7 +332,6 @@ mod tests {
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
-	use fees;
 	use hex_literal::{hex, hex_impl};
 
 	impl_outer_origin! {
@@ -338,7 +341,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
-			balances<T>, fees<T>,
+			balances<T>,
 		}
 	}
 
@@ -363,28 +366,25 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = MetaEvent;
-	}
-	impl fees::Trait for Runtime {
-		type Event = MetaEvent;
-		type TransferAsset = balances::Module<Runtime>;
+		type TransactionPayment = ();
+		type DustRemoval = ();
+		type TransferPayment = ();
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, fees::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
+			transaction_base_fee: 10,
+			transaction_byte_fee: 0,
 			balances: vec![(1, 111)],
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			vesting: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(fees::GenesisConfig::<Runtime> {
-			transaction_base_fee: 10,
-			transaction_byte_fee: 0,
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
@@ -410,7 +410,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("6651861f40a8f42c033b3e937cb3513e6dbaf4be6bafb1561a19f884be3f58dd").into(),
+					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -444,7 +444,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("6651861f40a8f42c033b3e937cb3513e6dbaf4be6bafb1561a19f884be3f58dd").into(),
+					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
