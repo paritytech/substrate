@@ -448,7 +448,7 @@ fn staking_should_work() {
 		assert_eq!(Staking::bonding_duration(), 2);
 
 		// put some money in account that we'll use.
-		for i in 1..5 { let _ = Balances::deposit_creating(&i, 2000); }
+		for i in 1..5 { let _ = Balances::ensure_free_balance_is(&i, 2000); }
 
 		// --- Block 1:
 		System::set_block_number(1);
