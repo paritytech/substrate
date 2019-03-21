@@ -78,10 +78,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_with_child_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.essence.for_keys_with_child_prefix(storage_key, prefix, f)
-	}
-
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		self.essence.for_keys_in_child_storage(storage_key, f)
 	}
@@ -180,6 +176,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		}
 
 		let is_default = root == default_root;
+
 		(root, is_default, write_overlay)
 	}
 

@@ -24,7 +24,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use srml_support::{storage::child, StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch,
+use srml_support::{storage::child, StorageMap, assert_ok, impl_outer_event, impl_outer_dispatch,
 	impl_outer_origin, traits::Currency};
 use substrate_primitives::Blake2Hasher;
 use system::{self, Phase, EventRecord};
@@ -121,7 +121,7 @@ static KEY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub struct DummyKeySpaceGenerator;
 impl KeySpaceGenerator<u64> for DummyKeySpaceGenerator {
 	fn key_space(account_id: &u64) -> KeySpace {
-		let mut res = KEY_COUNTER.fetch_add(1,Ordering::Relaxed).to_le_bytes().to_vec();
+		let mut res = KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes().to_vec();
 		res.extend_from_slice(&account_id.to_le_bytes());
 		res
 	}
@@ -241,7 +241,6 @@ fn account_removal_removes_storage() {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
 				Balances::deposit_creating(&1, 110);
-				Balances::increase_total_stake_by(110);
 				AccountInfoOf::<Test>::insert(1, &AccountInfo {
 					key_space: unique_id1.to_vec(),
 					current_mem_stored: 0,
@@ -251,7 +250,6 @@ fn account_removal_removes_storage() {
 				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
 
 				Balances::deposit_creating(&2, 110);
-				Balances::increase_total_stake_by(110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
 					key_space: unique_id2.to_vec(),
 					current_mem_stored: 0,

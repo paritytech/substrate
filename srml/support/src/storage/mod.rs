@@ -661,11 +661,6 @@ pub mod child {
 		runtime_io::clear_child_storage(storage_key, key);
 	}
 
-	/// Ensure keys with the given `prefix` have no entries in storage.
-	pub fn kill_prefix(storage_key: &[u8], prefix: &[u8]) {
-		runtime_io::clear_child_prefix(storage_key, prefix);
-	}
-
 	/// Get a Vec of bytes from storage.
 	pub fn get_raw(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		runtime_io::child_storage(storage_key, key)

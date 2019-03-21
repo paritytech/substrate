@@ -73,10 +73,9 @@ use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage, storage::child};
+use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced};
 use system::{ensure_signed, RawOrigin};
-use runtime_io::{blake2_256, twox_128};
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
@@ -92,7 +91,6 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-<<<<<<< HEAD
 #[derive(Encode,Decode,Clone,Debug)]
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
@@ -121,10 +119,11 @@ pub struct KeySpaceFromParentCounter<T: Trait>(PhantomData<T>);
 /// parent_keyspace + accountid_counter`
 impl<T: Trait> KeySpaceGenerator<T::AccountId> for KeySpaceFromParentCounter<T>
 where
-	T::AccountId: AsRef<[u8]> {
+	T::AccountId: AsRef<[u8]>
+{
 	fn key_space(account_id: &T::AccountId) -> KeySpace {
-    // note that skipping a value due to error is not an issue here.
-    // we only need uniqueness, not sequence.
+		// note that skipping a value due to error is not an issue here.
+		// we only need uniqueness, not sequence.
 		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
 
 		let mut buf = Vec::new();
@@ -259,13 +258,8 @@ decl_module! {
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
-<<<<<<< HEAD
 				// Commit all changes that made it thus far into the persistant storage.
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
-=======
-				// Commit all changes that made it thus far into the persistent storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
->>>>>>> master
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -398,26 +392,6 @@ decl_storage! {
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
 		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
-	}
-}
-
-/// The storage items associated with a prefix space in a tree
-pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
-impl<T: Trait> StorageDoubleMap for StorageOf<T> {
-	const PREFIX: &'static [u8] = b"con:sto:";
-	type Key1 = T::AccountId;
-	type Key2 = Vec<u8>;
-	type Value = Vec<u8>;
-
-	/// Hashed by XX
-	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8> {
-		twox_128(&key1_data).to_vec()
-	}
-
-	/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
-	/// thus will be susceptible for a untrusted input.
-	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8> {
-		blake2_256(&key2_data).to_vec()
 	}
 }
 

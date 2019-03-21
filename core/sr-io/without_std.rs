@@ -227,12 +227,6 @@ extern_functions! {
 	///
 	/// A child storage is used e.g. by a contract.
 	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
-	/// Remove storage entries which key starts with given prefix from a child trie.
-  ///
-	/// See [`ext_clear_child_prefix`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_clear_child_prefix(storage_key_data: *const u8, storage_key_len: u32, prefix_data: *const u8, prefix_len: u32);
 	/// A child storage function.
 	///
 	/// See [`ext_kill_storage`] for details.
@@ -420,19 +414,6 @@ pub fn clear_prefix(prefix: &[u8]) {
 		);
 	}
 }
-
-/// Clear the child storage entries key of which starts with the given prefix.
-pub fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
-	unsafe {
-		ext_clear_child_prefix.get()(
-			storage_key.as_ptr(),
-			storage_key.len() as u32,
-			prefix.as_ptr(),
-			prefix.len() as u32
-		);
-	}
-}
-
 
 /// Clear an entire child storage.
 pub fn kill_child_storage(storage_key: &[u8]) {

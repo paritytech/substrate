@@ -128,13 +128,6 @@ pub fn clear_prefix(prefix: &[u8]) {
 	);
 }
 
-/// Clear the child storage entries with a key that starts with the given prefix.
-pub fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
-	ext::with(|ext|
-		ext.clear_child_prefix(storage_key, prefix)
-	);
-}
-
 /// Clear an entire child storage.
 pub fn kill_child_storage(storage_key: &[u8]) {
 	ext::with(|ext|

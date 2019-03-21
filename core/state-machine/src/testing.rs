@@ -150,10 +150,6 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		self.inner.retain(|key, _| !key.starts_with(prefix));
 	}
 
-	fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
-		self.changes.clear_child_prefix(storage_key, prefix);
-  }
-
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {

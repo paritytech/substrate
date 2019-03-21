@@ -22,7 +22,7 @@ use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher};
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError, default_child_trie_root, default_child_trie_root_hash, child_root_from_slice, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
+use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError, default_child_trie_root, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
 use crate::changes_trie::Storage as ChangesTrieStorage;
 
 /// Patricia trie-based storage trait.
@@ -141,48 +141,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
 		}
 	}
-
-	/// Execute given closure for all keys starting with prefix. TODO fuse with for_keys_with_prefix
-	pub fn for_keys_with_child_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], mut f: F) {
-
-		let root: H::Out = match self.storage(storage_key) {
-			Ok(v) => v.map(|h|child_root_from_slice::<H>(&h[..])).unwrap_or(default_child_trie_root_hash::<H>(storage_key)),
-			Err(e) => {
-				debug!(target: "trie", "Error while iterating child storage: {}", e);
-				return;
-			}
-		};
-
-		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-		};
-
-		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, &root)?;
-			let mut iter = trie.iter()?;
-
-			iter.seek(prefix)?;
-
-			for x in iter {
-				let (key, _) = x?;
-
-				if !key.starts_with(prefix) {
-					break;
-				}
-
-				f(&key);
-			}
-
-			Ok(())
-		};
-
-		if let Err(e) = iter() {
-			debug!(target: "trie", "Error while iterating by prefix: {}", e);
-		}
-	}
-
 }
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {

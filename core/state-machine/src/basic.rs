@@ -133,8 +133,6 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 
 	fn kill_child_storage(&mut self, _storage_key: &[u8]) { }
 
-	fn clear_child_prefix(&mut self, _storage_key: &[u8], _prefix: &[u8]) { }
-
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.changes.clear_prefix(prefix);
 		self.inner.retain(|key, _| !key.starts_with(prefix));

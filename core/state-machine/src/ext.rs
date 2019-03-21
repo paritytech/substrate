@@ -264,21 +264,6 @@ where
 		});
 	}
 
-	fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
-		let _guard = panic_handler::AbortGuard::new(true);
-		if is_child_storage_key(prefix) {
-			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
-			return;
-		}
-
-		self.mark_dirty();
-		self.overlay.clear_child_prefix(storage_key, prefix);
-		self.backend.for_keys_with_child_prefix(storage_key, prefix, |key| {
-			self.overlay.set_child_storage(storage_key.to_vec(), key.to_vec(), None);
-		});
-	}
-
-
 	fn chain_id(&self) -> u64 {
 		42
 	}

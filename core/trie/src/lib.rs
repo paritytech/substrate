@@ -142,16 +142,6 @@ pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
 	empty.root().as_ref().to_vec()
 }
 
-/// Determine the default child trie root.
-pub fn default_child_trie_root_hash<H: Hasher>(_storage_key: &[u8]) -> H::Out {
-	let mut db = MemoryDB::default();
-	let mut root = H::Out::default();
-	let mut empty = TrieDBMut::<H>::new(&mut db, &mut root);
-	empty.commit();
-	empty.root().clone()
-}
-
-
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
 /// implementation may ignore this type parameter and use other hashers.
 pub fn child_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> Vec<u8> where
@@ -160,21 +150,6 @@ pub fn child_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> Vec
 	B: AsRef<[u8]>,
 {
 	trie_root::<H, _, _, _>(input).as_ref().iter().cloned().collect()
-}
-
-pub fn child_trie_root2<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> H::Out where
-	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
-{
-	trie_root::<H, _, _, _>(input)
-}
-
-
-pub fn child_root_from_slice<H: Hasher>(root_vec: &[u8]) -> H::Out {
-	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(&root_vec); // root is fetched from DB, not writable by runtime, so it's always valid.
-	root
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
@@ -189,7 +164,9 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let mut root = child_root_from_slice::<H>(&root_vec[..]);
+	let mut root = H::Out::default();
+	root.as_mut().copy_from_slice(&root_vec); // root is fetched from DB, not writable by runtime, so it's always valid.
+
 	{
 		let mut trie = TrieDBMut::<H>::from_existing(&mut *db, &mut root)?;
 

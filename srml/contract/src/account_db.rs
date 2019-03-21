@@ -23,8 +23,8 @@ use rstd::rc::Rc;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
-use srml_support::{StorageMap, StorageDoubleMap, traits::{UpdateBalanceOutcome,
-	SignedImbalance, Currency, Imbalance, storage::child}};
+use srml_support::{StorageMap, traits::{UpdateBalanceOutcome,
+	SignedImbalance, Currency, Imbalance}, storage::child};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,

@@ -221,13 +221,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
-	ext_clear_child_prefix(storage_key_data: *const u8, storage_key_len: u32, prefix_data: *const u8, prefix_len: u32) => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
-			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_clear_child_prefix"))?;
-		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_child_prefix"))?;
-		this.ext.clear_child_prefix(&storage_key, &prefix);
-		Ok(())
-	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(
 			storage_key_data,

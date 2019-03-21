@@ -323,10 +323,6 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_with_child_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.state.for_keys_with_child_prefix(storage_key, prefix, f)
-	}
-
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		self.state.for_keys_in_child_storage(storage_key, f)
 	}
