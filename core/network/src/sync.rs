@@ -417,6 +417,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Returns peer sync status (if any).
 	pub(crate) fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<B>> {
 		self.peers.get(&who).map(|peer| {
 			PeerInfo {
