@@ -50,9 +50,6 @@ impl network::SyncProvider<Block> for Status {
 		network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
-			is_reserved_only: false,
-			reserved_peers: Default::default(),
-			banned_peers: Default::default(),
 			connected_peers: Default::default(),
 			not_connected_peers: Default::default(),
 			average_download_per_sec: 0,
@@ -207,9 +204,6 @@ fn system_network_state() {
 		network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
-			is_reserved_only: false,
-			reserved_peers: Default::default(),
-			banned_peers: Default::default(),
 			connected_peers: Default::default(),
 			not_connected_peers: Default::default(),
 			average_download_per_sec: 0,

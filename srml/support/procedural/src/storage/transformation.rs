@@ -462,10 +462,12 @@ fn decl_storage_items(
 		..
 	} = instance_opts;
 
+	let build_prefix = |cratename, name| format!("{} {}", cratename, name);
+
 	// Build Instantiable trait
 	if instance.is_some() {
-		let mut method_defs = TokenStream2::new();
-		let mut method_impls = TokenStream2::new();
+		let mut const_names = vec![];
+
 		for sline in storage_lines.inner.iter() {
 			let DeclStorageLine {
 				storage_type,
@@ -473,48 +475,36 @@ fn decl_storage_items(
 				..
 			} = sline;
 
+			let prefix = build_prefix(cratename, name);
+
 			let type_infos = get_type_infos(storage_type);
 
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-
-			method_defs.extend(quote!{ fn #method_name(prefix: &'static [u8]) -> &'static [u8]; });
-			method_impls.extend(quote!{
-				fn #method_name(prefix: &'static [u8]) -> &'static [u8] {
-					static LAZY: #scrate::lazy::Lazy<#scrate::rstd::vec::Vec<u8>> = #scrate::lazy::Lazy::INIT;
-					LAZY.get(|| {
-						let mut final_prefix = #scrate::rstd::vec::Vec::new();
-						final_prefix.extend_from_slice(prefix);
-						final_prefix.extend_from_slice(Self::INSTANCE_PREFIX.as_bytes());
-						final_prefix
-					})
-				}
-			});
+			let const_name = syn::Ident::new(&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			let partial_const_value = prefix.clone();
+			const_names.push((const_name, partial_const_value));
 
 			if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
-				let method_name = syn::Ident::new(&format!("build_head_key_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-
-				method_defs.extend(quote!{ fn #method_name(prefix: &'static [u8]) -> &'static [u8]; });
-				method_impls.extend(quote!{
-					fn #method_name(prefix: &'static [u8]) -> &'static [u8] {
-						static LAZY: #scrate::lazy::Lazy<#scrate::rstd::vec::Vec<u8>> = #scrate::lazy::Lazy::INIT;
-						LAZY.get(|| {
-							let mut final_prefix = #scrate::rstd::vec::Vec::new();
-							final_prefix.extend_from_slice("head of ".as_bytes());
-							final_prefix.extend_from_slice(prefix);
-							final_prefix.extend_from_slice(Self::INSTANCE_PREFIX.as_bytes());
-							final_prefix
-						})
-					}
-				});
+				let const_name = syn::Ident::new(&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site());
+				let partial_const_value = format!("head of {}", prefix);
+				const_names.push((const_name, partial_const_value));
 			}
 		}
 
-		impls.extend(quote! {
-			pub trait #instantiable: 'static {
-				const INSTANCE_PREFIX: &'static str;
-				#method_defs
+		// Declare Instance trait
+		{
+			let mut const_impls = TokenStream2::new();
+			for (const_name, _) in &const_names {
+				const_impls.extend(quote! {
+					const #const_name: &'static str;
+				});
 			}
-		});
+
+			impls.extend(quote! {
+				pub trait #instantiable: 'static {
+					#const_impls
+				}
+			});
+		}
 
 		let instances = (0..NUMBER_OF_INSTANCE)
 			.map(|i| {
@@ -524,15 +514,24 @@ fn decl_storage_items(
 			})
 			.chain(default_instance.clone().map(|ident| (String::new(), ident)));
 
+		// Impl Instance trait for instances
 		for (prefix, ident) in instances {
+			let mut const_impls = TokenStream2::new();
+
+			for (const_name, partial_const_value) in &const_names {
+				let const_value = format!("{}{}", partial_const_value, prefix);
+				const_impls.extend(quote! {
+					const #const_name: &'static str = #const_value;
+				});
+			}
+
 			impls.extend(quote! {
 				// Those trait are derived because of wrong bounds for generics
 				#[cfg_attr(feature = "std", derive(Debug))]
 				#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
 				pub struct #ident;
 				impl #instantiable for #ident {
-					const INSTANCE_PREFIX: &'static str = #prefix;
-					#method_impls
+					#const_impls
 				}
 			});
 		}
@@ -563,7 +562,7 @@ fn decl_storage_items(
 			type_infos,
 			fielddefault: default_value.inner.as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
 				.unwrap_or_else(|| quote!{ Default::default() }),
-			prefix: format!("{} {}", cratename, name),
+			prefix: build_prefix(cratename, name),
 			name,
 			attrs,
 		};
