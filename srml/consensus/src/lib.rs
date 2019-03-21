@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+<<<<<<< HEAD
 //! ## Overview
 //! 
 //! The consensus module manages the authority set for the native code. It provides support for reporting offline behavior among validators and logging changes in the validator authority set.
@@ -89,7 +90,7 @@
 //! ```
 //! 
 //! ## Related Modules
-//! 
+//!
 //! - [`staking`](https://crates.parity.io/srml_staking/index.html): this module uses `consensus` to monitor offline reporting amongst validators
 //! - [`aura`](https://crates.parity.io/srml_aura/index.html): this module does not relate directly to `consensus`, but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method
 //! - [`grandpa`](https://crates.parity.io/srml_grandpa/index.html): although GRANDPA does its own voter-set managing, it has a mode where it can track `consensus`, if desired
@@ -97,6 +98,9 @@
 //! ## References
 //! 
 //! If you're interested in hacking on this module, it is useful to understand the interaction with `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` to create and check inherents.
+=======
+//! Consensus module for runtime; manages the authority set ready for the native code.
+>>>>>>> parent of d19a9cd5... first try
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -298,7 +302,6 @@ decl_module! {
 			}
 		}
 
-		/// Log changes in the set of authorities
 		fn on_finalise() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
@@ -318,7 +321,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of authorities' session keys.
 	///
-	/// Called by `rotate_session` only.
+	/// Called by `next_session` only.
 	pub fn set_authorities(authorities: &[T::SessionKey]) {
 		let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
 		if current_authorities != authorities {
@@ -328,8 +331,6 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set a single authority by index.
-	///
-	/// Called by `rotate_session` only.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		let current_authority = AuthorityStorageVec::<T::SessionKey>::item(index);
 		if current_authority != *key {
@@ -355,16 +356,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-/// Implementing `ProvideInherent` enables this module to create and check inherents
 impl<T: Trait> ProvideInherent for Module<T> {
-	/// The call type of the module
 	type Call = Call<T>;
-	/// The error returned by `check_inherent`
 	type Error = MakeFatalError<RuntimeString>;
-	/// The inherent identifier used by this inherent
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	/// Creates an inherent from the `InherentData`
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		if let Ok(Some(data)) =
 			data.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent>(
@@ -381,7 +377,6 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		}
 	}
 
-	/// Verify the validity of the given inherent
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> Result<(), Self::Error> {
 		let offline = match call {
 			Call::note_offline(ref offline) => offline,
