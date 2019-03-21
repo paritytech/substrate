@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use self::behaviour::{CustomProtos, CustomProtosOut};
-pub use self::upgrade::{CustomMessage, CustomMessageId, RegisteredProtocol, RegisteredProtocols};
+pub use self::behaviour::{CustomProto, CustomProtoOut};
+pub use self::upgrade::{CustomMessage, CustomMessageId, RegisteredProtocol};
 
 mod behaviour;
 mod handler;

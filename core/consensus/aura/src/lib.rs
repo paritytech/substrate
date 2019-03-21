@@ -34,7 +34,7 @@ use consensus_common::{
 };
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
-use client::block_builder::api::{BlockBuilder as BlockBuilderApi, self as block_builder_api};
+use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId, Justification};
@@ -497,51 +497,6 @@ impl<C, E> AuraVerifier<C, E>
 			Ok(())
 		}
 	}
-
-	#[allow(deprecated)]
-	fn old_check_inherents<B: Block>(
-		&self,
-		block: B,
-		block_id: BlockId<B>,
-		inherent_data: InherentData,
-		timestamp_now: u64,
-	) -> Result<(), String>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
-	{
-		use block_builder_api::{OldInherentData, OldCheckInherentError};
-		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
-
-		let (timestamp, slot) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data).map_err(|e| format!("{:?}", e))?;
-		let inherent_data = OldInherentData::new(timestamp, slot);
-
-		let inherent_res = self.client.runtime_api().check_inherents_before_version_2(
-			&block_id,
-			block,
-			inherent_data,
-		).map_err(|e| format!("{:?}", e))?;
-
-		match inherent_res {
-			Ok(()) => Ok(()),
-			Err(OldCheckInherentError::ValidAtTimestamp(timestamp)) => {
-				// halt import until timestamp is valid.
-				// reject when too far ahead.
-				if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-					return Err("Rejecting block too far in future".into());
-				}
-
-				let diff = timestamp.saturating_sub(timestamp_now);
-				info!(
-					target: "aura",
-					"halting for block {} seconds in the future",
-					diff
-				);
-				telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block"; "diff" => ?diff);
-				thread::sleep(Duration::from_secs(diff));
-				Ok(())
-			},
-			Err(OldCheckInherentError::Other(e)) => Err(e.into())
-		}
-	}
 }
 
 /// No-op extra verification.
@@ -596,18 +551,12 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					inherent_data.aura_replace_inherent_data(slot_num);
 					let block = B::new(pre_header.clone(), inner_body);
 
+					// skip the inherents verification if the runtime API is old.
 					if self.client
 						.runtime_api()
-						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v < 2)
+						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
 						.map_err(|e| format!("{:?}", e))?
 					{
-						self.old_check_inherents(
-							block.clone(),
-							BlockId::Hash(parent_hash),
-							inherent_data,
-							timestamp_now,
-						)?;
-					} else {
 						self.check_inherents(
 							block.clone(),
 							BlockId::Hash(parent_hash),

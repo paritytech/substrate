@@ -15,7 +15,7 @@ use basic_authorship::ProposerFactory;
 use node_executor;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use substrate_client as client;
-use primitives::{ed25519::Pair, Pair as _Pair};
+use primitives::{ed25519::Pair, Pair as PairT};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_executor::native_executor_instance;
