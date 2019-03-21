@@ -14,7 +14,60 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for Aura consensus. This manages offline reporting.
+//! ## Overview
+//! 
+//! The `aura` module extends Aura consensus by managing offline reporting.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable
+//! 
+//! There are no dispatchable functions for this module as it mainly serves to monitor offline interaction in the context of Aura consensus and doesn't operate independent of this consensus algorithm.
+//! 
+//! ### Public
+//! 
+//! See the [module](https://crates.parity.io/srml_aura/struct.Module.html) for details on publicly available functions.
+//! 
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! 
+//! ## Usage
+//! 
+//! ### Prerequisites
+//! 
+//! Use of this module implies selection of the Aura algorithm. More details on consensus configuration will be revealed once [Swappable Consensus](https://github.com/paritytech/substrate/issues/1304) is formalized.
+//! 
+//! ### Simple Code Snippet
+//! 
+//! Instantiate a report of skipped authorities
+//! ```rust,ignore
+//! let mut report = AuraReport {
+//!     start_slot: 6, // The first skipped slot
+//!     skipped: 3,   // The number of authorities skipped
+//! }
+//! ```
+//! 
+//! Punish validators that did not fulfill their duties (*skipped*)
+//! ```rust,ignore
+//! let mut validators = vec![0; 10];
+//! report.punish(10, |idx, count| validators[idx] += count);
+//! assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0]);
+//! ```
+//! 
+//! See the `test.rs` file in this module's directory for other simple code snippets that may make this module's functionalities clearer.
+//! 
+//! ### Example from SRML
+//! 
+//! This module is not used in other Substrate Runtime Module Libraries.
+//! 
+//! ## Related Modules
+//! 
+//! - [`staking`](https://crates.parity.io/srml_staking/index.html): this module is called in `aura` to enforce slashing if validators miss a certain number of slots (see the `StakingSlasher` struct and associated method)
+//! - [`timestamp`](https://crates.parity.io/srml_timestamp/index.html): this module is used in `aura` to track consensus rounds (via `slots`)
+//! - [`consensus`](https://crates.parity.io/srml_consensus/index.html): this module does not relate directly to `aura`, but serves to manage offline reporting by implementing `ProvideInherent` in a similar way
+//! 
+//! ## References
+//! 
+//! If you're interested in hacking on this module, it is useful to understand the interaction with `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` and `ProvideInherentData` to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -75,8 +128,10 @@ impl InherentDataProvider {
 	}
 }
 
+/// Methods to specify the provision of inherent data
 #[cfg(feature = "std")]
 impl ProvideInherentData for InherentDataProvider {
+	/// Called when this inherent data provider is registered at the given `InherentDataProviders`
 	fn on_register(
 		&self,
 		providers: &InherentDataProviders,
@@ -89,10 +144,14 @@ impl ProvideInherentData for InherentDataProvider {
 		}
 	}
 
+	/// Identifier of the inherent for the given data is provided
 	fn inherent_identifier(&self) -> &'static inherents::InherentIdentifier {
 		&INHERENT_IDENTIFIER
 	}
 
+	/// Provide inherent data to be included in a block
+	///
+	/// Data should be stored in the `InherentData` structure
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
@@ -102,6 +161,9 @@ impl ProvideInherentData for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
 	}
 
+	/// Convert the encoded error to a string
+	///
+	/// If the error cannot be decoded, `None` is returned
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
 		RuntimeString::decode(&mut &error[..]).map(Into::into)
 	}
@@ -219,15 +281,21 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	}
 }
 
+/// Methods for creating and checking inherents
 impl<T: Trait> ProvideInherent for Module<T> {
+	/// The call type (timestamp)
 	type Call = timestamp::Call<T>;
+	/// The error returned by `check_inherent`
 	type Error = MakeFatalError<RuntimeString>;
+	/// The inherent identifier used by this inherent
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
+	/// Create an inherent from the `InherentData`
 	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
 		None
 	}
 
+	/// Verify the validity of the inherent using the timestamp
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
 			timestamp::Call::set(ref timestamp) => timestamp.clone(),

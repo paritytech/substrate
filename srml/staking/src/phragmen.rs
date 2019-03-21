@@ -124,11 +124,11 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
 	
 	// 3- optimization:
-	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
+	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out now.
 	let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
 		.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
-	// 4- If we have more candidates then needed, run Phragmén.
+	// 4- If we have more candidates than needed, run Phragmén.
 	if candidates.len() > rounds {
 		// Main election loop
 		for _round in 0..rounds {
