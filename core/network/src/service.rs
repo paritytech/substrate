@@ -23,7 +23,8 @@ use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
+use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
+use peerset::Peerset;
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
@@ -138,6 +139,9 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
+	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
+	/// nodes it should be connected to or not.
+	peerset: Arc<Peerset>,
 	/// Protocol sender
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -153,7 +157,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		protocol_id: ProtocolId,
 		import_queue: Box<ImportQueue<B>>,
 	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
-		let (network_chan, network_port) = network_channel(protocol_id);
+		let (network_chan, network_port) = network_channel();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
@@ -174,7 +178,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		)?;
 		let versions = [(protocol::CURRENT_VERSION as u8)];
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
-		let (thread, network) = start_thread(
+		let (thread, network, peerset) = start_thread(
 			network_to_protocol_sender,
 			network_port,
 			params.network_config,
@@ -186,6 +190,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_offline,
 			is_major_syncing,
 			peers,
+			peerset,
 			network,
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
@@ -247,11 +252,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 
 	/// Send a consensus message through the gossip
-	pub fn gossip_consensus_message(&self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
+	pub fn gossip_consensus_message(
+		&self,
+		topic: B::Hash,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
+		force: bool,
+	) {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::GossipConsensusMessage(
-				topic, engine_id, message,
+				topic, engine_id, message, force,
 			));
 	}
 
@@ -337,20 +348,21 @@ pub trait ManageNetwork {
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
 	fn accept_unreserved_peers(&self) {
-		self.network.lock().accept_unreserved_peers();
+		self.peerset.set_reserved_only(false);
 	}
 
 	fn deny_unreserved_peers(&self) {
-		self.network.lock().deny_unreserved_peers();
+		self.peerset.set_reserved_only(true);
 	}
 
 	fn remove_reserved_peer(&self, peer: PeerId) {
-		self.network.lock().remove_reserved_peer(peer);
+		self.peerset.remove_reserved_peer(&peer);
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (addr, peer_id) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
-		self.network.lock().add_reserved_peer(addr, peer_id);
+		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+		self.peerset.add_reserved_peer(peer_id.clone());
+		self.network.lock().add_known_address(peer_id, addr);
 		Ok(())
 	}
 
@@ -361,7 +373,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 			.next()
 			.map(|addr| {
 				let mut addr = addr.clone();
-				addr.append(Libp2pProtocol::P2p(network.peer_id().clone().into()));
+				addr.append(multiaddr::Protocol::P2p(network.peer_id().clone().into()));
 				addr.to_string()
 			});
 		ret
@@ -370,10 +382,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 
 
 /// Create a NetworkPort/Chan pair.
-pub fn network_channel<B: BlockT + 'static>(protocol_id: ProtocolId) -> (NetworkChan<B>, NetworkPort<B>) {
+pub fn network_channel<B: BlockT + 'static>() -> (NetworkChan<B>, NetworkPort<B>) {
 	let (network_sender, network_receiver) = channel::unbounded();
 	let task_notify = Arc::new(AtomicTask::new());
-	let network_port = NetworkPort::new(network_receiver, protocol_id, task_notify.clone());
+	let network_port = NetworkPort::new(network_receiver, task_notify.clone());
 	let network_chan = NetworkChan::new(network_sender, task_notify);
 	(network_chan, network_port)
 }
@@ -413,26 +425,24 @@ impl<B: BlockT + 'static> Drop for NetworkChan<B> {
 /// A receiver of NetworkMsg that makes the protocol-id available with each message.
 pub struct NetworkPort<B: BlockT + 'static> {
 	receiver: Receiver<NetworkMsg<B>>,
-	protocol_id: ProtocolId,
 	task_notify: Arc<AtomicTask>,
 }
 
 impl<B: BlockT + 'static> NetworkPort<B> {
 	/// Create a new network port for a given protocol-id.
-	pub fn new(receiver: Receiver<NetworkMsg<B>>, protocol_id: ProtocolId, task_notify: Arc<AtomicTask>) -> Self {
+	pub fn new(receiver: Receiver<NetworkMsg<B>>, task_notify: Arc<AtomicTask>) -> Self {
 		Self {
 			receiver,
-			protocol_id,
 			task_notify,
 		}
 	}
 
 	/// Receive a message, if any is currently-enqueued.
 	/// Register the current tokio task for notification when a new message is available.
-	pub fn take_one_message(&self) -> Result<Option<(ProtocolId, NetworkMsg<B>)>, ()> {
+	pub fn take_one_message(&self) -> Result<Option<NetworkMsg<B>>, ()> {
 		self.task_notify.register();
 		match self.receiver.try_recv() {
-			Ok(msg) => Ok(Some((self.protocol_id.clone(), msg))),
+			Ok(msg) => Ok(Some(msg)),
 			Err(TryRecvError::Empty) => Ok(None),
 			Err(TryRecvError::Disconnected) => Err(()),
 		}
@@ -462,12 +472,10 @@ fn start_thread<B: BlockT + 'static>(
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
-) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>), Error> {
-	let protocol_id = registered.id();
-
+) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, Arc<Peerset>), Error> {
 	// Start the main service.
-	let service = match start_service(config, Some(registered)) {
-		Ok(service) => Arc::new(Mutex::new(service)),
+	let (service, peerset) = match start_service(config, registered) {
+		Ok((service, peerset)) => (Arc::new(Mutex::new(service)), peerset),
 		Err(err) => {
 			warn!("Error starting network: {}", err);
 			return Err(err.into())
@@ -478,7 +486,7 @@ fn start_thread<B: BlockT + 'static>(
 	let service_clone = service.clone();
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol_sender, service_clone, network_port, protocol_id)
+		let fut = run_thread(protocol_sender, service_clone, network_port)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -491,7 +499,7 @@ fn start_thread<B: BlockT + 'static>(
 		};
 	})?;
 
-	Ok(((close_tx, thread), service))
+	Ok(((close_tx, thread), service, peerset))
 }
 
 /// Runs the background thread that handles the networking.
@@ -499,7 +507,6 @@ fn run_thread<B: BlockT + 'static>(
 	protocol_sender: Sender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
-	protocol_id: ProtocolId,
 ) -> impl Future<Item = (), Error = io::Error> {
 
 	let network_service_2 = network_service.clone();
@@ -511,7 +518,7 @@ fn run_thread<B: BlockT + 'static>(
 			Ok(None) => Ok(Async::NotReady),
 			Err(_) => Err(())
 		}
-	}).for_each(move |(protocol_id, msg)| {
+	}).for_each(move |msg| {
 		// Handle message from Protocol.
 		match msg {
 			NetworkMsg::PeerIds(node_idxs, sender) => {
@@ -523,13 +530,15 @@ fn run_thread<B: BlockT + 'static>(
 			NetworkMsg::Outgoing(who, outgoing_message) => {
 				network_service_2
 					.lock()
-					.send_custom_message(who, protocol_id, outgoing_message);
+					.send_custom_message(who, outgoing_message);
 			},
 			NetworkMsg::ReportPeer(who, severity) => {
 				match severity {
 					Severity::Bad(message) => {
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
-						network_service_2.lock().ban_node(who)
+						warn!(target: "sync", "Banning a node is a deprecated mechanism that \
+							should be removed");
+						network_service_2.lock().drop_node(who)
 					},
 					Severity::Useless(message) => {
 						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
@@ -555,13 +564,6 @@ fn run_thread<B: BlockT + 'static>(
 	// The network service produces events about what happens on the network. Let's process them.
 	let network = stream::poll_fn(move || network_service.lock().poll()).for_each(move |event| {
 		match event {
-			NetworkServiceEvent::ClosedCustomProtocols { node_index, protocols, debug_info } => {
-				if !protocols.is_empty() {
-					debug_assert_eq!(protocols, &[protocol_id]);
-					let _ = protocol_sender.send(
-						FromNetworkMsg::PeerDisconnected(node_index, debug_info));
-				}
-			}
 			NetworkServiceEvent::OpenedCustomProtocol { peer_id, node_index, version, debug_info, .. } => {
 				debug_assert_eq!(version, protocol::CURRENT_VERSION as u8);
 				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(peer_id, node_index, debug_info));

@@ -104,7 +104,7 @@ fn invulnerability_should_work() {
 		// Make account 10 invulnerable
 		assert_ok!(Staking::set_invulnerables(vec![10]));
 		// Give account 10 some funds
-		Balances::set_free_balance(&10, 70);
+		let _ = Balances::deposit_creating(&10, 69);
 		// There is no slash grace -- slash immediately.
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 10 has not been slashed
@@ -133,7 +133,7 @@ fn offline_should_slash_and_kick() {
 	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
-		Balances::set_free_balance(&10, 1000);
+		let _ = Balances::deposit_creating(&10, 999);
 		// Confirm account 10 is a validator
 		assert!(<Validators<Test>>::exists(&10));
 		// Validators get slashed immediately
@@ -164,7 +164,7 @@ fn offline_grace_should_delay_slashing() {
 	// Tests that with grace, slashing is delayed
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Initialize account 10 with balance
-		Balances::set_free_balance(&10, 70);
+		let _ = Balances::deposit_creating(&10, 69);
 		// Verify account 10 has balance
 		assert_eq!(Balances::free_balance(&10), 70);
 
@@ -205,8 +205,8 @@ fn max_unstake_threshold_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 		// Two users with maximum possible balance
-		Balances::set_free_balance(&10, u64::max_value());
-		Balances::set_free_balance(&20, u64::max_value());
+		let _ = Balances::deposit_creating(&10, u64::max_value() - 1);
+		let _ = Balances::deposit_creating(&20, u64::max_value() - 1);
 
 		// Give them full exposer as a staker
 		<Stakers<Test>>::insert(&10, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
@@ -254,9 +254,6 @@ fn max_unstake_threshold_works() {
 fn slashing_does_not_cause_underflow() {
 	// Tests that slashing more than a user has does not underflow
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		// One user with less than `max_value` will test underflow does not occur
-		Balances::set_free_balance(&10, 1);
-
 		// Verify initial conditions
 		assert_eq!(Balances::free_balance(&10), 1);
 		assert_eq!(Staking::offline_slash_grace(), 0);
@@ -451,7 +448,7 @@ fn staking_should_work() {
 		assert_eq!(Staking::bonding_duration(), 2);
 
 		// put some money in account that we'll use.
-		for i in 1..5 { Balances::set_free_balance(&i, 2000); }
+		for i in 1..5 { let _ = Balances::deposit_creating(&i, 2000); }
 
 		// --- Block 1:
 		System::set_block_number(1);
@@ -639,9 +636,9 @@ fn nominating_and_rewards_should_work() {
 
 		// give the man some money
 		let initial_balance = 1000;
-		for i in 1..5 { Balances::set_free_balance(&i, initial_balance); }
-		Balances::set_free_balance(&10, initial_balance);
-		Balances::set_free_balance(&20, initial_balance);
+		for i in [1, 2, 3, 4, 5, 10, 20].iter() {
+			let _ = Balances::deposit_creating(i, initial_balance - Balances::total_balance(i));
+		}
 
 		// record their balances.
 		for i in 1..5 { assert_eq!(Balances::total_balance(&i), initial_balance); }
@@ -722,8 +719,9 @@ fn nominators_also_get_slashed() {
 
 		// give the man some money.
 		let initial_balance = 1000;
-		for i in 1..3 { Balances::set_free_balance(&i, initial_balance); }
-		Balances::set_free_balance(&10, initial_balance);
+		for i in [1, 2, 3, 10].iter() {
+			let _ = Balances::deposit_creating(i, initial_balance - Balances::total_balance(i));
+		}
 
 		// 2 will nominate for 10
 		let nominator_stake = 500;
@@ -859,7 +857,7 @@ fn cannot_transfer_staked_balance() {
 		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
-		Balances::set_free_balance(&11, 10000);
+		let _ = Balances::deposit_creating(&11, 9999);
 		// Confirm that account 11 can now transfer some balance
 		assert_ok!(Balances::transfer(Origin::signed(11), 20, 1));
 	});
@@ -903,7 +901,7 @@ fn cannot_reserve_staked_balance() {
 		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
-		Balances::set_free_balance(&11, 10000);
+		let _ = Balances::deposit_creating(&11, 9990);
 		// Confirm account 11 can now reserve balance
 		assert_ok!(Balances::reserve(&11, 1));
 	});
@@ -1081,7 +1079,7 @@ fn bond_extra_works() {
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 
 		// Give account 11 some large free balance greater than total
-		Balances::set_free_balance(&11, 1000000);
+		let _ = Balances::deposit_creating(&11, 999000);
 		// Check the balance of the stash account
 		assert_eq!(Balances::free_balance(&11), 1000000);
 
@@ -1116,7 +1114,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_ok!(Staking::set_bonding_duration(2));
 
 		// Give account 11 some large free balance greater than total
-		Balances::set_free_balance(&11, 1000000);
+		let _ = Balances::deposit_creating(&11, 999000);
 		// Check the balance of the stash account
 		assert_eq!(Balances::free_balance(&11), 1000000);
 
@@ -1221,8 +1219,8 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert_eq!(Staking::stakers(&20).total, 2000);
 
 		// Give the man some money.
-		Balances::set_free_balance(&10, 1000);
-		Balances::set_free_balance(&20, 1000);
+		let _ = Balances::deposit_creating(&10, 999);
+		let _ = Balances::deposit_creating(&20, 999);
 
 		// Confirm initial free balance.
 		assert_eq!(Balances::free_balance(&10), 1000);
@@ -1293,7 +1291,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(<Payee<Test>>::exists(&10));
 
 		// Reduce free_balance of controller to 0
-		Balances::set_free_balance(&10, 0);
+		Balances::slash(&10, u64::max_value());
 		// Check total balance of account 10
 		assert_eq!(Balances::total_balance(&10), 0);
 
@@ -1309,7 +1307,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(<Payee<Test>>::exists(&10));
 
 		// Reduce free_balance of stash to 0
-		Balances::set_free_balance(&11, 0);
+		Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
@@ -1352,7 +1350,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert!(<Payee<Test>>::exists(&10));
 
 		// Reduce free_balance of controller to 0
-		Balances::set_free_balance(&10, 0);
+		Balances::slash(&10, u64::max_value());
 		// Check total balance of account 10
 		assert_eq!(Balances::total_balance(&10), 0);
 
@@ -1367,7 +1365,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert!(<Payee<Test>>::exists(&10));
 
 		// Reduce free_balance of stash to 0
-		Balances::set_free_balance(&11, 0);
+		Balances::slash(&11, u64::max_value());
 		// Check total balance of stash
 		assert_eq!(Balances::total_balance(&11), 0);
 
@@ -1450,8 +1448,8 @@ fn phragmen_poc_works() {
 		assert_eq!(<Nominators<Test>>::enumerate().count(), 0 as usize);
 
 		// bond [2,1] / [4,3] a nominator
-		Balances::set_free_balance(&1, 1000);
-		Balances::set_free_balance(&3, 1000);
+		let _ = Balances::deposit_creating(&1, 1000);
+		let _ = Balances::deposit_creating(&3, 1000);
 
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20, 30]));
@@ -1498,7 +1496,7 @@ fn phragmen_election_works_example_2() {
 
 		// bond [2,1](A), [4,3](B), as 2 nominators
 		// Give all of them some balance to be able to bond properly.
-		for i in &[1, 3] { Balances::set_free_balance(i, 2000); }
+		for i in &[1, 3] { let _ = Balances::deposit_creating(i, 2000); }
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 50, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
 
@@ -1597,7 +1595,7 @@ fn switching_roles() {
 		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// put some money in account that we'll use.
-		for i in 1..7 { Balances::set_free_balance(&i, 5000); }
+		for i in 1..7 { let _ = Balances::deposit_creating(&i, 5000); }
 
 		// add 2 nominators
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::Controller));
@@ -1664,7 +1662,7 @@ fn wrong_vote_is_null() {
 		assert_eq!(Session::validators(), vec![40, 30]);
 
 		// put some money in account that we'll use.
-		for i in 1..3 { Balances::set_free_balance(&i, 5000); }
+		for i in 1..3 { let _ = Balances::deposit_creating(&i, 5000); }
 
 		// add 1 nominators
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::default()));
@@ -1693,9 +1691,9 @@ fn bond_with_no_staked_value() {
 		// setup
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 		assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
-		Balances::set_free_balance(&3, 1000);
-		Balances::set_free_balance(&4, 1000);
-		Balances::set_free_balance(&2, 1000);
+		let _ = Balances::deposit_creating(&3, 1000);
+		let initial_balance_2 = Balances::free_balance(&2);
+		let initial_balance_4 = Balances::free_balance(&4);
 
 		// initial validators
 		assert_eq!(Session::validators(), vec![20, 10]);
@@ -1719,7 +1717,10 @@ fn bond_with_no_staked_value() {
 
 		assert_eq!(Staking::ledger(4), Some(StakingLedger { stash: 3, active: 500, total: 500, unlocking: vec![]}));
 
-		System::set_block_number(1);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4);
+		
+		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Session::validators(), vec![20, 10, 2]);
@@ -1728,8 +1729,8 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Staking::slot_stake(), 500);
 
 		// no rewards paid to 2 and 4 yet
-		assert_eq!(Balances::free_balance(&2), 1000);
-		assert_eq!(Balances::free_balance(&4), 1000);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
@@ -1737,8 +1738,8 @@ fn bond_with_no_staked_value() {
 		let reward = Staking::current_session_reward();
 		// 2 will not get any reward
 		// 4 will get all the reward share
-		assert_eq!(Balances::free_balance(&2), 1000);
-		assert_eq!(Balances::free_balance(&4), 1000 + reward);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward);
 	});
 }
 #[test]
@@ -1754,7 +1755,7 @@ fn bond_with_little_staked_value() {
 		// setup
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 		assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
-		Balances::set_free_balance(&2, 1000);
+		let initial_balance_2 = Balances::free_balance(&2);
 
 		// initial validators
 		assert_eq!(Session::validators(), vec![20, 10]);
@@ -1775,9 +1776,9 @@ fn bond_with_little_staked_value() {
 		assert_eq!(Balances::free_balance(&10), 1 + 10);
 		assert_eq!(Balances::free_balance(&20), 1 + 10);
 		// no rewards paid to 2. This was initial election.
-		assert_eq!(Balances::free_balance(&2), 1000);
+		assert_eq!(Balances::free_balance(&2), initial_balance_2);
 
-		System::set_block_number(1);
+		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Session::validators(), vec![20, 10, 2]);
@@ -1785,7 +1786,7 @@ fn bond_with_little_staked_value() {
 
 		let reward = Staking::current_session_reward();
 		// 2 will not get the full reward, practically 1
-		assert_eq!(Balances::free_balance(&2), 1000 + reward.max(1));
+		assert_eq!(Balances::free_balance(&2), initial_balance_2 + reward.max(1));
 	});
 }
 
@@ -1799,12 +1800,12 @@ fn phragmen_linear_worse_case_equalise() {
 		.build(),
 	|| {
 		let bond_validator = |a, b| {
-			Balances::set_free_balance(&(a-1), b);
+			let _ = Balances::deposit_creating(&(a-1), b);
 			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
 		};
 		let bond_nominator = |a, b, v| {
-			Balances::set_free_balance(&(a-1), b);
+			let _ = Balances::deposit_creating(&(a-1), b);
 			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
 			assert_ok!(Staking::nominate(Origin::signed(a), v));
 		};

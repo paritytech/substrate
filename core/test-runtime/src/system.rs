@@ -52,7 +52,7 @@ pub fn nonce_of(who: AccountId) -> u64 {
 	storage::get_or(&who.to_keyed_vec(NONCE_OF), 0)
 }
 
-/// Get authorities ar given block.
+/// Get authorities at given block.
 pub fn authorities() -> Vec<AuthorityId> {
 	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
 		.expect("There are always authorities in test-runtime");
@@ -305,7 +305,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
 	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
-	use crate::{Header, Extrinsic, Transfer};
+	use crate::{Header, Transfer};
 	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;

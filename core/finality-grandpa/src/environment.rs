@@ -34,6 +34,7 @@ use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
@@ -469,6 +470,9 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
+		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
+			"number" => ?number, "hash" => ?hash,
+		);
 
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
@@ -480,6 +484,11 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
+			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";
+				"number" => ?canon_number, "hash" => ?canon_hash,
+				"authorities" => ?set_ref.to_vec(),
+				"set_id" => ?new_id,
+			);
 			Some(NewAuthoritySet {
 				canon_hash,
 				canon_number,

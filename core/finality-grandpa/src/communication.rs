@@ -21,11 +21,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use grandpa::VoterSet;
+use grandpa::Message::{Prevote, Precommit};
 use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
@@ -128,12 +130,12 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 			if rebroadcast {
 				let SetId(set_id) = self.set_id;
 				if let Some((Round(c_round), ref c_commit)) = self.last_commit {
-					self.network.send_commit(c_round, set_id, c_commit.clone());
+					self.network.send_commit(c_round, set_id, c_commit.clone(), true);
 				}
 
 				let Round(round) = self.round_messages.0;
 				for message in self.round_messages.1.iter().cloned() {
-					self.network.send_message(round, set_id, message);
+					self.network.send_message(round, set_id, message, true);
 				}
 
 				for (&announce_hash, &Round(round)) in &self.announcements {
@@ -141,6 +143,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 				}
 			}
 		}
+
 		loop {
 			match self.incoming_broadcast.poll().expect("UnboundedReceiver does not yield errors; qed") {
 				Async::NotReady => return Ok(Async::NotReady),
@@ -166,7 +169,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_commit(round.0, self.set_id.0, commit);
+							self.network.send_commit(round.0, self.set_id.0, commit, false);
 						}
 						Broadcast::Message(round, set_id, message) => {
 							if self.set_id == set_id {
@@ -180,7 +183,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_message(round.0, set_id.0, message);
+							self.network.send_message(round.0, set_id.0, message, false);
 						}
 						Broadcast::Announcement(round, set_id, hash) => {
 							if self.set_id == set_id {
@@ -213,7 +216,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.messages_for(round, set_id)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Message(Round(round), SetId(set_id), message));
 	}
 
@@ -229,7 +232,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.commit_messages(set_id)
 	}
 
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Commit(Round(round), SetId(set_id), message));
 	}
 
@@ -283,6 +286,24 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 						debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 						return Ok(None);
 					}
+
+					match &msg.message.message {
+						Prevote(prevote) => {
+							telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+								"voter" => ?format!("{}", msg.message.id),
+								"target_number" => ?prevote.target_number,
+								"target_hash" => ?prevote.target_hash,
+							);
+						},
+						Precommit(precommit) => {
+							telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+								"voter" => ?format!("{}", msg.message.id),
+								"target_number" => ?precommit.target_number,
+								"target_hash" => ?precommit.target_hash,
+							);
+						},
+					};
+
 					Ok(Some(msg.message))
 				}
 				_ => {
@@ -330,7 +351,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			// announce our block hash to peers and propagate the
 			// message.
 			self.network.announce(self.round, self.set_id, target_hash);
-			self.network.send_message(self.round, self.set_id, message.encode());
+			self.network.send_message(self.round, self.set_id, message.encode(), false);
 
 			// forward the message to the inner sender.
 			let _ = self.sender.unbounded_send(signed);
@@ -436,6 +457,15 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 			match msg {
 				GossipMessage::Commit(msg) => {
 					let round = msg.round;
+					let precommits_signed_by: Vec<String> =
+						msg.message.auth_data.iter().map(move |(_, a)| {
+							format!("{}", a)
+						}).collect();
+					telemetry!(CONSENSUS_INFO; "afg.received_commit";
+						"contains_precommits_signed_by" => ?precommits_signed_by,
+						"target_number" => ?msg.message.target_number,
+						"target_hash" => ?msg.message.target_hash,
+					);
 					check_compact_commit::<Block>(msg.message, &*voters).map(move |c| (round, c))
 				},
 				_ => {
@@ -477,6 +507,9 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		}
 
 		let (round, commit) = input;
+		telemetry!(CONSENSUS_INFO; "afg.commit_issued";
+			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
+		);
 		let (precommits, auth_data) = commit.precommits.into_iter()
 			.map(|signed| (signed.precommit, (signed.signature, signed.id)))
 			.unzip();
@@ -494,7 +527,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			message: compact_commit,
 		});
 
-		self.network.send_commit(round, self.set_id, Encode::encode(&message));
+		self.network.send_commit(round, self.set_id, Encode::encode(&message), false);
 
 		Ok(AsyncSink::Ready)
 	}
