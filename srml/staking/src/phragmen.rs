@@ -16,7 +16,7 @@
 
 //! Rust implementation of the Phragmén election algorithm.
 
-use rstd::{prelude::*};
+use rstd::prelude::*;
 use primitives::Perquintill;
 use primitives::traits::{Zero, As, Bounded, CheckedMul, CheckedSub};
 use parity_codec::{HasCompact, Encode, Decode};
@@ -35,7 +35,7 @@ pub struct ElectionConfig<Balance: HasCompact> {
 }
 
 // Wrapper around validation candidates some metadata.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Default))]
 pub struct Candidate<AccountId, Balance: HasCompact> {
 	// The validator's account
@@ -53,7 +53,7 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 }
 
 // Wrapper around the nomination info of a single nominator for a group of validators.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Nominator<AccountId, Balance: HasCompact> {
 	// The nominator's account.
@@ -67,8 +67,8 @@ pub struct Nominator<AccountId, Balance: HasCompact> {
 }
 
 // Wrapper around a nominator vote and the load of that vote.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Default))]
+#[derive(Clone, Encode, Decode, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Edge<AccountId, Balance: HasCompact> {
 	// Account being voted for
 	who: AccountId,
@@ -319,7 +319,8 @@ pub fn equalise<T: Trait + 'static>(
 
 	// Undo updates to exposure
 	elected_edges.iter_mut().for_each(|e| {
-		assert_eq!(elected_candidates[e.elected_idx].who, e.who);
+		// NOTE: no assertions in the runtime, but this should nonetheless be indicative.
+		//assert_eq!(elected_candidates[e.elected_idx].who, e.who);
 		elected_candidates[e.elected_idx].backing_stake -= e.backing_stake;
 		elected_candidates[e.elected_idx].exposure.total -= e.backing_stake;
 		e.backing_stake = <BalanceOf<T>>::zero();
