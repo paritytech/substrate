@@ -12,7 +12,6 @@ use substrate_service::{
 	TaskExecutor,
 };
 use basic_authorship::ProposerFactory;
-use node_executor;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use substrate_client as client;
 use primitives::{ed25519::Pair, Pair as PairT};
@@ -45,7 +44,7 @@ construct_service_factory! {
 		Block = Block,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
-		RuntimeDispatch = node_executor::Executor,
+		RuntimeDispatch = Executor,
 		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
