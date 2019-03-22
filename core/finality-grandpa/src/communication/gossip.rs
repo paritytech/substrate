@@ -77,9 +77,9 @@ impl<N: Ord> View<N> {
 		Consider::Accept
 	}
 
-	/// Consider a commit. Rounds are not taken into account, but are implicitly
+	/// Consider a set-id global message. Rounds are not taken into account, but are implicitly
 	/// because we gate on finalization of a further block than a previous commit.
-	pub fn consider_commit(&self, set_id: SetId, number: N) -> Consider {
+	pub fn consider_global(&self, set_id: SetId, number: N) -> Consider {
 		// only from current set
 		if set_id < self.set_id { return Consider::RejectPast }
 		if set_id > self.set_id { return Consider::RejectFuture }
@@ -95,6 +95,29 @@ impl<N: Ord> View<N> {
 			}
 		}
 	}
+
+	// the previous round, if we're not at 0.
+	fn prev_round(&self) -> Option<Round> {
+		if self.round.0 == 0 {
+			None
+		} else {
+			Some(Round(self.round.0 - 1))
+		}
+	}
+}
+
+fn view_topics<B: BlockT>(view: &View<NumberFor<B>>) -> HashMap<B::Hash, (Option<Round>, SetId)> {
+	let s = view.set_id;
+	let mut map: HashMap<_, _> = [
+		(super::global_topic::<B>(s.0), (None, s)),
+		(super::round_topic::<B>(view.round.0, s.0), (Some(view.round), s)),
+	].iter().cloned().collect();
+
+	if let Some(r) = view.prev_round() {
+		map.insert(super::round_topic::<B>(r.0, s.0), (Some(r), s));
+	}
+
+	map
 }
 
 /// Grandpa gossip message type.
@@ -240,6 +263,10 @@ impl<N: Ord> Peers<N> {
 
 		Ok(())
 	}
+
+	fn peer<'a>(&'a self, node_index: &NodeIndex) -> Option<&'a PeerInfo<N>> {
+		self.inner.get(node_index)
+	}
 }
 
 enum Action<H>  {
@@ -252,9 +279,23 @@ enum Action<H>  {
 struct Inner<Block: BlockT> {
 	local_view: View<NumberFor<Block>>,
 	peers: Peers<NumberFor<Block>>,
+	live_topics: HashMap<Block::Hash, (Option<Round>, SetId)>,
+
 }
 
 impl<Block: BlockT> Inner<Block> {
+	fn new() -> Self {
+		Inner {
+			local_view: View::default(),
+			peers: Peers { inner: HashMap::new() },
+			live_topics: HashMap::new(),
+		}
+	}
+
+	fn update_view_topics(&mut self) {
+		self.live_topics = view_topics::<Block>(&self.local_view);
+	}
+
 	/// Note a round in a set has started.
 	fn note_round(&mut self, round: Round, set_id: SetId) {
 		self.local_view.round = round;
@@ -265,11 +306,13 @@ impl<Block: BlockT> Inner<Block> {
 		}
 
 		self.local_view.set_id = set_id;
+		self.update_view_topics();
 	}
 
 	/// Note that a voter set with given ID has started.
 	fn note_set(&mut self, set_id: SetId) {
 		self.local_view.update_set(set_id);
+		self.update_view_topics();
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
@@ -281,8 +324,8 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.consider_vote(round, set_id)
 	}
 
-	fn consider_commit(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
-		self.local_view.consider_commit(set_id, number)
+	fn consider_global(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
+		self.local_view.consider_global(set_id, number)
 	}
 
 	fn cost_past_rejection(&self, _who: &NodeIndex, _round: Round, _set_id: SetId) -> i32 {
@@ -311,7 +354,7 @@ impl<Block: BlockT> Inner<Block> {
 			return Action::Discard(-100);
 		}
 
-		let topic = super::message_topic::<Block>(full.round.0, full.set_id.0);
+		let topic = super::round_topic::<Block>(full.round.0, full.set_id.0);
 		Action::Repropagate(topic, 100)
 	}
 
@@ -320,7 +363,7 @@ impl<Block: BlockT> Inner<Block> {
 	{
 		use grandpa::Message as GrandpaMessage;
 
-		match self.consider_commit(full.set_id, full.message.target_number) {
+		match self.consider_global(full.set_id, full.message.target_number) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
@@ -359,8 +402,12 @@ impl<Block: BlockT> Inner<Block> {
 			}
 		}
 
-		let topic = super::commit_topic::<Block>(full.set_id.0);
-		Action::Repropagate(topic, 100)
+		// always discard commits initially and rebroadcast after doing full
+		// checking.
+		//
+		// TODO: make this "DiscardAndProcess"
+		let _topic = super::global_topic::<Block>(full.set_id.0);
+		Action::Discard(100)
 	}
 
 	fn import_neighbor_message(&mut self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
@@ -384,12 +431,7 @@ pub(crate) struct GossipValidator<Block: BlockT> {
 impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
 	pub(crate) fn new() -> GossipValidator<Block> {
-		GossipValidator {
-			inner: parking_lot::RwLock::new(Inner {
-				local_view: View::default(),
-				peers: Peers { inner: Default::default() },
-			}),
-		}
+		GossipValidator { inner: parking_lot::RwLock::new(Inner::new()) }
 	}
 
 	/// Note a round in a set has started.
@@ -448,35 +490,75 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		match action {
 			Action::Repropagate(topic, cb) => {
 				self.report(who, cb);
-				network_gossip::ValidationResult::ValidStored(topic)
+				network_gossip::ValidationResult::Keep(topic)
 			}
 			Action::Discard(cb) => {
 				self.report(who, cb);
-				network_gossip::ValidationResult::ValidOneHop
+				network_gossip::ValidationResult::Discard
 			}
 		}
 	}
 
-	fn should_send_to(&self, _who: NodeIndex, _topic: &Block::Hash, _data: &[u8]) -> bool {
-		true
+	fn should_send_to<'a>(&'a self) -> Box<FnMut(NodeIndex, Block::Hash, &[u8]) -> bool + 'a> {
+		let inner = self.inner.read();
+		Box::new(move |who, topic, mut data| {
+			let peer = match inner.peers.peer(&who) {
+				None => return false,
+				Some(x) => x,
+			};
+
+			// if the topic is not something we're keeping at the moment,
+			// do not send.
+			let &(ref maybe_round, ref set_id) = match inner.live_topics.get(&topic) {
+				None => return false,
+				Some(x) => x,
+			};
+
+			// if the topic is not something the peer accepts, discard.
+			if let Some(round) = maybe_round {
+				return peer.view.consider_vote(*round, *set_id) == Consider::Accept
+			}
+
+			// global message.
+			let our_best_commit = inner.local_view.last_commit;
+			let peer_best_commit = peer.view.last_commit;
+
+			match GossipMessage::<Block>::decode(&mut data) {
+				None => false,
+				Some(GossipMessage::Commit(full)) => {
+					// we only broadcast our best commit and only if it's
+					// better than last received by peer.
+					Some(full.message.target_number) == our_best_commit
+					&& Some(full.message.target_number) > peer_best_commit
+				}
+				Some(GossipMessage::Neighbor(_)) => false,
+				Some(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
+			}
+		})
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<FnMut(Block::Hash, &[u8]) -> bool + 'a> {
 		let inner = self.inner.read();
-		Box::new(move |_topic, mut data| {
-			let rounds = &inner.local_view;
-			let consider = match GossipMessage::<Block>::decode(&mut data) {
-				None => Consider::Accept,
-				Some(GossipMessage::Commit(full)) => rounds.consider_commit(
-					full.set_id,
-					full.message.target_number,
-				),
-				Some(GossipMessage::VoteOrPrecommit(full)) =>
-					rounds.consider_vote(full.round, full.set_id),
-				Some(GossipMessage::Neighbor(_)) => Consider::RejectPast,
+		Box::new(move |topic, mut data| {
+			// if the topic is not one of the ones that we are keeping at the moment,
+			// it is expired.
+			let &(ref maybe_round, _) = match inner.live_topics.get(&topic) {
+				None => return true,
+				Some(x) => x,
 			};
 
-			consider == Consider::Accept
+			// round messages don't require any further checking.
+			if maybe_round.is_none() { return false }
+
+			// global messages -- only keep the best commit.
+			let best_commit = inner.local_view.last_commit;
+
+			match GossipMessage::<Block>::decode(&mut data) {
+				None => true,
+				Some(GossipMessage::Commit(full))
+					=> Some(full.message.target_number) != best_commit,
+				Some(_) => true,
+			}
 		})
 	}
 }
@@ -503,20 +585,20 @@ mod tests {
 	}
 
 	#[test]
-	fn commit_vote_rules() {
+	fn view_global_message_rules() {
 		let view = View { round: Round(100), set_id: SetId(2), last_commit: Some(1000u64) };
 
-		assert_eq!(view.consider_commit(Round(3), SetId(1)), Consider::RejectFuture);
-		assert_eq!(view.consider_commit(Round(3), SetId(1000)), Consider::RejectFuture);
-		assert_eq!(view.consider_commit(Round(3), SetId(10000)), Consider::RejectFuture);
+		assert_eq!(view.consider_global(Round(3), SetId(1)), Consider::RejectFuture);
+		assert_eq!(view.consider_global(Round(3), SetId(1000)), Consider::RejectFuture);
+		assert_eq!(view.consider_global(Round(3), SetId(10000)), Consider::RejectFuture);
 
-		assert_eq!(view.consider_commit(Round(1), SetId(1)), Consider::RejectPast);
-		assert_eq!(view.consider_commit(Round(1), SetId(1000)), Consider::RejectPast);
-		assert_eq!(view.consider_commit(Round(1), SetId(10000)), Consider::RejectPast);
+		assert_eq!(view.consider_global(Round(1), SetId(1)), Consider::RejectPast);
+		assert_eq!(view.consider_global(Round(1), SetId(1000)), Consider::RejectPast);
+		assert_eq!(view.consider_global(Round(1), SetId(10000)), Consider::RejectPast);
 
-		assert_eq!(view.consider_commit(Round(2), SetId(1)), Consider::RejectPast);
-		assert_eq!(view.consider_commit(Round(2), SetId(1000)), Consider::RejectPast);
-		assert_eq!(view.consider_commit(Round(2), SetId(1001)), Consider::Accept);
-		assert_eq!(view.consider_commit(Round(2), SetId(10000)), Consider::Accept);
+		assert_eq!(view.consider_global(Round(2), SetId(1)), Consider::RejectPast);
+		assert_eq!(view.consider_global(Round(2), SetId(1000)), Consider::RejectPast);
+		assert_eq!(view.consider_global(Round(2), SetId(1001)), Consider::Accept);
+		assert_eq!(view.consider_global(Round(2), SetId(10000)), Consider::Accept);
 	}
 }

@@ -139,13 +139,13 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Clone for
 }
 
 /// Create a unique topic for a round and set-id combo.
-pub(crate) fn message_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+pub(crate) fn round_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
 /// Create a unique topic for global messages on a set ID.
-pub(crate) fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
-	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
+pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
+	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
@@ -154,14 +154,14 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		self.validator.note_round(Round(round), SetId(set_id));
 		let (tx, rx) = oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, message_topic::<B>(round, set_id));
+			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, round_topic::<B>(round, set_id));
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream { outer: rx, inner: None }
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
-		let topic = message_topic::<B>(round, set_id);
+		let topic = round_topic::<B>(round, set_id);
 		let recipient = if force {
 			network_gossip::MessageRecipient::BroadcastToAll
 		} else {
@@ -182,14 +182,14 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		self.validator.note_set(SetId(set_id));
 		let (tx, rx) = oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, commit_topic::<B>(set_id));
+			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, global_topic::<B>(set_id));
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream { outer: rx, inner: None }
 	}
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
-		let topic = commit_topic::<B>(set_id);
+		let topic = global_topic::<B>(set_id);
 		let recipient = if force {
 			network_gossip::MessageRecipient::BroadcastToAll
 		} else {
