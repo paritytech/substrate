@@ -31,7 +31,7 @@ use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance
+	Imbalance, SignedImbalance, TransactionFee
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -488,6 +488,15 @@ impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
 	}
 }
 
+impl<T: Trait<I>, I: Instance> TransactionFee<T::Balance> for Module<T, I> {
+	fn transaction_base_fee() -> T::Balance {
+		Self::transaction_base_fee()
+	}
+	fn transaction_byte_fee() -> T::Balance {
+		Self::transaction_byte_fee()
+	}
+}
+
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDebug
@@ -495,6 +504,14 @@ where
 	type Balance = T::Balance;
 	type PositiveImbalance = PositiveImbalance<T, I>;
 	type NegativeImbalance = NegativeImbalance<T, I>;
+
+	fn creation_fee() -> Self::Balance {
+		Self::creation_fee()
+	}
+
+	fn transfer_fee() -> Self::Balance {
+		Self::transfer_fee()
+	}
 
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
 		Self::free_balance(who) + Self::reserved_balance(who)

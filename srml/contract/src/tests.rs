@@ -92,6 +92,7 @@ impl consensus::Trait for Test {
 	type InherentOfflineReport = ();
 }
 impl Trait for Test {
+	type Currency = Balances;
 	type Call = Call;
 	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;

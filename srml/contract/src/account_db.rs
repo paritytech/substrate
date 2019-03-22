@@ -16,8 +16,8 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, StorageOf, Trait};
-use {balances, system};
+use super::{CodeHash, CodeHashOf, StorageOf, Trait, BalanceOf};
+use system;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
@@ -26,7 +26,7 @@ use srml_support::{StorageMap, StorageDoubleMap, traits::{UpdateBalanceOutcome,
 	SignedImbalance, Currency, Imbalance}};
 
 pub struct ChangeEntry<T: Trait> {
-	balance: Option<T::Balance>,
+	balance: Option<BalanceOf<T>>,
 	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
 	code: Option<Option<CodeHash<T>>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
@@ -48,7 +48,7 @@ pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>
 pub trait AccountDb<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
+	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
 }
@@ -61,14 +61,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<CodeHashOf<T>>::get(account)
 	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		balances::Module::<T>::free_balance(account)
+	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
+		T::Currency::free_balance(account)
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				let (imbalance, outcome) = balances::Module::<T>::ensure_free_balance_is(&address, balance);
+				let (imbalance, outcome) = T::Currency::ensure_free_balance_is(&address, balance);
 				total_imbalance = total_imbalance.merge(imbalance);
 				if let UpdateBalanceOutcome::AccountKilled = outcome {
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
@@ -141,7 +141,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.or_insert(Default::default())
 			.code = Some(code);
 	}
-	pub fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
+	pub fn set_balance(&mut self, account: &T::AccountId, balance: BalanceOf<T>) {
 		self.local
 			.borrow_mut()
 			.entry(account.clone())
@@ -166,7 +166,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|a| a.code.clone())
 			.unwrap_or_else(|| self.underlying.get_code(account))
 	}
-	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
+	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		self.local
 			.borrow()
 			.get(account)
