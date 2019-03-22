@@ -98,7 +98,7 @@ struct PendingJustifications<B: BlockT> {
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<PeerId, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(PeerId, Instant)>>,
-  importing_requests: HashSet<PendingJustification<B>>,
+	importing_requests: HashSet<PendingJustification<B>>,
 }
 
 impl<B: BlockT> PendingJustifications<B> {
