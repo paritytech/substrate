@@ -134,26 +134,26 @@ fn offline_should_slash_and_kick() {
 	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
-		let _ = Balances::ensure_free_balance_is(&10, 1000);
+		let _ = Balances::ensure_free_balance_is(&11, 1000);
 		// Confirm account 10 is a validator
-		assert!(<Validators<Test>>::exists(&10));
+		assert!(<Validators<Test>>::exists(&11));
 		// Validators get slashed immediately
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Unstake threshold is 3
-		assert_eq!(Staking::validators(&10).unstake_threshold, 3);
+		assert_eq!(Staking::validators(&11).unstake_threshold, 3);
 		// Account 10 has not been slashed before
-		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::slash_count(&11), 0);
 		// Account 10 has the funds we just gave it
-		assert_eq!(Balances::free_balance(&10), 1000);
+		assert_eq!(Balances::free_balance(&11), 1000);
 		// Report account 10 as offline, one greater than unstake threshold
-		Staking::on_offline_validator(10, 4);
+		Staking::on_offline_validator(11, 4);
 		// Confirm user has been reported
-		assert_eq!(Staking::slash_count(&10), 4);
+		assert_eq!(Staking::slash_count(&11), 4);
 		// Confirm balance has been reduced by 2^unstake_threshold * offline_slash() * amount_at_stake.
-		let slash_base = Staking::offline_slash() * Staking::stakers(10).total;
-		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * slash_base);
+		let slash_base = Staking::offline_slash() * Staking::stakers(11).total;
+		assert_eq!(Balances::free_balance(&11), 1000 - 2_u64.pow(3) * slash_base);
 		// Confirm account 10 has been removed as a validator
-		assert!(!<Validators<Test>>::exists(&10));
+		assert!(!<Validators<Test>>::exists(&11));
 		// A new era is forced due to slashing
 		assert!(Staking::forcing_new_era().is_some());
 	});
@@ -164,9 +164,9 @@ fn offline_grace_should_delay_slashing() {
 	// Tests that with grace, slashing is delayed
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Initialize account 10 with balance
-		let _ = Balances::deposit_creating(&10, 69);
-		// Verify account 10 has balance
-		assert_eq!(Balances::free_balance(&10), 70);
+		let _ = Balances::ensure_free_balance_is(&11, 70);
+		// Verify account 11 has balance
+		assert_eq!(Balances::free_balance(&11), 70);
 
 		// Set offline slash grace
 		let offline_slash_grace = 1;
@@ -175,24 +175,24 @@ fn offline_grace_should_delay_slashing() {
 
 		// Check unstaked_threshold is 3 (default)
 		let default_unstake_threshold = 3;
-		assert_eq!(Staking::validators(&10), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
+		assert_eq!(Staking::validators(&11), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
 
 		// Check slash count is zero
-		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::slash_count(&11), 0);
 
 		// Report account 10 up to the threshold
-		Staking::on_offline_validator(10, default_unstake_threshold as usize + offline_slash_grace as usize);
+		Staking::on_offline_validator(11, default_unstake_threshold as usize + offline_slash_grace as usize);
 		// Confirm slash count
-		assert_eq!(Staking::slash_count(&10), 4);
+		assert_eq!(Staking::slash_count(&11), 4);
 
 		// Nothing should happen
-		assert_eq!(Balances::free_balance(&10), 70);
+		assert_eq!(Balances::free_balance(&11), 70);
 
 		// Report account 10 one more time
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::slash_count(&10), 5);
+		Staking::on_offline_validator(11, 1);
+		assert_eq!(Staking::slash_count(&11), 5);
 		// User gets slashed
-		assert_eq!(Balances::free_balance(&10), 0);
+		assert_eq!(Balances::free_balance(&11), 0);
 		// New era is forced
 		assert!(Staking::forcing_new_era().is_some());
 	});
@@ -205,16 +205,16 @@ fn max_unstake_threshold_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 		// Two users with maximum possible balance
-		let _ = Balances::ensure_free_balance_is(&10, u64::max_value());
-		let _ = Balances::ensure_free_balance_is(&20, u64::max_value());
+		let _ = Balances::ensure_free_balance_is(&11, u64::max_value());
+		let _ = Balances::ensure_free_balance_is(&21, u64::max_value());
 
 		// Give them full exposure as a staker
-		<Stakers<Test>>::insert(&10, Exposure { total: 1000000, own: 1000000, others: vec![]});
-		<Stakers<Test>>::insert(&20, Exposure { total: 2000000, own: 2000000, others: vec![]});
+		<Stakers<Test>>::insert(&11, Exposure { total: 1000000, own: 1000000, others: vec![]});
+		<Stakers<Test>>::insert(&21, Exposure { total: 2000000, own: 2000000, others: vec![]});
 
 		// Check things are initialized correctly
-		assert_eq!(Balances::free_balance(&10), u64::max_value());
-		assert_eq!(Balances::free_balance(&20), u64::max_value());
+		assert_eq!(Balances::free_balance(&11), u64::max_value());
+		assert_eq!(Balances::free_balance(&21), u64::max_value());
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 10 will have max unstake_threshold
 		assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs {
@@ -228,7 +228,7 @@ fn max_unstake_threshold_works() {
 			"unstake threshold too large"
 		);
 		// Give Account 20 unstake_threshold 11 anyway, should still be limited to 10
-		<Validators<Test>>::insert(20, ValidatorPrefs {
+		<Validators<Test>>::insert(21, ValidatorPrefs {
 			unstake_threshold: MAX_UNSTAKE_THRESHOLD + 1,
 			validator_payment: 0,
 		});
@@ -236,13 +236,13 @@ fn max_unstake_threshold_works() {
 		<OfflineSlash<Test>>::put(Perbill::from_fraction(0.0001));
 
 		// Report each user 1 more than the max_unstake_threshold
-		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
-		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(11, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(21, MAX_UNSTAKE_THRESHOLD as usize + 1);
 
 		// Show that each balance only gets reduced by 2^max_unstake_threshold times 10%
 		// of their total stake.
-		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 100);
-		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 200);
+		assert_eq!(Balances::free_balance(&11), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 100);
+		assert_eq!(Balances::free_balance(&21), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 200);
 	});
 }
 
