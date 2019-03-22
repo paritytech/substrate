@@ -168,11 +168,11 @@ impl MessageRouting {
 }
 
 fn make_topic(round: u64, set_id: u64) -> Hash {
-	crate::communication::message_topic::<Block>(round, set_id)
+	crate::communication::round_topic::<Block>(round, set_id)
 }
 
-fn make_commit_topic(set_id: u64) -> Hash {
-	crate::communication::commit_topic::<Block>(set_id)
+fn make_global_topic(set_id: u64) -> Hash {
+	crate::communication::global_topic::<Block>(set_id)
 }
 
 impl Network<Block> for MessageRouting {
@@ -206,7 +206,7 @@ impl Network<Block> for MessageRouting {
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
-		let topic = make_commit_topic(set_id);
+		let topic = make_global_topic(set_id);
 		self.drop_messages(topic);
 	}
 
@@ -216,7 +216,7 @@ impl Network<Block> for MessageRouting {
 		let peer = inner.peer(self.peer_id);
 		let messages = peer.consensus_gossip_messages_for(
 			GRANDPA_ENGINE_ID,
-			make_commit_topic(set_id),
+			make_global_topic(set_id),
 		);
 
 		let messages = messages.map_err(
@@ -229,7 +229,7 @@ impl Network<Block> for MessageRouting {
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
 		let inner = self.inner.lock();
 		inner.peer(self.peer_id)
-			.gossip_message(make_commit_topic(set_id), GRANDPA_ENGINE_ID, message, force);
+			.gossip_message(make_global_topic(set_id), GRANDPA_ENGINE_ID, message, force);
 	}
 
 	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {

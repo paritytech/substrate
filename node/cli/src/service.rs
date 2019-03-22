@@ -25,7 +25,7 @@ use client;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use grandpa;
 use node_executor;
-use primitives::{Pair as PairT, ed25519::Pair};
+use primitives::{Pair as PairT, ed25519};
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
@@ -76,7 +76,7 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<Pair>>| {
+			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<ed25519::Pair>>| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
@@ -133,7 +133,7 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue(
+				import_queue::<_, _, _, ed25519::Pair>(
 					slot_duration,
 					block_import,
 					Some(justification_import),
@@ -144,16 +144,16 @@ construct_service_factory! {
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-					import_queue(
-						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
-						None,
-						client,
-						NothingExtra,
-						config.custom.inherent_data_providers.clone(),
-					).map_err(Into::into)
-				}
-			},
+				import_queue::<_, _, _, ed25519::Pair>(
+					SlotDuration::get_or_compute(&*client)?,
+					client.clone(),
+					None,
+					client,
+					NothingExtra,
+					config.custom.inherent_data_providers.clone(),
+				).map_err(Into::into)
+			}
+		},
 	}
 }
 

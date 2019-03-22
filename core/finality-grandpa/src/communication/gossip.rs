@@ -17,7 +17,7 @@
 //! Gossip and politeness for GRANDPA communication.
 
 use runtime_primitives::traits::{NumberFor, Block as BlockT};
-use network::consensus_gossip::{self as network_gossip, ValidatorContext};
+use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, NodeIndex};
 use parity_codec::{Encode, Decode};
 
@@ -206,7 +206,6 @@ impl Misbehavior {
 
 				(benefit as i32).saturating_sub(cost as i32)
 			},
-			OldCommitMessage => -100,
 			FutureMessage => -500,
 		}
 	}
@@ -268,10 +267,10 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		peer.last_commit.as_ref() >= Some(&new_height) {
+		if peer.view.last_commit.as_ref() >= Some(&new_height) {
 			return Err(Misbehavior::InvalidViewChange);
 		}
-		peer.last_commit = Some(new_height);
+		peer.view.last_commit = Some(new_height);
 
 		Ok(())
 	}
@@ -464,7 +463,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		self.inner.write().note_commit_finalized(finalized);
 	}
 
-	fn report(&self, _who: NodeIndex, _cost_benefit: i32) {
+	fn report(&self, _who: &NodeIndex, _cost_benefit: i32) {
 		// nothing yet.
 	}
 }
@@ -478,16 +477,16 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		self.inner.write().peers.peer_disconnected(&who);
 	}
 
-	fn validate(&self, context: &mut ValidatorContext<Block>, who: NodeIndex, mut data: &[u8])
+	fn validate(&self, context: &mut ValidatorContext<Block>, who: &NodeIndex, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		let action = {
 			let mut inner = self.inner.write();
 			match GossipMessage::<Block>::decode(&mut data) {
 				Some(GossipMessage::VoteOrPrecommit(ref message))
-					=> inner.validate_round_message(&who, message),
-				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(&who, message),
-				Some(GossipMessage::Neighbor(update)) => inner.import_neighbor_message(&who, update),
+					=> inner.validate_round_message(who, message),
+				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(who, message),
+				Some(GossipMessage::Neighbor(update)) => inner.import_neighbor_message(who, update),
 				None => {
 					debug!(target: "afg", "Error decoding message");
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
@@ -514,10 +513,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		}
 	}
 
-	fn should_send_to<'a>(&'a self) -> Box<FnMut(NodeIndex, Block::Hash, &[u8]) -> bool + 'a> {
+	fn message_allowed<'a>(&'a self)
+		-> Box<FnMut(&NodeIndex, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
+	{
 		let inner = self.inner.read();
-		Box::new(move |who, topic, mut data| {
-			let peer = match inner.peers.peer(&who) {
+		Box::new(move |who, _intent, topic, mut data| {
+			let peer = match inner.peers.peer(who) {
 				None => return false,
 				Some(x) => x,
 			};
