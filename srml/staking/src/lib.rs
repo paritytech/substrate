@@ -917,7 +917,7 @@ impl<T: Trait> Module<T> {
 			stash_of,
 			min_validator_count,
 			ElectionConfig::<BalanceOf<T>> {
-				equalise: true,
+				equalise: false,
 				tolerance: <BalanceOf<T>>::sa(10 as u64),
 				iterations: 10,
 			}
