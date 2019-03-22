@@ -663,21 +663,51 @@ mod tests {
 			delay_kind: DelayKind::Finalized,
 		};
 
+		let change_b = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 10,
+			canon_height: 20,
+			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
+		};
+
 		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(true)).unwrap();
 
 		let is_descendent_of = is_descendent_of(|base, hash| match (*base, *hash) {
-			("hash_a", "hash_b") => true,
+			("hash_a", "hash_d") => true,
+			("hash_a", "hash_e") => true,
+			("hash_b", "hash_d") => true,
+			("hash_b", "hash_e") => true,
 			("hash_a", "hash_c") => false,
+			("hash_b", "hash_c") => false,
 			_ => unreachable!(),
 		});
 
 		// "hash_c" won't finalize the existing change since it isn't a descendent
-		assert!(!authorities.enacts_standard_change("hash_c", 15, &is_descendent_of).unwrap());
-		// "hash_b" at depth 14 won't work either
-		assert!(!authorities.enacts_standard_change("hash_b", 14, &is_descendent_of).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_c", 15, &is_descendent_of).unwrap(),
+			None,
+		);
+
+		// "hash_d" at depth 14 won't work either
+		assert_eq!(
+			authorities.enacts_standard_change("hash_d", 14, &is_descendent_of).unwrap(),
+			None,
+		);
 
 		// but it should work at depth 15 (change height + depth)
-		assert!(authorities.enacts_standard_change("hash_b", 15, &is_descendent_of).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_d", 15, &is_descendent_of).unwrap(),
+			Some(true),
+		);
+
+		// finalizing "hash_e" at depth 20 will trigger change at "hash_b", but
+		// it can't be applied yet since "hash_a" must be applied first
+		assert_eq!(
+			authorities.enacts_standard_change("hash_e", 30, &is_descendent_of).unwrap(),
+			Some(false),
+		);
 	}
 
 	#[test]
@@ -713,7 +743,10 @@ mod tests {
 
 		// there's an effective change triggered at block 15 but not a standard one.
 		// so this should do nothing.
-		assert!(!authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap(),
+			None,
+		);
 
 		// throw a standard change into the mix to prove that it's discarded
 		// for being on the same fork.
