@@ -916,12 +916,12 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::stakers(&10).total, 1125);
+		assert_eq!(Staking::stakers(&11).total, 1125);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
-		let _ = Balances::deposit_creating(&11, 9990);
+		let _ = Balances::ensure_free_balance_is(&11, 10000);
 		// Confirm account 11 can now reserve balance
 		assert_ok!(Balances::reserve(&11, 1));
 	});
@@ -931,8 +931,10 @@ fn cannot_reserve_staked_balance() {
 fn reward_destination_works() {
 	// Rewards go to the correct destination as determined in Payee
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
-		// Check that account 10 is a validator
-		assert!(<Validators<Test>>::exists(10));
+		// Check that account 11 is a validator
+		assert!(<Validators<Test>>::exists(11));
+		// Check that account 11 is a validator
+		assert!(Staking::current_elected().contains(&11));
 		// Check the balance of the validator account
 		assert_eq!(Balances::free_balance(&10), 1);
 		// Check the balance of the stash account
@@ -950,7 +952,7 @@ fn reward_destination_works() {
 		Session::check_rotate_session(System::block_number());
 
 		// Check that RewardDestination is Staked (default)
-		assert_eq!(Staking::payee(&10), RewardDestination::Staked);
+		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
 		// Check current session reward is 10
 		assert_eq!(current_session_reward, 10);
 		// Check that reward went to the stash account of validator
@@ -961,7 +963,7 @@ fn reward_destination_works() {
 		current_session_reward = Staking::current_session_reward(); // 1010 (1* slot_stake)
 
 		//Change RewardDestination to Stash
-		<Payee<Test>>::insert(&10, RewardDestination::Stash);
+		<Payee<Test>>::insert(&11, RewardDestination::Stash);
 
 		// Move forward the system for payment
 		System::set_block_number(2);
@@ -969,7 +971,7 @@ fn reward_destination_works() {
 		Session::check_rotate_session(System::block_number());
 
 		// Check that RewardDestination is Stash
-		assert_eq!(Staking::payee(&10), RewardDestination::Stash);
+		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
 		// Check that reward went to the stash account
 		assert_eq!(Balances::free_balance(&11), 1000 + 10 + current_session_reward);
 		// Record this value
@@ -979,7 +981,7 @@ fn reward_destination_works() {
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 10, active: 1000 + 10, unlocking: vec![] }));
 
 		// Change RewardDestination to Controller
-		<Payee<Test>>::insert(&10, RewardDestination::Controller);
+		<Payee<Test>>::insert(&11, RewardDestination::Controller);
 
 		// Check controller balance
 		assert_eq!(Balances::free_balance(&10), 1);
@@ -990,7 +992,7 @@ fn reward_destination_works() {
 		Session::check_rotate_session(System::block_number());
 
 		// Check that RewardDestination is Controller
-		assert_eq!(Staking::payee(&10), RewardDestination::Controller);
+		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
 		// Check that reward went to the controller account
 		assert_eq!(Balances::free_balance(&10), 1 + 1010);
 		// Check that amount at stake is NOT increased

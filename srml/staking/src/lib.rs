@@ -541,7 +541,7 @@ decl_module! {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-			Self::update_ledger(&controller, StakingLedger { stash, total: value, active: value, unlocking: vec![] });
+			Self::update_ledger(&controller, &StakingLedger { stash, total: value, active: value, unlocking: vec![] });
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up for
@@ -559,7 +559,7 @@ decl_module! {
 				let extra = (stash_balance - ledger.total).min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				Self::update_ledger(&controller, ledger);
+				Self::update_ledger(&controller, &ledger);
 			}
 		}
 
@@ -591,7 +591,7 @@ decl_module! {
 
 				let era = Self::current_era() + Self::bonding_duration();
 				ledger.unlocking.push(UnlockChunk { value, era });
-				Self::update_ledger(&controller, ledger);
+				Self::update_ledger(&controller, &ledger);
 			}
 		}
 
@@ -607,7 +607,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let ledger = ledger.consolidate_unlocked(Self::current_era());
-			Self::update_ledger(&controller, ledger);
+			Self::update_ledger(&controller, &ledger);
 		}
 
 		/// Declare the desire to validate for the origin controller.
@@ -755,7 +755,7 @@ impl<T: Trait> Module<T> {
 	// MUTABLES (DANGEROUS)
 
 	/// Update the ledger for a controller. This will also update the stash lock.
-	fn update_ledger(controller: &T::AccountId, ledger: StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>) {
+	fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, T::BlockNumber::max_value(), WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
 	}
@@ -790,7 +790,9 @@ impl<T: Trait> Module<T> {
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		match Self::payee(stash) {
+		let dest = Self::payee(stash);
+		println!("payout to {:?} {:?} {:?}", stash, dest, amount);
+		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
 				.and_then(|controller|
 					T::Currency::deposit_into_existing(&controller, amount).ok()
@@ -802,7 +804,8 @@ impl<T: Trait> Module<T> {
 					l.active += amount;
 					l.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
-					Self::update_ledger(stash, l);
+					Self::update_ledger(controller, &l);
+					println!("OK {:?}", l);
 					r
 				}),
 		}
@@ -866,6 +869,7 @@ impl<T: Trait> Module<T> {
 		let reward = <CurrentEraReward<T>>::take();
 		if !reward.is_zero() {
 			let validators = Self::current_elected();
+			println!("PAYOUT {:?} {:?}", &validators, reward);
 			for v in validators.iter() {
 				Self::reward_validator(v, reward);
 			}
