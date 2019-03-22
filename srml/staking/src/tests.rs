@@ -1094,16 +1094,14 @@ fn bond_extra_works() {
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		// Check that account 10 is a validator
-		assert!(<Validators<Test>>::exists(10));
+		assert!(<Validators<Test>>::exists(11));
 		// Check that account 10 is bonded to account 11
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Check how much is at stake
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 
 		// Give account 11 some large free balance greater than total
-		let _ = Balances::deposit_creating(&11, 999000);
-		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 1000000);
+		let _ = Balances::ensure_free_balance_is(&11, 1000000);
 
 		// Call the bond_extra function from controller, add only 100
 		assert_ok!(Staking::bond_extra(Origin::signed(10), 100));
@@ -1136,15 +1134,12 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_ok!(Staking::set_bonding_duration(2));
 
 		// Give account 11 some large free balance greater than total
-		let _ = Balances::deposit_creating(&11, 999000);
-		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 1000000);
+		let _ = Balances::ensure_free_balance_is(&11, 1000000);
 
 		// Initial config should be correct
 		assert_eq!(Staking::sessions_per_era(), 1);
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
-
 		assert_eq!(Staking::current_session_reward(), 10);
 
 		// check the balance of a validator accounts.
@@ -1163,16 +1158,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 
 		// Initial state of 10
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
-		assert_eq!(Staking::stakers(&10), Exposure { total: 1000, own: 1000, others: vec![] });
-
-
+		assert_eq!(Staking::stakers(&11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
 		Staking::bond_extra(Origin::signed(10), 100).unwrap();
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 		// Exposure is a snapshot! only updated after the next era update.
-		assert_ne!(Staking::stakers(&10), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_ne!(Staking::stakers(&11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// trigger next era.
 		System::set_block_number(2);Timestamp::set_timestamp(10);Session::check_rotate_session(System::block_number());
@@ -1182,7 +1175,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// ledger should be the same.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 		// Exposure is now updated.
-		assert_eq!(Staking::stakers(&10), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_eq!(Staking::stakers(&11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 		// Note that by this point 10 also have received more rewards, but we don't care now.
 		// assert_eq!(Balances::total_balance(&10), 1 + 10 + MORE_REWARD);
 
@@ -1233,27 +1226,21 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		// Confirm validator count is 2
 		assert_eq!(Staking::validator_count(), 2);
 		// Confirm account 10 and 20 are validators
-		assert!(<Validators<Test>>::exists(&10) && <Validators<Test>>::exists(&20));
-		// Confirm 10 has less stake than 20
-		assert!(Staking::stakers(&10).total < Staking::stakers(&20).total);
+		assert!(<Validators<Test>>::exists(&11) && <Validators<Test>>::exists(&21));
 
-		assert_eq!(Staking::stakers(&10).total, 1000);
-		assert_eq!(Staking::stakers(&20).total, 2000);
+		assert_eq!(Staking::stakers(&11).total, 1000);
+		assert_eq!(Staking::stakers(&21).total, 2000);
 
 		// Give the man some money.
-		let _ = Balances::deposit_creating(&10, 999);
-		let _ = Balances::deposit_creating(&20, 999);
-
-		// Confirm initial free balance.
-		assert_eq!(Balances::free_balance(&10), 1000);
-		assert_eq!(Balances::free_balance(&20), 1000);
+		let _ = Balances::ensure_free_balance_is(&10, 1000);
+		let _ = Balances::ensure_free_balance_is(&20, 1000);
 
 		// We confirm initialized slot_stake is this value
-		assert_eq!(Staking::slot_stake(), Staking::stakers(&10).total);
+		assert_eq!(Staking::slot_stake(), Staking::stakers(&11).total);
 
 		// Now lets lower account 20 stake
-		<Stakers<Test>>::insert(&20, Exposure { total: 69, own: 69, others: vec![] });
-		assert_eq!(Staking::stakers(&20).total, 69);
+		<Stakers<Test>>::insert(&21, Exposure { total: 69, own: 69, others: vec![] });
+		assert_eq!(Staking::stakers(&21).total, 69);
 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 22, total: 69, active: 69, unlocking: vec![] });
 
 		// New era --> rewards are paid --> stakes are changed
@@ -1263,8 +1250,8 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 
 		assert_eq!(Staking::current_era(), 1);
 		// -- new balances + reward
-		assert_eq!(Staking::stakers(&10).total, 1000 + 10);
-		assert_eq!(Staking::stakers(&20).total, 69 + 10);
+		assert_eq!(Staking::stakers(&11).total, 1000 + 10);
+		assert_eq!(Staking::stakers(&21).total, 69 + 10);
 
 		// -- Note that rewards are going directly to stash, not as free balance.
 		assert_eq!(Balances::free_balance(&10), 1000);
@@ -1274,11 +1261,11 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert_eq!(Staking::slot_stake(), 79);
 
 		// // If 10 gets slashed now, despite having +1000 in stash, it will be slashed byt 79, which is the slot stake
-		Staking::on_offline_validator(10, 4);
+		Staking::on_offline_validator(11, 4);
 		// // Confirm user has been reported
-		assert_eq!(Staking::slash_count(&10), 4);
+		assert_eq!(Staking::slash_count(&11), 4);
 		// // check the balance of 10 (slash will be deducted from free balance.)
-		assert_eq!(Balances::free_balance(&10), 1000 - 50 /*5% of 1000*/ * 8 /*2**3*/);
+		assert_eq!(Balances::free_balance(&11), 1000 + 10 - 50 /*5% of 1000*/ * 8 /*2**3*/);
 	});
 }
 
