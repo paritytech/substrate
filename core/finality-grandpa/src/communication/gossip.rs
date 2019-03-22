@@ -249,61 +249,44 @@ enum Action<H>  {
 	Discard(i32),
 }
 
-/// A validator for GRANDPA gossip messages.
-pub(crate) struct GossipValidator<Block: BlockT> {
-	local_view: parking_lot::RwLock<View<NumberFor<Block>>>,
-	peers: parking_lot::RwLock<Peers<NumberFor<Block>>>,
-	_marker: std::marker::PhantomData<Block>,
+struct Inner<Block: BlockT> {
+	local_view: View<NumberFor<Block>>,
+	peers: Peers<NumberFor<Block>>,
 }
 
-impl<Block: BlockT> GossipValidator<Block> {
-	/// Create a new gossip-validator.
-	pub(crate) fn new() -> GossipValidator<Block> {
-		GossipValidator {
-			local_view: parking_lot::RwLock::new(View::default()),
-			peers: parking_lot::RwLock::new(Peers { inner: Default::default() }),
-			_marker: Default::default(),
-		}
-	}
-
+impl<Block: BlockT> Inner<Block> {
 	/// Note a round in a set has started.
-	pub(crate) fn note_round(&self, round: Round, set_id: SetId) {
-		let mut view = self.local_view.write();
-		view.round = round;
+	fn note_round(&mut self, round: Round, set_id: SetId) {
+		self.local_view.round = round;
 
-		if set_id != view.set_id {
+		if set_id != self.local_view.set_id {
 			// clear commit when we change set.
-			view.last_commit = None;
+			self.local_view.last_commit = None;
 		}
 
-		view.set_id = set_id;
+		self.local_view.set_id = set_id;
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(crate) fn note_set(&self, set_id: SetId) {
-		self.local_view.write().update_set(set_id);
+	fn note_set(&mut self, set_id: SetId) {
+		self.local_view.update_set(set_id);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(crate) fn note_commit_finalized(&self, finalized: NumberFor<Block>) {
-		let mut view = self.local_view.write();
-		view.last_commit = std::cmp::max(view.last_commit, Some(finalized));
+	fn note_commit_finalized(&mut self, finalized: NumberFor<Block>) {
+		self.local_view.last_commit = std::cmp::max(self.local_view.last_commit, Some(finalized));
 	}
 
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
-		self.local_view.read().consider_vote(round, set_id)
+		self.local_view.consider_vote(round, set_id)
 	}
 
 	fn consider_commit(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
-		self.local_view.read().consider_commit(set_id, number)
+		self.local_view.consider_commit(set_id, number)
 	}
 
 	fn cost_past_rejection(&self, _who: &NodeIndex, _round: Round, _set_id: SetId) -> i32 {
 		-50 // hardcode for now.
-	}
-
-	fn report(&self, _who: NodeIndex, _cost_benefit: i32) {
-		// nothing yet.
 	}
 
 	fn validate_round_message(&self, who: &NodeIndex, full: &VoteOrPrecommitMessage<Block>)
@@ -380,10 +363,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 		Action::Repropagate(topic, 100)
 	}
 
-	fn import_neighbor_message(&self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
+	fn import_neighbor_message(&mut self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
 		-> Action<Block::Hash>
 	{
-		let cb = match self.peers.write().update_peer_state(who, update) {
+		let cb = match self.peers.update_peer_state(who, update) {
 			Ok(()) => 100i32,
 			Err(misbehavior) => misbehavior.cost(),
 		};
@@ -393,29 +376,68 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 }
 
+/// A validator for GRANDPA gossip messages.
+pub(crate) struct GossipValidator<Block: BlockT> {
+	inner: parking_lot::RwLock<Inner<Block>>,
+}
+
+impl<Block: BlockT> GossipValidator<Block> {
+	/// Create a new gossip-validator.
+	pub(crate) fn new() -> GossipValidator<Block> {
+		GossipValidator {
+			inner: parking_lot::RwLock::new(Inner {
+				local_view: View::default(),
+				peers: Peers { inner: Default::default() },
+			}),
+		}
+	}
+
+	/// Note a round in a set has started.
+	pub(crate) fn note_round(&self, round: Round, set_id: SetId) {
+		self.inner.write().note_round(round, set_id);
+	}
+
+	/// Note that a voter set with given ID has started.
+	pub(crate) fn note_set(&self, set_id: SetId) {
+		self.inner.write().note_set(set_id);
+	}
+
+	/// Note that we've imported a commit finalizing a given block.
+	pub(crate) fn note_commit_finalized(&self, finalized: NumberFor<Block>) {
+		self.inner.write().note_commit_finalized(finalized);
+	}
+
+	fn report(&self, _who: NodeIndex, _cost_benefit: i32) {
+		// nothing yet.
+	}
+}
+
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex, _roles: Roles) {
-		self.peers.write().new_peer(who);
+		self.inner.write().peers.new_peer(who);
 	}
 
 	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex) {
-		self.peers.write().peer_disconnected(&who);
+		self.inner.write().peers.peer_disconnected(&who);
 	}
 
 	fn validate(&self, context: &mut ValidatorContext<Block>, who: NodeIndex, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
-		let action = match GossipMessage::<Block>::decode(&mut data) {
-			Some(GossipMessage::VoteOrPrecommit(ref message))
-				=> self.validate_round_message(&who, message),
-			Some(GossipMessage::Commit(ref message)) => self.validate_commit_message(&who, message),
-			Some(GossipMessage::Neighbor(update)) => self.import_neighbor_message(&who, update),
-			None => {
-				debug!(target: "afg", "Error decoding message");
-				telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
+		let action = {
+			let mut inner = self.inner.write();
+			match GossipMessage::<Block>::decode(&mut data) {
+				Some(GossipMessage::VoteOrPrecommit(ref message))
+					=> inner.validate_round_message(&who, message),
+				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(&who, message),
+				Some(GossipMessage::Neighbor(update)) => inner.import_neighbor_message(&who, update),
+				None => {
+					debug!(target: "afg", "Error decoding message");
+					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
-				let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
-				Action::Discard(Misbehavior::UndecodablePacket(len).cost())
+					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
+					Action::Discard(Misbehavior::UndecodablePacket(len).cost())
+				}
 			}
 		};
 
@@ -440,8 +462,9 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<FnMut(Block::Hash, &[u8]) -> bool + 'a> {
-		let rounds = self.local_view.read();
+		let inner = self.inner.read();
 		Box::new(move |_topic, mut data| {
+			let rounds = &inner.local_view;
 			let consider = match GossipMessage::<Block>::decode(&mut data) {
 				None => Consider::Accept,
 				Some(GossipMessage::Commit(full)) => rounds.consider_commit(
