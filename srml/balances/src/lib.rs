@@ -283,8 +283,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		// Commented out for no - but consider it instructive.
+		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
+		// assert!(Self::free_balance(who) > Self::existential_deposit());
 		if balance < Self::existential_deposit() {
 			<FreeBalance<T, I>>::insert(who, balance);
 			Self::on_free_too_low(who);
@@ -657,6 +658,19 @@ where
 		UpdateBalanceOutcome
 	) {
 		let original = Self::free_balance(who);
+		if balance < Self::existential_deposit() && original.is_zero() {
+			// If we're attempting to set an existing account to less than ED, then
+			// bypass the entire operation. It's a no-op if you follow it through, but
+			// since this is an instance where we might account for a negative imbalance
+			// (in the dust cleaner of set_free_balance) before we account for its actual
+			// equal and opposite cause (returned as an Imbalance), then in the
+			// instance that there's no other accounts on the system at all, we might
+			// underflow the issuance and our arithmetic will be off.
+			return (
+				SignedImbalance::Positive(Self::PositiveImbalance::zero()),
+				UpdateBalanceOutcome::AccountKilled,
+			)
+		}
 		let imbalance = if original <= balance {
 			SignedImbalance::Positive(PositiveImbalance(balance - original))
 		} else {
