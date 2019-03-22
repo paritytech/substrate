@@ -102,27 +102,27 @@ fn invulnerability_should_work() {
 	// Test that users can be invulnerable from slashing and being kicked
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
-		// Make account 10 invulnerable
-		assert_ok!(Staking::set_invulnerables(vec![10]));
-		// Give account 10 some funds
-		let _ = Balances::deposit_creating(&10, 69);
+		// Make account 11 invulnerable
+		assert_ok!(Staking::set_invulnerables(vec![11]));
+		// Give account 11 some funds
+		let _ = Balances::ensure_free_balance_is(&11, 70);
 		// There is no slash grace -- slash immediately.
 		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Account 10 has not been slashed
-		assert_eq!(Staking::slash_count(&10), 0);
-		// Account 10 has the 70 funds we gave it above
-		assert_eq!(Balances::free_balance(&10), 70);
-		// Account 10 should be a validator
-		assert!(<Validators<Test>>::exists(&10));
+		// Account 11 has not been slashed
+		assert_eq!(Staking::slash_count(&11), 0);
+		// Account 11 has the 70 funds we gave it above
+		assert_eq!(Balances::free_balance(&11), 70);
+		// Account 11 should be a validator
+		assert!(<Validators<Test>>::exists(&11));
 
-		// Set account 10 as an offline validator with a large number of reports
+		// Set account 11 as an offline validator with a large number of reports
 		// Should exit early if invulnerable
-		Staking::on_offline_validator(10, 100);
+		Staking::on_offline_validator(11, 100);
 
-		// Show that account 10 has not been touched
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 70);
-		assert!(<Validators<Test>>::exists(&10));
+		// Show that account 11 has not been touched
+		assert_eq!(Staking::slash_count(&11), 0);
+		assert_eq!(Balances::free_balance(&11), 70);
+		assert!(<Validators<Test>>::exists(&11));
 		// New era not being forced
 		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
 		assert!(Staking::forcing_new_era().is_none());
