@@ -198,14 +198,14 @@ impl ExtBuilder {
 					(31, 30, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					(41, 40, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			} else {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
 					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
 					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			},
 			validator_count: self.validator_count,

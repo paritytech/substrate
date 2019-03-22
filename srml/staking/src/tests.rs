@@ -51,12 +51,12 @@ fn basic_setup_works() {
 
 		// Account 100 is the default nominator
 		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
-		assert_eq!(Staking::nominators(101), vec![10, 20]);
+		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
 		// Account 10 is exposed by 1000 * balance_factor from their own stash in account 11 + the default nominator vote
-		assert_eq!(Staking::stakers(11), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 100, value: 250 }] });
+		assert_eq!(Staking::stakers(11), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] });
 		// Account 20 is exposed by 1000 * balance_factor from their own stash in account 21 + the default nominator vote
-		assert_eq!(Staking::stakers(21), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 100, value: 250 }] });
+		assert_eq!(Staking::stakers(21), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 101, value: 250 }] });
 
 		// The number of validators required.
 		assert_eq!(Staking::validator_count(), 2);
