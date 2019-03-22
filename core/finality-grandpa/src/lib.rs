@@ -453,9 +453,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		persistent_data,
 		voter_commands_rx,
 	} = link;
-	// we shadow network with the wrapping/rebroadcasting network to avoid
-	// accidental reuse.
-	let (broadcast_worker, network) = communication::rebroadcasting_network(network);
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
@@ -615,7 +612,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	});
 
 	let voter_work = voter_work
-		.join3(broadcast_worker, forward_commit_finalized)
+		.join(forward_commit_finalized)
 		.map(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Voter failed: {:?}", e);
