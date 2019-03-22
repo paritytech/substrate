@@ -46,7 +46,6 @@ const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 // Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
-// TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 
 #[derive(Debug)]
@@ -500,7 +499,7 @@ impl<B: BlockT> ChainSync<B> {
 						self.download_new(protocol, who)
 					}
 				},
-				(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChain), _) => {
+				(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChainWithState), _) | (Ok(BlockStatus::InChainPruned), _) => {
 					debug!(target:"sync", "New peer with known best hash {} ({}).", info.best_hash, info.best_number);
 					self.peers.insert(who, PeerSync {
 						common_number: info.best_number,
@@ -834,7 +833,11 @@ impl<B: BlockT> ChainSync<B> {
 			trace!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
 			return;
 		}
-		let known_parent = self.is_known(protocol, &header.parent_hash());
+		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()
+			.unwrap_or(BlockStatus::Unknown);
+		let known_parent = parent_status != BlockStatus::Unknown;
+		let ancient_parent = parent_status == BlockStatus::InChainPruned;
+
 		let known = self.is_known(protocol, &hash);
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
@@ -862,15 +865,28 @@ impl<B: BlockT> ChainSync<B> {
 			let stale = number <= self.best_queued_number;
 			if stale {
 				if !(known_parent || self.is_already_downloading(header.parent_hash())) {
-					trace!(target: "sync", "Considering new unknown stale block announced from {}: {} {:?}", who, hash, header);
-					self.download_unknown_stale(protocol, who, &hash);
+					if protocol.client().block_status(&BlockId::Number(*header.number()))
+						.unwrap_or(BlockStatus::Unknown) == BlockStatus::InChainPruned
+					{
+						trace!(target: "sync", "Ignored unknown ancient block announced from {}: {} {:?}", who, hash, header);
+					} else {
+						trace!(target: "sync", "Considering new unknown stale block announced from {}: {} {:?}", who, hash, header);
+						self.download_unknown_stale(protocol, who, &hash);
+					}
 				} else {
-					trace!(target: "sync", "Considering new stale block announced from {}: {} {:?}", who, hash, header);
-					self.download_stale(protocol, who, &hash);
+					if ancient_parent {
+						trace!(target: "sync", "Ignored ancient stale block announced from {}: {} {:?}", who, hash, header);
+					} else {
+						self.download_stale(protocol, who, &hash);
+					}
 				}
 			} else {
-				trace!(target: "sync", "Considering new block announced from {}: {} {:?}", who, hash, header);
-				self.download_new(protocol, who);
+				if ancient_parent {
+					trace!(target: "sync", "Ignored ancient block announced from {}: {} {:?}", who, hash, header);
+				} else {
+					trace!(target: "sync", "Considering new block announced from {}: {} {:?}", who, hash, header);
+					self.download_new(protocol, who);
+				}
 			}
 		} else {
 			trace!(target: "sync", "Known block announce from {}: {}", who, hash);
