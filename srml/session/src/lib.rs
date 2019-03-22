@@ -184,8 +184,12 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
+
 		// Update any changes in session keys.
-		for (i, v) in Self::validators().into_iter().enumerate() {
+		let v = Self::validators();
+		<consensus::Module<T>>::set_authority_count(v.len() as u32);
+		for (i, v) in v.into_iter().enumerate() {
 			<consensus::Module<T>>::set_authority(
 				i as u32,
 				&<NextKeyFor<T>>::get(&v)
@@ -193,8 +197,6 @@ impl<T: Trait> Module<T> {
 					.unwrap_or_default()
 			);
 		};
-
-		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
@@ -224,6 +226,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Mutex;
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
@@ -233,6 +236,17 @@ mod tests {
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
+	}
+
+	lazy_static::lazy_static!{
+		static ref NEXT_VALIDATORS: Mutex<Vec<u64>> = Mutex::new(vec![1, 2, 3]);
+	}
+
+	pub struct TestOnSessionChange;
+	impl OnSessionChange<u64> for TestOnSessionChange {
+		fn on_session_change(_elapsed: u64, _should_reward: bool) {
+			Session::set_validators(&NEXT_VALIDATORS.lock().unwrap());
+		}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -261,7 +275,7 @@ mod tests {
 	}
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
-		type OnSessionChange = ();
+		type OnSessionChange = TestOnSessionChange;
 		type Event = ();
 	}
 
@@ -280,7 +294,7 @@ mod tests {
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
-			validators: vec![1, 2, 3],
+			validators: NEXT_VALIDATORS.lock().unwrap().clone(),
 			keys: vec![],
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
@@ -292,6 +306,33 @@ mod tests {
 			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
+		});
+	}
+
+	#[test]
+	fn authorities_should_track_validators() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Session::length(), 2);
+			assert_eq!(Session::validators(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
+
+			*NEXT_VALIDATORS.lock().unwrap() = vec![1, 2];
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session(1);
+			assert_eq!(Session::validators(), vec![1, 2]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into()]);
+
+			*NEXT_VALIDATORS.lock().unwrap() = vec![1, 2, 4];
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session(2);
+			assert_eq!(Session::validators(), vec![1, 2, 4]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(4).into()]);
+
+			*NEXT_VALIDATORS.lock().unwrap() = vec![1, 2, 3];
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session(3);
+			assert_eq!(Session::validators(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
 		});
 	}
 

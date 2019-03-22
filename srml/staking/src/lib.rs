@@ -944,7 +944,7 @@ impl<T: Trait> Module<T> {
 			let elected_stashes = elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>();
 			<CurrentElected<T>>::put(&elected_stashes);
 			<session::Module<T>>::set_validators(
-				&elected_stashes.into_iter().filter_map(Self::bonded).collect::<Vec<_>>()
+				&elected_stashes.into_iter().map(|s| Self::bonded(s).unwrap_or_default()).collect::<Vec<_>>()
 			);
 
 			slot_stake
