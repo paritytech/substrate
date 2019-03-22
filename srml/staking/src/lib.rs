@@ -960,56 +960,62 @@ impl<T: Trait> Module<T> {
 
 	/// Call when a validator is determined to be offline. `count` is the
 	/// number of offences the validator has committed.
-	pub fn on_offline_validator(v: T::AccountId, count: usize) {
+	///
+	/// NOTE: This is called with the controller (not the stash) account id.
+	pub fn on_offline_validator(controller: T::AccountId, count: usize) {
 		use primitives::traits::CheckedShl;
 
-		// Early exit if validator is invulnerable.
-		if Self::invulnerables().contains(&v) {
-			return
-		}
+		if let Some(l) = Self::ledger(&controller) {
+			let stash = l.stash;
 
-		let slash_count = Self::slash_count(&v);
-		let new_slash_count = slash_count + count as u32;
-		<SlashCount<T>>::insert(&v, new_slash_count);
-		let grace = Self::offline_slash_grace();
+			// Early exit if validator is invulnerable.
+			if Self::invulnerables().contains(&stash) {
+				return
+			}
 
-		if RECENT_OFFLINE_COUNT > 0 {
-			let item = (v.clone(), <system::Module<T>>::block_number(), count as u32);
-			<RecentlyOffline<T>>::mutate(|v| if v.len() >= RECENT_OFFLINE_COUNT {
-				let index = v.iter()
-					.enumerate()
-					.min_by_key(|(_, (_, block, _))| block)
-					.expect("v is non-empty; qed")
-					.0;
-				v[index] = item;
+			let slash_count = Self::slash_count(&stash);
+			let new_slash_count = slash_count + count as u32;
+			<SlashCount<T>>::insert(&stash, new_slash_count);
+			let grace = Self::offline_slash_grace();
+
+			if RECENT_OFFLINE_COUNT > 0 {
+				let item = (stash.clone(), <system::Module<T>>::block_number(), count as u32);
+				<RecentlyOffline<T>>::mutate(|v| if v.len() >= RECENT_OFFLINE_COUNT {
+					let index = v.iter()
+						.enumerate()
+						.min_by_key(|(_, (_, block, _))| block)
+						.expect("v is non-empty; qed")
+						.0;
+					v[index] = item;
+				} else {
+					v.push(item);
+				});
+			}
+
+			let prefs = Self::validators(&stash);
+			let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
+			let max_slashes = grace + unstake_threshold;
+
+			let event = if new_slash_count > max_slashes {
+				let slash_exposure = Self::stakers(&stash).total;
+				let offline_slash_base = Self::offline_slash() * slash_exposure;
+				// They're bailing.
+				let slash = offline_slash_base
+					// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
+					.checked_shl(unstake_threshold)
+					.map(|x| x.min(slash_exposure))
+					.unwrap_or(slash_exposure);
+				let _ = Self::slash_validator(&stash, slash);
+				<Validators<T>>::remove(&stash);
+				let _ = Self::apply_force_new_era(false);
+
+				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
-				v.push(item);
-			});
+				RawEvent::OfflineWarning(stash.clone(), slash_count)
+			};
+
+			Self::deposit_event(event);
 		}
-
-		let prefs = Self::validators(&v);
-		let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
-		let max_slashes = grace + unstake_threshold;
-
-		let event = if new_slash_count > max_slashes {
-			let slash_exposure = Self::stakers(&v).total;
-			let offline_slash_base = Self::offline_slash() * slash_exposure;
-			// They're bailing.
-			let slash = offline_slash_base
-				// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
-				.checked_shl(unstake_threshold)
-				.map(|x| x.min(slash_exposure))
-				.unwrap_or(slash_exposure);
-			let _ = Self::slash_validator(&v, slash);
-			<Validators<T>>::remove(&v);
-			let _ = Self::apply_force_new_era(false);
-
-			RawEvent::OfflineSlash(v.clone(), slash)
-		} else {
-			RawEvent::OfflineWarning(v.clone(), slash_count)
-		};
-
-		Self::deposit_event(event);
 	}
 }
 
