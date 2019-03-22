@@ -890,7 +890,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.total).unwrap_or_default()
+		let r = Self::bonded(stash).and_then(Self::ledger).map(|l| l.total).unwrap_or_default();
+		dbg!((&stash, r));
+		r
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
@@ -899,6 +901,7 @@ impl<T: Trait> Module<T> {
 	fn select_validators() -> BalanceOf<T> {
 		let rounds = || <ValidatorCount<T>>::get() as usize;
 		let validators = || <Validators<T>>::enumerate();
+		dbg!(validators().collect::<Vec<_>>());
 		let nominators = || <Nominators<T>>::enumerate();
 		let min_validator_count = Self::minimum_validator_count() as usize;
 		let maybe_elected_candidates = elect::<T, _, _, _, _>(

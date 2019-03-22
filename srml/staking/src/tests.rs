@@ -45,18 +45,18 @@ fn basic_setup_works() {
 
 		// ValidatorPrefs are default, thus unstake_threshold is 3, other values are default for their type
 		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
-			(20, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
-			(10, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 })
+			(21, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
+			(11, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 })
 		]);
 
 		// Account 100 is the default nominator
 		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
-		assert_eq!(Staking::nominators(100), vec![10, 20]);
+		assert_eq!(Staking::nominators(101), vec![10, 20]);
 
 		// Account 10 is exposed by 1000 * balance_factor from their own stash in account 11 + the default nominator vote
-		assert_eq!(Staking::stakers(10), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 100, value: 250 }] });
+		assert_eq!(Staking::stakers(11), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 100, value: 250 }] });
 		// Account 20 is exposed by 1000 * balance_factor from their own stash in account 21 + the default nominator vote
-		assert_eq!(Staking::stakers(20), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 100, value: 250 }] });
+		assert_eq!(Staking::stakers(21), Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: 100, value: 250 }] });
 
 		// The number of validators required.
 		assert_eq!(Staking::validator_count(), 2);
@@ -72,8 +72,8 @@ fn basic_setup_works() {
 		assert_eq!(Staking::slot_stake(),  1250);
 
 		// initial slash_count of validators 
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Staking::slash_count(&20), 0);
+		assert_eq!(Staking::slash_count(&11), 0);
+		assert_eq!(Staking::slash_count(&21), 0);
 	});
 }
 
