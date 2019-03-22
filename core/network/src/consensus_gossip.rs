@@ -18,6 +18,7 @@
 //! Handles chain-specific and standard BFT messages.
 
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use log::{trace, debug};
 use futures::sync::mpsc;
@@ -53,14 +54,10 @@ pub enum MessageRecipient {
 
 /// Message validation result.
 pub enum ValidationResult<H> {
-	/// Message is valid with this topic and should be stored for repropagation.
-	ValidStored(H),
-	/// Message is valid and should not be tracked.
-	ValidOneHop,
-	/// Invalid message.
-	Invalid,
-	/// Obsolete message.
-	Expired,
+	/// Message should be stored under the given topic.
+	Keep(H),
+	/// Message should be discarded.
+	Discard,
 }
 
 /// Validation context. Allows reacting to incoming messages by sending out furter messages.
@@ -114,8 +111,8 @@ pub trait Validator<B: BlockT> {
 	fn validate(&self, context: &mut ValidatorContext<B>, who: NodeIndex, data: &[u8]) -> ValidationResult<B::Hash>;
 
 	/// Filter out departing messages.
-	fn should_send_to(&self, _who: NodeIndex, _topic: &B::Hash, _data: &[u8]) -> bool {
-		true
+	fn should_send_to<'a>(&'a self) -> Box<FnMut(NodeIndex, B::Hash, &[u8]) -> bool + 'a> {
+		Box::new(move |_who, _topic, _data| false )
 	}
 
 	/// Produce a closure for validating messages on a given topic.
@@ -177,16 +174,33 @@ impl<B: BlockT> ConsensusGossip<B> {
 	)
 		where F: Fn() -> ConsensusMessage,
 	{
+
+		let validators = &self.validators;
+
+		let mut check_fns = HashMap::new();
+		let mut should_send_to = move |who, topic, message: &ConsensusMessage| {
+			let engine_id = message.engine_id;
+			let check_fn = match check_fns.entry(engine_id) {
+				Entry::Occupied(entry) => entry.into_mut(),
+				Entry::Vacant(vacant) => match validators.get(&engine_id) {
+					None => return true, // treat all messages with no validator as expired
+					Some(validator) => vacant.insert(validator.should_send_to()),
+				}
+			};
+
+			(check_fn)(who, topic, &message.data)
+		};
+
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if !force && peer.known_messages.contains(&message_hash) {
 				continue
 			}
 			let message = get_message();
-			if let Some(validator) = self.validators.get(&message.engine_id) {
-				if !validator.should_send_to(*id, &topic, &message.data) {
-					continue
-				}
+
+			if !should_send_to(*id, topic, &message) {
+				continue
 			}
+
 			peer.known_messages.insert(message_hash.clone());
 			trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
 			protocol.send_message(*id, Message::Consensus(message));
@@ -221,8 +235,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
 	/// for pruning, which returns `false` when the items with a given topic should be pruned.
 	pub fn collect_garbage(&mut self) {
-		use std::collections::hash_map::Entry;
-
 		self.live_message_sinks.retain(|_, sinks| {
 			sinks.retain(|sink| !sink.is_closed());
 			!sinks.is_empty()
@@ -302,20 +314,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 				v.validate(&mut context, who, &message.data)
 			});
 		let topic = match validation {
-			Some(ValidationResult::ValidStored(topic)) => Some(topic),
-			Some(ValidationResult::ValidOneHop) => None,
-			Some(ValidationResult::Invalid) => {
-				trace!(target:"gossip", "Invalid message from {}", who);
-				protocol.report_peer(
-					who,
-					Severity::Bad(format!("Sent invalid consensus message")),
-				);
-				return None;
-			},
-			Some(ValidationResult::Expired) => {
-				trace!(target:"gossip", "Ignored expired message from {}", who);
-				return None;
-			}
+			Some(ValidationResult::Keep(topic)) => Some(topic),
+			Some(ValidationResult::Discard) => None,
 			None => {
 				protocol.report_peer(
 					who,
@@ -403,8 +403,10 @@ mod tests {
 
 	struct AllowAll;
 	impl Validator<Block> for AllowAll {
-		fn validate(&self, _context: &mut ValidatorContext<Block>, _data: &[u8]) -> ValidationResult<H256> {
-			ValidationResult::ValidStored(H256::default())
+		fn validate(&self, _context: &mut ValidatorContext<Block>, _who: NodeIndex, _data: &[u8])
+			-> ValidationResult<H256>
+		{
+			ValidationResult::Keep(H256::default())
 		}
 	}
 
@@ -412,11 +414,13 @@ mod tests {
 	fn collects_garbage() {
 		struct AllowOne;
 		impl Validator<Block> for AllowOne {
-			fn validate(&self, _context: &mut ValidatorContext<Block>, data: &[u8]) -> ValidationResult<H256> {
+		fn validate(&self, _context: &mut ValidatorContext<Block>, _who: NodeIndex, data: &[u8])
+			-> ValidationResult<H256>
+		{
 				if data[0] == 1 {
-					ValidationResult::ValidStored(H256::default())
+					ValidationResult::Keep(H256::default())
 				} else {
-					ValidationResult::Expired
+					ValidationResult::Discard
 				}
 			}
 
