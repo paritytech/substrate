@@ -81,7 +81,8 @@ where
 	/// data at this moment (block number).
 	changes_trie_transaction: Option<(u64, MemoryDB<H>, H::Out)>,
 	/// Additional externalities for offchain workers.
-	/// If None the some methods from the trait might not supported.
+	///
+	/// If None, some methods from the trait might not supported.
 	offchain_externalities: Option<&'a mut O>,
 }
 

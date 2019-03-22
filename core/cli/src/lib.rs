@@ -431,7 +431,8 @@ where
 	config.offchain_worker = match (cli.offchain_worker, role) {
 		(params::OffchainWorkerEnabled::WhenValidating, service::Roles::AUTHORITY) => true,
 		(params::OffchainWorkerEnabled::Always, _) => true,
-		_ => false,
+		(params::OffchainWorkerEnabled::Never, _) => false,
+		(params::OffchainWorkerEnabled::WhenValidating, _) => false,
 	};
 
 	config.roles = role;

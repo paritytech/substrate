@@ -14,8 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
-//! Manages communication between them.
+//! Substrate offchain workers.
+//!
+//! The offchain workers is a special function of the runtime that
+//! gets executed after block is imported. During execution
+//! it's able to asynchronously submit extrinsics that will either
+//! be propagated to other nodes (transactions) or will be
+//! added to the next block produced by the node as inherents.
+//!
+//! Offchain workers can be used for computation-heavy tasks
+//! that are not feasible for execution during regular block processing.
+//! It can either be tasks that no consensus is required for,
+//! or some form of consensus over the data can be built on-chain
+//! for instance via:
+//! 1. Challenge period for incorrect computations
+//! 2. Majority voting for results
+//! 3. etc
 
 #![warn(missing_docs)]
 

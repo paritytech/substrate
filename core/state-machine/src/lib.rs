@@ -348,7 +348,12 @@ impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
 		let offchain = self.offchain_ext.as_mut();
-		let mut externalities = ext::Ext::new(self.overlay, self.backend, self.changes_trie_storage, offchain.map(|x| &mut **x));
+		let mut externalities = ext::Ext::new(
+			self.overlay,
+			self.backend,
+			self.changes_trie_storage,
+			offchain.map(|x| &mut **x),
+		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
 			self.method,
