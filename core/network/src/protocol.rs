@@ -445,6 +445,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		None
 	}
 
+	fn update_peer_info(&mut self, who: NodeIndex) {
+		if let Some(info) = self.sync.peer_info(who) {
+			if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
+				peer.info.best_hash = info.best_hash;
+				peer.info.best_number = info.best_number;
+			}
+			let mut peers = self.connected_peers.write();
+			if let Some(ref mut peer) = peers.get_mut(&who) {
+				peer.peer_info.best_hash = info.best_hash;
+				peer.peer_info.best_number = info.best_number;
+			}
+		}
+	}
+
 	/// Propagates protocol statuses.
 	fn on_status(&mut self) {
 		let status = ProtocolStatus {
@@ -467,9 +481,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::BlockResponse(r) => {
 				if let Some(request) = self.handle_response(who, &r) {
 					self.on_block_response(who, request, r);
+					self.update_peer_info(who);
 				}
 			},
-			GenericMessage::BlockAnnounce(announce) => self.on_block_announce(who, announce),
+			GenericMessage::BlockAnnounce(announce) => {
+				self.on_block_announce(who, announce);
+				self.update_peer_info(who);
+			},
 			GenericMessage::Transactions(m) => self.on_extrinsics(who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(who, response),
