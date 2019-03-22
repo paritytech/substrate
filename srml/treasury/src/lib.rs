@@ -170,7 +170,6 @@ decl_storage! {
 }
 
 decl_event!(
-	/// An event in this module.
 	pub enum Event<T>
 	where
 		Balance = BalanceOf<T>,

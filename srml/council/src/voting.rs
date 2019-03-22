@@ -126,7 +126,6 @@ decl_storage! {
 }
 
 decl_event!(
-	/// An event in this module.
 	pub enum Event<T> where <T as system::Trait>::Hash {
 		/// A voting tally has happened for a referendum cancellation vote.
 		/// Last three are yes, no, abstain counts.

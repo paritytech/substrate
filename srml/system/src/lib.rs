@@ -125,7 +125,6 @@ pub struct EventRecord<E: Parameter + Member> {
 }
 
 decl_event!(
-	/// Event for the system module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,

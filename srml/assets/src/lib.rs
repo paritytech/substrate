@@ -83,7 +83,6 @@ decl_module! {
 }
 
 decl_event!(
-	/// An event in this module.
 	pub enum Event<T> where <T as system::Trait>::AccountId, <T as Trait>::Balance {
 		/// Some assets were issued.
 		Issued(AssetId, AccountId, Balance),

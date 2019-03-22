@@ -177,7 +177,6 @@ impl<N: Decode, SessionKey: Decode> Decode for StoredPendingChange<N, SessionKey
 }
 
 decl_event!(
-	/// GRANDPA events.
 	pub enum Event<T> where <T as Trait>::SessionKey {
 		/// New authority set has been applied.
 		NewAuthorities(Vec<(SessionKey, u64)>),
