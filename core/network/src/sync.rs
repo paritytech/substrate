@@ -98,6 +98,7 @@ struct PendingJustifications<B: BlockT> {
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
+	importing_requests: HashSet<PendingJustification<B>>,
 }
 
 impl<B: BlockT> PendingJustifications<B> {
@@ -107,6 +108,7 @@ impl<B: BlockT> PendingJustifications<B> {
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
+			importing_requests: HashSet::new(),
 		}
 	}
 
@@ -243,6 +245,16 @@ impl<B: BlockT> PendingJustifications<B> {
 	/// Queues a retry in case the import failed.
 	fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let request = (hash, number);
+
+		if !self.importing_requests.remove(&request) {
+			debug!(target: "sync", "Got justification import result for unknown justification {:?} {:?} request.",
+				request.0,
+				request.1,
+			);
+
+			return;
+		};
+
 		if success {
 			if self.justifications.finalize_root(&request.0).is_none() {
 				warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
@@ -250,6 +262,7 @@ impl<B: BlockT> PendingJustifications<B> {
 					request.1,
 					self.justifications.roots().collect::<Vec<_>>(),
 				);
+
 				return;
 			};
 
@@ -278,6 +291,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(justification) = justification {
 				import_queue.import_justification(who.clone(), request.0, request.1, justification);
+				self.importing_requests.insert(request);
 				return
 			}
 
@@ -285,6 +299,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				.entry(request)
 				.or_insert(Vec::new())
 				.push((who, Instant::now()));
+
 			self.pending_requests.push_front(request);
 		}
 	}
@@ -299,7 +314,11 @@ impl<B: BlockT> PendingJustifications<B> {
 	) -> Result<(), fork_tree::Error<ClientError>>
 		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
 	{
-		use std::collections::HashSet;
+		if self.importing_requests.contains(&(*best_finalized_hash, best_finalized_number)) {
+			// we imported this justification ourselves, so we should get back a response
+			// from the import queue through `justification_import_result`
+			return Ok(());
+		}
 
 		self.justifications.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
 
