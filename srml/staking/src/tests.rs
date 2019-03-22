@@ -1029,17 +1029,17 @@ fn validator_payment_prefs_work() {
 		// check the balance of a validator's stash accounts.
 		assert_eq!(Balances::total_balance(&11), validator_initial_balance);
 		// and the nominator (to-be)
-		assert_eq!(Balances::total_balance(&2), 20);
+		let _ = Balances::ensure_free_balance_is(&2, 500);
 
 		// add a dummy nominator.
 		// NOTE: this nominator is being added 'manually', use '.nominate()' to do it realistically.
-		<Stakers<Test>>::insert(&10, Exposure {
+		<Stakers<Test>>::insert(&11, Exposure {
 			own: 500, // equal division indicates that the reward will be equally divided among validator and nominator.
 			total: 1000,
 			others: vec![IndividualExposure {who: 2, value: 500 }]
 		});
-		<Payee<Test>>::insert(&2, RewardDestination::Controller);
-		<Validators<Test>>::insert(&10, ValidatorPrefs {
+		<Payee<Test>>::insert(&2, RewardDestination::Stash);
+		<Validators<Test>>::insert(&11, ValidatorPrefs {
 			unstake_threshold: 3,
 			validator_payment: validator_cut
 		});
@@ -1081,7 +1081,7 @@ fn validator_payment_prefs_work() {
 		// Controller account will not get any reward.
 		assert_eq!(Balances::total_balance(&10), 1);
 		// Rest of the reward will be shared and paid to the nominator in stake.
-		assert_eq!(Balances::total_balance(&2), 20 + shared_cut/2);
+		assert_eq!(Balances::total_balance(&2), 500 + shared_cut/2);
 	});
 
 }
