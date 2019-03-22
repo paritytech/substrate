@@ -358,17 +358,18 @@ impl<B: BlockT> BlockImporter<B> {
 		let success = self.justification_import.as_ref().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
-					debug!("Justification import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}", e, hash, number, who);
+					debug!(target: "sync", "Justification import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}", e, hash, number, who);
 					e
 				}).is_ok()
 		}).unwrap_or(false);
+
 		if let Some(link) = self.link.as_ref() {
 			link.justification_imported(who, &hash, number, success);
 		}
 	}
 
 	fn handle_import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
-		trace!(target:"sync", "Scheduling {} blocks for import", blocks.len());
+		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
 		self.worker_sender
 			.send(BlockImportWorkerMsg::ImportBlocks(origin, blocks))
 			.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
@@ -423,7 +424,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			_ => Default::default(),
 		};
 
-		trace!(target:"sync", "Starting import of {} blocks {}", count, blocks_range);
+		trace!(target: "sync", "Starting import of {} blocks {}", count, blocks_range);
 
 		let mut results = vec![];
 
