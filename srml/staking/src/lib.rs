@@ -244,14 +244,14 @@ const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
-// Indicates the initial status of the staker
+/// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum StakerStatus<AccountId> {
-	// Chilling.
+	/// Chilling.
 	Idle,
-	// Declared state in validating or already participating in it.
+	/// Declared state in validating or already participating in it.
 	Validator,
-	// Nominating for a group of other stakers.
+	/// Nominating for a group of other stakers.
 	Nominator(Vec<AccountId>),
 }
 
@@ -456,8 +456,6 @@ decl_storage! {
 
 		/// Maximum reward, per validator, that is provided per acceptable session.
 		pub CurrentSessionReward get(current_session_reward) config(): BalanceOf<T>;
-		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub CurrentOfflineSlash get(current_offline_slash) config(): BalanceOf<T>;
 
 		/// The accumulated reward for the current era. Reset to zero at the beginning of the era and
 		/// increased for every successfully finished session.
@@ -894,8 +892,7 @@ impl<T: Trait> Module<T> {
 		// Reassign all Stakers.
 		let slot_stake = Self::select_validators();
 
-		// Update the balances for slashing/rewarding according to the stakes.
-		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * slot_stake);
+		// Update the balances for rewarding according to the stakes.
 		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
 	}
 
@@ -997,13 +994,14 @@ impl<T: Trait> Module<T> {
 		let max_slashes = grace + unstake_threshold;
 
 		let event = if new_slash_count > max_slashes {
-			let slot_stake = Self::slot_stake();
+			let slash_exposure = Self::stakers(&v).total;
+			let offline_slash_base = Self::offline_slash() * slash_exposure;
 			// They're bailing.
-			let slash = Self::current_offline_slash()
-				// Multiply current_offline_slash by 2^(unstake_threshold with upper bound)
+			let slash = offline_slash_base
+				// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
 				.checked_shl(unstake_threshold)
-				.map(|x| x.min(slot_stake))
-				.unwrap_or(slot_stake);
+				.map(|x| x.min(slash_exposure))
+				.unwrap_or(slash_exposure);
 			let _ = Self::slash_validator(&v, slash);
 			<Validators<T>>::remove(&v);
 			let _ = Self::apply_force_new_era(false);

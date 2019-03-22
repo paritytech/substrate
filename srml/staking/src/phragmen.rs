@@ -300,16 +300,14 @@ pub fn equalise<T: Trait + 'static>(
 
 	let mut difference;
 	if backing_backed_stake.len() > 0 {
-		let max_stake = backing_backed_stake
+		let max_stake = *backing_backed_stake
 			.iter()
 			.max()
-			.expect("vector with positive length will have a max; qed")
-			.to_owned();
-		let min_stake = backed_stakes
+			.expect("vector with positive length will have a max; qed");
+		let min_stake = *backed_stakes
 			.iter()
 			.min()
-			.expect("vector with positive length will have a max; qed")
-			.to_owned();
+			.expect("vector with positive length will have a max; qed");
 		difference = max_stake - min_stake;
 		difference += nominator.budget - stake_used;
 		if difference < tolerance {
