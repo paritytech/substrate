@@ -35,6 +35,7 @@ const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
+	roles: Roles,
 }
 
 /// Topic stream message with sender.
@@ -204,8 +205,17 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Register message validator for a message type.
-	pub fn register_validator(&mut self, engine_id: ConsensusEngineId, validator: Arc<Validator<B>>) {
-		self.validators.insert(engine_id, validator);
+	pub fn register_validator(&mut self, protocol: &mut Context<B>, engine_id: ConsensusEngineId, validator: Arc<Validator<B>>) {
+		self.register_validator_internal(engine_id, validator.clone());
+		let peers: Vec<_> = self.peers.iter().map(|(id, peer)| (id.clone(), peer.roles)).collect();
+		for (id, roles) in peers {
+			let mut context = ValidatorContext { gossip: self, protocol, engine_id: engine_id.clone() };
+			validator.new_peer(&mut context, id.clone(), roles);
+		}
+	}
+
+	fn register_validator_internal(&mut self, engine_id: ConsensusEngineId, validator: Arc<Validator<B>>) {
+		self.validators.insert(engine_id, validator.clone());
 	}
 
 	/// Handle new connected peer.
@@ -213,6 +223,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
 		self.peers.insert(who, PeerConsensus {
 			known_messages: HashSet::new(),
+			roles,
 		});
 		for (engine_id, v) in self.validators.clone() {
 			let mut context = ValidatorContext { gossip: self, protocol, engine_id: engine_id.clone() };
@@ -464,12 +475,12 @@ mod tests {
 		consensus.known_messages.insert(m2_hash, ());
 
 		let test_engine_id = Default::default();
-		consensus.register_validator(test_engine_id, Arc::new(AllowAll));
+		consensus.register_validator_internal(test_engine_id, Arc::new(AllowAll));
 		consensus.collect_garbage();
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.known_messages.len(), 2);
 
-		consensus.register_validator(test_engine_id, Arc::new(AllowOne));
+		consensus.register_validator_internal(test_engine_id, Arc::new(AllowOne));
 
 		// m2 is expired
 		consensus.collect_garbage();
@@ -484,7 +495,7 @@ mod tests {
 		use futures::Stream;
 
 		let mut consensus = ConsensusGossip::<Block>::new();
-		consensus.register_validator([0, 0, 0, 0], Arc::new(AllowAll));
+		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
@@ -514,7 +525,7 @@ mod tests {
 	#[test]
 	fn can_keep_multiple_subscribers_per_topic() {
 		let mut consensus = ConsensusGossip::<Block>::new();
-		consensus.register_validator([0, 0, 0, 0], Arc::new(AllowAll));
+		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
@@ -533,7 +544,7 @@ mod tests {
 	#[test]
 	fn topics_are_localized_to_engine_id() {
 		let mut consensus = ConsensusGossip::<Block>::new();
-		consensus.register_validator([0, 0, 0, 0], Arc::new(AllowAll));
+		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let topic = [1; 32].into();
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };

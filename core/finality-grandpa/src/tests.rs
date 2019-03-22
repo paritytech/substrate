@@ -148,8 +148,8 @@ impl MessageRouting {
 		{
 			let inner = inner.lock();
 			let peer = inner.peer(peer_id);
-			peer.with_gossip(move |gossip, _| {
-				gossip.register_validator(GRANDPA_ENGINE_ID, v);
+			peer.with_gossip(move |gossip, context| {
+				gossip.register_validator(context, GRANDPA_ENGINE_ID, v);
 			});
 		}
 		MessageRouting {
