@@ -791,7 +791,6 @@ impl<T: Trait> Module<T> {
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		let dest = Self::payee(stash);
-		println!("payout to {:?} {:?} {:?}", stash, dest, amount);
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
 				.and_then(|controller|
@@ -869,7 +868,6 @@ impl<T: Trait> Module<T> {
 		let reward = <CurrentEraReward<T>>::take();
 		if !reward.is_zero() {
 			let validators = Self::current_elected();
-			println!("PAYOUT {:?} {:?}", &validators, reward);
 			for v in validators.iter() {
 				Self::reward_validator(v, reward);
 			}
