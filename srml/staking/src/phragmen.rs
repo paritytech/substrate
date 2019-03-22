@@ -77,7 +77,7 @@ pub struct Edge<AccountId, Balance: HasCompact> {
 	// Final backing stake of this vote.
 	backing_stake: Balance,
 	// Index of the candidate stored in the 'candidates' vector
-	candidate_idx: usize,
+	candidate_index: usize,
 	// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalise.
 	elected_idx: usize,
 	// Indicates if this edge is a vote for an elected candidate. Used only with equalise.
@@ -125,7 +125,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		c.approval_stake += c.exposure.total;
 		nominators.push(Nominator {
 			who: c.who.clone(),
-			edges: vec![ Edge { who: c.who.clone(), candidate_idx: idx, ..Default::default() }],
+			edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
 			budget: c.exposure.total,
 			load: Perquintill::zero(),
 		})
@@ -139,7 +139,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		for n in &nominees {
 			if let Some(idx) = candidates.iter_mut().position(|i| i.who == *n) {
 				candidates[idx].approval_stake += nominator_stake;
-				edges.push(Edge { who: n.clone(), candidate_idx: idx, ..Default::default() });
+				edges.push(Edge { who: n.clone(), candidate_index: idx, ..Default::default() });
 			}
 		}
 
@@ -171,7 +171,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			// Loop 2: increment score.
 			for n in &nominators {
 				for e in &n.edges {
-					let c = &mut candidates[e.candidate_idx];
+					let c = &mut candidates[e.candidate_index];
 					if !c.elected {
 						let temp = n.budget.as_() * *n.load / c.approval_stake.as_();
 						c.score = Perquintill::from_quintillionths(*c.score + temp);
