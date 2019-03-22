@@ -40,7 +40,7 @@ use client::ExecutionStrategies;
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
-use trie::{MemoryDB, full_key};
+use trie::{MemoryDB, prefixed_key};
 use parking_lot::RwLock;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
@@ -379,7 +379,7 @@ struct StorageDb<Block: BlockT> {
 
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
-		let key = full_key::<Blake2Hasher>(key, prefix);
+		let key = prefixed_key::<Blake2Hasher>(key, prefix);
 		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}

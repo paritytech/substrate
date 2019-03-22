@@ -33,7 +33,7 @@ pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
-pub use memory_db::full_key;
+pub use memory_db::prefixed_key;
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -45,7 +45,7 @@ pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db`, but less generic, trait exposed.
-pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
+pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
