@@ -20,6 +20,7 @@ use super::*;
 use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
+use network::consensus_gossip as network_gossip;
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::AuthorityKeyring;
@@ -39,7 +40,7 @@ use runtime_primitives::ExecutionContext;
 use substrate_primitives::NativeOrEncoded;
 
 use authorities::AuthoritySet;
-use communication::{GRANDPA_ENGINE_ID, gossip::GossipValidator};
+use communication::{GRANDPA_ENGINE_ID, gossip::GossipValidator, Round, SetId};
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -176,10 +177,10 @@ fn make_global_topic(set_id: u64) -> Hash {
 }
 
 impl Network<Block> for MessageRouting {
-	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
+	type In = Box<Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.validator.note_round(round, set_id);
+		self.validator.note_round(Round(round), SetId(set_id));
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
 		let messages = peer.consensus_gossip_messages_for(
@@ -211,7 +212,7 @@ impl Network<Block> for MessageRouting {
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.validator.note_set(set_id);
+		self.validator.note_set(SetId(set_id));
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
 		let messages = peer.consensus_gossip_messages_for(

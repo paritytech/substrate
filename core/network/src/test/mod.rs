@@ -35,7 +35,7 @@ use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
@@ -377,7 +377,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		&self,
 		engine_id: ConsensusEngineId,
 		topic: <Block as BlockT>::Hash,
-	) -> mpsc::UnboundedReceiver<Vec<u8>> {
+	) -> mpsc::UnboundedReceiver<TopicNotification> {
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(engine_id, topic);

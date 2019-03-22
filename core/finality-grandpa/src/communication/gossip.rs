@@ -282,7 +282,9 @@ impl<N: Ord> Peers<N> {
 
 enum Action<H>  {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
-	Repropagate(H, i32),
+	Keep(H, i32),
+	// discard and process.
+	ProcessAndDiscard(H, i32),
 	// discard, applying cost/benefit to originator.
 	Discard(i32),
 }
@@ -365,7 +367,7 @@ impl<Block: BlockT> Inner<Block> {
 		}
 
 		let topic = super::round_topic::<Block>(full.round.0, full.set_id.0);
-		Action::Repropagate(topic, 100)
+		Action::Keep(topic, 100)
 	}
 
 	fn validate_commit_message(&mut self, who: &NodeIndex, full: &FullCommitMessage<Block>)
@@ -418,10 +420,8 @@ impl<Block: BlockT> Inner<Block> {
 
 		// always discard commits initially and rebroadcast after doing full
 		// checking.
-		//
-		// TODO: make this "DiscardAndProcess"
-		let _topic = super::global_topic::<Block>(full.set_id.0);
-		Action::Discard(100)
+		let topic = super::global_topic::<Block>(full.set_id.0);
+		Action::ProcessAndDiscard(topic, 100)
 	}
 
 	fn import_neighbor_message(&mut self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
@@ -477,7 +477,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		self.inner.write().peers.peer_disconnected(&who);
 	}
 
-	fn validate(&self, context: &mut ValidatorContext<Block>, who: &NodeIndex, mut data: &[u8])
+	fn validate(&self, _context: &mut ValidatorContext<Block>, who: &NodeIndex, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		let action = {
@@ -497,14 +497,14 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			}
 		};
 
-		if let Action::Repropagate(ref topic, _) = action {
-			context.broadcast_message(*topic, data.to_vec(), false);
-		}
-
 		match action {
-			Action::Repropagate(topic, cb) => {
+			Action::Keep(topic, cb) => {
 				self.report(who, cb);
-				network_gossip::ValidationResult::Keep(topic)
+				network_gossip::ValidationResult::KeepAndPropagate(topic)
+			}
+			Action::ProcessAndDiscard(topic, cb) => {
+				self.report(who, cb);
+				network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			}
 			Action::Discard(cb) => {
 				self.report(who, cb);
@@ -604,17 +604,17 @@ mod tests {
 	fn view_global_message_rules() {
 		let view = View { round: Round(100), set_id: SetId(2), last_commit: Some(1000u64) };
 
-		assert_eq!(view.consider_global(Round(3), SetId(1)), Consider::RejectFuture);
-		assert_eq!(view.consider_global(Round(3), SetId(1000)), Consider::RejectFuture);
-		assert_eq!(view.consider_global(Round(3), SetId(10000)), Consider::RejectFuture);
+		assert_eq!(view.consider_global(SetId(3), 1), Consider::RejectFuture);
+		assert_eq!(view.consider_global(SetId(3), 1000), Consider::RejectFuture);
+		assert_eq!(view.consider_global(SetId(3), 10000), Consider::RejectFuture);
 
-		assert_eq!(view.consider_global(Round(1), SetId(1)), Consider::RejectPast);
-		assert_eq!(view.consider_global(Round(1), SetId(1000)), Consider::RejectPast);
-		assert_eq!(view.consider_global(Round(1), SetId(10000)), Consider::RejectPast);
+		assert_eq!(view.consider_global(SetId(1), 1), Consider::RejectPast);
+		assert_eq!(view.consider_global(SetId(1), 1000), Consider::RejectPast);
+		assert_eq!(view.consider_global(SetId(1), 10000), Consider::RejectPast);
 
-		assert_eq!(view.consider_global(Round(2), SetId(1)), Consider::RejectPast);
-		assert_eq!(view.consider_global(Round(2), SetId(1000)), Consider::RejectPast);
-		assert_eq!(view.consider_global(Round(2), SetId(1001)), Consider::Accept);
-		assert_eq!(view.consider_global(Round(2), SetId(10000)), Consider::Accept);
+		assert_eq!(view.consider_global(SetId(2), 1), Consider::RejectPast);
+		assert_eq!(view.consider_global(SetId(2), 1000), Consider::RejectPast);
+		assert_eq!(view.consider_global(SetId(2), 1001), Consider::Accept);
+		assert_eq!(view.consider_global(SetId(2), 10000), Consider::Accept);
 	}
 }

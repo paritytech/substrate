@@ -47,7 +47,7 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
 /// Intended to be a lightweight handle such as an `Arc`.
 pub trait Network<Block: BlockT>: Clone {
 	/// A stream of input messages for a topic.
-	type In: Stream<Item=Vec<u8>,Error=()>;
+	type In: Stream<Item=network_gossip::TopicNotification,Error=()>;
 
 	/// Get a stream of messages for a specific round. This stream should
 	/// never logically conclude.
@@ -87,12 +87,12 @@ pub trait Network<Block: BlockT>: Clone {
 
 /// A stream used by NetworkBridge in its implementation of Network.
 pub struct NetworkStream {
-	inner: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
-	outer: oneshot::Receiver<mpsc::UnboundedReceiver<Vec<u8>>>
+	inner: Option<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>,
+	outer: oneshot::Receiver<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>
 }
 
 impl Stream for NetworkStream {
-	type Item = Vec<u8>;
+	type Item = network_gossip::TopicNotification;
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -460,13 +460,13 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
-	S: Stream<Item=Vec<u8>,Error=()>
+	S: Stream<Item=network_gossip::TopicNotification, Error=()>
 {
 	inner
-		.filter_map(|raw| {
-			let decoded = GossipMessage::<Block>::decode(&mut &raw[..]);
+		.filter_map(|notification| {
+			let decoded = GossipMessage::<Block>::decode(&mut &notification.message[..]);
 			if decoded.is_none() {
-				debug!(target: "afg", "Skipping malformed message {:?}", raw);
+				debug!(target: "afg", "Skipping malformed message {:?}", notification);
 			}
 			decoded
 		})
@@ -685,14 +685,14 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
-	S: Stream<Item=Vec<u8>,Error=()>
+	S: Stream<Item=network_gossip::TopicNotification, Error=()>
 {
 	inner
-		.filter_map(|raw| {
+		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
-			let decoded = GossipMessage::<Block>::decode(&mut &raw[..]);
+			let decoded = GossipMessage::<Block>::decode(&mut &notification.message[..]);
 			if decoded.is_none() {
-				trace!(target: "afg", "Skipping malformed commit message {:?}", raw);
+				trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
 			}
 			decoded
 		})
