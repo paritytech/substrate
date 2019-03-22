@@ -312,10 +312,6 @@ mod tests {
 	#[test]
 	fn authorities_should_track_validators() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Session::length(), 2);
-			assert_eq!(Session::validators(), vec![1, 2, 3]);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-
 			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2]);
 			assert_ok!(Session::force_new_session(false));
 			Session::check_rotate_session(1);
