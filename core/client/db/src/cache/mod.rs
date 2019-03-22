@@ -113,27 +113,39 @@ impl<Block: BlockT> DbCache<Block> {
 
 	/// Creates `ListCache` with the given name or returns a reference to the existing.
 	fn get_cache(&mut self, name: Vec<u8>) -> &mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
-		let db = self.db.clone();
-		let key_lookup = self.key_lookup_column.clone();
-		let header = self.header_column.clone();
-		let cache = self.authorities_column.clone();
-		let best_finalized_block = self.best_finalized_block.clone();
-
-		self.cache_at.entry(name.clone()).or_insert_with(|| {
-			ListCache::new(
-				self::list_storage::DbStorage::new(name, db,
-					self::list_storage::DbColumns {
-						meta: COLUMN_META,
-						key_lookup,
-						header,
-						cache,
-					},
-				),
-				As::sa(PRUNE_DEPTH),
-				best_finalized_block,
-			)
-		})
+		get_cache_helper(&mut self.cache_at,
+						 name,
+						 &self.db,
+						 self.key_lookup_column,
+						 self.header_column,
+						 self.authorities_column,
+						 &self.best_finalized_block)
 	}
+}
+
+fn get_cache_helper<'a, Block: BlockT>(
+	cache_at: &'a mut HashMap<Vec<u8>, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
+	name: Vec<u8>,
+	db: &Arc<KeyValueDB>,
+	key_lookup: Option<u32>,
+	header: Option<u32>,
+	cache: Option<u32>,
+	best_finalized_block: &ComplexBlockId<Block>,
+) -> &'a mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
+	cache_at.entry(name.clone()).or_insert_with(|| {
+		ListCache::new(
+			self::list_storage::DbStorage::new(name, db.clone(),
+											   self::list_storage::DbColumns {
+												   meta: COLUMN_META,
+												   key_lookup,
+												   header,
+												   cache,
+											   },
+			),
+			As::sa(PRUNE_DEPTH),
+			best_finalized_block.clone(),
+		)
+	})
 }
 
 /// Cache operations that are to be committed after database transaction is committed.
