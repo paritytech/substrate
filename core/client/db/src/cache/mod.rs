@@ -97,6 +97,7 @@ impl<Block: BlockT> DbCache<Block> {
 			cache: self,
 			tx,
 			cache_at_op: HashMap::new(),
+			best_finalized_block: None,
 		}
 	}
 
@@ -104,6 +105,9 @@ impl<Block: BlockT> DbCache<Block> {
 	pub fn commit(&mut self, ops: DbCacheTransactionOps<Block>) {
 		for (name, op) in ops.cache_at_op.into_iter() {
 			self.get_cache(name).on_transaction_commit(op);
+		}
+		if let Some(best_finalized_block) = ops.best_finalized_block {
+			self.best_finalized_block = best_finalized_block;
 		}
 	}
 
@@ -135,6 +139,7 @@ impl<Block: BlockT> DbCache<Block> {
 /// Cache operations that are to be committed after database transaction is committed.
 pub struct DbCacheTransactionOps<Block: BlockT> {
 	cache_at_op: HashMap<Vec<u8>, self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
 /// Database-backed blockchain data cache transaction valid for single block import.
@@ -142,6 +147,7 @@ pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
 	tx: &'a mut DBTransaction,
 	cache_at_op: HashMap<Vec<u8>, self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
 impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
@@ -149,6 +155,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	pub fn into_ops(self) -> DbCacheTransactionOps<Block> {
 		DbCacheTransactionOps {
 			cache_at_op: self.cache_at_op,
+			best_finalized_block: self.best_finalized_block,
 		}
 	}
 
@@ -162,12 +169,19 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	) -> ClientResult<Self> {
 		assert!(self.cache_at_op.is_empty());
 
+		// prepare list of caches that are not update
+		// (we might still need to do some cache maintenance in this case)
+		let missed_caches = self.cache.cache_at.keys()
+			.filter(|cache| !data_at.contains_key(cache.clone()))
+			.cloned()
+			.collect::<Vec<_>>();
+
 		for (name, data) in data_at.into_iter() {
 			let cache = self.cache.get_cache(name.clone());
 			let op = cache.on_block_insert(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache.storage(),
-					&mut self.tx
+					&mut self.tx,
 				),
 				parent.clone(),
 				block.clone(),
@@ -177,6 +191,28 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			if let Some(op) = op {
 				self.cache_at_op.insert(name, op);
 			}
+		}
+
+		for name in missed_caches.into_iter() {
+			let cache = self.cache.get_cache(name.clone());
+			let same_value = cache.value_at_block(&parent)?;
+			let op = cache.on_block_insert(
+				&mut self::list_storage::DbStorageTransaction::new(
+					cache.storage(),
+					&mut self.tx,
+				),
+				parent.clone(),
+				block.clone(),
+				same_value,
+				is_final,
+			)?;
+			if let Some(op) = op {
+				self.cache_at_op.insert(name.clone(), op);
+			}
+		}
+
+		if is_final {
+			self.best_finalized_block = Some(block.clone());
 		}
 
 		Ok(self)
@@ -204,6 +240,8 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				self.cache_at_op.insert(name.to_owned(), op);
 			}
 		}
+
+		self.best_finalized_block = Some(block.clone());
 
 		Ok(self)
 	}
@@ -240,3 +278,4 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		cache.cache_at.get(key).unwrap().value_at_block(&at).ok()?
 	}
 }
+
