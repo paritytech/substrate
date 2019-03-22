@@ -49,7 +49,8 @@ use hash_db::Hasher;
 
 use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
 use crate::blockchain::{
-	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend
+	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend,
+	ProvideCache, Cache,
 };
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -1309,6 +1310,15 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 
 	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
+	}
+}
+
+impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn cache(&self) -> Option<Arc<Cache<Block>>> {
+		self.backend.blockchain().cache()
 	}
 }
 
