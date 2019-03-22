@@ -1619,10 +1619,10 @@ fn switching_roles() {
 
 		// add 2 nominators
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 6]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 5]));
 
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![20, 2]));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 1]));
 
 		// add a new validator candidate
 		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardDestination::Controller));
@@ -1687,7 +1687,7 @@ fn wrong_vote_is_null() {
 		// add 1 nominators
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![
-			10, 20, 			// good votes
+			11, 21, 			// good votes
 			1, 2, 15, 1000, 25  // crap votes. No effect.
 		]));
 
@@ -1733,7 +1733,7 @@ fn bond_with_no_staked_value() {
 
 		// let's make the stingy one elected.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![2]));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
 
 		assert_eq!(Staking::ledger(4), Some(StakingLedger { stash: 3, active: 500, total: 500, unlocking: vec![]}));
 
@@ -1744,7 +1744,7 @@ fn bond_with_no_staked_value() {
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Session::validators(), vec![20, 10, 2]);
-		assert_eq!(Staking::stakers(2), Exposure { own: 0, total: 500, others: vec![IndividualExposure { who: 4, value: 500}]});
+		assert_eq!(Staking::stakers(1), Exposure { own: 0, total: 500, others: vec![IndividualExposure { who: 3, value: 500}]});
 
 		assert_eq!(Staking::slot_stake(), 500);
 
@@ -1752,13 +1752,14 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
 		assert_eq!(Balances::free_balance(&4), initial_balance_4);
 
-		System::set_block_number(1);
+		System::set_block_number(3);
 		Session::check_rotate_session(System::block_number());
 
 		let reward = Staking::current_session_reward();
 		// 2 will not get any reward
 		// 4 will get all the reward share
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
+		// assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward);
 		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward);
 	});
 }
