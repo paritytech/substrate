@@ -48,8 +48,10 @@ pub use network_libp2p::{
 	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
 	build_multiaddr, PeerId, PublicKey
 };
-pub use message::{generic as generic_message, RequestId, Status as StatusMessage, ConsensusEngineId};
+pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;
+#[doc(hidden)]
+pub use runtime_primitives::ConsensusEngineId;
