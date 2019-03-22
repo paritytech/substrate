@@ -677,6 +677,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Perform time based maintenance.
 	fn tick(&mut self) {
 		self.consensus_gossip.collect_garbage();
+		self.consensus_gossip.rebroadcast(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand

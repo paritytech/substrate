@@ -336,7 +336,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		if self.is_expired(full.round, full.set_id) {
-			return network_gossip::ValidationResult::Expired;
+			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
 		}
 
 		if let Err(()) = communication::check_message_sig::<Block>(
@@ -348,11 +348,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return network_gossip::ValidationResult::Invalid;
+			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
 		}
 
 		let topic = message_topic::<Block>(full.round, full.set_id);
-		network_gossip::ValidationResult::ValidStored(topic)
+		network_gossip::ValidationResult::Keep(topic, Default::default()) // TODO: cost/benefit
 	}
 
 	fn validate_commit_message(&self, full: FullCommitMessage<Block>)
@@ -361,7 +361,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		use grandpa::Message as GrandpaMessage;
 
 		if self.is_expired(full.round, full.set_id) {
-			return network_gossip::ValidationResult::Expired;
+			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -371,7 +371,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
 			);
-			return network_gossip::ValidationResult::Invalid;
+			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
 		}
 
 		// check signatures on all contained precommits.
@@ -385,7 +385,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			) {
 				debug!(target: "afg", "Bad commit message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
-				return network_gossip::ValidationResult::Invalid;
+				return network_gossip::ValidationResult::Discard(Default::default()); // TODO: cost/benefit
 			}
 		}
 
@@ -402,12 +402,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 			"topic" => ?topic,
 			"block_hash" => ?full.message,
 		);
-		network_gossip::ValidationResult::ValidStored(topic)
+		network_gossip::ValidationResult::Keep(topic, Default::default()) //TODO: cost/benefit
 	}
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn validate(&self, _context: &mut network_gossip::ValidatorContext<Block>, mut data: &[u8])
+	fn validate(&self, _context: &mut network_gossip::ValidatorContext<Block>, _sender: &network::NodeIndex, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		match GossipMessage::<Block>::decode(&mut data) {
@@ -416,7 +416,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			None => {
 				debug!(target: "afg", "Error decoding message");
 				telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
-				network_gossip::ValidationResult::Invalid
+				network_gossip::ValidationResult::Discard(Default::default()) //TODO: cost/benefit
 			}
 		}
 	}
