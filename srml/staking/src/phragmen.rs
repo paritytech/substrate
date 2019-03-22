@@ -151,6 +151,9 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		}
 	}));
 
+	// println!("Nominators: {:?}", nominators);
+	// println!("candidates: {:?}", candidates);
+
 	// 3- optimization:
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
 	let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
@@ -205,7 +208,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who) {
 					e.elected = true;
-					e.backing_stake = <BalanceOf<T>>::sa(n.budget.as_() * (*e.load / *n.load));
+					// NOTE: for now, always divide last to avoid collapse to zero.
+					e.backing_stake = <BalanceOf<T>>::sa((n.budget.as_() * *e.load) / *n.load);
 					c.backing_stake += e.backing_stake;
 					if c.who != n.who {
 						// Only update the exposure if this vote is from some other account.
@@ -266,6 +270,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			return None
 		}
 	}
+	// println!("++Elected {:?}", elected_candidates);
 	Some(elected_candidates)
 }
 

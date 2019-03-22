@@ -126,7 +126,7 @@ impl ExtBuilder {
 		self.current_era = current_era;
 		self
 	}
-	pub fn validator_pool(mut self, validator_pool: bool) -> Self { 
+	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
 		self.validator_pool = validator_pool;
 		self
 	}
