@@ -55,7 +55,6 @@ decl_module! {
 }
 
 decl_event!(
-	/// An event in this module.
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`

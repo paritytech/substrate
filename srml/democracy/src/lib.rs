@@ -242,7 +242,6 @@ decl_storage! {
 }
 
 decl_event!(
-	/// An event in this module.
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
 		Proposed(PropIndex, Balance),
 		Tabled(PropIndex, Balance, Vec<AccountId>),
