@@ -210,7 +210,7 @@ struct Peers<N> {
 
 impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, node_index: NodeIndex) {
-		self.inner.insert(node_index, PeerInfo { view: View::default() });
+		self.inner.insert(node_index, PeerInfo::new());
 	}
 
 	fn peer_disconnected(&mut self, node_index: &NodeIndex) {
@@ -379,6 +379,18 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let topic = super::commit_topic::<Block>(full.set_id.0);
 		Action::Repropagate(topic, 100)
 	}
+
+	fn import_neighbor_message(&self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
+		-> Action<Block::Hash>
+	{
+		let cb = match self.peers.write().update_peer_state(who, update) {
+			Ok(()) => 100i32,
+			Err(misbehavior) => misbehavior.cost(),
+		};
+
+		// always discard, it's valid for one hop.
+		Action::Discard(cb)
+	}
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
@@ -397,7 +409,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			Some(GossipMessage::VoteOrPrecommit(ref message))
 				=> self.validate_round_message(&who, message),
 			Some(GossipMessage::Commit(ref message)) => self.validate_commit_message(&who, message),
-			Some(GossipMessage::Neighbor(_)) => unimplemented!(),
+			Some(GossipMessage::Neighbor(update)) => self.import_neighbor_message(&who, update),
 			None => {
 				debug!(target: "afg", "Error decoding message");
 				telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
