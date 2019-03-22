@@ -534,6 +534,10 @@ decl_module! {
 
 			let controller = T::Lookup::lookup(controller)?;
 
+			if <Ledger<T>>::exists(&controller) {
+				return Err("controller already paired")
+			}
+
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate.
 			<Bonded<T>>::insert(&stash, controller.clone());
@@ -663,6 +667,25 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			<Payee<T>>::insert(&controller, payee);
+		}
+
+		/// (Re-)set the payment target for a controller.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		///
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
+			let stash = ensure_signed(origin)?;
+			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
+			let controller = T::Lookup::lookup(controller)?;
+			if <Ledger<T>>::exists(&controller) {
+				return Err("controller already paired")
+			}
+			if controller != old_controller {
+				<Bonded<T>>::insert(&stash, &controller);
+				if let Some(l) = <Ledger<T>>::take(&old_controller) { <Ledger<T>>::insert(&controller, l) };
+				<Payee<T>>::insert(&controller, <Payee<T>>::take(&old_controller));
+			}
 		}
 
 		/// Set the number of sessions in an era.
@@ -887,7 +910,7 @@ impl<T: Trait> Module<T> {
 		let nominators = || <Nominators<T>>::enumerate();
 		let stash_of = |w: &T::AccountId| -> BalanceOf<T> { Self::stash_balance(w) };
 		let min_validator_count = Self::minimum_validator_count() as usize;
-		let elected_candidates = elect::<T, _, _, _, _>(
+		let maybe_elected_candidates = elect::<T, _, _, _, _>(
 			rounds,
 			validators,
 			nominators,
@@ -900,31 +923,40 @@ impl<T: Trait> Module<T> {
 			}
 		);
 
-		// Clear Stakers and reduce their slash_count.
-		for v in <session::Module<T>>::validators().iter() {
-			<Stakers<T>>::remove(v);
-			let slash_count = <SlashCount<T>>::take(v);
-			if slash_count > 1 {
-				<SlashCount<T>>::insert(v, slash_count - 1);
+		if let Some(elected_candidates) = maybe_elected_candidates {
+			// Clear Stakers and reduce their slash_count.
+			for v in <session::Module<T>>::validators().iter() {
+				<Stakers<T>>::remove(v);
+				let slash_count = <SlashCount<T>>::take(v);
+				if slash_count > 1 {
+					<SlashCount<T>>::insert(v, slash_count - 1);
+				}
 			}
-		}
 
-		// Populate Stakers and figure out the minimum stake behind a slot.
-		let mut slot_stake = elected_candidates[0].exposure.total;
-		for c in &elected_candidates {
-			if c.exposure.total < slot_stake {
-				slot_stake = c.exposure.total;
+			// Populate Stakers and figure out the minimum stake behind a slot.
+			let mut slot_stake = elected_candidates[0].exposure.total;
+			for c in &elected_candidates {
+				if c.exposure.total < slot_stake {
+					slot_stake = c.exposure.total;
+				}
+				<Stakers<T>>::insert(c.who.clone(), c.exposure.clone());
 			}
-			<Stakers<T>>::insert(c.who.clone(), c.exposure.clone());
+			<SlotStake<T>>::put(&slot_stake);
+
+			// Set the new validator set.
+			<session::Module<T>>::set_validators(
+				&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
+			);
+
+			slot_stake
+		} else {
+			// There were not enough candidates for even our minimal level of functionality.
+			// This is bad.
+			// We should probably disable all functionality except for block production
+			// and let the chain keep producing blocks until we can decide on a sufficiently
+			// substantial set.
+			Self::slot_stake()
 		}
-		<SlotStake<T>>::put(&slot_stake);
-
-		// Set the new validator set.
-		<session::Module<T>>::set_validators(
-			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
-		);
-
-		slot_stake
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the

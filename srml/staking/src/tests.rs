@@ -562,7 +562,7 @@ fn no_candidate_emergency_condition() {
 		assert_eq!(Staking::validator_count(), 15);
 
 		// initial validators 
-		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
 
 		// trigger era
 		System::set_block_number(1);
@@ -570,7 +570,7 @@ fn no_candidate_emergency_condition() {
 		assert_eq!(Staking::current_era(), 1);
 
 		// No one nominates => no one has a proper vote => no change
-		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
 	});
 }
 
@@ -756,20 +756,38 @@ fn double_staking_should_fail() {
 	with_externalities(&mut ExtBuilder::default()
 		.sessions_per_era(2)
 		.build(),
-	|| {
-		let arbitrary_value = 5;
-		System::set_block_number(1);
-		// 2 = controller, 1 stashed => ok
-		assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::default()));
-		// 2 = controller, 3 stashed (Note that 2 is reused.) => ok
-		assert_ok!(Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()));
-		// 4 = not used so far, 1 stashed => not allowed.
-		assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value, RewardDestination::default()), "stash already bonded");
-		// 1 = stashed => attempting to nominate should fail.
-		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
-		// 2 = controller  => nominating should work.
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
-	});
+		|| {
+			let arbitrary_value = 5;
+			System::set_block_number(1);
+			// 2 = controller, 1 stashed => ok
+			assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::default()));
+			// 4 = not used so far, 1 stashed => not allowed.
+			assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value, RewardDestination::default()), "stash already bonded");
+			// 1 = stashed => attempting to nominate should fail.
+			assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
+			// 2 = controller  => nominating should work.
+			assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
+		});
+}
+
+#[test]
+fn double_controlling_should_fail() {
+	// should test (in the same order):
+	// * an account already bonded as controller CAN be reused as the controller of another account.
+	// * an account already bonded as stash cannot be the controller of another account.
+	// * an account already bonded as stash cannot nominate.
+	// * an account already bonded as controller can nominate.
+	with_externalities(&mut ExtBuilder::default()
+		.sessions_per_era(2)
+		.build(),
+		|| {
+			let arbitrary_value = 5;
+			System::set_block_number(1);
+			// 2 = controller, 1 stashed => ok
+			assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::default()));
+			// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
+			assert_noop!(Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()), "controller already paired");
+		});
 }
 
 #[test]
@@ -1521,6 +1539,8 @@ fn phragmen_election_works_example_2() {
 				iterations: 10,
 			}
 		);
+
+		let winners = winners.unwrap();
 
 		// 10 and 30 must be the winners
 		assert_eq!(winners.iter().map(|w| w.who).collect::<Vec<BalanceOf<Test>>>(), vec![10, 30]);

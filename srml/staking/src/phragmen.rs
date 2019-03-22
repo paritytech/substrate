@@ -36,7 +36,7 @@ pub struct ElectionConfig<Balance: HasCompact> {
 
 // Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Default))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Candidate<AccountId, Balance: HasCompact> {
 	// The validator's account
 	pub who: AccountId,
@@ -96,7 +96,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		stash_of: FS,
 		minimum_validator_count: usize,
 		config: ElectionConfig<BalanceOf<T>>,
-) -> Vec<Candidate<T::AccountId, BalanceOf<T>>> where
+) -> Option<Vec<Candidate<T::AccountId, BalanceOf<T>>>> where
 	FR: Fn() -> usize,
 	FV: Fn() -> Box<dyn Iterator<
 		Item =(T::AccountId, ValidatorPrefs<BalanceOf<T>>)
@@ -118,9 +118,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			..Default::default()
 		}
 	}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
-
-	// Just to be used when we are below minimum validator count
-	let original_candidates = candidates.clone();
 
 	// 1.1- Add phantom votes.
 	let mut nominators: Vec<Nominator<T::AccountId, BalanceOf<T>>> = Vec::with_capacity(candidates.len());
@@ -266,10 +263,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			}
 		} else {
 			// if we have less than minimum, use the previous validator set.
-			elected_candidates = original_candidates;
+			return None
 		}
 	}
-	elected_candidates
+	Some(elected_candidates)
 }
 
 pub fn equalise<T: Trait + 'static>(

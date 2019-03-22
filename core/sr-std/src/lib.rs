@@ -45,7 +45,6 @@ pub mod prelude {
 	pub use crate::boxed::Box;
 	pub use crate::cmp::{Eq, PartialEq};
 	pub use crate::clone::Clone;
-	pub use crate::alloc::prelude::*;
 
 	// Re-export `vec!` macro here, but not in `std` mode, since
 	// std's prelude already brings `vec!` into the scope.
