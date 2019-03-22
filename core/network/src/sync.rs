@@ -58,6 +58,15 @@ struct PeerSync<B: BlockT> {
 	pub recently_announced: VecDeque<B::Hash>,
 }
 
+#[derive(Debug)]
+/// Peer sync status.
+pub(crate) struct PeerInfo<B: BlockT> {
+	/// Their best block hash.
+	pub best_hash: B::Hash,
+	/// Their best block number.
+	pub best_number: NumberFor<B>,
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum AncestorSearchState<B: BlockT> {
 	/// Use exponential backoff to find an ancestor, then switch to binary search.
@@ -406,6 +415,16 @@ impl<B: BlockT> ChainSync<B> {
 			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > As::sa(5) => SyncState::Downloading,
 			_ => SyncState::Idle,
 		}
+	}
+
+	/// Returns peer sync status (if any).
+	pub(crate) fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<B>> {
+		self.peers.get(&who).map(|peer| {
+			PeerInfo {
+				best_hash: peer.best_hash,
+				best_number: peer.best_number,
+			}
+		})
 	}
 
 	/// Returns sync status.
