@@ -46,7 +46,6 @@ const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 // Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
-// TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 
 #[derive(Debug)]
@@ -56,6 +55,15 @@ struct PeerSync<B: BlockT> {
 	pub best_number: NumberFor<B>,
 	pub state: PeerSyncState<B>,
 	pub recently_announced: VecDeque<B::Hash>,
+}
+
+#[derive(Debug)]
+/// Peer sync status.
+pub(crate) struct PeerInfo<B: BlockT> {
+	/// Their best block hash.
+	pub best_hash: B::Hash,
+	/// Their best block number.
+	pub best_number: NumberFor<B>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -90,6 +98,7 @@ struct PendingJustifications<B: BlockT> {
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
+	importing_requests: HashSet<PendingJustification<B>>,
 }
 
 impl<B: BlockT> PendingJustifications<B> {
@@ -99,6 +108,7 @@ impl<B: BlockT> PendingJustifications<B> {
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
+			importing_requests: HashSet::new(),
 		}
 	}
 
@@ -235,6 +245,16 @@ impl<B: BlockT> PendingJustifications<B> {
 	/// Queues a retry in case the import failed.
 	fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let request = (hash, number);
+
+		if !self.importing_requests.remove(&request) {
+			debug!(target: "sync", "Got justification import result for unknown justification {:?} {:?} request.",
+				request.0,
+				request.1,
+			);
+
+			return;
+		};
+
 		if success {
 			if self.justifications.finalize_root(&request.0).is_none() {
 				warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
@@ -242,6 +262,7 @@ impl<B: BlockT> PendingJustifications<B> {
 					request.1,
 					self.justifications.roots().collect::<Vec<_>>(),
 				);
+
 				return;
 			};
 
@@ -270,6 +291,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(justification) = justification {
 				import_queue.import_justification(who.clone(), request.0, request.1, justification);
+				self.importing_requests.insert(request);
 				return
 			}
 
@@ -277,6 +299,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				.entry(request)
 				.or_insert(Vec::new())
 				.push((who, Instant::now()));
+
 			self.pending_requests.push_front(request);
 		}
 	}
@@ -291,7 +314,11 @@ impl<B: BlockT> PendingJustifications<B> {
 	) -> Result<(), fork_tree::Error<ClientError>>
 		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
 	{
-		use std::collections::HashSet;
+		if self.importing_requests.contains(&(*best_finalized_hash, best_finalized_number)) {
+			// we imported this justification ourselves, so we should get back a response
+			// from the import queue through `justification_import_result`
+			return Ok(());
+		}
 
 		self.justifications.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
 
@@ -408,6 +435,16 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Returns peer sync status (if any).
+	pub(crate) fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<B>> {
+		self.peers.get(&who).map(|peer| {
+			PeerInfo {
+				best_hash: peer.best_hash,
+				best_number: peer.best_number,
+			}
+		})
+	}
+
 	/// Returns sync status.
 	pub(crate) fn status(&self) -> Status<B> {
 		let best_seen = self.best_seen_block();
@@ -481,7 +518,7 @@ impl<B: BlockT> ChainSync<B> {
 						self.download_new(protocol, who)
 					}
 				},
-				(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChain), _) => {
+				(Ok(BlockStatus::Queued), _) | (Ok(BlockStatus::InChainWithState), _) | (Ok(BlockStatus::InChainPruned), _) => {
 					debug!(target:"sync", "New peer with known best hash {} ({}).", info.best_hash, info.best_number);
 					self.peers.insert(who, PeerSync {
 						common_number: info.best_number,
@@ -815,7 +852,11 @@ impl<B: BlockT> ChainSync<B> {
 			trace!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
 			return;
 		}
-		let known_parent = self.is_known(protocol, &header.parent_hash());
+		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()
+			.unwrap_or(BlockStatus::Unknown);
+		let known_parent = parent_status != BlockStatus::Unknown;
+		let ancient_parent = parent_status == BlockStatus::InChainPruned;
+
 		let known = self.is_known(protocol, &hash);
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
@@ -843,15 +884,28 @@ impl<B: BlockT> ChainSync<B> {
 			let stale = number <= self.best_queued_number;
 			if stale {
 				if !(known_parent || self.is_already_downloading(header.parent_hash())) {
-					trace!(target: "sync", "Considering new unknown stale block announced from {}: {} {:?}", who, hash, header);
-					self.download_unknown_stale(protocol, who, &hash);
+					if protocol.client().block_status(&BlockId::Number(*header.number()))
+						.unwrap_or(BlockStatus::Unknown) == BlockStatus::InChainPruned
+					{
+						trace!(target: "sync", "Ignored unknown ancient block announced from {}: {} {:?}", who, hash, header);
+					} else {
+						trace!(target: "sync", "Considering new unknown stale block announced from {}: {} {:?}", who, hash, header);
+						self.download_unknown_stale(protocol, who, &hash);
+					}
 				} else {
-					trace!(target: "sync", "Considering new stale block announced from {}: {} {:?}", who, hash, header);
-					self.download_stale(protocol, who, &hash);
+					if ancient_parent {
+						trace!(target: "sync", "Ignored ancient stale block announced from {}: {} {:?}", who, hash, header);
+					} else {
+						self.download_stale(protocol, who, &hash);
+					}
 				}
 			} else {
-				trace!(target: "sync", "Considering new block announced from {}: {} {:?}", who, hash, header);
-				self.download_new(protocol, who);
+				if ancient_parent {
+					trace!(target: "sync", "Ignored ancient block announced from {}: {} {:?}", who, hash, header);
+				} else {
+					trace!(target: "sync", "Considering new block announced from {}: {} {:?}", who, hash, header);
+					self.download_new(protocol, who);
+				}
 			}
 		} else {
 			trace!(target: "sync", "Known block announce from {}: {}", who, hash);

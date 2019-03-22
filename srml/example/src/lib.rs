@@ -271,7 +271,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
@@ -281,6 +281,9 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
 	}
 	impl Trait for Test {
 		type Event = ();

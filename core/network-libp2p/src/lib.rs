@@ -106,12 +106,6 @@ pub struct NetworkState {
 	/// List of addresses the node is currently listening on.
 	pub listened_addresses: HashSet<Multiaddr>,
 	// TODO (https://github.com/libp2p/rust-libp2p/issues/978): external_addresses: Vec<Multiaddr>,
-	/// If true, we only accept reserved peers.
-	pub is_reserved_only: bool,
-	/// PeerIds of the nodes that are marked as reserved.
-	pub reserved_peers: HashSet<String>,
-	/// PeerIds of the nodes that are banned, and how long in the seconds the ban remains.
-	pub banned_peers: HashMap<String, u64>,
 	/// List of node we're connected to.
 	pub connected_peers: HashMap<String, NetworkStatePeer>,
 	/// List of node that we know of but that we're not connected to.
@@ -137,15 +131,15 @@ pub struct NetworkStatePeer {
 	/// If true, the peer is "open", which means that we have a Substrate-related protocol
 	/// with this peer.
 	pub open: bool,
-	/// List of addresses known for this node, with its reputation score.
-	pub known_addresses: HashMap<Multiaddr, u32>,
+	/// List of addresses known for this node.
+	pub known_addresses: HashSet<Multiaddr>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStateNotConnectedPeer {
-	/// List of addresses known for this node, with its reputation score.
-	pub known_addresses: HashMap<Multiaddr, u32>,
+	/// List of addresses known for this node.
+	pub known_addresses: HashSet<Multiaddr>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
