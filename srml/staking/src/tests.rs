@@ -874,12 +874,12 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::stakers(&10).total, 1000);
+		assert_eq!(Staking::stakers(&11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
-		let _ = Balances::deposit_creating(&11, 9999);
+		let _ = Balances::ensure_free_balance_is(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
 		assert_ok!(Balances::transfer(Origin::signed(11), 20, 1));
 	});
@@ -900,12 +900,10 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 has some free balance
 		assert_eq!(Balances::free_balance(&21), 2000);
 		// Confirm account 21 (via controller 20) is totally staked
-		assert_eq!(Staking::stakers(&20).total, 1000);
-		// Confirm account 21 cannot transfer more than 1000
-		assert_noop!(Balances::transfer(Origin::signed(21), 20, 1500), "account liquidity restrictions prevent withdrawal");
-
-		// Confirm that account 21 can transfer less than 1000
-		assert_ok!(Balances::transfer(Origin::signed(21), 20, 500));
+		assert_eq!(Staking::stakers(&21).total, 1000);
+		// Confirm account 21 can transfer at most 1000
+		assert_noop!(Balances::transfer(Origin::signed(21), 20, 1001), "account liquidity restrictions prevent withdrawal");
+		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});
 }
 
