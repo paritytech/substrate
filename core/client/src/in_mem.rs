@@ -354,6 +354,12 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 }
 
+impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {
+	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+		None
+	}
+}
+
 impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	fn insert_aux<
 		'a,

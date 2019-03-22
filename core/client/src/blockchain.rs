@@ -91,6 +91,12 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 }
 
+/// Provides access to the optional cache.
+pub trait ProvideCache<Block: BlockT> {
+	/// Returns data cache reference, if it is enabled on this backend.
+	fn cache(&self) -> Option<Arc<Cache<Block>>>;
+}
+
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns cached value by the given key.
