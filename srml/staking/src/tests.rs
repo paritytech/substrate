@@ -634,8 +634,8 @@ fn nominating_and_rewards_should_work() {
 
 		// give the man some money
 		let initial_balance = 1000;
-		for i in [1, 2, 3, 4, 5, 10, 20].iter() {
-			let _ = Balances::deposit_creating(i, initial_balance - Balances::total_balance(i));
+		for i in [1, 2, 3, 4, 5, 10, 11, 20, 21].iter() {
+			let _ = Balances::ensure_free_balance_is(i, initial_balance);
 		}
 
 		// record their balances.
@@ -644,10 +644,10 @@ fn nominating_and_rewards_should_work() {
 		// bond two account pairs and state interest in nomination.
 		// 2 will nominate for 10, 20, 30
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20, 30]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21, 31]));
 		// 4 will nominate for 10, 20, 40
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 20, 40]));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
@@ -663,21 +663,21 @@ fn nominating_and_rewards_should_work() {
 		// ------ check the staked value of all parties.
 
 		// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
-		assert_eq!(Staking::stakers(10).own, 1000);
-		assert_eq!(Staking::stakers(10).total, 1000 + 800);
+		assert_eq!(Staking::stakers(11).own, 1000);
+		assert_eq!(Staking::stakers(11).total, 1000 + 800);
 		// 2 and 4 supported 10, each with stake 600, according to phragmen.
-		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![400, 400]);
-		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![4, 2]);
+		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![400, 400]);
+		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 		// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
-		assert_eq!(Staking::stakers(20).own, 1000);
-		assert_eq!(Staking::stakers(20).total, 1000 + 1200);
+		assert_eq!(Staking::stakers(21).own, 1000);
+		assert_eq!(Staking::stakers(21).total, 1000 + 1200);
 		// 2 and 4 supported 20, each with stake 250, according to phragmen.
-		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![600, 600]);
-		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![4, 2]);
+		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![600, 600]);
+		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 
 		// They are not chosen anymore
-		assert_eq!(Staking::stakers(30).total, 0);
-		assert_eq!(Staking::stakers(40).total, 0);
+		assert_eq!(Staking::stakers(31).total, 0);
+		assert_eq!(Staking::stakers(41).total, 0);
 
 
 		System::set_block_number(2);
