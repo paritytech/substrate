@@ -99,8 +99,8 @@
 //!
 //! ### Types
 //!
-//! - `Currency`: Used as the measurement means of staking and funds management.		
-//! 
+//! - `Currency`: Used as the measurement means of staking and funds management.
+//!
 //! ### Dispatchable
 //!
 //! The Dispatchable functions of the staking module enable the steps needed for entities to accept and change their
@@ -114,97 +114,97 @@
 //!
 //! ## Usage
 //!
-//! 
+//!
 //! ### Snippet: Bonding and Accepting Roles
-//! 
+//!
 //! An arbitrary account pair, given that the associated stash has the required funds, can become stakers via the following call:
-//! 
+//!
 //! ```rust,ignore
 //! // bond account 3 as stash
-//! // account 4 as controller 
-//! // with stash value 1500 units 
+//! // account 4 as controller
+//! // with stash value 1500 units
 //! // while the rewards get transferred to the controller account.
 //! Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller);
 //! ```
-//! 
-//! To state desire to become a validator: 
-//! 
+//!
+//! To state desire to become a validator:
+//!
 //! ```rust,ignore
 //! // controller account 4 states desire for validation with the given preferences.
-//! Staking::validate(Origin::signed(4), ValidatorPrefs::default()); 
+//! Staking::validate(Origin::signed(4), ValidatorPrefs::default());
 //! ```
-//! 
+//!
 //! Note that, as mentioned, the stash account is transparent in such calls and only the controller initiates the function calls.
-//! 
-//! Similarly, to state desire in nominating: 
-//! 
+//!
+//! Similarly, to state desire in nominating:
+//!
 //! ```rust,ignore
 //! // controller account 4 nominates for account 10 and 20.
 //! Staking::nominate(Origin::signed(4), vec![20, 10]);
 //! ```
-//! 
+//!
 //! Finally, account 4 can withdraw from any of the above roles via
-//! 
+//!
 //! ```rust,ignore
 //! Staking::chill(Origin::signed(4));
 //! ```
-//! 
+//!
 //! ## Implementation Details
-//! 
-//! ### Slot Stake 
-//! 
-//! The term `slot_stake` will be used throughout this section. It refers to a value calculated at the end of each era, 
+//!
+//! ### Slot Stake
+//!
+//! The term `slot_stake` will be used throughout this section. It refers to a value calculated at the end of each era,
 //! containing the _minimum value at stake among all validators._
-//! 
-//! ### Reward Calculation 
-//! 
-//! - Rewards are recorded **per-session** and paid **per-era**. The value of the reward for each session is calculated at 
-//!     the end of the session based on the timeliness of the session, then accumulated to be paid later. The value of 
+//!
+//! ### Reward Calculation
+//!
+//! - Rewards are recorded **per-session** and paid **per-era**. The value of the reward for each session is calculated at
+//!     the end of the session based on the timeliness of the session, then accumulated to be paid later. The value of
 //!     the new _per-session-reward_ is calculated at the end of each era by multiplying `slot_stake` and a configuration
-//!     storage item named `SessionReward`. 
-//! - Once a new era is triggered, rewards are paid to the validators and the associated nominators. 
-//! - The validator can declare an amount, named `validator_payment`, that does not get shared with the nominators at 
+//!     storage item named `SessionReward`.
+//! - Once a new era is triggered, rewards are paid to the validators and the associated nominators.
+//! - The validator can declare an amount, named `validator_payment`, that does not get shared with the nominators at
 //!     each reward payout through their `ValidatorPrefs`. This value gets deducted from the total reward that can be paid.
 //!     The remaining portion is split among the validator and all of the nominators who had a vote for this validator,
-//!     proportional to their staked value. 
-//! - All entities who receive a reward have the option to choose their reward destination, through the `Payee` storage item (see `set_payee()`), to be one of the following: 
+//!     proportional to their staked value.
+//! - All entities who receive a reward have the option to choose their reward destination, through the `Payee` storage item (see `set_payee()`), to be one of the following:
 //! - Controller account.
 //! - Stash account, not increasing the staked value.
 //! - Stash account, also increasing the staked value.
-//! 
-//! ### Slashing details 
-//! 
-//! - A validator can be _reported_ to be offline at any point via `on_offline_validator` public function. 
-//! - Each validator declares how many times it can be _reported_ before it actually gets slashed via the 
-//!     `unstake_threshold` in `ValidatorPrefs`. On top of this, the module also introduces an `OfflineSlashGrace`, 
+//!
+//! ### Slashing details
+//!
+//! - A validator can be _reported_ to be offline at any point via `on_offline_validator` public function.
+//! - Each validator declares how many times it can be _reported_ before it actually gets slashed via the
+//!     `unstake_threshold` in `ValidatorPrefs`. On top of this, the module also introduces an `OfflineSlashGrace`,
 //!      which applies to all validators and prevents them from getting immediately slashed.
-//! - Similar to the reward value, the slash value is updated at the end of each era by multiplying `slot_stake` and a 
+//! - Similar to the reward value, the slash value is updated at the end of each era by multiplying `slot_stake` and a
 //!     configuration storage item, `OfflineSlash`.
-//! - Once a validator has been reported a sufficient number of times, the actual value that gets deducted from that 
-//!     validator, and every single nominator that voted for it is calculated by multiplying the result of the above point 
+//! - Once a validator has been reported a sufficient number of times, the actual value that gets deducted from that
+//!     validator, and every single nominator that voted for it is calculated by multiplying the result of the above point
 //!       by `2.pow(unstake_threshold)`.
 //! - If the previous overflows, then `slot_stake` is used.
 //! - If the previous is more than what the validator/nominator has in stake, all of its stake is slashed (`.max(total_stake)`).
-//! 
+//!
 //! ### Additional Fund Management Operations
-//! 
+//!
 //! Any funds already placed into stash can be the target of the following operations:
-//! 
-//! - The controller account can free a portion (or all) of the funds using the `unbond()` call. Note that the funds 
+//!
+//! - The controller account can free a portion (or all) of the funds using the `unbond()` call. Note that the funds
 //!     are not immediately accessible, instead, a duration denoted by `BondingDuration` (in number of eras) must pass until the funds can actually be removed.
 //! - To actually remove the funds, once the bonding duration is over, `withdraw_unbonded()` can be used.
-//! - As opposed to the above, additional funds can be added to the stash account via the `bond_extra()` transaction call. 
-//! 
+//! - As opposed to the above, additional funds can be added to the stash account via the `bond_extra()` transaction call.
+//!
 //! ### Election algorithm details.
-//! 
+//!
 //! The current election algorithm is implemented based on Phragmén. The reference implementation can be found [here](https://github.com/w3f/consensus/tree/master/NPoS).
-//! 
+//!
 //! ## GenesisConfig
-//! 
+//!
 //! See the [`GensisConfig`] for a list of attributes that can be provided.
-//! 
-//! ## Related Modules 
-//! 
+//!
+//! ## Related Modules
+//!
 //! - [**Balances**](https://crates.parity.io/srml_balances/index.html): Used to manage values at stake.
 //! - [**Sessions**](https://crates.parity.io/srml_session/index.html): Used to manage sessions. Also, a list of new validators is also stored in the sessions module's `Validators` at the end of each era.
 //! - [**System**](https://crates.parity.io/srml_system/index.html): Used to obtain block number and time, among other details.
