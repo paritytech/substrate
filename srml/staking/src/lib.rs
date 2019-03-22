@@ -350,7 +350,7 @@ impl<
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
-	/// Which nominator.
+	/// The stash account of the nominator in question.
 	who: AccountId,
 	/// Amount of funds exposed.
 	#[codec(compact)]
@@ -414,9 +414,6 @@ decl_storage! {
 		/// The length of the bonding duration in blocks.
 		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
-		// TODO: remove once Alex/CC updated #1785
-		pub Invulerables get(invulerables): Vec<T::AccountId>;
-
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialise
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
 		pub Invulnerables get(invulnerables) config(): Vec<T::AccountId>;
@@ -426,21 +423,19 @@ decl_storage! {
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
-		/// Where the reward payment should be made.
+		/// Where the reward payment should be made. Keyed by stash.
 		pub Payee get(payee): map T::AccountId => RewardDestination;
 
-		/// The set of keys are all controllers that want to validate.
-		///
-		/// The values are the preferences that a validator has.
+		/// The map from (wannabe) validator stash key to the preferences of that validator.
 		pub Validators get(validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
-		/// The set of keys are all controllers that want to nominate.
-		///
-		/// The value are the nominations.
+		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
+		///
+		/// This is keyed by the stash account.
 		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
 		// The historical validators and their nominations for a given era. Stored as a trie root of the mapping
@@ -450,6 +445,9 @@ decl_storage! {
 		// Every era change, this will be appended with the trie root of the contents of `Stakers`, and the oldest
 		// entry removed down to a specific number of entries (probably around 90 for a 3 month history).
 		// pub HistoricalStakers get(historical_stakers): map T::BlockNumber => Option<H256>;
+
+		/// The currently elected validator set keyed by stash account ID.
+		pub CurrentElected get(current_elected): Vec<T::AccountId>;
 
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
@@ -539,12 +537,11 @@ decl_module! {
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate.
 			<Bonded<T>>::insert(&stash, controller.clone());
+			<Payee<T>>::insert(&stash, payee);
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-
 			Self::update_ledger(&controller, StakingLedger { stash, total: value, active: value, unlocking: vec![] });
-			<Payee<T>>::insert(&controller, payee);
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up for
@@ -620,10 +617,11 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
-			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let stash = &ledger.stash;
 			ensure!(prefs.unstake_threshold <= MAX_UNSTAKE_THRESHOLD, "unstake threshold too large");
-			<Nominators<T>>::remove(&controller);
-			<Validators<T>>::insert(controller, prefs);
+			<Nominators<T>>::remove(stash);
+			<Validators<T>>::insert(stash, prefs);
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -633,15 +631,16 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
-			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), "targets cannot be empty");
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(T::Lookup::lookup)
 				.collect::<result::Result<Vec<T::AccountId>, &'static str>>()?;
 
-			<Validators<T>>::remove(&controller);
-			<Nominators<T>>::insert(controller, targets);
+			<Validators<T>>::remove(stash);
+			<Nominators<T>>::insert(stash, targets);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -651,9 +650,10 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
-			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			<Validators<T>>::remove(&controller);
-			<Nominators<T>>::remove(&controller);
+			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let stash = &ledger.stash;
+			<Validators<T>>::remove(stash);
+			<Nominators<T>>::remove(stash);
 		}
 
 		/// (Re-)set the payment target for a controller.
@@ -663,8 +663,9 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
-			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			<Payee<T>>::insert(&controller, payee);
+			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let stash = &ledger.stash;
+			<Payee<T>>::insert(stash, payee);
 		}
 
 		/// (Re-)set the payment target for a controller.
@@ -682,7 +683,6 @@ decl_module! {
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
 				if let Some(l) = <Ledger<T>>::take(&old_controller) { <Ledger<T>>::insert(&controller, l) };
-				<Payee<T>>::insert(&controller, <Payee<T>>::take(&old_controller));
 			}
 		}
 
@@ -746,13 +746,6 @@ impl<T: Trait> Module<T> {
 		Self::sessions_per_era() * <session::Module<T>>::length()
 	}
 
-	/// The stashed funds whose staking activities are controlled by `controller` and
-	/// which are actively in stake right now.
-	pub fn stash_balance(controller: &T::AccountId) -> BalanceOf<T> {
-		Self::ledger(controller)
-			.map_or_else(Zero::zero, |l| l.active)
-	}
-
 	/// The total balance that can be slashed from a validator controller account as of
 	/// right now.
 	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
@@ -769,14 +762,14 @@ impl<T: Trait> Module<T> {
 
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
-	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
+	fn slash_validator(stash: &T::AccountId, slash: BalanceOf<T>) {
 		// The exposure (backing stake) information of the validator to be slashed.
-		let exposure = Self::stakers(v);
+		let exposure = Self::stakers(stash);
 		// The amount we are actually going to slash (can't be bigger than their total exposure)
 		let slash = slash.min(exposure.total);
 		// The amount we'll slash from the validator's stash directly.
 		let own_slash = exposure.own.min(slash);
-		let (mut imbalance, missing) = T::Currency::slash(v, own_slash);
+		let (mut imbalance, missing) = T::Currency::slash(stash, own_slash);
 		let own_slash = own_slash - missing;
 		// The amount remaining that we can't slash from the validator, that must be taken from the nominators.
 		let rest_slash = slash - own_slash;
@@ -796,17 +789,17 @@ impl<T: Trait> Module<T> {
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
-	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		match Self::payee(who) {
-			RewardDestination::Controller => T::Currency::deposit_into_existing(&who, amount).ok(),
-			RewardDestination::Stash => Self::ledger(who)
-				.and_then(|l| T::Currency::deposit_into_existing(&l.stash, amount).ok()),
+	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
+		match Self::payee(stash) {
+			RewardDestination::Controller => Self::bonded(stash)
+				.and_then(|controller| T::Currency::deposit_into_existing(&controller, amount).ok()),
+			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked =>
-				Self::ledger(who).and_then(|mut l| {
+				Self::bonded(stash).and_then(Self::ledger).and_then(|mut l| {
 					l.active += amount;
 					l.total += amount;
 					let r = T::Currency::deposit_into_existing(&l.stash, amount).ok();
-					Self::update_ledger(who, l);
+					Self::update_ledger(stash, l);
 					r
 				}),
 		}
@@ -814,14 +807,14 @@ impl<T: Trait> Module<T> {
 
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata based on their exposure, after having removed the validator's pre-payout cut.
-	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
-		let off_the_table = reward.min(Self::validators(who).validator_payment);
+	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) {
+		let off_the_table = reward.min(Self::validators(stash).validator_payment);
 		let reward = reward - off_the_table;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
 		} else {
-			let exposure = Self::stakers(who);
+			let exposure = Self::stakers(stash);
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for i in &exposure.others {
@@ -829,7 +822,7 @@ impl<T: Trait> Module<T> {
 			}
 			safe_mul_rational(exposure.own)
 		};
-		imbalance.maybe_subsume(Self::make_payout(who, validator_cut + off_the_table));
+		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
 		T::Reward::on_unbalanced(imbalance);
 	}
 
@@ -896,22 +889,23 @@ impl<T: Trait> Module<T> {
 		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
 	}
 
+	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
+		Self::bonded(stash).and_then(Self::ledger).map(|l| l.total).unwrap_or_default()
+	}
+
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
 	/// Returns the new SlotStake value.
 	fn select_validators() -> BalanceOf<T> {
-		// Map of (would-be) validator account to amount of stake backing it.
-
 		let rounds = || <ValidatorCount<T>>::get() as usize;
 		let validators = || <Validators<T>>::enumerate();
 		let nominators = || <Nominators<T>>::enumerate();
-		let stash_of = |w: &T::AccountId| -> BalanceOf<T> { Self::stash_balance(w) };
 		let min_validator_count = Self::minimum_validator_count() as usize;
 		let maybe_elected_candidates = elect::<T, _, _, _, _>(
 			rounds,
 			validators,
 			nominators,
-			stash_of,
+			Self::slashable_balance_of,
 			min_validator_count,
 			ElectionConfig::<BalanceOf<T>> {
 				equalise: true,
@@ -922,7 +916,7 @@ impl<T: Trait> Module<T> {
 
 		if let Some(elected_candidates) = maybe_elected_candidates {
 			// Clear Stakers and reduce their slash_count.
-			for v in <session::Module<T>>::validators().iter() {
+			for v in Self::current_elected().iter() {
 				<Stakers<T>>::remove(v);
 				let slash_count = <SlashCount<T>>::take(v);
 				if slash_count > 1 {
@@ -941,8 +935,10 @@ impl<T: Trait> Module<T> {
 			<SlotStake<T>>::put(&slot_stake);
 
 			// Set the new validator set.
+			let elected_stashes = elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>();
+			<CurrentElected<T>>::put(&elected_stashes);
 			<session::Module<T>>::set_validators(
-				&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
+				&elected_stashes.into_iter().filter_map(Self::bonded).collect::<Vec<_>>()
 			);
 
 			slot_stake
@@ -963,10 +959,6 @@ impl<T: Trait> Module<T> {
 
 		// Early exit if validator is invulnerable.
 		if Self::invulnerables().contains(&v) {
-			return
-		}
-		// TODO: remove once Alex/CC updated #1785
-		if Self::invulerables().contains(&v) {
 			return
 		}
 
@@ -1022,14 +1014,14 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
-		if let Some(controller) = <Bonded<T>>::take(who) {
+	fn on_free_balance_zero(stash: &T::AccountId) {
+		if let Some(controller) = <Bonded<T>>::take(stash) {
 			<Ledger<T>>::remove(&controller);
-			<Payee<T>>::remove(&controller);
-			<SlashCount<T>>::remove(&controller);
-			<Validators<T>>::remove(&controller);
-			<Nominators<T>>::remove(&controller);
 		}
+		<Payee<T>>::remove(stash);
+		<SlashCount<T>>::remove(stash);
+		<Validators<T>>::remove(stash);
+		<Nominators<T>>::remove(stash);
 	}
 }
 

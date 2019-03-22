@@ -308,7 +308,6 @@ mod tests {
 				bonding_duration: 0,
 				offline_slash: Perbill::zero(),
 				session_reward: Perbill::zero(),
-				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
