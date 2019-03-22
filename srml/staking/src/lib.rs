@@ -792,13 +792,16 @@ impl<T: Trait> Module<T> {
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		match Self::payee(stash) {
 			RewardDestination::Controller => Self::bonded(stash)
-				.and_then(|controller| T::Currency::deposit_into_existing(&controller, amount).ok()),
-			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
+				.and_then(|controller|
+					T::Currency::deposit_into_existing(&controller, amount).ok()
+				),
+			RewardDestination::Stash =>
+				T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked =>
 				Self::bonded(stash).and_then(Self::ledger).and_then(|mut l| {
 					l.active += amount;
 					l.total += amount;
-					let r = T::Currency::deposit_into_existing(&l.stash, amount).ok();
+					let r = T::Currency::deposit_into_existing(stash, amount).ok();
 					Self::update_ledger(stash, l);
 					r
 				}),
@@ -818,7 +821,8 @@ impl<T: Trait> Module<T> {
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for i in &exposure.others {
-				imbalance.maybe_subsume(Self::make_payout(&i.who, safe_mul_rational(i.value)));
+				let nom_payout = safe_mul_rational(i.value);
+				imbalance.maybe_subsume(Self::make_payout(&i.who, nom_payout));
 			}
 			safe_mul_rational(exposure.own)
 		};
@@ -861,7 +865,7 @@ impl<T: Trait> Module<T> {
 		// Payout
 		let reward = <CurrentEraReward<T>>::take();
 		if !reward.is_zero() {
-			let validators = <session::Module<T>>::validators();
+			let validators = Self::current_elected();
 			for v in validators.iter() {
 				Self::reward_validator(v, reward);
 			}
