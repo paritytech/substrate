@@ -26,7 +26,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, 
 
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache};
 use crate::cht;
 use crate::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
@@ -166,6 +166,12 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		unimplemented!()
+	}
+}
+
+impl<S: Storage<Block>, F, Block: BlockT> ProvideCache<Block> for Blockchain<S, F> {
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+		self.storage.cache()
 	}
 }
 

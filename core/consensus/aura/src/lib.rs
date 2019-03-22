@@ -36,7 +36,7 @@ use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
-use client::blockchain::Cache;
+use client::blockchain::ProvideCache;
 use client::runtime_api::ApiExt;
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
@@ -173,7 +173,6 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
-	cache: Option<Arc<Cache<B>>>,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -182,7 +181,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: ChainHead<B> + ProvideRuntimeApi + Send + Sync + 'static,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
@@ -199,7 +198,6 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 {
 	let worker = AuraWorker {
 		client: client.clone(),
-		cache,
 		block_import,
 		env,
 		local_key,
@@ -223,7 +221,6 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
-	cache: Option<Arc<Cache<B>>>,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -232,7 +229,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: ChainHead<B> + ProvideRuntimeApi,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -249,7 +246,6 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 {
 	let worker = AuraWorker {
 		client: client.clone(),
-		cache,
 		block_import,
 		env,
 		local_key,
@@ -267,9 +263,8 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	)
 }
 
-struct AuraWorker<C, B, E, I, P, SO> {
+struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
-	cache: Option<Arc<Cache<B>>>,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	local_key: Arc<P>,
@@ -278,8 +273,8 @@ struct AuraWorker<C, B, E, I, P, SO> {
 	force_authoring: bool,
 }
 
-impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, B, E, I, P, SO> where
-	C: ProvideRuntimeApi,
+impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -316,7 +311,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, B, E, I, P
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let authorities = match authorities(client.as_ref(), &self.cache.clone(), &BlockId::Hash(chain_head.hash())) {
+		let authorities = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
 			Err(e) => {
 				warn!(
@@ -509,19 +504,18 @@ pub trait ExtraVerification<B: Block>: Send + Sync {
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, B, E, P> {
+pub struct AuraVerifier<C, E, P> {
 	client: Arc<C>,
-	cache: Option<Arc<Cache<B>>>,
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	allow_old_seals: bool,
 }
 
-impl<C, B: Block, E, P> AuraVerifier<C, B, E, P>
+impl<C, E, P> AuraVerifier<C, E, P>
 	where P: Send + Sync + 'static
 {
-	fn check_inherents(
+	fn check_inherents<B: Block>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
@@ -591,6 +585,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, B, E, P> where
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode,
+	Self: Authorities<B>,
 {
 	fn verify(
 		&self,
@@ -680,25 +675,25 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, B, E, P> where
 	}
 }
 
-impl<B, C, E, P> Authorities<B> for AuraVerifier<C, B, E, P> where
+impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
 	B: Block,
-	C: ProvideRuntimeApi,
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 {
 	type Error = ConsensusError;
 
 	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error> {
-		authorities(self.client.as_ref(), &self.cache, at)
+		authorities(self.client.as_ref(), at)
 	}
 }
 
-fn authorities<B, C>(client: &C, cache: &Option<Arc<Cache<B>>>, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
+fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
 	B: Block,
-	C: ProvideRuntimeApi,
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 {
-	cache
-		.as_ref()
+	client
+		.cache()
 		.and_then(|cache| cache.get_at(well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| client.runtime_api().authorities(at).ok())
@@ -728,13 +723,12 @@ pub fn import_queue<B, C, E, P>(
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
 	client: Arc<C>,
-	cache: Option<Arc<Cache<B>>>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
 	allow_old_seals: bool,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	C: 'static + ProvideRuntimeApi + Send + Sync,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
@@ -747,7 +741,6 @@ pub fn import_queue<B, C, E, P>(
 	let verifier = Arc::new(
 		AuraVerifier {
 			client: client.clone(),
-			cache,
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
@@ -769,7 +762,7 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::ed25519::Keyring;
 	use primitives::ed25519;
-	use client::{BlockchainEvents, backend::Backend, blockchain::Backend as _};
+	use client::BlockchainEvents;
 	use test_client;
 
 	type Error = ::client::error::Error;
@@ -809,7 +802,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersClient, TestBlock, NothingExtra, ed25519::Pair>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra, ed25519::Pair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -833,7 +826,6 @@ mod tests {
 
 			assert_eq!(slot_duration.get(), SLOT_DURATION);
 			Arc::new(AuraVerifier {
-				cache: client.backend().blockchain().cache(),
 				client,
 				extra: NothingExtra,
 				inherent_data_providers,
@@ -901,7 +893,6 @@ mod tests {
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
-				client.backend().blockchain().cache(),
 				client,
 				environ.clone(),
 				DummyOracle,
@@ -935,7 +926,7 @@ mod tests {
 		let client = test_client::new();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
-		assert_eq!(authorities(&client, &None, &BlockId::Number(0)).unwrap(), vec![
+		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.into(),
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
