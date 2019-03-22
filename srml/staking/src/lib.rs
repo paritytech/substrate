@@ -799,13 +799,13 @@ impl<T: Trait> Module<T> {
 				),
 			RewardDestination::Stash =>
 				T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked =>
-				Self::bonded(stash).and_then(Self::ledger).and_then(|mut l| {
+			RewardDestination::Staked => Self::bonded(stash)
+				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
+				.and_then(|(controller, mut l)| {
 					l.active += amount;
 					l.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
-					Self::update_ledger(controller, &l);
-					println!("OK {:?}", l);
+					Self::update_ledger(&controller, &l);
 					r
 				}),
 		}
