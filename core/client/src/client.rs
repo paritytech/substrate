@@ -169,7 +169,7 @@ pub enum BlockStatus {
 	Queued,
 	/// Already in the blockchain and the state is available.
 	InChainWithState,
-	/// Int he blockchain, but the state is not available.
+	/// In the blockchain, but the state is not available.
 	InChainPruned,
 	/// Block or parent is known to be bad.
 	KnownBad,
