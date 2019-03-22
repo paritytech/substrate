@@ -167,8 +167,10 @@ pub struct ClientInfo<Block: BlockT> {
 pub enum BlockStatus {
 	/// Added to the import queue.
 	Queued,
-	/// Already in the blockchain.
-	InChain,
+	/// Already in the blockchain and the state is available.
+	InChainWithState,
+	/// In the blockchain, but the state is not available.
+	InChainPruned,
 	/// Block or parent is known to be bad.
 	KnownBad,
 	/// Not in the queue or the blockchain.
@@ -1073,9 +1075,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				return Ok(BlockStatus::Queued);
 			}
 		}
-		match self.backend.blockchain().header(*id).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
-			true => Ok(BlockStatus::InChain),
-			false => Ok(BlockStatus::Unknown),
+		let hash_and_number = match id.clone() {
+			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
+		};
+		match hash_and_number {
+			Some((hash, number)) => {
+				if self.backend().have_state_at(&hash, number) {
+					Ok(BlockStatus::InChainWithState)
+				} else {
+					Ok(BlockStatus::InChainPruned)
+				}
+			}
+			None => Ok(BlockStatus::Unknown),
 		}
 	}
 
@@ -1386,18 +1398,20 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
+		match self.block_status(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+			BlockStatus::InChainWithState | BlockStatus::Queued => {},
+			BlockStatus::Unknown | BlockStatus::InChainPruned => return Ok(ImportResult::UnknownParent),
+			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
-		match self.backend.blockchain().status(BlockId::Hash(hash))
+		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
-			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
-			blockchain::BlockStatus::Unknown => {},
+			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
+			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
 		Ok(ImportResult::imported())

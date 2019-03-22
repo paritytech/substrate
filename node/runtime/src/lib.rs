@@ -172,6 +172,7 @@ impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
+	type TrieIdGenerator = contract::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
 }
 
