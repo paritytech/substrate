@@ -253,8 +253,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// tree, if we find a valid node that passes the predicate then we must
 		// ensure that we're not finalizing past any of its child nodes.
 		for node in self.node_iter() {
-			if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
-				if predicate(&node.data) {
+			if predicate(&node.data) {
+				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
 					for node in node.children.iter() {
 						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
 							return Err(Error::UnfinalizedAncestor);
@@ -298,8 +298,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// we're not finalizing past any children node.
 		let mut position = None;
 		for (i, root) in self.roots.iter().enumerate() {
-			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-				if predicate(&root.data) {
+			if predicate(&root.data) {
+				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 					for node in root.children.iter() {
 						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
 							return Err(Error::UnfinalizedAncestor);
