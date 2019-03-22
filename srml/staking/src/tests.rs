@@ -1278,7 +1278,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		.build(),
 	|| {
 		// Check that account 10 is a validator
-		assert!(<Validators<Test>>::exists(10));
+		assert!(<Validators<Test>>::exists(11));
 		// Check the balance of the validator account
 		assert_eq!(Balances::free_balance(&10), 256);
 		// Check the balance of the stash account
@@ -1288,20 +1288,19 @@ fn on_free_balance_zero_stash_removes_validator() {
 
 		// Set some storage items which we expect to be cleaned up
 		// Initiate slash count storage item
-		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(11, 1);
 		// Set payee information
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
 		// Check storage items that should be cleaned up
 		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Validators<Test>>::exists(&10));
-		assert!(<SlashCount<Test>>::exists(&10));
-		assert!(<Payee<Test>>::exists(&10));
+		assert!(<Bonded<Test>>::exists(&11));
+		assert!(<Validators<Test>>::exists(&11));
+		assert!(<SlashCount<Test>>::exists(&11));
+		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of controller to 0
 		Balances::slash(&10, u64::max_value());
-		// Check total balance of account 10
-		assert_eq!(Balances::total_balance(&10), 0);
 
 		// Check the balance of the stash account has not been touched
 		assert_eq!(Balances::free_balance(&11), 256000);
@@ -1310,9 +1309,10 @@ fn on_free_balance_zero_stash_removes_validator() {
 
 		// Check storage items have not changed
 		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Validators<Test>>::exists(&10));
-		assert!(<SlashCount<Test>>::exists(&10));
-		assert!(<Payee<Test>>::exists(&10));
+		assert!(<Bonded<Test>>::exists(&11));
+		assert!(<Validators<Test>>::exists(&11));
+		assert!(<SlashCount<Test>>::exists(&11));
+		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of stash to 0
 		Balances::slash(&11, u64::max_value());
@@ -1321,11 +1321,11 @@ fn on_free_balance_zero_stash_removes_validator() {
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::exists(&10));
-		assert!(!<Validators<Test>>::exists(&10));
-		assert!(!<Nominators<Test>>::exists(&10));
-		assert!(!<SlashCount<Test>>::exists(&10));
-		assert!(!<Payee<Test>>::exists(&10));
 		assert!(!<Bonded<Test>>::exists(&11));
+		assert!(!<Validators<Test>>::exists(&11));
+		assert!(!<Nominators<Test>>::exists(&11));
+		assert!(!<SlashCount<Test>>::exists(&11));
+		assert!(!<Payee<Test>>::exists(&11));
 	});
 }
 
@@ -1340,7 +1340,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Make 10 a nominator
 		assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
 		// Check that account 10 is a nominator
-		assert!(<Nominators<Test>>::exists(10));
+		assert!(<Nominators<Test>>::exists(11));
 		// Check the balance of the nominator account
 		assert_eq!(Balances::free_balance(&10), 256);
 		// Check the balance of the stash account
@@ -1354,8 +1354,9 @@ fn on_free_balance_zero_stash_removes_nominator() {
 
 		// Check storage items that should be cleaned up
 		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Nominators<Test>>::exists(&10));
-		assert!(<Payee<Test>>::exists(&10));
+		assert!(<Bonded<Test>>::exists(&11));
+		assert!(<Nominators<Test>>::exists(&11));
+		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of controller to 0
 		Balances::slash(&10, u64::max_value());
@@ -1369,8 +1370,9 @@ fn on_free_balance_zero_stash_removes_nominator() {
 
 		// Check storage items have not changed
 		assert!(<Ledger<Test>>::exists(&10));
-		assert!(<Nominators<Test>>::exists(&10));
-		assert!(<Payee<Test>>::exists(&10));
+		assert!(<Bonded<Test>>::exists(&11));
+		assert!(<Nominators<Test>>::exists(&11));
+		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of stash to 0
 		Balances::slash(&11, u64::max_value());
@@ -1379,11 +1381,11 @@ fn on_free_balance_zero_stash_removes_nominator() {
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::exists(&10));
-		assert!(!<Validators<Test>>::exists(&10));
-		assert!(!<Nominators<Test>>::exists(&10));
-		assert!(!<SlashCount<Test>>::exists(&10));
-		assert!(!<Payee<Test>>::exists(&10));
 		assert!(!<Bonded<Test>>::exists(&11));
+		assert!(!<Validators<Test>>::exists(&11));
+		assert!(!<Nominators<Test>>::exists(&11));
+		assert!(!<SlashCount<Test>>::exists(&11));
+		assert!(!<Payee<Test>>::exists(&11));
 	});
 }
 
@@ -1460,10 +1462,10 @@ fn phragmen_poc_works() {
 		let _ = Balances::deposit_creating(&3, 1000);
 
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20, 30]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21, 31]));
 
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 20, 40]));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
 		// New era => election algorithm will trigger
 		System::set_block_number(1);
@@ -1472,19 +1474,19 @@ fn phragmen_poc_works() {
 		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// with stake 1666 and 1333 respectively
-		assert_eq!(Staking::stakers(10).own, 1000);
-		assert_eq!(Staking::stakers(10).total, 1000 + 332);
-		assert_eq!(Staking::stakers(20).own, 1000);
-		assert_eq!(Staking::stakers(20).total, 1000 + 666);
+		assert_eq!(Staking::stakers(11).own, 1000);
+		assert_eq!(Staking::stakers(11).total, 1000 + 332);
+		assert_eq!(Staking::stakers(21).own, 1000);
+		assert_eq!(Staking::stakers(21).total, 1000 + 666);
 
 		// Nominator's stake distribution.
-		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![166, 166]);
-		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 332);
-		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![4, 2]);
+		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![166, 166]);
+		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 332);
+		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 
-		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![333, 333]);
-		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 666);
-		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![4, 2]);
+		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![333, 333]);
+		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(), 666);
+		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 	});
 }
 
@@ -1506,10 +1508,10 @@ fn phragmen_election_works_example_2() {
 		// Give all of them some balance to be able to bond properly.
 		for i in &[1, 3] { let _ = Balances::deposit_creating(i, 2000); }
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 50, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21]));
 
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 30]));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 31]));
 
 		let rounds =     || 2 as usize;
 		let validators = || <Validators<Test>>::enumerate();
@@ -1532,10 +1534,10 @@ fn phragmen_election_works_example_2() {
 		let winners = winners.unwrap();
 
 		// 10 and 30 must be the winners
-		assert_eq!(winners.iter().map(|w| w.who).collect::<Vec<BalanceOf<Test>>>(), vec![10, 30]);
+		assert_eq!(winners.iter().map(|w| w.who).collect::<Vec<BalanceOf<Test>>>(), vec![11, 31]);
 
-		let winner_10 = winners.iter().filter(|w| w.who == 10).nth(0).unwrap();
-		let winner_30 = winners.iter().filter(|w| w.who == 30).nth(0).unwrap();
+		let winner_10 = winners.iter().filter(|w| w.who == 11).nth(0).unwrap();
+		let winner_30 = winners.iter().filter(|w| w.who == 31).nth(0).unwrap();
 
 		// python implementation output:
 		/*
@@ -1752,6 +1754,7 @@ fn bond_with_no_staked_value() {
 		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward);
 	});
 }
+
 #[test]
 fn bond_with_little_staked_value() {
 	// Behavior when someone bonds with little staked value.
@@ -1827,13 +1830,13 @@ fn phragmen_linear_worse_case_equalise() {
 		bond_validator(60, 1000);
 		bond_validator(70, 1000);
 
-		bond_nominator(2, 2000, vec![10]);
-		bond_nominator(4, 1000, vec![10, 20]);
-		bond_nominator(6, 1000, vec![20, 30]);
-		bond_nominator(8, 1000, vec![30, 40]);
-		bond_nominator(110, 1000, vec![40, 50]);
-		bond_nominator(112, 1000, vec![50, 60]);
-		bond_nominator(114, 1000, vec![60, 70]);
+		bond_nominator(2, 2000, vec![11]);
+		bond_nominator(4, 1000, vec![11, 21]);
+		bond_nominator(6, 1000, vec![21, 31]);
+		bond_nominator(8, 1000, vec![31, 41]);
+		bond_nominator(110, 1000, vec![41, 51]);
+		bond_nominator(112, 1000, vec![51, 61]);
+		bond_nominator(114, 1000, vec![61, 71]);
 
 		assert_eq!(Session::validators(), vec![40, 30]);
 		assert_ok!(Staking::set_validator_count(7));
@@ -1852,13 +1855,13 @@ fn phragmen_linear_worse_case_equalise() {
 		// 40  is elected with stake  2000.0001049958742 and score  0.0005555555555555556
 		// 70  is elected with stake  1982.2574230340813 and score  0.0007222222222222222
 
-		assert_eq!(Staking::stakers(10).total, 3000);
-		assert_eq!(Staking::stakers(30).total, 2035);
-		assert_eq!(Staking::stakers(50).total, 2000);
-		assert_eq!(Staking::stakers(60).total, 1968);
-		assert_eq!(Staking::stakers(20).total, 2035);
-		assert_eq!(Staking::stakers(40).total, 2024);
-		assert_eq!(Staking::stakers(70).total, 1936);
+		assert_eq!(Staking::stakers(11).total, 3000);
+		assert_eq!(Staking::stakers(31).total, 2035);
+		assert_eq!(Staking::stakers(51).total, 2000);
+		assert_eq!(Staking::stakers(61).total, 1968);
+		assert_eq!(Staking::stakers(21).total, 2035);
+		assert_eq!(Staking::stakers(41).total, 2024);
+		assert_eq!(Staking::stakers(71).total, 1936);
 	})
 }
 
