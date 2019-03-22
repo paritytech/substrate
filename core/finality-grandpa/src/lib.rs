@@ -416,14 +416,16 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	}
 }
 
-fn forward_commit_finalized<B, S, N>(network: &N, stream: S) -> impl Future<Item=(),Error=Error>
+fn forward_commit<B, S, N>(network: &N, stream: S) -> impl Future<Item=(),Error=Error>
 	where
 		B: BlockT,
 		S: Stream<Item=(u64, NumberFor<B>)> + Send + 'static,
 		N: Network<B> + Send + 'static,
 {
 	let net = network.clone();
-	stream.for_each(move |(set_id, num)| { net.note_commit_finalized(set_id, num); Ok(()) })
+
+	// net.send_commit
+	stream.for_each(move |(set_id, num)| { unimplemented!(); Ok(()) })
 		.map_err(|_| panic!("unbounded receivers do not error; qed"))
 }
 
@@ -459,7 +461,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 	let voters = authority_set.current_authorities();
 	let (commit_finalized_tx, commit_finalized_rx) = mpsc::unbounded();
-	let forward_commit_finalized = forward_commit_finalized(&network, commit_finalized_rx);
+	let forward_commit = forward_commit(&network, commit_finalized_rx);
 
 	let initial_environment = Arc::new(Environment {
 		inner: client.clone(),
@@ -612,7 +614,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	});
 
 	let voter_work = voter_work
-		.join(forward_commit_finalized)
+		.join(forward_commit)
 		.map(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Voter failed: {:?}", e);

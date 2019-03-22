@@ -86,7 +86,6 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) network: N,
 	pub(crate) set_id: u64,
 	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
-	pub(crate) note_commit_finalized: mpsc::UnboundedSender<(u64, NumberFor<Block>)>,
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
@@ -308,7 +307,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
-		let res = finalize_block(
+		finalize_block(
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
@@ -316,15 +315,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			hash,
 			number,
 			(round, commit).into(),
-		);
-
-		match res {
-			Err(CommandOrError::Error(e)) => Err(CommandOrError::Error(e)),
-			x => {
-				let _ = self.note_commit_finalized.unbounded_send((self.set_id, number));
-				x
-			}
-		}
+		)
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {

@@ -57,12 +57,6 @@ pub trait Network<Block: BlockT>: Clone {
 	/// Only should be used in case of consensus stall.
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool);
 
-	/// Clean up messages for a round.
-	fn drop_round_messages(&self, round: u64, set_id: u64);
-
-	/// Clean up messages for a given authority set id (e.g. commit messages).
-	fn drop_set_messages(&self, set_id: u64);
-
 	/// Get a stream of commit messages for a specific set-id. This stream
 	/// should never logically conclude.
 	fn commit_messages(&self, set_id: u64) -> Self::In;
@@ -71,13 +65,7 @@ pub trait Network<Block: BlockT>: Clone {
 	///
 	/// Force causes it to be sent to all peers, even if they've seen it already.
 	/// Only should be used in case of consensus stall.
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool);
-
-	/// Note a block finalized in a commit message that has been successfully
-	/// imported.
-	/// This should inform the network handler but does not need to lead
-	/// to any network action in particular.
-	fn note_commit_finalized(&self, set_id: u64, number: NumberFor<Block>);
+	fn send_commit(&self, set_id: u64, message: Vec<u8>, force: bool);
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, round: u64, set_id: u64, block: Block::Hash);
@@ -168,14 +156,6 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message, recipient);
 	}
 
-	fn drop_round_messages(&self, _round: u64, _set_id: u64) {
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
-	}
-
-	fn drop_set_messages(&self, _set_id: u64) {
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
-	}
-
 	fn commit_messages(&self, set_id: u64) -> Self::In {
 		self.validator.note_set(SetId(set_id));
 		let (tx, rx) = oneshot::channel();
@@ -186,7 +166,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		NetworkStream { outer: rx, inner: None }
 	}
 
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
+	fn send_commit(&self, set_id: u64, message: Vec<u8>, force: bool) {
 		let topic = global_topic::<B>(set_id);
 		let recipient = if force {
 			network_gossip::MessageRecipient::BroadcastToAll
@@ -202,10 +182,6 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 			"block" => ?block, "round" => ?round
 		);
 		self.service.announce_block(block)
-	}
-
-	fn note_commit_finalized(&self, _set_id: u64, number: NumberFor<B>) {
-		self.validator.note_commit_finalized(number);
 	}
 }
 
@@ -240,7 +216,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 }
 
 /// converts a message stream into a stream of signed messages.
-/// the output stream checks signatures also.
+/// the output stream assumes signatures have been checked already.
 pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	inner: S,
 	voters: Arc<VoterSet<AuthorityId>>,
@@ -264,6 +240,8 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 						debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 						return Ok(None);
 					}
+
+					println!("Got message {:?}", msg.message);
 
 					match &msg.message.message {
 						Prevote(prevote) => {
@@ -356,6 +334,8 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			grandpa::Message::Precommit(_) => self.has_voted.can_precommit(),
 		};
 
+		println!("Sending message {:?}", msg);
+
 		// when locals exist, sign messages on import
 		if let (true, &Some((ref pair, ref local_id))) = (should_sign, &self.locals) {
 			let encoded = localized_payload(self.round, self.set_id, &msg);
@@ -392,12 +372,6 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 	fn close(&mut self) -> Poll<(), Error> {
 		// ignore errors since we allow this inner sender to be closed already.
 		self.sender.close().or_else(|_| Ok(Async::Ready(())))
-	}
-}
-
-impl<Block: BlockT, N: Network<Block>> Drop for OutgoingMessages<Block, N> {
-	fn drop(&mut self) {
-		self.network.drop_round_messages(self.round, self.set_id);
 	}
 }
 
@@ -510,8 +484,8 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 pub(crate) struct CommitsOut<Block: BlockT, N: Network<Block>> {
 	network: N,
 	set_id: SetId,
-	_marker: ::std::marker::PhantomData<Block>,
 	is_voter: bool,
+	_marker: ::std::marker::PhantomData<Block>,
 }
 
 impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
@@ -558,17 +532,11 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			message: compact_commit,
 		});
 
-		self.network.send_commit(round.0, self.set_id.0, Encode::encode(&message), false);
+		self.network.send_commit(self.set_id.0, Encode::encode(&message), false);
 
 		Ok(AsyncSink::Ready)
 	}
 
 	fn close(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
 	fn poll_complete(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
-}
-
-impl<Block: BlockT, N: Network<Block>> Drop for CommitsOut<Block, N> {
-	fn drop(&mut self) {
-		self.network.drop_set_messages(self.set_id.0);
-	}
 }

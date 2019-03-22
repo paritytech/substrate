@@ -280,6 +280,7 @@ impl<N: Ord> Peers<N> {
 	}
 }
 
+#[derive(Debug)]
 enum Action<H>  {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
 	Keep(H, i32),
@@ -470,6 +471,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex, _roles: Roles) {
+		println!("new peer {:?}", who);
 		self.inner.write().peers.new_peer(who);
 	}
 
@@ -497,6 +499,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			}
 		};
 
+		println!("validated incoming message -> {:?}", action);
+
 		match action {
 			Action::Keep(topic, cb) => {
 				self.report(who, cb);
@@ -518,6 +522,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	{
 		let inner = self.inner.read();
 		Box::new(move |who, _intent, topic, mut data| {
+			println!("deciding whether to send message on topic {} to peer {:?}", topic, who);
 			let peer = match inner.peers.peer(who) {
 				None => return false,
 				Some(x) => x,
@@ -532,7 +537,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
-				return peer.view.consider_vote(*round, *set_id) == Consider::Accept
+				return dbg!(peer.view.consider_vote(*round, *set_id)) == Consider::Accept
 			}
 
 			// global message.

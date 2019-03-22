@@ -160,12 +160,6 @@ impl MessageRouting {
 			validator,
 		}
 	}
-
-	fn drop_messages(&self, topic: Hash) {
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-		peer.consensus_gossip_collect_garbage_for_topic(topic);
-	}
 }
 
 fn make_topic(round: u64, set_id: u64) -> Hash {
@@ -201,16 +195,6 @@ impl Network<Block> for MessageRouting {
 			.gossip_message(make_topic(round, set_id), GRANDPA_ENGINE_ID, message, force);
 	}
 
-	fn drop_round_messages(&self, round: u64, set_id: u64) {
-		let topic = make_topic(round, set_id);
-		self.drop_messages(topic);
-	}
-
-	fn drop_set_messages(&self, set_id: u64) {
-		let topic = make_global_topic(set_id);
-		self.drop_messages(topic);
-	}
-
 	fn commit_messages(&self, set_id: u64) -> Self::In {
 		self.validator.note_set(SetId(set_id));
 		let inner = self.inner.lock();
@@ -227,17 +211,13 @@ impl Network<Block> for MessageRouting {
 		Box::new(messages)
 	}
 
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
+	fn send_commit(&self, set_id: u64, message: Vec<u8>, force: bool) {
 		let inner = self.inner.lock();
 		inner.peer(self.peer_id)
 			.gossip_message(make_global_topic(set_id), GRANDPA_ENGINE_ID, message, force);
 	}
 
 	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
-
-	}
-
-	fn note_commit_finalized(&self, _set_id: u64, _block: BlockNumber) {
 
 	}
 }
