@@ -18,7 +18,6 @@ hex-literal = "0.1.0"
 substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
 balances = { package = "srml-balances", path = "../balances" }
-fees = { package = "srml-fees", path = "../fees" }
 parity-codec-derive = { version = "3.1" }
 
 [features]

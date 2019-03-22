@@ -247,7 +247,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, bool),
 	/// Tell protocol to abort sync (does not stop protocol).
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -389,8 +389,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
-				self.gossip_consensus_message(topic, engine_id, message)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, force) => {
+				self.gossip_consensus_message(topic, engine_id, message, force)
 			}
 			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
 				self.sync.blocks_processed(hashes, has_error);
@@ -461,6 +461,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		None
 	}
 
+	fn update_peer_info(&mut self, who: NodeIndex) {
+		if let Some(info) = self.sync.peer_info(who) {
+			if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
+				peer.info.best_hash = info.best_hash;
+				peer.info.best_number = info.best_number;
+			}
+			let mut peers = self.connected_peers.write();
+			if let Some(ref mut peer) = peers.get_mut(&who) {
+				peer.peer_info.best_hash = info.best_hash;
+				peer.peer_info.best_number = info.best_number;
+			}
+		}
+	}
+
 	/// Propagates protocol statuses.
 	fn on_status(&mut self) {
 		let status = ProtocolStatus {
@@ -483,9 +497,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::BlockResponse(r) => {
 				if let Some(request) = self.handle_response(who, &r) {
 					self.on_block_response(who, request, r);
+					self.update_peer_info(who);
 				}
 			},
-			GenericMessage::BlockAnnounce(announce) => self.on_block_announce(who, announce),
+			GenericMessage::BlockAnnounce(announce) => {
+				self.on_block_announce(who, announce);
+				self.update_peer_info(who);
+			},
 			GenericMessage::Transactions(m) => self.on_extrinsics(who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(who, response),
@@ -521,11 +539,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
+	fn gossip_consensus_message(
+		&mut self,
+		topic: B::Hash,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
+		force: bool,
+	) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
 			ConsensusMessage{ data: message, engine_id },
+			force,
 		);
 	}
 

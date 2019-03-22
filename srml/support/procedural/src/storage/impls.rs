@@ -29,6 +29,10 @@ pub fn option_unwrap(is_option: bool) -> TokenStream2 {
 	}
 }
 
+// prefix for consts in trait Instance
+pub(crate) const PREFIX_FOR: &str = "PREFIX_FOR_";
+pub(crate) const HEAD_KEY_FOR: &str = "HEAD_KEY_FOR_";
+
 pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub scrate: &'a TokenStream2,
 	pub visibility: &'a syn::Visibility,
@@ -83,8 +87,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
 		};
@@ -165,8 +169,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
 		};
@@ -240,16 +244,16 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			quote!{ #prefix.as_bytes() }
 		};
 
 		// make sure to use different prefix for head and elements.
 		let final_head_key = if let Some(instance) = instance {
-			let method_name = syn::Ident::new(&format!("build_head_key_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#method_name(#prefix.as_bytes()) }
+			let const_name = syn::Ident::new(&format!("{}{}", HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
 		} else {
 			let final_head_key = format!("head of {}", prefix);
 			quote!{ #final_head_key.as_bytes() }

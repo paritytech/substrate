@@ -58,6 +58,9 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
+	type TransactionPayment = ();
+	type TransferPayment = ();
+	type DustRemoval = ();
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
@@ -72,6 +75,8 @@ impl Trait for Test {
 	type Currency = balances::Module<Self>;
 	type OnRewardMinted = ();
 	type Event = ();
+	type Slash = ();
+	type Reward = ();
 }
 
 pub struct ExtBuilder {
@@ -193,6 +198,8 @@ impl ExtBuilder {
 					(40, balance_factor), (41, balance_factor * 40)
 				]
 			},
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			existential_deposit: self.existential_deposit,
 			transfer_fee: 0,
 			creation_fee: 0,
