@@ -187,8 +187,6 @@ enum Misbehavior {
 		blocks_loaded: i32,
 		equivocations_caught: i32,
 	},
-	// Commit message received that's behind local view.
-	OldCommitMessage,
 	// A message received that's from the future relative to our view.
 	// always misbehavior.
 	FutureMessage,
@@ -264,6 +262,20 @@ impl<N: Ord> Peers<N> {
 		Ok(())
 	}
 
+	fn update_commit_height(&mut self, node_index: &NodeIndex, new_height: N) -> Result<(), Misbehavior> {
+		let peer = match self.inner.get_mut(node_index) {
+			None => return Ok(()),
+			Some(p) => p,
+		};
+
+		peer.last_commit.as_ref() >= Some(&new_height) {
+			return Err(Misbehavior::InvalidViewChange);
+		}
+		peer.last_commit = Some(new_height);
+
+		Ok(())
+	}
+
 	fn peer<'a>(&'a self, node_index: &NodeIndex) -> Option<&'a PeerInfo<N>> {
 		self.inner.get(node_index)
 	}
@@ -280,7 +292,6 @@ struct Inner<Block: BlockT> {
 	local_view: View<NumberFor<Block>>,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: HashMap<Block::Hash, (Option<Round>, SetId)>,
-
 }
 
 impl<Block: BlockT> Inner<Block> {
@@ -358,10 +369,14 @@ impl<Block: BlockT> Inner<Block> {
 		Action::Repropagate(topic, 100)
 	}
 
-	fn validate_commit_message(&self, who: &NodeIndex, full: &FullCommitMessage<Block>)
+	fn validate_commit_message(&mut self, who: &NodeIndex, full: &FullCommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
 		use grandpa::Message as GrandpaMessage;
+
+		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
+			return Action::Discard(misbehavior.cost());
+		}
 
 		match self.consider_global(full.set_id, full.message.target_number) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
