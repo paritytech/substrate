@@ -151,8 +151,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		}
 	}));
 
-	// println!("Nominators: {:?}", nominators);
-	// println!("candidates: {:?}", candidates);
 
 	// 3- optimization:
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
@@ -270,7 +268,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			return None
 		}
 	}
-	// println!("++Elected {:?}", elected_candidates);
 	Some(elected_candidates)
 }
 
