@@ -12,6 +12,10 @@ rbac:
   name: substrate
 
 
+# name of the statefulset
+app: substrate
+listen_node_port: true
+
 nodes:
   replicas: 2
   args:
@@ -29,15 +33,17 @@ nodes:
     # - sub-libp2p=trace
   
 
-validator:
-  enable: True
-  # adds --validator commandline option
+validator: {}
+  # providing 'keys' string via --set commandline parameter will run the nodes
+  # in validator mode (--validator).
   #
-  # key and node-key can be given in a base64 encoded keyfile string (at 
+  # name, key and node-key can be given in a base64 encoded keyfile string (at 
   # validator.keys) which has the following format:
   #
+  # substrate-0-name <node-name>
   # substrate-0-key <key-seed>
   # substrate-0-node-key <node-secret-key>
+  # substrate-1-name <node-name>
   # substrate-1-key <key-seed>
   # substrate-1-node-key <node-secret-key>
   #

@@ -24,6 +24,7 @@ use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
+use peerset::Peerset;
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
@@ -138,6 +139,9 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
+	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
+	/// nodes it should be connected to or not.
+	peerset: Arc<Peerset>,
 	/// Protocol sender
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -174,7 +178,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		)?;
 		let versions = [(protocol::CURRENT_VERSION as u8)];
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
-		let (thread, network) = start_thread(
+		let (thread, network, peerset) = start_thread(
 			network_to_protocol_sender,
 			network_port,
 			params.network_config,
@@ -186,6 +190,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_offline,
 			is_major_syncing,
 			peers,
+			peerset,
 			network,
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
@@ -343,20 +348,21 @@ pub trait ManageNetwork {
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
 	fn accept_unreserved_peers(&self) {
-		self.network.lock().accept_unreserved_peers();
+		self.peerset.set_reserved_only(false);
 	}
 
 	fn deny_unreserved_peers(&self) {
-		self.network.lock().deny_unreserved_peers();
+		self.peerset.set_reserved_only(true);
 	}
 
 	fn remove_reserved_peer(&self, peer: PeerId) {
-		self.network.lock().remove_reserved_peer(peer);
+		self.peerset.remove_reserved_peer(&peer);
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (addr, peer_id) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
-		self.network.lock().add_reserved_peer(addr, peer_id);
+		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+		self.peerset.add_reserved_peer(peer_id.clone());
+		self.network.lock().add_known_address(peer_id, addr);
 		Ok(())
 	}
 
@@ -466,10 +472,10 @@ fn start_thread<B: BlockT + 'static>(
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
-) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>), Error> {
+) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, Arc<Peerset>), Error> {
 	// Start the main service.
-	let service = match start_service(config, registered) {
-		Ok(service) => Arc::new(Mutex::new(service)),
+	let (service, peerset) = match start_service(config, registered) {
+		Ok((service, peerset)) => (Arc::new(Mutex::new(service)), peerset),
 		Err(err) => {
 			warn!("Error starting network: {}", err);
 			return Err(err.into())
@@ -493,7 +499,7 @@ fn start_thread<B: BlockT + 'static>(
 		};
 	})?;
 
-	Ok(((close_tx, thread), service))
+	Ok(((close_tx, thread), service, peerset))
 }
 
 /// Runs the background thread that handles the networking.
@@ -530,7 +536,9 @@ fn run_thread<B: BlockT + 'static>(
 				match severity {
 					Severity::Bad(message) => {
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
-						network_service_2.lock().ban_node(who)
+						warn!(target: "sync", "Banning a node is a deprecated mechanism that \
+							should be removed");
+						network_service_2.lock().drop_node(who)
 					},
 					Severity::Useless(message) => {
 						info!(target: "sync", "Dropping {:?} because {:?}", who, message);

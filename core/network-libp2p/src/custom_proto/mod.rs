@@ -19,5 +19,4 @@ pub use self::upgrade::{CustomMessage, CustomMessageId, RegisteredProtocol};
 
 mod behaviour;
 mod handler;
-mod topology;
 mod upgrade;

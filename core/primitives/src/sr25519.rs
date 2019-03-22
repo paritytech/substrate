@@ -501,7 +501,7 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{Pair as PairT, crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS}};
+	use crate::crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS};
 	use hex_literal::{hex, hex_impl};
 
 	#[test]
