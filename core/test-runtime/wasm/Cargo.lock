@@ -2288,7 +2288,7 @@ dependencies = [
 name = "substrate-consensus-authorities"
 version = "0.1.0"
 dependencies = [
- "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
