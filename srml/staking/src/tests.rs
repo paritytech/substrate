@@ -133,7 +133,7 @@ fn offline_should_slash_and_kick() {
 	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
-		let _ = Balances::deposit_creating(&10, 999);
+		let _ = Balances::ensure_free_balance_is(&10, 1000);
 		// Confirm account 10 is a validator
 		assert!(<Validators<Test>>::exists(&10));
 		// Validators get slashed immediately
@@ -148,10 +148,9 @@ fn offline_should_slash_and_kick() {
 		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
 		assert_eq!(Staking::slash_count(&10), 4);
-		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
-		assert!(Staking::slot_stake() > 2_u64.pow(3) * 20);
-		// Confirm balance has been reduced by 2^unstake_threshold * current_offline_slash()
-		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * 20);
+		// Confirm balance has been reduced by 2^unstake_threshold * offline_slash() * amount_at_stake.
+		let slash_base = Staking::offline_slash() * Staking::stakers(10).total;
+		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * slash_base);
 		// Confirm account 10 has been removed as a validator
 		assert!(!<Validators<Test>>::exists(&10));
 		// A new era is forced due to slashing
@@ -205,19 +204,17 @@ fn max_unstake_threshold_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 		// Two users with maximum possible balance
-		let _ = Balances::deposit_creating(&10, u64::max_value() - 1);
-		let _ = Balances::deposit_creating(&20, u64::max_value() - 1);
+		let _ = Balances::ensure_free_balance_is(&10, u64::max_value());
+		let _ = Balances::ensure_free_balance_is(&20, u64::max_value());
 
-		// Give them full exposer as a staker
-		<Stakers<Test>>::insert(&10, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
-		<Stakers<Test>>::insert(&20, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
+		// Give them full exposure as a staker
+		<Stakers<Test>>::insert(&10, Exposure { total: 1000000, own: 1000000, others: vec![]});
+		<Stakers<Test>>::insert(&20, Exposure { total: 2000000, own: 2000000, others: vec![]});
 
 		// Check things are initialized correctly
 		assert_eq!(Balances::free_balance(&10), u64::max_value());
 		assert_eq!(Balances::free_balance(&20), u64::max_value());
-		assert_eq!(Balances::free_balance(&10), Balances::free_balance(&20));
 		assert_eq!(Staking::offline_slash_grace(), 0);
-		assert_eq!(Staking::current_offline_slash(), 20);
 		// Account 10 will have max unstake_threshold
 		assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs {
 			unstake_threshold: MAX_UNSTAKE_THRESHOLD,
@@ -225,28 +222,26 @@ fn max_unstake_threshold_works() {
 		}));
 		// Account 20 could not set their unstake_threshold past 10
 		assert_noop!(Staking::validate(Origin::signed(20), ValidatorPrefs {
-			unstake_threshold: 11,
+			unstake_threshold: MAX_UNSTAKE_THRESHOLD + 1,
 			validator_payment: 0}),
 			"unstake threshold too large"
 		);
 		// Give Account 20 unstake_threshold 11 anyway, should still be limited to 10
 		<Validators<Test>>::insert(20, ValidatorPrefs {
-			unstake_threshold: 11,
+			unstake_threshold: MAX_UNSTAKE_THRESHOLD + 1,
 			validator_payment: 0,
 		});
 
-		// Make slot_stake really large, as to not affect punishment curve
-		<SlotStake<Test>>::put(u64::max_value());
-		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
-		assert!(Staking::slot_stake() > 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+		<OfflineSlash<Test>>::put(Perbill::from_fraction(0.0001));
 
 		// Report each user 1 more than the max_unstake_threshold
 		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
 		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
 
-		// Show that each balance only gets reduced by 2^max_unstake_threshold
-		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
-		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+		// Show that each balance only gets reduced by 2^max_unstake_threshold times 10%
+		// of their total stake.
+		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 100);
+		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 200);
 	});
 }
 
@@ -713,6 +708,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		// initial validators
 		assert_eq!(Session::validators(), vec![20, 10]);
+		<OfflineSlash<Test>>::put(Perbill::from_percent(12));
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -720,7 +716,7 @@ fn nominators_also_get_slashed() {
 		// give the man some money.
 		let initial_balance = 1000;
 		for i in [1, 2, 3, 10].iter() {
-			let _ = Balances::deposit_creating(i, initial_balance - Balances::total_balance(i));
+			let _ = Balances::ensure_free_balance_is(i, initial_balance);
 		}
 
 		// 2 will nominate for 10
@@ -732,15 +728,20 @@ fn nominators_also_get_slashed() {
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
 
+		// Nominator stash didn't collect any.
+		assert_eq!(Balances::total_balance(&2), initial_balance);
+
 		// 10 goes offline
 		Staking::on_offline_validator(10, 4);
-		let slash_value = 2_u64.pow(3) * Staking::current_offline_slash();
 		let expo = Staking::stakers(10);
-		let actual_slash = expo.own.min(slash_value);
-		let nominator_actual_slash = nominator_stake.min(expo.total - actual_slash);
+		let slash_value = Staking::offline_slash() * expo.total * 2_u64.pow(3);
+		let total_slash = expo.total.min(slash_value);
+		let validator_slash = expo.own.min(total_slash);
+		let nominator_slash = nominator_stake.min(total_slash - validator_slash);
+
 		// initial + first era reward + slash
-		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - actual_slash);
-		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_actual_slash);
+		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - validator_slash);
+		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		// Because slashing happened.
 		assert!(Staking::forcing_new_era().is_some());
 	});
@@ -1274,8 +1275,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		// // Confirm user has been reported
 		assert_eq!(Staking::slash_count(&10), 4);
 		// // check the balance of 10 (slash will be deducted from free balance.)
-		assert_eq!(Balances::free_balance(&10), 1000 - 79);
-		
+		assert_eq!(Balances::free_balance(&10), 1000 - 50 /*5% of 1000*/ * 8 /*2**3*/);
 	});
 }
 

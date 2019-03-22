@@ -26,9 +26,9 @@
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
 
-use std::{sync::Arc, time::Duration, thread};
+use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 use consensus_common::{
 	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
 };
@@ -41,7 +41,7 @@ use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
 };
-use primitives::{ed25519, Pair};
+use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future};
@@ -60,8 +60,8 @@ pub use aura_slots::SlotDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
-type AuthorityId = ed25519::Public;
-type Signature = ed25519::Signature;
+type AuthorityId<P> = <P as Pair>::Public;
+type Signature<P> = <P as Pair>::Signature;
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
@@ -76,7 +76,9 @@ pub trait Network: Clone {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author(slot_num: u64, authorities: &[AuthorityId]) -> Option<AuthorityId> {
+fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<AuthorityId<P>>
+	where P::Public: Clone,
+{
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
@@ -88,7 +90,7 @@ fn slot_author(slot_num: u64, authorities: &[AuthorityId]) -> Option<AuthorityId
 				this is a valid index; qed")
 		.clone();
 
-	Some(current_author)
+	Some(current_author.clone())
 }
 
 fn duration_now() -> Option<Duration> {
@@ -110,25 +112,27 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 }
 
 /// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem: Sized {
+pub trait CompatibleDigestItem<T: Pair>: Sized {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature) -> Self;
+	fn aura_seal(slot_number: u64, signature: Signature<T>) -> Self;
 
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, Signature)>;
+	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)>;
 }
 
-impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId, Signature> {
+impl<T: Pair, Hash, AuthorityId> CompatibleDigestItem<T> for generic::DigestItem<Hash, AuthorityId, Signature<T>>
+	where T::Signature: Clone
+{
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature) -> Self {
+	fn aura_seal(slot_number: u64, signature: Signature<T>) -> Self {
 		generic::DigestItem::Seal(slot_number, signature)
 	}
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, Signature)> {
+	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)> {
 		match self {
-			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, sig.clone().into())),
+			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
 			_ => None
 		}
 	}
@@ -147,9 +151,9 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker in a separate thread.
-pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
+pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
-	local_key: Arc<ed25519::Pair>,
+	local_key: Arc<P>,
 	client: Arc<C>,
 	block_import: Arc<I>,
 	env: Arc<E>,
@@ -164,9 +168,11 @@ pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Encode + Decode + Eq + Clone + Debug + Hash + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	OnExit: Future<Item=(), Error=()> + Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId> + 'static,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
@@ -184,9 +190,9 @@ pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
+pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
-	local_key: Arc<ed25519::Pair>,
+	local_key: Arc<P>,
 	client: Arc<C>,
 	block_import: Arc<I>,
 	env: Arc<E>,
@@ -201,8 +207,10 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 	OnExit: Future<Item=(), Error=()>,
 {
@@ -219,24 +227,26 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	)
 }
 
-struct AuraWorker<C, E, I, SO> {
+struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<I>,
 	env: Arc<E>,
-	local_key: Arc<ed25519::Pair>,
+	local_key: Arc<P>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 }
 
-impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> where
+impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	C: Authorities<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -284,10 +294,10 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 			);
 			return Box::new(future::ok(()));
 		}
-
-		let proposal_work = match slot_author(slot_num, &authorities) {
+		let maybe_author = slot_author::<P>(slot_num, &authorities);
+		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
-			Some(author) => if author.0 == public_key.0 {
+			Some(author) => if author == public_key {
 				debug!(
 					target: "aura", "Starting authorship at slot {}; timestamp = {}",
 					slot_num,
@@ -347,7 +357,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					// add it to a digest item.
 					let to_sign = (slot_num, pre_hash).encode();
 					let signature = pair.sign(&to_sign[..]);
-					let item = <DigestItemFor<B> as CompatibleDigestItem>::aura_seal(
+					let item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(
 						slot_num,
 						signature,
 					);
@@ -391,9 +401,10 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId])
-	-> Result<CheckedHeader<B::Header, ed25519::Signature>, String>
-	where DigestItemFor<B>: CompatibleDigestItem
+fn check_header<B: Block, P: Pair>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId<P>])
+	-> Result<CheckedHeader<B::Header, P::Signature>, String>
+	where DigestItemFor<B>: CompatibleDigestItem<P>,
+		P::Public: Clone + AsRef<P::Public>,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -411,16 +422,16 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 		// check the signature is valid under the expected authority and
 		// chain state.
 
-		let expected_author = match slot_author(slot_num, &authorities) {
+		let expected_author = match slot_author::<P>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author
 		};
 
 		let pre_hash = header.hash();
 		let to_sign = (slot_num, pre_hash).encode();
-		let public = ed25519::Public(expected_author.0);
+		let public = expected_author;
 
-		if ed25519::Pair::verify(&sig, &to_sign[..], public) {
+		if P::verify(&sig, &to_sign[..], public) {
 			Ok(CheckedHeader::Checked(header, slot_num, sig))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
@@ -442,13 +453,15 @@ pub trait ExtraVerification<B: Block>: Send + Sync {
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E> {
+pub struct AuraVerifier<C, E, P> {
 	client: Arc<C>,
 	extra: E,
+	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
 }
 
-impl<C, E> AuraVerifier<C, E>
+impl<C, E, P> AuraVerifier<C, E, P>
+	where P: Send + Sync + 'static
 {
 	fn check_inherents<B: Block>(
 		&self,
@@ -511,11 +524,13 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 	}
 }
 
-impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
+impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 {
 	fn verify(
 		&self,
@@ -523,7 +538,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId<P>>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
 		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
@@ -539,7 +554,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B>(slot_now + 1, header, hash, &authorities[..])?;
+		let checked_header = check_header::<B, P>(slot_now + 1, header, hash, &authorities[..])?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
@@ -617,7 +632,7 @@ fn register_aura_inherent_data_provider(
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C, E>(
+pub fn import_queue<B, C, E, P>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
@@ -628,13 +643,20 @@ pub fn import_queue<B, C, E>(
 	B: Block,
 	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
 	let verifier = Arc::new(
-		AuraVerifier { client: client.clone(), extra, inherent_data_providers }
+		AuraVerifier {
+			client: client.clone(),
+			extra,
+			inherent_data_providers,
+			phantom: PhantomData,
+		}
 	);
 	Ok(BasicQueue::new(verifier, block_import, justification_import))
 }
@@ -650,6 +672,7 @@ mod tests {
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::ed25519::Keyring;
+	use primitives::ed25519;
 	use client::BlockchainEvents;
 	use test_client;
 
@@ -664,7 +687,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId])
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId<ed25519::Pair>])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -690,7 +713,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra, ed25519::Pair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -717,6 +740,7 @@ mod tests {
 				client,
 				extra: NothingExtra,
 				inherent_data_providers,
+				phantom: Default::default(),
 			})
 		}
 
@@ -775,7 +799,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura(
+			let aura = start_aura::<_, _, _, _, ed25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
