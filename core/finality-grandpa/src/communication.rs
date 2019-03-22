@@ -28,6 +28,7 @@ use log::{debug, trace};
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use network::consensus_gossip as network_gossip;
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
@@ -268,13 +269,13 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
-	S: Stream<Item=Vec<u8>,Error=()>
+	S: Stream<Item=network_gossip::TopicNotification, Error=()>
 {
 	inner
-		.filter_map(|raw| {
-			let decoded = GossipMessage::<Block>::decode(&mut &raw[..]);
+		.filter_map(|notification| {
+			let decoded = GossipMessage::<Block>::decode(&mut &notification.message[..]);
 			if decoded.is_none() {
-				debug!(target: "afg", "Skipping malformed message {:?}", raw);
+				debug!(target: "afg", "Skipping malformed message {:?}", notification);
 			}
 			decoded
 		})
@@ -442,14 +443,14 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
-	S: Stream<Item=Vec<u8>,Error=()>
+	S: Stream<Item=network_gossip::TopicNotification, Error=()>
 {
 	inner
-		.filter_map(|raw| {
+		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
-			let decoded = GossipMessage::<Block>::decode(&mut &raw[..]);
+			let decoded = GossipMessage::<Block>::decode(&mut &notification.message[..]);
 			if decoded.is_none() {
-				trace!(target: "afg", "Skipping malformed commit message {:?}", raw);
+				trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
 			}
 			decoded
 		})

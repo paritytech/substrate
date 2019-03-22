@@ -221,12 +221,12 @@ impl From<ClientError> for Error {
 
 /// A stream used by NetworkBridge in its implementation of Network.
 pub struct NetworkStream {
-	inner: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
-	outer: oneshot::Receiver<mpsc::UnboundedReceiver<Vec<u8>>>
+	inner: Option<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>,
+	outer: oneshot::Receiver<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>
 }
 
 impl Stream for NetworkStream {
-	type Item = Vec<u8>;
+	type Item = network_gossip::TopicNotification;
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -336,7 +336,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		if self.is_expired(full.round, full.set_id) {
-			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
+			return network_gossip::ValidationResult::Discard;
 		}
 
 		if let Err(()) = communication::check_message_sig::<Block>(
@@ -348,11 +348,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
+			return network_gossip::ValidationResult::Discard;
 		}
 
 		let topic = message_topic::<Block>(full.round, full.set_id);
-		network_gossip::ValidationResult::Keep(topic, Default::default()) // TODO: cost/benefit
+		network_gossip::ValidationResult::KeepAndPropagate(topic)
 	}
 
 	fn validate_commit_message(&self, full: FullCommitMessage<Block>)
@@ -361,7 +361,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		use grandpa::Message as GrandpaMessage;
 
 		if self.is_expired(full.round, full.set_id) {
-			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
+			return network_gossip::ValidationResult::Discard;
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -371,7 +371,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
 			);
-			return network_gossip::ValidationResult::Discard(Default::default()); //TODO: cost/benefit
+			return network_gossip::ValidationResult::Discard;
 		}
 
 		// check signatures on all contained precommits.
@@ -385,7 +385,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			) {
 				debug!(target: "afg", "Bad commit message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
-				return network_gossip::ValidationResult::Discard(Default::default()); // TODO: cost/benefit
+				return network_gossip::ValidationResult::Discard;
 			}
 		}
 
@@ -402,7 +402,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			"topic" => ?topic,
 			"block_hash" => ?full.message,
 		);
-		network_gossip::ValidationResult::Keep(topic, Default::default()) //TODO: cost/benefit
+		network_gossip::ValidationResult::KeepAndPropagate(topic)
 	}
 }
 
@@ -416,7 +416,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			None => {
 				debug!(target: "afg", "Error decoding message");
 				telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
-				network_gossip::ValidationResult::Discard(Default::default()) //TODO: cost/benefit
+				network_gossip::ValidationResult::Discard
 			}
 		}
 	}
@@ -440,7 +440,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 /// Intended to be a lightweight handle such as an `Arc`.
 pub trait Network<Block: BlockT>: Clone {
 	/// A stream of input messages for a topic.
-	type In: Stream<Item=Vec<u8>,Error=()>;
+	type In: Stream<Item=network_gossip::TopicNotification, Error=()>;
 
 	/// Get a stream of messages for a specific round. This stream should
 	/// never logically conclude.
