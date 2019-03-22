@@ -351,14 +351,18 @@ where
 	/// authority set change (without triggering it), ensuring that if there are
 	/// multiple changes in the same branch, finalizing this block won't
 	/// finalize past multiple transitions (i.e. transitions must be finalized
-	/// in-order). The given function `is_descendent_of` should return `true` if
-	/// the second hash (target) is a descendent of the first hash (base).
+	/// in-order). Returns `Some(true)` if the block being finalized enacts a
+	/// change that can be immediately applied, `Some(false)` if the block being
+	/// finalized enacts a change but it cannot be applied yet since there are
+	/// other dependent changes, and `None` if no change is enacted. The given
+	/// function `is_descendent_of` should return `true` if the second hash
+	/// (target) is a descendent of the first hash (base).
 	pub fn enacts_standard_change<F, E>(
 		&self,
 		finalized_hash: H,
 		finalized_number: N,
 		is_descendent_of: &F,
-	) -> Result<bool, fork_tree::Error<E>>
+	) -> Result<Option<bool>, fork_tree::Error<E>>
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{

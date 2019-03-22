@@ -228,17 +228,19 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Checks if any node in the tree is finalized by either finalizing the
 	/// node itself or a child node that's not in the tree, guaranteeing that
 	/// the node being finalized isn't a descendent of any of the node's
-	/// children. The given `predicate` is checked on the prospective finalized
-	/// root and must pass for finalization to occur. The given function
-	/// `is_descendent_of` should return `true` if the second hash (target) is a
-	/// descendent of the first hash (base).
+	/// children. Returns `Some(true)` if the node being finalized is a root,
+	/// `Some(false)` if the node being finalized is not a root, and `None` if
+	/// no node in the tree is finalized. The given `predicate` is checked on
+	/// the prospective finalized root and must pass for finalization to occur.
+	/// The given function `is_descendent_of` should return `true` if the second
+	/// hash (target) is a descendent of the first hash (base).
 	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
 		number: N,
 		is_descendent_of: &F,
 		predicate: P,
-	) -> Result<bool, Error<E>>
+	) -> Result<Option<bool>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
@@ -261,12 +263,12 @@ impl<H, N, V> ForkTree<H, N, V> where
 						}
 					}
 
-					return Ok(true);
+					return Ok(Some(self.roots.iter().any(|root| root.hash == node.hash)));
 				}
 			}
 		}
 
-		Ok(false)
+		Ok(None)
 	}
 
 	/// Finalize a root in the tree by either finalizing the node itself or a
