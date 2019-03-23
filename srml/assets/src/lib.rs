@@ -239,7 +239,6 @@ decl_event!(
 	}
 );
 
-/// BLAH
 decl_storage! {
 	trait Store for Module<T: Trait> as Assets {
 		/// The number of units of assets held by any given account.
