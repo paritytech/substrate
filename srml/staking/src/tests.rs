@@ -117,7 +117,7 @@ fn invulnerability_should_work() {
 
 		// Set account 11 as an offline validator with a large number of reports
 		// Should exit early if invulnerable
-		Staking::on_offline_validator(11, 100);
+		Staking::on_offline_validator(10, 100);
 
 		// Show that account 11 has not been touched
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -146,7 +146,7 @@ fn offline_should_slash_and_kick() {
 		// Account 10 has the funds we just gave it
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Report account 10 as offline, one greater than unstake threshold
-		Staking::on_offline_validator(11, 4);
+		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
 		assert_eq!(Staking::slash_count(&11), 4);
 		// Confirm balance has been reduced by 2^unstake_threshold * offline_slash() * amount_at_stake.
@@ -181,7 +181,7 @@ fn offline_grace_should_delay_slashing() {
 		assert_eq!(Staking::slash_count(&11), 0);
 
 		// Report account 10 up to the threshold
-		Staking::on_offline_validator(11, default_unstake_threshold as usize + offline_slash_grace as usize);
+		Staking::on_offline_validator(10, default_unstake_threshold as usize + offline_slash_grace as usize);
 		// Confirm slash count
 		assert_eq!(Staking::slash_count(&11), 4);
 
@@ -189,7 +189,7 @@ fn offline_grace_should_delay_slashing() {
 		assert_eq!(Balances::free_balance(&11), 70);
 
 		// Report account 10 one more time
-		Staking::on_offline_validator(11, 1);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::slash_count(&11), 5);
 		// User gets slashed
 		assert_eq!(Balances::free_balance(&11), 0);
@@ -236,8 +236,8 @@ fn max_unstake_threshold_works() {
 		<OfflineSlash<Test>>::put(Perbill::from_fraction(0.0001));
 
 		// Report each user 1 more than the max_unstake_threshold
-		Staking::on_offline_validator(11, MAX_UNSTAKE_THRESHOLD as usize + 1);
-		Staking::on_offline_validator(21, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
 
 		// Show that each balance only gets reduced by 2^max_unstake_threshold times 10%
 		// of their total stake.
@@ -264,7 +264,7 @@ fn slashing_does_not_cause_underflow() {
 		Session::check_rotate_session(System::block_number());
 
 		// Should not panic
-		Staking::on_offline_validator(11, 100);
+		Staking::on_offline_validator(10, 100);
 		// Confirm that underflow has not occurred, and account balance is set to zero
 		assert_eq!(Balances::free_balance(&11), 0);
 	});
@@ -1261,7 +1261,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert_eq!(Staking::slot_stake(), 79);
 
 		// // If 10 gets slashed now, despite having +1000 in stash, it will be slashed byt 79, which is the slot stake
-		Staking::on_offline_validator(11, 4);
+		Staking::on_offline_validator(10, 4);
 		// // Confirm user has been reported
 		assert_eq!(Staking::slash_count(&11), 4);
 		// // check the balance of 10 (slash will be deducted from free balance.)
@@ -1288,7 +1288,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 
 		// Set some storage items which we expect to be cleaned up
 		// Initiate slash count storage item
-		Staking::on_offline_validator(11, 1);
+		Staking::on_offline_validator(10, 1);
 		// Set payee information
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
