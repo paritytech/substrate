@@ -407,7 +407,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn validate(&self, _context: &mut network_gossip::ValidatorContext<Block>, _sender: &network::NodeIndex, mut data: &[u8])
+	fn validate(&self, _context: &mut network_gossip::ValidatorContext<Block>, _sender: &network::PeerId, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		match GossipMessage::<Block>::decode(&mut data) {

@@ -3,12 +3,12 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: substrate
+  name: {{ .Values.app }}
 spec:
   selector:
     matchLabels:
-      app: substrate
-  serviceName: substrate
+      app: {{ .Values.GitlabEnvSlug | default .Values.app }}
+  serviceName: {{ .Values.app }}
   replicas: {{ .Values.nodes.replicas }}
   updateStrategy:
     type: RollingUpdate
@@ -16,7 +16,7 @@ spec:
   template:
     metadata:
       labels:
-        app: substrate
+        app: {{ .Values.GitlabEnvSlug | default .Values.app }}
     spec:
       {{- if .Values.rbac.enable }}
       serviceAccountName: {{ .Values.rbac.name }}
@@ -32,6 +32,7 @@ spec:
                   operator: In
                   values:
                   - substrate
+        {{- if .Values.listen_node_port }}
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
@@ -39,14 +40,15 @@ spec:
                   - key: "app"
                     operator: In
                     values:
-                    - substrate
+                    - {{ .Values.app }}
               topologyKey: "kubernetes.io/hostname"
+        {{- end }}
       terminationGracePeriodSeconds: 300
       {{- if .Values.validator.keys }}
       volumes:
-        - name: substrate-validator-secrets
+        - name: {{ .Values.app }}-validator-secrets
           secret:
-            secretName: substrate-secrets
+            secretName: {{ .Values.app }}-secrets
       initContainers:
       - name: prepare-secrets
         image: busybox
@@ -54,7 +56,9 @@ spec:
         args:
           - -c
           - sed -n -r "s/^${POD_NAME}-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/key;
-            sed -n -r "s/^${POD_NAME}-node-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/node-key
+            sed -n -r "s/^${POD_NAME}-node-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/node-key;
+            sed -n -r "s/^${POD_NAME}-name ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/name;
+            test -z {{ .Values.image.basepath }}/name && echo "${POD_NAME}" > {{ .Values.image.basepath }}/name
         env:
           # from (workaround for hostname)
           # https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/
@@ -63,14 +67,14 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
         volumeMounts:
-        - name: substrate-validator-secrets
+        - name: {{ .Values.app }}-validator-secrets
           readOnly: true
           mountPath: "/etc/validator"
-        - name: substratedir
+        - name: {{ .Values.app }}dir
           mountPath: {{ .Values.image.basepath }}
       {{- end }}
       containers:
-      - name: substrate
+      - name: {{ .Values.app }}
         imagePullPolicy: "{{ .Values.image.pullPolicy }}"
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         {{- if .Values.resources }}
@@ -91,13 +95,13 @@ spec:
           - -c
           - exec /usr/local/bin/substrate
             --base-path {{ .Values.image.basepath }}
-            --name $(POD_NAME)
-            {{- if .Values.validator.enable }}
-            --validator
-            {{- end }}
             {{- if .Values.validator.keys }}
+            --validator
+            --name $(cat {{ .Values.image.basepath }}/name)
             --key $(cat {{ .Values.image.basepath }}/key)
             --node-key $(cat {{ .Values.image.basepath }}/node-key)
+            {{- else }}
+            --name $(POD_NAME)
             {{- end }}
             {{- range .Values.nodes.args }} {{ . }} {{- end }}
         env:
@@ -106,7 +110,7 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
         volumeMounts:
-        - name: substratedir
+        - name: {{ .Values.app }}dir
           mountPath: {{ .Values.image.basepath }}
         readinessProbe:
           httpGet:
@@ -125,7 +129,7 @@ spec:
         fsGroup: 1000
   volumeClaimTemplates:
   - metadata:
-      name: substratedir
+      name: {{ .Values.app }}dir
     spec:
       accessModes: [ "ReadWriteOnce" ]
       storageClassName: ssd
