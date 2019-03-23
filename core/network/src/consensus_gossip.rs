@@ -414,6 +414,27 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(protocol, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
 	}
+
+	/// Send addressed message to a peer. The message is not kept or multicast
+	/// later on.
+	pub fn send_message(
+		&mut self,
+		protocol: &mut Context<B>,
+		who: NodeIndex,
+		message: ConsensusMessage,
+	) {
+		let peer = match self.peers.get_mut(&who) {
+			None => return,
+			Some(peer) => peer,
+		};
+
+		let message_hash = HashFor::<B>::hash(&message.data);
+
+		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
+
+		peer.known_messages.insert(message_hash);
+		protocol.send_message(who, Message::Consensus(message.clone()));
+	}
 }
 
 #[cfg(test)]
