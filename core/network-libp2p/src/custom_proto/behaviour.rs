@@ -563,7 +563,7 @@ where
 		match (self.peers.entry(peer_id), connected_point) {
 			(Entry::Occupied(mut entry), connected_point) => {
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					PeerState::Requested => {
+					PeerState::Requested | PeerState::PendingRequest { .. } => {
 						debug!(target: "sub-libp2p", "Libp2p => Connected({:?}): Connection \
 							requested by PSM (through {:?})", entry.key(), connected_point);
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", entry.key());
@@ -572,21 +572,6 @@ where
 							event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
 						});
 						*entry.into_mut() = PeerState::Enabled { open: false, connected_point };
-					}
-					PeerState::PendingRequest { timer } => {
-						debug!(target: "sub-libp2p", "Libp2p => Connected({:?}): Connection \
-							requested by PSM (through {:?}) but node is banned", entry.key(),
-							connected_point);
-						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", entry.key());
-						self.events.push(NetworkBehaviourAction::SendEvent {
-							peer_id: entry.key().clone(),
-							event: CustomProtoHandlerIn::Disable,
-						});
-						*entry.into_mut() = PeerState::DisabledPendingEnable {
-							open: false,
-							connected_point,
-							timer,
-						};
 					}
 					st @ _ => {
 						// This is a serious bug either in this state machine or in libp2p.
