@@ -182,7 +182,7 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub,
+	Zero, One, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
@@ -312,7 +312,7 @@ decl_storage! {
 						// <= begin it should be >= balance
 						// >= begin+length it should be <= 0
 
-						let per_block = balance / length;
+						let per_block = balance / length.max(One::one());
 						let offset = begin * per_block + balance;
 
 						(who.clone(), VestingSchedule { offset, per_block })
