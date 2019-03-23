@@ -95,13 +95,14 @@ mod until_imported;
 mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService};
-pub use communication::{Network, NetworkBridge};
+pub use communication::Network;
+pub use finality_proof::{prove_finality, check_finality_proof};
 
 use aux_schema::{PersistentData, VoterSetState};
 use environment::Environment;
-pub use finality_proof::{prove_finality, check_finality_proof};
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
+use communication::NetworkBridge;
 
 use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
@@ -335,11 +336,11 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 }
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<Arc<ed25519::Pair>>,
+	local_key: Option<&Arc<ed25519::Pair>>,
 	set_id: u64,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &N,
+	network: &NetworkBridge<Block, N>,
 ) -> (
 	impl Stream<
 		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
@@ -357,10 +358,15 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 {
+	let is_voter = local_key
+		.map(|pair| voters.contains_key(&pair.public().into()))
+		.unwrap_or(false);
+
 	// verification stream
-	let commit_in = crate::communication::checked_commit_stream::<Block, _>(
-		network.commit_messages(set_id),
+	let (commit_in, commit_out) = network.global_communication(
+		communication::SetId(set_id),
 		voters.clone(),
+		is_voter,
 	);
 
 	// block commit messages until relevant blocks are imported.
@@ -368,16 +374,6 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		client.import_notification_stream(),
 		client.clone(),
 		commit_in,
-	);
-
-	let is_voter = local_key
-		.map(|pair| voters.contains_key(&pair.public().into()))
-		.unwrap_or(false);
-
-	let commit_out = crate::communication::CommitsOut::<Block, _>::new(
-		network.clone(),
-		set_id,
-		is_voter,
 	);
 
 	let commit_in = commit_in.map_err(Into::into);
@@ -416,19 +412,6 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	}
 }
 
-fn forward_commit<B, S, N>(network: &N, stream: S) -> impl Future<Item=(),Error=Error>
-	where
-		B: BlockT,
-		S: Stream<Item=(u64, NumberFor<B>)> + Send + 'static,
-		N: Network<B> + Send + 'static,
-{
-	let net = network.clone();
-
-	// net.send_commit
-	stream.for_each(move |(set_id, num)| { unimplemented!(); Ok(()) })
-		.map_err(|_| panic!("unbounded receivers do not error; qed"))
-}
-
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
@@ -450,6 +433,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 {
 	use futures::future::{self, Loop as FutureLoop};
 
+	let network = NetworkBridge::new(network);
+
 	let LinkHalf {
 		client,
 		persistent_data,
@@ -460,9 +445,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
 	let voters = authority_set.current_authorities();
-	let (commit_finalized_tx, commit_finalized_rx) = mpsc::unbounded();
-	let forward_commit = forward_commit(&network, commit_finalized_rx);
-
 	let initial_environment = Arc::new(Environment {
 		inner: client.clone(),
 		config: config.clone(),
@@ -472,7 +454,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
 		last_completed: environment::LastCompletedRound::new(set_state.round()),
-		note_commit_finalized: commit_finalized_tx.clone(),
 	});
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
@@ -496,7 +477,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 				);
 
 				let committer_data = committer_communication(
-					config.local_key.clone(),
+					config.local_key.as_ref(),
 					env.set_id,
 					&env.voters,
 					&client,
@@ -528,7 +509,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let network = network.clone();
 		let authority_set = authority_set.clone();
 		let consensus_changes = consensus_changes.clone();
-		let note_commit_finalized = commit_finalized_tx.clone();
 
 		let handle_voter_command = move |command: VoterCommand<_, _>, voter_commands_rx| {
 			match command {
@@ -557,7 +537,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						last_completed: environment::LastCompletedRound::new(
 							(0, genesis_state.clone())
 						),
-						note_commit_finalized: note_commit_finalized,
 					});
 
 
@@ -614,7 +593,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	});
 
 	let voter_work = voter_work
-		.join(forward_commit)
 		.map(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Voter failed: {:?}", e);

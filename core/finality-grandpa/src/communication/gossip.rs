@@ -31,7 +31,7 @@ use std::collections::HashMap;
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Consider {
+enum Consider {
 	/// Accept the message.
 	Accept,
 	/// Message is too early. Reject.
@@ -41,7 +41,7 @@ pub enum Consider {
 }
 
 /// A view of protocol state.
-pub struct View<N> {
+struct View<N> {
 	round: Round, // the current round we are at.
 	set_id: SetId, // the current voter set id.
 	last_commit: Option<N>, // commit-finalized block height, if any.
@@ -59,13 +59,15 @@ impl<N> Default for View<N> {
 
 impl<N: Ord> View<N> {
 	/// Update the set ID. implies a reset to round 0.
-	pub fn update_set(&mut self, set_id: SetId) {
-		self.set_id = set_id;
-		self.round = Round(0);
+	fn update_set(&mut self, set_id: SetId) {
+		if set_id != self.set_id {
+			self.set_id = set_id;
+			self.round = Round(0);
+		}
 	}
 
 	/// Consider a round and set ID combination under a current view.
-	pub fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
+	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
 		// only from current set
 		if set_id < self.set_id { return Consider::RejectPast }
 		if set_id > self.set_id { return Consider::RejectFuture }
@@ -79,7 +81,7 @@ impl<N: Ord> View<N> {
 
 	/// Consider a set-id global message. Rounds are not taken into account, but are implicitly
 	/// because we gate on finalization of a further block than a previous commit.
-	pub fn consider_global(&self, set_id: SetId, number: N) -> Consider {
+	fn consider_global(&self, set_id: SetId, number: N) -> Consider {
 		// only from current set
 		if set_id < self.set_id { return Consider::RejectPast }
 		if set_id > self.set_id { return Consider::RejectFuture }
@@ -123,41 +125,41 @@ fn view_topics<B: BlockT>(view: &View<NumberFor<B>>) -> HashMap<B::Hash, (Option
 /// Grandpa gossip message type.
 /// This is the root type that gets encoded and sent on the network.
 #[derive(Debug, Encode, Decode)]
-pub enum GossipMessage<Block: BlockT> {
+pub(super) enum GossipMessage<Block: BlockT> {
 	/// Grandpa message with round and set info.
 	VoteOrPrecommit(VoteOrPrecommitMessage<Block>),
 	/// Grandpa commit message with round and set info.
 	Commit(FullCommitMessage<Block>),
 	/// A neighbor packet. Not repropagated.
-	Neighbor(NeighborPacket<NumberFor<Block>>),
+	Neighbor(VersionedNeighborPacket<NumberFor<Block>>),
 }
 
 /// Network level message with topic information.
 #[derive(Debug, Encode, Decode)]
-pub struct VoteOrPrecommitMessage<Block: BlockT> {
+pub(super) struct VoteOrPrecommitMessage<Block: BlockT> {
 	/// The round this message is from.
-	pub round: Round,
+	pub(super) round: Round,
 	/// The voter set ID this message is from.
-	pub set_id: SetId,
+	pub(super) set_id: SetId,
 	/// The message itself.
-	pub message: SignedMessage<Block>,
+	pub(super) message: SignedMessage<Block>,
 }
 
 /// Network level commit message with topic information.
 #[derive(Debug, Encode, Decode)]
-pub struct FullCommitMessage<Block: BlockT> {
+pub(super) struct FullCommitMessage<Block: BlockT> {
 	/// The round this message is from.
-	pub round: Round,
+	pub(super) round: Round,
 	/// The voter set ID this message is from.
-	pub set_id: SetId,
+	pub(super) set_id: SetId,
 	/// The compact commit message.
-	pub message: CompactCommit<Block>,
+	pub(super) message: CompactCommit<Block>,
 }
 
 /// V1 neighbor packet. Neighbor packets are sent from nodes to their peers
 /// and are not repropagated. These contain information about the node's state.
 #[derive(Debug, Encode, Decode)]
-pub struct NeighborPacket<N> {
+pub(super) struct NeighborPacket<N> {
 	round: Round,
 	set_id: SetId,
 	finalized_height: N,
@@ -166,9 +168,17 @@ pub struct NeighborPacket<N> {
 
 /// A versioned neighbor packet.
 #[derive(Debug, Encode, Decode)]
-pub enum VersionedNeighborPacket<N> {
+pub(super) enum VersionedNeighborPacket<N> {
 	#[codec(index = "1")]
 	V1(NeighborPacket<N>),
+}
+
+impl<N> VersionedNeighborPacket<N> {
+	fn into_neighbor_packet(self) -> NeighborPacket<N> {
+		match self {
+			VersionedNeighborPacket::V1(p) => p,
+		}
+	}
 }
 
 /// Misbehavior that peers can perform.
@@ -237,9 +247,12 @@ impl<N: Ord> Peers<N> {
 		self.inner.remove(node_index);
 	}
 
-	fn update_peer_state(&mut self, node_index: &NodeIndex, update: NeighborPacket<N>) -> Result<(), Misbehavior> {
+	// returns a reference to the new view.
+	fn update_peer_state(&mut self, node_index: &NodeIndex, update: NeighborPacket<N>)
+		-> Result<Option<&View<N>>, Misbehavior>
+	{
 		let peer = match self.inner.get_mut(node_index) {
-			None => return Ok(()),
+			None => return Ok(None),
 			Some(p) => p,
 		};
 
@@ -258,7 +271,7 @@ impl<N: Ord> Peers<N> {
 			last_commit: Some(update.commit_finalized_height),
 		};
 
-		Ok(())
+		Ok(Some(&peer.view))
 	}
 
 	fn update_commit_height(&mut self, node_index: &NodeIndex, new_height: N) -> Result<(), Misbehavior> {
@@ -322,7 +335,8 @@ impl<Block: BlockT> Inner<Block> {
 		self.update_view_topics();
 	}
 
-	/// Note that a voter set with given ID has started.
+	/// Note that a voter set with given ID has started. Does nothing if the last
+	/// call to the function was with the same `set_id`.
 	fn note_set(&mut self, set_id: SetId) {
 		self.local_view.update_set(set_id);
 		self.update_view_topics();
@@ -426,41 +440,45 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn import_neighbor_message(&mut self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
-		-> Action<Block::Hash>
+		-> (impl Iterator<Item=Block::Hash>, Action<Block::Hash>)
 	{
-		let cb = match self.peers.update_peer_state(who, update) {
-			Ok(()) => 100i32,
-			Err(misbehavior) => misbehavior.cost(),
+		let (cb, topics) = match self.peers.update_peer_state(who, update) {
+			Ok(view) => (100i32, view.map(|view| view_topics::<Block>(view))),
+			Err(misbehavior) => (misbehavior.cost(), None)
 		};
 
+		let view_topics = topics.into_iter()
+			.flat_map(|inner| inner)
+			.map(|(k, _)| k);
+
 		// always discard, it's valid for one hop.
-		Action::Discard(cb)
+		(view_topics, Action::Discard(cb))
 	}
 }
 
 /// A validator for GRANDPA gossip messages.
-pub(crate) struct GossipValidator<Block: BlockT> {
+pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
-	pub(crate) fn new() -> GossipValidator<Block> {
+	pub(super) fn new() -> GossipValidator<Block> {
 		GossipValidator { inner: parking_lot::RwLock::new(Inner::new()) }
 	}
 
 	/// Note a round in a set has started.
-	pub(crate) fn note_round(&self, round: Round, set_id: SetId) {
+	pub(super) fn note_round(&self, round: Round, set_id: SetId) {
 		self.inner.write().note_round(round, set_id);
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(crate) fn note_set(&self, set_id: SetId) {
+	pub(super) fn note_set(&self, set_id: SetId) {
 		self.inner.write().note_set(set_id);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(crate) fn note_commit_finalized(&self, finalized: NumberFor<Block>) {
+	pub(super) fn note_commit_finalized(&self, finalized: NumberFor<Block>) {
 		self.inner.write().note_commit_finalized(finalized);
 	}
 
@@ -479,7 +497,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		self.inner.write().peers.peer_disconnected(&who);
 	}
 
-	fn validate(&self, _context: &mut ValidatorContext<Block>, who: &NodeIndex, mut data: &[u8])
+	fn validate(&self, context: &mut ValidatorContext<Block>, who: &NodeIndex, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		let action = {
@@ -488,7 +506,18 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(GossipMessage::VoteOrPrecommit(ref message))
 					=> inner.validate_round_message(who, message),
 				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(who, message),
-				Some(GossipMessage::Neighbor(update)) => inner.import_neighbor_message(who, update),
+				Some(GossipMessage::Neighbor(update)) => {
+					let (broadcast_topics, action) = inner.import_neighbor_message(
+						who,
+						update.into_neighbor_packet(),
+					);
+
+					for topic in broadcast_topics {
+						// TODO: only to this peer.
+						context.broadcast_topic(topic, false);
+					}
+					action
+				}
 				None => {
 					debug!(target: "afg", "Error decoding message");
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");

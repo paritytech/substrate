@@ -156,7 +156,7 @@ fn propagate<'a, B: BlockT, I>(
 }
 
 /// Validates consensus messages.
-pub trait Validator<B: BlockT> {
+pub trait Validator<B: BlockT>: Send + Sync {
 	/// New peer is connected.
 	fn new_peer(&self, _context: &mut ValidatorContext<B>, _who: NodeIndex, _roles: Roles) {
 	}

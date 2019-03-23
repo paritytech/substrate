@@ -40,7 +40,7 @@ use runtime_primitives::ExecutionContext;
 use substrate_primitives::NativeOrEncoded;
 
 use authorities::AuthoritySet;
-use communication::{GRANDPA_ENGINE_ID, gossip::GossipValidator, Round, SetId};
+use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -140,84 +140,72 @@ impl TestNetFactory for GrandpaTestNet {
 struct MessageRouting {
 	inner: Arc<Mutex<GrandpaTestNet>>,
 	peer_id: usize,
-	validator: Arc<GossipValidator<Block>>,
 }
 
 impl MessageRouting {
 	fn new(inner: Arc<Mutex<GrandpaTestNet>>, peer_id: usize,) -> Self {
-		let validator = Arc::new(GossipValidator::new());
-		let v = validator.clone();
-		{
-			let inner = inner.lock();
-			let peer = inner.peer(peer_id);
-			peer.with_gossip(move |gossip, _| {
-				gossip.register_validator(GRANDPA_ENGINE_ID, v);
-			});
-		}
 		MessageRouting {
 			inner,
 			peer_id,
-			validator,
 		}
 	}
-}
-
-fn make_topic(round: u64, set_id: u64) -> Hash {
-	crate::communication::round_topic::<Block>(round, set_id)
-}
-
-fn make_global_topic(set_id: u64) -> Hash {
-	crate::communication::global_topic::<Block>(set_id)
 }
 
 impl Network<Block> for MessageRouting {
 	type In = Box<Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
 
-	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.validator.note_round(Round(round), SetId(set_id));
+	/// Get a stream of messages for a specific gossip topic.
+	fn messages_for(&self, topic: Hash) -> Self::In {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
+
 		let messages = peer.consensus_gossip_messages_for(
 			GRANDPA_ENGINE_ID,
-			make_topic(round, set_id),
+			topic,
 		);
 
 		let messages = messages.map_err(
-			move |_| panic!("Messages for round {} dropped too early", round)
+			move |_| panic!("Messages for topic {} dropped too early", topic)
 		);
 
 		Box::new(messages)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
-		let inner = self.inner.lock();
-		inner.peer(self.peer_id)
-			.gossip_message(make_topic(round, set_id), GRANDPA_ENGINE_ID, message, force);
-	}
-
-	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.validator.note_set(SetId(set_id));
+	fn register_validator(&self, v: Arc<dyn network_gossip::Validator<Block>>) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		let messages = peer.consensus_gossip_messages_for(
-			GRANDPA_ENGINE_ID,
-			make_global_topic(set_id),
-		);
-
-		let messages = messages.map_err(
-			move |_| panic!("Commit messages for set {} dropped too early", set_id)
-		);
-
-		Box::new(messages)
+		peer.with_gossip(move |gossip, _| {
+			gossip.register_validator(GRANDPA_ENGINE_ID, v);
+		});
 	}
 
-	fn send_commit(&self, set_id: u64, message: Vec<u8>, force: bool) {
+	fn gossip_message(&self, topic: Hash, data: Vec<u8>, force: bool) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id)
-			.gossip_message(make_global_topic(set_id), GRANDPA_ENGINE_ID, message, force);
+		inner.peer(self.peer_id).gossip_message(
+			topic,
+			GRANDPA_ENGINE_ID,
+			data,
+			force,
+		);
 	}
 
-	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
+	fn send_message(&self, who: network::NodeIndex, data: Vec<u8>) {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+
+		peer.with_gossip(move |gossip, ctx|
+			gossip.send_message(
+				ctx,
+				who,
+				network_gossip::ConsensusMessage {
+					engine_id: GRANDPA_ENGINE_ID,
+					data,
+				}
+			)
+		)
+	}
+
+	fn announce(&self, _block: Hash) {
 
 	}
 }
