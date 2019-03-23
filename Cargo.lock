@@ -1287,7 +1287,7 @@ dependencies = [
 [[package]]
 name = "libp2p"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1322,7 +1322,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "asn1_der 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1357,7 +1357,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core-derive"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "quote 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1366,7 +1366,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
@@ -1379,7 +1379,7 @@ dependencies = [
 [[package]]
 name = "libp2p-floodsub"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1398,7 +1398,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identify"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1419,7 +1419,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "arrayvec 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "bigint 4.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1447,7 +1447,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "data-encoding 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "dns-parser 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1468,7 +1468,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1484,7 +1484,7 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.3.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "curve25519-dalek 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1502,7 +1502,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "arrayvec 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1521,7 +1521,7 @@ dependencies = [
 [[package]]
 name = "libp2p-plaintext"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
@@ -1531,7 +1531,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ratelimit"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "aio-limited 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1544,7 +1544,7 @@ dependencies = [
 [[package]]
 name = "libp2p-secio"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "aes-ctr 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "asn1_der 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1570,7 +1570,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
@@ -1584,7 +1584,7 @@ dependencies = [
 [[package]]
 name = "libp2p-uds"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
@@ -1596,7 +1596,7 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
@@ -1611,7 +1611,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.5.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
@@ -1807,7 +1807,7 @@ dependencies = [
 [[package]]
 name = "multistream-select"
 version = "0.3.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2179,7 +2179,7 @@ dependencies = [
 [[package]]
 name = "parity-multiaddr"
 version = "0.2.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "arrayref 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2193,7 +2193,7 @@ dependencies = [
 [[package]]
 name = "parity-multihash"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2728,7 +2728,7 @@ dependencies = [
 [[package]]
 name = "rw-stream-sink"
 version = "0.1.1"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#afd9623fccaac5ce1c41db1d82ad4def2652390f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20#f0a2243eddd71c31e924044e80f03abd2dc61267"
 dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3783,6 +3783,7 @@ dependencies = [
  "crossbeam-channel 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libp2p 0.5.0 (git+https://github.com/tomaka/libp2p-rs?branch=substrate-tmp-2019-03-20)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
