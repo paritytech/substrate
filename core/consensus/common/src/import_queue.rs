@@ -46,7 +46,7 @@ pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> +
 pub type SharedJustificationImport<B> = Arc<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
-pub type Origin = usize;
+pub type Origin = libp2p::PeerId;
 
 /// Block data used by the queue.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -179,7 +179,7 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		let _ = self
 			.sender
-			.send(BlockImportMsg::ImportJustification(who, hash, number, justification))
+			.send(BlockImportMsg::ImportJustification(who.clone(), hash, number, justification))
 			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
 	}
 }
@@ -516,7 +516,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	let (header, justification) = match (block.header, block.justification) {
 		(Some(header), justification) => (header, justification),
 		(None, _) => {
-			if let Some(peer) = peer {
+			if let Some(ref peer) = peer {
 				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
 			} else {
 				debug!(target: "sync", "Header {} was not provided ", block.hash);
@@ -535,14 +535,14 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 				Ok(BlockImportResult::ImportedKnown(number))
 			},
-			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer)),
+			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 				Err(BlockImportError::UnknownParent)
 			},
 			Ok(ImportResult::KnownBad) => {
 				debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
-				Err(BlockImportError::BadBlock(peer))
+				Err(BlockImportError::BadBlock(peer.clone()))
 			},
 			Err(e) => {
 				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
@@ -558,12 +558,12 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 
 	let (import_block, new_authorities) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
-			if let Some(peer) = peer {
+			if let Some(ref peer) = peer {
 				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
 			} else {
 				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
 			}
-			BlockImportError::VerificationFailed(peer, msg)
+			BlockImportError::VerificationFailed(peer.clone(), msg)
 		})?;
 
 	import_error(import_handle.import_block(import_block, new_authorities))
@@ -572,6 +572,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use libp2p::PeerId;
 	use test_client::runtime::{Block, Hash};
 
 	#[derive(Debug, PartialEq)]
@@ -639,15 +640,16 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown with peer and bad justification
+		let peer_id = PeerId::random();
 		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(),
 			ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: true },
-			Some(0))), Default::default())];
+			Some(peer_id.clone()))), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 
 		// Send an incomplete header
-		let results = vec![(Err(BlockImportError::IncompleteHeader(Some(Default::default()))), Default::default())];
+		let results = vec![(Err(BlockImportError::IncompleteHeader(Some(peer_id.clone()))), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
@@ -658,7 +660,7 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
 
 		// Send a verification failed
-		let results = vec![(Err(BlockImportError::VerificationFailed(Some(0), String::new())), Default::default())];
+		let results = vec![(Err(BlockImportError::VerificationFailed(Some(peer_id.clone()), String::new())), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));

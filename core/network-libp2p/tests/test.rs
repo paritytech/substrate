@@ -99,9 +99,9 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { node_index, .. }) => {
+				Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
-						service1.send_custom_message(node_index, vec![(n % 256) as u8]);
+						service1.send_custom_message(&peer_id, vec![(n % 256) as u8]);
 					}
 				},
 				_ => panic!(),
@@ -227,9 +227,9 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { node_index, .. }) => {
+				Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
-						service1.send_custom_message(node_index, msg);
+						service1.send_custom_message(&peer_id, msg);
 					}
 				},
 				_ => panic!(),
