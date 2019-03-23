@@ -551,9 +551,12 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn bond_extra(origin, max_additional: BalanceOf<T>) {
-			let controller = ensure_signed(origin)?;
+			let stash = ensure_signed(origin)?;
+
+			let controller = Self::bonded(&stash).ok_or("not a stash")?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			let stash_balance = T::Currency::free_balance(&ledger.stash);
+
+			let stash_balance = T::Currency::free_balance(&stash);
 
 			if stash_balance > ledger.total {
 				let extra = (stash_balance - ledger.total).min(max_additional);
