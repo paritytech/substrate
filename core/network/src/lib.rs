@@ -43,7 +43,7 @@ pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
 	identity, multiaddr,
-	NodeIndex, ProtocolId, Severity, Multiaddr,
+	ProtocolId, Severity, Multiaddr,
 	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
 	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
 	build_multiaddr, PeerId, PublicKey
