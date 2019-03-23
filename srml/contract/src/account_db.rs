@@ -122,7 +122,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		for (address, changed) in s.into_iter() {
 			let trieid = <Self as AccountDb<T>>::get_or_create_trieid(&self, &address);
 			if let Some(balance) = changed.balance {
-				let (imbalance, outcome) = balances::Module::<T>::ensure_free_balance_is(&address, balance);
+				let (imbalance, outcome) = balances::Module::<T>::make_free_balance_be(&address, balance);
 				total_imbalance = total_imbalance.merge(imbalance);
 				if let UpdateBalanceOutcome::AccountKilled = outcome {
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback

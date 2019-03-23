@@ -23,7 +23,7 @@ use log::{trace, debug};
 use futures::sync::mpsc;
 use rand::{self, seq::SliceRandom};
 use lru_cache::LruCache;
-use network_libp2p::{Severity, NodeIndex};
+use network_libp2p::{Severity, PeerId};
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
@@ -79,7 +79,7 @@ pub trait Validator<H> {
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
-	peers: HashMap<NodeIndex, PeerConsensus<B::Hash>>,
+	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
 	live_message_sinks: HashMap<(ConsensusEngineId, B::Hash), Vec<mpsc::UnboundedSender<Vec<u8>>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
@@ -109,7 +109,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
+	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId, roles: Roles) {
 		if roles.intersects(Roles::AUTHORITY) {
 			trace!(target:"gossip", "Registering {:?} {}", roles, who);
 			// Send out all known messages to authorities.
@@ -118,7 +118,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				if let Status::Future = entry.status { continue }
 
 				known_messages.insert(entry.message_hash);
-				protocol.send_message(who, Message::Consensus(entry.message.clone()));
+				protocol.send_message(who.clone(), Message::Consensus(entry.message.clone()));
 			}
 			self.peers.insert(who, PeerConsensus {
 				known_messages,
@@ -145,7 +145,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let mut non_authorities: Vec<_> = self.peers.iter()
 			.filter_map(|(id, ref peer)|
 				if !peer.is_authority && (!peer.known_messages.contains(&message_hash) || force) {
-					Some(*id)
+					Some(id.clone())
 				} else {
 					None
 				}
@@ -164,12 +164,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 				if peer.known_messages.insert(message_hash.clone()) || force {
 					let message = get_message();
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					protocol.send_message(*id, Message::Consensus(message));
+					protocol.send_message(id.clone(), Message::Consensus(message));
 				}
 			} else if non_authorities.contains(&id) {
 				let message = get_message();
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-				protocol.send_message(*id, Message::Consensus(message));
+				protocol.send_message(id.clone(), Message::Consensus(message));
 			}
 		}
 	}
@@ -194,7 +194,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
-	pub fn peer_disconnected(&mut self, _protocol: &mut Context<B>, who: NodeIndex) {
+	pub fn peer_disconnected(&mut self, _protocol: &mut Context<B>, who: PeerId) {
 		self.peers.remove(&who);
 	}
 
@@ -291,7 +291,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	pub fn on_incoming(
 		&mut self,
 		protocol: &mut Context<B>,
-		who: NodeIndex,
+		who: PeerId,
 		message: ConsensusMessage,
 	) -> Option<(B::Hash, ConsensusMessage)> {
 		let message_hash = HashFor::<B>::hash(&message.data[..]);
@@ -325,7 +325,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				},
 				None => {
 					protocol.report_peer(
-						who,
+						who.clone(),
 						Severity::Useless(format!("Sent unknown consensus engine id")),
 					);
 					trace!(target:"gossip", "Unknown message engine id {:?} from {}",

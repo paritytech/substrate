@@ -18,7 +18,6 @@ use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::config::Roles;
 use consensus::BlockOrigin;
-use network_libp2p::NodeIndex;
 use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
@@ -54,7 +53,7 @@ fn sync_peers_works() {
 		// And then disconnect.
 		for other in 0..3 {
 			if other != peer {
-				net.peer(peer).on_disconnect(other);
+				net.peer(peer).on_disconnect(net.peer(other));
 			}
 		}
 	}
@@ -100,7 +99,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	for peer in 0..3 {
 		for other in 0..3 {
 			if other != peer {
-				net.peer(peer).on_disconnect(other);
+				net.peer(peer).on_disconnect(net.peer(other));
 			}
 		}
 		thread::sleep(Duration::from_millis(100));
@@ -125,8 +124,8 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	assert!(net.peer(1).is_major_syncing());
 
 	// Disconnect peer 1 form everyone else.
-	net.peer(1).on_disconnect(0);
-	net.peer(1).on_disconnect(2);
+	net.peer(1).on_disconnect(net.peer(0));
+	net.peer(1).on_disconnect(net.peer(2));
 	thread::sleep(Duration::from_millis(100));
 
 	// Peer 1 is not major-syncing.
@@ -162,7 +161,7 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 fn ancestry_search_works_when_backoff_is_one() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
-	
+
 	net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
@@ -357,13 +356,13 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.peer(0).start();
 	net.peer(1).start();
 	net.peer(2).start();
-	net.peer(0).on_connect(1);
-	net.peer(1).on_connect(2);
+	net.peer(0).on_connect(net.peer(1));
+	net.peer(1).on_connect(net.peer(2));
 
 	// Only sync between 0 -> 1, and 1 -> 2
 	let mut disconnected = HashSet::new();
-	disconnected.insert(0 as NodeIndex);
-	disconnected.insert(2 as NodeIndex);
+	disconnected.insert(0);
+	disconnected.insert(2);
 	net.sync_with_disconnected(disconnected);
 
 	// peer 0 has the best chain
