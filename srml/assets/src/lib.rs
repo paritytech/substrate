@@ -19,8 +19,6 @@
 //!
 //! A simple, secure module for dealing with fungible assets.
 //!
-//! Run `cargo doc --package srml-assets --open` to view this module's documentation.
-//!
 //! ## Overview
 //!
 //! The assets module provides functionality for asset management of fungible asset classes with a fixed supply, including:
