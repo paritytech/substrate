@@ -79,14 +79,6 @@
 //! <!-- Original author of paragraph: @Kianenigma -->
 //! Note that when using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
 //!
-//! ### Storage Items:
-//!
-//! * Balances
-//! * NextAssetId
-//! * TotalSupply
-//!
-//! Please refer to the <a href="https://github.com/paritytech/substrate/blob/master/srml/assets/src/lib.rs#L99" target="_blank">`decl_storage!`</a> block in the Asset SRML source code for details of storage items.
-//!
 //! ### Events:
 //!
 //! * [`Issued`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
