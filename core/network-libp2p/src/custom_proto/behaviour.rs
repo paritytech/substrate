@@ -332,15 +332,33 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		};
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			PeerState::Banned { until } => {
+			PeerState::Banned { ref until } if *until > Instant::now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: tokio_timer::Delay::new(until),
+					timer: tokio_timer::Delay::new(until.clone()),
 				};
 			},
 
-			PeerState::Disabled { open, connected_point, banned_until: None } => {
+			PeerState::Banned { .. } => {
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", occ_entry.key());
+				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
+				self.events.push(NetworkBehaviourAction::DialPeer { peer_id: occ_entry.key().clone() });
+				*occ_entry.into_mut() = PeerState::Requested;
+			},
+
+			PeerState::Disabled { open, ref connected_point, banned_until: Some(ref banned) }
+				if *banned > Instant::now() => {
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
+					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
+				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
+					connected_point: connected_point.clone(),
+					open,
+					timer: tokio_timer::Delay::new(banned.clone()),
+				};
+			},
+
+			PeerState::Disabled { open, connected_point, banned_until: _ } => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Enabling previously-idle \
 					connection through {:?}", occ_entry.key(), connected_point);
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
@@ -349,16 +367,6 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 					event: CustomProtoHandlerIn::Enable(connected_point.clone().into()),
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { connected_point, open };
-			},
-
-			PeerState::Disabled { open, connected_point, banned_until: Some(banned) } => {
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
-					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
-				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
-					connected_point,
-					open,
-					timer: tokio_timer::Delay::new(banned),
-				};
 			},
 
 			PeerState::Incoming { connected_point, .. } => {
