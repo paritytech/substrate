@@ -56,10 +56,6 @@
 //!
 //! **signed** - Used to issue, transfer, and destroy an asset holding.
 //!
-//! ### Types
-//!
-//! * `AssetId`: `u32`
-//!
 //! ### Dispatchable Functions ([`Call`])
 //!
 //! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
