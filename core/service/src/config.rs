@@ -68,7 +68,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
-	/// Enable authoinrg even when offline.
+	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 }
 
