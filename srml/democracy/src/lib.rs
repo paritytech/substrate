@@ -291,7 +291,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the voters for the current proposal.
 	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
-		let (approve, against, capital): (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) = Self::voters_for(ref_index).iter()
+		Self::voters_for(ref_index).iter()
 			.map(|voter| (
 				T::Currency::total_balance(voter), Self::vote_of((ref_index, voter.clone()))
 			))
@@ -301,42 +301,34 @@ impl<T: Trait> Module<T> {
 				} else {
 					(Zero::zero(), bal * BalanceOf::<T>::sa(vote.multiplier() as u64), bal)
 				}
-			).fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f));
-		let (del_approve, del_against, del_capital) = Self::tally_delegation(ref_index);
-		(approve + del_approve, against + del_against, capital + del_capital)
+			).fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f))
 	}
 
 	/// Get the delegated voters for the current proposal.
 	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done. 
-	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
-		Self::voters_for(ref_index).iter()
-			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
-				let vote = Self::vote_of((ref_index, voter.clone()));
-				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT);
-				if vote.is_aye() {
-					(approve_acc + votes, against_acc, capital_acc + balance)
-				} else {
-					(approve_acc, against_acc + votes, capital_acc + balance)
-				}
-			})
+	fn add_delegated_votes(ref_index: ReferendumIndex) {
+		for voter in Self::voters_for(ref_index).iter() {
+			let vote = Self::vote_of((ref_index, voter.clone()));
+			Self::add_delegated_votes_to(ref_index, voter, &vote, MAX_RECURSION_LIMIT);
+		}
 	}
 
-	fn delegated_votes(
+	fn add_delegated_votes_to(
 		ref_index: ReferendumIndex,
-		to: T::AccountId,
-		min_lock_periods: LockPeriods,
+		to: &T::AccountId,
+		vote: &Vote,
 		recursion_limit: u32,
-	) -> (BalanceOf<T>, BalanceOf<T>) {
-		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
-		<Delegations<T>>::enumerate()
-			.filter(|(delegator, (delegate, _))| *delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())))
-			.fold((Zero::zero(), Zero::zero()), |(votes_acc, balance_acc), (delegator, (_delegate, periods))| {
-				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
-				let balance = T::Currency::total_balance(&delegator);
-				let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
-				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1);
-				(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
-			})
+	) {
+		if recursion_limit == 0 { return }
+		for (delegator, (delegate, periods)) in <Delegations<T>>::enumerate() {
+			if 	delegate == *to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())) {
+				let multiplier = if periods < vote.multiplier() { periods } else { vote.multiplier() };
+				let delegator_vote = Vote::new(vote.is_aye(), multiplier);
+				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(delegator.clone()));
+				<VoteOf<T>>::insert(&(ref_index, delegator.clone()), delegator_vote);
+				Self::add_delegated_votes_to(ref_index, &delegator, vote, recursion_limit - 1);
+			}
+		}
 	}
 
 	// Exposed mutables.
@@ -410,6 +402,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn bake_referendum(now: T::BlockNumber, index: ReferendumIndex, info: ReferendumInfo<T::BlockNumber, T::Proposal>) -> Result {
+		Self::add_delegated_votes(index);
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
@@ -648,6 +641,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is counted.
+			Democracy::add_delegated_votes(r);
 			assert_eq!(Democracy::tally(r), (30, 0, 30));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -678,6 +672,7 @@ mod tests {
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 
 			// Delegated vote is counted.
+			Democracy::add_delegated_votes(r);
 			assert_eq!(Democracy::tally(r), (60, 0, 60));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
@@ -710,6 +705,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
+			Democracy::add_delegated_votes(r);
 			assert_eq!(Democracy::tally(r), (30, 0, 30));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -739,6 +735,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
+			Democracy::add_delegated_votes(r);
 			assert_eq!(Democracy::tally(r), (10, 0, 10));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -772,6 +769,7 @@ mod tests {
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
 			// Delegated vote is not counted.
+			Democracy::add_delegated_votes(r);
 			assert_eq!(Democracy::tally(r), (30, 0, 30));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -995,9 +993,17 @@ mod tests {
 			assert_ok!(Democracy::delegate(Origin::signed(5), 2, 2));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, Vote::new(false, 1)));
 
+			Democracy::add_delegated_votes(r);
 			assert_eq!(Democracy::tally(r), (440, 120, 210));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::locks(1), vec![]);
+			assert_eq!(Balances::locks(2), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 6, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(3), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 5, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(4), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 4, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(5), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 3, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(6), vec![]);
 
 			System::set_block_number(2);
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
