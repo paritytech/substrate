@@ -32,7 +32,7 @@
 //!
 //! ## Terminology
 //!
-//! * **Asset issuance:** The process of an account issuing a total fixed supply of a new asset class.
+//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account that issues the asset.
 //! * **Asset transfer:** The process of an account transfering units of their holding of an asset to a recipient.
 //! * **Asset destruction:** The process of an account destroying their entire holding of an asset.
 //! * **Fungible asset:** An asset that may be interchanged into an identical equivalent.
