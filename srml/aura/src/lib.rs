@@ -277,7 +277,6 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	}
 }
 
-
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = timestamp::Call<T>;
 	type Error = MakeFatalError<RuntimeString>;
