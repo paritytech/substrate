@@ -287,7 +287,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		None
 	}
 
-	// Verify the validity of the inherent using the timestamp
+	/// Verify the validity of the inherent using the timestamp
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
 			timestamp::Call::set(ref timestamp) => timestamp.clone(),
