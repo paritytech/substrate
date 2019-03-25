@@ -154,7 +154,6 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	/// Convert the encoded error to a string
-	/// If the error cannot be decoded, `None` is returned
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
 		RuntimeString::decode(&mut &error[..]).map(Into::into)
 	}
