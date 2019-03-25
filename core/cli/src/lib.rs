@@ -472,6 +472,8 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
+	config.force_authoring = cli.force_authoring;
+
 	Ok(config)
 }
 
