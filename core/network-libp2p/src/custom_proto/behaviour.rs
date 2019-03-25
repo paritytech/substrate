@@ -585,7 +585,7 @@ where
 					st @ _ => {
 						// This is a serious bug either in this state machine or in libp2p.
 						error!(target: "sub-libp2p", "Received inject_connected for \
-							already-connected node");
+							already-connected node; state is {:?}", st);
 						*entry.into_mut() = st;
 						return
 					}
