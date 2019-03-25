@@ -700,12 +700,13 @@ fn store_functions_to_metadata (
 					)
 				}
 			},
-			DeclStorageTypeInfosKind::Map { key_type, .. } => {
+			DeclStorageTypeInfosKind::Map { key_type, is_linked } => {
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Map {
 						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
 						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+						is_linked: #is_linked,
 					}
 				}
 			},

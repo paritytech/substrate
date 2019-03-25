@@ -220,6 +220,10 @@ pub struct RunCmd {
 	#[structopt(long = "validator")]
 	pub validator: bool,
 
+	/// Disable GRANDPA when running in validator mode
+	#[structopt(long = "no-grandpa")]
+	pub no_grandpa: bool,
+
 	/// Run in light client mode
 	#[structopt(long = "light")]
 	pub light: bool,
@@ -325,6 +329,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keyring: Keyring,
+
+	/// Enable authoring even when offline.
+	#[structopt(long = "force-authoring")]
+	pub force_authoring: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.
