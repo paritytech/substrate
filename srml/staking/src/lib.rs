@@ -228,7 +228,7 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
+use primitives::traits::{Zero, One, As, StaticLookup, CheckedSub, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -549,14 +549,17 @@ decl_module! {
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		fn bond_extra(origin, max_additional: BalanceOf<T>) {
-			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			let stash_balance = T::Currency::free_balance(&ledger.stash);
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
+			let stash = ensure_signed(origin)?;
 
-			if stash_balance > ledger.total {
-				let extra = (stash_balance - ledger.total).min(max_additional);
+			let controller = Self::bonded(&stash).ok_or("not a stash")?;
+			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+
+			let stash_balance = T::Currency::free_balance(&stash);
+
+			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
+				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
 				Self::update_ledger(&controller, &ledger);
@@ -583,8 +586,7 @@ decl_module! {
 				ledger.active -= value;
 
 				// Avoid there being a dust balance left in the staking system.
-				let ed = T::Currency::minimum_balance();
-				if ledger.active < ed {
+				if ledger.active < T::Currency::minimum_balance() {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
@@ -672,7 +674,7 @@ decl_module! {
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
