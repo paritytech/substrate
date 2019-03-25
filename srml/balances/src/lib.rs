@@ -48,10 +48,10 @@
 //! existential deposit then it will be deleted.
 //! - **Imbalance:** A condition when some funds were created or deducted without equal and opposite accounting. Functions
 //! that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
-//! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number.
+//! - **Locks:** A freeze on an account's balance until a specified block number.
 //!
 //! ### Implementations
-//! 
+//!
 //! The balances module provides implementations for the following traits. If these traits provide the functionality
 //! that you need, then you can avoid coupling with the balances module.
 //!
@@ -60,13 +60,13 @@
 //! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
 //! - [`Imbalance`]: Functions for handling imbalances between total issuance in the system and account balances.
-//! Must be used when a function creates new funds (e.g. a reward) or destroys some funds (e.g. system fee).
+//! Must be used when a function creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
 //! - [`MakePayent`]: Simple trait designed for hooking into a transaction payment. It operates over a single generic
 //! `AccountId` type.
 //! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
-//! Example from the treasury module:
+//! Example of using the `Currency` trait from the treasury module:
 //!
 //! ```rust,ignore
 //! pub trait Trait: system::Trait {
@@ -142,7 +142,7 @@
 //! ## Genesis config
 //!
 //! The following storage items depend on the genesis config:
-//! 
+//!
 //! - `TotalIssuance`
 //! - `ExistentialDeposit`
 //! - `TransferFee`
@@ -183,7 +183,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
-	/// A function which is invoked when the free-balance has fallen below the existential deposit and
+	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
@@ -197,7 +197,7 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
-	/// A function which is invoked when the free-balance has fallen below the existential deposit and
+	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
@@ -314,7 +314,7 @@ decl_storage! {
 		/// This is the only balance that matters in terms of most operations on tokens. It
 		/// alone is used to determine the balance when in the contract execution environment. When this
 		/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-		/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
+		/// deleted: specifically `FreeBalance`. Further, the `OnFreeBalanceZero` callback
 		/// is invoked, giving a chance to external modules to clean up data associated with
 		/// the deleted account.
 		///
@@ -370,7 +370,7 @@ decl_module! {
 		/// Set the balances of a given account.
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
-		/// If the new free or reserved balance is below the existential deposit, 
+		/// If the new free or reserved balance is below the existential deposit,
 		/// it will also decrease the total issuance of the system (`TotalIssuance`)
 		/// and reset the account nonce (`system::AccountNonce`).
 		///
@@ -406,9 +406,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Set the reserved balance of an account to some new value. Will enforce `ExistentialDeposit`
 	/// law, annulling the account as needed.
 	///
-  /// Doesn't do any preparatory work for creating a new account, so should only be used when it
+	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
-  ///
+	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
@@ -422,8 +422,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit
-	/// law annulling the account as needed.
+	/// Set the free balance of an account to some new value. Will enforce `ExistentialDeposit`
+	/// law, annulling the account as needed.
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.

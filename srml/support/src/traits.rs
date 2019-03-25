@@ -297,7 +297,7 @@ pub trait Currency<AccountId> {
 		new_balance: Self::Balance,
 	) -> result::Result<(), &'static str>;
 
-		// PUBLIC MUTABLES (DANGEROUS)
+	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Transfer some liquid free balance to another staker.
 	///
@@ -332,7 +332,7 @@ pub trait Currency<AccountId> {
 	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is `KeepAlive`,
 	/// then no less than `ExistentialDeposit` must be left remaining.
 	///
-	/// This checks any locks, vesting and liquidity requirements. If the removal is not possible, then it
+	/// This checks any locks, vesting, and liquidity requirements. If the removal is not possible, then it
 	/// returns `Err`.
 	fn withdraw(
 		who: &AccountId,
@@ -362,7 +362,7 @@ pub trait Currency<AccountId> {
 		UpdateBalanceOutcome,
 	);
 
-		/// Moves `value` from balance to reserved balance.
+	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
 	/// be returned to notify of this. This is different behavior than `unreserve`.
@@ -467,3 +467,4 @@ bitmask! {
 		Fee = 0b00001000,
 	}
 }
+
