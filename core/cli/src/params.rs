@@ -17,7 +17,7 @@
 use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
+use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
 /// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
@@ -68,7 +68,7 @@ pub struct SharedParams {
 	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
-	///Sets a custom logging filter
+	/// Sets a custom logging filter
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
 }
@@ -98,10 +98,6 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
-	/// Specify node secret key (64-character hex string)
-	#[structopt(long = "node-key", value_name = "KEY")]
-	pub node_key: Option<String>,
-
 	/// Specify the number of outgoing connections we're trying to maintain
 	#[structopt(long = "out-peers", value_name = "OUT_PEERS", default_value = "25")]
 	pub out_peers: u32,
@@ -109,6 +105,93 @@ pub struct NetworkConfigurationParams {
 	/// Specify the maximum number of incoming connections we're accepting
 	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
 	pub in_peers: u32,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub node_key_params: NodeKeyParams
+}
+
+arg_enum! {
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	pub enum NodeKeyType {
+		Secp256k1,
+		Ed25519
+	}
+}
+
+/// Parameters used to create the `NodeKeyConfig`, which determines the keypair
+/// used for libp2p networking.
+#[derive(Debug, StructOpt, Clone)]
+pub struct NodeKeyParams {
+	/// The secret key to use for libp2p networking.
+	///
+	/// The value is a string that is parsed according to the choice of
+	/// `--node-key-type` as follows:
+	///
+	///   `secp256k1`:
+	///   The value is parsed as a hex-encoded Secp256k1 32 bytes secret key,
+	///   i.e. 64 hex characters.
+	///
+	///   `ed25519`:
+	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
+	///   i.e. 64 hex characters.
+	///
+	/// The value of this option takes precedence over `--node-key-file`.
+	///
+	/// WARNING: Secrets provided as command-line arguments are easily exposed.
+	/// Use of this option should be limited to development and testing. To use
+	/// an externally managed secret key, use `--node-key-file` instead.
+	#[structopt(long = "node-key", value_name = "KEY")]
+	pub node_key: Option<String>,
+
+	/// The type of secret key to use for libp2p networking.
+	///
+	/// The secret key of the node is obtained as follows:
+	///
+	///   * If the `--node-key` option is given, the value is parsed as a secret key
+	///     according to the type. See the documentation for `--node-key`.
+	///
+	///   * If the `--node-key-file` option is given, the secret key is read from the
+	///     specified file. See the documentation for `--node-key-file`.
+	///
+	///   * Otherwise, the secret key is read from a file with a predetermined,
+	///     type-specific name from the chain-specific network config directory
+	///     inside the base directory specified by `--base-dir`. If this file does
+	///     not exist, it is created with a newly generated secret key of the
+	///     chosen type.
+	///
+	/// The node's secret key determines the corresponding public key and hence the
+	/// node's peer ID in the context of libp2p.
+	///
+	/// NOTE: The current default key type is `secp256k1` for a transition period only
+	/// but will eventually change to `ed25519` in a future release. To continue using
+	/// `secp256k1` keys, use `--node-key-type=secp256k1`.
+	#[structopt(
+		long = "node-key-type",
+		value_name = "TYPE",
+		raw(
+			possible_values = "&NodeKeyType::variants()",
+			case_insensitive = "true",
+			default_value = r#""Secp256k1""#
+		)
+	)]
+	pub node_key_type: NodeKeyType,
+
+	/// The file from which to read the node's secret key to use for libp2p networking.
+	///
+	/// The contents of the file are parsed according to the choice of `--node-key-type`
+	/// as follows:
+	///
+	///   `secp256k1`:
+	///   The file must contain an unencoded 32 bytes Secp256k1 secret key.
+	///
+	///   `ed25519`:
+	///   The file must contain an unencoded 32 bytes Ed25519 secret key.
+	///
+	/// If the file does not exist, it is created with a newly generated secret key of
+	/// the chosen type.
+	#[structopt(long = "node-key-file", value_name = "FILE")]
+	pub node_key_file: Option<PathBuf>
 }
 
 /// Parameters used to create the pool configuration.
@@ -169,7 +252,7 @@ pub struct RunCmd {
 	#[structopt(long = "name", value_name = "NAME")]
 	pub name: Option<String>,
 
-	/// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
+	/// Disable connecting to the Substrate telemetry server (telemetry is on by default on global chains).
 	#[structopt(long = "no-telemetry")]
 	pub no_telemetry: bool,
 
@@ -227,7 +310,6 @@ pub struct RunCmd {
 	)]
 	pub other_execution: ExecutionStrategy,
 
-	
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -239,6 +321,84 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub keyring: Keyring,
+
+	/// Enable authoring even when offline.
+	#[structopt(long = "force-authoring")]
+	pub force_authoring: bool,
+}
+
+/// Stores all required Cli values for a keyring test account.
+struct KeyringTestAccountCliValues {
+	help: String,
+	conflicts_with: Vec<String>,
+	name: String,
+	variant: keyring::AuthorityKeyring,
+}
+
+lazy_static::lazy_static! {
+	/// The Cli values for all test accounts.
+	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
+		keyring::AuthorityKeyring::iter().map(|a| {
+			let help = format!("Shortcut for `--key //{} --name {}`.", a, a);
+			let conflicts_with = keyring::AuthorityKeyring::iter()
+				.filter(|b| a != *b)
+				.map(|b| b.to_string().to_lowercase())
+				.chain(["name", "key"].iter().map(|s| s.to_string()))
+				.collect::<Vec<_>>();
+			let name = a.to_string().to_lowercase();
+
+			KeyringTestAccountCliValues {
+				help,
+				conflicts_with,
+				name,
+				variant: a,
+			}
+		}).collect()
+	};
+}
+
+/// Wrapper for exposing the keyring test accounts into the Cli.
+#[derive(Debug, Clone)]
+pub struct Keyring {
+	pub account: Option<keyring::AuthorityKeyring>,
+}
+
+impl StructOpt for Keyring {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		unimplemented!("Should not be called for `TestAccounts`.")
+	}
+
+	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
+		Keyring {
+			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
+		}
+	}
+}
+
+impl AugmentClap for Keyring {
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
+			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+			app.arg(
+				Arg::with_name(&a.name)
+					.long(&a.name)
+					.help(&a.help)
+					.conflicts_with_all(&conflicts_with_strs)
+					.takes_value(false)
+			)
+		})
+	}
+}
+
+impl Keyring {
+	fn is_subcommand() -> bool {
+		false
+	}
 }
 
 /// Default to verbosity level 0, if none is provided.
@@ -270,9 +430,9 @@ pub struct BuildSpecCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
-	/// Specify node secret key (64-character hex string)
-	#[structopt(long = "node-key", value_name = "KEY")]
-	pub node_key: Option<String>,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub node_key_params: NodeKeyParams,
 }
 
 impl_get_log_filter!(BuildSpecCmd);
@@ -338,6 +498,10 @@ impl_get_log_filter!(RevertCmd);
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
+	/// Skip interactive prompt by answering yes automatically.
+	#[structopt(short = "y")]
+	pub yes: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,

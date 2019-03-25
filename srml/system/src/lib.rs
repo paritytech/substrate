@@ -324,8 +324,7 @@ impl<T: Trait> Module<T> {
 
 		// <Events<T>> stays to be inspected by the client.
 
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root,
-			parent_hash, digest)
+		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -482,7 +481,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
 		type Log = DigestItem;

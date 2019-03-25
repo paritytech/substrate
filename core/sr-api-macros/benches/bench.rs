@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use criterion::Criterion;
+use criterion::{Criterion, criterion_group, criterion_main};
 use test_client::runtime::TestAPI;
 use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
+use state_machine::ExecutionStrategy;
 
 fn sr_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
@@ -49,6 +50,18 @@ fn sr_api_benchmark(c: &mut Criterion) {
 		let data = vec![0; 1000];
 
 		b.iter_with_large_drop(|| client.runtime_api().benchmark_vector_add_one(&block_id, &data))
+	});
+
+	c.bench_function("calling function by function pointer in wasm", |b| {
+		let client = test_client::new_with_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+		b.iter(|| client.runtime_api().benchmark_indirect_call(&block_id).unwrap())
+	});
+
+	c.bench_function("calling function in wasm", |b| {
+		let client = test_client::new_with_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+		b.iter(|| client.runtime_api().benchmark_direct_call(&block_id).unwrap())
 	});
 }
 

@@ -6,7 +6,7 @@
 
 
 /// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/gav-template/srml/example/src/lib.rs
+/// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
 use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
@@ -95,7 +95,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;

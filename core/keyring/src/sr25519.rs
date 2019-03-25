@@ -19,13 +19,8 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as _Pair, H256};
+use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, H256};
 pub use substrate_primitives::sr25519;
-
-/// The root phrase for our test keys.
-///
-/// This is the same phrase that's in node::cli, but shouldn't need to be.
-pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -81,7 +76,7 @@ impl Keyring {
 	}
 
 	pub fn pair(self) -> Pair {
-		Pair::from_string(&format!("{}//{}", DEV_PHRASE, <&'static str>::from(self)), None)
+		Pair::from_string(&format!("//{}", <&'static str>::from(self)), None)
 			.expect("static values are known good; qed")
 	}
 }
@@ -172,7 +167,7 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use substrate_primitives::{sr25519::Pair, Pair as _Pair};
+	use substrate_primitives::{sr25519::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {

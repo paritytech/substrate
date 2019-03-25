@@ -31,7 +31,7 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::{AccountKeyring, AuthorityKeyring};
+	use keyring::{AuthorityKeyring, AccountKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
@@ -44,7 +44,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, FeesConfig, Event, Log};
+		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
 	use wabt;
 	use primitives::map;
 
@@ -126,8 +126,8 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -159,8 +159,8 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -192,8 +192,8 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -229,8 +229,8 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -271,6 +271,8 @@ mod tests {
 				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
 			}),
 			balances: Some(BalancesConfig {
+				transaction_base_fee: 1,
+				transaction_byte_fee: 0,
 				balances: vec![
 					(alice(), 111),
 					(bob(), 100),
@@ -306,7 +308,6 @@ mod tests {
 				bonding_duration: 0,
 				offline_slash: Perbill::zero(),
 				session_reward: Perbill::zero(),
-				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
@@ -320,10 +321,6 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
-			}),
-			fees: Some(FeesConfig {
-				transaction_base_fee: 1,
-				transaction_byte_fee: 0,
 			}),
 		}.build_storage().unwrap().0)
 	}
@@ -445,13 +442,7 @@ mod tests {
 			]
 		);
 
-		// let mut digest = generic::Digest::<Log>::default();
-		// digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-		// 	(Keyring::Charlie.to_raw_public().into(), 1),
-		// 	(Keyring::Bob.to_raw_public().into(), 1),
-		// 	(Keyring::Alice.to_raw_public().into(), 1),
-		// ])));
-		let digest = generic::Digest::<Log>::default(); // TODO test this
+		let digest = generic::Digest::<Log>::default();
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
 		(block1, block2)
@@ -524,10 +515,6 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::fees(fees::RawEvent::Charged(1, 1))
-				}
 			]);
 		});
 
@@ -584,14 +571,6 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))
 				},
-				// EventRecord { // TODO: this might be wrong.
-				// 	phase: Phase::Finalization,
-				// 	event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-				// 		(Keyring::Charlie.to_raw_public().into(), 1),
-				// 		(Keyring::Bob.to_raw_public().into(), 1),
-				// 		(Keyring::Alice.to_raw_public().into(), 1),
-				// 	])),
-				// },
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Spending(0))
@@ -604,14 +583,6 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::fees(fees::RawEvent::Charged(1, 1))
-				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::fees(fees::RawEvent::Charged(2, 1))
-				}
 			]);
 		});
 	}
@@ -832,8 +803,8 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialise_block", &vec![].and(&from_block_number(1u64)));
@@ -854,8 +825,8 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
-			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialise_block", &vec![].and(&from_block_number(1u64)));

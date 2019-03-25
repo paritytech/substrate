@@ -1169,6 +1169,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		}
 	}
 
+	fn have_state_at(&self, hash: &Block::Hash, number: NumberFor<Block>) -> bool {
+		!self.storage.state_db.is_pruned(hash, number.as_())
+	}
+
 	fn destroy_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
 		if let Some(hash) = state.parent_hash.clone() {
 			let is_best = || self.blockchain.meta.read().best_hash == hash;

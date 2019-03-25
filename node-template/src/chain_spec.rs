@@ -1,9 +1,8 @@
 use primitives::{ed25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
-	SudoConfig, IndicesConfig, FeesConfig,
+	SudoConfig, IndicesConfig,
 };
-use substrate_cli::DEV_PHRASE;
 use substrate_service;
 
 use ed25519::Public as AuthorityId;
@@ -26,13 +25,13 @@ pub enum Alternative {
 }
 
 fn authority_key(s: &str) -> AuthorityId {
-	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+	ed25519::Pair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 fn account_key(s: &str) -> AccountId {
-	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+	ed25519::Pair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
 }
@@ -105,6 +104,8 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 			ids: endowed_accounts.clone(),
 		}),
 		balances: Some(BalancesConfig {
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -114,9 +115,5 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		fees: Some(FeesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-		})
 	}
 }
