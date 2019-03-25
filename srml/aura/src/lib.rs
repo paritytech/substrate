@@ -28,8 +28,6 @@
 //! 
 //! See the [module](https://crates.parity.io/srml_aura/struct.Module.html) for details on publicly available functions.
 //! 
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
-//! 
 //! ## Usage
 //! 
 //! ### Prerequisites
@@ -128,10 +126,8 @@ impl InherentDataProvider {
 	}
 }
 
-/// Methods to specify the provision of inherent data
 #[cfg(feature = "std")]
 impl ProvideInherentData for InherentDataProvider {
-	/// Called when this inherent data provider is registered at the given `InherentDataProviders`
 	fn on_register(
 		&self,
 		providers: &InherentDataProviders,
@@ -281,21 +277,17 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	}
 }
 
-/// Methods for creating and checking inherents
+
 impl<T: Trait> ProvideInherent for Module<T> {
-	/// The call type (timestamp)
 	type Call = timestamp::Call<T>;
-	/// The error returned by `check_inherent`
 	type Error = MakeFatalError<RuntimeString>;
-	/// The inherent identifier used by this inherent
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	/// Create an inherent from the `InherentData`
 	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
 		None
 	}
 
-	/// Verify the validity of the inherent using the timestamp
+	// Verify the validity of the inherent using the timestamp
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
 			timestamp::Call::set(ref timestamp) => timestamp.clone(),
