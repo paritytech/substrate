@@ -70,7 +70,7 @@
 //! ```rust,ignore
 //! pub trait Trait: system::Trait {
 //! 	/// The staking balance.
-//! 	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=<<Self as Trait>::Currency as ArithmeticType>::Type>;
+//! 	type Currency: Currency<Self::AccountId>;
 //! }
 //! ```
 //!
