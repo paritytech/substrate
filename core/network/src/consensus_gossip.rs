@@ -140,12 +140,11 @@ fn propagate<'a, B: BlockT, I>(
 	};
 
 	for (message_hash, topic, message) in messages {
-		println!("attempting to propagate on engine ID {:?}", message.engine_id);
-
 		for (id, ref mut peer) in peers.iter_mut() {
 			if intent == MessageIntent::Broadcast && peer.known_messages.contains(&message_hash) {
 				continue
 			}
+
 			if !message_allowed(id, intent, &topic, &message) {
 				continue
 			}

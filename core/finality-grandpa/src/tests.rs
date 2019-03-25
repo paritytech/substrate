@@ -189,21 +189,20 @@ impl Network<Block> for MessageRouting {
 		);
 	}
 
-	fn send_message(&self, who: &network::PeerId, data: Vec<u8>) {
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		let who = who.clone();
 
-		peer.with_gossip(move |gossip, ctx|
+		peer.with_gossip(move |gossip, ctx| for who in &who {
 			gossip.send_message(
 				ctx,
-				&who,
+				who,
 				network_gossip::ConsensusMessage {
 					engine_id: GRANDPA_ENGINE_ID,
-					data,
+					data: data.clone(),
 				}
 			)
-		)
+		})
 	}
 
 	fn announce(&self, _block: Hash) {

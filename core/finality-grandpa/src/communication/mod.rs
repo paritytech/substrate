@@ -27,7 +27,7 @@ use log::{debug, trace};
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use network::{consensus_gossip as network_gossip, ConsensusEngineId, Service as NetworkService,};
 use network_gossip::ConsensusMessage;
 
@@ -62,8 +62,8 @@ pub trait Network<Block: BlockT>: Clone {
 	/// Only should be used in case of consensus stall.
 	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
 
-	/// Send a message to a specific peer, even if they've seen it already.
-	fn send_message(&self, who: &network::PeerId, data: Vec<u8>);
+	/// Send a message to a bunch of specific peers, even if they've seen it already.
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash);
@@ -110,15 +110,15 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 		)
 	}
 
-	fn send_message(&self, who: &network::PeerId, data: Vec<u8>) {
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
 		let msg = ConsensusMessage {
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
-		let who = who.clone();
-		self.with_gossip(
-			move |gossip, ctx| gossip.send_message(ctx, &who, msg)
-		)
+
+		self.with_gossip(move |gossip, ctx| for who in &who {
+			gossip.send_message(ctx, who, msg.clone())
+		})
 	}
 
 	fn announce(&self, block: B::Hash) {
@@ -178,7 +178,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
-		self.validator.note_round(round, set_id);
+		self.validator.note_round(round, set_id, &self.service);
 
 		let locals = local_key.and_then(|pair| {
 			let public = pair.public();
@@ -207,8 +207,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 							return Ok(None);
 						}
-
-						println!("Got message {:?}", msg.message);
 
 						match &msg.message.message {
 							Prevote(prevote) => {
@@ -266,7 +264,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item = (u64, CompactCommit<B>), Error = Error>,
 		impl Sink<SinkItem = (u64, Commit<B>), SinkError = Error>,
 	) {
-		self.validator.note_set(set_id);
+		self.validator.note_set(set_id, &self.service);
 
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = self.service.messages_for(topic)
@@ -308,6 +306,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		(incoming, outgoing)
+	}
+
+	pub(crate) fn note_commit_finalized(&self, number: NumberFor<B>) {
+		self.validator.note_commit_finalized(number, &self.service);
 	}
 }
 
@@ -413,10 +415,10 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			grandpa::Message::Precommit(_) => self.has_voted.can_precommit(),
 		};
 
-		println!("Sending message {:?}", msg);
-
 		// when locals exist, sign messages on import
 		if let (true, &Some((ref pair, ref local_id))) = (should_sign, &self.locals) {
+			println!("Sending message {:?}", msg);
+
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
 

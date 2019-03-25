@@ -16,7 +16,7 @@
 
 //! Gossip and politeness for GRANDPA communication.
 
-use runtime_primitives::traits::{NumberFor, Block as BlockT};
+use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
@@ -25,7 +25,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::debug;
 
 use crate::{CompactCommit, SignedMessage};
-use super::{Round, SetId};
+use super::{Round, SetId, Network};
 
 use std::collections::HashMap;
 
@@ -97,26 +97,21 @@ impl<N: Ord> View<N> {
 			}
 		}
 	}
-
-	// the previous round, if we're not at 0.
-	fn prev_round(&self) -> Option<Round> {
-		if self.round.0 == 0 {
-			None
-		} else {
-			Some(Round(self.round.0 - 1))
-		}
-	}
 }
 
 fn view_topics<B: BlockT>(view: &View<NumberFor<B>>) -> HashMap<B::Hash, (Option<Round>, SetId)> {
+	const KEEP_PAST_ROUNDS: u64 = 3;
+
 	let s = view.set_id;
 	let mut map: HashMap<_, _> = [
 		(super::global_topic::<B>(s.0), (None, s)),
 		(super::round_topic::<B>(view.round.0, s.0), (Some(view.round), s)),
 	].iter().cloned().collect();
 
-	if let Some(r) = view.prev_round() {
-		map.insert(super::round_topic::<B>(r.0, s.0), (Some(r), s));
+	for i in (0..KEEP_PAST_ROUNDS).map(|i| i + 1) {
+		if view.round.0 < i { break }
+		let r = view.round.0 - i;
+		map.insert(super::round_topic::<B>(r, s.0), (Some(Round(r)), s));
 	}
 
 	map
@@ -162,7 +157,6 @@ pub(super) struct FullCommitMessage<Block: BlockT> {
 pub(super) struct NeighborPacket<N> {
 	round: Round,
 	set_id: SetId,
-	finalized_height: N,
 	commit_finalized_height: N,
 }
 
@@ -258,7 +252,7 @@ impl<N: Ord> Peers<N> {
 
 		let invalid_change = peer.view.set_id > update.set_id
 			|| peer.view.round > update.round && peer.view.set_id == peer.view.set_id
-			|| update.commit_finalized_height > update.finalized_height
+			|| update.commit_finalized_height > update.commit_finalized_height
 			|| peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
 
 		if invalid_change {
@@ -319,32 +313,41 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn update_view_topics(&mut self) {
-		self.live_topics = view_topics::<Block>(&self.local_view);
+		self.live_topics = view_topics::<Block>(&self.local_view
+		);
+		println!("keeping topics: {:?}", self.live_topics);
 	}
 
 	/// Note a round in a set has started.
-	fn note_round(&mut self, round: Round, set_id: SetId) {
-		self.local_view.round = round;
-
-		if set_id != self.local_view.set_id {
-			// clear commit when we change set.
-			self.local_view.last_commit = None;
+	fn note_round<N: Network<Block>>(&mut self, round: Round, set_id: SetId, net: &N) {
+		if self.local_view.round == round && self.local_view.set_id == set_id {
+			return
 		}
 
+		self.local_view.round = round;
 		self.local_view.set_id = set_id;
+
 		self.update_view_topics();
+		self.multicast_neighbor_packet(net);
 	}
 
 	/// Note that a voter set with given ID has started. Does nothing if the last
 	/// call to the function was with the same `set_id`.
-	fn note_set(&mut self, set_id: SetId) {
+	fn note_set<N: Network<Block>>(&mut self, set_id: SetId, net: &N) {
+		if self.local_view.set_id == set_id { return }
+
 		self.local_view.update_set(set_id);
 		self.update_view_topics();
+		self.multicast_neighbor_packet(net);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	fn note_commit_finalized(&mut self, finalized: NumberFor<Block>) {
-		self.local_view.last_commit = std::cmp::max(self.local_view.last_commit, Some(finalized));
+	fn note_commit_finalized<N: Network<Block>>(&mut self, finalized: NumberFor<Block>, net: &N) {
+		if self.local_view.last_commit.as_ref() < Some(&finalized) {
+			self.local_view.last_commit = Some(finalized);
+			self.update_view_topics();
+			self.multicast_neighbor_packet(net)
+		}
 	}
 
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
@@ -454,6 +457,22 @@ impl<Block: BlockT> Inner<Block> {
 		// always discard, it's valid for one hop.
 		(view_topics, Action::Discard(cb))
 	}
+
+	fn construct_neighbor_packet(&self) -> GossipMessage<Block> {
+		let packet = NeighborPacket {
+			round: self.local_view.round,
+			set_id: self.local_view.set_id,
+			commit_finalized_height: self.local_view.last_commit.unwrap_or(Zero::zero()),
+		};
+
+		GossipMessage::Neighbor(VersionedNeighborPacket::V1(packet))
+	}
+
+	fn multicast_neighbor_packet<N: Network<Block>>(&self, net: &N) {
+		let packet = self.construct_neighbor_packet();
+		let peers = self.peers.inner.keys().cloned().collect();
+		net.send_message(peers, packet.encode());
+	}
 }
 
 /// A validator for GRANDPA gossip messages.
@@ -468,29 +487,33 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note a round in a set has started.
-	pub(super) fn note_round(&self, round: Round, set_id: SetId) {
-		self.inner.write().note_round(round, set_id);
+	pub(super) fn note_round<N: Network<Block>>(&self, round: Round, set_id: SetId, net: &N) {
+		self.inner.write().note_round(round, set_id, net);
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(super) fn note_set(&self, set_id: SetId) {
-		self.inner.write().note_set(set_id);
+	pub(super) fn note_set<N: Network<Block>>(&self, set_id: SetId, net: &N) {
+		self.inner.write().note_set(set_id, net);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(super) fn note_commit_finalized(&self, finalized: NumberFor<Block>) {
-		self.inner.write().note_commit_finalized(finalized);
+	pub(super) fn note_commit_finalized<N: Network<Block>>(&self, finalized: NumberFor<Block>, net: &N) {
+		self.inner.write().note_commit_finalized(finalized, net);
 	}
 
 	fn report(&self, _who: &PeerId, _cost_benefit: i32) {
-		// nothing yet.
+		// report
 	}
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, _context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
-		println!("new peer {:?}", who);
-		self.inner.write().peers.new_peer(who.clone());
+	fn new_peer(&self, context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
+		let packet_data = {
+			let mut inner = self.inner.write();
+			inner.peers.new_peer(who.clone());
+			inner.construct_neighbor_packet().encode()
+		};
+		context.send_message(who, packet_data);
 	}
 
 	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: &PeerId) {
@@ -500,6 +523,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn validate(&self, context: &mut ValidatorContext<Block>, who: &PeerId, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
+		let mut broadcast_topics = Vec::new();
 		let action = {
 			let mut inner = self.inner.write();
 			match GossipMessage::<Block>::decode(&mut data) {
@@ -507,15 +531,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					=> inner.validate_round_message(who, message),
 				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(who, message),
 				Some(GossipMessage::Neighbor(update)) => {
-					let (broadcast_topics, action) = inner.import_neighbor_message(
+					let (topics, action) = inner.import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
 					);
 
-					for topic in broadcast_topics {
-						// TODO: only to this peer.
-						context.broadcast_topic(topic, false);
-					}
+					broadcast_topics = topics.collect();
 					action
 				}
 				None => {
@@ -528,7 +549,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			}
 		};
 
-		println!("validated incoming message -> {:?}", action);
+		// not with lock held!
+		for topic in broadcast_topics {
+			// TODO: only to this peer.
+			context.broadcast_topic(topic, false);
+		}
 
 		match action {
 			Action::Keep(topic, cb) => {
@@ -550,8 +575,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
 		let inner = self.inner.read();
-		Box::new(move |who, _intent, topic, mut data| {
-			println!("deciding whether to send message on topic {} to peer {:?}", topic, who);
+		Box::new(move |who, intent, topic, mut data| {
+			if let MessageIntent::PeriodicRebroadcast = intent {
+				return false;
+			}
+
 			let peer = match inner.peers.peer(who) {
 				None => return false,
 				Some(x) => x,
@@ -592,13 +620,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		Box::new(move |topic, mut data| {
 			// if the topic is not one of the ones that we are keeping at the moment,
 			// it is expired.
-			let &(ref maybe_round, _) = match inner.live_topics.get(&topic) {
+			match inner.live_topics.get(&topic) {
 				None => return true,
-				Some(x) => x,
+				Some((Some(_), _)) => return false, // round messages don't require further checking.
+				Some((None, _)) => {},
 			};
-
-			// round messages don't require any further checking.
-			if maybe_round.is_none() { return false }
 
 			// global messages -- only keep the best commit.
 			let best_commit = inner.local_view.last_commit;

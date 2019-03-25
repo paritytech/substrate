@@ -270,6 +270,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.estimate.as_ref().map(|e| e.1),
 			state.finalized.as_ref().map(|e| e.1),
 		);
+		println!("completed round");
 
 		self.last_completed.with(|last_completed| {
 			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
@@ -297,7 +298,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
-		finalize_block(
+		let res = finalize_block(
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
@@ -305,7 +306,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			hash,
 			number,
 			(round, commit).into(),
-		)
+		);
+
+		if let Ok(_) = res {
+			self.network.note_commit_finalized(number);
+		}
+
+		res
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
