@@ -35,8 +35,7 @@ spec:
   type: NodePort
   # don't route exteral traffic to non-local pods
   externalTrafficPolicy: Local
-{{- else }}
-{{- if .Values.validator.keys }}
+{{- else if .Values.validator.keys }}
 {{- $root := . -}}
 {{- range until (int .Values.nodes.replicas) }}
 ---
@@ -51,6 +50,5 @@ spec:
     - port: 30333
       targetPort: 30333
       protocol: TCP
-{{- end }}
 {{- end }}
 {{- end }}
