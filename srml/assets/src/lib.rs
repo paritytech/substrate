@@ -127,7 +127,7 @@
 //!		}
 //!
 //! 		pub fn get_balance(asset_id, who) -> Result {
-//!				let _balance = <assets::Module<T>>::balance::get(asset_id, who);
+//!			let _balance = <assets::Module<T>>::balance::get(asset_id, who);
 //!				Ok(())
 //! 		}
 //!
