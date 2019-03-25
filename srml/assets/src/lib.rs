@@ -57,7 +57,7 @@
 //! ### Dispatchable Functions ([`Call`])
 //!
 //! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
-//! * `transfer` - Transfers an `amount` of units of a fungible asset `id` from the balance of the sender's account (`origin`) that called the function to a `target` account.
+//! * `transfer` - Transfers an `amount` of units of fungible asset `id` from the balance of the function caller's account (`origin`) to a `target` account.
 //! * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account that called the function.
 //! 
 //! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
