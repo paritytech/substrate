@@ -22,7 +22,7 @@ use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::debug;
+use log::{trace, debug};
 
 use crate::{CompactCommit, SignedMessage};
 use super::{Round, SetId, Network};
