@@ -72,7 +72,7 @@ pub mod opaque {
 	#[cfg(feature = "std")]
 	impl std::fmt::Debug for UncheckedExtrinsic {
 		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-			write!(fmt, "{}", runtime_primitives::hexdisplay::HexDisplay::from(&self.0))
+			write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 		}
 	}
 	impl traits::Extrinsic for UncheckedExtrinsic {
