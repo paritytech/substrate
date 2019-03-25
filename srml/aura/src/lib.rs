@@ -153,7 +153,6 @@ impl ProvideInherentData for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
 	}
 
-	/// Convert the encoded error to a string
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
 		RuntimeString::decode(&mut &error[..]).map(Into::into)
 	}
