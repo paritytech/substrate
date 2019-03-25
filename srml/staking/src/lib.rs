@@ -550,7 +550,7 @@ decl_module! {
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
-		fn bond_extra(origin, max_additional: BalanceOf<T>) {
+		fn bond_extra(origin, max_additional: #[compact] BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
 			let controller = Self::bonded(&stash).ok_or("not a stash")?;
@@ -558,8 +558,8 @@ decl_module! {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 
-			if stash_balance > ledger.total {
-				let extra = (stash_balance - ledger.total).min(max_additional);
+			if let Some(extra) = stash_balance.checked_sub(ledger.total) {
+				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
 				Self::update_ledger(&controller, &ledger);
@@ -586,8 +586,7 @@ decl_module! {
 				ledger.active -= value;
 
 				// Avoid there being a dust balance left in the staking system.
-				let ed = T::Currency::minimum_balance();
-				if ledger.active < ed {
+				if ledger.active < T::Currency::minimum_balance() {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
