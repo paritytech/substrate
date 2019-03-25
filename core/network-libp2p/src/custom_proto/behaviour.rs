@@ -571,7 +571,8 @@ where
 		match (self.peers.entry(peer_id), connected_point) {
 			(Entry::Occupied(mut entry), connected_point) => {
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					PeerState::Requested | PeerState::PendingRequest { .. } => {
+					PeerState::Requested | PeerState::PendingRequest { .. } |
+					PeerState::Banned { .. } => {
 						debug!(target: "sub-libp2p", "Libp2p => Connected({:?}): Connection \
 							requested by PSM (through {:?})", entry.key(), connected_point);
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", entry.key());
