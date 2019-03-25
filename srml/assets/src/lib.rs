@@ -83,7 +83,7 @@
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the Asset Module in your custom module by exposing public functions to:
+//! The following example shows how to use the Assets Module in your custom module by exposing public functions to:
 //! * Issue a new fungible asset for a token distribution event (airdrop).
 //! * Query the fungible asset holding balance of an account.
 //! * Query the total supply of a fungible asset that has been issued.
