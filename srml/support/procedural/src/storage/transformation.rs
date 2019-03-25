@@ -500,7 +500,9 @@ fn decl_storage_items(
 			}
 
 			impls.extend(quote! {
-				/// Instance trait implemented by all usable instance of the module.
+				/// Tag a type as an instance of a module.
+				/// 
+				/// Defines storage prefixes, they must be unique.
 				pub trait #instantiable: 'static {
 					#const_impls
 				}
