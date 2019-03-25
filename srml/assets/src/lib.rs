@@ -112,7 +112,7 @@
 //!		pub fn issue_token_airdrop(origin) -> Result {
 //!				const ACCOUNT_ALICE: u64 = 1;
 //! 			const ACCOUNT_BOB: u64 = 2;
-//!				const COUNT_AIRDROP_RECIPIENTS = 2;
+//!			const COUNT_AIRDROP_RECIPIENTS = 2;
 //! 			const TOKENS_FIXED_SUPPLY: u64 = 100;
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _asset_id = Self::next_asset_id();
