@@ -6,6 +6,9 @@ description = "Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
 
+[features]
+allow-old-seals = []
+
 [dependencies]
 log = "0.4"
 tokio = "0.1.7"

@@ -32,6 +32,7 @@ native_executor_instance!(
 #[derive(Default)]
 pub struct NodeConfig {
 	inherent_data_providers: InherentDataProviders,
+	allow_old_seals: bool,
 }
 
 construct_simple_protocol! {
@@ -93,6 +94,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					cfg!(feature = "allow-old-seals"),
 				).map_err(Into::into)
 			},
 		LightImportQueue = AuraImportQueue<
@@ -106,6 +108,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					cfg!(feature = "allow-old-seals"),
 				).map_err(Into::into)
 			},
 	}

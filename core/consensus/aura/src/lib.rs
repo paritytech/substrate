@@ -37,7 +37,7 @@ use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
-use runtime_primitives::{generic, generic::BlockId, Justification, ConsensusEngineId};
+use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
 };
@@ -62,6 +62,8 @@ pub use consensus_common::SyncOracle;
 
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
+
+const AURA: [u8; 4] = [b'a', b'u', b'r', b'a'];
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
@@ -112,28 +114,31 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 }
 
 /// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<U, V>: Sized {
-	/// Construct a digest item which is a slot number and a signature on the
+pub trait CompatibleDigestItem<T>: Sized {
+	/// Construct a digest item which contains a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: U, signature: V) -> Self;
+	fn aura_seal(signature: T) -> Self;
 
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(U, V)>;
+	fn as_aura_seal(&self) -> Option<T>;
 }
 
 /// A digest item which is usable with aura consensus.
-pub trait GoodDigestItem<T: Pair>: CompatibleDigestItem<u64, T::Signature> + CompatibleDigestItem<ConsensusEngineId, Vec<u8>> {}
+pub trait GoodDigestItem<T: Pair>: CompatibleDigestItem<(u64, T::Signature)> + CompatibleDigestItem<Vec<u8>> {}
 
 #[deprecated]
-impl<Pub, Sig, Hash> CompatibleDigestItem<u64, Sig> for generic::DigestItem<Hash, Pub, Sig>
+impl<Pub, Sig, Hash> CompatibleDigestItem<(u64, Sig)> for generic::DigestItem<Hash, Pub, Sig>
 	where Sig: Clone,
 {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Sig) -> Self {
+	#[allow(deprecated)]
+	fn aura_seal((slot_number, signature): (u64, Sig)) -> Self {
 		generic::DigestItem::Seal(slot_number, signature)
 	}
+
 	/// If this item is an Aura seal, return the slot number and signature.
+	#[allow(deprecated)]
 	fn as_aura_seal(&self) -> Option<(u64, Sig)> {
 		match self {
 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
@@ -142,18 +147,18 @@ impl<Pub, Sig, Hash> CompatibleDigestItem<u64, Sig> for generic::DigestItem<Hash
 	}
 }
 
-impl<Pub, Sig, Hash> CompatibleDigestItem<ConsensusEngineId, Vec<u8>> for generic::DigestItem<Hash, Pub, Sig>
+impl<Pub, Sig, Hash> CompatibleDigestItem<Vec<u8>> for generic::DigestItem<Hash, Pub, Sig>
 	where Sig: Clone,
 {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(engine_id: ConsensusEngineId, seal: Vec<u8>) -> Self {
-		generic::DigestItem::Consensus(engine_id, seal)
+	fn aura_seal(seal: Vec<u8>) -> Self {
+		generic::DigestItem::Consensus(AURA, seal)
 	}
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(ConsensusEngineId, Vec<u8>)> {
+	fn as_aura_seal(&self) -> Option<Vec<u8>> {
 		match self {
-			generic::DigestItem::Consensus(slot, ref sig) => Some((*slot, (*sig).clone())),
+			generic::DigestItem::Consensus(AURA, ref sig) => Some((*sig).clone()),
 			_ => None
 		}
 	}
@@ -454,9 +459,8 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 					// add it to a digest item.
 					let to_sign = (slot_num, pre_hash).encode();
 					let signature = pair.sign(&to_sign[..]);
-					let item = <DigestItemFor<B> as CompatibleDigestItem<ConsensusEngineId, Vec<u8>>>::aura_seal(
-						[0; 4],
-						Encode::encode(&signature),
+					let item = <DigestItemFor<B> as CompatibleDigestItem<Vec<u8>>>::aura_seal(
+						Encode::encode(&(slot_num, &signature)),
 					);
 
 					let import_block: ImportBlock<B> = ImportBlock {
@@ -498,18 +502,35 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block, P: Pair>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId<P>])
-	-> Result<CheckedHeader<B::Header, P::Signature>, String>
-	where DigestItemFor<B>: CompatibleDigestItem<u64, Signature<P>>,
+fn check_header<B: Block, P: Pair>(
+	slot_now: u64,
+	mut header: B::Header,
+	hash: B::Hash,
+	authorities: &[AuthorityId<P>],
+	allow_old_seals: bool,
+) -> Result<CheckedHeader<B::Header, P::Signature>, String>
+	where DigestItemFor<B>: GoodDigestItem<P>,
 		P::Public: Clone + AsRef<P::Public>,
+		P::Signature: Decode,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-	let (slot_num, sig) = match digest_item.as_aura_seal() {
-		Some(x) => x,
-		None => return Err(format!("Header {:?} is unsealed", hash)),
+	let seal: Option<Vec<u8>> = digest_item.as_aura_seal();
+	let (slot_num, sig) = match seal {
+		Some(v) => {
+			let opt: Option<(u64, Signature<P>)> = Decode::decode(&mut &*v);
+			opt.ok_or_else(|| format!("Header {:?} is unsealed", hash))?
+		}
+		None => if !allow_old_seals {
+			return Err(format!("Header {:?} is unsealed", hash))
+		} else {
+			match digest_item.as_aura_seal() {
+				Some(x) => x,
+				None => return Err(format!("Header {:?} is unsealed", hash)),
+			}
+		}
 	};
 
 	if slot_num > slot_now {
@@ -555,6 +576,7 @@ pub struct AuraVerifier<C, E, P> {
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
+	allow_old_seals: bool,
 }
 
 impl<C, E, P> AuraVerifier<C, E, P>
@@ -628,6 +650,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	E: ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
+	P::Signature: Decode,
 {
 	fn verify(
 		&self,
@@ -643,7 +666,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 		let parent_hash = *header.parent_hash();
 		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
-
+		// FIXME this should be determined by the block number
 		let extra_verification = self.extra.verify(
 			&header,
 			body.as_ref().map(|x| &x[..]),
@@ -651,10 +674,10 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, P>(slot_now + 1, header, hash, &authorities[..])?;
+		let checked_header = check_header::<B, P>(slot_now + 1, header, hash, &authorities[..], self.allow_old_seals)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
-				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
+				let item = <DigestItemFor<B>>::aura_seal((slot_num, sig));
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -736,6 +759,7 @@ pub fn import_queue<B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
+	allow_old_seals: bool,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
@@ -744,6 +768,7 @@ pub fn import_queue<B, C, E, P>(
 	E: 'static + ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Signature: Decode,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
@@ -753,6 +778,7 @@ pub fn import_queue<B, C, E, P>(
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData::<P>,
+			allow_old_seals,
 		}
 	);
 	Ok(BasicQueue::new(verifier, block_import, justification_import))
