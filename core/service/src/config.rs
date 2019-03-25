@@ -72,6 +72,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub offchain_worker: bool,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
+	/// Disable GRANDPA when running in validator mode
+	pub disable_grandpa: bool,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -99,6 +101,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
 			force_authoring: false,
+			disable_grandpa: false,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 

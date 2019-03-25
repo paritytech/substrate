@@ -122,6 +122,7 @@ fn node_config<F: ServiceFactory> (
 		default_heap_pages: None,
 		offchain_worker: false,
 		force_authoring: false,
+		disable_grandpa: false,
 	}
 }
 
