@@ -144,7 +144,6 @@ impl ProvideInherentData for InherentDataProvider {
 		&INHERENT_IDENTIFIER
 	}
 
-	/// Data should be stored in the `InherentData` structure
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
