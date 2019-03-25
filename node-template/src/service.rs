@@ -12,7 +12,6 @@ use substrate_service::{
 	TaskExecutor,
 };
 use basic_authorship::ProposerFactory;
-use node_executor;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use substrate_client as client;
 use primitives::{ed25519::Pair, Pair as PairT};
@@ -45,7 +44,7 @@ construct_service_factory! {
 		Block = Block,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
-		RuntimeDispatch = node_executor::Executor,
+		RuntimeDispatch = Executor,
 		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
@@ -74,6 +73,7 @@ construct_service_factory! {
 						service.network(),
 						service.on_exit(),
 						service.config.custom.inherent_data_providers.clone(),
+						service.config.force_authoring,
 					)?);
 				}
 
@@ -86,7 +86,7 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>|
-				import_queue(
+				import_queue::<_, _, _, Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					client.clone(),
 					None,
@@ -99,7 +99,7 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>|
-				import_queue(
+				import_queue::<_, _, _, Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					client.clone(),
 					None,

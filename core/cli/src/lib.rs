@@ -427,6 +427,8 @@ where
 	};
 
 	config.roles = role;
+	config.disable_grandpa = cli.no_grandpa;
+
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
@@ -469,6 +471,8 @@ where
 	} else if !cli.telemetry_endpoints.is_empty() {
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
+
+	config.force_authoring = cli.force_authoring;
 
 	Ok(config)
 }

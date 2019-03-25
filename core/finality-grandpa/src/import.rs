@@ -116,7 +116,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 }
 
 enum AppliedChanges<H, N> {
-	Standard,
+	Standard(bool), // true if the change is ready to be applied (i.e. it's a root)
 	Forced(NewAuthoritySet<H, N>),
 	None,
 }
@@ -124,7 +124,7 @@ enum AppliedChanges<H, N> {
 impl<H, N> AppliedChanges<H, N> {
 	fn needs_justification(&self) -> bool {
 		match *self {
-			AppliedChanges::Standard => true,
+			AppliedChanges::Standard(_) => true,
 			AppliedChanges::Forced(_) | AppliedChanges::None => false,
 		}
 	}
@@ -345,8 +345,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 					.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
 					.map_err(ConsensusError::from)?;
 
-				if did_standard {
-					AppliedChanges::Standard
+				if let Some(root) = did_standard {
+					AppliedChanges::Standard(root)
 				} else {
 					AppliedChanges::None
 				}
@@ -358,7 +358,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		if let Some((_, ref authorities)) = just_in_case {
 			let authorities_change = match applied_changes {
 				AppliedChanges::Forced(ref new) => Some(new),
-				AppliedChanges::Standard => None, // the change isn't actually applied yet.
+				AppliedChanges::Standard(_) => None, // the change isn't actually applied yet.
 				AppliedChanges::None => None,
 			};
 
@@ -405,7 +405,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 
 		// we don't want to finalize on `inner.import_block`
-		let justification = block.justification.take();
+		let mut justification = block.justification.take();
 		let enacts_consensus_change = new_authorities.is_some();
 		let import_result = self.inner.import_block(block, new_authorities);
 
@@ -435,23 +435,34 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 
 		let needs_justification = applied_changes.needs_justification();
-		if let AppliedChanges::Forced(new) = applied_changes {
-			// NOTE: when we do a force change we are "discrediting" the old set so we
-			// ignore any justifications from them. this block may contain a justification
-			// which should be checked and imported below against the new authority
-			// triggered by this forced change. the new grandpa voter will start at the
-			// last median finalized block (which is before the block that enacts the
-			// change), full nodes syncing the chain will not be able to successfully
-			// import justifications for those blocks since their local authority set view
-			// is still of the set before the forced change was enacted, still after #1867
-			// they should import the block and discard the justification, and they will
-			// then request a justification from sync if it's necessary (which they should
-			// then be able to successfully validate).
-			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
 
-			// we must clear all pending justifications requests, presumably they won't be
-			// finalized hence why this forced changes was triggered
-			imported_aux.clear_justification_requests = true;
+		match applied_changes {
+			AppliedChanges::Forced(new) => {
+				// NOTE: when we do a force change we are "discrediting" the old set so we
+				// ignore any justifications from them. this block may contain a justification
+				// which should be checked and imported below against the new authority
+				// triggered by this forced change. the new grandpa voter will start at the
+				// last median finalized block (which is before the block that enacts the
+				// change), full nodes syncing the chain will not be able to successfully
+				// import justifications for those blocks since their local authority set view
+				// is still of the set before the forced change was enacted, still after #1867
+				// they should import the block and discard the justification, and they will
+				// then request a justification from sync if it's necessary (which they should
+				// then be able to successfully validate).
+				let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
+
+				// we must clear all pending justifications requests, presumably they won't be
+				// finalized hence why this forced changes was triggered
+				imported_aux.clear_justification_requests = true;
+			},
+			AppliedChanges::Standard(false) => {
+				// we can't apply this change yet since there are other dependent changes that we
+				// need to apply first, drop any justification that might have been provided with
+				// the block to make sure we request them from `sync` which will ensure they'll be
+				// applied in-order.
+				justification.take();
+			},
+			_ => {},
 		}
 
 		if !needs_justification && !enacts_consensus_change {
@@ -481,6 +492,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				if enacts_consensus_change {
 					self.consensus_changes.lock().note_change((number, hash));
 				}
+
 				imported_aux.needs_justification = true;
 			}
 		}

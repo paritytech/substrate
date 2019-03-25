@@ -107,6 +107,9 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 	}
 }
 
+// TODO child test primitives are currently limited to `changes` (for non child the way
+// things are defined seems utterly odd to (put changes in changes but never make them
+// available for read through inner)
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
@@ -115,8 +118,8 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		}
 	}
 
-	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> Option<Vec<u8>> {
-		None
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		self.changes.child_storage(storage_key, key)?.map(Vec::from)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -132,11 +135,15 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		}
 	}
 
-	fn place_child_storage(&mut self, _storage_key: Vec<u8>, _key: Vec<u8>, _value: Option<Vec<u8>>) -> bool {
-		false
+	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool {
+		self.changes.set_child_storage(storage_key, key, value);
+		// TODO place_child_storage and set_child_storage should always be valid (create child on set)?
+		true
 	}
 
-	fn kill_child_storage(&mut self, _storage_key: &[u8]) { }
+	fn kill_child_storage(&mut self, storage_key: &[u8]) {
+		self.changes.clear_child_storage(storage_key);
+	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.changes.clear_prefix(prefix);
