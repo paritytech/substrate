@@ -646,7 +646,6 @@ pub trait TestNetFactory: Sized {
 					Some(NetworkMsg::ReportPeer(who, _)) => {
 						to_disconnect.insert(who);
 					}
-					Some(_msg) => continue,
 				}
 			}
 			for d in to_disconnect {

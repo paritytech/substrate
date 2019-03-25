@@ -121,11 +121,7 @@ pub trait CompatibleDigestItem<U, V>: Sized {
 	fn as_aura_seal(&self) -> Option<(U, V)>;
 }
 
-#[deprecated]
-pub type DeprecatedDigestItem<T> = CompatibleDigestItem<u64, T>;
-
-pub type ModernDigestItem = CompatibleDigestItem<ConsensusEngineId, Vec<u8>>;
-
+/// A digest item which is usable with aura consensus.
 pub trait GoodDigestItem<T: Pair>: CompatibleDigestItem<u64, T::Signature> + CompatibleDigestItem<ConsensusEngineId, Vec<u8>> {}
 
 #[deprecated]
@@ -229,6 +225,8 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
+///
+/// This version does not accept old-style seals.
 pub fn start_aura2<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
@@ -239,7 +237,6 @@ pub fn start_aura2<B, C, E, I, P, SO, Error, OnExit>(
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	accept_old_seals: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
@@ -272,11 +269,13 @@ pub fn start_aura2<B, C, E, I, P, SO, Error, OnExit>(
 		sync_oracle,
 		on_exit,
 		inherent_data_providers,
-		accept_old_seals,
+		false,
 	)
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
+///
+/// This version accepts old-style seals.
 pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
@@ -286,6 +285,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
@@ -302,7 +302,24 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 	OnExit: Future<Item=(), Error=()>,
 {
-	start_aura2(slot_duration, local_key, client, block_import, env, sync_oracle, on_exit, inherent_data_providers, true)
+	let worker = AuraWorker {
+		client: client.clone(),
+		block_import,
+		env,
+		local_key,
+		inherent_data_providers: inherent_data_providers.clone(),
+		sync_oracle: sync_oracle.clone(),
+		force_authoring,
+	};
+	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
+		slot_duration,
+		client,
+		Arc::new(worker),
+		sync_oracle,
+		on_exit,
+		inherent_data_providers,
+		true,
+	)
 }
 
 struct AuraWorker<C, E, I, P, SO> {
