@@ -35,7 +35,7 @@
 //! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account that issues the asset.
 //! * **Asset transfer:** The action of transferring assets from one account to another.
 //! * **Asset destruction:** The process of an account removing its entire holding of an asset.
-//! * **Fungible asset:** An asset that may be interchanged into an identical equivalent.
+//! * **Fungible asset:** An asset whose units are interchangeable.
 //! * **Non-fungible asset:** An asset for which each unit has unique characteristics.
 //!
 //! ## Goals
