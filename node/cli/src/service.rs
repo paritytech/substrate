@@ -103,6 +103,12 @@ construct_service_factory! {
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
 
+				let local_key = if service.config.disable_grandpa {
+					None
+				} else {
+					local_key
+				};
+
 				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
