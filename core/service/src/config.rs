@@ -68,6 +68,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
+	/// Should offchain workers be executed.
+	pub offchain_worker: bool,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -97,6 +99,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			rpc_ws: None,
 			telemetry_endpoints: None,
 			default_heap_pages: None,
+			offchain_worker: Default::default(),
 			force_authoring: false,
 			disable_grandpa: false,
 		};
