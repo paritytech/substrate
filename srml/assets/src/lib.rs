@@ -102,40 +102,44 @@
 //! pub trait Trait: assets::Trait { }
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
-//! 			Ok(())
-//! 		}
+//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!         pub fn get_time(origin) -> Result {
+//!             let _sender = ensure_signed(origin)?;
+//!             let _now = <timestamp::Module<T>>::get();
+//!             Ok(())
+//!         }
 //!
-//!		pub fn issue_token_airdrop(origin) -> Result {
-//!				const ACCOUNT_ALICE: u64 = 1;
-//! 			const ACCOUNT_BOB: u64 = 2;
-//!			const COUNT_AIRDROP_RECIPIENTS = 2;
-//! 			const TOKENS_FIXED_SUPPLY: u64 = 100;
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _asset_id = Self::next_asset_id();
+//!         pub fn issue_token_airdrop(origin) -> Result {
+//!             const ACCOUNT_ALICE: u64 = 1;
+//!             const ACCOUNT_BOB: u64 = 2;
+//!             const COUNT_AIRDROP_RECIPIENTS = 2;
+//!             const TOKENS_FIXED_SUPPLY: u64 = 100;
 //!
-//! 			<NextAssetId<T>>::mutate(|_asset_id| *_asset_id += 1);
-//! 			<Balances<T>>::insert((_asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//! 			<Balances<T>>::insert((_asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//! 			<TotalSupply<T>>::insert(_asset_id, TOKENS_FIXED_SUPPLY);
+//!             <!-- Original author of line: @joepetrowski -->
+//!             ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), "Divide by zero error.");
 //!
-//! 			Self::deposit_event(RawEvent::Issued(_asset_id, origin, TOKENS_FIXED_SUPPLY));
-//! 			Ok(())
-//!		}
+//!             let _sender = ensure_signed(origin)?;
+//!             let _asset_id = Self::next_asset_id();
 //!
-//! 		pub fn get_balance(asset_id, who) -> Result {
-//!			let _balance = <assets::Module<T>>::balance::get(asset_id, who);
-//!				Ok(())
-//! 		}
+//!             <NextAssetId<T>>::mutate(|_asset_id| *_asset_id += 1);
+//!             <Balances<T>>::insert((_asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+//!             <Balances<T>>::insert((_asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+//!             <TotalSupply<T>>::insert(_asset_id, TOKENS_FIXED_SUPPLY);
 //!
-//! 		pub fn get_total_supply(asset_id) -> Result {
-//!				let _total_supply = <assets::Module<T>>::total_supply::get(asset_id);
-//!				Ok(())
-//! 		}
-//! 	}
+//!             Self::deposit_event(RawEvent::Issued(_asset_id, origin, TOKENS_FIXED_SUPPLY));
+//!             Ok(())
+//!         }
+//!
+//!         pub fn get_balance(asset_id, who) -> Result {
+//!             let _balance = <assets::Module<T>>::balance::get(asset_id, who);
+//!             Ok(())
+//!         }
+//!
+//!         pub fn get_total_supply(asset_id) -> Result {
+//!             let _total_supply = <assets::Module<T>>::total_supply::get(asset_id);
+//!             Ok(())
+//!         }
+//!     }
 //! }
 //! ```
 //!
