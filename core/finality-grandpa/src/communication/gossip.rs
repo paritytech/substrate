@@ -18,7 +18,7 @@
 
 use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
-use network::{config::Roles, NodeIndex};
+use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
@@ -235,23 +235,23 @@ impl<N> PeerInfo<N> {
 
 /// The peers we're connected do in gossip.
 struct Peers<N> {
-	inner: HashMap<NodeIndex, PeerInfo<N>>,
+	inner: HashMap<PeerId, PeerInfo<N>>,
 }
 
 impl<N: Ord> Peers<N> {
-	fn new_peer(&mut self, node_index: NodeIndex) {
-		self.inner.insert(node_index, PeerInfo::new());
+	fn new_peer(&mut self, who: PeerId) {
+		self.inner.insert(who, PeerInfo::new());
 	}
 
-	fn peer_disconnected(&mut self, node_index: &NodeIndex) {
-		self.inner.remove(node_index);
+	fn peer_disconnected(&mut self, who: &PeerId) {
+		self.inner.remove(who);
 	}
 
 	// returns a reference to the new view.
-	fn update_peer_state(&mut self, node_index: &NodeIndex, update: NeighborPacket<N>)
+	fn update_peer_state(&mut self, who: &PeerId, update: NeighborPacket<N>)
 		-> Result<Option<&View<N>>, Misbehavior>
 	{
-		let peer = match self.inner.get_mut(node_index) {
+		let peer = match self.inner.get_mut(who) {
 			None => return Ok(None),
 			Some(p) => p,
 		};
@@ -274,8 +274,8 @@ impl<N: Ord> Peers<N> {
 		Ok(Some(&peer.view))
 	}
 
-	fn update_commit_height(&mut self, node_index: &NodeIndex, new_height: N) -> Result<(), Misbehavior> {
-		let peer = match self.inner.get_mut(node_index) {
+	fn update_commit_height(&mut self, who: &PeerId, new_height: N) -> Result<(), Misbehavior> {
+		let peer = match self.inner.get_mut(who) {
 			None => return Ok(()),
 			Some(p) => p,
 		};
@@ -288,8 +288,8 @@ impl<N: Ord> Peers<N> {
 		Ok(())
 	}
 
-	fn peer<'a>(&'a self, node_index: &NodeIndex) -> Option<&'a PeerInfo<N>> {
-		self.inner.get(node_index)
+	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<N>> {
+		self.inner.get(who)
 	}
 }
 
@@ -355,11 +355,11 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.consider_global(set_id, number)
 	}
 
-	fn cost_past_rejection(&self, _who: &NodeIndex, _round: Round, _set_id: SetId) -> i32 {
+	fn cost_past_rejection(&self, _who: &PeerId, _round: Round, _set_id: SetId) -> i32 {
 		-50 // hardcode for now.
 	}
 
-	fn validate_round_message(&self, who: &NodeIndex, full: &VoteOrPrecommitMessage<Block>)
+	fn validate_round_message(&self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
 		match self.consider_vote(full.round, full.set_id) {
@@ -385,7 +385,7 @@ impl<Block: BlockT> Inner<Block> {
 		Action::Keep(topic, 100)
 	}
 
-	fn validate_commit_message(&mut self, who: &NodeIndex, full: &FullCommitMessage<Block>)
+	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
 		use grandpa::Message as GrandpaMessage;
@@ -439,7 +439,7 @@ impl<Block: BlockT> Inner<Block> {
 		Action::ProcessAndDiscard(topic, 100)
 	}
 
-	fn import_neighbor_message(&mut self, who: &NodeIndex, update: NeighborPacket<NumberFor<Block>>)
+	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
 		-> (impl Iterator<Item=Block::Hash>, Action<Block::Hash>)
 	{
 		let (cb, topics) = match self.peers.update_peer_state(who, update) {
@@ -482,22 +482,22 @@ impl<Block: BlockT> GossipValidator<Block> {
 		self.inner.write().note_commit_finalized(finalized);
 	}
 
-	fn report(&self, _who: &NodeIndex, _cost_benefit: i32) {
+	fn report(&self, _who: &PeerId, _cost_benefit: i32) {
 		// nothing yet.
 	}
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex, _roles: Roles) {
+	fn new_peer(&self, _context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
 		println!("new peer {:?}", who);
-		self.inner.write().peers.new_peer(who);
+		self.inner.write().peers.new_peer(who.clone());
 	}
 
-	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: NodeIndex) {
-		self.inner.write().peers.peer_disconnected(&who);
+	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: &PeerId) {
+		self.inner.write().peers.peer_disconnected(who);
 	}
 
-	fn validate(&self, context: &mut ValidatorContext<Block>, who: &NodeIndex, mut data: &[u8])
+	fn validate(&self, context: &mut ValidatorContext<Block>, who: &PeerId, mut data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		let action = {
@@ -547,7 +547,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_allowed<'a>(&'a self)
-		-> Box<FnMut(&NodeIndex, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
+		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
 		let inner = self.inner.read();
 		Box::new(move |who, _intent, topic, mut data| {

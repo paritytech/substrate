@@ -174,8 +174,8 @@ impl Network<Block> for MessageRouting {
 	fn register_validator(&self, v: Arc<dyn network_gossip::Validator<Block>>) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		peer.with_gossip(move |gossip, _| {
-			gossip.register_validator(GRANDPA_ENGINE_ID, v);
+		peer.with_gossip(move |gossip, context| {
+			gossip.register_validator(context, GRANDPA_ENGINE_ID, v);
 		});
 	}
 
@@ -189,14 +189,15 @@ impl Network<Block> for MessageRouting {
 		);
 	}
 
-	fn send_message(&self, who: network::NodeIndex, data: Vec<u8>) {
+	fn send_message(&self, who: &network::PeerId, data: Vec<u8>) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
+		let who = who.clone();
 
 		peer.with_gossip(move |gossip, ctx|
 			gossip.send_message(
 				ctx,
-				who,
+				&who,
 				network_gossip::ConsensusMessage {
 					engine_id: GRANDPA_ENGINE_ID,
 					data,

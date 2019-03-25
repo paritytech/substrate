@@ -63,7 +63,7 @@ pub trait Network<Block: BlockT>: Clone {
 	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
 
 	/// Send a message to a specific peer, even if they've seen it already.
-	fn send_message(&self, who: network::NodeIndex, data: Vec<u8>);
+	fn send_message(&self, who: &network::PeerId, data: Vec<u8>);
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash);
@@ -96,7 +96,7 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 
 	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
 		self.with_gossip(
-			move |gossip, _| gossip.register_validator(GRANDPA_ENGINE_ID, validator)
+			move |gossip, context| gossip.register_validator(context, GRANDPA_ENGINE_ID, validator)
 		)
 	}
 
@@ -110,13 +110,14 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 		)
 	}
 
-	fn send_message(&self, who: network::NodeIndex, data: Vec<u8>) {
+	fn send_message(&self, who: &network::PeerId, data: Vec<u8>) {
 		let msg = ConsensusMessage {
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
+		let who = who.clone();
 		self.with_gossip(
-			move |gossip, ctx| gossip.send_message(ctx, who, msg)
+			move |gossip, ctx| gossip.send_message(ctx, &who, msg)
 		)
 	}
 

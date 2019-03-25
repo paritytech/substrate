@@ -228,17 +228,19 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Checks if any node in the tree is finalized by either finalizing the
 	/// node itself or a child node that's not in the tree, guaranteeing that
 	/// the node being finalized isn't a descendent of any of the node's
-	/// children. The given `predicate` is checked on the prospective finalized
-	/// root and must pass for finalization to occur. The given function
-	/// `is_descendent_of` should return `true` if the second hash (target) is a
-	/// descendent of the first hash (base).
+	/// children. Returns `Some(true)` if the node being finalized is a root,
+	/// `Some(false)` if the node being finalized is not a root, and `None` if
+	/// no node in the tree is finalized. The given `predicate` is checked on
+	/// the prospective finalized root and must pass for finalization to occur.
+	/// The given function `is_descendent_of` should return `true` if the second
+	/// hash (target) is a descendent of the first hash (base).
 	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
 		number: N,
 		is_descendent_of: &F,
 		predicate: P,
-	) -> Result<bool, Error<E>>
+	) -> Result<Option<bool>, Error<E>>
 		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 			  P: Fn(&V) -> bool,
@@ -253,20 +255,20 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// tree, if we find a valid node that passes the predicate then we must
 		// ensure that we're not finalizing past any of its child nodes.
 		for node in self.node_iter() {
-			if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
-				if predicate(&node.data) {
+			if predicate(&node.data) {
+				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
 					for node in node.children.iter() {
 						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
 							return Err(Error::UnfinalizedAncestor);
 						}
 					}
 
-					return Ok(true);
+					return Ok(Some(self.roots.iter().any(|root| root.hash == node.hash)));
 				}
 			}
 		}
 
-		Ok(false)
+		Ok(None)
 	}
 
 	/// Finalize a root in the tree by either finalizing the node itself or a
@@ -298,8 +300,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// we're not finalizing past any children node.
 		let mut position = None;
 		for (i, root) in self.roots.iter().enumerate() {
-			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-				if predicate(&root.data) {
+			if predicate(&root.data) {
+				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 					for node in root.children.iter() {
 						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
 							return Err(Error::UnfinalizedAncestor);
@@ -692,7 +694,19 @@ mod test {
 				&is_descendent_of,
 				|c| c.effective <= 2,
 			),
-			Ok(false),
+			Ok(None),
+		);
+
+		// finalizing "D" will finalize a block from the tree, but it can't be applied yet
+		// since it is not a root change
+		assert_eq!(
+			tree.finalizes_any_with_descendent_if(
+				&"D",
+				10,
+				&is_descendent_of,
+				|c| c.effective == 10,
+			),
+			Ok(Some(false)),
 		);
 
 		// finalizing "B" doesn't finalize "A0" since the predicate doesn't pass,
@@ -720,7 +734,7 @@ mod test {
 				&is_descendent_of,
 				|c| c.effective <= 5,
 			),
-			Ok(true),
+			Ok(Some(true)),
 		);
 
 		assert_eq!(
@@ -757,7 +771,7 @@ mod test {
 				&is_descendent_of,
 				|c| c.effective <= 100,
 			),
-			Ok(true),
+			Ok(Some(true)),
 		);
 
 		assert_eq!(
@@ -787,5 +801,77 @@ mod test {
 				("B", 2), ("C", 3), ("D", 4), ("E", 5),
 			],
 		);
+	}
+
+	#[test]
+	fn minimizes_calls_to_is_descendent_of() {
+		use std::sync::atomic::{AtomicUsize, Ordering};
+
+		let n_is_descendent_of_calls = AtomicUsize::new(0);
+
+		let is_descendent_of = |_: &&str, _: &&str| -> Result<bool, TestError> {
+			n_is_descendent_of_calls.fetch_add(1, Ordering::SeqCst);
+			Ok(true)
+		};
+
+		{
+			// Deep tree where we want to call `finalizes_any_with_descendent_if`. The
+			// search for the node should first check the predicate (which is cheaper) and
+			// only then call `is_descendent_of`
+			let mut tree = ForkTree::new();
+			let letters = vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+
+			for (i, letter) in letters.iter().enumerate() {
+				tree.import::<_, TestError>(*letter, i, i, &|_, _| Ok(true)).unwrap();
+			}
+
+			// "L" is a descendent of "K", but the predicate will only pass for "K",
+			// therefore only one call to `is_descendent_of` should be made
+			assert_eq!(
+				tree.finalizes_any_with_descendent_if(
+					&"L",
+					11,
+					&is_descendent_of,
+					|i| *i == 10,
+				),
+				Ok(Some(false)),
+			);
+
+			assert_eq!(
+				n_is_descendent_of_calls.load(Ordering::SeqCst),
+				1,
+			);
+		}
+
+		n_is_descendent_of_calls.store(0, Ordering::SeqCst);
+
+		{
+			// Multiple roots in the tree where we want to call `finalize_with_descendent_if`.
+			// The search for the root node should first check the predicate (which is cheaper)
+			// and only then call `is_descendent_of`
+			let mut tree = ForkTree::new();
+			let letters = vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+
+			for (i, letter) in letters.iter().enumerate() {
+				tree.import::<_, TestError>(*letter, i, i, &|_, _| Ok(false)).unwrap();
+			}
+
+			// "L" is a descendent of "K", but the predicate will only pass for "K",
+			// therefore only one call to `is_descendent_of` should be made
+			assert_eq!(
+				tree.finalize_with_descendent_if(
+					&"L",
+					11,
+					&is_descendent_of,
+					|i| *i == 10,
+				),
+				Ok(FinalizationResult::Changed(Some(10))),
+			);
+
+			assert_eq!(
+				n_is_descendent_of_calls.load(Ordering::SeqCst),
+				1,
+			);
+		}
 	}
 }

@@ -117,9 +117,8 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	}
 
 	fn system_peers(&self) -> Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
-		Ok(self.sync.peers().into_iter().map(|(index, p)| PeerInfo {
-			index,
-			peer_id: p.peer_id.to_base58(),
+		Ok(self.sync.peers().into_iter().map(|(peer_id, p)| PeerInfo {
+			peer_id: peer_id.to_base58(),
 			roles: format!("{:?}", p.roles),
 			protocol_version: p.protocol_version,
 			best_hash: p.best_hash,
