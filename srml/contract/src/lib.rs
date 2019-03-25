@@ -388,8 +388,6 @@ decl_storage! {
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
-		/// The storage items associated with an account/key.
-		StorageOf: double_map T::AccountId, blake2_256(Vec<u8>) => Option<Vec<u8>>;
 		/// The subtrie counter
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.

@@ -333,7 +333,7 @@ impl Decode for RuntimeMetadataDeprecated {
 	}
 }
 
-/// The metadata of a runtime version 2.
+/// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV3 {
