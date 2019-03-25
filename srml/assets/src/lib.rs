@@ -124,7 +124,7 @@
 //!
 //! 			Self::deposit_event(RawEvent::Issued(_asset_id, origin, TOKENS_FIXED_SUPPLY));
 //! 			Ok(())
-//!			}
+//!		}
 //!
 //! 		pub fn get_balance(asset_id, who) -> Result {
 //!				let _balance = <assets::Module<T>>::balance::get(asset_id, who);
