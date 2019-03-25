@@ -109,7 +109,7 @@
 //! 			Ok(())
 //! 		}
 //!
-//!			pub fn issue_token_airdrop(origin) -> Results {
+//!		pub fn issue_token_airdrop(origin) -> Result {
 //!				const ACCOUNT_ALICE: u64 = 1;
 //! 			const ACCOUNT_BOB: u64 = 2;
 //!				const COUNT_AIRDROP_RECIPIENTS = 2;
