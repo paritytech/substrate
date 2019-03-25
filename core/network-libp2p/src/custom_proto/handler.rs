@@ -488,9 +488,11 @@ where
 
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match init_deadline.poll() {
-					Ok(Async::Ready(())) =>
+					Ok(Async::Ready(())) => {
+						init_deadline.reset(Instant::now() + Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
-							with {:?}", self.remote_peer_id),
+							with {:?}", self.remote_peer_id)
+					},
 					Ok(Async::NotReady) => {}
 					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
 				}

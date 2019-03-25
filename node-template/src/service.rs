@@ -73,6 +73,7 @@ construct_service_factory! {
 						service.network(),
 						service.on_exit(),
 						service.config.custom.inherent_data_providers.clone(),
+						service.config.force_authoring,
 					)?);
 				}
 

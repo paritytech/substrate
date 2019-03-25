@@ -228,7 +228,7 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
+use primitives::traits::{Zero, One, As, StaticLookup, CheckedSub, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -550,7 +550,7 @@ decl_module! {
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
-		fn bond_extra(origin, max_additional: #[compact] BalanceOf<T>) {
+		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
 			let controller = Self::bonded(&stash).ok_or("not a stash")?;
@@ -558,7 +558,7 @@ decl_module! {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 
-			if let Some(extra) = stash_balance.checked_sub(ledger.total) {
+			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
