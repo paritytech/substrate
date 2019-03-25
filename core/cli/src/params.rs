@@ -325,6 +325,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keyring: Keyring,
+
+	/// Enable authoring even when offline.
+	#[structopt(long = "force-authoring")]
+	pub force_authoring: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.
