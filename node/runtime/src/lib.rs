@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 38,
-	impl_version: 38,
+	spec_version: 41,
+	impl_version: 42,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -172,6 +172,7 @@ impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
+	type TrieIdGenerator = contract::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
 }
 

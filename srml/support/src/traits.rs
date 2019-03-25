@@ -355,7 +355,7 @@ pub trait Currency<AccountId> {
 	///
 	/// Returns a signed imbalance and status to indicate if the account was successfully updated or update
 	/// has led to killing of the account.
-	fn ensure_free_balance_is(
+	fn make_free_balance_be(
 		who: &AccountId,
 		balance: Self::Balance,
 	) -> (
