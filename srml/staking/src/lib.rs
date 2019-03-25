@@ -549,7 +549,7 @@ decl_module! {
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		fn bond_extra(origin, max_additional: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
@@ -675,7 +675,7 @@ decl_module! {
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
