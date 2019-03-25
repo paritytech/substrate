@@ -70,7 +70,7 @@
 //!
 //! Please refer to the [`Module`] enum for details of publicly available functions.
 //!
-//! <!-- Original author of paragraph: @Kianenigma -->
+//! <!-- Original author of paragraph: @joepetrowski  -->
 //! Note that when using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
 //!
 //! ### Events:
