@@ -493,7 +493,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					self.consensus_changes.lock().note_change((number, hash));
 				}
 
-				println!("requesting justification for unfinalized set-change block.");
 				imported_aux.needs_justification = true;
 			}
 		}

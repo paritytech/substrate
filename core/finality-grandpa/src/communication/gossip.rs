@@ -27,7 +27,7 @@ use log::debug;
 use crate::{CompactCommit, SignedMessage};
 use super::{Round, SetId, Network};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -41,6 +41,7 @@ enum Consider {
 }
 
 /// A view of protocol state.
+#[derive(Debug)]
 struct View<N> {
 	round: Round, // the current round we are at.
 	set_id: SetId, // the current voter set id.
@@ -99,22 +100,65 @@ impl<N: Ord> View<N> {
 	}
 }
 
-fn view_topics<B: BlockT>(view: &View<NumberFor<B>>) -> HashMap<B::Hash, (Option<Round>, SetId)> {
-	const KEEP_PAST_ROUNDS: u64 = 3;
+const KEEP_RECENT_ROUNDS: usize = 3;
 
-	let s = view.set_id;
-	let mut map: HashMap<_, _> = [
-		(super::global_topic::<B>(s.0), (None, s)),
-		(super::round_topic::<B>(view.round.0, s.0), (Some(view.round), s)),
-	].iter().cloned().collect();
+/// Tracks topics we keep messages for.
+struct KeepTopics<B: BlockT> {
+	current_set: SetId,
+	rounds: VecDeque<(Round, SetId)>,
+	reverse_map: HashMap<B::Hash, (Option<Round>, SetId)>
+}
 
-	for i in (0..KEEP_PAST_ROUNDS).map(|i| i + 1) {
-		if view.round.0 < i { break }
-		let r = view.round.0 - i;
-		map.insert(super::round_topic::<B>(r, s.0), (Some(Round(r)), s));
+impl<B: BlockT> KeepTopics<B> {
+	fn new() -> Self {
+		KeepTopics {
+			current_set: SetId(0),
+			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 1),
+			reverse_map: HashMap::new(),
+		}
 	}
 
-	map
+	fn push(&mut self, round: Round, set_id: SetId) {
+		self.current_set = std::cmp::max(self.current_set, set_id);
+		self.rounds.push_back((round, set_id));
+
+		// the 1 is for the current round.
+		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
+			let _ = self.rounds.pop_front();
+		}
+
+		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 2);
+		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
+
+		for &(round, set) in &self.rounds {
+			map.insert(
+				super::round_topic::<B>(round.0, set.0),
+				(Some(round), set)
+			);
+		}
+
+		self.reverse_map = map;
+	}
+
+	fn topic_info(&self, topic: &B::Hash) -> Option<(Option<Round>, SetId)> {
+		self.reverse_map.get(topic).cloned()
+	}
+}
+
+// topics to send to a neighbor based on their view.
+fn neighbor_topics<B: BlockT>(view: &View<NumberFor<B>>) -> Vec<B::Hash> {
+	let s = view.set_id;
+	let mut topics = vec![
+		super::global_topic::<B>(s.0),
+		super::round_topic::<B>(view.round.0, s.0),
+	];
+
+	if view.round.0 != 0 {
+		let r = Round(view.round.0 - 1);
+		topics.push(super::round_topic::<B>(r.0, s.0))
+	}
+
+	topics
 }
 
 /// Grandpa gossip message type.
@@ -251,8 +295,7 @@ impl<N: Ord> Peers<N> {
 		};
 
 		let invalid_change = peer.view.set_id > update.set_id
-			|| peer.view.round > update.round && peer.view.set_id == peer.view.set_id
-			|| update.commit_finalized_height > update.commit_finalized_height
+			|| peer.view.round > update.round && peer.view.set_id == update.set_id
 			|| peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
 
 		if invalid_change {
@@ -264,6 +307,9 @@ impl<N: Ord> Peers<N> {
 			set_id: update.set_id,
 			last_commit: Some(update.commit_finalized_height),
 		};
+
+		trace!(target: "afg", "Peer {} updated view. Now at {:?}, {:?}",
+			who, peer.view.round, peer.view.set_id);
 
 		Ok(Some(&peer.view))
 	}
@@ -300,22 +346,18 @@ enum Action<H>  {
 struct Inner<Block: BlockT> {
 	local_view: View<NumberFor<Block>>,
 	peers: Peers<NumberFor<Block>>,
-	live_topics: HashMap<Block::Hash, (Option<Round>, SetId)>,
+	live_topics: KeepTopics<Block>,
+	config: crate::Config,
 }
 
 impl<Block: BlockT> Inner<Block> {
-	fn new() -> Self {
+	fn new(config: crate::Config) -> Self {
 		Inner {
 			local_view: View::default(),
 			peers: Peers { inner: HashMap::new() },
-			live_topics: HashMap::new(),
+			live_topics: KeepTopics::new(),
+			config,
 		}
-	}
-
-	fn update_view_topics(&mut self) {
-		self.live_topics = view_topics::<Block>(&self.local_view
-		);
-		println!("keeping topics: {:?}", self.live_topics);
 	}
 
 	/// Note a round in a set has started.
@@ -327,7 +369,7 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
 
-		self.update_view_topics();
+		self.live_topics.push(round, set_id);
 		self.multicast_neighbor_packet(net);
 	}
 
@@ -337,7 +379,7 @@ impl<Block: BlockT> Inner<Block> {
 		if self.local_view.set_id == set_id { return }
 
 		self.local_view.update_set(set_id);
-		self.update_view_topics();
+		self.live_topics.push(Round(0), set_id);
 		self.multicast_neighbor_packet(net);
 	}
 
@@ -345,7 +387,6 @@ impl<Block: BlockT> Inner<Block> {
 	fn note_commit_finalized<N: Network<Block>>(&mut self, finalized: NumberFor<Block>, net: &N) {
 		if self.local_view.last_commit.as_ref() < Some(&finalized) {
 			self.local_view.last_commit = Some(finalized);
-			self.update_view_topics();
 			self.multicast_neighbor_packet(net)
 		}
 	}
@@ -443,19 +484,17 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
-		-> (impl Iterator<Item=Block::Hash>, Action<Block::Hash>)
+		-> (Vec<Block::Hash>, Action<Block::Hash>)
 	{
 		let (cb, topics) = match self.peers.update_peer_state(who, update) {
-			Ok(view) => (100i32, view.map(|view| view_topics::<Block>(view))),
+			Ok(view) => (100i32, view.map(|view| neighbor_topics::<Block>(view))),
 			Err(misbehavior) => (misbehavior.cost(), None)
 		};
 
-		let view_topics = topics.into_iter()
-			.flat_map(|inner| inner)
-			.map(|(k, _)| k);
+		let neighbor_topics = topics.unwrap_or_default();
 
 		// always discard, it's valid for one hop.
-		(view_topics, Action::Discard(cb))
+		(neighbor_topics, Action::Discard(cb))
 	}
 
 	fn construct_neighbor_packet(&self) -> GossipMessage<Block> {
@@ -482,8 +521,8 @@ pub(super) struct GossipValidator<Block: BlockT> {
 
 impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
-	pub(super) fn new() -> GossipValidator<Block> {
-		GossipValidator { inner: parking_lot::RwLock::new(Inner::new()) }
+	pub(super) fn new(config: crate::Config) -> GossipValidator<Block> {
+		GossipValidator { inner: parking_lot::RwLock::new(Inner::new(config)) }
 	}
 
 	/// Note a round in a set has started.
@@ -536,7 +575,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 						update.into_neighbor_packet(),
 					);
 
-					broadcast_topics = topics.collect();
+					broadcast_topics = topics;
 					action
 				}
 				None => {
@@ -587,14 +626,17 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let &(ref maybe_round, ref set_id) = match inner.live_topics.get(&topic) {
+			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
 				None => return false,
 				Some(x) => x,
 			};
 
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
-				return dbg!(peer.view.consider_vote(*round, *set_id)) == Consider::Accept
+				if set_id.0 >= 1 {
+					dbg!(peer.view.consider_vote(round, set_id));
+				}
+				return peer.view.consider_vote(round, set_id) == Consider::Accept
 			}
 
 			// global message.
@@ -620,7 +662,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		Box::new(move |topic, mut data| {
 			// if the topic is not one of the ones that we are keeping at the moment,
 			// it is expired.
-			match inner.live_topics.get(&topic) {
+			match inner.live_topics.topic_info(&topic) {
 				None => return true,
 				Some((Some(_), _)) => return false, // round messages don't require further checking.
 				Some((None, _)) => {},
@@ -676,5 +718,10 @@ mod tests {
 		assert_eq!(view.consider_global(SetId(2), 1000), Consider::RejectPast);
 		assert_eq!(view.consider_global(SetId(2), 1001), Consider::Accept);
 		assert_eq!(view.consider_global(SetId(2), 10000), Consider::Accept);
+	}
+
+	#[test]
+	fn view_topics_at_set_boundary() {
+		unimplemented!()
 	}
 }

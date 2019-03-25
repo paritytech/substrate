@@ -160,8 +160,8 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService
-	pub(crate) fn new(service: N) -> Self {
-		let validator = Arc::new(GossipValidator::new());
+	pub(crate) fn new(service: N, config: crate::Config) -> Self {
+		let validator = Arc::new(GossipValidator::new(config));
 		service.register_validator(validator.clone());
 		NetworkBridge { service, validator: validator }
 	}
@@ -417,8 +417,6 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 		// when locals exist, sign messages on import
 		if let (true, &Some((ref pair, ref local_id))) = (should_sign, &self.locals) {
-			println!("Sending message {:?}", msg);
-
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
 

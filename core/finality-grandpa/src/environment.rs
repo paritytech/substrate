@@ -270,7 +270,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.estimate.as_ref().map(|e| e.1),
 			state.finalized.as_ref().map(|e| e.1),
 		);
-		println!("completed round");
 
 		self.last_completed.with(|last_completed| {
 			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());

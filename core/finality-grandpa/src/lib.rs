@@ -433,7 +433,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 {
 	use futures::future::{self, Loop as FutureLoop};
 
-	let network = NetworkBridge::new(network);
+	let network = NetworkBridge::new(network, config.clone());
 
 	let LinkHalf {
 		client,
