@@ -141,9 +141,24 @@ fn propagate<'a, B: BlockT, I>(
 
 	for (message_hash, topic, message) in messages {
 		for (id, ref mut peer) in peers.iter_mut() {
-			if intent == MessageIntent::Broadcast && peer.known_messages.contains(&message_hash) {
-				continue
-			}
+			let intent = match intent {
+				MessageIntent::Broadcast =>
+					if peer.known_messages.contains(&message_hash) {
+						continue
+					} else {
+						MessageIntent::Broadcast
+					},
+				MessageIntent::PeriodicRebroadcast =>
+					if peer.known_messages.contains(&message_hash) {
+						MessageIntent::PeriodicRebroadcast
+					} else {
+						// peer doesn't know message, so the logic should treat it as an
+						// initial broadcast.
+						MessageIntent::Broadcast
+					},
+				other => other,
+			};
+
 			if !message_allowed(id, intent, &topic, &message) {
 				continue
 			}
