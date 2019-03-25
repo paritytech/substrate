@@ -310,7 +310,7 @@ pub trait Currency<AccountId> {
 		value: Self::Balance,
 	) -> result::Result<(), &'static str>;
 
-		/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
+	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.

@@ -23,64 +23,64 @@ use parity_codec::{HasCompact, Encode, Decode};
 use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
 
-// Configure the behavior of the Phragmen election.
-// Might be deprecated.
+/// Configure the behavior of the Phragmen election.
+/// Might be deprecated.
 pub struct ElectionConfig<Balance: HasCompact> {
-	// Perform equalise?.
+	/// Perform equalise?.
 	pub equalise: bool,
-	// Number of equalise iterations.
+	/// Number of equalise iterations.
 	pub iterations: usize,
-	// Tolerance of max change per equalise iteration.
+	/// Tolerance of max change per equalise iteration.
 	pub tolerance: Balance,
 }
 
-// Wrapper around validation candidates some metadata.
+/// Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Candidate<AccountId, Balance: HasCompact> {
-	// The validator's account
+	/// The validator's account
 	pub who: AccountId,
-	// Exposure struct, holding info about the value that the validator has in stake.
+	/// Exposure struct, holding info about the value that the validator has in stake.
 	pub exposure: Exposure<AccountId, Balance>,
-	// Intermediary value used to sort candidates.
+	/// Intermediary value used to sort candidates.
 	pub score: Perquintill,
-	// Accumulator of the stake of this candidate based on received votes.
+	/// Accumulator of the stake of this candidate based on received votes.
 	approval_stake: Balance,
-	// Flag for being elected.
+	/// Flag for being elected.
 	elected: bool,
-	// This is most often equal to `Exposure.total` but not always. Needed for [`equalise`]
+	/// This is most often equal to `Exposure.total` but not always. Needed for [`equalise`]
 	backing_stake: Balance
 }
 
-// Wrapper around the nomination info of a single nominator for a group of validators.
+/// Wrapper around the nomination info of a single nominator for a group of validators.
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Nominator<AccountId, Balance: HasCompact> {
-	// The nominator's account.
+	/// The nominator's account.
 	who: AccountId,
-	// List of validators proposed by this nominator.
+	/// List of validators proposed by this nominator.
 	edges: Vec<Edge<AccountId, Balance>>,
-	// the stake amount proposed by the nominator as a part of the vote.
+	/// the stake amount proposed by the nominator as a part of the vote.
 	budget: Balance,
-	// Incremented each time a nominee that this nominator voted for has been elected.
+	/// Incremented each time a nominee that this nominator voted for has been elected.
 	load: Perquintill,
 }
 
-// Wrapper around a nominator vote and the load of that vote.
+/// Wrapper around a nominator vote and the load of that vote.
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Edge<AccountId, Balance: HasCompact> {
-	// Account being voted for
+	/// Account being voted for
 	who: AccountId,
-	// Load of this vote.
+	/// Load of this vote.
 	load: Perquintill,
-	// Final backing stake of this vote.
+	/// Final backing stake of this vote.
 	backing_stake: Balance,
-	// Index of the candidate stored in the 'candidates' vector
+	/// Index of the candidate stored in the 'candidates' vector
 	candidate_index: usize,
-	// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalise.
+	/// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalise.
 	elected_idx: usize,
-	// Indicates if this edge is a vote for an elected candidate. Used only with equalise.
+	/// Indicates if this edge is a vote for an elected candidate. Used only with equalise.
 	elected: bool,
 }
 
@@ -88,7 +88,8 @@ pub struct Edge<AccountId, Balance: HasCompact> {
 ///
 /// Reference implementation: https://github.com/w3f/consensus
 ///
-/// Returns a vector of elected candidates
+/// Returns an Option of elected candidates, if election is performed.
+/// Returns None if not enough candidates exist.
 pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		get_rounds: FR,
 		get_validators: FV,
@@ -304,7 +305,7 @@ pub fn equalise<T: Trait + 'static>(
 		let min_stake = *backed_stakes
 			.iter()
 			.min()
-			.expect("vector with positive length will have a max; qed");
+			.expect("vector with positive length will have a min; qed");
 		difference = max_stake - min_stake;
 		difference += nominator.budget - stake_used;
 		if difference < tolerance {
