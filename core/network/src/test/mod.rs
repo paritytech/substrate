@@ -40,7 +40,7 @@ use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use crate::message::{Message, ConsensusEngineId};
-use network_libp2p::{NodeIndex, PeerId};
+use network_libp2p::PeerId;
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, ed25519::Public as AuthorityId};
@@ -100,16 +100,16 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		vec![]
 	}
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: crate::message::Status<Block>) {
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: crate::message::Status<Block>) {
 	}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
 	}
 
 	fn on_message(
 		&mut self,
 		_ctx: &mut Context<Block>,
-		_peer_id: NodeIndex,
+		_peer_id: PeerId,
 		_message: &mut Option<crate::message::Message<Block>>,
 	) {
 	}
@@ -166,7 +166,7 @@ impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
 		self.link.blocks_processed(processed_blocks, has_error);
 	}
 
-	fn justification_imported(&self, who: NodeIndex, hash: &Hash, number:NumberFor<Block>, success: bool) {
+	fn justification_imported(&self, who: PeerId, hash: &Hash, number:NumberFor<Block>, success: bool) {
 		self.link.justification_imported(who, hash, number, success);
 	}
 
@@ -174,11 +174,11 @@ impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
 		self.link.request_justification(hash, number);
 	}
 
-	fn useless_peer(&self, who: NodeIndex, reason: &str) {
+	fn useless_peer(&self, who: PeerId, reason: &str) {
 		self.link.useless_peer(who, reason);
 	}
 
-	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
+	fn note_useless_and_restart_sync(&self, who: PeerId, reason: &str) {
 		self.link.note_useless_and_restart_sync(who, reason);
 	}
 
@@ -190,7 +190,8 @@ impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
 pub struct Peer<D, S: NetworkSpecialization<Block> + Clone> {
 	pub is_offline: Arc<AtomicBool>,
 	pub is_major_syncing: Arc<AtomicBool>,
-	pub peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>>,
+	pub peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
+	pub peer_id: PeerId,
 	client: Arc<PeersClient>,
 	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, S>>,
@@ -206,7 +207,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	fn new(
 		is_offline: Arc<AtomicBool>,
 		is_major_syncing: Arc<AtomicBool>,
-		peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>>,
+		peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 		client: Arc<PeersClient>,
 		import_queue: Box<ImportQueue<Block>>,
 		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
@@ -222,6 +223,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 			is_offline,
 			is_major_syncing,
 			peers,
+			peer_id: PeerId::random(),
 			client,
 			network_to_protocol_sender,
 			protocol_sender,
@@ -268,22 +270,22 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	}
 
 	/// Called on connection to other indicated peer.
-	fn on_connect(&self, other: NodeIndex) {
-		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::PeerConnected(PeerId::random(), other, String::new()));
+	fn on_connect(&self, other: &Self) {
+		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::PeerConnected(other.peer_id.clone(), String::new()));
 	}
 
 	/// Called on disconnect from other indicated peer.
-	fn on_disconnect(&self, other: NodeIndex) {
+	fn on_disconnect(&self, other: &Self) {
 		let _ = self
 			.network_to_protocol_sender
-			.send(FromNetworkMsg::PeerDisconnected(other, String::new()));
+			.send(FromNetworkMsg::PeerDisconnected(other.peer_id.clone(), String::new()));
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
-	fn receive_message(&self, from: NodeIndex, msg: Message<Block>) {
+	fn receive_message(&self, from: &Self, msg: Message<Block>) {
 		let _ = self
 			.network_to_protocol_sender
-			.send(FromNetworkMsg::CustomMessage(from, msg));
+			.send(FromNetworkMsg::CustomMessage(from.peer_id.clone(), msg));
 	}
 
 	/// Produce the next pending message to send to another peer.
@@ -567,7 +569,7 @@ pub trait TestNetFactory: Sized {
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let specialization = self::SpecializationFactory::create();
-		let peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>> = Arc::new(Default::default());
+		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			status_sinks,
@@ -606,39 +608,38 @@ pub trait TestNetFactory: Sized {
 		if self.started() {
 			return;
 		}
-		self.mut_peers(|peers| {
-			for peer in 0..peers.len() {
-				peers[peer].start();
-				for client in 0..peers.len() {
-					if peer != client {
-						peers[peer].on_connect(client as NodeIndex);
-					}
+		for peer in self.peers() {
+			peer.start();
+			for client in self.peers() {
+				if peer.peer_id != client.peer_id {
+					peer.on_connect(client);
 				}
 			}
-		});
+		}
 		self.route(None);
 		self.set_started(true);
 	}
 
 	/// Do one step of routing.
-	fn route(&mut self, disconnected: Option<HashSet<NodeIndex>>) {
+	fn route(&mut self, disconnected: Option<HashSet<usize>>) {
 		self.mut_peers(move |peers| {
 			let mut to_disconnect = HashSet::new();
-			for peer in 0..peers.len() {
-				let packet = peers[peer].pending_message();
+			for (peer_pos, peer) in peers.iter().enumerate() {
+				let packet = peer.pending_message();
 				match packet {
 					None => continue,
 					Some(NetworkMsg::Outgoing(recipient, packet)) => {
+						let recipient = peers.iter().position(|p| p.peer_id == recipient).unwrap();
 						if let Some(disconnected) = disconnected.as_ref() {
 							let mut current = HashSet::new();
-							current.insert(peer);
+							current.insert(peer_pos);
 							current.insert(recipient);
 							// Not routing message between "disconnected" nodes.
 							if disconnected.is_subset(&current) {
 								continue;
 							}
 						}
-						peers[recipient].receive_message(peer as NodeIndex, packet)
+						peers[recipient].receive_message(peer, packet)
 					}
 					Some(NetworkMsg::ReportPeer(who, _)) => {
 						to_disconnect.insert(who);
@@ -647,8 +648,10 @@ pub trait TestNetFactory: Sized {
 				}
 			}
 			for d in to_disconnect {
-				for peer in 0..peers.len() {
-					peers[peer].on_disconnect(d);
+				if let Some(d) = peers.iter().find(|p| p.peer_id == d) {
+					for peer in 0..peers.len() {
+						peers[peer].on_disconnect(d);
+					}
 				}
 			}
 		});
@@ -659,7 +662,9 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(move |peers| {
 			for peer in 0..peers.len() {
 				while let Some(NetworkMsg::Outgoing(recipient, packet)) = peers[peer].pending_message_fast() {
-					peers[recipient].receive_message(peer as NodeIndex, packet)
+					if let Some(p) = peers.iter().find(|p| p.peer_id == recipient) {
+						p.receive_message(&peers[peer], packet)
+					}
 				}
 			}
 		});
@@ -701,7 +706,7 @@ pub trait TestNetFactory: Sized {
 
 	/// Perform synchronization until complete, if provided the
 	/// given nodes set are excluded from sync.
-	fn sync_with(&mut self, disconnected: Option<HashSet<NodeIndex>>) -> u32 {
+	fn sync_with(&mut self, disconnected: Option<HashSet<usize>>) -> u32 {
 		self.start();
 		let mut total_steps = 0;
 		let mut done = 0;
@@ -730,7 +735,7 @@ pub trait TestNetFactory: Sized {
 
 	/// Perform synchronization until complete,
 	/// excluding sync between certain nodes.
-	fn sync_with_disconnected(&mut self, disconnected: HashSet<NodeIndex>) -> u32 {
+	fn sync_with_disconnected(&mut self, disconnected: HashSet<usize>) -> u32 {
 		self.sync_with(Some(disconnected))
 	}
 

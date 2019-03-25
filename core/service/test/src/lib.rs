@@ -121,6 +121,7 @@ fn node_config<F: ServiceFactory> (
 		telemetry_endpoints: None,
 		default_heap_pages: None,
 		offchain_worker: false,
+		force_authoring: false,
 	}
 }
 
