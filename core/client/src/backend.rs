@@ -142,6 +142,10 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
+	/// Returns true if state for given block is available.
+	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
+		self.state_at(BlockId::Hash(hash.clone())).is_ok()
+	}
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
 	/// Destroy state and save any useful data, such as cache.
