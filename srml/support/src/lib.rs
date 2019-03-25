@@ -313,7 +313,7 @@ mod tests {
 				name: DecodeDifferent::Encode("Data"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
@@ -324,7 +324,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber")
+					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
@@ -335,7 +335,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData2"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map{
-					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber")
+					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
