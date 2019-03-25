@@ -191,7 +191,6 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	accept_old_seals: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
 	C: Authorities<B> + ChainHead<B> + Send + Sync + 'static,
@@ -225,56 +224,6 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 		sync_oracle,
 		on_exit,
 		inherent_data_providers,
-		accept_old_seals,
-	)
-}
-
-/// Start the aura worker. The returned future should be run in a tokio runtime.
-///
-/// This version does not accept old-style seals.
-pub fn start_aura2<B, C, E, I, P, SO, Error, OnExit>(
-	slot_duration: SlotDuration,
-	local_key: Arc<P>,
-	client: Arc<C>,
-	block_import: Arc<I>,
-	env: Arc<E>,
-	sync_oracle: SO,
-	on_exit: OnExit,
-	inherent_data_providers: InherentDataProviders,
-	force_authoring: bool,
-) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
-	B: Block,
-	C: Authorities<B> + ChainHead<B>,
-	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error>,
-	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<C::Error> + From<I::Error>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
-	P::Signature: Encode,
-	SO: SyncOracle + Send + Sync + Clone,
-	DigestItemFor<B>: GoodDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
-	OnExit: Future<Item=(), Error=()>,
-{
-	let worker = AuraWorker {
-		client: client.clone(),
-		block_import,
-		env,
-		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
-		sync_oracle: sync_oracle.clone(),
-		force_authoring,
-	};
-	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
-		slot_duration,
-		client,
-		Arc::new(worker),
-		sync_oracle,
-		on_exit,
-		inherent_data_providers,
-		false,
 	)
 }
 
@@ -323,7 +272,6 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 		sync_oracle,
 		on_exit,
 		inherent_data_providers,
-		true,
 	)
 }
 
@@ -864,6 +812,7 @@ mod tests {
 				extra: NothingExtra,
 				inherent_data_providers,
 				phantom: Default::default(),
+				allow_old_seals: false,
 			})
 		}
 

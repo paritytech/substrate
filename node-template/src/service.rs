@@ -32,7 +32,6 @@ native_executor_instance!(
 #[derive(Default)]
 pub struct NodeConfig {
 	inherent_data_providers: InherentDataProviders,
-	allow_old_seals: bool,
 }
 
 construct_simple_protocol! {

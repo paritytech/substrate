@@ -68,7 +68,6 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
-	accept_old_seals: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
 	C: ChainHead<B> + Send + Sync + 'static,
@@ -97,7 +96,6 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 			sync_oracle,
 			on_exit,
 			inherent_data_providers,
-			accept_old_seals,
 		) {
 			Ok(slot_worker_future) => {
 				result_sender
@@ -127,7 +125,6 @@ pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
-	accept_old_seals: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
 	C: ChainHead<B>,
