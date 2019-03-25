@@ -644,7 +644,7 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
-		let (imbalance, _) = Self::ensure_free_balance_is(who, Self::free_balance(who) + value);
+		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -653,7 +653,7 @@ where
 		}
 	}
 
-	fn ensure_free_balance_is(who: &T::AccountId, balance: T::Balance) -> (
+	fn make_free_balance_be(who: &T::AccountId, balance: T::Balance) -> (
 		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
 		UpdateBalanceOutcome
 	) {

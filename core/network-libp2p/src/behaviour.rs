@@ -76,7 +76,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 				user_defined: known_addresses,
 				kademlia,
 				next_kad_random_query: Delay::new(Instant::now()),
-				duration_to_next_kad: Duration::from_secs(60),
+				duration_to_next_kad: Duration::from_secs(10),
 			},
 			identify,
 			events: Vec::new(),

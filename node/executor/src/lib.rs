@@ -308,7 +308,6 @@ mod tests {
 				bonding_duration: 0,
 				offline_slash: Perbill::zero(),
 				session_reward: Perbill::zero(),
-				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
@@ -443,13 +442,7 @@ mod tests {
 			]
 		);
 
-		// let mut digest = generic::Digest::<Log>::default();
-		// digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-		// 	(Keyring::Charlie.to_raw_public().into(), 1),
-		// 	(Keyring::Bob.to_raw_public().into(), 1),
-		// 	(Keyring::Alice.to_raw_public().into(), 1),
-		// ])));
-		let digest = generic::Digest::<Log>::default(); // TODO test this
+		let digest = generic::Digest::<Log>::default();
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
 		(block1, block2)
@@ -578,14 +571,6 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))
 				},
-				// EventRecord { // TODO: this might be wrong.
-				// 	phase: Phase::Finalization,
-				// 	event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-				// 		(Keyring::Charlie.to_raw_public().into(), 1),
-				// 		(Keyring::Bob.to_raw_public().into(), 1),
-				// 		(Keyring::Alice.to_raw_public().into(), 1),
-				// 	])),
-				// },
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Spending(0))

@@ -160,6 +160,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
 	C: Authorities<B> + ChainHead<B> + Send + Sync + 'static,
@@ -176,7 +177,13 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(), sync_oracle: sync_oracle.clone(),
+		client: client.clone(),
+		block_import,
+		env,
+		local_key,
+		inherent_data_providers: inherent_data_providers.clone(),
+		sync_oracle: sync_oracle.clone(),
+		force_authoring,
 	};
 
 	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
@@ -199,6 +206,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
@@ -215,7 +223,13 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(), sync_oracle: sync_oracle.clone(),
+		client: client.clone(),
+		block_import,
+		env,
+		local_key,
+		inherent_data_providers: inherent_data_providers.clone(),
+		sync_oracle: sync_oracle.clone(),
+		force_authoring,
 	};
 	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
 		slot_duration,
@@ -234,6 +248,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	local_key: Arc<P>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 }
 
 impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
@@ -287,7 +302,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 			}
 		};
 
-		if self.sync_oracle.is_offline() && authorities.len() > 1 {
+		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "aura", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "aura.skipping_proposal_slot";
 				"authorities_len" => authorities.len()
@@ -808,6 +823,7 @@ mod tests {
 				DummyOracle,
 				futures::empty(),
 				inherent_data_providers,
+				false,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);

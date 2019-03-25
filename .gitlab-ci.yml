@@ -1,5 +1,9 @@
 # .gitlab-ci.yml
-
+#
+# substrate
+#
+# pipelines can be triggered manually in the web
+# setting DEPLOY_TAG will only deploy the tagged image
 
 
 stages:
@@ -22,7 +26,7 @@ variables:
 
 cache:                             {}
 
-.collect_artifacts:                &collect_artifacts
+.collect-artifacts:                &collect-artifacts
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
     when:                          on_success
@@ -32,7 +36,7 @@ cache:                             {}
 
 
 
-.kubernetes_build:                 &kubernetes_build
+.kubernetes-build:                 &kubernetes-build
   tags:
     - kubernetes-parity-build
   environment:
@@ -42,11 +46,11 @@ cache:                             {}
 
 #### stage:                        merge-test
 
-check:merge:conflict:
+check-merge-conflict:
   stage:                           merge-test
   image:                           parity/tools:latest
   cache:                           {}
-  <<:                              *kubernetes_build
+  <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
   variables:
@@ -61,11 +65,11 @@ check:merge:conflict:
 
 #### stage:                        test
 
-check:runtime:
+check-runtime:
   stage:                           test
   image:                           parity/tools:latest
   cache:                           {}
-  <<:                              *kubernetes_build
+  <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
   variables:
@@ -77,10 +81,10 @@ check:runtime:
 
 
 
-test:rust:stable:                  &test
+test-linux-stable:                 &test
   stage:                           test
   cache:
-    key:                           "${CI_JOB_NAME}-test"
+    key:                           "${CI_JOB_NAME}"
     paths:
       - ${CARGO_HOME}
       - ./target
@@ -98,6 +102,9 @@ test:rust:stable:                  &test
     - schedules
     - web
     - /^[0-9]+$/
+  except:
+    variables:
+      - $DEPLOY_TAG
   before_script:
    - test -d ${CARGO_HOME} -a -d ./target &&
      echo "build cache size:" &&
@@ -110,7 +117,7 @@ test:rust:stable:                  &test
 
 
 
-.build_only:                      &build_only
+.build-only:                      &build-only
   only:
     - master
     - tags
@@ -119,15 +126,18 @@ test:rust:stable:                  &test
 
 #### stage:                        build
 
-build:rust:linux:release:          &build
+build-linux-release:               &build
   stage:                           build
   cache:
-    key:                           "${CI_JOB_NAME}-build"
+    key:                           "${CI_JOB_NAME}"
     paths:
       - ${CARGO_HOME}
       - ./target
-  <<:                              *collect_artifacts
-  <<:                              *build_only
+  <<:                              *collect-artifacts
+  <<:                              *build-only
+  except:
+    variables:
+      - $DEPLOY_TAG
   tags:
     - linux-docker
   before_script:
@@ -151,7 +161,7 @@ build:rust:linux:release:          &build
 
 
 
-build:rust:doc:release:            &build
+build-rust-doc-release:            &build
   stage:                           build
   allow_failure:                   true
   artifacts:
@@ -160,7 +170,7 @@ build:rust:doc:release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build_only
+  <<:                              *build-only
   tags:
     - linux-docker
   script:
@@ -174,35 +184,38 @@ build:rust:doc:release:            &build
 
 #### stage:                        publish
 
-.publish_build:                    &publish_build
+.publish-build:                    &publish-build
   stage:                           publish
   dependencies:
-    - build:rust:linux:release
+    - build-linux-release
   cache: {}
-  <<:                              *build_only
-  <<:                              *kubernetes_build
+  <<:                              *build-only
+  <<:                              *kubernetes-build
 
 
 
-publish:docker:release:
-  <<:                              *publish_build
+publish-docker-release:
+  <<:                              *publish-build
   image:                           docker:stable
   services:
     - docker:dind
   # collect VERSION artifact here to pass it on to kubernetes
-  <<:                              *collect_artifacts
+  <<:                              *collect-artifacts
   variables:
     DOCKER_HOST:                   tcp://localhost:2375
     DOCKER_DRIVER:                 overlay2
     GIT_STRATEGY:                  none
     # DOCKERFILE:                  scripts/docker/Dockerfile
     CONTAINER_IMAGE:               parity/substrate
-  script:
-    - VERSION="$(cat ./artifacts/VERSION)"
+  before_script:
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
+  script:
+    - VERSION="$(cat ./artifacts/VERSION)"
+    - echo "Substrate version = ${VERSION}"
+    - test -z "${VERSION}" && exit 1
     - cd ./artifacts
     - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest .
     - docker push $CONTAINER_IMAGE:$VERSION
@@ -215,8 +228,8 @@ publish:docker:release:
 
 
 
-publish:s3:release:
-  <<:                              *publish_build
+publish-s3-release:
+  <<:                              *publish-build
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
@@ -237,14 +250,14 @@ publish:s3:release:
 
 
 
-publish:s3:doc:
+publish-s3-doc:
   stage:                           publish
   allow_failure:                   true
   dependencies:
-    - build:rust:doc:release
+    - build-rust-doc-release
   cache: {}
-  <<:                              *build_only
-  <<:                              *kubernetes_build
+  <<:                              *build-only
+  <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
@@ -264,20 +277,15 @@ publish:s3:doc:
 
 
 
-
-
-.deploy:template:                  &deploy
+.deploy-template:                  &deploy
   stage:                           deploy
   when:                            manual
   cache:                           {}
-  dependencies:
-    - publish:docker:release
   retry:                           1
   image:                           parity/kubectl-helm:$HELM_VERSION
-  <<:                              *build_only
-  # variables:
-  #   DEPLOY_TAG:                    "latest"
+  <<:                              *build-only
   tags:
+    # this is the runner that is used to deploy it
     - kubernetes-parity-build
   before_script:
     - test -z "${DEPLOY_TAG}" &&
@@ -292,28 +300,56 @@ publish:s3:doc:
       --set image.tag=${DEPLOY_TAG}
       --set validator.keys=${VALIDATOR_KEYS}
       ./scripts/kubernetes | kubectl apply -f - --dry-run=false
-    - echo "# substrate namespace"
-    - kubectl -n substrate get all
+    - echo "# substrate namespace ${KUBE_NAMESPACE}"
+    - kubectl -n ${KUBE_NAMESPACE} get all
     - echo "# substrate's nodes' external ip addresses:"
     - kubectl get nodes -l node=substrate
       -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range @.status.addresses[?(@.type=="ExternalIP")]}{.address}{"\n"}{end}'
     - echo "# substrate' nodes"
-    - kubectl -n substrate get pods
+    - kubectl -n ${KUBE_NAMESPACE} get pods
       -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}{end}'
+    - echo "# wait for the rollout to complete"
+    - kubectl -n ${KUBE_NAMESPACE} rollout status statefulset/substrate
 
 
 
 # have environment:url eventually point to the logs
 
-deploy:ew3:
+
+.deploy-cibuild:                   &deploy-cibuild
   <<:                              *deploy
+  dependencies:
+    - publish-docker-release
+
+.deploy-tag:                       &deploy-tag
+  <<:                              *deploy
+  only:
+    variables:
+      - $DEPLOY_TAG
+
+
+
+# have environment:url eventually point to the logs
+deploy-ew3:
+  <<:                              *deploy-cibuild
   environment:
     name: parity-prod-ew3
 
-deploy:ue1:
-  <<:                              *deploy
+deploy-ue1:
+  <<:                              *deploy-cibuild
   environment:
     name: parity-prod-ue1
+
+deploy-ew3-tag:
+  <<:                              *deploy-tag
+  environment:
+    name: parity-prod-ew3
+
+deploy-ue1-tag:
+  <<:                              *deploy-tag
+  environment:
+    name: parity-prod-ue1
+
 
 
 
