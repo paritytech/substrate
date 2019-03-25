@@ -38,7 +38,7 @@
 //! * **Fungible asset:** An asset whose units are interchangeable.
 //! * **Non-fungible asset:** An asset for which each unit has unique characteristics.
 //!
-//! ## Goals
+//! ### Goals
 //! <!-- Original inspiration of paragraph: @gavofyork / staking module documentation -->
 //! <!-- FIXME - assumptions only. require an expert to peer review (or re-write) -->
 //!
