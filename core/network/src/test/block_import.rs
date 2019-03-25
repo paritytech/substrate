@@ -26,7 +26,7 @@ struct TestLink {}
 
 impl Link<Block> for TestLink {}
 
-fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>, Hash, u64, IncomingBlock<Block>) {
+fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>, Hash, u64, PeerId, IncomingBlock<Block>) {
 	let client = test_client::new();
 	let block = client.new_block().unwrap().bake().unwrap();
 	client.import(BlockOrigin::File, block).unwrap();
@@ -34,27 +34,28 @@ fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Ex
 	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
 	let header = client.header(&BlockId::Number(1)).unwrap();
 	let justification = client.justification(&BlockId::Number(1)).unwrap();
-	(client, hash, number, IncomingBlock {
+	let peer_id = PeerId::random();
+	(client, hash, number, peer_id.clone(), IncomingBlock {
 		hash,
 		header,
 		body: None,
 		justification,
-		origin: Some(0)
+		origin: Some(peer_id.clone())
 	})
 }
 
 #[test]
 fn import_single_good_block_works() {
-	let (_, _hash, number, block) = prepare_good_block();
+	let (_, _hash, number, peer_id, block) = prepare_good_block();
 	assert_eq!(
 		import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-		Ok(BlockImportResult::ImportedUnknown(number, Default::default(), Some(0)))
+		Ok(BlockImportResult::ImportedUnknown(number, Default::default(), Some(peer_id)))
 	);
 }
 
 #[test]
 fn import_single_good_known_block_is_ignored() {
-	let (client, _hash, number, block) = prepare_good_block();
+	let (client, _hash, number, _, block) = prepare_good_block();
 	assert_eq!(
 		import_single_block(&client, BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
 		Ok(BlockImportResult::ImportedKnown(number))
@@ -63,11 +64,11 @@ fn import_single_good_known_block_is_ignored() {
 
 #[test]
 fn import_single_good_block_without_header_fails() {
-	let (_, _, _, mut block) = prepare_good_block();
+	let (_, _, _, peer_id, mut block) = prepare_good_block();
 	block.header = None;
 	assert_eq!(
 		import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-		Err(BlockImportError::IncompleteHeader(Some(0)))
+		Err(BlockImportError::IncompleteHeader(Some(peer_id)))
 	);
 }
 

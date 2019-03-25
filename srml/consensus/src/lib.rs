@@ -245,6 +245,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set a single authority by index.
+	pub fn set_authority_count(count: u32) {
+		Self::save_original_authorities(None);
+		AuthorityStorageVec::<T::SessionKey>::set_count(count);
+	}
+
+	/// Set a single authority by index.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		let current_authority = AuthorityStorageVec::<T::SessionKey>::item(index);
 		if current_authority != *key {

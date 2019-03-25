@@ -109,7 +109,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 				};
 
 				// if the header is from future or genesis (we never prune genesis) => return
-				if number.is_zero() || self.storage.status(BlockId::Number(number))? != BlockStatus::InChain {
+				if number.is_zero() || self.storage.status(BlockId::Number(number))? == BlockStatus::Unknown {
 					return Ok(None);
 				}
 
