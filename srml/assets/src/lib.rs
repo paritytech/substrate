@@ -46,7 +46,7 @@
 //! * It should be possible to create a unique fungible asset.
 //! * It should be possible to issue fungible assets that are controlled by a cold wallet.
 //! * It should be possible to transfer fungible assets between cold wallets.
-//! * It should be possible to destroy a proportion of fungible assets that are controlled by a cold wallet.
+//! * It should be possible to destroy a portion of fungible assets that are controlled by a cold wallet.
 //!
 //! ## Interface
 //!
