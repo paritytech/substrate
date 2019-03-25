@@ -144,7 +144,6 @@ impl ProvideInherentData for InherentDataProvider {
 		&INHERENT_IDENTIFIER
 	}
 
-	/// Provide inherent data to be included in a block
 	///
 	/// Data should be stored in the `InherentData` structure
 	fn provide_inherent_data(
