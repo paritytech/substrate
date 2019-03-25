@@ -719,9 +719,4 @@ mod tests {
 		assert_eq!(view.consider_global(SetId(2), 1001), Consider::Accept);
 		assert_eq!(view.consider_global(SetId(2), 10000), Consider::Accept);
 	}
-
-	#[test]
-	fn view_topics_at_set_boundary() {
-		unimplemented!()
-	}
 }
