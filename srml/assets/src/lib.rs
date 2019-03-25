@@ -30,7 +30,7 @@
 //! To use it in your module, you need to implement the assets [`Trait`].<br />
 //! The supported dispatchable functions are documented in the [`Call`] enum.
 //!
-//! ## Terminology
+//! ### Terminology
 //!
 //! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account that issues the asset.
 //! * **Asset transfer:** The action of transferring assets from one account to another.
