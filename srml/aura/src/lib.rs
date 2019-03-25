@@ -140,7 +140,6 @@ impl ProvideInherentData for InherentDataProvider {
 		}
 	}
 
-	/// Identifier of the inherent for the given data is provided
 	fn inherent_identifier(&self) -> &'static inherents::InherentIdentifier {
 		&INHERENT_IDENTIFIER
 	}
