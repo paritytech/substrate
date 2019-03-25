@@ -46,9 +46,9 @@
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
 //! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
 //! existential deposit then it will be deleted.
-//! - **Imbalance:** A condition when some funds were created or deducted without equal and opposite accounting. Functions
-//! that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
-//! - **Locks:** A freeze on an account's balance until a specified block number.
+//! - **Imbalance:** A condition when some funds were created or deducted without equal and opposite accounting.
+//! Functions that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
+//! - **Lock:** A freeze on a specified amount of an account's balance until a specified block number.
 //!
 //! ### Implementations
 //!
@@ -59,9 +59,11 @@
 //! fungible assets system.
 //! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
-//! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling imbalances between total issuance in the system and account balances.
-//! Must be used when a function creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayent`](https://crates.parity.io/srml_support/traits/trait.MakePayment.html): Simple trait designed for hooking into a transaction payment.
+//! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling
+//! imbalances between total issuance in the system and account balances. Must be used when a function
+//! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
+//! - [`MakePayent`](https://crates.parity.io/srml_support/traits/trait.MakePayment.html): Simple trait designed
+//! for hooking into a transaction payment.
 //! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
@@ -386,7 +388,6 @@ decl_module! {
 	}
 }
 
-/// The functions in this implementation affect storage.
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	// PUBLIC IMMUTABLES
