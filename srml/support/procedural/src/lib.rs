@@ -50,7 +50,7 @@ use proc_macro::TokenStream;
 /// * storage map: `Foo: map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html)
 /// * storage linked map: `Foo: linked_map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html) and [EnumarableStorageMap](https://crates.parity.io/srml_support/storage/trait.EnumerableStorageMap.html)
 ///
-/// And it's can be extended as such:
+/// And it can be extended as such:
 ///
 /// `#vis #name get(#getter) config(#field_name) build(#closure): #type = #default;`
 /// * `#vis`: set the visibility of the structure
