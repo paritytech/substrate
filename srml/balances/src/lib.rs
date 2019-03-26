@@ -126,7 +126,27 @@
 //!
 //! Use in the `contract` module (gas.rs):
 //!
-//! TODO!
+//! ```rust,ignore
+//! pub fn refund_unused_gas<T: Trait>(
+//! 	transactor: &T::AccountId,
+//! 	gas_meter: GasMeter<T>,
+//! 	imbalance: balances::NegativeImbalance<T>,
+//! ) {
+//! 	let gas_spent = gas_meter.spent();
+//! 	let gas_left = gas_meter.gas_left();
+//!
+//! 	// Increase total spent gas.
+//! 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
+//!
+//! 	let refund = <T::Gas as As<T::Balance>>::as_(gas_left) * gas_meter.gas_price;
+//! 	// Refund gas using balances module
+//! 	let refund_imbalance = <balances::Module<T>>::deposit_creating(transactor, refund);
+//! 	// Handle imbalance
+//! 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
+//! 		T::GasPayment::on_unbalanced(imbalance);
+//! 	}
+//! }
+//! ```
 //!
 //! ## Genesis config
 //!
