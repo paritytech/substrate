@@ -47,7 +47,7 @@
 //! 
 //! Import the system module and derive your module configuration trait from the system trait.
 //! 
-//! ### Example - get random seed and extrinsic count for the current block
+//! ### Example - Get random seed and extrinsic count for the current block
 //! 
 //! ```ignore
 //! use support::{decl_module, dispatch::Result};
@@ -122,30 +122,31 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
-	/// The `Origin` type used by dispatchable calls
+	/// The `Origin` type used by dispatchable calls.
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 
-	/// Represents account indexes and nonces for lookups
+	/// Represents account indexes and nonces for lookups.
 	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
 
-	/// The block number type used by the runtime
+	/// The block number type used by the runtime.
 	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	
-	/// Represents the output of a hashing function
+	/// Represents the output of a hashing function.
 	type Hash: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 	
-	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2)
+	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
-	/// Collection of DigestItems (logs) for a block
-	/// Relevant for light clients
-	/// Part of the block header
+	/// Collection of DigestItems (logs) for a block.
+	/// 
+	/// Relevant for light clients.
+	/// Part of the block header.
 	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
 
-	/// The user account identifier type for the runtime
+	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 
-	/// Wrapper for converting other types to AccountId
+	/// Wrapper for converting other types to AccountId.
 	/// 
 	/// Useful when resolving AccountId from predefined source types.
 	/// For example: Index to AccountId lookup.
@@ -158,10 +159,10 @@ pub trait Trait: 'static + Eq + Clone {
 		Digest = Self::Digest
 	>;
 
-	/// Represents the event type of the runtime
+	/// Represents the event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
 
-	/// Represents a piece of information which can be part of the digest (as a digest item)
+	/// Represents a piece of information which can be part of the digest (as a digest item).
 	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
@@ -267,7 +268,7 @@ impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestIte
 }
 
 // Create a Hash with 69 for each byte,
-// only used to build genesis config
+// only used to build genesis config.
 #[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
@@ -277,27 +278,27 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
-		/// Extrinsics nonce for accounts
+		/// Extrinsics nonce for accounts.
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
-		/// Total extrinsics count for the current block
+		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
-		/// Total length in bytes for all extrinsics put together, for the current block
+		/// Total length in bytes for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
-		/// Maps block numbers to block hashes
+		/// Maps block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
-		/// Extrinsics data for the current block (maps extrinsic's index to its data)
+		/// Extrinsics data for the current block (maps extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		/// Random seed of the current block
+		/// Random seed of the current block.
 		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
-		/// Hash of the previous block
+		/// Hash of the previous block.
 		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
-		/// Extrinsics root of the current block, also part of the block header
+		/// Extrinsics root of the current block, also part of the block header.
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
-		/// Digest of the current block, also part of the block header
+		/// Digest of the current block, also part of the block header.
 		Digest get(digest): T::Digest;
-		/// Events deposited for the current block
+		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event>>;
 	}
 	add_extra_genesis {
