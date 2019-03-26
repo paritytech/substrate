@@ -20,6 +20,7 @@
 use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::Arc;
 use std::iter;
+use std::time;
 use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
@@ -32,6 +33,8 @@ use crate::ConsensusEngineId;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
+
+const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
@@ -77,7 +80,7 @@ pub enum MessageIntent {
 /// Message validation result.
 pub enum ValidationResult<H> {
 	/// Message should be stored and propagated under given topic.
-	KeepAndPropagate(H),
+	ProcessAndKeep(H),
 	/// Message should be processed, but not propagated.
 	ProcessAndDiscard(H),
 	/// Message should be ignored.
@@ -200,6 +203,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<Validator<B>>>,
+	next_broadcast: time::Instant,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
@@ -211,6 +215,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
 			validators: Default::default(),
+			next_broadcast: time::Instant::now() + REBROADCAST_INTERVAL,
 		}
 	}
 
@@ -269,8 +274,17 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
+	/// Perform periodic maintenance
+	pub fn tick(&mut self, protocol: &mut Context<B>) {
+		self.collect_garbage();
+		if time::Instant::now() >= self.next_broadcast {
+			self.rebroadcast(protocol);
+			self.next_broadcast = time::Instant::now() + REBROADCAST_INTERVAL;
+		}
+	}
+
 	/// Rebroadcast all messages to all peers.
-	pub fn rebroadcast(&mut self, protocol: &mut Context<B>) {
+	fn rebroadcast(&mut self, protocol: &mut Context<B>) {
 		let messages = self.messages.iter()
 			.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
 		propagate(protocol, messages, MessageIntent::PeriodicRebroadcast, &mut self.peers, &self.validators);
@@ -278,8 +292,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, protocol: &mut Context<B>, topic: B::Hash, force: bool) {
-	   let messages = self.messages.iter()
-		   .filter_map(|entry| if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None });
+		let messages = self.messages.iter()
+		   .filter_map(|entry|
+				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
+			);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(protocol, messages, intent, &mut self.peers, &self.validators);
 	}
@@ -371,7 +387,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				v.validate(&mut context, &who, &message.data)
 			});
 		let validation_result = match validation {
-			Some(ValidationResult::KeepAndPropagate(topic)) => Some((topic, true)),
+			Some(ValidationResult::ProcessAndKeep(topic)) => Some((topic, true)),
 			Some(ValidationResult::ProcessAndDiscard(topic)) => Some((topic, false)),
 			Some(ValidationResult::Discard) => None,
 			None => {
@@ -402,9 +418,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 					if entry.get().is_empty() {
 						entry.remove_entry();
 					}
-					if keep {
-						self.register_message(message_hash, topic, message);
-					}
+				}
+				if keep {
+					self.register_message(message_hash, topic, message);
 				}
 			} else {
 				trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -474,7 +490,7 @@ mod tests {
 	struct AllowAll;
 	impl Validator<Block> for AllowAll {
 		fn validate(&self, _context: &mut ValidatorContext<Block>, _sender: &PeerId, _data: &[u8]) -> ValidationResult<H256> {
-			ValidationResult::KeepAndPropagate(H256::default())
+			ValidationResult::ProcessAndKeep(H256::default())
 		}
 	}
 
@@ -484,7 +500,7 @@ mod tests {
 		impl Validator<Block> for AllowOne {
 			fn validate(&self, _context: &mut ValidatorContext<Block>, _sender: &PeerId, data: &[u8]) -> ValidationResult<H256> {
 				if data[0] == 1 {
-					ValidationResult::KeepAndPropagate(H256::default())
+					ValidationResult::ProcessAndKeep(H256::default())
 				} else {
 					ValidationResult::Discard
 				}
