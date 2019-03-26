@@ -293,7 +293,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, protocol: &mut Context<B>, topic: B::Hash, force: bool) {
 		let messages = self.messages.iter()
-		   .filter_map(|entry|
+			.filter_map(|entry|
 				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
 			);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
