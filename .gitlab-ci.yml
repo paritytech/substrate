@@ -147,7 +147,7 @@ build-linux-release:               &build
     - qa
   before_script:
     - sccache -s
-   - ./scripts/build.sh
+    - ./scripts/build.sh
   script:
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
