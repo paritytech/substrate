@@ -33,36 +33,64 @@ use proc_macro::TokenStream;
 /// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
-/// 		Dummy get(dummy) config(): Option<T::Balance>;
-/// 		Foo get(foo) config(): T::Balance;
+/// 		Foo get(foo) config(): u32=12;
+/// 		Bar: map u32 => u32;
+/// 		pub Zed build(|config| vec![(0, 0)]): linked_map u32 => u32;
 /// 	}
 /// }
 /// ```
 ///
-/// For now we implement a convenience trait with pre-specialised associated types, one for each
-/// storage item. This allows you to gain access to publicly visible storage items from a
-/// module type. Currently you must disambiguate by using `<Module as Store>::Item` rather than
-/// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
+/// Declaration is set with this header `(pub) trait Store for Module<T: Trait> as Example`
+/// with `Store` a (pub) trait generated associating each storage to the Module and
+/// `as Example` setting the prefix used for storages of this module, it must be unique,
+/// another module with same name and same inner storage name will conflict.
 ///
-/// An optional `GenesisConfig` struct for storage initialization can be defined, either specifically as in :
+/// Basic storage consist of a name and a type, supported types are:
+/// * storage value: `Foo: type`: implements [StorageValue](https://crates.parity.io/srml_support/storage/trait.StorageValue.html)
+/// * storage map: `Foo: map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html)
+/// * storage linked map: `Foo: linked_map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html) and [EnumarableStorageMap](https://crates.parity.io/srml_support/storage/trait.EnumerableStorageMap.html)
+///
+/// And it can be extended as such:
+///
+/// `#vis #name get(#getter) config(#field_name) build(#closure): #type = #default;`
+/// * `#vis`: set the visibility of the structure
+/// * `#name`: name of the storage, used as a prefix in the storage
+/// * [optional] `get(#getter)`: implements the function #getter to `Module`
+/// * [optional] `config(#field_name)`: `field_name` is optional if get is set: include in `GenesisConfig`
+/// * [optional] `build(#closure)`: closure called with storage overlays
+/// * `#type`: storage type
+/// * [optional] `#default`: value returned when none
+///
+/// Storages are accessible in multiples ways, using:
+/// * the structure: `Foo::<T>`
+/// * the `Store` trait structure: `<Module<T> as Store>::Foo`
+/// * the getter on the module which calls get on the structure: `Module::<T>::foo()`
+///
+/// ## GenesisConfig
+///
+/// An optional `GenesisConfig` struct for storage initialization can be defined, either
+/// when at least one storage field requires default initialization
+/// (both `get` and `config` or `build`), or specifically as in :
 /// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 	}
 ///		add_extra_genesis {
 ///			config(genesis_field): GenesisFieldType;
+///			config(genesis_field2): GenesisFieldType;
+///			...
 ///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
+///				// Modification of storages
 ///			})
 ///		}
 /// }
 /// ```
-/// or when at least one storage field requires default initialization (both `get` and `config` or `build`).
 /// This struct can be expose as `Config` by `decl_runtime` macro.
 ///
-/// ### Module with instances
+/// ## Module with instances
 ///
 /// `decl_storage!` macro support building modules with instances with the following syntax: (DefaultInstance type
-/// is optionnal)
+/// is optional)
 /// ```nocompile
 /// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
