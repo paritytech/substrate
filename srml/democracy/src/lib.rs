@@ -125,10 +125,7 @@ decl_module! {
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 			ensure!(!T::Currency::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
-			if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
-			}
-			<VoteOf<T>>::insert(&(ref_index, who), vote);
+			Self::vote_aux(&who, &vote, ref_index);
 		}
 
 		/// Start a referendum.
@@ -159,9 +156,12 @@ decl_module! {
 			}
 		}
 
-		/// Delegate vote.
+		/// Delegate vote for a maximum of `lock_periods` after a successful referendum.
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
 			let who = ensure_signed(origin)?;
+			ensure!(lock_periods <= Self::max_lock_periods(), "delegation has too great a strength");
+			ensure!(!T::Currency::total_balance(&who).is_zero(),
+					"transactor must have balance to delegate.");
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			Self::deposit_event(RawEvent::Delegated(who, to));
 			Ok(())
@@ -304,8 +304,23 @@ impl<T: Trait> Module<T> {
 			).fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f))
 	}
 
-	/// Get the delegated voters for the current proposal.
-	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done. 
+	/// Auxiliar function to vote.
+	/// 
+	/// Warning: this function does not check the arguments.
+	fn vote_aux(who: &T::AccountId, vote: &Vote, ref_index: ReferendumIndex) {
+		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
+			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
+		}
+		<VoteOf<T>>::insert((ref_index, who.clone()), vote);
+	}
+
+	/// Adds delegators votes to the referendum with index `ref_index`.
+	/// 
+	/// Warning: this function should be called inmediately before `tally` (inside `bake_referendum`), 
+	/// i.e. inmediately before counting votes.
+	/// 
+	/// Note: delegators at a distance higher than `recursion_limit` from `voter`,
+	/// following the delegation path, are ignored.
 	fn add_delegated_votes(ref_index: ReferendumIndex) {
 		for voter in Self::voters_for(ref_index).iter() {
 			let vote = Self::vote_of((ref_index, voter.clone()));
@@ -313,20 +328,26 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Adds a vote for each delegator delegating to `voter` to the referendum with index `ref_index`.
+	/// 
+	/// We assume that `vote` is the vote of `voter` in this referendum. So the delegator's vote 
+	/// is similar but taking the minimum of the multipliers.
+	/// 
+	/// Note: delegators at a distance higher than `recursion_limit` from `voter`,
+	/// following the delegation path, are ignored.
 	fn add_delegated_votes_to(
 		ref_index: ReferendumIndex,
-		to: &T::AccountId,
+		voter: &T::AccountId,
 		vote: &Vote,
 		recursion_limit: u32,
 	) {
 		if recursion_limit == 0 { return }
 		for (delegator, (delegate, periods)) in <Delegations<T>>::enumerate() {
-			if 	delegate == *to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())) {
+			if 	delegate == *voter && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())) {
 				let multiplier = if periods < vote.multiplier() { periods } else { vote.multiplier() };
 				let delegator_vote = Vote::new(vote.is_aye(), multiplier);
-				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(delegator.clone()));
-				<VoteOf<T>>::insert(&(ref_index, delegator.clone()), delegator_vote);
-				Self::add_delegated_votes_to(ref_index, &delegator, vote, recursion_limit - 1);
+				Self::vote_aux(&delegator, &delegator_vote, ref_index);
+				Self::add_delegated_votes_to(ref_index, &delegator, &delegator_vote, recursion_limit - 1);
 			}
 		}
 	}
@@ -632,7 +653,7 @@ mod tests {
 			let r = 0;
 
 			// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 6));
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -662,9 +683,9 @@ mod tests {
 			let r = 0;
 
 			// Check behaviour with cycle.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
-			assert_ok!(Democracy::delegate(Origin::signed(3), 2, 100));
-			assert_ok!(Democracy::delegate(Origin::signed(1), 3, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 6));
+			assert_ok!(Democracy::delegate(Origin::signed(3), 2, 6));
+			assert_ok!(Democracy::delegate(Origin::signed(1), 3, 6));
 			
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -698,7 +719,7 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
 
 			// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 6));
 
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1, 2]);
@@ -722,7 +743,7 @@ mod tests {
 			assert_ok!(propose_set_balance(1, 2, 1));
 
 			// Delegate and undelegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 6));
 			assert_ok!(Democracy::undelegate(Origin::signed(2)));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -759,7 +780,7 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 6));
 
 			// Vote.
 			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
