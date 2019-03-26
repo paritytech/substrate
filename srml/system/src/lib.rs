@@ -152,7 +152,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// For example: Index to AccountId lookup.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
-	/// The block header
+	/// The block header.
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
