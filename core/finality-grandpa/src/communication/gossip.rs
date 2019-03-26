@@ -310,6 +310,19 @@ impl Misbehavior {
 	}
 }
 
+// cost scalars for reporting peers.
+mod cost {
+	pub(super) const PAST_REJECTION: i32 = -50;
+	pub(super) const BAD_SIGNATURE: i32 = -100;
+	pub(super) const MALFORMED_COMMIT: i32 = -1000;
+}
+
+// benefit scalars for reporting peers.
+mod benefit {
+	pub(super) const ROUND_MESSAGE: i32 = 100;
+	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
+}
+
 struct PeerInfo<N> {
 	view: View<N>,
 }
@@ -417,6 +430,9 @@ impl<Block: BlockT> Inner<Block> {
 			return
 		}
 
+		debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
+			self.config.name(), (round, set_id));
+
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
 
@@ -451,7 +467,8 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn cost_past_rejection(&self, _who: &PeerId, _round: Round, _set_id: SetId) -> i32 {
-		-50 // hardcode for now.
+		// hardcoded for now.
+		cost::PAST_REJECTION
 	}
 
 	fn validate_round_message(&self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
@@ -473,11 +490,11 @@ impl<Block: BlockT> Inner<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return Action::Discard(-100);
+			return Action::Discard(cost::BAD_SIGNATURE);
 		}
 
 		let topic = super::round_topic::<Block>(full.round.0, full.set_id.0);
-		Action::Keep(topic, 100)
+		Action::Keep(topic, benefit::ROUND_MESSAGE)
 	}
 
 	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
@@ -503,7 +520,7 @@ impl<Block: BlockT> Inner<Block> {
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
 			);
-			return Action::Discard(-1000);
+			return Action::Discard(cost::MALFORMED_COMMIT);
 		}
 
 		// check signatures on all contained precommits.
@@ -531,7 +548,7 @@ impl<Block: BlockT> Inner<Block> {
 		// always discard commits initially and rebroadcast after doing full
 		// checking.
 		let topic = super::global_topic::<Block>(full.set_id.0);
-		Action::ProcessAndDiscard(topic, 100)
+		Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_COMMIT)
 	}
 
 	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
@@ -684,9 +701,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
-				if set_id.0 >= 1 {
-					dbg!(peer.view.consider_vote(round, set_id));
-				}
 				return peer.view.consider_vote(round, set_id) == Consider::Accept
 			}
 
