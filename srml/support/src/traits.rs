@@ -57,7 +57,7 @@ impl<Balance> OnDilution<Balance> for () {
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.
 	Updated,
-	/// The update has led to killing of the account.
+	/// The update led to killing the account.
 	AccountKilled,
 }
 
@@ -245,7 +245,7 @@ pub trait Currency<AccountId> {
 	/// The combined balance of `who`.
 	fn total_balance(who: &AccountId) -> Self::Balance;
 
-	/// Some result as `slash(who, value)` (but without the side-effects) assuming there are no
+	/// Same result as `slash(who, value)` (but without the side-effects) assuming there are no
 	/// balance changes in the meantime and only the reserved balance is not taken into account.
 	fn can_slash(who: &AccountId, value: Self::Balance) -> bool;
 
@@ -253,20 +253,20 @@ pub trait Currency<AccountId> {
 	/// are no balance changes in the meantime.
 	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
 
-	/// The total amount of stake on the system.
+	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
-	/// The minimum balance any single account may have. This is equivalent to Balances module's
-	/// Existential Deposit.
+	/// The minimum balance any single account may have. This is equivalent to the `Balances` module's
+	/// `ExistentialDeposit`.
 	fn minimum_balance() -> Self::Balance;
 
 	/// The 'free' balance of a given account.
 	///
-	/// This is the only balance that matters in terms of most operations on tokens. It is
-	/// alone used to determine the balance when in the contract execution environment. When this
+	/// This is the only balance that matters in terms of most operations on tokens. It alone
+	/// is used to determine the balance when in the contract execution environment. When this
 	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-	/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-	/// is invoked, giving a chance to external modules to cleanup data associated with
+	/// deleted: specifically `FreeBalance`. Further, the `OnFreeBalanceZero` callback
+	/// is invoked, giving a chance to external modules to clean up data associated with
 	/// the deleted account.
 	///
 	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
@@ -277,8 +277,7 @@ pub trait Currency<AccountId> {
 	/// slashed, but gets slashed last of all.
 	///
 	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
-	/// that are still 'owned' by the account holder, but which are suspendable. (This is different
-	/// and wholly unrelated to the `Bondage` system used in the staking module.)
+	/// that are still 'owned' by the account holder, but which are suspendable.
 	///
 	/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
 	/// is deleted: specifically, `ReservedBalance`.
@@ -298,7 +297,7 @@ pub trait Currency<AccountId> {
 		new_balance: Self::Balance,
 	) -> result::Result<(), &'static str>;
 
-		// PUBLIC MUTABLES (DANGEROUS)
+	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Transfer some liquid free balance to another staker.
 	///
@@ -333,7 +332,7 @@ pub trait Currency<AccountId> {
 	/// Removes some free balance from `who` account for `reason` if possible. If `liveness` is `KeepAlive`,
 	/// then no less than `ExistentialDeposit` must be left remaining.
 	///
-	/// This checks any locks, vesting and liquidity requirements. If the removal is not possible, then it
+	/// This checks any locks, vesting, and liquidity requirements. If the removal is not possible, then it
 	/// returns `Err`.
 	fn withdraw(
 		who: &AccountId,
@@ -342,7 +341,7 @@ pub trait Currency<AccountId> {
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
-	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created
+	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
 	///
 	/// Infallible.
 	fn deposit_creating(
@@ -363,24 +362,28 @@ pub trait Currency<AccountId> {
 		UpdateBalanceOutcome,
 	);
 
-		/// Moves `value` from balance to reserved balance.
+	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
-	/// be returned to notify of this. This is different behaviour to `unreserve`.
+	/// be returned to notify of this. This is different behavior than `unreserve`.
 	fn reserve(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
 
-	/// Moves up to `value` from reserved balance to balance. This function cannot fail.
+	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
 	///
-	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then non-zero will be returned.
+	/// As much funds up to `value` will be moved as possible. If the reserve balance of `who`
+	/// is less than `value`, then the remaining amount will be returned.
 	///
-	/// NOTE: This is different to `reserve`.
+	/// # NOTES
+	///
+	/// - This is different from `reserve`.
+	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
+	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Self::Balance;
 
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
-	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then non-zero second item will be returned.
+	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
+	/// is less than `value`, then a non-zero second item will be returned.
 	fn slash_reserved(
 		who: &AccountId,
 		value: Self::Balance
@@ -408,7 +411,12 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
-	/// Introduce a new lock or change an existing one.
+	/// Create a new balance lock on account `who`.
+	///
+	/// If the new lock is valid (i.e. not already expired), it will push the struct to
+	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
+	///
+	/// If the lock `id` already exists, this will update it.
 	fn set_lock(
 		id: LockIdentifier,
 		who: &AccountId,
@@ -417,8 +425,15 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 		reasons: WithdrawReasons,
 	);
 
-	/// Change any existing lock so that it becomes strictly less liquid in all
-	/// respects to the given parameters.
+	/// Changes a balance lock (selected by `id`) so that it becomes less liquid in all
+	/// parameters or creates a new one if it does not exist.
+	///
+	/// Calling `extend_lock` on an existing lock `id` differs from `set_lock` in that it
+	/// applies the most severe constraints of the two, while `set_lock` replaces the lock
+	/// with the new parameters. As in, `extend_lock` will set:
+	/// - maximum `amount`
+	/// - farthest duration (`until`)
+	/// - bitwise mask of all `reasons`
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &AccountId,
@@ -452,3 +467,4 @@ bitmask! {
 		Fee = 0b00001000,
 	}
 }
+
