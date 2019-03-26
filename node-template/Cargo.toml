@@ -10,6 +10,7 @@ name = "template-node"
 path = "src/main.rs"
 
 [features]
+default = ['allow-old-seals']
 allow-old-seals = []
 
 [dependencies]

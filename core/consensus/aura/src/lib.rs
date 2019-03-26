@@ -46,7 +46,7 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future};
 use tokio::timer::Timeout;
-use log::{warn, debug, info, trace};
+use log::{warn, debug, info, trace, error};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -466,14 +466,20 @@ fn check_header<B: Block, P: Pair>(
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
 	let seal: Option<Vec<u8>> = digest_item.as_aura_seal();
+	trace!("Unsealing {:?}", hash);
 	let (slot_num, sig) = match seal {
 		Some(v) => {
 			let opt: Option<(u64, Signature<P>)> = Decode::decode(&mut &*v);
-			opt.ok_or_else(|| format!("Header {:?} is unsealed", hash))?
+			opt.ok_or_else(|| {
+				error!("Header {:?} is unsealed", hash);
+				format!("Header {:?} is unsealed", hash)
+			})?
 		}
-		None => if !allow_old_seals {
+		None => if !allow_old_seals || false {
+			error!("Header {:?} uses old seal format, rejecting", hash);
 			return Err(format!("Header {:?} is unsealed", hash))
 		} else {
+			warn!("Header {:?} uses old seal format", hash);
 			match digest_item.as_aura_seal() {
 				Some(x) => x,
 				None => return Err(format!("Header {:?} is unsealed", hash)),
