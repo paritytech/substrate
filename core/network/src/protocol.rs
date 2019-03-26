@@ -526,7 +526,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		recipient: GossipMessageRecipient,
 	) {
 		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
-		let message = ConsensusMessage{ data: message, engine_id };
+		let message = ConsensusMessage { data: message, engine_id };
 		match recipient {
 			GossipMessageRecipient::BroadcastToAll =>
 				self.consensus_gossip.multicast(&mut context, topic, message, true),

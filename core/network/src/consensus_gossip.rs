@@ -87,7 +87,7 @@ pub enum ValidationResult<H> {
 	Discard,
 }
 
-/// Validation context. Allows reacting to incoming messages by sending out furter messages.
+/// Validation context. Allows reacting to incoming messages by sending out further messages.
 pub struct ValidatorContext<'g, 'p, B: BlockT> {
 	gossip: &'g mut ConsensusGossip<B>,
 	protocol: &'p mut Context<B>,
@@ -187,12 +187,12 @@ pub trait Validator<B: BlockT> {
 
 	/// Produce a closure for validating messages on a given topic.
 	fn message_expired<'a>(&'a self) -> Box<FnMut(B::Hash, &[u8]) -> bool + 'a> {
-		Box::new(move |_topic, _data| false )
+		Box::new(move |_topic, _data| false)
 	}
 
 	/// Produce a closure for filtering egress messages.
 	fn message_allowed<'a>(&'a self) -> Box<FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
-		Box::new(move |_who, _intent, _topic, _data| true )
+		Box::new(move |_who, _intent, _topic, _data| true)
 	}
 }
 
