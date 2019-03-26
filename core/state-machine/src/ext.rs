@@ -250,7 +250,7 @@ where
 
 		self.mark_dirty();
 		self.overlay.clear_child_storage(subtrie);
-	  self.overlay.sync_child_storage_root(subtrie, None);
+		self.overlay.sync_child_storage_root(subtrie, None);
 		self.backend.for_keys_in_child_storage(subtrie, |key| {
 			self.overlay.set_child_storage(subtrie, key.to_vec(), None);
 		});
@@ -281,7 +281,7 @@ where
 		}
 
 		let mut transaction = B::Transaction::default();
-    // TODO avoid this clone somehow?
+		// TODO avoid this clone somehow?
 		let child_storage_subtries: Vec<_> = self.overlay.prospective.children.values().map(|v|v.2.clone()).collect();
 
 		for subtrie in child_storage_subtries {

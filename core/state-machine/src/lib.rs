@@ -911,14 +911,14 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 
-    assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
-    ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild".to_vec()));
-    let subtrie = ext.get_child_trie(&b"testchild"[..]).expect("set above");
+		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
+		ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild".to_vec()));
+		let subtrie = ext.get_child_trie(&b"testchild"[..]).expect("set above");
 		ext.set_child_storage(&subtrie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(&subtrie, b"abc"), Some(b"def".to_vec()));
 		ext.kill_child_storage(&subtrie);
 		assert_eq!(ext.child_storage(&subtrie, b"abc"), None);
-    assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
+		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
 	}
 
 	#[test]
