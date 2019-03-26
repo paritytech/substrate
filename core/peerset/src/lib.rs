@@ -18,9 +18,11 @@
 //! connected to.
 
 use std::collections::{HashSet, VecDeque};
+use std::ops;
 use futures::{prelude::*, sync::mpsc};
 use libp2p::PeerId;
 
+#[derive(Debug)]
 struct PeersetData {
 	/// List of nodes that we know exist but we are not connected to.
 	/// Elements in this list must never be in `out_slots` or `in_slots`.
@@ -49,7 +51,7 @@ enum Action {
 }
 
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PeersetHandle {
 	tx: mpsc::UnboundedSender<Action>,
 }
@@ -114,7 +116,7 @@ impl PeersetHandle {
 }
 
 /// Message that can be sent by the peer set manager (PSM).
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Message {
 	/// Request to open a connection to the given peer. From the point of view of the PSM, we are
 	/// immediately connected.
@@ -169,11 +171,20 @@ pub struct PeersetConfig {
 ///
 /// Implements the `Stream` trait and can be polled for messages. The `Stream` never ends and never
 /// errors.
+#[derive(Debug)]
 pub struct Peerset {
 	data: PeersetData,
-	tx: mpsc::UnboundedSender<Action>,
+	handle: PeersetHandle,
 	rx: mpsc::UnboundedReceiver<Action>,
 	message_queue: VecDeque<Message>,
+}
+
+impl ops::Deref for Peerset {
+	type Target = PeersetHandle;
+
+	fn deref(&self) -> &Self::Target {
+		&self.handle
+	}
 }
 
 impl Peerset {
@@ -182,7 +193,7 @@ impl Peerset {
 		let (tx, rx) = mpsc::unbounded();
 
 		let data = PeersetData {
-			discovered: config.bootnodes.into_iter().collect(),
+			discovered: config.bootnodes,
 			reserved: Default::default(),
 			reserved_only: config.reserved_only,
 			out_slots: (0 .. config.out_peers).map(|_| None).collect(),
@@ -191,29 +202,28 @@ impl Peerset {
 
 		let mut peerset = Peerset {
 			data,
-			tx,
+			handle: PeersetHandle {
+				tx,
+			},
 			rx,
 			message_queue: VecDeque::new(),
 		};
 
 		peerset.alloc_slots();
 
-		let handle = peerset.handle();
-
 		for reserved in config.reserved_nodes {
-			handle.add_reserved_peer(reserved);
+			peerset.add_reserved_peer(reserved);
 		}
 
 		peerset
 	}
 
-	fn handle(&self) -> PeersetHandle {
-		PeersetHandle {
-			tx: self.tx.clone(),
-		}
+	/// Creates shared handle to the peer set manager (PSM).
+	pub fn handle(&self) -> PeersetHandle {
+		self.handle.clone()
 	}
 
-	fn add_reserved_peer(&mut self, peer_id: PeerId) {
+	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if !self.data.reserved.insert(peer_id.clone()) {
 			// Immediately return if this peer was already in the list.
 			return;
@@ -236,12 +246,13 @@ impl Peerset {
 		}
 	}
 
-	fn remove_reserved_peer(&mut self, peer_id: &PeerId) {
+	fn on_remove_reserved_peer(&mut self, peer_id: &PeerId) {
 		self.data.reserved.remove(peer_id);
 	}
 
-	fn set_reserved_only(&mut self, reserved_only: bool) {
+	fn on_set_reserved_only(&mut self, reserved_only: bool) {
 		// Disconnect non-reserved nodes.
+		self.data.reserved_only = reserved_only;
 		if self.data.reserved_only {
 			for slot in self.data.out_slots.iter_mut().chain(self.data.in_slots.iter_mut()) {
 				if let Some(peer) = slot.as_ref() {
@@ -257,7 +268,7 @@ impl Peerset {
 		}
 	}
 
-	pub fn report_peer(&self, _peer_id: PeerId, _score_diff: i32) {
+	fn on_report_peer(&self, _peer_id: PeerId, _score_diff: i32) {
 		//unimplemented!();
 		// This is not implemented in this dummy implementation.
 	}
@@ -280,7 +291,7 @@ impl Peerset {
 		}
 	}
 
-	fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
+	fn on_incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
 		if self.data.out_slots.iter().chain(self.data.in_slots.iter()).any(|s| s.as_ref() == Some(&peer_id)) {
 			return
 		}
@@ -296,7 +307,7 @@ impl Peerset {
 		}
 	}
 
-	fn dropped(&mut self, peer_id: PeerId) {
+	fn on_dropped(&mut self, peer_id: PeerId) {
 		// Automatically connect back if reserved.
 		if self.data.reserved.contains(&peer_id) {
 			self.message_queue.push_back(Message::Connect(peer_id.clone()));
@@ -319,7 +330,7 @@ impl Peerset {
 		self.alloc_slots();
 	}
 
-	fn discovered(&mut self, peer_id: PeerId) {
+	fn on_discovered(&mut self, peer_id: PeerId) {
 		if self.data.out_slots.iter().chain(self.data.in_slots.iter()).any(|p| p.as_ref() == Some(&peer_id)) {
 			return;
 		}
@@ -344,15 +355,77 @@ impl Stream for Peerset {
 				Async::NotReady => return Ok(Async::NotReady),
 				Async::Ready(None) => return Ok(Async::Ready(None)),
 				Async::Ready(Some(action)) => match action {
-					Action::AddReservedPeer(peer_id) => self.add_reserved_peer(peer_id),
-					Action::RemoveReservedPeer(peer_id) => self.remove_reserved_peer(&peer_id),
-					Action::SetReservedOnly(reserved) => self.set_reserved_only(reserved),
-					Action::ReportPeer(peer_id, score_diff) => self.report_peer(peer_id, score_diff),
-					Action::Incoming(peer_id, index) => self.incoming(peer_id, index),
-					Action::Dropped(peer_id) => self.dropped(peer_id),
-					Action::Discovered(peer_id) => self.discovered(peer_id),
+					Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
+					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(&peer_id),
+					Action::SetReservedOnly(reserved) => self.on_set_reserved_only(reserved),
+					Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
+					Action::Incoming(peer_id, index) => self.on_incoming(peer_id, index),
+					Action::Dropped(peer_id) => self.on_dropped(peer_id),
+					Action::Discovered(peer_id) => self.on_discovered(peer_id),
 				}
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use libp2p::PeerId;
+	use futures::prelude::*;
+	use super::{PeersetConfig, Peerset, Message};
+
+	#[test]
+	fn test_peerset_from_config_with_bootnodes() {
+		let bootnode = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 1,
+			bootnodes: vec![bootnode.clone()],
+			reserved_only: false,
+			reserved_nodes: Vec::new(),
+		};
+
+		let peerset = Peerset::from_config(config);
+		let (next, _peerset) = peerset.into_future()
+			.wait()
+			.expect("Ok((Some(Message::Connect), peerset))");
+
+		let message = next.expect("Some(Message::Connect)");
+		assert_eq!(message, Message::Connect(bootnode));
+	}
+
+	#[test]
+	fn test_peerset_add_reserved_peer() {
+		//unimplemented!();
+	}
+
+	#[test]
+	fn test_peerset_remove_reserved_peer() {
+		//unimplemented!();
+	}
+
+	#[test]
+	fn test_peerset_set_reserved_only() {
+		//unimplemented!();
+	}
+
+	#[test]
+	fn test_peerset_report_peer() {
+		//unimplemented!();
+	}
+
+	#[test]
+	fn test_peerset_incoming() {
+		//unimplemented!();
+	}
+
+	#[test]
+	fn test_peerset_dropped() {
+		//unimplemented!();
+	}
+
+	#[test]
+	fn test_peerset_discovered() {
+		//unimplemented!();
 	}
 }
