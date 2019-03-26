@@ -242,6 +242,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
+		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
 	}
 }
 

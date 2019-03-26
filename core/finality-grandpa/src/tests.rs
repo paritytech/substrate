@@ -35,8 +35,7 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::ExecutionContext;
-use substrate_primitives::NativeOrEncoded;
+use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 
 use authorities::AuthoritySet;
 use consensus_changes::ConsensusChanges;

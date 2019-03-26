@@ -1104,12 +1104,12 @@ fn bond_extra_works() {
 		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Call the bond_extra function from controller, add only 100
-		assert_ok!(Staking::bond_extra(Origin::signed(10), 100));
+		assert_ok!(Staking::bond_extra(Origin::signed(11), 100));
 		// There should be 100 more `total` and `active` in the ledger
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 
 		// Call the bond_extra function with a large number, should handle it
-		assert_ok!(Staking::bond_extra(Origin::signed(10), u64::max_value()));
+		assert_ok!(Staking::bond_extra(Origin::signed(11), u64::max_value()));
 		// The full amount of the funds should now be in the total and active
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000000, active: 1000000, unlocking: vec![] }));
 
@@ -1161,7 +1161,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_eq!(Staking::stakers(&11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
-		Staking::bond_extra(Origin::signed(10), 100).unwrap();
+		Staking::bond_extra(Origin::signed(11), 100).unwrap();
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 		// Exposure is a snapshot! only updated after the next era update.

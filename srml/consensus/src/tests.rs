@@ -83,3 +83,28 @@ fn offline_report_can_be_excluded() {
 		assert!(Consensus::create_inherent(&data).is_some());
 	});
 }
+
+#[test]
+fn set_and_kill_storage_work() {
+	use srml_support::storage;
+
+	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
+		System::initialise(&1, &Default::default(), &Default::default());
+
+		let item = (vec![42u8], vec![42u8]);
+
+		Consensus::set_storage(vec![item.clone()]).unwrap();
+
+		assert_eq!(
+			storage::unhashed::get_raw(&item.0),
+			Some(item.1),
+		);
+
+		Consensus::kill_storage(vec![item.0.clone()]).unwrap();
+
+		assert_eq!(
+			storage::unhashed::get_raw(&item.0),
+			None,
+		);
+	});
+}

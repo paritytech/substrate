@@ -24,9 +24,11 @@ pub use state_machine::OverlayedChanges;
 pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
-	generic::BlockId, transaction_validity::TransactionValidity, ExecutionContext,
+	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Header as HeaderT, ApiRef, RuntimeApiInfo},
+	generic::BlockId, transaction_validity::TransactionValidity,
 };
+#[doc(hidden)]
+pub use primitives::{ExecutionContext, OffchainExt};
 #[doc(hidden)]
 pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
@@ -91,7 +93,10 @@ pub trait ApiExt<Block: BlockT> {
 pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
-	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
+	fn call_api_at<
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+	>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
@@ -99,7 +104,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
-		context: ExecutionContext
+		context: ExecutionContext,
 	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.
@@ -132,3 +137,4 @@ decl_runtime_apis! {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
 }
+

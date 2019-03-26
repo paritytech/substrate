@@ -270,6 +270,24 @@ pub trait OnInitialise<BlockNumber> {
 
 impl<N> OnInitialise<N> for () {}
 
+/// Off-chain computation trait.
+///
+/// Implementing this trait on a module allows you to perform a long-running tasks
+/// that make validators generate extrinsics (either transactions or inherents)
+/// with results of those long-running computations.
+///
+/// NOTE: This function runs off-chain, so it can access the block state,
+/// but cannot preform any alterations.
+pub trait OffchainWorker<BlockNumber> {
+	/// This function is being called on every block.
+	///
+	/// Implement this and use special `extern`s to generate transactions or inherents.
+	/// Any state alterations are lost and are not persisted.
+	fn generate_extrinsics(_n: BlockNumber) {}
+}
+
+impl<N> OffchainWorker<N> for () {}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
@@ -280,6 +298,11 @@ macro_rules! tuple_impl {
 		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
 			fn on_initialise(n: Number) {
 				$one::on_initialise(n);
+			}
+		}
+		impl<Number: Copy, $one: OffchainWorker<Number>> OffchainWorker<Number> for ($one,) {
+			fn generate_extrinsics(n: Number) {
+				$one::generate_extrinsics(n);
 			}
 		}
 	};
@@ -302,6 +325,16 @@ macro_rules! tuple_impl {
 			fn on_initialise(n: Number) {
 				$first::on_initialise(n);
 				$($rest::on_initialise(n);)+
+			}
+		}
+		impl<
+			Number: Copy,
+			$first: OffchainWorker<Number>,
+			$($rest: OffchainWorker<Number>),+
+		> OffchainWorker<Number> for ($first, $($rest),+) {
+			fn generate_extrinsics(n: Number) {
+				$first::generate_extrinsics(n);
+				$($rest::generate_extrinsics(n);)+
 			}
 		}
 		tuple_impl!($($rest,)+);
