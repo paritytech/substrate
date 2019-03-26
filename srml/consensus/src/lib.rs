@@ -24,7 +24,7 @@
 //! 
 //! The `Call` enum is documented [here](https://crates.parity.io/srml_consensus/enum.Call.html).
 //! 
-//! - `report_misbehavior` - Report some misbehaviour. The origin of this call must be signed.
+//! - `report_misbehavior` - Report some misbehavior. The origin of this call must be signed.
 //! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of this call must be an inherent.
 //! - `remark` - Make some on-chain remark. The origin of this call must be signed.
 //! - `set_heap_pages` - Set the number of pages in the WebAssembly environment's heap.
