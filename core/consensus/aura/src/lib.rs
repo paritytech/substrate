@@ -880,7 +880,7 @@ mod tests {
 				DummyOracle,
 				futures::empty(),
 				inherent_data_providers,
-				false,
+				true,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);
