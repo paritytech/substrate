@@ -21,6 +21,7 @@ use std::collections::{HashSet, VecDeque};
 use std::ops;
 use futures::{prelude::*, sync::mpsc};
 use libp2p::PeerId;
+pub use serde_json::Value;
 
 #[derive(Debug)]
 struct PeersetData {
@@ -339,6 +340,11 @@ impl Peerset {
 			self.data.discovered.push(peer_id);
 		}
 		self.alloc_slots();
+	}
+
+	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
+	pub fn debug_info(&self) -> serde_json::Value {
+		serde_json::Value::Null
 	}
 }
 

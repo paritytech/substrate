@@ -317,6 +317,11 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		self.peerset.discovered(peer_id.clone())
 	}
 
+	/// Returns the state of the peerset manager, for debugging purposes.
+	pub fn peerset_debug_info(&self) -> serde_json::Value {
+		self.peerset.debug_info()
+	}
+
 	/// Function that is called when the peerset wants us to connect to a node.
 	fn peerset_report_connect(&mut self, peer_id: PeerId) {
 		let mut occ_entry = match self.peers.entry(peer_id) {

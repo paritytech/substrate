@@ -129,6 +129,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	pub fn drop_node(&mut self, peer_id: &PeerId) {
 		self.custom_protocols.disconnect_peer(peer_id)
 	}
+
+	/// Returns the state of the peerset manager, for debugging purposes.
+	pub fn peerset_debug_info(&self) -> serde_json::Value {
+		self.custom_protocols.peerset_debug_info()
+	}
 }
 
 /// Event that can be emitted by the behaviour.
