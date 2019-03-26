@@ -47,7 +47,6 @@ pub enum Origin {
 	Members(u32),
 }
 
-/// Event for this module.
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::Hash, <T as system::Trait>::AccountId {
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).

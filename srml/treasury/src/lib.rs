@@ -31,11 +31,6 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
-/// Our module's configuration trait. All our types and consts go in here. If the
-/// module is dependent on specific other modules, then their configuration traits
-/// should be added to our implied traits list.
-///
-/// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId>;
@@ -58,10 +53,7 @@ pub trait Trait: system::Trait {
 
 type ProposalIndex = u32;
 
-// The module declaration. This states the entry points that we handle. The
-// macro takes care of the marshalling of arguments and dispatch.
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
@@ -177,7 +169,6 @@ decl_storage! {
 	}
 }
 
-/// An event in this module.
 decl_event!(
 	pub enum Event<T>
 	where
