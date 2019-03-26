@@ -87,7 +87,7 @@ macro_rules! construct_runtime {
 			$( $rest:tt )*
 		}
 	) => {
-		construct_runtime!(
+		$crate::construct_runtime!(
 			{
 				$runtime;
 				$block;
@@ -105,7 +105,7 @@ macro_rules! construct_runtime {
 		$name:ident: $module:ident,
 		$( $rest:tt )*
 	) => {
-		construct_runtime!(
+		$crate::construct_runtime!(
 			{ $( $preset )* };
 			{ $( $expanded )* $name: $module::{Module, Call, Storage, Event<T>, Config<T>}, };
 			$( $rest )*
@@ -124,7 +124,7 @@ macro_rules! construct_runtime {
 		},
 		$( $rest:tt )*
 	) => {
-		construct_runtime!(
+		$crate::construct_runtime!(
 			{ $( $preset )* };
 			{
 				$( $expanded )*
@@ -151,7 +151,7 @@ macro_rules! construct_runtime {
 		},
 		$( $rest:tt )*
 	) => {
-		construct_runtime!(
+		$crate::construct_runtime!(
 			{ $( $preset )* };
 			{
 				$( $expanded )*
@@ -177,7 +177,7 @@ macro_rules! construct_runtime {
 		},
 		$( $rest:tt )*
 	) => {
-		construct_runtime!(
+		$crate::construct_runtime!(
 			{ $( $preset )* };
 			{
 				$( $expanded )*

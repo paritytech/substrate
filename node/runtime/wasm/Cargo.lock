@@ -1297,6 +1297,7 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2664,6 +2665,14 @@ dependencies = [
  "strum 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "strum_macros 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "substrate-offchain-primitives"
+version = "0.1.0"
+dependencies = [
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
 ]
 
 [[package]]

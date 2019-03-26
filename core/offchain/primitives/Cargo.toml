@@ -1,0 +1,18 @@
+[package]
+description = "Substrate offchain workers primitives"
+name = "substrate-offchain-primitives"
+version = "0.1.0"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+client = { package = "substrate-client", path = "../../client", default-features = false }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"client/std",
+	"runtime_primitives/std"
+]

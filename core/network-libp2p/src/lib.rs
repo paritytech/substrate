@@ -99,7 +99,8 @@ pub struct NetworkState {
 	pub peer_id: String,
 	/// List of addresses the node is currently listening on.
 	pub listened_addresses: HashSet<Multiaddr>,
-	// TODO (https://github.com/libp2p/rust-libp2p/issues/978): external_addresses: Vec<Multiaddr>,
+	/// List of addresses the node knows it can be reached as.
+	pub external_addresses: HashSet<Multiaddr>,
 	/// List of node we're connected to.
 	pub connected_peers: HashMap<String, NetworkStatePeer>,
 	/// List of node that we know of but that we're not connected to.
@@ -108,6 +109,8 @@ pub struct NetworkState {
 	pub average_download_per_sec: u64,
 	/// Uploaded bytes per second averaged over the past few seconds.
 	pub average_upload_per_sec: u64,
+	/// State of the peerset manager.
+	pub peerset: serde_json::Value,
 }
 
 #[derive(Debug, PartialEq, Serialize)]

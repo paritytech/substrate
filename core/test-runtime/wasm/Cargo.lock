@@ -2347,6 +2347,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-offchain-primitives"
+version = "0.1.0"
+dependencies = [
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+]
+
+[[package]]
 name = "substrate-panic-handler"
 version = "0.1.0"
 dependencies = [
@@ -2446,6 +2454,7 @@ dependencies = [
  "substrate-consensus-aura-primitives 0.1.0",
  "substrate-inherents 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
