@@ -33,7 +33,7 @@
 //! For example, if contract A calls B and B runs out of gas mid-call, then all of B's calls are reverted.
 //! Assuming correct error handling by contract A, A's other calls and state changes still persist. 
 //! 
-//! **NOTE:** Call failures are also not always cascading. For example, if contract A calls contract B and B
+//! **NOTE:** Call failures are also not always cascading. For example, if contract A calls contract B, and B
 //! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
 //! Finally, when the `balances` module determines an account is dead (i.e. account balance fell below the
