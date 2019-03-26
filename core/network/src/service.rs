@@ -24,7 +24,7 @@ use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
-use peerset::Peerset;
+use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
@@ -141,7 +141,7 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
-	peerset: Arc<Peerset>,
+	peerset: PeersetHandle,
 	/// Protocol sender
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -356,7 +356,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 	}
 
 	fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(&peer);
+		self.peerset.remove_reserved_peer(peer);
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
@@ -470,7 +470,7 @@ fn start_thread<B: BlockT + 'static>(
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
-) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, Arc<Peerset>), Error> {
+) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, PeersetHandle), Error> {
 	// Start the main service.
 	let (service, peerset) = match start_service(config, registered) {
 		Ok((service, peerset)) => (Arc::new(Mutex::new(service)), peerset),
