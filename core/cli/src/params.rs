@@ -261,7 +261,7 @@ pub struct ExecutionStrategies {
 		raw(
 			possible_values = "&ExecutionStrategy::variants()",
 			case_insensitive = "true",
-			default_value = r#""NativeWhenPossible""#
+			default_value = r#""NativeElseWasm""#
 		)
 	)]
 	pub offchain_worker_execution: ExecutionStrategy,
