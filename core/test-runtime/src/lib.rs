@@ -94,6 +94,7 @@ impl Transfer {
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
+	IncludeData(Vec<u8>),
 }
 
 #[cfg(feature = "std")]
@@ -117,6 +118,7 @@ impl BlindCheckable for Extrinsic {
 					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
+			Extrinsic::IncludeData(data) => Ok(Extrinsic::IncludeData(data)),
 		}
 	}
 }
@@ -377,6 +379,13 @@ cfg_if! {
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 			}
+
+			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+				fn offchain_worker(block: u64) {
+					let ex = Extrinsic::IncludeData(block.encode());
+					runtime_io::submit_extrinsic(&ex)
+				}
+			}
 		}
 	} else {
 		impl_runtime_apis! {
@@ -479,6 +488,13 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+			}
+
+			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+				fn offchain_worker(block: u64) {
+					let ex = Extrinsic::IncludeData(block.encode());
+					runtime_io::submit_extrinsic(&ex)
+				}
 			}
 		}
 	}

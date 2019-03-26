@@ -23,7 +23,7 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
 
 pub mod backend;
 mod changes_trie;
@@ -153,6 +153,25 @@ pub trait Externalities<H: Hasher> {
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
+
+	/// Submit extrinsic.
+	///
+	/// Returns an error in case the API is not available.
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+}
+
+/// An implementation of offchain extensions that should never be triggered.
+pub enum NeverOffchainExt {}
+
+impl NeverOffchainExt {
+	/// Create new offchain extensions.
+	pub fn new<'a>() -> Option<&'a mut Self> {
+		None
+	}
+}
+
+impl OffchainExt for NeverOffchainExt {
+	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) { unreachable!() }
 }
 
 /// Code execution engine.
@@ -252,17 +271,19 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 }
 
 /// Creates new substrate state machine.
-pub fn new<'a, H, B, T, Exec>(
+pub fn new<'a, H, B, T, O, Exec>(
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
+	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-) -> StateMachine<'a, H, B, T, Exec> {
+) -> StateMachine<'a, H, B, T, O, Exec> {
 	StateMachine {
 		backend,
 		changes_trie_storage,
+		offchain_ext,
 		overlay,
 		exec,
 		method,
@@ -272,9 +293,10 @@ pub fn new<'a, H, B, T, Exec>(
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, H, B, T, Exec> {
+pub struct StateMachine<'a, H, B, T, O, Exec> {
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
+	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
@@ -282,11 +304,12 @@ pub struct StateMachine<'a, H, B, T, Exec> {
 	_hasher: PhantomData<H>,
 }
 
-impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
+impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
+	O: OffchainExt,
 	H::Out: Ord + HeapSizeOf,
 {
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -324,7 +347,13 @@ impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
-		let mut externalities = ext::Ext::new(self.overlay, self.backend, self.changes_trie_storage);
+		let offchain = self.offchain_ext.as_mut();
+		let mut externalities = ext::Ext::new(
+			self.overlay,
+			self.backend,
+			self.changes_trie_storage,
+			offchain.map(|x| &mut **x),
+		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
 			self.method,
@@ -505,6 +534,7 @@ where
 	let mut sm = StateMachine {
 		backend: &proving_backend,
 		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
+		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
 		method,
@@ -554,6 +584,7 @@ where
 	let mut sm = StateMachine {
 		backend: trie_backend,
 		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
+		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
 		method,
@@ -730,6 +761,7 @@ mod tests {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -750,6 +782,7 @@ mod tests {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -770,6 +803,7 @@ mod tests {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -838,7 +872,7 @@ mod tests {
 
 		{
 			let changes_trie_storage = InMemoryChangesTrieStorage::new();
-			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.clear_prefix(b"ab");
 		}
 		overlay.commit_prospective();
@@ -862,7 +896,7 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 
 		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
 		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
@@ -889,6 +923,7 @@ mod tests {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,
@@ -908,6 +943,7 @@ mod tests {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,

@@ -51,6 +51,7 @@ impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	const PREFIX: &'static [u8] = well_known_keys::AUTHORITY_PREFIX;
 }
 
+pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// Handling offline validator reports in a generic way.
@@ -216,6 +217,13 @@ decl_module! {
 			}
 		}
 
+		/// Kill some items from storage.
+		fn kill_storage(keys: Vec<Key>) {
+			for key in &keys {
+				storage::unhashed::kill(&key);
+			}
+		}
+
 		fn on_finalise() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
@@ -242,6 +250,12 @@ impl<T: Trait> Module<T> {
 			Self::save_original_authorities(Some(current_authorities));
 			AuthorityStorageVec::<T::SessionKey>::set_items(authorities);
 		}
+	}
+
+	/// Set a single authority by index.
+	pub fn set_authority_count(count: u32) {
+		Self::save_original_authorities(None);
+		AuthorityStorageVec::<T::SessionKey>::set_count(count);
 	}
 
 	/// Set a single authority by index.

@@ -201,8 +201,8 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub event: E,
 }
 
-/// Event for the system module.
 decl_event!(
+	/// Event for the system module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
@@ -565,7 +565,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
 		type Log = DigestItem;
