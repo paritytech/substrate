@@ -72,7 +72,7 @@ pub enum DigestItem<Hash, AuthorityId, SealSignature> {
 	ChangesTrieRoot(Hash),
 	/// The old way to put a Seal on it.  Deprecated.
 	#[deprecated]
-	Seal(#[deprecated] u64, #[deprecated] SealSignature),
+	Seal(u64, SealSignature),
 	/// Put a Seal on it
 	Consensus(ConsensusEngineId, Vec<u8>),
 	/// Any 'non-system' digest item, opaque to the native code.
@@ -119,6 +119,7 @@ enum DigestItemType {
 	AuthoritiesChange,
 	ChangesTrieRoot,
 	Seal,
+	Consensus,
 }
 
 impl<Hash, AuthorityId, SealSignature> DigestItem<Hash, AuthorityId, SealSignature> {
@@ -181,6 +182,10 @@ impl<Hash: Decode, AuthorityId: Decode, SealSignature: Decode> Decode for Digest
 				let vals: (u64, SealSignature) = Decode::decode(input)?;
 				Some(DigestItem::Seal(vals.0, vals.1))
 			},
+			DigestItemType::Consensus => {
+				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
+				Some(DigestItem::Consensus(vals.0, vals.1))
+			}
 			DigestItemType::Other => Some(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
@@ -225,7 +230,7 @@ impl<'a, Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for Di
 				(val, sig).encode_to(&mut v)
 			},
 			DigestItemRef::Consensus(val, sig) => {
-				DigestItemType::Seal.encode_to(&mut v);
+				DigestItemType::Consensus.encode_to(&mut v);
 				(val, sig).encode_to(&mut v)
 			},
 			DigestItemRef::Other(val) => {
