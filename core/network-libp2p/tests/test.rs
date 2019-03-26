@@ -41,7 +41,7 @@ fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
 		};
 
 		let proto = substrate_network_libp2p::RegisteredProtocol::new(*b"tst", &[1]);
-		result.push(substrate_network_libp2p::start_service(config, proto).unwrap());
+		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
 	}
 
 	result
@@ -99,9 +99,9 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { node_index, .. }) => {
+				Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
-						service1.send_custom_message(node_index, vec![(n % 256) as u8]);
+						service1.send_custom_message(&peer_id, vec![(n % 256) as u8]);
 					}
 				},
 				_ => panic!(),
@@ -131,8 +131,6 @@ fn two_nodes_transfer_lots_of_packets() {
 }
 
 #[test]
-#[ignore]
-// TODO: remove ignore once this test it fixed. #1777
 fn many_nodes_connectivity() {
 	// Creates many nodes, then make sure that they are all connected to each other.
 	// Note: if you increase this number, keep in mind that there's a limit to the number of
@@ -229,9 +227,9 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(ServiceEvent::OpenedCustomProtocol { node_index, .. }) => {
+				Some(ServiceEvent::OpenedCustomProtocol { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
-						service1.send_custom_message(node_index, msg);
+						service1.send_custom_message(&peer_id, msg);
 					}
 				},
 				_ => panic!(),

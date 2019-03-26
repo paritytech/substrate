@@ -144,6 +144,8 @@ macro_rules! decl_event {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
+		/// Events for this module.
+		///
 		$(#[$attr])*
 		pub enum Event {
 			$(
@@ -277,9 +279,12 @@ macro_rules! __decl_generic_event {
 		/// [`RawEvent`]: enum.RawEvent.html
 		/// [`Trait`]: trait.Trait.html
 		pub type Event<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
+
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
+		/// Events for this module.
+		///
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),* $(, $instance)? > {
 			$(

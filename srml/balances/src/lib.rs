@@ -430,6 +430,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
+		// assert!(Self::free_balance(who) > Self::existential_deposit());
 		if balance < Self::existential_deposit() {
 			<FreeBalance<T, I>>::insert(who, balance);
 			Self::on_free_too_low(who);
@@ -788,7 +789,7 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> Self::PositiveImbalance {
-		let (imbalance, _) = Self::ensure_free_balance_is(who, Self::free_balance(who) + value);
+		let (imbalance, _) = Self::make_free_balance_be(who, Self::free_balance(who) + value);
 		if let SignedImbalance::Positive(p) = imbalance {
 			p
 		} else {
@@ -797,11 +798,24 @@ where
 		}
 	}
 
-	fn ensure_free_balance_is(who: &T::AccountId, balance: T::Balance) -> (
+	fn make_free_balance_be(who: &T::AccountId, balance: T::Balance) -> (
 		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
 		UpdateBalanceOutcome
 	) {
 		let original = Self::free_balance(who);
+		if balance < Self::existential_deposit() && original.is_zero() {
+			// If we're attempting to set an existing account to less than ED, then
+			// bypass the entire operation. It's a no-op if you follow it through, but
+			// since this is an instance where we might account for a negative imbalance
+			// (in the dust cleaner of set_free_balance) before we account for its actual
+			// equal and opposite cause (returned as an Imbalance), then in the
+			// instance that there's no other accounts on the system at all, we might
+			// underflow the issuance and our arithmetic will be off.
+			return (
+				SignedImbalance::Positive(Self::PositiveImbalance::zero()),
+				UpdateBalanceOutcome::AccountKilled,
+			)
+		}
 		let imbalance = if original <= balance {
 			SignedImbalance::Positive(PositiveImbalance(balance - original))
 		} else {
@@ -949,7 +963,7 @@ where
 	}
 }
 
-impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
+impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let encoded_len = <T::Balance as As<u64>>::sa(encoded_len as u64);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;

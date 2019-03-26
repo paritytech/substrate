@@ -116,35 +116,43 @@ impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
 }
 
 impl<G: RuntimeGenesis> ChainSpec<G> {
+	/// A list of bootnode addresses.
 	pub fn boot_nodes(&self) -> &[String] {
 		&self.spec.boot_nodes
 	}
 
+	/// Spec name.
 	pub fn name(&self) -> &str {
 		&self.spec.name
 	}
 
+	/// Spec id.
 	pub fn id(&self) -> &str {
 		&self.spec.id
 	}
 
+	/// Telemetry endpoints (if any)
 	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
 		&self.spec.telemetry_endpoints
 	}
 
+	/// Network protocol id.
 	pub fn protocol_id(&self) -> Option<&str> {
 		self.spec.protocol_id.as_ref().map(String::as_str)
 	}
 
+	/// Name of the consensus engine.
 	pub fn consensus_engine(&self) -> Option<&str> {
 		self.spec.consensus_engine.as_ref().map(String::as_str)
 	}
 
+	/// Additional loosly-typed properties of the chain.
 	pub fn properties(&self) -> Properties {
 		// Return an empty JSON object if 'properties' not defined in config
 		self.spec.properties.as_ref().unwrap_or(&json::map::Map::new()).clone()
 	}
 
+	/// Add a bootnode to the list.
 	pub fn add_boot_node(&mut self, addr: Multiaddr) {
 		self.spec.boot_nodes.push(addr.to_string())
 	}

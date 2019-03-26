@@ -63,7 +63,7 @@ mod wasm;
 mod tests;
 
 use crate::exec::ExecutionContext;
-use crate::account_db::AccountDb;
+use crate::account_db::{AccountDb, DirectAccountDb};
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
@@ -73,22 +73,64 @@ use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
+use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced};
 use system::{ensure_signed, RawOrigin};
-use runtime_io::{blake2_256, twox_128};
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
+pub type TrieId = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
-pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
+pub trait ContractAddressFor<CodeHash, AccountId> {
 	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
 }
 
 /// A function that returns the fee for dispatching a `Call`.
 pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
+}
+
+#[derive(Encode,Decode,Clone,Debug)]
+/// Information for managing an acocunt and its sub trie abstraction.
+/// This is the required info to cache for an account
+pub struct AccountInfo {
+	/// unique ID for the subtree encoded as a byte
+	pub trie_id: TrieId,
+	/// the size of stored value in octet
+	pub current_mem_stored: u64,
+}
+
+/// Get a trie id (trie id must be unique and collision resistant depending upon its context)
+/// Note that it is different than encode because trie id should have collision resistance
+/// property (being a proper uniqueid).
+pub trait TrieIdGenerator<AccountId> {
+	/// get a trie id for an account, using reference to parent account trie id to ensure
+	/// uniqueness of trie id 
+	/// The implementation must ensure every new trie id is unique: two consecutive call with the
+	/// same parameter needs to return different trie id values.
+	fn trie_id(account_id: &AccountId) -> TrieId;
+}
+
+/// Get trie id from `account_id`
+pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
+
+/// This generator use inner counter for account id and apply hash over `AccountId +
+/// accountid_counter`
+impl<T: Trait> TrieIdGenerator<T::AccountId> for TrieIdFromParentCounter<T>
+where
+	T::AccountId: AsRef<[u8]>
+{
+	fn trie_id(account_id: &T::AccountId) -> TrieId {
+		// note that skipping a value due to error is not an issue here.
+		// we only need uniqueness, not sequence.
+		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
+
+		let mut buf = Vec::new();
+		buf.extend_from_slice(account_id.as_ref());
+		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
+		T::Hashing::hash(&buf[..]).as_ref().into()
+	}
 }
 
 pub trait Trait: balances::Trait + timestamp::Trait {
@@ -109,6 +151,8 @@ pub trait Trait: balances::Trait + timestamp::Trait {
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
+	/// trieid id generator
+	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
 	type GasPayment: OnUnbalanced<balances::NegativeImbalance<Self>>;
@@ -214,8 +258,8 @@ decl_module! {
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistent storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+				// Commit all changes that made it thus far into the persistant storage.
+				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -268,7 +312,7 @@ decl_module! {
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -344,34 +388,19 @@ decl_storage! {
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
-	}
-}
-
-/// The storage items associated with an account/key.
-///
-pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
-impl<T: Trait> StorageDoubleMap for StorageOf<T> {
-	const PREFIX: &'static [u8] = b"con:sto:";
-	type Key1 = T::AccountId;
-	type Key2 = Vec<u8>;
-	type Value = Vec<u8>;
-
-	/// Hashed by XX
-	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8> {
-		twox_128(&key1_data).to_vec()
-	}
-
-	/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
-	/// thus will be susceptible for a untrusted input.
-	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8> {
-		blake2_256(&key2_data).to_vec()
+		/// The subtrie counter
+		pub AccountCounter: u64 = 0;
+		/// The code associated with a given account.
+		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who);
+		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
+			child::kill_storage(&subtrie.trie_id);
+		});
 	}
 }
 
