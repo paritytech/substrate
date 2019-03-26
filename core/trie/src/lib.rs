@@ -128,11 +128,6 @@ pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out where
 	)
 }
 
-/// Determine whether a child trie key is valid. `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
-pub fn is_child_trie_key_valid<H: Hasher>(_storage_key: &[u8]) -> bool {
-	true
-}
-
 /// Determine the default child trie root.
 pub fn default_child_trie_root<H: Hasher>() -> Vec<u8> {
 	let mut db = MemoryDB::default();

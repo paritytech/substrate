@@ -19,7 +19,7 @@ pub use parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{
 	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519,
-	Pair
+	Pair, SubTrie,
 };
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
@@ -43,13 +43,19 @@ pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
-	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
+	ext::with(|ext| ext.storage(key))
 		.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Get `key` from child storage and return a `Vec`, empty if there's a problem.
-pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-	ext::with(|ext| ext.child_storage(storage_key, key).map(|s| s.to_vec()))
+pub fn child_storage(subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
+	ext::with(|ext| ext.child_storage(subtrie, key))
+		.expect("storage cannot be called outside of an Externalities-provided environment.")
+}
+
+/// get child trie at storage key location
+pub fn get_child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+	ext::with(|ext| ext.get_child_trie(storage_key))
 		.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 
@@ -70,8 +76,8 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 /// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 /// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
 /// number of bytes is not equal to the number of bytes written to the `value_out`.
-pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-	ext::with(|ext| ext.child_storage(storage_key, key).map(|value| {
+pub fn read_child_storage(subtrie: &SubTrie, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	ext::with(|ext| ext.child_storage(subtrie, key).map(|value| {
 		let value = &value[value_offset..];
 		let written = ::std::cmp::min(value.len(), value_out.len());
 		value_out[..written].copy_from_slice(&value[..written]);
@@ -87,9 +93,9 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 }
 
 /// Set the child storage of a key to some value.
-pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+pub fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
 	ext::with(|ext|
-		ext.set_child_storage(storage_key.to_vec(), key.to_vec(), value.to_vec())
+		ext.set_child_storage(subtrie, key.to_vec(), value.to_vec())
 	);
 }
 
@@ -101,9 +107,9 @@ pub fn clear_storage(key: &[u8]) {
 }
 
 /// Clear the storage of a key.
-pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+pub fn clear_child_storage(subtrie: &SubTrie, key: &[u8]) {
 	ext::with(|ext|
-		ext.clear_child_storage(storage_key, key)
+		ext.clear_child_storage(subtrie, key)
 	);
 }
 
@@ -115,9 +121,9 @@ pub fn exists_storage(key: &[u8]) -> bool {
 }
 
 /// Check whether a given `key` exists in storage.
-pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
+pub fn exists_child_storage(subtrie: &SubTrie, key: &[u8]) -> bool {
 	ext::with(|ext|
-		ext.exists_child_storage(storage_key, key)
+		ext.exists_child_storage(subtrie, key)
 	).unwrap_or(false)
 }
 
@@ -129,9 +135,9 @@ pub fn clear_prefix(prefix: &[u8]) {
 }
 
 /// Clear an entire child storage.
-pub fn kill_child_storage(storage_key: &[u8]) {
+pub fn kill_child_storage(subtrie: &SubTrie) {
 	ext::with(|ext|
-		ext.kill_child_storage(storage_key)
+		ext.kill_child_storage(subtrie)
 	);
 }
 
@@ -147,13 +153,6 @@ pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
 	).unwrap_or(H256::zero())
-}
-
-/// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
-	ext::with(|ext|
-		ext.child_storage_root(storage_key)
-	).unwrap_or(None)
 }
 
 /// "Commit" all existing operations and get the resultant storage change root.

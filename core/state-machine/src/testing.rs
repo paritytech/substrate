@@ -24,6 +24,7 @@ use trie::trie_root;
 use crate::backend::InMemory;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
+use primitives::SubTrie;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
@@ -118,8 +119,8 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		}
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		self.changes.child_storage(storage_key, key)?.map(Vec::from)
+	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
+		self.changes.child_storage(subtrie, key)?.map(Vec::from)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -135,14 +136,13 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		}
 	}
 
-	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool {
-		self.changes.set_child_storage(storage_key, key, value);
-		// TODO place_child_storage and set_child_storage should always be valid (create child on set)?
-		true
+	fn place_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, value: Option<Vec<u8>>) {
+		self.changes.set_child_storage(subtrie, key, value);
 	}
 
-	fn kill_child_storage(&mut self, storage_key: &[u8]) {
-		self.changes.clear_child_storage(storage_key);
+	fn kill_child_storage(&mut self, subtrie: &SubTrie) {
+    self.changes.set_storage(subtrie.parent.clone(), None); // TODO EMCH wellknownkey see parent no more public
+		self.changes.clear_child_storage(subtrie);
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -154,10 +154,6 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 
 	fn storage_root(&mut self) -> H::Out {
 		trie_root::<H, _, _, _>(self.inner.clone())
-	}
-
-	fn child_storage_root(&mut self, _storage_key: &[u8]) -> Option<Vec<u8>> {
-		None
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {

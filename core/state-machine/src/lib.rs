@@ -23,7 +23,7 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt, SubTrie};
 
 pub mod backend;
 mod changes_trie;
@@ -96,7 +96,25 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Read child runtime storage.
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// get child trie infos at storage_key
+	fn get_child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+		let mut key_for = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		Encode::encode_to(&storage_key, &mut key_for);
+		self.storage(&key_for[..])
+			.map(std::io::Cursor::new)
+			.as_mut()
+			.and_then(Decode::decode)
+			.map(|node|SubTrie { node, parent: storage_key.to_vec() })
+	}
+
+	/// put or delete child trie in top trie at a location
+	fn set_child_trie(&mut self, subtrie: &SubTrie) {
+		let mut key_for = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		Encode::encode_to(&subtrie.parent, &mut key_for);
+		self.place_storage(key_for, Some(Encode::encode(&subtrie.node)))
+	}
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -104,8 +122,8 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Set child storage entry `key` of current contract being called (effective immediately).
-	fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) -> bool {
-		self.place_child_storage(storage_key, key, Some(value))
+	fn set_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, value: Vec<u8>) {
+		self.place_child_storage(subtrie, key, Some(value))
 	}
 
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
@@ -114,8 +132,8 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
-	fn clear_child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> bool {
-		self.place_child_storage(storage_key.to_vec(), key.to_vec(), None)
+	fn clear_child_storage(&mut self, subtrie: &SubTrie, key: &[u8]) {
+		self.place_child_storage(subtrie, key.to_vec(), None)
 	}
 
 	/// Whether a storage entry exists.
@@ -124,12 +142,12 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Whether a child storage entry exists.
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> bool {
-		self.child_storage(storage_key, key).is_some()
+	fn exists_child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> bool {
+		self.child_storage(subtrie, key).is_some()
 	}
 
-	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, storage_key: &[u8]);
+	/// Clear an entire child storage and update parent.
+	fn kill_child_storage(&mut self, subtrie: &SubTrie);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -138,18 +156,13 @@ pub trait Externalities<H: Hasher> {
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
-	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool;
+	fn place_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
-
-	/// Get the trie root of a child storage map. This will also update the value of the child storage keys in the top-level storage map. If the storage root equals default hash as defined by trie, the key in top-level storage map will be removed.
-	///
-	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
-	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
@@ -898,10 +911,14 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 
-		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
-		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
-		ext.kill_child_storage(b":child_storage:testchild");
-		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), None);
+    assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
+    ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild".to_vec()));
+    let subtrie = ext.get_child_trie(&b"testchild"[..]).expect("set above");
+		ext.set_child_storage(&subtrie, b"abc".to_vec(), b"def".to_vec());
+		assert_eq!(ext.child_storage(&subtrie, b"abc"), Some(b"def".to_vec()));
+		ext.kill_child_storage(&subtrie);
+		assert_eq!(ext.child_storage(&subtrie, b"abc"), None);
+    assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
 	}
 
 	#[test]

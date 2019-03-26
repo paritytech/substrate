@@ -475,7 +475,7 @@ pub fn storage_root() -> [u8; 32] {
 }
 
 /// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+pub fn child_storage_root(subtrie: &SubTrie) -> Vec<u8> {
 	let mut length: u32 = 0;
 	unsafe {
 		let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
