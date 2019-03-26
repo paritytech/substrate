@@ -17,19 +17,11 @@
 //! Peer Set Manager (PSM). Contains the strategy for choosing which nodes the network should be
 //! connected to.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use futures::{prelude::*, sync::mpsc};
 use libp2p::PeerId;
-use parking_lot::Mutex;
-use std::sync::Arc;
 
-/// Shared part of the peer set manager (PSM). Distributed around the code.
-pub struct Peerset {
-	tx: mpsc::UnboundedSender<Message>,
-	inner: Mutex<Inner>,
-}
-
-struct Inner {
+struct PeersetData {
 	/// List of nodes that we know exist but we are not connected to.
 	/// Elements in this list must never be in `out_slots` or `in_slots`.
 	discovered: Vec<PeerId>,
@@ -43,6 +35,82 @@ struct Inner {
 	/// Node slots for incoming connections. Each slot contains either `None` if the node is free,
 	/// or `Some` if it is assigned to a peer.
 	in_slots: Vec<Option<PeerId>>,
+}
+
+#[derive(Debug)]
+enum Action {
+	AddReservedPeer(PeerId),
+	RemoveReservedPeer(PeerId),
+	SetReservedOnly(bool),
+	ReportPeer(PeerId, i32),
+	Incoming(PeerId, IncomingIndex),
+	Dropped(PeerId),
+	Discovered(PeerId),
+}
+
+/// Shared handle to the peer set manager (PSM). Distributed around the code.
+#[derive(Clone)]
+pub struct PeersetHandle {
+	tx: mpsc::UnboundedSender<Action>,
+}
+
+impl PeersetHandle {
+	/// Adds a new reserved peer. The peerset will make an effort to always remain connected to
+	/// this peer.
+	///
+	/// Has no effect if the node was already a reserved peer.
+	///
+	/// > **Note**: Keep in mind that the networking has to know an address for this node,
+	/// >			otherwise it will not be able to connect to it.
+	pub fn add_reserved_peer(&self, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::AddReservedPeer(peer_id));
+	}
+
+	/// Remove a previously-added reserved peer.
+	///
+	/// Has no effect if the node was not a reserved peer.
+	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(peer_id));
+	}
+
+	/// Sets whether or not the peerset only has connections .
+	pub fn set_reserved_only(&self, reserved: bool) {
+		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
+	}
+
+	/// Reports an adjustement to the reputation of the given peer.
+	pub fn report_peer(&self, peer_id: PeerId, score_diff: i32) {
+		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
+	}
+
+	/// Indicate that we received an incoming connection. Must be answered either with
+	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
+	///
+	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
+	/// connection implicitely means `Accept`, but incoming connections aren't cancelled by
+	/// `dropped`.
+	///
+	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
+	/// peerset is already connected to, in which case it must not answer.
+	pub fn incoming(&self, peer_id: PeerId, index: IncomingIndex) {
+		let _ = self.tx.unbounded_send(Action::Incoming(peer_id, index));
+	}
+
+	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
+	///
+	/// Must only be called after the PSM has either generated a `Connect` message with this
+	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
+	pub fn dropped(&self, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::Dropped(peer_id));
+	}
+
+	/// Adds a discovered peer id to the PSM.
+	///
+	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
+	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
+	pub fn discovered(&self, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::Discovered(peer_id));
+	}
 }
 
 /// Message that can be sent by the peer set manager (PSM).
@@ -101,17 +169,19 @@ pub struct PeersetConfig {
 ///
 /// Implements the `Stream` trait and can be polled for messages. The `Stream` never ends and never
 /// errors.
-pub struct PeersetMut {
-	parent: Arc<Peerset>,
-	rx: mpsc::UnboundedReceiver<Message>,
+pub struct Peerset {
+	data: PeersetData,
+	tx: mpsc::UnboundedSender<Action>,
+	rx: mpsc::UnboundedReceiver<Action>,
+	message_queue: VecDeque<Message>,
 }
 
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
-	pub fn from_config(config: PeersetConfig) -> (Arc<Peerset>, PeersetMut) {
+	pub fn from_config(config: PeersetConfig) -> Peerset {
 		let (tx, rx) = mpsc::unbounded();
 
-		let mut inner = Inner {
+		let data = PeersetData {
 			discovered: config.bootnodes.into_iter().collect(),
 			reserved: Default::default(),
 			reserved_only: config.reserved_only,
@@ -119,80 +189,67 @@ impl Peerset {
 			in_slots: (0 .. config.in_peers).map(|_| None).collect(),
 		};
 
-		alloc_slots(&mut inner, &tx);
-
-		let peerset = Arc::new(Peerset {
+		let mut peerset = Peerset {
+			data,
 			tx,
-			inner: Mutex::new(inner),
-		});
-
-		let rx = PeersetMut {
-			parent: peerset.clone(),
 			rx,
+			message_queue: VecDeque::new(),
 		};
 
+		peerset.alloc_slots();
+
+		let handle = peerset.handle();
+
 		for reserved in config.reserved_nodes {
-			peerset.add_reserved_peer(reserved);
+			handle.add_reserved_peer(reserved);
 		}
 
-		(peerset, rx)
+		peerset
 	}
 
-	/// Adds a new reserved peer. The peerset will make an effort to always remain connected to
-	/// this peer.
-	///
-	/// Has no effect if the node was already a reserved peer.
-	///
-	/// > **Note**: Keep in mind that the networking has to know an address for this node,
-	/// >			otherwise it will not be able to connect to it.
-	pub fn add_reserved_peer(&self, peer_id: PeerId) {
-		let mut inner = self.inner.lock();
-		if !inner.reserved.insert(peer_id.clone()) {
+	fn handle(&self) -> PeersetHandle {
+		PeersetHandle {
+			tx: self.tx.clone(),
+		}
+	}
+
+	fn add_reserved_peer(&mut self, peer_id: PeerId) {
+		if !self.data.reserved.insert(peer_id.clone()) {
 			// Immediately return if this peer was already in the list.
 			return;
 		}
 
 		// Nothing more to do if we're already connected.
-		if inner.out_slots.iter().chain(inner.in_slots.iter()).any(|s| s.as_ref() == Some(&peer_id)) {
+		if self.data.out_slots.iter().chain(self.data.in_slots.iter()).any(|s| s.as_ref() == Some(&peer_id)) {
 			return;
 		}
 
 		// Assign a slot for this reserved peer.
-		if let Some(pos) = inner.out_slots.iter().position(|s| s.as_ref().map(|n| !inner.reserved.contains(n)).unwrap_or(true)) {
-			let _ = self.tx.unbounded_send(Message::Connect(peer_id.clone()));
-			inner.out_slots[pos] = Some(peer_id);
-
+		if let Some(pos) = self.data.out_slots.iter().position(|s| s.as_ref().map(|n| !self.data.reserved.contains(n)).unwrap_or(true)) {
+			self.message_queue.push_back(Message::Connect(peer_id.clone()));
+			self.data.out_slots[pos] = Some(peer_id);
 		} else {
 			// All slots are filled with reserved peers.
-			if inner.discovered.iter().all(|p| *p != peer_id) {
-				inner.discovered.push(peer_id);
+			if self.data.discovered.iter().all(|p| *p != peer_id) {
+				self.data.discovered.push(peer_id);
 			}
 		}
 	}
 
-	/// Remove a previously-added reserved peer.
-	///
-	/// Has no effect if the node was not a reserved peer.
-	pub fn remove_reserved_peer(&self, peer_id: &PeerId) {
-		let mut inner = self.inner.lock();
-		inner.reserved.remove(peer_id);
+	fn remove_reserved_peer(&mut self, peer_id: &PeerId) {
+		self.data.reserved.remove(peer_id);
 	}
 
-	/// Sets whether or not the peerset only has connections .
-	pub fn set_reserved_only(&self, reserved_only: bool) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;	// Fixes a borrowing issue.
-		inner.reserved_only = reserved_only;
-
+	fn set_reserved_only(&mut self, reserved_only: bool) {
 		// Disconnect non-reserved nodes.
-		if reserved_only {
-			for slot in inner.out_slots.iter_mut().chain(inner.in_slots.iter_mut()) {
+		if self.data.reserved_only {
+			for slot in self.data.out_slots.iter_mut().chain(self.data.in_slots.iter_mut()) {
 				if let Some(peer) = slot.as_ref() {
-					if inner.reserved.contains(peer) {
+					if self.data.reserved.contains(peer) {
 						continue;
 					}
 
-					let _ = self.tx.unbounded_send(Message::Drop(peer.clone()));
+					self.message_queue.push_back(Message::Drop(peer.clone()));
 				}
 
 				*slot = None;
@@ -200,74 +257,55 @@ impl Peerset {
 		}
 	}
 
-	/// Reports an adjustement to the reputation of the given peer.
-	pub fn report_peer(&self, _peer_id: &PeerId, _score_diff: i32) {
+	pub fn report_peer(&self, _peer_id: PeerId, _score_diff: i32) {
+		//unimplemented!();
 		// This is not implemented in this dummy implementation.
 	}
-}
 
-fn alloc_slots(inner: &mut Inner, tx: &mpsc::UnboundedSender<Message>) {
-	if inner.reserved_only {
-		return;
-	}
-
-	for slot in inner.out_slots.iter_mut() {
-		if slot.is_some() {
-			continue;
+	fn alloc_slots(&mut self) {
+		if self.data.reserved_only {
+			return;
 		}
 
-		if !inner.discovered.is_empty() {
-			let elem = inner.discovered.remove(0);
-			*slot = Some(elem.clone());
-			let _ = tx.unbounded_send(Message::Connect(elem));
+		for slot in self.data.out_slots.iter_mut() {
+			if slot.is_some() {
+				continue;
+			}
+
+			if !self.data.discovered.is_empty() {
+				let elem = self.data.discovered.remove(0);
+				*slot = Some(elem.clone());
+				self.message_queue.push_back(Message::Connect(elem));
+			}
 		}
 	}
-}
 
-impl PeersetMut {
-	/// Indicate that we received an incoming connection. Must be answered either with
-	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
-	///
-	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
-	/// connection implicitely means `Accept`, but incoming connections aren't cancelled by
-	/// `dropped`.
-	///
-	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
-	/// peerset is already connected to, in which case it must not answer.
-	pub fn incoming(&self, peer_id: PeerId, index: IncomingIndex) {
-		let mut inner = self.parent.inner.lock();
-		if inner.out_slots.iter().chain(inner.in_slots.iter()).any(|s| s.as_ref() == Some(&peer_id)) {
+	fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
+		if self.data.out_slots.iter().chain(self.data.in_slots.iter()).any(|s| s.as_ref() == Some(&peer_id)) {
 			return
 		}
 
-		if let Some(pos) = inner.in_slots.iter().position(|s| s.is_none()) {
-			inner.in_slots[pos] = Some(peer_id);
-			let _ = self.parent.tx.unbounded_send(Message::Accept(index));
+		if let Some(pos) = self.data.in_slots.iter().position(|s| s.is_none()) {
+			self.data.in_slots[pos] = Some(peer_id);
+			self.message_queue.push_back(Message::Accept(index));
 		} else {
-			if inner.discovered.iter().all(|p| *p != peer_id) {
-				inner.discovered.push(peer_id);
+			if self.data.discovered.iter().all(|p| *p != peer_id) {
+				self.data.discovered.push(peer_id);
 			}
-			let _ = self.parent.tx.unbounded_send(Message::Reject(index));
+			self.message_queue.push_back(Message::Reject(index));
 		}
 	}
 
-	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
-	///
-	/// Must only be called after the PSM has either generated a `Connect` message with this
-	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&self, peer_id: &PeerId) {
-		let mut inner = self.parent.inner.lock();
-		let inner = &mut *inner;	// Fixes a borrowing issue.
-
+	fn dropped(&mut self, peer_id: PeerId) {
 		// Automatically connect back if reserved.
-		if inner.reserved.contains(peer_id) {
-			let _ = self.parent.tx.unbounded_send(Message::Connect(peer_id.clone()));
+		if self.data.reserved.contains(&peer_id) {
+			self.message_queue.push_back(Message::Connect(peer_id.clone()));
 			return
 		}
 
 		// Otherwise, free the slot.
-		for slot in inner.out_slots.iter_mut().chain(inner.in_slots.iter_mut()) {
-			if slot.as_ref() == Some(peer_id) {
+		for slot in self.data.out_slots.iter_mut().chain(self.data.in_slots.iter_mut()) {
+			if slot.as_ref() == Some(&peer_id) {
 				*slot = None;
 				break;
 			}
@@ -275,35 +313,46 @@ impl PeersetMut {
 
 		// Note: in this dummy implementation we consider that peers never expire. As soon as we
 		// are disconnected from a peer, we try again.
-		if inner.discovered.iter().all(|p| p != peer_id) {
-			inner.discovered.push(peer_id.clone());
+		if self.data.discovered.iter().all(|p| p != &peer_id) {
+			self.data.discovered.push(peer_id.clone());
 		}
-		alloc_slots(inner, &self.parent.tx);
+		self.alloc_slots();
 	}
 
-	/// Adds a discovered peer id to the PSM.
-	///
-	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
-	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
-	pub fn discovered(&self, peer_id: PeerId) {
-		let mut inner = self.parent.inner.lock();
-
-		if inner.out_slots.iter().chain(inner.in_slots.iter()).any(|p| p.as_ref() == Some(&peer_id)) {
+	fn discovered(&mut self, peer_id: PeerId) {
+		if self.data.out_slots.iter().chain(self.data.in_slots.iter()).any(|p| p.as_ref() == Some(&peer_id)) {
 			return;
 		}
 
-		if inner.discovered.iter().all(|p| *p != peer_id) {
-			inner.discovered.push(peer_id);
+		if self.data.discovered.iter().all(|p| *p != peer_id) {
+			self.data.discovered.push(peer_id);
 		}
-		alloc_slots(&mut inner, &self.parent.tx);
+		self.alloc_slots();
 	}
 }
 
-impl Stream for PeersetMut {
+impl Stream for Peerset {
 	type Item = Message;
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		self.rx.poll()
+		loop {
+			if let Some(message) = self.message_queue.pop_front() {
+				return Ok(Async::Ready(Some(message)));
+			}
+			match self.rx.poll()? {
+				Async::NotReady => return Ok(Async::NotReady),
+				Async::Ready(None) => return Ok(Async::Ready(None)),
+				Async::Ready(Some(action)) => match action {
+					Action::AddReservedPeer(peer_id) => self.add_reserved_peer(peer_id),
+					Action::RemoveReservedPeer(peer_id) => self.remove_reserved_peer(&peer_id),
+					Action::SetReservedOnly(reserved) => self.set_reserved_only(reserved),
+					Action::ReportPeer(peer_id, score_diff) => self.report_peer(peer_id, score_diff),
+					Action::Incoming(peer_id, index) => self.incoming(peer_id, index),
+					Action::Dropped(peer_id) => self.dropped(peer_id),
+					Action::Discovered(peer_id) => self.discovered(peer_id),
+				}
+			}
+		}
 	}
 }
