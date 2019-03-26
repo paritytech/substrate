@@ -14,7 +14,58 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Gossip and politeness for GRANDPA communication.
+//! Gossip and politeness for polite-grandpa.
+//!
+//! This module implements the following message types:
+//! #### Neighbor Packet
+//!
+//! The neighbor packet is sent to only our neighbors. It contains this information
+//!
+//!   - Current Round
+//!   - Current voter set ID
+//!   - Last finalized hash from commit messages.
+//!
+//! If a peer is at a given voter set, it is impolite to send messages from
+//! an earlier voter set. It is extremely impolite to send messages
+//! from a future voter set. "future-set" messages can be dropped and ignored.
+//!
+//! If a peer is at round r, is impolite to send messages about r-2 or earlier and extremely
+//! impolite to send messages about r+1 or later. "future-round" messages can
+//!  be dropped and ignored.
+//!
+//! It is impolite to send a neighbor packet which moves backwards in protocol state.
+//!
+//! This is beneficial if it conveys some progress in the protocol state of the peer.
+//!
+//! #### Prevote / Precommit
+//!
+//! These are votes within a round. Noting that we receive these messages
+//! from our peers who are not necessarily voters, we have to account the benefit
+//! based on what they might have seen.
+//!
+//! #### Propose
+//!
+//! This is a broadcast by a known voter of the last-round estimate.
+
+//! #### Commit
+//!
+//! These are used to announce past agreement of finality.
+//!
+//! It is impolite to send commits which are earlier than the last commit
+//! sent. It is especially impolite to send commits which are invalid, or from
+//! a different Set ID than the receiving peer has indicated.
+//!
+//! Sending a commit is polite when it may finalize something that the receiving peer
+//! was not aware of.
+//!
+//! ## Expiration
+//!
+//! We keep some amount of recent rounds' messages, but do not accept new ones from rounds
+//! older than our current_round - 1.
+//!
+//! ## Message Validation
+//!
+//! We only send polite messages to peers,
 
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};

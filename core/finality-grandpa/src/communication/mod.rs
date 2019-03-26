@@ -14,8 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Incoming message streams that verify signatures, and outgoing message streams
-//! that sign or re-shape.
+//! Communication streams for the polite-grandpa networking protocol.
+//!
+//! GRANDPA nodes communicate over a gossip network, where messages are not sent to
+//! peers until they have reached a given round.
+//!
+//! Rather than expressing protocol rules,
+//! polite-grandpa just carries a notion of impoliteness. Nodes which pass some arbitrary
+//! threshold of impoliteness are removed. Messages are either costly, or beneficial.
+//!
+//! For instance, it is _impolite_ to send the same message more than once.
+//! In the future, there will be a fallback for allowing sending the same message
+//! under certain conditions that are used to un-stick the protocol.
 
 use std::sync::Arc;
 
