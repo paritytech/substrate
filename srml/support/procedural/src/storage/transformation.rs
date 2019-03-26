@@ -500,6 +500,9 @@ fn decl_storage_items(
 			}
 
 			impls.extend(quote! {
+				/// Tag a type as an instance of a module.
+				/// 
+				/// Defines storage prefixes, they must be unique.
 				pub trait #instantiable: 'static {
 					#const_impls
 				}
@@ -510,12 +513,12 @@ fn decl_storage_items(
 			.map(|i| {
 				let name = format!("Instance{}", i);
 				let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-				(name, ident)
+				(name, ident, quote! {#[doc=r"Module instance"]})
 			})
-			.chain(default_instance.clone().map(|ident| (String::new(), ident)));
+			.chain(default_instance.clone().map(|ident| (String::new(), ident, quote! {#[doc=r"Default module instance"]})));
 
 		// Impl Instance trait for instances
-		for (prefix, ident) in instances {
+		for (prefix, ident, doc) in instances {
 			let mut const_impls = TokenStream2::new();
 
 			for (const_name, partial_const_value) in &const_names {
@@ -529,6 +532,7 @@ fn decl_storage_items(
 				// Those trait are derived because of wrong bounds for generics
 				#[cfg_attr(feature = "std", derive(Debug))]
 				#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
+				#doc
 				pub struct #ident;
 				impl #instantiable for #ident {
 					#const_impls

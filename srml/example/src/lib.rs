@@ -72,10 +72,10 @@ decl_storage! {
 	}
 }
 
-/// An event in this module. Events are simple means of reporting specific conditions and
-/// circumstances that have happened that users, Dapps and/or chain explorers would find
-/// interesting and otherwise difficult to detect.
 decl_event!(
+	/// Events are a simple means of reporting specific conditions and
+	/// circumstances that have happened that users, Dapps and/or chain explorers would find
+	/// interesting and otherwise difficult to detect.
 	pub enum Event<T> where B = <T as balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
