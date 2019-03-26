@@ -22,8 +22,8 @@
 //! 
 //! ## Overview
 //! 
-//! The system module defines the core data types used in Substrate runtime. 
-//! It also provides several utility functions (see [`Module`]) for other modules.
+//! The system module defines the core data types used in a Substrate runtime.
+//! It also provides several utility functions (see [`Module`]) for other runtime modules.
 //! 
 //! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, 
 //! among other things that support the execution of the current block.
@@ -66,7 +66,6 @@
 //! 	}
 //! }
 //! ```
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
