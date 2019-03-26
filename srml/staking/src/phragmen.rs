@@ -345,11 +345,11 @@ pub fn equalise<T: Trait + 'static>(
 	let last_stake = elected_candidates[elected_edges[last_index].elected_idx].backing_stake;
 	let split_ways = last_index + 1;
 	let excess = nominator.budget
-	.saturating_add(cumulative_stake)
-	.saturating_sub(
-		last_stake.checked_mul(&<BalanceOf<T>>::sa(split_ways as u64))
-		.unwrap_or(<BalanceOf<T>>::max_value())
-	);
+		.saturating_add(cumulative_stake)
+		.saturating_sub(
+			last_stake.checked_mul(&<BalanceOf<T>>::sa(split_ways as u64))
+				.unwrap_or(<BalanceOf<T>>::max_value())
+		);
 	let nominator_address = nominator.who.clone();
 	elected_edges.iter_mut().take(split_ways).for_each(|e| {
 		let c = &mut elected_candidates[e.elected_idx];
