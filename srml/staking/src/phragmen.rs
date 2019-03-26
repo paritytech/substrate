@@ -188,6 +188,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				}
 			}
 
+			println!("++ candidates {:?}", candidates);
+
 			// Find the best
 			let winner = candidates
 				.iter_mut()
