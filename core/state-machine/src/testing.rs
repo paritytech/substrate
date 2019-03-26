@@ -168,6 +168,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 			&AnchorBlockId { hash: parent, number: parent_num },
 		).map(|(root, _)| root.clone())
 	}
+
+	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+		unimplemented!()
+	}
 }
 
 #[cfg(test)]

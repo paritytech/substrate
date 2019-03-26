@@ -1974,6 +1974,7 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2029,6 +2030,7 @@ dependencies = [
  "srml-timestamp 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3979,6 +3981,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-offchain"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-consensus-common 0.1.0",
+ "substrate-inherents 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-test-client 0.1.0",
+ "substrate-transaction-pool 0.1.0",
+ "tokio 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-offchain-primitives"
+version = "0.1.0"
+dependencies = [
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+]
+
+[[package]]
 name = "substrate-panic-handler"
 version = "0.1.0"
 dependencies = [
@@ -4110,8 +4139,10 @@ dependencies = [
  "substrate-client-db 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
+ "substrate-offchain 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-rpc-servers 0.1.0",
  "substrate-telemetry 0.3.1",
@@ -4222,6 +4253,7 @@ dependencies = [
  "substrate-executor 0.1.0",
  "substrate-inherents 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-test-client 0.1.0",
 ]
