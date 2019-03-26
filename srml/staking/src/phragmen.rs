@@ -208,7 +208,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			for e in &mut n.edges {
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who) {
-					 e.elected = true;
+					e.elected = true;
 					// NOTE: always divide last to avoid collapse to zero.
 					e.backing_stake = <BalanceOf<T>>::sa(n.budget.as_().saturating_mul(*e.load) / *n.load);
 					c.backing_stake = c.backing_stake.saturating_add(e.backing_stake);
