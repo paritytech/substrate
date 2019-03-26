@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use primitives::Perquintill;
-use primitives::traits::{Zero, As, Bounded, CheckedMul, CheckedSub, Saturating};
+use primitives::traits::{Zero, As, Bounded, CheckedMul, Saturating};
 use parity_codec::{HasCompact, Encode, Decode};
 use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
