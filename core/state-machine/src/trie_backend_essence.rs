@@ -76,7 +76,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Get the value of child storage at given key.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
+		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>());
 
 		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral {
@@ -92,7 +92,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		let root = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<H>(storage_key)),
+			Ok(v) => v.unwrap_or(default_child_trie_root::<H>()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;

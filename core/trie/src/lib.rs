@@ -23,6 +23,7 @@ mod node_header;
 mod node_codec;
 mod trie_stream;
 
+use substrate_primitives::SubTrie;
 use hash_db::Hasher;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -116,8 +117,7 @@ pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 
 /// A trie root formed from the items, with keys attached according to their
 /// compact-encoded index (using `parity-codec` crate).
-pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out
-where
+pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out where
 	I: IntoIterator<Item = A>,
 	A: AsRef<[u8]>,
 {
@@ -134,7 +134,7 @@ pub fn is_child_trie_key_valid<H: Hasher>(_storage_key: &[u8]) -> bool {
 }
 
 /// Determine the default child trie root.
-pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
+pub fn default_child_trie_root<H: Hasher>() -> Vec<u8> {
 	let mut db = MemoryDB::default();
 	let mut root = H::Out::default();
 	let mut empty = TrieDBMut::<H>::new(&mut db, &mut root);
@@ -144,7 +144,7 @@ pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
 /// implementation may ignore this type parameter and use other hashers.
-pub fn child_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> Vec<u8> where
+pub fn child_trie_root<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
@@ -154,9 +154,8 @@ pub fn child_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> Vec
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
-	_storage_key: &[u8],
+	subtrie: &SubTrie,
 	db: &mut DB,
-	root_vec: Vec<u8>,
 	delta: I
 ) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
@@ -165,10 +164,11 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(&root_vec); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
 
 	{
-		let mut trie = TrieDBMut::<H>::from_existing(&mut *db, &mut root)?;
+		let mut db = KeySpacedDBMut(&mut *db, &subtrie.node.keyspace);
+		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
 			match change {
@@ -183,17 +183,17 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
-	_storage_key: &[u8],
+	subtrie: &SubTrie,
 	db: &DB,
-	root_slice: &[u8],
 	mut f: F
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
+	let db = KeySpacedDB(&*db, &subtrie.node.keyspace);
 
-	let trie = TrieDB::<H>::new(&*db, &root)?;
+	let trie = TrieDB::<H>::new(&db, &root)?;
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -229,33 +229,33 @@ pub fn record_all_keys<H: Hasher, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<H: Hasher, DB>(
-	_storage_key: &[u8],
+	subtrie: &SubTrie,
 	db: &DB,
-	root_slice: &[u8],
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
 
-	Ok(TrieDB::<H>::new(&*db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	let db = KeySpacedDB(&*db, &subtrie.node.keyspace);
+	Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
-	_storage_key: &[u8],
+	subtrie: &SubTrie,
 	db: &DB,
-	root_slice: &[u8],
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
 
-	Ok(TrieDB::<H>::new(&*db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	let db = KeySpacedDB(&*db, &subtrie.node.keyspace);
+	Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 // Utilities (not exported):
@@ -306,6 +306,86 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 		cursor <<= 1;
 	}
 	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
+}
+
+
+pub struct KeySpacedDB<'a, DB>(&'a DB, &'a substrate_primitives::KeySpace);
+pub struct KeySpacedDBMut<'a, DB>(&'a mut DB, &'a substrate_primitives::KeySpace);
+
+impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB> where
+	DB: hash_db::HashDBRef<H, T>,
+	H: Hasher,
+{
+	fn get(&self, key: &H::Out) -> Option<T> {
+		// TODO use interal buffer for derive key to avoid alloc
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.get(&derived_key)
+	}
+
+	fn contains(&self, key: &H::Out) -> bool {
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.contains(&derived_key)
+	}
+}
+
+impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB> where
+	DB: hash_db::PlainDBRef<K, V>,
+	K: AsMut<[u8]> + AsRef<[u8]> + Clone
+{
+	fn get(&self, key: &K) -> Option<V> {
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.get(&derived_key)
+	}
+	fn contains(&self, key: &K) -> bool {
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.contains(&derived_key)
+	}
+}
+
+impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB> where
+	DB: hash_db::HashDB<H, T>,
+	H: Hasher,
+	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
+{
+	fn get(&self, key: &H::Out) -> Option<T> {
+		// TODO use interal buffer for derive key to avoid alloc
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.get(&derived_key)
+	}
+
+	fn contains(&self, key: &H::Out) -> bool {
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.contains(&derived_key)
+	}
+
+	fn insert(&mut self, value: &[u8]) -> H::Out {
+		// TODO avoid buff for every keyspace db (using internal vec as buf)
+		let key = H::hash(value);
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, &key);
+		Self::emplace(self, derived_key, value.into());
+		key
+	}
+
+	fn emplace(&mut self, key: H::Out, value: T) {
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, &key);
+		self.0.emplace(derived_key, value)
+	}
+
+	fn remove(&mut self, key: &H::Out) {
+		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
+		self.0.remove(&derived_key)
+	}
+}
+impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB> where
+	DB: hash_db::HashDB<H, T>,
+	H: Hasher,
+	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
+{
+	fn as_hash_db(&self) -> &hash_db::HashDB<H, T> { &*self }
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::HashDB<H, T> + 'b) {
+		&mut *self
+	}
+
 }
 
 #[cfg(test)]

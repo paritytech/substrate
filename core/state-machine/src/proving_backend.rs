@@ -52,7 +52,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	}
 
 	pub fn child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
+		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>());
 
 		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral::new(

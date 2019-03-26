@@ -311,7 +311,7 @@ where
 		}
 
 		if self.storage_transaction.is_some() {
-			return Some(self.storage(storage_key).unwrap_or(default_child_trie_root::<H>(storage_key)));
+			return Some(self.storage(storage_key).unwrap_or(default_child_trie_root::<H>()));
 		}
 
 		Some(self.child_storage_root_transaction(storage_key).0)

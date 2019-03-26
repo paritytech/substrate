@@ -269,7 +269,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = child_trie_root::<H, _, _, _>(
-			&storage_key,
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
 				.into_iter()
@@ -278,7 +277,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 
 		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
 
-		let is_default = root == default_child_trie_root::<H>(&storage_key);
+		let is_default = root == default_child_trie_root::<H>();
 
 		(root, is_default, full_transaction)
 	}

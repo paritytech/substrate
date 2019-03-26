@@ -110,6 +110,43 @@ impl<T: OffchainExt + ?Sized> OffchainExt for Box<T> {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
+// use prefixed key for keyspace TODO put keyspace support at KeyValueDB level
+// TODO for default impl in kvdb run a hashing first?? -> warn to keep key for no ks (some
+// test code is accessing directly the db over the memorydb key!!
+// Note that this scheme must produce new key same as old key if ks is the empty vec
+// TODO put it as inner SubTrie function (requires changing child trie proto first)
+// TODO switch to simple mixing until trie pr changing Hashdb get merged (not even prefixed)
+pub fn keyspace_as_prefix<H: AsRef<[u8]>>(ks: &KeySpace, key: &H, dst: &mut[u8]) {
+	assert!(dst.len() == keyspace_expected_len(ks, key));
+	//dst[..ks.len()].copy_from_slice(&ks[..]);
+	dst[ks.len()..].copy_from_slice(key.as_ref());
+	let high = ::rstd::cmp::min(ks.len(), key.as_ref().len());
+	// TODO this mixing will be useless after trie pr merge (keeping it until then)
+	// same thing we use H dest but not after pr merge
+	//let start = ks.len();
+	let start = 0;
+	for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
+	//for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
+		// TODO any use of xor val? (preventing some targeted collision I would say)
+		*k ^= *a;
+	}
+}
+
+/// TODO when things work SubTrie will need to use key as param type, same for KeySpace
+pub fn keyspace_expected_len<H: AsRef<[u8]>>(ks: &KeySpace, key: &H) -> usize {
+	//ks.len() + key.as_ref().len()
+	key.as_ref().len()
+}
+
+/// keyspace as prefix with allocation
+pub fn keyspace_as_prefix_alloc<H: AsRef<[u8]> + Clone + AsMut<[u8]>>(ks: &KeySpace, key: &H) -> H {
+	//let mut res = Vec::with_capacity(keyspace_expected_len(ks, key));
+	let mut res = key.clone();
+	keyspace_as_prefix(ks, key, res.as_mut());
+	res
+
+}
+
 impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }
 }
@@ -208,5 +245,47 @@ impl parity_codec::Encode for NeverNativeValue {
 impl parity_codec::Decode for NeverNativeValue {
 	fn decode<I: parity_codec::Input>(_: &mut I) -> Option<Self> {
 		None
+	}
+}
+
+/// keyspace type.
+pub type KeySpace = Vec<u8>;
+
+
+/// key of subtrie in parent trie.
+pub type ParentTrie = Vec<u8>;
+
+/// child trie stored definition
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
+pub struct SubTrieNode {
+	/// subtrie unique keyspace
+	#[cfg_attr(feature = "std", serde(with="bytes"))]
+	pub keyspace: KeySpace,
+	/// subtrie current root hash
+	#[cfg_attr(feature = "std", serde(with="bytes"))]
+	pub root: Vec<u8>,
+}
+
+/// child trie infos
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
+pub struct SubTrie {
+	/// subtrie node info
+	pub node: SubTrieNode,
+	/// subtrie path
+	pub parent: ParentTrie,
+}
+
+impl SubTrie {
+	/// instantiate new subtrie without root value
+	pub fn new (keyspace: KeySpace, parent: ParentTrie) -> Self {
+		SubTrie {
+			node: SubTrieNode {
+				keyspace,
+				root: Default::default(),
+			},
+			parent,
+		}
 	}
 }

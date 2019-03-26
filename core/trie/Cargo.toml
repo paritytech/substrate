@@ -17,9 +17,9 @@ hash-db = { version = "0.11", default-features = false }
 trie-db = { version = "0.11", optional = true }
 trie-root = { version = "0.11", default-features = false }
 memory-db = { version = "0.11", optional = true }
+substrate-primitives = { path = "../primitives" } # TODO back to dev and Subtrie define in trie crate?
 
 [dev-dependencies]
-substrate-primitives = { path = "../primitives" }
 trie-bench = { version = "0.11" }
 trie-standardmap = { version = "0.11" }
 keccak-hasher = { version = "0.11" }
