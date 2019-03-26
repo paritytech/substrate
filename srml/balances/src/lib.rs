@@ -14,13 +14,158 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles setting and retrieval of free balance,
-//! retrieving total balance, reserve and unreserve balance,
-//! repatriating a reserved balance to a beneficiary account that exists,
-//! transfering a balance between accounts (when not reserved),
-//! slashing an account balance, account removal, rewards,
-//! lookup of an index to reclaim an account (when not balance not reserved),
-//! increasing total stake.
+//! # Balances Module
+//!
+//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need
+//! to implement the [balances Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables
+//! are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
+//!
+//! ## Overview
+//!
+//! The balances module provides functions for:
+//!
+//! - Getting and setting free balances
+//! - Retrieving total, reserved and unreserved balances
+//! - Repatriating a reserved balance to a beneficiary account that exists
+//! - Transferring a balance between accounts (when not reserved)
+//! - Slashing an account balance
+//! - Account creation and removal
+//! - Lookup of an index to reclaim an account
+//! - Managing total issuance
+//! - Setting and managing locks
+//!
+//! ### Terminology
+//!
+//! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
+//! "dust accounts" from filling storage.
+//! - **Total Issuance:** The total amount of units in existence in a system.
+//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set
+//! to zero.
+//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only balance that matters
+//! for most operations. When this balance falls below the existential deposit, most functionality of the account is
+//! removed. When both it and the reserved balance are deleted, then the account is said to be dead.
+//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
+//! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
+//! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
+//! deleted, then the account is said to be dead.
+//! - **Imbalance:** A condition when some funds were created or deducted without equal and opposite accounting.
+//! Functions that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
+//! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
+//! locks always operate over the same funds, so they "overlay" rather than "stack".
+//! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
+//! over time.
+//!
+//! ### Implementations
+//!
+//! The balances module provides implementations for the following traits. If these traits provide the functionality
+//! that you need, then you can avoid coupling with the balances module.
+//!
+//! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a
+//! fungible assets system.
+//! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
+//! dealing with accounts that allow liquidity restrictions.
+//! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling
+//! imbalances between total issuance in the system and account balances. Must be used when a function
+//! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
+//! - [`MakePayent`](https://crates.parity.io/srml_support/traits/trait.MakePayment.html): Simple trait designed
+//! for hooking into a transaction payment.
+//! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a
+//! given account is unused.
+//!
+//! Example of using the `Currency` trait from the treasury module:
+//!
+//! ```rust,ignore
+//! pub trait Trait: system::Trait {
+//! 	/// The staking balance.
+//! 	type Currency: Currency<Self::AccountId>;
+//! }
+//! ```
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! The `Call` enum is documented [here](https://crates.parity.io/srml_balances/enum.Call.html).
+//!
+//! - `transfer` - Transfer some liquid free balance to another account.
+//! - `set_balance` - Set the balances of a given account. The origin of this call must be root.
+//!
+//! ### Public Functions
+//!
+//! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available
+//! functions.
+//!
+//! ## Usage
+//!
+//! The following examples show how to use the balances module in your custom module.
+//!
+//! ### Import and Balance Transfer
+//!
+//! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call
+//! functions from the module.
+//!
+//! ```rust,ignore
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//!
+//! pub trait Trait: balances::Trait {}
+//!
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		fn transfer_proxy(origin, to: T::AccountId, value: T::Balance) -> Result {
+//! 			let sender = ensure_signed(origin)?;
+//! 			<balances::Module<T>>::make_transfer(&sender, &to, value)?;
+//!
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! ```
+//!
+//! ### Real Use Example
+//!
+//! Use in the `contract` module (gas.rs):
+//!
+//! ```rust,ignore
+//! pub fn refund_unused_gas<T: Trait>(
+//! 	transactor: &T::AccountId,
+//! 	gas_meter: GasMeter<T>,
+//! 	imbalance: balances::NegativeImbalance<T>,
+//! ) {
+//! 	let gas_spent = gas_meter.spent();
+//! 	let gas_left = gas_meter.gas_left();
+//!
+//! 	// Increase total spent gas.
+//! 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
+//!
+//! 	let refund = <T::Gas as As<T::Balance>>::as_(gas_left) * gas_meter.gas_price;
+//! 	// Refund gas using balances module
+//! 	let refund_imbalance = <balances::Module<T>>::deposit_creating(transactor, refund);
+//! 	// Handle imbalance
+//! 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
+//! 		T::GasPayment::on_unbalanced(imbalance);
+//! 	}
+//! }
+//! ```
+//!
+//! ## Genesis config
+//!
+//! The following storage items depend on the genesis config:
+//!
+//! - `TotalIssuance`
+//! - `ExistentialDeposit`
+//! - `TransferFee`
+//! - `CreationFee`
+//! - `Vesting`
+//! - `FreeBalance`
+//! - `TransactionBaseFee`
+//! - `TransactionByteFee`
+//!
+//! ## Related Modules
+//!
+//! The balances module depends on the [`system`](https://crates.parity.io/srml_system/index.html) and
+//! [`srml_support`](https://crates.parity.io/srml_support/index.html) modules as well as Substrate Core
+//! libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -47,7 +192,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
-	/// A function which is invoked when the free-balance has fallen below the existential deposit and
+	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
@@ -61,7 +206,7 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
-	/// A function which is invoked when the free-balance has fallen below the existential deposit and
+	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
@@ -136,15 +281,15 @@ pub struct BalanceLock<Balance, BlockNumber> {
 
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
-		/// The total amount of stake on the system.
+		/// The total units issued in the system.
 		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T, I>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
-		/// The minimum amount allowed to keep an account open.
+		/// The minimum amount required to keep an account open.
 		pub ExistentialDeposit get(existential_deposit) config(): T::Balance;
 		/// The fee required to make a transfer.
 		pub TransferFee get(transfer_fee) config(): T::Balance;
-		/// The fee required to create an account. At least as big as ReclaimRebate.
+		/// The fee required to create an account.
 		pub CreationFee get(creation_fee) config(): T::Balance;
 		/// The fee to be paid for making a transaction; the base.
 		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
@@ -175,11 +320,11 @@ decl_storage! {
 
 		/// The 'free' balance of a given account.
 		///
-		/// This is the only balance that matters in terms of most operations on tokens. It is
-		/// alone used to determine the balance when in the contract execution environment. When this
+		/// This is the only balance that matters in terms of most operations on tokens. It
+		/// alone is used to determine the balance when in the contract execution environment. When this
 		/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-		/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-		/// is invoked, giving a chance to external modules to cleanup data associated with
+		/// deleted: specifically `FreeBalance`. Further, the `OnFreeBalanceZero` callback
+		/// is invoked, giving a chance to external modules to clean up data associated with
 		/// the deleted account.
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
@@ -190,14 +335,13 @@ decl_storage! {
 		/// slashed, but gets slashed last of all.
 		///
 		/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
-		/// that are still 'owned' by the account holder, but which are suspendable. (This is different
-		/// and wholly unrelated to the `Bondage` system used in the staking module.)
+		/// that are still 'owned' by the account holder, but which are suspendable.
 		///
 		/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
 		/// is deleted: specifically, `ReservedBalance`.
 		///
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
-		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
 		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
 
 		/// Any liquidity locks on some account balances.
@@ -214,7 +358,14 @@ decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 		fn deposit_event<T, I>() = default;
 
-		/// Transfer some liquid free balance to another staker.
+		/// Transfer some liquid free balance to another account.
+		///
+		/// `transfer` will set the `FreeBalance` of the sender and receiver.
+		/// It will decrease the total issuance of the system by the `TransferFee`.
+		/// If the sender's account is below the existential deposit as a result
+		/// of the transfer, the account will be reaped.
+		///
+		/// The dispatch origin for this call must be `Signed` by the transactor.
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -226,6 +377,13 @@ decl_module! {
 		}
 
 		/// Set the balances of a given account.
+		///
+		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
+		/// If the new free or reserved balance is below the existential deposit,
+		/// it will also decrease the total issuance of the system (`TotalIssuance`)
+		/// and reset the account nonce (`system::AccountNonce`).
+		///
+		/// The dispatch origin for this call is `root`.
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] free: T::Balance,
@@ -238,7 +396,6 @@ decl_module! {
 	}
 }
 
-// For funding methods, see Currency trait
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	// PUBLIC IMMUTABLES
@@ -254,10 +411,11 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	// PRIVATE MUTABLES
 
-	/// Set the free balance of an account to some new value.
+	/// Set the reserved balance of an account to some new value. Will enforce `ExistentialDeposit`
+	/// law, annulling the account as needed.
 	///
-	/// Will enforce ExistentialDeposit law, annulling the account as needed.
-	/// In that case it will return `AccountKilled`.
+	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
+	/// is known that the account already exists.
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
@@ -272,13 +430,11 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit
-	/// law annulling the account as needed.
+	/// Set the free balance of an account to some new value. Will enforce `ExistentialDeposit`
+	/// law, annulling the account as needed.
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
-	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
@@ -684,8 +840,6 @@ where
 		// Free balance can never be less than ED. If that happens, it gets reduced to zero
 		// and the account information relevant to this subsystem is deleted (i.e. the
 		// account is reaped).
-		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
-		// value of which makes even the `free_balance` unspendable.
 		let outcome = if balance < <Module<T, I>>::existential_deposit() {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
