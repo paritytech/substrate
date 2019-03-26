@@ -184,8 +184,12 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
+
 		// Update any changes in session keys.
-		for (i, v) in Self::validators().into_iter().enumerate() {
+		let v = Self::validators();
+		<consensus::Module<T>>::set_authority_count(v.len() as u32);
+		for (i, v) in v.into_iter().enumerate() {
 			<consensus::Module<T>>::set_authority(
 				i as u32,
 				&<NextKeyFor<T>>::get(&v)
@@ -193,8 +197,6 @@ impl<T: Trait> Module<T> {
 					.unwrap_or_default()
 			);
 		};
-
-		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
@@ -224,6 +226,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::cell::RefCell;
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
@@ -233,6 +236,17 @@ mod tests {
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
+	}
+
+	thread_local!{
+		static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
+	}
+
+	pub struct TestOnSessionChange;
+	impl OnSessionChange<u64> for TestOnSessionChange {
+		fn on_session_change(_elapsed: u64, _should_reward: bool) {
+			NEXT_VALIDATORS.with(|v| Session::set_validators(&*v.borrow()));
+		}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -261,7 +275,7 @@ mod tests {
 	}
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
-		type OnSessionChange = ();
+		type OnSessionChange = TestOnSessionChange;
 		type Event = ();
 	}
 
@@ -273,14 +287,14 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
-			authorities: vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)],
+			authorities: NEXT_VALIDATORS.with(|l| l.borrow().iter().cloned().map(UintAuthorityId).collect()),
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
-			validators: vec![1, 2, 3],
+			validators: NEXT_VALIDATORS.with(|l| l.borrow().clone()),
 			keys: vec![],
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
@@ -289,9 +303,32 @@ mod tests {
 	#[test]
 	fn simple_setup_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
+		});
+	}
+
+	#[test]
+	fn authorities_should_track_validators() {
+		with_externalities(&mut new_test_ext(), || {
+			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2]);
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session(1);
+			assert_eq!(Session::validators(), vec![1, 2]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
+
+			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 4]);
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session(2);
+			assert_eq!(Session::validators(), vec![1, 2, 4]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
+
+			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 3]);
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session(3);
+			assert_eq!(Session::validators(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		});
 	}
 

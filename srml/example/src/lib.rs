@@ -214,6 +214,15 @@ decl_module! {
 			// We just kill our dummy storage item.
 			<Dummy<T>>::kill();
 		}
+
+		// A runtime code run after every block and have access to extended set of APIs.
+		//
+		// For instance you can generate extrinsics for the upcoming produced block.
+		fn offchain_worker(_n: T::BlockNumber) {
+			// We don't do anything here.
+			// but we could dispatch extrinsic (transaction/inherent) using
+			// runtime_io::submit_extrinsic
+		}
 	}
 }
 

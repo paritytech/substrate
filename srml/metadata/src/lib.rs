@@ -261,7 +261,8 @@ pub enum StorageFunctionType {
 	Map {
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-	}
+		is_linked: bool,
+	},
 }
 
 /// A storage function modifier.
@@ -301,8 +302,10 @@ pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
 pub enum RuntimeMetadata {
 	/// Unused; enum filler.
 	V0(RuntimeMetadataDeprecated),
-	/// Version 1 for runtime metadata.
-	V1(RuntimeMetadataV1),
+	/// Version 1 for runtime metadata. No longer used.
+	V1(RuntimeMetadataDeprecated),
+	/// Version 2 for runtime metadata.
+	V2(RuntimeMetadataV2),
 }
 
 /// Enum that should fail.
@@ -322,10 +325,10 @@ impl Decode for RuntimeMetadataDeprecated {
 	}
 }
 
-/// The metadata of a runtime version 1.
+/// The metadata of a runtime version 2.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV1 {
+pub struct RuntimeMetadataV2 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 

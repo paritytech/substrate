@@ -37,12 +37,6 @@ use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
 /// Protocol / handler id
 pub type ProtocolId = [u8; 3];
 
-/// Node public key
-pub type NodeId = PeerId;
-
-/// Local (temporary) peer session ID.
-pub type NodeIndex = usize;
-
 /// Parses a string address and returns the component, if valid.
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let mut addr: Multiaddr = addr_str.parse()?;
