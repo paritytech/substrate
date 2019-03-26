@@ -132,13 +132,8 @@ test-linux-stable:                 &test
 
 build-linux-release:               &build
   stage:                           build
-  # cache:
-  #   key:                           "${CI_JOB_NAME}"
-  #   paths:
-  #     - ${CARGO_HOME}
-  #     - ./target
   <<:                              *collect-artifacts
-  <<:                              *build-only
+  # <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -177,7 +172,7 @@ build-rust-doc-release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only
+  # <<:                              *build-only
   tags:
     # - linux-docker
     - qa
