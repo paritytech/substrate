@@ -25,7 +25,7 @@
 //! The balances module provides functions for:
 //!
 //! - Getting and setting free balances
-//! - Retrieving total, reserved, and unreserved balances
+//! - Retrieving total, reserved and unreserved balances
 //! - Repatriating a reserved balance to a beneficiary account that exists
 //! - Transferring a balance between accounts (when not reserved)
 //! - Slashing an account balance
@@ -41,14 +41,19 @@
 //! - **Total Issuance:** The total amount of units in existence in a system.
 //! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set
 //! to zero.
-//! - **Free Balance:** The liquid or spendable balance. The free balance is the only balance that matters for most
-//! operations. When this balance falls below the existential deposit, the account is removed.
+//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only balance that matters
+//! for most operations. When this balance falls below the existential deposit, most functionality of the account is
+//! removed. When both it and the reserved balance are deleted, then the account is said to be dead.
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
 //! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
-//! existential deposit then it will be deleted.
+//! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
+//! deleted, then the account is said to be dead.
 //! - **Imbalance:** A condition when some funds were created or deducted without equal and opposite accounting.
 //! Functions that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
-//! - **Lock:** A freeze on a specified amount of an account's balance until a specified block number.
+//! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
+//! locks always operate over the same funds, so they "overlay" rather than "stack".
+//! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
+//! over time.
 //!
 //! ### Implementations
 //!
@@ -121,21 +126,7 @@
 //!
 //! Use in the `contract` module (gas.rs):
 //!
-//! ```rust,ignore
-//! pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
-//! 	// Increase total spent gas.
-//! 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
-//! 	// also has T::Gas type.
-//! 	let gas_spent = <Module<T>>::gas_spent() + gas_meter.spent();
-//! 	<GasSpent<T>>::put(gas_spent);
-//!
-//! 	// Refund gas left by the price it was bought.
-//! 	let b = <balances::Module<T>>::free_balance(transactor);
-//! 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
-//! 	<balances::Module<T>>::set_free_balance(transactor, b + refund);
-//! 	<balances::Module<T>>::increase_total_stake_by(refund);
-//! }
-//! ```
+//! TODO!
 //!
 //! ## Genesis config
 //!
