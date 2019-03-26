@@ -17,25 +17,33 @@
 //! # Contract Module
 //! 
 //! The contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
-//! The supported dispatchable functions are documented as part of the [`Call`](/enum.Call.html) enum.
+//! The supported dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
 //! 
 //! ## Overview
 //! 
-//! This module extends accounts with the ability to create smart-contracts and make calls to the contracts.
-//! Each smart-contract is associated with an account, which handles the code and storage. When a smart-contract is called, its associated code gets executed. This code can alter the storage entries of the associated account, create new smart-contracts, or call other smart-contracts.
+//! This module extends accounts (see `Balances` module) to have smart-contract functionality.
+//! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract and non-contract accounts.
+//! 
+//! The smart-contract code is stored once in a code cache, and later retrievable via a code hash.
+//! This means that multiple smart-contracts can be instantiated from the same code cache, without replicating the code each time.
+//! 
+//! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
+//! This call can alter the storage entries of the smart-contract account, create new smart-contracts, or call other smart-contracts.
+//! 
+//! Finally, when the `balances` module determines an account is dead (i.e. account balance fell below the
+//! existential deposit), it reaps the account. This will delete the associated code and storage of the smart-contract account.
+//! 
+//! **NOTE:** Call failures are not always cascading. For example, if contract A calls contract B, and B
+//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+//! 
+//! ### Gas
 //! 
 //! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
-//! Unused gas is refunded after the call, regardless of the execution outcome. 
+//! Unused gas is refunded after the call, regardless of the execution outcome.
 //! 
 //! If the gas limit is reached, then all calls and state changes (including balance transfers) are only reverted at the current call's contract level.
 //! For example, if contract A calls B and B runs out of gas mid-call, then all of B's calls are reverted.
 //! Assuming correct error handling by contract A, A's other calls and state changes still persist. 
-//! 
-//! Finally, when the `balances` module determines an account is dead (i.e. account balance fell below the
-//! existential deposit), it reaps the account. This will delete the associated code and storage of the account.
-//! 
-//! **NOTE:** Call failures are also not always cascading. For example, if contract A calls contract B and B,
-//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
 //! ## Interface
 //! 
@@ -258,7 +266,10 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Make a call to a specified account, optionally transferring some balance.
+		/// Makes a call to an account, optionally transferring some balance.
+		/// If the account is a smart-contract account, the associated code will be executed and any fees will be transferred.
+		/// If the account is a regular account, any fees will be transferred.
+		/// If no account exists (and the call value fulfills the `existential_deposit`), a regular account will be created and any fees will be transferred.
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -392,11 +403,11 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
-		/// The fee required to create a contract. At least as big as staking's ReclaimRebate.
+		/// The fee required to create a contract instance. At least as big as staking's ReclaimRebate.
 		ContractFee get(contract_fee) config(): T::Balance = T::Balance::sa(21);
-		/// The fee charged for a call into a contract.
+		/// The base fee charged for a call into a contract.
 		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
-		/// The fee charged for a create of a contract.
+		/// The base fee charged for a create of a contract.
 		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
 		/// The price of one unit of gas.
 		GasPrice get(gas_price) config(): T::Balance = T::Balance::sa(1);
