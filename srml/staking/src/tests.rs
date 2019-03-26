@@ -21,7 +21,7 @@
 use super::*;
 use runtime_io::with_externalities;
 use phragmen;
-use primitives::Perquintill;
+use primitives::PerU128;
 use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
 use srml_support::traits::{Currency, ReservableCurrency};
@@ -54,7 +54,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
 		// Account 10 is exposed by 1000 * balance_factor from their own stash in account 11 + the default nominator vote
-		assert_eq!(Staking::stakers(11), Exposure { total: 1125, own: 1000, others: vec![ IndividualExposure { who: 101, value: 125 }] });
+		assert_eq!(Staking::stakers(11), Exposure { total: 1124, own: 1000, others: vec![ IndividualExposure { who: 101, value: 124 }] });
 		// Account 20 is exposed by 1000 * balance_factor from their own stash in account 21 + the default nominator vote
 		assert_eq!(Staking::stakers(21), Exposure { total: 1375, own: 1000, others: vec![ IndividualExposure { who: 101, value: 375 }] });
 
@@ -69,7 +69,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::current_session_reward(), 10);
 
 		// initial slot_stake
-		assert_eq!(Staking::slot_stake(),  1125); // Naive
+		assert_eq!(Staking::slot_stake(),  1124); // Naive
 		// assert_eq!(Staking::slot_stake(),  1250); // Post-process
 
 		// initial slash_count of validators
@@ -664,9 +664,9 @@ fn nominating_and_rewards_should_work() {
 
 		// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
 		assert_eq!(Staking::stakers(11).own, 1000);
-		assert_eq!(Staking::stakers(11).total, 1000 + 800);
+		assert_eq!(Staking::stakers(11).total, 1000 + 798);
 		// 2 and 4 supported 10, each with stake 600, according to phragmen.
-		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![400, 400]);
+		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![399, 399]);
 		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
 		// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 		assert_eq!(Staking::stakers(21).own, 1000);
@@ -693,7 +693,7 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11));
 
 		// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9) ;
+		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 + 2) ;
 		// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
 		assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11);
 	});
@@ -916,7 +916,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::stakers(&11).total, 1125);
+		assert_eq!(Staking::stakers(&11).own, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
@@ -1582,12 +1582,12 @@ fn phragmen_election_works_example_2() {
 		*/
 
 		assert_eq!(winner_10.exposure.total, 1000 + 525);
-		assert_eq!(winner_10.score, Perquintill::from_quintillionths(487804878048780));
+		assert_eq!(winner_10.score, PerU128::from_max_value(165991398498018762665060784113057664));
 		assert_eq!(winner_10.exposure.others[0].value, 475);
 		assert_eq!(winner_10.exposure.others[1].value, 50);
 
 		assert_eq!(winner_30.exposure.total, 1000 + 525);
-		assert_eq!(winner_30.score, Perquintill::from_quintillionths(743902439024390));
+		assert_eq!(winner_30.score, PerU128::from_max_value(253136882709478613064217695772412937));
 		assert_eq!(winner_30.exposure.others[0].value, 525);
 	})
 }
@@ -1896,10 +1896,6 @@ fn phragmen_should_not_overflow_validators() {
 			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
 		};
-		let bond_nominator = |a, b, v| {
-			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(a), v));
-		};
 
 		for i in 1..=8 {
 			let _ = Balances::make_free_balance_be(&i, u64::max_value());
@@ -1910,44 +1906,6 @@ fn phragmen_should_not_overflow_validators() {
 
 		bond_validator(2, u64::max_value());
 		bond_validator(4, u64::max_value());
-
-		bond_nominator(6, u64::max_value()/2, vec![1, 3]);
-		bond_nominator(8, u64::max_value()/2, vec![1, 3]);
-
-		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
-
-		assert_eq!(Session::validators(), vec![4, 2]);
-	})
-}
-
-#[test]
-fn phragmen_should_not_overflow_nominators() {
-	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.build()
-	, || {
-		let bond_validator = |a, b| {
-			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
-			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
-		};
-		let bond_nominator = |a, b, v| {
-			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(a), v));
-		};
-
-		let _ = Staking::chill(Origin::signed(10));
-		let _ = Staking::chill(Origin::signed(20));
-
-		for i in 1..=8 {
-			let _ = Balances::make_free_balance_be(&i, u64::max_value());
-		}
-
-		bond_validator(2, u64::max_value()/2);
-		bond_validator(4, u64::max_value()/2);
-
-		bond_nominator(6, u64::max_value(), vec![1, 3]);
-		bond_nominator(8, u64::max_value(), vec![1, 3]);
 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
