@@ -16,7 +16,7 @@
 
 //! # Contract Module
 //! 
-//! The contract module provides functionality for the runtime to deploy and execute smart-contracts expressed in WebAssembly.
+//! The contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //! To add this functionality, you need to add the contract module to `construct_runtime!` in the runtime module.
 //! The supported dispatchable functions are documented as part of the [`Call`] enum.
 //! 
