@@ -23,6 +23,8 @@ use libp2p::PeerId;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+pub use serde_json::Value;
+
 /// Shared part of the peer set manager (PSM). Distributed around the code.
 pub struct Peerset {
 	tx: mpsc::UnboundedSender<Message>,
@@ -296,6 +298,11 @@ impl PeersetMut {
 			inner.discovered.push(peer_id);
 		}
 		alloc_slots(&mut inner, &self.parent.tx);
+	}
+
+	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
+	pub fn debug_info(&self) -> serde_json::Value {
+		serde_json::Value::Null
 	}
 }
 
