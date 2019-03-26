@@ -79,6 +79,9 @@ use crate::{CompactCommit, SignedMessage};
 use super::{Round, SetId, Network};
 
 use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
+
+const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -412,6 +415,7 @@ struct Inner<Block: BlockT> {
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
 	config: crate::Config,
+	next_rebroadcast: Instant,
 }
 
 impl<Block: BlockT> Inner<Block> {
@@ -420,6 +424,7 @@ impl<Block: BlockT> Inner<Block> {
 			local_view: View::default(),
 			peers: Peers { inner: HashMap::new() },
 			live_topics: KeepTopics::new(),
+			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			config,
 		}
 	}
@@ -681,10 +686,25 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn message_allowed<'a>(&'a self)
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
-		let inner = self.inner.read();
+		let (inner, do_rebroadcast) = {
+			use parking_lot::RwLockWriteGuard;
+
+			let mut inner = self.inner.write();
+			let now = Instant::now();
+			let do_rebroadcast = if now >= inner.next_rebroadcast {
+				inner.next_rebroadcast = now + REBROADCAST_AFTER;
+				true
+			} else {
+				false
+			};
+
+			// downgrade to read-lock.
+			(RwLockWriteGuard::downgrade(inner), do_rebroadcast)
+		};
+
 		Box::new(move |who, intent, topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
-				return false;
+				return do_rebroadcast;
 			}
 
 			let peer = match inner.peers.peer(who) {
