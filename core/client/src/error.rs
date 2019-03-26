@@ -16,9 +16,6 @@
 
 //! Substrate client possible errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
 #![allow(missing_docs)]
 
 use std;
@@ -27,10 +24,13 @@ use runtime_primitives::ApplyError;
 use consensus;
 use error_chain::*;
 
+#[derive(Debug, Display)]
+pub enum Error {
+	/// Consensus Error
+	Consensus(consensus::Error),
+}
+
 error_chain! {
-	links {
-		Consensus(consensus::Error, consensus::ErrorKind);
-	}
 	errors {
 		/// Backend error.
 		Backend(s: String) {
