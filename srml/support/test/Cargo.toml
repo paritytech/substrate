@@ -1,0 +1,25 @@
+[package]
+name = "srml-support-test"
+version = "0.1.0"
+authors = ["thiolliere <gui.thiolliere@gmail.com>"]
+edition = "2018"
+
+[dev-dependencies]
+serde = { version = "1.0", default-features = false }
+serde_derive = { version = "1.0" }
+parity-codec = { version = "3.2", default-features = false, features = ["derive"] }
+runtime_io = { package = "sr-io", path = "../../../core/sr-io", default-features = false }
+srml-support = { path = "../", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../../core/inherents", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../core/primitives", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"serde/std",
+	"parity-codec/std",
+	"runtime_io/std",
+	"srml-support/std",
+	"inherents/std",
+	"primitives/std",
+]

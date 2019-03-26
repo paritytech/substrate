@@ -8,3 +8,5 @@ edition = "2018"
 substrate-primitives = { path = "../primitives" }
 hex-literal = { version = "0.1.0" }
 lazy_static = { version = "1.0" }
+strum = "0.14.0"
+strum_macros = "0.14.0"

@@ -21,11 +21,11 @@ use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::Ph
 use futures::{IntoFuture, Future};
 
 use parity_codec::{Encode, Decode};
-use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded};
+use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded, OffchainExt};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges, ExecutionStrategy,
-	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager};
+	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager, NeverOffchainExt};
 use hash_db::Hasher;
 
 use crate::backend::RemoteBackend;
@@ -80,7 +80,16 @@ where
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8], _strategy: ExecutionStrategy)
+	fn call<
+		O: OffchainExt,
+	>(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+		_strategy: ExecutionStrategy,
+		_side_effects_handler: Option<&mut O>,
+	)
 		-> ClientResult<Vec<u8>> {
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
@@ -95,6 +104,7 @@ where
 	}
 
 	fn contextual_call<
+		O: OffchainExt,
 		PB: Fn() -> ClientResult<Block::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -112,22 +122,24 @@ where
 		_prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
 		if !changes.is_empty() || initialised_block.is_some() {
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data, (&execution_manager).into()).map(NativeOrEncoded::Encoded)
+		self.call(at, method, call_data, (&execution_manager).into(), side_effects_handler).map(NativeOrEncoded::Encoded)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(id, "version", &[], ExecutionStrategy::NativeElseWasm)?;
+		let call_result = self.call(id, "version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
+		O: OffchainExt,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -142,6 +154,7 @@ where
 		_call_data: &[u8],
 		_m: ExecutionManager<FF>,
 		_native_call: Option<NC>,
+		_side_effects_handler: Option<&mut O>,
 	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
@@ -201,15 +214,24 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8], strategy: ExecutionStrategy)
-		-> ClientResult<Vec<u8>> {
+	fn call<
+		O: OffchainExt,
+	>(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+		strategy: ExecutionStrategy,
+		side_effects_handler: Option<&mut O>,
+	) -> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
-			true => self.local.call(id, method, call_data, strategy),
-			false => self.remote.call(id, method, call_data, strategy),
+			true => self.local.call(id, method, call_data, strategy, side_effects_handler),
+			false => self.remote.call(id, method, call_data, strategy, side_effects_handler),
 		}
 	}
 
 	fn contextual_call<
+		O: OffchainExt,
 		PB: Fn() -> ClientResult<Block::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -227,12 +249,14 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		prepare_environment_block: PB,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
 		match self.backend.is_local_state_available(at) {
 			true => CallExecutor::contextual_call::<
+				_,
 				_,
 				fn(
 					Result<NativeOrEncoded<R>, Local::Error>,
@@ -250,8 +274,10 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				prepare_environment_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
+				side_effects_handler,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
 			false => CallExecutor::contextual_call::<
+				_,
 				_,
 				fn(
 					Result<NativeOrEncoded<R>, Remote::Error>,
@@ -269,6 +295,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				prepare_environment_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
+				side_effects_handler,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
 		}
 	}
@@ -281,6 +308,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	}
 
 	fn call_at_state<
+		O: OffchainExt,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -295,11 +323,13 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		call_data: &[u8],
 		_manager: ExecutionManager<FF>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
 		CallExecutor::call_at_state::<
+				_,
 				_,
 				fn(
 					Result<NativeOrEncoded<R>, Remote::Error>,
@@ -315,6 +345,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				call_data,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
+				side_effects_handler,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into())
 	}
 
@@ -509,7 +540,7 @@ mod tests {
 		let local_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![1])));
 		let remote_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![2])));
 		let remote_or_local = RemoteOrLocalCallExecutor::new(backend, remote_executor, local_executor);
-		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[], ExecutionStrategy::NativeElseWasm).unwrap(), vec![1]);
-		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[], ExecutionStrategy::NativeElseWasm).unwrap(), vec![2]);
+		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new()).unwrap(), vec![1]);
+		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new()).unwrap(), vec![2]);
 	}
 }

@@ -16,7 +16,7 @@
 
 //! Configuration for the networking layer of Substrate.
 
-pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, Secret};
+pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfig, Secret};
 
 use bitflags::bitflags;
 use crate::chain::Client;

@@ -1,10 +1,10 @@
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
-  name: substrate
+  name: {{ .Values.GitlabEnvSlug | default .Values.app }}
 spec:
   selector:
     matchLabels:
-      app: substrate
+      app: {{ .Values.GitlabEnvSlug | default .Values.app }}
   maxUnavailable: 1
 

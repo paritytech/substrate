@@ -22,8 +22,8 @@
 //! 
 //! ## Overview
 //! 
-//! The system module defines the core data types used in Substrate runtime. 
-//! It also provides several utility functions (see [`Module`]) for other modules.
+//! The system module defines the core data types used in a Substrate runtime.
+//! It also provides several utility functions (see [`Module`]) for other runtime modules.
 //! 
 //! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, 
 //! among other things that support the execution of the current block.
@@ -47,7 +47,7 @@
 //! 
 //! Import the system module and derive your module configuration trait from the system trait.
 //! 
-//! ### Example - get random seed and extrinsic count for the current block
+//! ### Example - Get random seed and extrinsic count for the current block
 //! 
 //! ```ignore
 //! use support::{decl_module, dispatch::Result};
@@ -66,7 +66,6 @@
 //! 	}
 //! }
 //! ```
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -128,25 +127,31 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
-	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+	type Index:
+		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
 
 	/// The block number type used by the runtime.
-	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
+	type BlockNumber:
+		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
+		+ rstd::hash::Hash;
 	
 	/// The output of a hashing function.
-	type Hash: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash:
+		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
+		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 	
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
 	/// Collection of (light-client-relevant) logs for a block to be included verbatim in the block header.
-	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+	type Digest:
+		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
 
 	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
-	/// 
+	///
 	/// Used to define the type and conversion mechanism for referencing accounts in transactions. It's perfectly
 	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
@@ -201,8 +206,8 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub event: E,
 }
 
-/// Event for the system module.
 decl_event!(
+	/// Event for the system module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
@@ -268,7 +273,7 @@ impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestIte
 }
 
 // Create a Hash with 69 for each byte,
-// only used to build genesis config
+// only used to build genesis config.
 #[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
@@ -565,7 +570,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
 		type Log = DigestItem;

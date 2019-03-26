@@ -54,8 +54,6 @@ pub struct Health {
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerInfo<Hash, Number> {
-	/// Peer Node Index
-	pub index: usize,
 	/// Peer ID
 	pub peer_id: String,
 	/// Roles
@@ -96,14 +94,13 @@ mod tests {
 	fn should_serialize_peer_info() {
 		assert_eq!(
 			::serde_json::to_string(&PeerInfo {
-				index: 1,
 				peer_id: "2".into(),
 				roles: "a".into(),
 				protocol_version: 2,
 				best_hash: 5u32,
 				best_number: 6u32,
 			}).unwrap(),
-			r#"{"index":1,"peerId":"2","roles":"a","protocolVersion":2,"bestHash":5,"bestNumber":6}"#,
+			r#"{"peerId":"2","roles":"a","protocolVersion":2,"bestHash":5,"bestNumber":6}"#,
 		);
 	}
 }

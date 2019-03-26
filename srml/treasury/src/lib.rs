@@ -22,21 +22,18 @@
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnDilution, ArithmeticType};
+use srml_support::traits::{Currency, OnDilution, OnUnbalanced, Imbalance};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
-/// Our module's configuration trait. All our types and consts go in here. If the
-/// module is dependent on specific other modules, then their configuration traits
-/// should be added to our implied traits list.
-///
-/// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=BalanceOf<Self>>;
+	type Currency: Currency<Self::AccountId>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
@@ -46,14 +43,17 @@ pub trait Trait: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	/// Handler for the unbalanced increase when minting cash from the "Pot".
+	type MintedForSpending: OnUnbalanced<PositiveImbalanceOf<Self>>;
+
+	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
+	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 type ProposalIndex = u32;
 
-// The module declaration. This states the entry points that we handle. The
-// macro takes care of the marshalling of arguments and dispatch.
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
@@ -103,7 +103,8 @@ decl_module! {
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 
 			let value = proposal.bond;
-			let _ = T::Currency::slash_reserved(&proposal.proposer, value);
+			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
+			T::ProposalRejection::on_unbalanced(imbalance);
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -168,7 +169,6 @@ decl_storage! {
 	}
 }
 
-/// An event in this module.
 decl_event!(
 	pub enum Event<T>
 	where
@@ -202,6 +202,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
+		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		<Approvals<T>>::mutate(|v| {
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
@@ -214,7 +215,7 @@ impl<T: Trait> Module<T> {
 						let _ = T::Currency::unreserve(&p.proposer, p.bond);
 
 						// provide the allocation.
-						T::Currency::increase_free_balance_creating(&p.beneficiary, p.value);
+						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
 
 						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
 						false
@@ -227,6 +228,8 @@ impl<T: Trait> Module<T> {
 				}
 			});
 		});
+
+		T::MintedForSpending::on_unbalanced(imbalance);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
@@ -278,7 +281,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
@@ -288,12 +291,17 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = ();
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
 	}
 	impl Trait for Test {
 		type Currency = balances::Module<Test>;
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
+		type MintedForSpending = ();
+		type ProposalRejection = ();
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
@@ -302,6 +310,8 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			existential_deposit: 0,
