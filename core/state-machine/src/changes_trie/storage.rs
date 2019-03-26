@@ -69,7 +69,7 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 		let mut mdb = MemoryDB::default();
 		let mut roots = HashMap::new();
 		for (block, pairs) in inputs {
-			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
+			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into), &None);
 			if let Some(root) = root {
 				roots.insert(block, root);
 			}

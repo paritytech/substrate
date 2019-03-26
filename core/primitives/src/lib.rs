@@ -279,7 +279,7 @@ pub struct SubTrie {
 
 impl SubTrie {
 	/// instantiate new subtrie without root value
-	pub fn new (keyspace: KeySpace, parent: ParentTrie) -> Self {
+	pub fn new(keyspace: KeySpace, parent: ParentTrie) -> Self {
 		SubTrie {
 			node: SubTrieNode {
 				keyspace,
@@ -287,5 +287,8 @@ impl SubTrie {
 			},
 			parent,
 		}
+	}
+	pub fn encoded_node(&self) -> Vec<u8> {
+		parity_codec::Encode::encode(&self.node)
 	}
 }

@@ -309,8 +309,8 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 }
 
 
-pub struct KeySpacedDB<'a, DB>(&'a DB, &'a substrate_primitives::KeySpace);
-pub struct KeySpacedDBMut<'a, DB>(&'a mut DB, &'a substrate_primitives::KeySpace);
+pub struct KeySpacedDB<'a, DB>(pub &'a DB, pub &'a substrate_primitives::KeySpace);
+pub struct KeySpacedDBMut<'a, DB>(pub &'a mut DB, pub &'a substrate_primitives::KeySpace);
 
 impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB> where
 	DB: hash_db::HashDBRef<H, T>,
