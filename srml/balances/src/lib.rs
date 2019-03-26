@@ -90,9 +90,6 @@
 //! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available
 //! functions.
 //!
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing
-//! any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
-//!
 //! ## Usage
 //!
 //! The following examples show how to use the balances module in your custom module.
