@@ -22,16 +22,20 @@
 //! ## Overview
 //! 
 //! This module extends accounts (see `Balances` module) to have smart-contract functionality.
-//! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract and non-contract accounts.
+//! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract 
+//! and non-contract accounts.
 //! 
 //! The smart-contract code is stored once in a code cache, and later retrievable via a code hash.
-//! This means that multiple smart-contracts can be instantiated from the same code cache, without replicating the code each time.
+//! This means that multiple smart-contracts can be instantiated from the same code cache, without replicating 
+//! the code each time.
 //! 
 //! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
-//! This call can alter the storage entries of the smart-contract account, create new smart-contracts, or call other smart-contracts.
+//! This call can alter the storage entries of the smart-contract account, create new smart-contracts,
+//! or call other smart-contracts.
 //! 
 //! Finally, when the `balances` module determines an account is dead (i.e. account balance fell below the
-//! existential deposit), it reaps the account. This will delete the associated code and storage of the smart-contract account.
+//! existential deposit), it reaps the account. This will delete the associated code and storage of the 
+//! smart-contract account.
 //! 
 //! **NOTE:** Call failures are not always cascading. For example, if contract A calls contract B, and B
 //! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
@@ -41,9 +45,10 @@
 //! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
 //! Unused gas is refunded after the call, regardless of the execution outcome.
 //! 
-//! If the gas limit is reached, then all calls and state changes (including balance transfers) are only reverted at the current call's contract level.
-//! For example, if contract A calls B and B runs out of gas mid-call, then all of B's calls are reverted.
-//! Assuming correct error handling by contract A, A's other calls and state changes still persist. 
+//! If the gas limit is reached, then all calls and state changes (including balance transfers) are only
+//! reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
+//! then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state 
+//! changes still persist. 
 //! 
 //! ## Interface
 //! 
@@ -51,7 +56,8 @@
 //! 
 //! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
 //! 
-//! * `create` - Deploys a new contract from the given `codehash`, optionally transferring some balance. This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
+//! * `create` - Deploys a new contract from the given `codehash`, optionally transferring some balance. 
+//! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! 
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
@@ -75,9 +81,11 @@
 //! 
 //! ## Usage
 //! 
-//! The contract module is a work in progress. The following examples show how this contract module can be used to create and call contracts.
+//! The contract module is a work in progress. The following examples show how this contract module can be 
+//! used to create and call contracts.
 //! 
-//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language which enables writing WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
+//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language which enables writing 
+//! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 //! 
 //! ## Related Modules
 //! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
@@ -245,7 +253,8 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Stores the given binary Wasm code into the chains storage and returns its `codehash`. You can instantiate contracts only with stored code.
+		/// Stores the given binary Wasm code into the chains storage and returns its `codehash`. 
+		/// You can instantiate contracts only with stored code.
 		fn put_code(
 			origin,
 			#[compact] gas_limit: T::Gas,
@@ -267,9 +276,12 @@ decl_module! {
 		}
 
 		/// Makes a call to an account, optionally transferring some balance.
-		/// If the account is a smart-contract account, the associated code will be executed and any fees will be transferred.
-		/// If the account is a regular account, any fees will be transferred.
-		/// If no account exists (and the call value fulfills the `existential_deposit`), a regular account will be created and any fees will be transferred.
+		///
+		/// * If the account is a smart-contract account, the associated code will be 
+		/// executed and any fees will be transferred.
+		/// * If the account is a regular account, any fees will be transferred.
+		/// * If no account exists (and the call value fulfills the `existential_deposit`), 
+		/// a regular account will be created and any fees will be transferred.
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
