@@ -41,7 +41,7 @@
 //! 
 //! ## Interface
 //! 
-//! ### Dispatchable functions ([`Call`])
+//! ### Dispatchable functions
 //! 
 //! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
 //! 
@@ -49,7 +49,7 @@
 //! 
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
-//! ### Public functions ([`Module`])
+//! ### Public functions
 //! 
 //! * `contract_fee` - Gets the fee required to create a contract
 //! 
@@ -72,7 +72,6 @@
 //! The contract module is a work in progress. The following examples show how this contract module can be used to create and call contracts.
 //! 
 //! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language which enables writing WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
-//! * [`Sample Contract`](https://github.com/pepyakin/substrate-contracts-adder) is a raw contract example that can be instrumented with [`Polkadot UI`](https://polkadot.js.org/apps/). This is a work in progress.
 //! 
 //! ## Related Modules
 //! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
