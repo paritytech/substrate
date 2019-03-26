@@ -19,7 +19,7 @@ pub use parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{
 	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519,
-	Pair, SubTrie,
+	Pair, SubTrie, KeySpace,
 };
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
@@ -39,7 +39,7 @@ environmental!(ext: trait Externalities<Blake2Hasher>);
 pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 
 /// A set of key value pairs for children storage;
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
+pub type ChildrenStorageOverlay = HashMap<KeySpace, (StorageOverlay, SubTrie)>;
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -56,6 +56,12 @@ pub fn child_storage(subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
 /// get child trie at storage key location
 pub fn get_child_trie(storage_key: &[u8]) -> Option<SubTrie> {
 	ext::with(|ext| ext.get_child_trie(storage_key))
+		.expect("storage cannot be called outside of an Externalities-provided environment.")
+}
+
+/// set child trie at storage key location
+pub fn set_child_trie(subtrie: &SubTrie) {
+	ext::with(|ext| ext.set_child_trie(subtrie))
 		.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 

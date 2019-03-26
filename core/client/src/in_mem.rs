@@ -24,7 +24,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
+use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate, VecTransaction};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
@@ -497,14 +497,14 @@ where
 	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
-		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
+		let mut transaction: VecTransaction = Default::default();
 
-		for (child_key, child_map) in children {
-			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
+		for (keyspace, (child_map, subtrie)) in children {
+			let (root, is_default, update) = self.old_state.child_storage_root(&subtrie, child_map.into_iter().map(|(k, v)| (k, Some(v))));
 			transaction.consolidate(update);
 
 			if !is_default {
-				top.insert(child_key, root);
+				top.insert(keyspace, root);
 			}
 		}
 

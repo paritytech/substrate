@@ -24,6 +24,7 @@ use hash_db::Hasher;
 use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
+use primitives::SubTrie;
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -307,24 +308,24 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		Ok(hash)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.child_storage(storage_key, key)
+	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.child_storage(subtrie, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())
 	}
 
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, key)
+	fn exists_child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Result<bool, Self::Error> {
+		self.state.exists_child_storage(subtrie, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.state.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.state.for_keys_in_child_storage(storage_key, f)
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: &SubTrie, f: F) {
+		self.state.for_keys_in_child_storage(subtrie, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -335,12 +336,12 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.child_storage_root(subtrie, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

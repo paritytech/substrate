@@ -39,6 +39,8 @@ use crate::{
 use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(test)]
+use substrate_primitives::SubTrie;
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -238,6 +240,11 @@ fn account_removal_removes_storage() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
+			let subtrie1 = SubTrie::new(unique_id1.to_vec(), unique_id1.to_vec());
+			child::set_child_trie(&subtrie1);
+			let subtrie2 = SubTrie::new(unique_id2.to_vec(), unique_id2.to_vec());
+			child::set_child_trie(&subtrie2);
+
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
 				Balances::deposit_creating(&1, 110);
@@ -245,17 +252,18 @@ fn account_removal_removes_storage() {
 					trie_id: unique_id1.to_vec(),
 					current_mem_stored: 0,
 				});
-				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
-				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
-				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
+
+				child::put(&subtrie1, &b"foo".to_vec(), &b"1".to_vec());
+				assert_eq!(child::get(&subtrie1, &b"foo".to_vec()), Some(b"1".to_vec()));
+				child::put(&subtrie1, &b"bar".to_vec(), &b"2".to_vec());
 
 				Balances::deposit_creating(&2, 110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
 					trie_id: unique_id2.to_vec(),
 					current_mem_stored: 0,
 				});
-				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
-				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
+				child::put(&subtrie2, &b"hello".to_vec(), &b"3".to_vec());
+				child::put(&subtrie2, &b"world".to_vec(), &b"4".to_vec());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
@@ -267,15 +275,15 @@ fn account_removal_removes_storage() {
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
 			{
-				assert_eq!(child::get_raw(&unique_id1[..], &b"foo".to_vec()), None);
-				assert_eq!(child::get_raw(&unique_id1[..], &b"bar".to_vec()), None);
+				assert_eq!(child::get_raw(&subtrie1, &b"foo".to_vec()), None);
+				assert_eq!(child::get_raw(&subtrie1, &b"bar".to_vec()), None);
 
 				assert_eq!(
-					child::get(&unique_id2[..], &b"hello".to_vec()),
+					child::get(&subtrie2, &b"hello".to_vec()),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					child::get(&unique_id2[..], &b"world".to_vec()),
+					child::get(&subtrie2, &b"world".to_vec()),
 					Some(b"4".to_vec())
 				);
 			}

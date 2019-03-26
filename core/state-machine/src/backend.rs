@@ -28,8 +28,8 @@ use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_chi
 use heapsize::HeapSizeOf;
 use primitives::{KeySpace, SubTrie};
 
-type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<SubTrie>)>;
-type VecTransaction = Vec<(Option<SubTrie>, Vec<u8>, Option<Vec<u8>>)>;
+pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<SubTrie>)>;
+pub type VecTransaction = Vec<(Option<SubTrie>, Vec<u8>, Option<Vec<u8>>)>;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.

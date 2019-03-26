@@ -585,6 +585,11 @@ pub mod child {
 		runtime_io::get_child_trie(storage_key)
 	}
 
+  pub fn set_child_trie(subtrie: &SubTrie) {
+		runtime_io::set_child_trie(subtrie)
+	}
+
+
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Codec + Sized>(subtrie: &SubTrie, key: &[u8]) -> Option<T> {
 		runtime_io::read_child_storage(subtrie, key, &mut [0; 0][..], 0).map(|_| {

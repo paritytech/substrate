@@ -25,6 +25,7 @@ use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
 use srml_support::{StorageMap, traits::{UpdateBalanceOutcome,
 	SignedImbalance, Currency, Imbalance}, storage::child};
+use substrate_primitives::SubTrie;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -108,8 +109,12 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			.map(|s|s.trie_id)
 			.unwrap_or_else(||<T as Trait>::TrieIdGenerator::trie_id(account))
 	}
-	fn get_storage(&self, trie_id: &TrieId, location: &[u8]) -> Option<Vec<u8>> {
-		child::get_raw(trie_id, location)
+	fn get_storage(&self, trieid: &TrieId, location: &[u8]) -> Option<Vec<u8>> {
+		// TODO pass optional SubTrie or change def to use subtrie (put the subtrie in cache (rc one of
+		// the overlays)) EMCH TODO create an issue for a following pr
+		child::get_child_trie(&trieid).and_then(|subtrie|
+			child::get_raw(&subtrie, location)
+		)
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<CodeHashOf<T>>::get(account)
@@ -138,11 +143,19 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					<CodeHashOf<T>>::remove(&address);
 				}
 			}
+			// TODO put in cache (there is also a scheme change to do to avoid indirection)
+			let subtrie = child::get_child_trie(&trieid).unwrap_or_else(||{
+				// use trie_id as keyspace TODO in future adderssing trieid is still the keyspace
+				// but address is use as subtrie key (using encoding as in generated storage)
+				let new_subtrie = SubTrie::new(trieid.clone(), trieid.clone());
+				child::set_child_trie(&new_subtrie);
+				new_subtrie
+			});
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
-					child::put_raw(&trieid[..], &k, &value[..]);
+					child::put_raw(&subtrie, &k, &value[..]);
 				} else {
-					child::kill(&trieid[..], &k);
+					child::kill(&subtrie, &k);
 				}
 			}
 		}

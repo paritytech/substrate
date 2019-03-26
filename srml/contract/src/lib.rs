@@ -399,7 +399,9 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
 		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
-			child::kill_storage(&subtrie.trie_id);
+			child::get_child_trie(&subtrie.trie_id).map(|subtrie|
+				child::kill_storage(&subtrie)
+			)
 		});
 	}
 }

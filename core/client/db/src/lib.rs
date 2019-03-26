@@ -323,12 +323,9 @@ where Block: BlockT<Hash=H256>,
 
 		let mut transaction: MemoryDB<Blake2Hasher> = Default::default();
 
-		for (child_key, child_map) in children {
-			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(client::error::ErrorKind::GenesisInvalid.into());
-			}
+		for (child_key, (child_map, subtrie)) in children {
 
-			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
+			let (root, is_default, update) = self.old_state.child_storage_root(&subtrie, child_map.into_iter().map(|(k, v)| (k, Some(v))));
 			transaction.consolidate(update);
 
 			if !is_default {
