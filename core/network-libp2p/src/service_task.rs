@@ -220,10 +220,12 @@ where TMessage: CustomMessage + Send + 'static {
 		NetworkState {
 			peer_id: Swarm::local_peer_id(&self.swarm).to_base58(),
 			listened_addresses: Swarm::listeners(&self.swarm).cloned().collect(),
+			external_addresses: Swarm::external_addresses(&self.swarm).cloned().collect(),
 			average_download_per_sec: self.bandwidth.average_download_per_sec(),
 			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
 			connected_peers,
 			not_connected_peers,
+			peerset: self.swarm.peerset_debug_info(),
 		}
 	}
 

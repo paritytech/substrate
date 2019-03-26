@@ -21,11 +21,11 @@ substrate-primitives = { path = "../../core/primitives" }
 [features]
 default = ["std"]
 std = [
-	"rstd/std",
-	"srml-support/std",
-	"runtime_primitives/std",
-	"serde",
-	"parity-codec/std",
-	"system/std",
 	"inherents/std",
+	"parity-codec/std",
+	"rstd/std",
+	"runtime_primitives/std",
+	"srml-support/std",
+	"serde",
+	"system/std",
 ]

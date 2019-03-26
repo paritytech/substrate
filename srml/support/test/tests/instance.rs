@@ -24,7 +24,7 @@ use srml_support::rstd as rstd;
 use srml_support::codec::{Encode, Decode};
 use srml_support::runtime_primitives::{generic, BuildStorage};
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify, Digest};
-use srml_support::{Parameter, construct_runtime, decl_module, decl_storage, decl_event};
+use srml_support::Parameter;
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
@@ -50,7 +50,7 @@ mod system {
 
 	pub type DigestItemOf<T> = <<T as Trait>::Digest as Digest>::Item;
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			pub fn deposit_event(_event: T::Event) {
 			}
@@ -62,7 +62,7 @@ mod system {
 		}
 	}
 
-	decl_event!(
+	srml_support::decl_event!(
 		pub enum Event {
 			ExtrinsicSuccess,
 			ExtrinsicFailed,
@@ -122,7 +122,7 @@ mod module1 {
 		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, I>() = default;
 
@@ -140,7 +140,7 @@ mod module1 {
 		}
 	}
 
-	decl_storage! {
+	srml_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 {
 			pub Value config(value): u64;
 			pub Map: map u32 => u64;
@@ -148,7 +148,7 @@ mod module1 {
 		}
 	}
 
-	decl_event! {
+	srml_support::decl_event! {
 		pub enum Event<T, I> where Phantom = rstd::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
@@ -207,13 +207,13 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, I>() = default;
 		}
 	}
 
-	decl_storage! {
+	srml_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
@@ -222,7 +222,7 @@ mod module2 {
 		extra_genesis_skip_phantom_data_field;
 	}
 
-	decl_event! {
+	srml_support::decl_event! {
 		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
 			Variant(Amount),
 		}
@@ -275,7 +275,7 @@ mod module3 {
 		type Currency2: Currency;
 	}
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		}
 	}
@@ -335,7 +335,7 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
-construct_runtime!(
+srml_support::construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
 		Block = Block,
 		NodeBlock = Block,

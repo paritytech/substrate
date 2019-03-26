@@ -520,6 +520,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(0)
 	},
+	ext_submit_extrinsic(msg_data: *const u8, len: u32) => {
+		let extrinsic = this.memory.get(msg_data, len as usize)
+			.map_err(|_| UserError("OOB while ext_submit_extrinsic: wasm"))?;
+
+		this.ext.submit_extrinsic(extrinsic)
+			.map_err(|_| UserError("Calling unavailable API ext_submit_extrinsic: wasm"))?;
+
+		Ok(())
+	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
 		wasm_ptr: *const u8,

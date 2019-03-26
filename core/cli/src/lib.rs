@@ -419,11 +419,20 @@ where
 			service::Roles::FULL
 		};
 
+	let exec = cli.execution_strategies;
 	config.execution_strategies = ExecutionStrategies {
-		syncing: cli.syncing_execution.into(),
-		importing: cli.importing_execution.into(),
-		block_construction: cli.block_construction_execution.into(),
-		other: cli.other_execution.into(),
+		syncing: exec.syncing_execution.into(),
+		importing: exec.importing_execution.into(),
+		block_construction: exec.block_construction_execution.into(),
+		offchain_worker: exec.offchain_worker_execution.into(),
+		other: exec.other_execution.into(),
+	};
+
+	config.offchain_worker = match (cli.offchain_worker, role) {
+		(params::OffchainWorkerEnabled::WhenValidating, service::Roles::AUTHORITY) => true,
+		(params::OffchainWorkerEnabled::Always, _) => true,
+		(params::OffchainWorkerEnabled::Never, _) => false,
+		(params::OffchainWorkerEnabled::WhenValidating, _) => false,
 	};
 
 	config.roles = role;
