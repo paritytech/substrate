@@ -22,7 +22,7 @@
 //! 
 //! ### Dispatchable
 //! 
-//! The `Call` enum is documented [here](https://crates.parity.io/srml_consensus/enum.Call.html).
+//! The `Call` enum is documented [here](./enum.Call.html).
 //! 
 //! - `report_misbehavior` - Report some misbehavior. The origin of this call must be signed.
 //! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of this call must be an inherent.
@@ -33,7 +33,7 @@
 //! 
 //! ### Public
 //! 
-//! See the [module](https://crates.parity.io/srml_consensus/struct.Module.html) for details on publicly available functions.
+//! See the [module](./struct.Module.html) for details on publicly available functions.
 //! 
 //! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
 //! 
