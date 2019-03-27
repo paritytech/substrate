@@ -251,7 +251,7 @@ pub(super) struct FullCommitMessage<Block: BlockT> {
 
 /// V1 neighbor packet. Neighbor packets are sent from nodes to their peers
 /// and are not repropagated. These contain information about the node's state.
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, Clone)]
 pub(super) struct NeighborPacket<N> {
 	round: Round,
 	set_id: SetId,
@@ -277,7 +277,7 @@ impl<N> VersionedNeighborPacket<N> {
 ///
 /// `cost` gives a cost that can be used to perform cost/benefit analysis of a
 /// peer.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Misbehavior {
 	// invalid neighbor message, considering the last one.
 	InvalidViewChange,
@@ -343,6 +343,12 @@ struct Peers<N> {
 	inner: HashMap<PeerId, PeerInfo<N>>,
 }
 
+impl<N> Default for Peers<N> {
+	fn default() -> Self {
+		Peers { inner: HashMap::new() }
+	}
+}
+
 impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId) {
 		self.inner.insert(who, PeerInfo::new());
@@ -352,7 +358,7 @@ impl<N: Ord> Peers<N> {
 		self.inner.remove(who);
 	}
 
-	// returns a reference to the new view.
+	// returns a reference to the new view, if the peer is known.
 	fn update_peer_state(&mut self, who: &PeerId, update: NeighborPacket<N>)
 		-> Result<Option<&View<N>>, Misbehavior>
 	{
@@ -422,7 +428,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn new(config: crate::Config) -> Self {
 		Inner {
 			local_view: View::default(),
-			peers: Peers { inner: HashMap::new() },
+			peers: Peers::default(),
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			config,
@@ -803,5 +809,109 @@ mod tests {
 		assert_eq!(view.consider_global(SetId(2), 1000), Consider::RejectPast);
 		assert_eq!(view.consider_global(SetId(2), 1001), Consider::Accept);
 		assert_eq!(view.consider_global(SetId(2), 10000), Consider::Accept);
+	}
+
+	#[test]
+	fn unknown_peer_cannot_be_updated() {
+		let mut peers = Peers::default();
+		let id = PeerId::random();
+
+		let update = NeighborPacket {
+			round: Round(5),
+			set_id: SetId(10),
+			commit_finalized_height: 50,
+		};
+
+		let res = peers.update_peer_state(&id, update.clone());
+		assert!(res.unwrap().is_none());
+
+		// connect & disconnect.
+		peers.new_peer(id.clone());
+		peers.peer_disconnected(&id);
+
+		let res = peers.update_peer_state(&id, update.clone());
+		assert!(res.unwrap().is_none());
+	}
+
+	#[test]
+	fn update_peer_state() {
+		let update1 = NeighborPacket {
+			round: Round(5),
+			set_id: SetId(10),
+			commit_finalized_height: 50u32,
+		};
+
+		let update2 = NeighborPacket {
+			round: Round(6),
+			set_id: SetId(10),
+			commit_finalized_height: 60,
+		};
+
+		let update3 = NeighborPacket {
+			round: Round(2),
+			set_id: SetId(11),
+			commit_finalized_height: 61,
+		};
+
+		let update4 = NeighborPacket {
+			round: Round(3),
+			set_id: SetId(11),
+			commit_finalized_height: 80,
+		};
+
+		let mut peers = Peers::default();
+		let id = PeerId::random();
+
+		peers.new_peer(id.clone());
+
+		let mut check_update = move |update: NeighborPacket<_>| {
+			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
+			assert_eq!(view.round, update.round);
+			assert_eq!(view.set_id, update.set_id);
+			assert_eq!(view.last_commit, Some(update.commit_finalized_height));
+		};
+
+		check_update(update1);
+		check_update(update2);
+		check_update(update3);
+		check_update(update4);
+	}
+
+	#[test]
+	fn invalid_view_change() {
+		let mut peers = Peers::default();
+
+		let id = PeerId::random();
+		peers.new_peer(id.clone());
+
+		peers.update_peer_state(&id, NeighborPacket {
+			round: Round(10),
+			set_id: SetId(10),
+			commit_finalized_height: 10,
+		}).unwrap().unwrap();
+
+		let mut check_update = move |update: NeighborPacket<_>| {
+			let err = peers.update_peer_state(&id, update.clone()).unwrap_err();
+			assert_eq!(err, Misbehavior::InvalidViewChange);
+		};
+
+		// round moves backwards.
+		check_update(NeighborPacket {
+			round: Round(9),
+			set_id: SetId(10),
+			commit_finalized_height: 10,
+		});
+		// commit finalized height moves backwards.
+		check_update(NeighborPacket {
+			round: Round(10),
+			set_id: SetId(10),
+			commit_finalized_height: 9,
+		});
+		// set ID moves backwards.
+		check_update(NeighborPacket {
+			round: Round(10),
+			set_id: SetId(9),
+			commit_finalized_height: 10,
+		});
 	}
 }
