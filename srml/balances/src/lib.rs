@@ -62,6 +62,8 @@
 //!
 //! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
+//! - [`ReservableCurrency`](https://crates.parity.io/srml_support/traits/trait.ReservableCurrency.html):
+//! Functions for dealing with assets that can be reserved from an account.
 //! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
 //! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling
@@ -176,7 +178,7 @@ use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance
+	Imbalance, SignedImbalance, ReservableCurrency
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -661,14 +663,6 @@ where
 		Self::free_balance(who) >= value
 	}
 
-	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		Self::free_balance(who)
-			.checked_sub(&value)
-			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
-			)
-	}
-
 	fn total_issuance() -> Self::Balance {
 		<TotalIssuance<T, I>>::get()
 	}
@@ -679,10 +673,6 @@ where
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
 		<FreeBalance<T, I>>::get(who)
-	}
-
-	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
-		<ReservedBalance<T, I>>::get(who)
 	}
 
 	fn ensure_can_withdraw(
@@ -775,6 +765,10 @@ where
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
 		let remaining_slash = value - free_slash;
+		// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
+		// from in extreme circumstances. `can_slash()` should be used prior to `slash()` is avoid having
+		// to draw from reserved funds, however we err on the side of punishment if things are inconsistent
+		// or `can_slash` wasn't used appropriately.
 		if !remaining_slash.is_zero() {
 			let reserved_balance = Self::reserved_balance(who);
 			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
@@ -851,6 +845,23 @@ where
 			UpdateBalanceOutcome::Updated
 		};
 		(imbalance, outcome)
+	}
+}
+
+impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
+where
+	T::Balance: MaybeSerializeDebug
+{
+	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
+		Self::free_balance(who)
+			.checked_sub(&value)
+			.map_or(false, |new_balance|
+				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+			)
+	}
+
+	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
+		<ReservedBalance<T, I>>::get(who)
 	}
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
