@@ -765,6 +765,9 @@ where
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
 		let remaining_slash = value - free_slash;
+		// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
+		// from in extreme circumstances. The use of `can_slash()` can help prevent these situations,
+		// however it is generally better to err on the side of punishment if things are inconsistent.
 		if !remaining_slash.is_zero() {
 			let reserved_balance = Self::reserved_balance(who);
 			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
