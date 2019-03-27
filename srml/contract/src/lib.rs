@@ -25,20 +25,17 @@
 //! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract 
 //! and non-contract accounts.
 //! 
-//! The smart-contract code is stored once in a code cache, and later retrievable via a code hash.
-//! This means that multiple smart-contracts can be instantiated from the same code cache, without replicating 
+//! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
+//! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating 
 //! the code each time.
 //! 
 //! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
 //! This call can alter the storage entries of the smart-contract account, create new smart-contracts,
 //! or call other smart-contracts.
 //! 
-//! Finally, when the `balances` module determines an account is dead (i.e. account balance fell below the
+//! Finally, when the `Balances` module determines an account is dead (i.e. account balance fell below the
 //! existential deposit), it reaps the account. This will delete the associated code and storage of the 
 //! smart-contract account.
-//! 
-//! **NOTE:** Call failures are not always cascading. For example, if contract A calls contract B, and B
-//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
 //! ### Gas
 //! 
@@ -49,6 +46,12 @@
 //! reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
 //! then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state 
 //! changes still persist. 
+//! 
+//! ### Notable Scenarios
+//! 
+//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
+//! and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
+//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 //! 
 //! ## Interface
 //! 
@@ -63,21 +66,7 @@
 //!
 //! ### Public functions
 //! 
-//! * `contract_fee` - Gets the fee required to create a contract
-//! 
-//! * `call_base_fee` - Gets the fee required for a call into a contract.
-//! 
-//! * `create_base_fee` - Gets the fee required for a create of a contract. 
-//! 
-//! * `gas_price` - Gets the price of one unit of gas.
-//! 
-//! * `max_depth` - Gets the max nesting level of a call/create stack.
-//! 
-//! * `block_gas_limit` - Gets the max gas amount that could be expended per block.
-//! 
-//! * `gas_spent` - Gets the gas spent so far in this block
-//! 
-//! * `current_schedule` - Gets the current cost schedule for contracts.
+//! See the [module](./struct.Module.html) for details on publicly available functions.
 //! 
 //! ## Usage
 //! 
