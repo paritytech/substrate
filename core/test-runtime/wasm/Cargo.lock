@@ -2105,6 +2105,7 @@ dependencies = [
  "srml-metadata 0.1.0",
  "srml-support-procedural 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]
@@ -2472,6 +2473,7 @@ dependencies = [
  "hash-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 0.1.0",
  "trie-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

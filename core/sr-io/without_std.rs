@@ -23,7 +23,7 @@ pub use rstd::{mem, slice};
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
 use hash_db::Hasher;
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher, SubTrie};
 
 #[panic_handler]
 #[no_mangle]
@@ -323,8 +323,25 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	}
 }
 
+/// get child trie at storage key location
+pub fn get_child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+	let prefixed_key = SubTrie::prefix_parent_key(storage_key);
+	storage(&prefixed_key)
+		.and_then(|enc_node|SubTrie::decode_node_prefixed_parent(&enc_node, prefixed_key))
+}
+
+/// set child trie at storage key location
+pub fn set_child_trie(subtrie: &SubTrie) {
+	let prefixed_key = subtrie.parent_prefixed_key();
+	let key = &prefixed_key[..];
+	let encoded_node = subtrie.encoded_node();
+	let value = &encoded_node[..];
+	set_storage(key, value);
+}
+
 /// Get `key` from child storage and return a `Vec`, empty if there's a problem.
-pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+pub fn child_storage(subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
+	let storage_key = subtrie.parent_key(); // no prefix
 	let mut length: u32 = 0;
 	unsafe {
 		let ptr = ext_get_allocated_child_storage.get()(
@@ -356,7 +373,8 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 }
 
 /// Set the child storage of some particular key to Some value.
-pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+pub fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
+	let storage_key = subtrie.parent_key(); // no prefix
 	unsafe {
 		ext_set_child_storage.get()(
 			storage_key.as_ptr(), key.len() as u32,
@@ -376,7 +394,8 @@ pub fn clear_storage(key: &[u8]) {
 }
 
 /// Clear the storage of some particular key.
-pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+pub fn clear_child_storage(subtrie: &SubTrie, key: &[u8]) {
+	let storage_key = subtrie.parent_key(); // no prefix
 	unsafe {
 		ext_clear_child_storage.get()(
 			storage_key.as_ptr(), storage_key.len() as u32,
@@ -415,7 +434,8 @@ pub fn clear_prefix(prefix: &[u8]) {
 }
 
 /// Clear an entire child storage.
-pub fn kill_child_storage(storage_key: &[u8]) {
+pub fn kill_child_storage(subtrie: &SubTrie) {
+	let storage_key = subtrie.parent_key(); // no prefix
 	unsafe {
 		ext_kill_child_storage.get()(
 			storage_key.as_ptr(),
@@ -443,7 +463,8 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 
 /// Get `key` from child storage, placing the value into `value_out` (as much as possible) and return
 /// the number of bytes that the key in storage was beyond the offset.
-pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+pub fn read_child_storage(subtrie: &SubTrie, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+  let storage_key = subtrie.parent_key(); // no prefix
 	unsafe {
 		match ext_get_child_storage_into.get()(
 			storage_key.as_ptr(), storage_key.len() as u32,

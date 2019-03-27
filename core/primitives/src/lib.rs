@@ -116,6 +116,7 @@ pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 // Note that this scheme must produce new key same as old key if ks is the empty vec
 // TODO put it as inner SubTrie function (requires changing child trie proto first)
 // TODO switch to simple mixing until trie pr changing Hashdb get merged (not even prefixed)
+/// temp function to keyspace data above the db level
 pub fn keyspace_as_prefix<H: AsRef<[u8]>>(ks: &KeySpace, key: &H, dst: &mut[u8]) {
 	assert!(dst.len() == keyspace_expected_len(ks, key));
 	//dst[..ks.len()].copy_from_slice(&ks[..]);
@@ -123,8 +124,6 @@ pub fn keyspace_as_prefix<H: AsRef<[u8]>>(ks: &KeySpace, key: &H, dst: &mut[u8])
 	let high = ::rstd::cmp::min(ks.len(), key.as_ref().len());
 	// TODO this mixing will be useless after trie pr merge (keeping it until then)
 	// same thing we use H dest but not after pr merge
-	//let start = ks.len();
-	let start = 0;
 	for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
 	//for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
 		// TODO any use of xor val? (preventing some targeted collision I would say)
@@ -133,7 +132,7 @@ pub fn keyspace_as_prefix<H: AsRef<[u8]>>(ks: &KeySpace, key: &H, dst: &mut[u8])
 }
 
 /// TODO when things work SubTrie will need to use key as param type, same for KeySpace
-pub fn keyspace_expected_len<H: AsRef<[u8]>>(ks: &KeySpace, key: &H) -> usize {
+pub fn keyspace_expected_len<H: AsRef<[u8]>>(_ks: &KeySpace, key: &H) -> usize {
 	//ks.len() + key.as_ref().len()
 	key.as_ref().len()
 }
@@ -305,13 +304,20 @@ impl SubTrie {
 	}
 	/// instantiate subtrie from a read node value
 	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
-
 		parity_codec::Decode::decode(&mut &encoded_node[..]).map(|node| {
       let parent = Self::prefix_parent_key(parent);
 			SubTrie {
 				node,
 				parent,
 			}
+		})
+	}
+	/// instantiate subtrie from a read node value, parent node is prefixed
+	pub fn decode_node_prefixed_parent(encoded_node: &[u8], parent: Vec<u8>) -> Option<Self> {
+		parity_codec::Decode::decode(&mut &encoded_node[..]).map(|node|
+			SubTrie {
+				node,
+				parent,
 		})
 	}
 	/// encoded parent trie node content
