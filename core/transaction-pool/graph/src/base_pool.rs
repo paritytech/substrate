@@ -394,6 +394,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 }
 
 /// Pool status
+#[derive(Debug)]
 pub struct Status {
 	/// Number of transactions in the ready queue.
 	pub ready: usize,
