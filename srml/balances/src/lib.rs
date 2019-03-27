@@ -176,7 +176,7 @@ use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, MakePayment, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance
+	Imbalance, SignedImbalance, ReservableCurrency
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -661,14 +661,6 @@ where
 		Self::free_balance(who) >= value
 	}
 
-	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		Self::free_balance(who)
-			.checked_sub(&value)
-			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
-			)
-	}
-
 	fn total_issuance() -> Self::Balance {
 		<TotalIssuance<T, I>>::get()
 	}
@@ -679,10 +671,6 @@ where
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
 		<FreeBalance<T, I>>::get(who)
-	}
-
-	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
-		<ReservedBalance<T, I>>::get(who)
 	}
 
 	fn ensure_can_withdraw(
@@ -851,6 +839,23 @@ where
 			UpdateBalanceOutcome::Updated
 		};
 		(imbalance, outcome)
+	}
+}
+
+impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
+where
+	T::Balance: MaybeSerializeDebug
+{
+	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
+		Self::free_balance(who)
+			.checked_sub(&value)
+			.map_or(false, |new_balance|
+				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+			)
+	}
+
+	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
+		<ReservedBalance<T, I>>::get(who)
 	}
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
