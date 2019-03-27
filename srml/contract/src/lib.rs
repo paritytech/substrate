@@ -267,7 +267,7 @@ decl_module! {
 		/// Makes a call to an account, optionally transferring some balance.
 		///
 		/// * If the account is a smart-contract account, the associated code will be 
-		/// executed and any fees will be transferred.
+		/// executed and any balance will be transferred.
 		/// * If the account is a regular account, any fees will be transferred.
 		/// * If no account exists (and the call value fulfills the `existential_deposit`), 
 		/// a regular account will be created and any fees will be transferred.
