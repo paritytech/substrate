@@ -54,7 +54,7 @@ impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountInde
 }
 
 fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
-	if a < b { Some(a) } else { None }
+	if a < b { Some(b) } else { None }
 }
 
 impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
@@ -106,5 +106,33 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 {
 	fn default() -> Self {
 		Address::Id(Default::default())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{Encode, Decode};
+
+	type Address = super::Address<[u8; 8], u32>;
+	fn index(i: u32) -> Address { super::Address::Index(i) }
+	fn id(i: [u8; 8]) -> Address { super::Address::Id(i) }
+
+	fn compare(a: Option<Address>, d: &[u8]) {
+		if let Some(ref a) = a {
+			assert_eq!(d, &a.encode()[..]);
+		}
+		assert_eq!(Address::decode(&mut &d[..]), a);
+	}
+
+	#[test]
+	fn it_should_work() {
+		compare(Some(index(2)), &[2][..]);
+		compare(None, &[240][..]);
+		compare(None, &[252, 239, 0][..]);
+		compare(Some(index(240)), &[252, 240, 0][..]);
+		compare(Some(index(304)), &[252, 48, 1][..]);
+		compare(None, &[253, 255, 255, 0, 0][..]);
+		compare(Some(index(0x10000)), &[253, 0, 0, 1, 0][..]);
+		compare(Some(id([42, 69, 42, 69, 42, 69, 42, 69])), &[255, 42, 69, 42, 69, 42, 69, 42, 69][..]);
 	}
 }
