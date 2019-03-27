@@ -148,14 +148,10 @@ impl ProvideInherentData for InherentDataProvider {
 		}
 	}
 
-	/// Identifier of the inherent for the given data is provided
 	fn inherent_identifier(&self) -> &'static inherents::InherentIdentifier {
 		&INHERENT_IDENTIFIER
 	}
 
-	/// Provide inherent data to be included in a block
-	///
-	/// Data should be stored in the `InherentData` structure
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
@@ -165,9 +161,6 @@ impl ProvideInherentData for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
 	}
 
-	/// Convert the encoded error to a string
-	///
-	/// If the error cannot be decoded, `None` is returned
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
 		RuntimeString::decode(&mut &error[..]).map(Into::into)
 	}
@@ -284,7 +277,6 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 		);
 	}
 }
-
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = timestamp::Call<T>;
