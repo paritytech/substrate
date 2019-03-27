@@ -249,10 +249,6 @@ pub trait Currency<AccountId> {
 	/// balance changes in the meantime and only the reserved balance is not taken into account.
 	fn can_slash(who: &AccountId, value: Self::Balance) -> bool;
 
-	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
-	/// are no balance changes in the meantime.
-	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
-
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
@@ -272,19 +268,6 @@ pub trait Currency<AccountId> {
 	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn free_balance(who: &AccountId) -> Self::Balance;
-
-	/// The amount of the balance of a given account that is externally reserved; this can still get
-	/// slashed, but gets slashed last of all.
-	///
-	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
-	/// that are still 'owned' by the account holder, but which are suspendable.
-	///
-	/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
-	/// is deleted: specifically, `ReservedBalance`.
-	///
-	/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
-	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-	fn reserved_balance(who: &AccountId) -> Self::Balance;
 
 	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
 	/// for the given reason. Basically, it's just a dry-run of `withdraw`.
@@ -361,6 +344,36 @@ pub trait Currency<AccountId> {
 		SignedImbalance<Self::Balance, Self::PositiveImbalance>,
 		UpdateBalanceOutcome,
 	);
+}
+
+/// A currency where funds can be reserved from the user.
+pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
+	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
+	/// are no balance changes in the meantime.
+	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
+
+	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
+	///
+	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
+	/// is less than `value`, then a non-zero second item will be returned.
+	fn slash_reserved(
+		who: &AccountId,
+		value: Self::Balance
+	) -> (Self::NegativeImbalance, Self::Balance);
+
+	/// The amount of the balance of a given account that is externally reserved; this can still get
+	/// slashed, but gets slashed last of all.
+	///
+	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
+	/// that are still 'owned' by the account holder, but which are suspendable.
+	///
+	/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
+	/// is deleted: specifically, `ReservedBalance`.
+	///
+	/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
+	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+	fn reserved_balance(who: &AccountId) -> Self::Balance;
+
 
 	/// Moves `value` from balance to reserved balance.
 	///
@@ -379,15 +392,6 @@ pub trait Currency<AccountId> {
 	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
 	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Self::Balance;
-
-	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
-	///
-	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
-	/// is less than `value`, then a non-zero second item will be returned.
-	fn slash_reserved(
-		who: &AccountId,
-		value: Self::Balance
-	) -> (Self::NegativeImbalance, Self::Balance);
 
 	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
