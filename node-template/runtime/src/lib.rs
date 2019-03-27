@@ -11,10 +11,10 @@ use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
-use primitives::{ed25519, OpaqueMetadata};
+use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -44,7 +44,7 @@ pub type AuthoritySignature = ed25519::Signature;
 pub type AccountId = <AccountSignature as Verify>::Signer;
 
 /// The type used by authorities to prove their ID.
-pub type AccountSignature = ed25519::Signature;
+pub type AccountSignature = sr25519::Signature;
 
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
@@ -182,7 +182,7 @@ impl sudo::Trait for Runtime {
 }
 
 /// Used for the module template in `./template.rs`
-impl template::Trait for Runtime { 
+impl template::Trait for Runtime {
 	type Event = Event;
 }
 
@@ -278,6 +278,12 @@ impl_runtime_apis! {
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+	}
+
+	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+		fn offchain_worker(n: NumberFor<Block>) {
+			Executive::offchain_worker(n)
 		}
 	}
 }

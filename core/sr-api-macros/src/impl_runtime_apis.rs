@@ -469,7 +469,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			};
 
 			let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
-	
+
 			// Rewrite the input parameters.
 			input.sig.decl.inputs = parse_quote! {
 				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
@@ -615,7 +615,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
-	
+
 	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));

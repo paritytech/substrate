@@ -24,7 +24,7 @@ use phragmen;
 use primitives::Perquintill;
 use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
-use srml_support::traits::Currency;
+use srml_support::traits::{Currency, ReservableCurrency};
 
 #[test]
 fn basic_setup_works() {
@@ -105,7 +105,7 @@ fn invulnerability_should_work() {
 		// Make account 11 invulnerable
 		assert_ok!(Staking::set_invulnerables(vec![11]));
 		// Give account 11 some funds
-		let _ = Balances::ensure_free_balance_is(&11, 70);
+		let _ = Balances::make_free_balance_be(&11, 70);
 		// There is no slash grace -- slash immediately.
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 11 has not been slashed
@@ -117,7 +117,7 @@ fn invulnerability_should_work() {
 
 		// Set account 11 as an offline validator with a large number of reports
 		// Should exit early if invulnerable
-		Staking::on_offline_validator(11, 100);
+		Staking::on_offline_validator(10, 100);
 
 		// Show that account 11 has not been touched
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -134,7 +134,7 @@ fn offline_should_slash_and_kick() {
 	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
-		let _ = Balances::ensure_free_balance_is(&11, 1000);
+		let _ = Balances::make_free_balance_be(&11, 1000);
 		// Confirm account 10 is a validator
 		assert!(<Validators<Test>>::exists(&11));
 		// Validators get slashed immediately
@@ -146,7 +146,7 @@ fn offline_should_slash_and_kick() {
 		// Account 10 has the funds we just gave it
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Report account 10 as offline, one greater than unstake threshold
-		Staking::on_offline_validator(11, 4);
+		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
 		assert_eq!(Staking::slash_count(&11), 4);
 		// Confirm balance has been reduced by 2^unstake_threshold * offline_slash() * amount_at_stake.
@@ -164,7 +164,7 @@ fn offline_grace_should_delay_slashing() {
 	// Tests that with grace, slashing is delayed
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Initialize account 10 with balance
-		let _ = Balances::ensure_free_balance_is(&11, 70);
+		let _ = Balances::make_free_balance_be(&11, 70);
 		// Verify account 11 has balance
 		assert_eq!(Balances::free_balance(&11), 70);
 
@@ -181,7 +181,7 @@ fn offline_grace_should_delay_slashing() {
 		assert_eq!(Staking::slash_count(&11), 0);
 
 		// Report account 10 up to the threshold
-		Staking::on_offline_validator(11, default_unstake_threshold as usize + offline_slash_grace as usize);
+		Staking::on_offline_validator(10, default_unstake_threshold as usize + offline_slash_grace as usize);
 		// Confirm slash count
 		assert_eq!(Staking::slash_count(&11), 4);
 
@@ -189,7 +189,7 @@ fn offline_grace_should_delay_slashing() {
 		assert_eq!(Balances::free_balance(&11), 70);
 
 		// Report account 10 one more time
-		Staking::on_offline_validator(11, 1);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::slash_count(&11), 5);
 		// User gets slashed
 		assert_eq!(Balances::free_balance(&11), 0);
@@ -205,8 +205,8 @@ fn max_unstake_threshold_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 		// Two users with maximum possible balance
-		let _ = Balances::ensure_free_balance_is(&11, u64::max_value());
-		let _ = Balances::ensure_free_balance_is(&21, u64::max_value());
+		let _ = Balances::make_free_balance_be(&11, u64::max_value());
+		let _ = Balances::make_free_balance_be(&21, u64::max_value());
 
 		// Give them full exposure as a staker
 		<Stakers<Test>>::insert(&11, Exposure { total: 1000000, own: 1000000, others: vec![]});
@@ -236,8 +236,8 @@ fn max_unstake_threshold_works() {
 		<OfflineSlash<Test>>::put(Perbill::from_fraction(0.0001));
 
 		// Report each user 1 more than the max_unstake_threshold
-		Staking::on_offline_validator(11, MAX_UNSTAKE_THRESHOLD as usize + 1);
-		Staking::on_offline_validator(21, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
 
 		// Show that each balance only gets reduced by 2^max_unstake_threshold times 10%
 		// of their total stake.
@@ -264,7 +264,7 @@ fn slashing_does_not_cause_underflow() {
 		Session::check_rotate_session(System::block_number());
 
 		// Should not panic
-		Staking::on_offline_validator(11, 100);
+		Staking::on_offline_validator(10, 100);
 		// Confirm that underflow has not occurred, and account balance is set to zero
 		assert_eq!(Balances::free_balance(&11), 0);
 	});
@@ -301,7 +301,7 @@ fn rewards_should_work() {
 		// check the balance of a validator accounts.
 		assert_eq!(Balances::total_balance(&11), 1000);
 		// and the nominator (to-be)
-		let _ = Balances::ensure_free_balance_is(&2, 500);
+		let _ = Balances::make_free_balance_be(&2, 500);
 		assert_eq!(Balances::total_balance(&2), 500);
 
 		// add a dummy nominator.
@@ -446,7 +446,7 @@ fn staking_should_work() {
 		assert_eq!(Staking::bonding_duration(), 2);
 
 		// put some money in account that we'll use.
-		for i in 1..5 { let _ = Balances::ensure_free_balance_is(&i, 2000); }
+		for i in 1..5 { let _ = Balances::make_free_balance_be(&i, 2000); }
 
 		// --- Block 1:
 		System::set_block_number(1);
@@ -635,7 +635,7 @@ fn nominating_and_rewards_should_work() {
 		// give the man some money
 		let initial_balance = 1000;
 		for i in [1, 2, 3, 4, 5, 10, 11, 20, 21].iter() {
-			let _ = Balances::ensure_free_balance_is(i, initial_balance);
+			let _ = Balances::make_free_balance_be(i, initial_balance);
 		}
 
 		// record their balances.
@@ -719,7 +719,7 @@ fn nominators_also_get_slashed() {
 		// give the man some money.
 		let initial_balance = 1000;
 		for i in [1, 2, 3, 10].iter() {
-			let _ = Balances::ensure_free_balance_is(i, initial_balance);
+			let _ = Balances::make_free_balance_be(i, initial_balance);
 		}
 
 		// 2 will nominate for 10
@@ -728,7 +728,7 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		// new era, pay rewards,
-		System::set_block_number(2);
+		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
 		// Nominator stash didn't collect any.
@@ -879,7 +879,7 @@ fn cannot_transfer_staked_balance() {
 		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
-		let _ = Balances::ensure_free_balance_is(&11, 10000);
+		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
 		assert_ok!(Balances::transfer(Origin::signed(11), 20, 1));
 	});
@@ -921,7 +921,7 @@ fn cannot_reserve_staked_balance() {
 		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
-		let _ = Balances::ensure_free_balance_is(&11, 10000);
+		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm account 11 can now reserve balance
 		assert_ok!(Balances::reserve(&11, 1));
 	});
@@ -1029,7 +1029,7 @@ fn validator_payment_prefs_work() {
 		// check the balance of a validator's stash accounts.
 		assert_eq!(Balances::total_balance(&11), validator_initial_balance);
 		// and the nominator (to-be)
-		let _ = Balances::ensure_free_balance_is(&2, 500);
+		let _ = Balances::make_free_balance_be(&2, 500);
 
 		// add a dummy nominator.
 		// NOTE: this nominator is being added 'manually', use '.nominate()' to do it realistically.
@@ -1101,15 +1101,15 @@ fn bond_extra_works() {
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 
 		// Give account 11 some large free balance greater than total
-		let _ = Balances::ensure_free_balance_is(&11, 1000000);
+		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Call the bond_extra function from controller, add only 100
-		assert_ok!(Staking::bond_extra(Origin::signed(10), 100));
+		assert_ok!(Staking::bond_extra(Origin::signed(11), 100));
 		// There should be 100 more `total` and `active` in the ledger
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 
 		// Call the bond_extra function with a large number, should handle it
-		assert_ok!(Staking::bond_extra(Origin::signed(10), u64::max_value()));
+		assert_ok!(Staking::bond_extra(Origin::signed(11), u64::max_value()));
 		// The full amount of the funds should now be in the total and active
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000000, active: 1000000, unlocking: vec![] }));
 
@@ -1134,7 +1134,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_ok!(Staking::set_bonding_duration(2));
 
 		// Give account 11 some large free balance greater than total
-		let _ = Balances::ensure_free_balance_is(&11, 1000000);
+		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Initial config should be correct
 		assert_eq!(Staking::sessions_per_era(), 1);
@@ -1161,7 +1161,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_eq!(Staking::stakers(&11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
-		Staking::bond_extra(Origin::signed(10), 100).unwrap();
+		Staking::bond_extra(Origin::signed(11), 100).unwrap();
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 		// Exposure is a snapshot! only updated after the next era update.
@@ -1232,8 +1232,8 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert_eq!(Staking::stakers(&21).total, 2000);
 
 		// Give the man some money.
-		let _ = Balances::ensure_free_balance_is(&10, 1000);
-		let _ = Balances::ensure_free_balance_is(&20, 1000);
+		let _ = Balances::make_free_balance_be(&10, 1000);
+		let _ = Balances::make_free_balance_be(&20, 1000);
 
 		// We confirm initialized slot_stake is this value
 		assert_eq!(Staking::slot_stake(), Staking::stakers(&11).total);
@@ -1261,7 +1261,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert_eq!(Staking::slot_stake(), 79);
 
 		// // If 10 gets slashed now, despite having +1000 in stash, it will be slashed byt 79, which is the slot stake
-		Staking::on_offline_validator(11, 4);
+		Staking::on_offline_validator(10, 4);
 		// // Confirm user has been reported
 		assert_eq!(Staking::slash_count(&11), 4);
 		// // check the balance of 10 (slash will be deducted from free balance.)
@@ -1288,7 +1288,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 
 		// Set some storage items which we expect to be cleaned up
 		// Initiate slash count storage item
-		Staking::on_offline_validator(11, 1);
+		Staking::on_offline_validator(10, 1);
 		// Set payee information
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
@@ -1883,5 +1883,107 @@ fn phragmen_chooses_correct_validators() {
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Session::validators().len(), 1);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_validators() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		bond_validator(2, u64::max_value());
+		bond_validator(4, u64::max_value());
+
+		bond_nominator(6, u64::max_value()/2, vec![1, 3]);
+		bond_nominator(8, u64::max_value()/2, vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![4, 2]);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_nominators() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(2, u64::max_value()/2);
+		bond_validator(4, u64::max_value()/2);
+
+		bond_nominator(6, u64::max_value(), vec![1, 3]);
+		bond_nominator(8, u64::max_value(), vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![4, 2]);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_ultimate() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(2, u64::max_value());
+		bond_validator(4, u64::max_value());
+
+		bond_nominator(6, u64::max_value(), vec![1, 3]);
+		bond_nominator(8, u64::max_value(), vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![4, 2]);
 	})
 }

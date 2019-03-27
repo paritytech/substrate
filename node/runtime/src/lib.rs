@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 39,
-	impl_version: 39,
+	spec_version: 46,
+	impl_version: 46,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -285,6 +285,12 @@ impl_runtime_apis! {
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+		fn offchain_worker(number: NumberFor<Block>) {
+			Executive::offchain_worker(number)
 		}
 	}
 

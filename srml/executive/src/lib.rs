@@ -23,7 +23,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT
+	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT, OffchainWorker
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -65,7 +65,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
+	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
@@ -73,11 +73,11 @@ impl<
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	fn execute_block(block: Block) {
-		Self::execute_block(block);
+		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block);
 	}
 
 	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>) {
-		Self::execute_extrinsics_without_checks(block_number, extrinsics);
+		Executive::<System, Block, Context, Payment, AllModules>::execute_extrinsics_without_checks(block_number, extrinsics);
 	}
 }
 
@@ -86,7 +86,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
+	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
@@ -318,6 +318,11 @@ impl<
 				INVALID_INDEX
 			})
 		}
+	}
+
+	/// Start an offchain worker and generate extrinsics.
+	pub fn offchain_worker(n: System::BlockNumber) {
+		<AllModules as OffchainWorker<System::BlockNumber>>::generate_extrinsics(n)
 	}
 }
 

@@ -76,6 +76,35 @@ pub use hash_db::Hasher;
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
+/// Context for executing a call into the runtime.
+#[repr(u8)]
+pub enum ExecutionContext {
+	/// Context for general importing (including own blocks).
+	Importing,
+	/// Context used when syncing the blockchain.
+	Syncing,
+	/// Context used for block construction.
+	BlockConstruction,
+	/// Offchain worker context.
+	OffchainWorker(Box<OffchainExt>),
+	/// Context used for other calls.
+	Other,
+}
+
+/// An extended externalities for offchain workers.
+pub trait OffchainExt {
+	/// Submits an extrinsics.
+	///
+	/// The extrinsic will either go to the pool (signed)
+	/// or to the next produced block (inherent).
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
+}
+impl<T: OffchainExt + ?Sized> OffchainExt for Box<T> {
+	fn submit_extrinsic(&mut self, ex: Vec<u8>) {
+		(&mut **self).submit_extrinsic(ex)
+	}
+}
+
 /// Hex-serialised shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
