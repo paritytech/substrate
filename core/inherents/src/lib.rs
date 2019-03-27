@@ -31,6 +31,7 @@
 //! information on how that is done.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 
 use parity_codec as codec;
 use codec::{Encode, Decode};
@@ -42,6 +43,9 @@ use parking_lot::RwLock;
 
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
+
+#[cfg(feature = "std")]
+pub mod pool;
 
 pub use runtime_primitives::RuntimeString;
 

@@ -20,7 +20,7 @@ use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::{Backend, Consolidate};
 use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
-use crate::{Externalities, OverlayedChanges};
+use crate::{Externalities, OverlayedChanges, OffchainExt};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
@@ -58,12 +58,11 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, B, T>
+pub struct Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 
 	B: 'a + Backend<H>,
-	T: 'a + ChangesTrieStorage<H>,
 {
 	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
@@ -81,23 +80,34 @@ where
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
 	changes_trie_transaction: Option<(u64, MemoryDB<H>, H::Out)>,
+	/// Additional externalities for offchain workers.
+	///
+	/// If None, some methods from the trait might not supported.
+	offchain_externalities: Option<&'a mut O>,
 }
 
-impl<'a, H, B, T> Ext<'a, H, B, T>
+impl<'a, H, B, T, O> Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
+	O: 'a + OffchainExt,
 	H::Out: Ord + HeapSizeOf,
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
-	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B, changes_trie_storage: Option<&'a T>) -> Self {
+	pub fn new(
+		overlay: &'a mut OverlayedChanges,
+		backend: &'a B,
+		changes_trie_storage: Option<&'a T>,
+		offchain_externalities: Option<&'a mut O>,
+	) -> Self {
 		Ext {
 			overlay,
 			backend,
 			storage_transaction: None,
 			changes_trie_storage,
 			changes_trie_transaction: None,
+			offchain_externalities,
 		}
 	}
 
@@ -152,12 +162,13 @@ where
 }
 
 #[cfg(test)]
-impl<'a, H, B, T> Ext<'a, H, B, T>
+impl<'a, H, B, T, O> Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
+	O: 'a + OffchainExt,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
@@ -173,11 +184,12 @@ where
 	}
 }
 
-impl<'a, B: 'a, T: 'a, H> Externalities<H> for Ext<'a, H, B, T>
+impl<'a, B, T, H, O> Externalities<H> for Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
+	O: 'a + OffchainExt,
 	H::Out: Ord + HeapSizeOf,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -329,6 +341,17 @@ where
 		self.changes_trie_transaction = root_and_tx;
 		root
 	}
+
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		if let Some(ext) = self.offchain_externalities.as_mut() {
+			ext.submit_extrinsic(extrinsic);
+			Ok(())
+		} else {
+			warn!("Call to submit_extrinsic without offchain externalities set.");
+			Err(())
+		}
+	}
 }
 
 #[cfg(test)]
@@ -345,7 +368,7 @@ mod tests {
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher>;
-	type TestExt<'a> = Ext<'a, Blake2Hasher, TestBackend, TestChangesTrieStorage>;
+	type TestExt<'a> = Ext<'a, Blake2Hasher, TestBackend, TestChangesTrieStorage, crate::NeverOffchainExt>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
@@ -371,7 +394,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_storage_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None, None);
 		assert_eq!(ext.storage_changes_root(Default::default(), 100), None);
 	}
 
@@ -381,7 +404,7 @@ mod tests {
 		overlay.changes_trie_config = None;
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(ext.storage_changes_root(Default::default(), 100), None);
 	}
 
@@ -390,7 +413,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(ext.storage_changes_root(Default::default(), 99),
 			Some(hex!("5b829920b9c8d554a19ee2a1ba593c4f2ee6fc32822d083e04236d693e8358d5").into()));
 	}
@@ -401,7 +424,7 @@ mod tests {
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(ext.storage_changes_root(Default::default(), 99),
 			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
 	}

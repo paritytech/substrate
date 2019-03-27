@@ -128,6 +128,7 @@ pub fn new_with_execution_strategy(
 		syncing: execution_strategy,
 		importing: execution_strategy,
 		block_construction: execution_strategy,
+		offchain_worker: execution_strategy,
 		other: execution_strategy,
 	};
 

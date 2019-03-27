@@ -317,6 +317,11 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		self.peerset.discovered(peer_id.clone())
 	}
 
+	/// Returns the state of the peerset manager, for debugging purposes.
+	pub fn peerset_debug_info(&self) -> serde_json::Value {
+		self.peerset.debug_info()
+	}
+
 	/// Function that is called when the peerset wants us to connect to a node.
 	fn peerset_report_connect(&mut self, peer_id: PeerId) {
 		let mut occ_entry = match self.peers.entry(peer_id) {
@@ -571,7 +576,8 @@ where
 		match (self.peers.entry(peer_id), connected_point) {
 			(Entry::Occupied(mut entry), connected_point) => {
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					PeerState::Requested | PeerState::PendingRequest { .. } => {
+					PeerState::Requested | PeerState::PendingRequest { .. } |
+					PeerState::Banned { .. } => {
 						debug!(target: "sub-libp2p", "Libp2p => Connected({:?}): Connection \
 							requested by PSM (through {:?})", entry.key(), connected_point);
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", entry.key());
@@ -584,7 +590,7 @@ where
 					st @ _ => {
 						// This is a serious bug either in this state machine or in libp2p.
 						error!(target: "sub-libp2p", "Received inject_connected for \
-							already-connected node");
+							already-connected node; state is {:?}", st);
 						*entry.into_mut() = st;
 						return
 					}
