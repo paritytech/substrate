@@ -475,7 +475,7 @@ fn check_header<B: Block, P: Pair>(
 				format!("Header {:?} is unsealed", hash)
 			})?
 		}
-		None => if !allow_old_seals || false {
+		None => if !allow_old_seals && false {
 			error!("Header {:?} uses old seal format, rejecting", hash);
 			return Err(format!("Header {:?} is unsealed", hash))
 		} else {
