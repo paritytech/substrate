@@ -270,7 +270,7 @@ impl PerU128 {
 	pub fn from_max_value(x: u128) -> Self { Self(x) }
 
 	/// Construct new instance where `x` is denominator and the nominator is 1.
-	pub fn from_xth(x: u128) -> Self { Self(U128/x) }
+	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
 }
 
 impl ::rstd::ops::Deref for PerU128 {

@@ -109,6 +109,25 @@ macro_rules! assert_ok {
 	}
 }
 
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_uvec {
+	( $x:expr, $y:expr ) => {
+		$crate::__assert_eq_uvec!($x, $y);
+		$crate::__assert_eq_uvec!($y, $x);
+	}
+}
+#[macro_export]
+#[doc(hidden)]
+#[cfg(feature = "std")]
+macro_rules! __assert_eq_uvec {
+	( $x:expr, $y:expr ) => {
+		$x.iter().for_each(|e| {
+			if !$y.contains(e) { panic!(format!("vectors not equal {:?} != {:?}", $x, $y)); }
+		});
+	}
+}
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq)]

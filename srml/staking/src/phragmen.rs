@@ -46,11 +46,11 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 	pub exposure: Exposure<AccountId, Balance>,
 	// Intermediary value used to sort candidates.
 	pub score: Fraction,
-	// Accumulator of the stake of this candidate based on received votes.
+	/// Accumulator of the stake of this candidate based on received votes.
 	approval_stake: ExtendedBalance,
-	// Flag for being elected.
+	/// Flag for being elected.
 	elected: bool,
-	// This is most often equal to `Exposure.total` but not always. Needed for [`equalise`]
+	/// This is most often equal to `Exposure.total` but not always. Needed for [`equalise`]
 	backing_stake: ExtendedBalance
 }
 
@@ -58,13 +58,13 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Nominator<AccountId> {
-	// The nominator's account.
+	/// The nominator's account.
 	who: AccountId,
-	// List of validators proposed by this nominator.
+	/// List of validators proposed by this nominator.
 	edges: Vec<Edge<AccountId>>,
-	// the stake amount proposed by the nominator as a part of the vote.
+	/// the stake amount proposed by the nominator as a part of the vote.
 	budget: ExtendedBalance,
-	// Incremented each time a nominee that this nominator voted for has been elected.
+	/// Incremented each time a nominee that this nominator voted for has been elected.
 	load: Fraction,
 }
 
@@ -72,13 +72,13 @@ pub struct Nominator<AccountId> {
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Edge<AccountId> {
-	// Account being voted for
+	/// Account being voted for
 	who: AccountId,
-	// Load of this vote.
+	/// Load of this vote.
 	load: Fraction,
-	// Final backing stake of this vote.
+	/// Final backing stake of this vote.
 	backing_stake: ExtendedBalance,
-	// Index of the candidate stored in the 'candidates' vector
+	/// Index of the candidate stored in the 'candidates' vector
 	candidate_index: usize,
 	/// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalise.
 	elected_idx: usize,
@@ -280,6 +280,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	Some(elected_candidates)
 }
 
+/// Performs equalise post-processing to the output of the election algorithm
+/// This function mutates the input parameters, most noticeably it updates the exposure of
+/// the elected candidates.
+/// The return value is to tolerance at which the function has stopped.
 pub fn equalise<T: Trait + 'static>(
 	nominator: &mut Nominator<T::AccountId>,
 	elected_candidates: &mut Vec<Candidate<T::AccountId, BalanceOf<T>>>,
