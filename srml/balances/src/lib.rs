@@ -62,6 +62,8 @@
 //!
 //! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
+//! - [`ReservableCurrency`](https://crates.parity.io/srml_support/traits/trait.ReservableCurrency.html):
+//! Functions for dealing with assets that can be reserved from an account.
 //! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
 //! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling
