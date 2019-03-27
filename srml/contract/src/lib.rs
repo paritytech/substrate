@@ -408,7 +408,7 @@ decl_storage! {
 		ContractFee get(contract_fee) config(): T::Balance = T::Balance::sa(21);
 		/// The base fee charged for a call into a contract.
 		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
-		/// The base fee charged for a create of a contract.
+		/// The base fee charged for creating a contract.
 		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
 		/// The price of one unit of gas.
 		GasPrice get(gas_price) config(): T::Balance = T::Balance::sa(1);
