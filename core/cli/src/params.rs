@@ -39,6 +39,7 @@ arg_enum! {
 		Wasm,
 		Both,
 		NativeElseWasm,
+		NativeWhenPossible,
 	}
 }
 
@@ -49,6 +50,7 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::NativeWhenPossible => client::ExecutionStrategy::NativeWhenPossible,
 		}
 	}
 }
@@ -261,7 +263,7 @@ pub struct ExecutionStrategies {
 		raw(
 			possible_values = "&ExecutionStrategy::variants()",
 			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
+			default_value = r#""NativeWhenPossible""#
 		)
 	)]
 	pub offchain_worker_execution: ExecutionStrategy,
