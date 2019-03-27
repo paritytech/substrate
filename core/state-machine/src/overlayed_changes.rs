@@ -168,6 +168,8 @@ impl OverlayedChanges {
 			if &new_root != subtrie.root_initial_value() {
 				entry.value = Some(subtrie.encoded_with_root(&new_root));
 			}
+		} else {
+			entry.value = None;
 		}
 
 		if let Some((Some(extrinsics), _, _)) = self.prospective.children.get(subtrie.keyspace()) {

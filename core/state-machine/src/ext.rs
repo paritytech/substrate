@@ -229,10 +229,6 @@ where
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		let _guard = panic_handler::AbortGuard::new(true);
-		if is_child_storage_key(&key) {
-			warn!(target: "trie", "Refuse to directly set child storage key");
-			return;
-		}
 
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);

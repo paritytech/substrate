@@ -120,11 +120,11 @@ pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 pub fn keyspace_as_prefix<H: AsRef<[u8]>>(ks: &KeySpace, key: &H, dst: &mut[u8]) {
 	assert!(dst.len() == keyspace_expected_len(ks, key));
 	//dst[..ks.len()].copy_from_slice(&ks[..]);
-	dst[ks.len()..].copy_from_slice(key.as_ref());
-	let high = ::rstd::cmp::min(ks.len(), key.as_ref().len());
+	dst[..].copy_from_slice(key.as_ref());
+	let high = rstd::cmp::min(ks.len(), key.as_ref().len());
 	// TODO this mixing will be useless after trie pr merge (keeping it until then)
 	// same thing we use H dest but not after pr merge
-	for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
+	for (k, a) in dst[..high].iter_mut().zip(key.as_ref()[..high].iter()) {
 	//for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
 		// TODO any use of xor val? (preventing some targeted collision I would say)
 		*k ^= *a;

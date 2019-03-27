@@ -101,7 +101,9 @@ pub trait Externalities<H: Hasher> {
 	/// get child trie infos at storage_key
 	fn get_child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
 		self.storage(&SubTrie::prefix_parent_key(storage_key))
-			.and_then(|v|SubTrie::decode_node(&v, storage_key))
+			.and_then(|v|{
+        SubTrie::decode_node(&v, storage_key)
+      })
 	}
 
 	/// put or delete child trie in top trie at a location
@@ -906,7 +908,9 @@ mod tests {
 
 		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
 		ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild"));
-		let subtrie = ext.get_child_trie(&b"testchild"[..]).expect("set above");
+		let subtrie = ext.get_child_trie(&b"testchild"[..]);
+		assert!(subtrie.is_some());
+		let subtrie = subtrie.expect("checked above");
 		ext.set_child_storage(&subtrie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(&subtrie, b"abc"), Some(b"def".to_vec()));
 		ext.kill_child_storage(&subtrie);

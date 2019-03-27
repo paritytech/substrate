@@ -158,8 +158,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(subtrie.root_initial_value());
+  let mut root = subtrie_root_as_hash::<H>(subtrie);
 
 	{
 		let mut db = KeySpacedDBMut(&mut *db, subtrie.keyspace());
@@ -184,8 +183,7 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(subtrie.root_initial_value());
+  let root = subtrie_root_as_hash::<H>(subtrie);
 	let db = KeySpacedDB(&*db, subtrie.keyspace());
 
 	let trie = TrieDB::<H>::new(&db, &root)?;
@@ -230,9 +228,7 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(subtrie.root_initial_value());
-
+  let root = subtrie_root_as_hash::<H>(subtrie);
 	let db = KeySpacedDB(&*db, subtrie.keyspace());
 	Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
@@ -246,14 +242,14 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(subtrie.root_initial_value());
-
+  let root = subtrie_root_as_hash::<H>(subtrie);
 	let db = KeySpacedDB(&*db, subtrie.keyspace());
 	Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
+
 // Utilities (not exported):
+
 
 const EMPTY_TRIE: u8 = 0;
 const LEAF_NODE_OFFSET: u8 = 1;
@@ -266,6 +262,13 @@ const LEAF_NODE_THRESHOLD: u8 = LEAF_NODE_BIG - LEAF_NODE_OFFSET;
 const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;	//125
 const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
 const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
+
+fn subtrie_root_as_hash<H: Hasher> (subtrie: &SubTrie) -> H::Out {
+	let mut root = H::Out::default();
+  let max = std::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
+	root.as_mut()[..max].copy_from_slice(&subtrie.root_initial_value()[..max]);
+  root
+}
 
 fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
 	if input.len() < count {
