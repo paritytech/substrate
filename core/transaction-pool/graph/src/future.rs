@@ -16,11 +16,13 @@
 
 use std::{
 	collections::{HashMap, HashSet},
+	fmt,
 	hash,
 	sync::Arc,
 	time,
 };
 
+use substrate_primitives::hexdisplay::HexDisplay;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
@@ -28,7 +30,6 @@ use sr_primitives::transaction_validity::{
 use crate::base_pool::Transaction;
 
 /// Transaction with partially satisfied dependencies.
-#[derive(Debug)]
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
 	pub transaction: Arc<Transaction<Hash, Ex>>,
@@ -36,6 +37,23 @@ pub struct WaitingTransaction<Hash, Ex> {
 	pub missing_tags: HashSet<Tag>,
 	/// Time of import to the Future Queue.
 	pub imported_at: time::Instant,
+}
+
+impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, Ex> {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		write!(fmt, "WaitingTransaction {{ ")?;
+		write!(fmt, "imported_at: {:?}, ", self.imported_at)?;
+		write!(fmt, "transaction: {:?}, ", self.transaction)?;
+		write!(fmt, "missing_tags: {{")?;
+		let mut it = self.missing_tags.iter().map(|tag| HexDisplay::from(tag));
+		if let Some(tag) = it.next() {
+			write!(fmt, "{}", tag)?;
+		}
+		for tag in it {
+			write!(fmt, ", {}", tag)?;
+		}
+		write!(fmt, " }}}}")
+	}
 }
 
 impl<Hash, Ex> Clone for WaitingTransaction<Hash, Ex> {
