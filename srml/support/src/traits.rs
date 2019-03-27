@@ -346,7 +346,7 @@ pub trait Currency<AccountId> {
 	);
 }
 
-/// A currency where funds can be reserved from the user
+/// A currency where funds can be reserved from the user.
 pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
 	/// are no balance changes in the meantime.
