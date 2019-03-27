@@ -283,6 +283,13 @@ extern_functions! {
 	fn ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 	/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
 	fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
+
+	//================================
+	// Offchain-worker Context
+	//================================
+
+	/// Submit extrinsic.
+	fn ext_submit_extrinsic(data: *const u8, len: u32);
 }
 
 /// Ensures we use the right crypto when calling into native
@@ -591,6 +598,18 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 		2 => Err(EcdsaVerifyError::BadV),
 		3 => Err(EcdsaVerifyError::BadSignature),
 		_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
+	}
+}
+
+/// Submit extrinsic from the runtime.
+///
+/// Depending on the kind of extrinsic it will either be:
+/// 1. scheduled to be included in the next produced block (inherent)
+/// 2. added to the pool and propagated (transaction)
+pub fn submit_extrinsic<T: codec::Encode>(data: &T) {
+	let encoded_data = codec::Encode::encode(data);
+	unsafe {
+		ext_submit_extrinsic.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
 	}
 }
 

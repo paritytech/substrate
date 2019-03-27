@@ -25,6 +25,7 @@ sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = fal
 runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
 consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
+offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 
 [features]
 default = ["std"]
@@ -48,4 +49,5 @@ std = [
 	"serde",
 	"safe-mix/std",
 	"consensus-aura/std",
+	"offchain-primitives/std",
 ]

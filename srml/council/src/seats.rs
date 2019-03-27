@@ -21,7 +21,7 @@ use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
 use srml_support::{
 	StorageValue, StorageMap, dispatch::Result, decl_storage, decl_event, ensure,
-	traits::{Currency, OnUnbalanced}
+	traits::{Currency, ReservableCurrency, OnUnbalanced}
 };
 use democracy;
 use system::{self, ensure_signed};
@@ -382,7 +382,6 @@ decl_storage! {
 }
 
 decl_event!(
-	/// An event in this module.
 	pub enum Event<T> where <T as system::Trait>::AccountId {
 		/// reaped voter, reaper
 		VoterReaped(AccountId, AccountId),

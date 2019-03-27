@@ -39,6 +39,7 @@ arg_enum! {
 		Wasm,
 		Both,
 		NativeElseWasm,
+		NativeWhenPossible,
 	}
 }
 
@@ -49,7 +50,18 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::NativeWhenPossible => client::ExecutionStrategy::NativeWhenPossible,
 		}
+	}
+}
+
+arg_enum! {
+	/// How to execute blocks
+	#[derive(Debug, Clone)]
+	pub enum OffchainWorkerEnabled {
+		Always,
+		Never,
+		WhenValidating,
 	}
 }
 
@@ -205,6 +217,70 @@ pub struct TransactionPoolParams {
 	pub pool_kbytes: usize,
 }
 
+/// Execution strategies parameters.
+#[derive(Debug, StructOpt, Clone)]
+pub struct ExecutionStrategies {
+	/// The means of execution used when calling into the runtime while syncing blocks.
+	#[structopt(
+		long = "syncing-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeElseWasm""#
+		)
+	)]
+	pub syncing_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime while importing blocks.
+	#[structopt(
+		long = "importing-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeElseWasm""#
+		)
+	)]
+	pub importing_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime while constructing blocks.
+	#[structopt(
+		long = "block-construction-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""Wasm""#
+		)
+	)]
+	pub block_construction_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime while constructing blocks.
+	#[structopt(
+		long = "offchain-worker-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeWhenPossible""#
+		)
+	)]
+	pub offchain_worker_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
+	#[structopt(
+		long = "other-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""Wasm""#
+		)
+	)]
+	pub other_execution: ExecutionStrategy,
+}
+
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
@@ -219,6 +295,10 @@ pub struct RunCmd {
 	/// Enable validator mode
 	#[structopt(long = "validator")]
 	pub validator: bool,
+
+	/// Disable GRANDPA when running in validator mode
+	#[structopt(long = "no-grandpa")]
+	pub no_grandpa: bool,
 
 	/// Run in light client mode
 	#[structopt(long = "light")]
@@ -262,53 +342,22 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
-	/// The means of execution used when calling into the runtime while syncing blocks.
+	/// Should execute offchain workers on every block. By default it's only enabled for nodes that are authoring new
+	/// blocks.
 	#[structopt(
-		long = "syncing-execution",
-		value_name = "STRATEGY",
+		long = "offchain-worker",
+		value_name = "ENABLED",
 		raw(
-			possible_values = "&ExecutionStrategy::variants()",
+			possible_values = "&OffchainWorkerEnabled::variants()",
 			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
+			default_value = r#""WhenValidating""#
 		)
 	)]
-	pub syncing_execution: ExecutionStrategy,
+	pub offchain_worker: OffchainWorkerEnabled,
 
-	/// The means of execution used when calling into the runtime while importing blocks.
-	#[structopt(
-		long = "importing-execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
-		)
-	)]
-	pub importing_execution: ExecutionStrategy,
-
-	/// The means of execution used when calling into the runtime while constructing blocks.
-	#[structopt(
-		long = "block-construction-execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Wasm""#
-		)
-	)]
-	pub block_construction_execution: ExecutionStrategy,
-
-	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
-	#[structopt(
-		long = "other-execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Wasm""#
-		)
-	)]
-	pub other_execution: ExecutionStrategy,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub execution_strategies: ExecutionStrategies,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -325,6 +374,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keyring: Keyring,
+
+	/// Enable authoring even when offline.
+	#[structopt(long = "force-authoring")]
+	pub force_authoring: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.

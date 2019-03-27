@@ -76,7 +76,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 				user_defined: known_addresses,
 				kademlia,
 				next_kad_random_query: Delay::new(Instant::now()),
-				duration_to_next_kad: Duration::from_secs(60),
+				duration_to_next_kad: Duration::from_secs(10),
 			},
 			identify,
 			events: Vec::new(),
@@ -128,6 +128,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	#[inline]
 	pub fn drop_node(&mut self, peer_id: &PeerId) {
 		self.custom_protocols.disconnect_peer(peer_id)
+	}
+
+	/// Returns the state of the peerset manager, for debugging purposes.
+	pub fn peerset_debug_info(&self) -> serde_json::Value {
+		self.custom_protocols.peerset_debug_info()
 	}
 }
 
