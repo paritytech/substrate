@@ -159,10 +159,10 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(subtrie.root_initial_value());
 
 	{
-		let mut db = KeySpacedDBMut(&mut *db, &subtrie.node.keyspace);
+		let mut db = KeySpacedDBMut(&mut *db, subtrie.keyspace());
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
@@ -185,8 +185,8 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
-	let db = KeySpacedDB(&*db, &subtrie.node.keyspace);
+	root.as_mut().copy_from_slice(subtrie.root_initial_value());
+	let db = KeySpacedDB(&*db, subtrie.keyspace());
 
 	let trie = TrieDB::<H>::new(&db, &root)?;
 	let iter = trie.iter()?;
@@ -231,9 +231,9 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(subtrie.root_initial_value());
 
-	let db = KeySpacedDB(&*db, &subtrie.node.keyspace);
+	let db = KeySpacedDB(&*db, subtrie.keyspace());
 	Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
@@ -247,9 +247,9 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
-	root.as_mut().copy_from_slice(&subtrie.node.root[..]); // root is fetched from DB, not writable by runtime, so it's always valid.
+	root.as_mut().copy_from_slice(subtrie.root_initial_value());
 
-	let db = KeySpacedDB(&*db, &subtrie.node.keyspace);
+	let db = KeySpacedDB(&*db, subtrie.keyspace());
 	Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 

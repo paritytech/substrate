@@ -264,22 +264,37 @@ pub struct SubTrieNode {
 	pub keyspace: KeySpace,
 	/// subtrie current root hash
 	#[cfg_attr(feature = "std", serde(with="bytes"))]
-	pub root: Vec<u8>,
+	root: Vec<u8>,
 }
+
+/// `SubTrieNode` using reference for encoding without copy
+#[derive(Encode)]
+struct SubTrieNodeRef<'a> {
+	pub keyspace: &'a KeySpace,
+	pub root: &'a [u8],
+}
+
 
 /// child trie infos
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 pub struct SubTrie {
-	/// subtrie node info
-	pub node: SubTrieNode,
+	/// subtrie last node info
+	node: SubTrieNode,
 	/// subtrie path
-	pub parent: ParentTrie,
+	parent: ParentTrie,
 }
 
 impl SubTrie {
+  /// map parent key to some isolated space
+  pub fn prefix_parent_key(parent: &[u8]) -> Vec<u8> {
+		let mut key_full = crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		parity_codec::Encode::encode_to(parent, &mut key_full);
+    key_full
+  }
 	/// instantiate new subtrie without root value
-	pub fn new(keyspace: KeySpace, parent: ParentTrie) -> Self {
+	pub fn new(keyspace: KeySpace, parent: &[u8]) -> Self {
+    let parent = Self::prefix_parent_key(parent);
 		SubTrie {
 			node: SubTrieNode {
 				keyspace,
@@ -288,14 +303,42 @@ impl SubTrie {
 			parent,
 		}
 	}
+	/// instantiate subtrie from a read node value
+	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
+
+		parity_codec::Decode::decode(&mut &encoded_node[..]).map(|node| {
+      let parent = Self::prefix_parent_key(parent);
+			SubTrie {
+				node,
+				parent,
+			}
+		})
+	}
 	/// encoded parent trie node content
 	pub fn encoded_node(&self) -> Vec<u8> {
 		parity_codec::Encode::encode(&self.node)
 	}
-	/// encoded parent trie node content
-	pub fn parent_storage_key(&self) -> Vec<u8> {
-		// !! TODO EMCH (there is probably many places with incorrect parent key usage)
-		unimplemented!("TODO build from well known key or better build on construct: create a setter and make parentn non public");
+	/// parent trie key with prefix
+	pub fn parent_prefixed_key(&self) -> &Vec<u8> {
+		&self.parent
 	}
-
+	/// parent trie key
+	pub fn parent_key(&self) -> &[u8] {
+		&self.parent[crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX.len()..]
+	}
+	/// access to root value (as it was on build)
+	pub fn root_initial_value(&self) -> &Vec<u8> {
+		&self.node.root
+	}
+	/// access to keyspace
+	pub fn keyspace(&self) -> &Vec<u8> {
+		&self.node.keyspace
+	}
+	/// encdode with an updated root
+	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
+		parity_codec::Encode::encode(&SubTrieNodeRef{
+			keyspace: &self.node.keyspace,
+			root: new_root,
+		})
+	}
 }

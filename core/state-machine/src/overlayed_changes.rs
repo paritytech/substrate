@@ -117,13 +117,13 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(map) = self.prospective.children.get(&subtrie.node.keyspace) {
+		if let Some(map) = self.prospective.children.get(subtrie.keyspace()) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));
 			}
 		}
 
-		if let Some(map) = self.committed.children.get(&subtrie.node.keyspace) {
+		if let Some(map) = self.committed.children.get(subtrie.keyspace()) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));
 			}
@@ -151,7 +151,7 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(subtrie.node.keyspace.clone())
+		let map_entry = self.prospective.children.entry(subtrie.keyspace().clone())
 			.or_insert_with(||(Default::default(), Default::default(), subtrie.clone()));
 		map_entry.1.insert(key, val);
 
@@ -163,16 +163,14 @@ impl OverlayedChanges {
 
 	/// Sync the child storage root.
 	pub(crate) fn sync_child_storage_root(&mut self, subtrie: &SubTrie, root: Option<Vec<u8>>) {
-		let entry = self.prospective.top.entry(subtrie.parent.clone()).or_default();
+		let entry = self.prospective.top.entry(subtrie.parent_prefixed_key().clone()).or_default();
 		if let Some(new_root) = root {
-			if new_root != subtrie.node.root {
-				let mut new_node = subtrie.node.clone();
-				new_node.root = new_root;
-				entry.value = Some(parity_codec::Encode::encode(&new_node));
+			if &new_root != subtrie.root_initial_value() {
+				entry.value = Some(subtrie.encoded_with_root(&new_root));
 			}
 		}
 
-		if let Some((Some(extrinsics), _, _)) = self.prospective.children.get(&subtrie.node.keyspace) {
+		if let Some((Some(extrinsics), _, _)) = self.prospective.children.get(subtrie.keyspace()) {
 			for extrinsic in extrinsics {
 				entry.extrinsics.get_or_insert_with(Default::default)
 					.insert(*extrinsic);
@@ -188,7 +186,7 @@ impl OverlayedChanges {
 	/// [`discard_prospective`]: #method.discard_prospective
 	pub(crate) fn clear_child_storage(&mut self, subtrie: &SubTrie) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(subtrie.node.keyspace.to_vec())
+		let map_entry = self.prospective.children.entry(subtrie.keyspace().clone())
 			.or_insert_with(||(Default::default(), Default::default(), subtrie.clone()));
 
 		if let Some(extrinsic) = extrinsic_index {
@@ -198,7 +196,7 @@ impl OverlayedChanges {
 
 		map_entry.1.values_mut().for_each(|e| *e = None);
 
-		if let Some((_, committed_map, _o_subtrie)) = self.committed.children.get(&subtrie.node.keyspace) {
+		if let Some((_, committed_map, _o_subtrie)) = self.committed.children.get(subtrie.keyspace()) {
 			for (key, _) in committed_map.iter() {
 				map_entry.1.insert(key.clone(), None);
 			}

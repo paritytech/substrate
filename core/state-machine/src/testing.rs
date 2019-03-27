@@ -141,7 +141,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 	}
 
 	fn kill_child_storage(&mut self, subtrie: &SubTrie) {
-		self.changes.set_storage(subtrie.parent.clone(), None); // TODO EMCH wellknownkey see parent no more public
+		self.changes.set_storage(subtrie.parent_prefixed_key().clone(), None);
 		self.changes.clear_child_storage(subtrie);
 	}
 

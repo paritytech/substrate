@@ -100,20 +100,13 @@ pub trait Externalities<H: Hasher> {
 
 	/// get child trie infos at storage_key
 	fn get_child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
-		let mut key_for = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
-		Encode::encode_to(&storage_key, &mut key_for);
-		self.storage(&key_for[..])
-			.map(std::io::Cursor::new)
-			.as_mut()
-			.and_then(Decode::decode)
-			.map(|node|SubTrie { node, parent: storage_key.to_vec() })
+		self.storage(&SubTrie::prefix_parent_key(storage_key))
+			.and_then(|v|SubTrie::decode_node(&v, storage_key))
 	}
 
 	/// put or delete child trie in top trie at a location
 	fn set_child_trie(&mut self, subtrie: &SubTrie) {
-		let mut key_for = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
-		Encode::encode_to(&subtrie.parent, &mut key_for);
-		self.place_storage(key_for, Some(Encode::encode(&subtrie.node)))
+		self.place_storage(subtrie.parent_prefixed_key().clone(), Some(subtrie.encoded_node()))
 	}
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
@@ -912,7 +905,7 @@ mod tests {
 		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 
 		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
-		ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild".to_vec()));
+		ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild"));
 		let subtrie = ext.get_child_trie(&b"testchild"[..]).expect("set above");
 		ext.set_child_storage(&subtrie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(&subtrie, b"abc"), Some(b"def".to_vec()));

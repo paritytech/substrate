@@ -145,9 +145,9 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			}
 			// TODO put in cache (there is also a scheme change to do to avoid indirection)
 			let subtrie = child::get_child_trie(&trieid).unwrap_or_else(||{
-				// use trie_id as keyspace TODO in future adderssing trieid is still the keyspace
+				// use trie_id as keyspace TODO EMCH in future adderssing trieid is still the keyspace
 				// but address is use as subtrie key (using encoding as in generated storage)
-				let new_subtrie = SubTrie::new(trieid.clone(), trieid.clone());
+				let new_subtrie = SubTrie::new(trieid.clone(), &trieid);
 				child::set_child_trie(&new_subtrie);
 				new_subtrie
 			});

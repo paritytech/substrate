@@ -240,9 +240,9 @@ fn account_removal_removes_storage() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
-			let subtrie1 = SubTrie::new(unique_id1.to_vec(), unique_id1.to_vec());
+			let subtrie1 = SubTrie::new(unique_id1.to_vec(), &unique_id1[..]);
 			child::set_child_trie(&subtrie1);
-			let subtrie2 = SubTrie::new(unique_id2.to_vec(), unique_id2.to_vec());
+			let subtrie2 = SubTrie::new(unique_id2.to_vec(), &unique_id2[..]);
 			child::set_child_trie(&subtrie2);
 
 			// Setup two accounts with free balance above than exsistential threshold.

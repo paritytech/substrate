@@ -141,10 +141,10 @@ where
 		self.mark_dirty();
 
 		let (root, is_default, transaction) = {
-			let delta = self.overlay.committed.children.get(&subtrie.node.keyspace)
+			let delta = self.overlay.committed.children.get(subtrie.keyspace())
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(&subtrie.node.keyspace)
+				.chain(self.overlay.prospective.children.get(subtrie.keyspace())
 						.into_iter()
 						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
 
