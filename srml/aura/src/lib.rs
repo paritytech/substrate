@@ -22,7 +22,8 @@
 //! 
 //! ### Dispatchable
 //! 
-//! There are no dispatchable functions for this module as it mainly serves to monitor offline interaction in the context of Aura consensus and doesn't operate independent of this consensus algorithm.
+//! There are no dispatchable functions for this module as it mainly serves to monitor offline interaction in the 
+//! context of Aura consensus and doesn't operate independent of this consensus algorithm.
 //! 
 //! ### Public
 //! 
@@ -32,7 +33,8 @@
 //! 
 //! ### Prerequisites
 //! 
-//! Use of this module implies selection of the Aura algorithm. More details on consensus configuration will be revealed once [Swappable Consensus](https://github.com/paritytech/substrate/issues/1304) is formalized.
+//! Use of this module implies selection of the Aura algorithm. More details on consensus configuration will be revealed
+//! once [Swappable Consensus](https://github.com/paritytech/substrate/issues/1304) is formalized.
 //! 
 //! ### Simple Code Snippet
 //! 
@@ -51,7 +53,8 @@
 //! assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0]);
 //! ```
 //! 
-//! See the `test.rs` file in this module's directory for other simple code snippets that may make this module's functionalities clearer.
+//! See the `test.rs` file in this module's directory for other simple code snippets that may make this module's 
+//! functionalities clearer.
 //! 
 //! ### Example from SRML
 //! 
@@ -59,13 +62,18 @@
 //! 
 //! ## Related Modules
 //! 
-//! - [`staking`](https://crates.parity.io/srml_staking/index.html): this module is called in `aura` to enforce slashing if validators miss a certain number of slots (see the `StakingSlasher` struct and associated method)
-//! - [`timestamp`](https://crates.parity.io/srml_timestamp/index.html): this module is used in `aura` to track consensus rounds (via `slots`)
-//! - [`consensus`](https://crates.parity.io/srml_consensus/index.html): this module does not relate directly to `aura`, but serves to manage offline reporting by implementing `ProvideInherent` in a similar way
+//! - [`staking`](https://crates.parity.io/srml_staking/index.html): this module is called in `aura` to enforce slashing
+//!  if validators miss a certain number of slots (see the `StakingSlasher` struct and associated method)
+//! - [`timestamp`](https://crates.parity.io/srml_timestamp/index.html): this module is used in `aura` to track 
+//! consensus rounds (via `slots`)
+//! - [`consensus`](https://crates.parity.io/srml_consensus/index.html): this module does not relate directly to `aura`,
+//!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way
 //! 
 //! ## References
 //! 
-//! If you're interested in hacking on this module, it is useful to understand the interaction with `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` and `ProvideInherentData` to create and check inherents.
+//! If you're interested in hacking on this module, it is useful to understand the interaction with 
+//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` and 
+//! `ProvideInherentData` to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
