@@ -22,7 +22,7 @@
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnDilution, OnUnbalanced, Imbalance};
+use srml_support::traits::{Currency, ReservableCurrency, OnDilution, OnUnbalanced, Imbalance};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
@@ -33,7 +33,7 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Currency: Currency<Self::AccountId>;
+	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
