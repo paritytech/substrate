@@ -176,6 +176,8 @@ impl<B: ChainApi> Pool<B> {
 		let ready_limit = &self.options.ready;
 		let future_limit = &self.options.future;
 
+		debug!(target: "txpool", "Pool Status: {:?}", status);
+
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
 			|| future_limit.is_exceeded(status.future, status.future_bytes) {
 			// clean up the pool
