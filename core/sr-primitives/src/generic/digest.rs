@@ -62,6 +62,7 @@ impl<Item> traits::Digest for Digest<Item> where
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
+#[allow(deprecated)]
 pub enum DigestItem<Hash, AuthorityId, SealSignature> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
@@ -93,6 +94,7 @@ impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> ::serde::Serializ
 /// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
+#[allow(deprecated)]
 pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a, SealSignature: 'a> {
 	/// Reference to `DigestItem::AuthoritiesChange`.
 	AuthoritiesChange(&'a [AuthorityId]),
