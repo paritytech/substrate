@@ -92,7 +92,7 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	pub fn remove_from_storage(&self, keys: &HashSet<H::Out>) {
 		let mut data = self.data.write();
 		for key in keys {
-			data.mdb.remove_and_purge(key);
+			data.mdb.remove_and_purge(key, &[]);
 		}
 	}
 

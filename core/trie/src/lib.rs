@@ -315,7 +315,6 @@ mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
 	use substrate_primitives::Blake2Hasher;
-	use memory_db::MemoryDB;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
