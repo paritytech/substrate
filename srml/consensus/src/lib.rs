@@ -16,7 +16,8 @@
 
 //! ## Overview
 //! 
-//! The consensus module manages the authority set for the native code. It provides support for reporting offline behavior among validators and logging changes in the validator authority set.
+//! The consensus module manages the authority set for the native code. It provides support for reporting offline 
+//! behavior among validators and logging changes in the validator authority set.
 //!
 //! ## Interface
 //! 
@@ -25,23 +26,26 @@
 //! The `Call` enum is documented [here](./enum.Call.html).
 //! 
 //! - `report_misbehavior` - Report some misbehavior. The origin of this call must be signed.
-//! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of this call must be an inherent.
+//! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of 
+//! 	this call must be an inherent.
 //! - `remark` - Make some on-chain remark. The origin of this call must be signed.
 //! - `set_heap_pages` - Set the number of pages in the WebAssembly environment's heap.
 //! - `set_code` - Set the new code.
-//! - `set_storage(Vec<KeyValue>)` - Set some items of storage.
+//! - `set_storage` - Set some items of storage.
 //! 
 //! ### Public
 //! 
 //! See the [module](./struct.Module.html) for details on publicly available functions.
 //! 
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing 
+//! any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
 //! 
 //! ## Usage
 //! 
 //! ### Prerequisites
 //! 
-//! To use a functionality from the `consensus` module, call the specific Trait or function that you are invoking from the module with the Rust syntax for doing so, ie
+//! To use functionality from the `consensus` module, implement the specific Trait or function that you are invoking 
+//! from the module:
 //! ```rust,ignore
 //! impl<T> for consensus::SomeTrait for Module<T> {
 //! 	/// required functions and types for trait included here
@@ -49,7 +53,7 @@
 //! }
 //! ```
 //! 
-//! Alternatively, to just set the authorities (presumably for testing purposes with a changing validator set)
+//! Alternatively, to set the authorities
 //! ```rust,ignore
 //! consensus::set_authorities(&[<authorities>]) // example included below
 //! ```
@@ -80,7 +84,8 @@
 //! }
 //! ```
 //! 
-//! In `grandpa`, we use `consensus` to get the set of `next_authorities` before changing this set according to the consensus algorithm (which does not rotate sessions in the *normal* way):
+//! In `grandpa`, we use `consensus` to get the set of `next_authorities` before changing this set according to the 
+//! consensus algorithm (which does not rotate sessions in the *normal* way):
 //! ```rust,ignore
 //! let next_authorities = <consensus::Module<T>>::authorities()
 //! 			.into_iter()
@@ -90,13 +95,18 @@
 //! 
 //! ## Related Modules
 //! 
-//! - [`staking`](https://crates.parity.io/srml_staking/index.html): This module uses `consensus` to monitor offline reporting amongst validators.
-//! - [`aura`](https://crates.parity.io/srml_aura/index.html): This module does not relate directly to `consensus`, but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method.
-//! - [`grandpa`](https://crates.parity.io/srml_grandpa/index.html): Although GRANDPA does its own voter-set management, it has a mode where it can track `consensus`, if desired.
+//! - [`staking`](https://crates.parity.io/srml_staking/index.html): This module uses `consensus` to monitor offline 
+//! reporting amongst validators.
+//! - [`aura`](https://crates.parity.io/srml_aura/index.html): This module does not relate directly to `consensus`, 
+//! but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method.
+//! - [`grandpa`](https://crates.parity.io/srml_grandpa/index.html): Although GRANDPA does its own voter-set management,
+//!  it has a mode where it can track `consensus`, if desired.
 //! 
 //! ## References
 //! 
-//! If you're interested in hacking on this module, it is useful to understand the interaction with `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` to create and check inherents.
+//! If you're interested in hacking on this module, it is useful to understand the interaction with 
+//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` 
+//! to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
