@@ -16,7 +16,7 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, Trait, AccountInfo, TrieId, AccountInfoOf, BalanceOf};
+use super::{CodeHash, CodeHashOf, Trait, TrieId, AccountInfoOf, BalanceOf, TrieIdGenerator};
 use system;
 use rstd::cell::RefCell;
 use rstd::rc::Rc;
@@ -87,7 +87,6 @@ impl<A: Clone + Ord> AccountTrieIdMapping<A> {
 }
 
 pub trait AccountDb<T: Trait> {
-	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo>;
 	fn get_or_create_trieid(&self, account: &T::AccountId) -> TrieId;
 	fn get_storage(&self, trie_id: &TrieId, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
@@ -98,13 +97,8 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo> {
-		let res: Option<AccountInfo> = AccountInfoOf::<T>::get(account);
-		res
-	}
 	fn get_or_create_trieid(&self, account: &T::AccountId) -> TrieId {
-		use super::TrieIdGenerator;
-		<Self as AccountDb<T>>::get_account_info(self, account)
+		<AccountInfoOf<T>>::get(account)
 			.map(|s|s.trie_id)
 			.unwrap_or_else(||<T as Trait>::TrieIdGenerator::trie_id(account))
 	}
@@ -216,13 +210,6 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_account_info(&self, account: &T::AccountId) -> Option<AccountInfo> {
-		let v = self.underlying.get_account_info(account);
-		if self.trie_account_cache {
-			v.as_ref().map(|v|self.trie_account.as_ref().borrow_mut().insert(account.clone(), v.trie_id.clone()));
-		}
-		v
-	}
 	fn get_or_create_trieid(&self, account: &T::AccountId) -> TrieId {
 		if self.trie_account_cache {
 			let mut ka_mut = self.trie_account.as_ref().borrow_mut();
