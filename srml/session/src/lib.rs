@@ -200,7 +200,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
 	pub fn ideal_session_duration() -> T::Moment {
-		let block_period: T::Moment = <timestamp::Module<T>>::block_period();
+		let block_period: T::Moment = <timestamp::Module<T>>::minimum_period();
 		let session_length: T::BlockNumber = Self::length();
 		Mul::<T::BlockNumber>::mul(block_period, session_length)
 	}
@@ -289,7 +289,7 @@ mod tests {
 			authorities: NEXT_VALIDATORS.with(|l| l.borrow().iter().cloned().map(UintAuthorityId).collect()),
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
-			period: 5,
+			minimum_period: 5,
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
