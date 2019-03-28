@@ -50,16 +50,6 @@ pub enum V1VoterSetState<H, N> {
 	Live(u64, RoundState<H, N>),
 }
 
-impl<H: Clone, N: Clone> V1VoterSetState<H, N> {
-	/// Yields the current state.
-	pub(crate) fn round(&self) -> (u64, RoundState<H, N>) {
-		match *self {
-			V1VoterSetState::Paused(n, ref s) => (n, s.clone()),
-			V1VoterSetState::Live(n, ref s) => (n, s.clone()),
-		}
-	}
-}
-
 type V0VoterSetState<H, N> = (u64, RoundState<H, N>);
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
