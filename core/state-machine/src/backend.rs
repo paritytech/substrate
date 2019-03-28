@@ -57,7 +57,7 @@ pub trait Backend<H: Hasher> {
 
 	/// get SubTrie information
 	fn child_trie(&self, storage_key: &[u8]) -> Result<Option<SubTrie>, Self::Error> {
-    let prefixed_key = SubTrie::prefix_parent_key(storage_key); 
+		let prefixed_key = SubTrie::prefix_parent_key(storage_key); 
 		Ok(self.storage(&prefixed_key)?
 			.and_then(|n|SubTrie::decode_node_prefixed_parent(&n[..], prefixed_key)))
 	}
@@ -189,12 +189,15 @@ impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
 		for (subtrie, key, val) in changes {
 			match val {
 				Some(v) => { 
-					let mut entry = inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone())).or_default();
+					let mut entry = inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
+						.or_insert_with(||(Default::default(), subtrie.clone()));
 					entry.0.insert(key, v);
 					entry.1 = subtrie.as_ref().cloned(); // TODO EMCH transaction multiple update here is terrible
 				},
 				None => {
-					inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone())).or_default().0.remove(&key);
+					inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
+						.or_insert_with(||(Default::default(), subtrie.clone()))
+						.0.remove(&key);
 				},
 			}
 		}
@@ -228,7 +231,8 @@ impl<H> From<VecTransaction> for InMemory<H> {
 		let mut expanded: MapTransaction = HashMap::new();
 		for (child_key, key, value) in inner {
 			if let Some(value) = value {
-				let mut entry = expanded.entry(child_key.as_ref().map(|s|s.keyspace().clone())).or_default();
+				let mut entry = expanded.entry(child_key.as_ref().map(|s|s.keyspace().clone()))
+					.or_insert_with(||(Default::default(), child_key.clone()));
 				entry.0.insert(key, value);
 				entry.1 = child_key;
 			}
@@ -272,10 +276,22 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		<H as Hasher>::Out: Ord,
 	{
 		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
-			.collect::<HashMap<_, _>>()
+    let mut map_input = existing_pairs.chain(transaction.iter().cloned())
+			.collect::<HashMap<_, _>>();
+
+    // first add child root to delta
+		for (keyspace, (_existing_pairs, subtrie)) in self.inner.iter() {
+			if keyspace != &None {
+        subtrie.as_ref().map(|s|{
+          let child_root = self.child_storage_root(s, ::std::iter::empty()).0;
+          map_input.insert(s.parent_prefixed_key().clone(), Some(s.encoded_with_root(child_root.as_ref())));
+        });
+      }
+    }
+
+
+		let root = trie_root::<H, _, _, _>(map_input
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
@@ -353,7 +369,7 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I, subtr
 	let mut root = <H as Hasher>::Out::default();
 	{
 		if let Some(subtrie) = subtrie.as_ref() {
-			let mut mdb = KeySpacedDBMut(&mut *mdb, subtrie.keyspace());
+			let mut mdb = KeySpacedDBMut::new(&mut *mdb, subtrie.keyspace());
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {

@@ -158,10 +158,10 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-  let mut root = subtrie_root_as_hash::<H>(subtrie);
+	let mut root = subtrie_root_as_hash::<H>(subtrie);
 
 	{
-		let mut db = KeySpacedDBMut(&mut *db, subtrie.keyspace());
+		let mut db = KeySpacedDBMut::new(&mut *db, subtrie.keyspace());
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
@@ -183,8 +183,8 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-  let root = subtrie_root_as_hash::<H>(subtrie);
-	let db = KeySpacedDB(&*db, subtrie.keyspace());
+	let root = subtrie_root_as_hash::<H>(subtrie);
+	let db = KeySpacedDB::new(&*db, subtrie.keyspace());
 
 	let trie = TrieDB::<H>::new(&db, &root)?;
 	let iter = trie.iter()?;
@@ -228,8 +228,8 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-  let root = subtrie_root_as_hash::<H>(subtrie);
-	let db = KeySpacedDB(&*db, subtrie.keyspace());
+	let root = subtrie_root_as_hash::<H>(subtrie);
+	let db = KeySpacedDB::new(&*db, subtrie.keyspace());
 	Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
@@ -242,8 +242,8 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-  let root = subtrie_root_as_hash::<H>(subtrie);
-	let db = KeySpacedDB(&*db, subtrie.keyspace());
+	let root = subtrie_root_as_hash::<H>(subtrie);
+	let db = KeySpacedDB::new(&*db, subtrie.keyspace());
 	Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
@@ -265,9 +265,9 @@ const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
 
 fn subtrie_root_as_hash<H: Hasher> (subtrie: &SubTrie) -> H::Out {
 	let mut root = H::Out::default();
-  let max = std::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
+	let max = std::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
 	root.as_mut()[..max].copy_from_slice(&subtrie.root_initial_value()[..max]);
-  root
+	root
 }
 
 fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
@@ -306,29 +306,62 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
 }
 
-
-pub struct KeySpacedDB<'a, DB>(pub &'a DB, pub &'a substrate_primitives::KeySpace);
-pub struct KeySpacedDBMut<'a, DB>(pub &'a mut DB, pub &'a substrate_primitives::KeySpace);
-
-impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB> where
-	DB: hash_db::HashDBRef<H, T>,
+// TODO EMCH issue to add default value to HashDB trait: avoiding this costy calculation here
+// returning &'a or &'static is tricky in this one (maybe the compiler can accept both).
+// Maybe a const in Hasher trait is right (there is already a const).
+// Otherwhise store it in keyspacedb
+pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a substrate_primitives::KeySpace, H::Out);
+pub struct KeySpacedDBMut<'a, DB, H: Hasher>(&'a mut DB, &'a substrate_primitives::KeySpace, H::Out);
+// TODO rem in favor of using underlying Memorydb values
+const NULL_NODE: &[u8] = &[0];
+impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	H: Hasher,
 {
+	/// instantiate new keyspaced db
+	pub fn new(db: &'a DB, ks: &'a substrate_primitives::KeySpace) -> Self {
+		// TODO remove that it is already defined and probably stored in underlying db
+		let null_node_data = H::hash(NULL_NODE);
+		KeySpacedDB(db, ks, null_node_data) 
+	}
+}
+impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
+	H: Hasher,
+{
+	/// instantiate new keyspaced db
+	pub fn new(db: &'a mut DB, ks: &'a substrate_primitives::KeySpace) -> Self {
+		// TODO remove that it is already defined and probably stored in underlying db
+		let null_node_data = H::hash(&[0]);
+		KeySpacedDBMut(db, ks, null_node_data) 
+	}
+}
+
+impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
+	DB: hash_db::HashDBRef<H, T>,
+	H: Hasher,
+	T: From<&'static [u8]>,
+{
 	fn get(&self, key: &H::Out) -> Option<T> {
-		// TODO use interal buffer for derive key to avoid alloc
+		if key == &self.2 {
+			return Some(NULL_NODE.into());
+		}
+		// TODO use interal buffer for derive key to avoid alloc?
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
 		self.0.get(&derived_key)
 	}
 
 	fn contains(&self, key: &H::Out) -> bool {
+		if key == &self.2 {
+			return true;
+		}
+	
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
 		self.0.contains(&derived_key)
 	}
 }
 
-impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB> where
+impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB, K> where
 	DB: hash_db::PlainDBRef<K, V>,
-	K: AsMut<[u8]> + AsRef<[u8]> + Clone
+	K: AsMut<[u8]> + AsRef<[u8]> + Clone + Hasher
 {
 	fn get(&self, key: &K) -> Option<V> {
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
@@ -340,23 +373,35 @@ impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB> where
 	}
 }
 
-impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB> where
+impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
 	H: Hasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
 	fn get(&self, key: &H::Out) -> Option<T> {
+		if key == &self.2 {
+			return Some(NULL_NODE.into());
+		}
 		// TODO use interal buffer for derive key to avoid alloc
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
 		self.0.get(&derived_key)
 	}
 
 	fn contains(&self, key: &H::Out) -> bool {
+		if key == &self.2 {
+			return true;
+		}
+
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
 		self.0.contains(&derived_key)
 	}
 
 	fn insert(&mut self, value: &[u8]) -> H::Out {
+		if value == NULL_NODE {
+			return self.2.clone();
+		}
+
+
 		// TODO avoid buff for every keyspace db (using internal vec as buf)
 		let key = H::hash(value);
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, &key);
@@ -365,16 +410,22 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB> where
 	}
 
 	fn emplace(&mut self, key: H::Out, value: T) {
+		if key == self.2 {
+      return;
+    }
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, &key);
 		self.0.emplace(derived_key, value)
 	}
 
 	fn remove(&mut self, key: &H::Out) {
+		if key == &self.2 {
+      return;
+    }
 		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
 		self.0.remove(&derived_key)
 	}
 }
-impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB> where
+impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
 	H: Hasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,

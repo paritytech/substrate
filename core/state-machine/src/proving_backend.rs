@@ -267,5 +267,34 @@ mod tests {
 		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
-	// TODO EMCH tast case with child trie in proof!!!
+
+	#[test]
+	fn proof_recorded_and_checked_with_child() {
+		let subtrie1 = SubTrie::new(b"subks1".to_vec(), b"sub1");
+		let subtrie2 = SubTrie::new(b"subks2".to_vec(), b"sub2");
+		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
+			.chain((28..65).map(|i| (Some(subtrie1.clone()), vec![i], Some(vec![i]))))
+			.chain((10..15).map(|i| (Some(subtrie2.clone()), vec![i], Some(vec![i]))))
+			.collect::<Vec<_>>();
+		let in_memory = InMemory::<Blake2Hasher>::default();
+		let in_memory = in_memory.update(contents);
+		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
+		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
+		(28..65).for_each(|i| assert_eq!(in_memory.child_storage(&subtrie1, &[i]).unwrap().unwrap(), vec![i]));
+		(10..15).for_each(|i| assert_eq!(in_memory.child_storage(&subtrie2, &[i]).unwrap().unwrap(), vec![i]));
+
+		let trie = in_memory.try_into_trie_backend().unwrap();
+		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		assert_eq!(in_memory_root, trie_root);
+		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
+
+		let proving = ProvingBackend::new(&trie);
+		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
+
+		let proof = proving.extract_proof();
+
+		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
+	}
+
 }
