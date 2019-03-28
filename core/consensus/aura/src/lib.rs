@@ -453,11 +453,11 @@ fn check_header<B: Block, P: Pair>(
 	};
 	trace!("Unsealing {:?}", hash);
 	if !allow_old_seals && digest_item.is_deprecated() {
-		error!("Header {:?} uses old seal format, rejecting", hash);
+		debug!(target: "aura", "Header {:?} uses old seal format, rejecting", hash);
 		return Err(format!("Header {:?} uses old seal format, rejecting", hash))
 	}
 	let (slot_num, sig) = digest_item.as_aura_seal().ok_or_else(|| {
-		error!("Header {:?} is unsealed", hash);
+		debug!(target: "aura", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
 
