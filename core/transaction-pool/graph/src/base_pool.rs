@@ -371,7 +371,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		let mut to_import = vec![];
 		let mut pruned = vec![];
 		let recently_pruned = &mut self.recently_pruned[self.recently_pruned_idx];
-		self.recently_pruned_idx = (self.recently_pruned_idx + 1) % RECENTLY_PRUNED_TAGS;
+		self.recently_pruned_index = (self.recently_pruned_index + 1) % RECENTLY_PRUNED_TAGS;
 		recently_pruned.clear();
 
 		for tag in tags {
