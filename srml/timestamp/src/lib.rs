@@ -252,19 +252,14 @@ decl_storage! {
 		// TODO: #2133
 		pub BlockPeriod: Option<T::Moment>;
 
-		/// The minimum (and advised) period between blocks. This is half of the period provided
-		/// into the genesis config since the consensus system essentially doubles it for the effective
-		/// period.
-		pub MinimumPeriod get(minimum_period) build(|config: &GenesisConfig<T>| {
-			((config.period.clone() + As::sa(1)) / As::sa(2)).max(As::sa(1))
-		}):
-			T::Moment = T::Moment::sa(3);
+		/// The minimum period between blocks. Beware that this is different to the *expected* period
+		/// that the block production apparatus provides. Your chosen consensus system will generally
+		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
+		/// period on default settings.
+		pub MinimumPeriod get(minimum_period) config(): T::Moment = T::Moment::sa(3);
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
-	}
-	add_extra_genesis {
-		config(period): T::Moment = T::Moment::sa(6);
 	}
 }
 
@@ -363,7 +358,7 @@ mod tests {
 	fn timestamp_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
-			period: 5,
+			minimum_period: 5,
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
@@ -378,7 +373,7 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
-			period: 5,
+			minimum_period: 5,
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
@@ -393,7 +388,7 @@ mod tests {
 	fn block_period_minimum_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
-			period: 10, // minimum period is half of this
+			minimum_period: 5,
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
