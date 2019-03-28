@@ -19,7 +19,7 @@ exit-future = "0.1"
 parking_lot = "0.7.1"
 hex-literal = "0.1"
 parity-codec = "3.2"
-trie-root = "0.11.0"
+trie-root = "0.12.0"
 sr-io = { path = "../core/sr-io" }
 substrate-cli = { path = "../core/cli" }
 primitives = { package = "substrate-primitives", path = "../core/primitives" }

@@ -48,6 +48,8 @@
 
 use crate::codec;
 use crate::rstd::vec::Vec;
+#[cfg(feature = "std")]
+use crate::storage::unhashed::generator::UnhashedStorage;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
 #[doc(hidden)]
@@ -101,20 +103,19 @@ pub trait Storage {
 #[cfg(feature = "std")]
 impl<S: sr_primitives::BuildStorage> Storage for (crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {
 	fn exists(&self, key: &[u8]) -> bool {
-		self.0.borrow().contains_key(S::hash(key).as_ref())
+		UnhashedStorage::exists(self, &S::hash(key))
 	}
 
 	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		self.0.borrow().get(S::hash(key).as_ref())
-			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
+		UnhashedStorage::get(self, &S::hash(key))
 	}
 
 	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		self.0.borrow_mut().insert(S::hash(key).to_vec(), codec::Encode::encode(val));
+		UnhashedStorage::put(self, &S::hash(key), val)
 	}
 
 	fn kill(&self, key: &[u8]) {
-		self.0.borrow_mut().remove(S::hash(key).as_ref());
+		UnhashedStorage::kill(self, &S::hash(key))
 	}
 }
 

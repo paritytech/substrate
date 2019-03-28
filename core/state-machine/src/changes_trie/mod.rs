@@ -77,7 +77,7 @@ pub trait RootsStorage<H: Hasher>: Send + Sync {
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher>: RootsStorage<H> {
 	/// Get a trie node.
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
 }
 
 /// Changes trie configuration.
