@@ -226,7 +226,7 @@ macro_rules! __decl_generic_event {
 		$crate::__decl_generic_event!(@format_generic
 			$( #[ $attr ] )*;
 			$event_generic_param;
-			$($instance $( = $event_default_instance)? )?;
+			$( $instance $( = $event_default_instance)? )?;
 			{ $($rest)* };
 			{ $($parsed)*, $generic_rename = $generic_type };
 		);
