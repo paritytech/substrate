@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-/// Initalise a key-value collection from array.
+/// Initialize a key-value collection from array.
 ///
 /// Creates a vector of given pairs and calls `collect` on the iterator from it.
 /// Can be used to create a `HashMap`.
