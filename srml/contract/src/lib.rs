@@ -39,7 +39,7 @@
 //! This module requires performing some finalization steps at the end of the block. If not performed
 //! the module will have incorrect behavior.
 //!
-//! Thus [`Module::on_finalise`] must be called at the end of the block. The order in relation to
+//! Thus [`Module::on_finalize`] must be called at the end of the block. The order in relation to
 //! the other module doesn't matter.
 //!
 //! ## Account killing
@@ -48,7 +48,7 @@
 //! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
 //! code and storage of the account.
 //!
-//! [`Module::on_finalise`]: struct.Module.html#impl-OnFinalise
+//! [`Module::on_finalize`]: struct.Module.html#impl-OnFinalize
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -339,7 +339,7 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		fn on_finalise() {
+		fn on_finalize() {
 			<GasSpent<T>>::kill();
 		}
 	}

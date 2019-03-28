@@ -105,7 +105,7 @@ impl<T: OffchainExt + ?Sized> OffchainExt for Box<T> {
 	}
 }
 
-/// Hex-serialised shim for `Vec<u8>`.
+/// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);

@@ -224,7 +224,7 @@ decl_module! {
 			}
 		}
 
-		fn on_finalise() {
+		fn on_finalize() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
 				if current_authorities != original_authorities {

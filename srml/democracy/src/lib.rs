@@ -153,7 +153,7 @@ decl_module! {
 			Ok(())
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				runtime_io::print(e);
 			}

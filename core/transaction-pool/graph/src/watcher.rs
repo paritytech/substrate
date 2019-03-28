@@ -30,8 +30,8 @@ pub enum Status<H, H2> {
 	Future,
 	/// Extrinsic is part of the ready queue.
 	Ready,
-	/// Extrinsic has been finalised in block with given hash.
-	Finalised(H2),
+	/// Extrinsic has been finalized in block with given hash.
+	Finalized(H2),
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
 	Usurped(H),
 	/// The extrinsic has been broadcast to the given peers.
@@ -70,14 +70,14 @@ impl<H, H2> Watcher<H, H2> {
 #[derive(Debug)]
 pub struct Sender<H, H2> {
 	receivers: Vec<mpsc::UnboundedSender<Status<H, H2>>>,
-	finalised: bool,
+	finalized: bool,
 }
 
 impl<H, H2> Default for Sender<H, H2> {
 	fn default() -> Self {
 		Sender {
 			receivers: Default::default(),
-			finalised: false,
+			finalized: false,
 		}
 	}
 }
@@ -108,17 +108,17 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 		self.send(Status::Usurped(hash))
 	}
 
-	/// Extrinsic has been finalised in block with given hash.
-	pub fn finalised(&mut self, hash: H2) {
-		self.send(Status::Finalised(hash));
-		self.finalised = true;
+	/// Extrinsic has been finalized in block with given hash.
+	pub fn finalized(&mut self, hash: H2) {
+		self.send(Status::Finalized(hash));
+		self.finalized = true;
 	}
 
 	/// Extrinsic has been marked as invalid by the block builder.
 	pub fn invalid(&mut self) {
 		self.send(Status::Invalid);
-		// we mark as finalised as there are no more notifications
-		self.finalised = true;
+		// we mark as finalized as there are no more notifications
+		self.finalized = true;
 	}
 
 	/// Transaction has been dropped from the pool because of the limit.
@@ -132,9 +132,9 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	}
 
 
-	/// Returns true if the are no more listeners for this extrinsic or it was finalised.
+	/// Returns true if the are no more listeners for this extrinsic or it was finalized.
 	pub fn is_done(&self) -> bool {
-		self.finalised || self.receivers.is_empty()
+		self.finalized || self.receivers.is_empty()
 	}
 
 	fn send(&mut self, status: Status<H, H2>) {

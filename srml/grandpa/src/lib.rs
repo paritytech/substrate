@@ -221,7 +221,7 @@ decl_module! {
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
-		fn on_finalise(block_number: T::BlockNumber) {
+		fn on_finalize(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				if block_number == pending_change.scheduled_at {
 					if let Some(median) = pending_change.forced {

@@ -380,7 +380,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
+	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
@@ -392,7 +392,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove temporary "environment" entries in storage.
-	pub fn finalise() -> T::Header {
+	pub fn finalize() -> T::Header {
 		<RandomSeed<T>>::kill();
 		<ExtrinsicCount<T>>::kill();
 		<AllExtrinsicsLen<T>>::kill();
@@ -448,7 +448,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
-	/// `initialise` for tests that don't need to bother with the other environment entries.
+	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
@@ -461,14 +461,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
-	/// `initialise` for tests that don't need to bother with the other environment entries.
+	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_parent_hash(n: T::Hash) {
 		<ParentHash<T>>::put(n);
 	}
 
 	/// Set the random seed to something in particular. Can be used as an alternative to
-	/// `initialise` for tests that don't need to bother with the other environment entries.
+	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_random_seed(seed: T::Hash) {
 		<RandomSeed<T>>::put(seed);
@@ -595,19 +595,19 @@ mod tests {
 	#[test]
 	fn deposit_event_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			System::initialise(&1, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into());
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
-			System::finalise();
+			System::finalize();
 			assert_eq!(System::events(), vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]);
 
-			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0);
 			System::note_applied_extrinsic(&Err(""), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
-			System::finalise();
+			System::finalize();
 			assert_eq!(System::events(), vec![
 				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
 				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16 },

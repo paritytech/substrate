@@ -36,7 +36,7 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 . Buggy behaviour.
 . Undue maintenance burden.
 . Breaking with house coding style.
-. Pessimisation (i.e. reduction of speed as measured in the projects benchmarks).
+. Pessimization (i.e. reduction of speed as measured in the projects benchmarks).
 . Feature reduction (i.e. it removes some aspect of functionality that a significant minority of users rely on).
 . Uselessness (i.e. it does not strictly add a feature or fix a known issue).
 

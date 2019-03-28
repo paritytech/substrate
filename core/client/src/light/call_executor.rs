@@ -118,14 +118,14 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
-		if !changes.is_empty() || initialised_block.is_some() {
+		if !changes.is_empty() || initialized_block.is_some() {
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
@@ -245,7 +245,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		method: &str,
 		call_data: &[u8],
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		prepare_environment_block: PB,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -270,7 +270,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				method,
 				call_data,
 				changes,
-				initialised_block,
+				initialized_block,
 				prepare_environment_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
@@ -291,7 +291,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				method,
 				call_data,
 				changes,
-				initialised_block,
+				initialized_block,
 				prepare_environment_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
@@ -388,7 +388,7 @@ pub fn prove_execution<Block, S, E>(
 	let (_, init_proof) = executor.prove_at_trie_state(
 		&trie_state,
 		&mut changes,
-		"Core_initialise_block",
+		"Core_initialize_block",
 		&header.encode(),
 	)?;
 
@@ -435,7 +435,7 @@ pub fn check_execution_proof<Header, E, H>(
 		&trie_backend,
 		&mut changes,
 		executor,
-		"Core_initialise_block",
+		"Core_initialize_block",
 		&next_block.encode(),
 	)?;
 
@@ -516,12 +516,12 @@ mod tests {
 		assert_eq!(remote, local);
 
 		// check method that requires environment
-		let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalise_block");
+		let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalize_block");
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 1);
 
 		// check method that requires environment
-		let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalise_block");
+		let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalize_block");
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 3);
 	}

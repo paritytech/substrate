@@ -44,7 +44,7 @@ pub struct CallReceipt {
 /// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
 ///
-/// This interface is specialised to an account of the executing code, so all
+/// This interface is specialized to an account of the executing code, so all
 /// operations are implicitly performed on that account.
 pub trait Ext {
 	type T: Trait;

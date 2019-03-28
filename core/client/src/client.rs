@@ -1351,7 +1351,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
 	) -> error::Result<NativeOrEncoded<R>> {
@@ -1373,7 +1373,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			function,
 			&args,
 			changes,
-			initialised_block,
+			initialized_block,
 			|| self.prepare_environment_block(at),
 			manager,
 			native_call,
@@ -1630,7 +1630,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn client_initialises_from_genesis_ok() {
+	fn client_initializes_from_genesis_ok() {
 		let client = test_client::new();
 
 		assert_eq!(

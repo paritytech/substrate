@@ -182,7 +182,7 @@ mod tests {
 	#[test]
 	fn basic_insert_remove_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			// initialised during genesis
+			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
 
 			// get / insert / take
