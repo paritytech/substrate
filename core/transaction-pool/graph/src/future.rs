@@ -71,10 +71,19 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 	///
 	/// Computes the set of missing tags based on the requirements and tags that
 	/// are provided by all transactions in the ready queue.
-	pub fn new(transaction: Transaction<Hash, Ex>, provided: &HashMap<Tag, Hash>) -> Self {
+	pub fn new(
+		transaction: Transaction<Hash, Ex>,
+		provided: &HashMap<Tag, Hash>,
+		recently_pruned: &[HashSet<Tag>],
+	) -> Self {
 		let missing_tags = transaction.requires
 			.iter()
-			.filter(|tag| !provided.contains_key(&**tag))
+			.filter(|tag| {
+				// is true if the tag is already satisfied either via transaction in the pool
+				// or one that was recently included.
+				let is_provided = provided.contains_key(&**tag) || recently_pruned.iter().any(|x| x.contains(&**tag));
+				!is_provided
+			})
 			.cloned()
 			.collect();
 

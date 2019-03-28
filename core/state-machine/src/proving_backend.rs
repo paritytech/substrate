@@ -21,7 +21,7 @@ use log::debug;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{Recorder, MemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
+use trie::{Recorder, MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
@@ -40,7 +40,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		H::Out: HeapSizeOf,
 {
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
@@ -54,7 +54,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	pub fn child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
 
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
@@ -66,7 +66,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	}
 
 	pub fn record_all_keys(&mut self) {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
@@ -116,8 +116,8 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;
-	type Transaction = MemoryDB<H>;
-	type TrieBackendStorage = MemoryDB<H>;
+	type Transaction = S::Overlay;
+	type TrieBackendStorage = PrefixedMemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
@@ -151,7 +151,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.keys(prefix)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.backend.storage_root(delta)
@@ -181,7 +181,7 @@ where
 {
 	let db = create_proof_check_backend_storage(proof);
 
-	if !db.contains(&root) {
+	if !db.contains(&root, &[]) {
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
@@ -198,7 +198,7 @@ where
 {
 	let mut db = MemoryDB::default();
 	for item in proof {
-		db.insert(&item);
+		db.insert(&[], &item);
 	}
 	db
 }
@@ -210,7 +210,7 @@ mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher};
 
-	fn test_proving<'a>(trie_backend: &'a TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher>) -> ProvingBackend<'a, MemoryDB<Blake2Hasher>, Blake2Hasher> {
+	fn test_proving<'a>(trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
 		ProvingBackend::new(trie_backend)
 	}
 

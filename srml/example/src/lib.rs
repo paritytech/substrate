@@ -66,7 +66,6 @@ decl_storage! {
 		// A map that has enumerable entries.
 		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
 
-
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
 	}

@@ -508,8 +508,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
-			fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
-				self.storage.get(key)
+			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+				self.storage.get(key, prefix)
 			}
 		}
 
