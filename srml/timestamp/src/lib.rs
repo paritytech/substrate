@@ -230,7 +230,6 @@ decl_module! {
 		// Manage upgrade. Remove after all networks upgraded.
 		fn on_initialise() {
 			if let Some(period) = <BlockPeriod<T>>::take() {
-				println!("Upgrading {:?} {}", period, <MinimumPeriod<T>>::exists());
 				if !<MinimumPeriod<T>>::exists() {
 					<MinimumPeriod<T>>::put(period)
 				}
