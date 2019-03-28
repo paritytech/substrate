@@ -157,7 +157,7 @@ pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	/// This is used to make sure we don't accidentally put
 	/// transactions to future in case they were just stuck in verification.
 	recently_pruned: [HashSet<Tag>; RECENTLY_PRUNED_TAGS],
-	recently_pruned_idx: usize,
+	recently_pruned_index: usize,
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
