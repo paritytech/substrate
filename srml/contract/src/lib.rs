@@ -267,10 +267,10 @@ decl_module! {
 		/// Makes a call to an account, optionally transferring some balance.
 		///
 		/// * If the account is a smart-contract account, the associated code will be 
-		/// executed and any balance will be transferred.
-		/// * If the account is a regular account, any balance will be transferred.
+		/// executed and any value will be transferred.
+		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`, 
-		/// a regular account will be created and any balance will be transferred.
+		/// a regular account will be created and any value will be transferred.
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
