@@ -219,7 +219,7 @@ decl_module! {
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
 				Self::now().is_zero() || now >= Self::now() + <MinimumPeriod<T>>::get(),
-				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
+				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
 			<Self as Store>::Now::put(now.clone());
 			<Self as Store>::DidUpdate::put(true);
