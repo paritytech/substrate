@@ -196,7 +196,7 @@ macro_rules! __decl_generic_event {
 			$event_generic_param;
 			$($instance $( = $event_default_instance)? )?;
 			{ $($events)* };
-			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type};
+			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type };
 		);
 	};
 	// Finish formatting on a named one
