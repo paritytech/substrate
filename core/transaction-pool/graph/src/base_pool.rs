@@ -19,6 +19,7 @@
 //! For a more full-featured pool, have a look at the `pool` module.
 
 use std::{
+	collections::HashSet,
 	fmt,
 	hash,
 	sync::Arc,
@@ -134,6 +135,9 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 	}
 }
 
+/// Store last pruned tags for given number of invocations.
+const RECENTLY_PRUNED_TAGS: usize = 2;
+
 /// Transaction pool.
 ///
 /// Builds a dependency graph for all transactions in the pool and returns
@@ -148,6 +152,12 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	future: FutureTransactions<Hash, Ex>,
 	ready: ReadyTransactions<Hash, Ex>,
+	/// Store recently pruned tags (for last two invocations).
+	///
+	/// This is used to make sure we don't accidentally put
+	/// transactions to future in case they were just stuck in verification.
+	recently_pruned: [HashSet<Tag>; RECENTLY_PRUNED_TAGS],
+	recently_pruned_index: usize,
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
@@ -155,6 +165,8 @@ impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
 		BasePool {
 			future: Default::default(),
 			ready: Default::default(),
+			recently_pruned: Default::default(),
+			recently_pruned_index: 0,
 		}
 	}
 }
@@ -175,7 +187,11 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 			bail!(error::ErrorKind::AlreadyImported(Box::new(tx.hash.clone())))
 		}
 
-		let tx = WaitingTransaction::new(tx, self.ready.provided_tags());
+		let tx = WaitingTransaction::new(
+			tx,
+			self.ready.provided_tags(),
+			&self.recently_pruned,
+		);
 		trace!(target: "txpool", "[{:?}] {:?}", tx.transaction.hash, tx);
 		debug!(target: "txpool", "[{:?}] Importing to {}", tx.transaction.hash, if tx.is_ready() { "ready" } else { "future" });
 
@@ -354,12 +370,17 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	pub fn prune_tags(&mut self, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash, Ex> {
 		let mut to_import = vec![];
 		let mut pruned = vec![];
+		let recently_pruned = &mut self.recently_pruned[self.recently_pruned_index];
+		self.recently_pruned_index = (self.recently_pruned_index + 1) % RECENTLY_PRUNED_TAGS;
+		recently_pruned.clear();
 
 		for tag in tags {
 			// make sure to promote any future transactions that could be unlocked
 			to_import.append(&mut self.future.satisfy_tags(::std::iter::once(&tag)));
 			// and actually prune transactions in ready queue
-			pruned.append(&mut self.ready.prune_tags(tag));
+			pruned.append(&mut self.ready.prune_tags(tag.clone()));
+			// store the tags for next submission
+			recently_pruned.insert(tag);
 		}
 
 		let mut promoted = vec![];
@@ -663,7 +684,6 @@ mod tests {
 		assert_eq!(pool.future.len(), 0);
 	}
 
-
 	#[test]
 	fn should_handle_a_cycle_with_low_priority() {
 		// given
@@ -798,7 +818,6 @@ mod tests {
 		assert_eq!(pool.future.len(), 0);
 	}
 
-
 	#[test]
 	fn should_prune_ready_transactions() {
 		// given
@@ -887,5 +906,4 @@ mod tests {
 			r#"Transaction { hash: 4, priority: 1000, valid_till: 64, bytes: 1, requires: [03,02], provides: [04], data: [4]}"#.to_owned()
 		);
 	}
-
 }
