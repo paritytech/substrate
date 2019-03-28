@@ -212,7 +212,7 @@ macro_rules! __decl_generic_event {
 			$event_generic_param;
 			$($instance $( = $event_default_instance)? )?;
 			{ $($events)* };
-			{ $($parsed)*, $generic_rename = $generic_type};
+			{ $($parsed)*, $generic_rename = $generic_type };
 		);
 	};
 	// Parse named
