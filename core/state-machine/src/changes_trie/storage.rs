@@ -128,6 +128,8 @@ impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendAdapter<'a, H, S> {
 }
 
 impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, S> {
+	type Overlay = MemoryDB<H>;
+
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}

@@ -22,8 +22,9 @@ use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher};
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError, default_child_trie_root, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
+use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError, default_child_trie_root, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
 use crate::changes_trie::Storage as ChangesTrieStorage;
+use crate::backend::Consolidate;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
@@ -63,7 +64,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Get the value of storage at given key.
 	pub fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
@@ -78,7 +79,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
 
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
@@ -99,7 +100,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			}
 		};
 
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
@@ -112,7 +113,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
@@ -145,7 +146,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	storage: &'a S,
-	overlay: &'a mut MemoryDB<H>,
+	overlay: &'a mut S::Overlay,
 }
 
 impl<'a,
@@ -171,7 +172,7 @@ impl<'a,
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
-	pub fn new(storage: &'a S, overlay: &'a mut MemoryDB<H>) -> Self {
+	pub fn new(storage: &'a S, overlay: &'a mut S::Overlay) -> Self {
 		Ephemeral {
 			storage,
 			overlay,
@@ -187,7 +188,7 @@ impl<'a,
 	where H::Out: HeapSizeOf
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		if let Some(val) = hash_db::PlainDB::get(self.overlay, key) {
+		if let Some(val) = hash_db::HashDB::get(self.overlay, key, &[]) {
 			Some(val)
 		} else {
 			match self.storage.get(&key, &[]) {
@@ -201,15 +202,15 @@ impl<'a,
 	}
 
 	fn contains(&self, key: &H::Out) -> bool {
-		hash_db::PlainDB::get(self, key).is_some()
+		hash_db::HashDB::get(self, key, &[]).is_some()
 	}
 
 	fn emplace(&mut self, key: H::Out, value: DBValue) {
-		hash_db::PlainDB::emplace(self.overlay, key, value)
+		hash_db::HashDB::emplace(self.overlay, key, &[], value)
 	}
 
 	fn remove(&mut self, key: &H::Out) {
-		hash_db::PlainDB::remove(self.overlay, key)
+		hash_db::HashDB::remove(self.overlay, key, &[])
 	}
 }
 
@@ -275,19 +276,33 @@ impl<'a,
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
+	/// Type of in-memory overlay.
+	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
 }
 
 // This implementation is used by normal storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
+	type Overlay = PrefixedMemoryDB<H>;
+
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		Storage::<H>::get(self.deref(), key, prefix)
 	}
 }
 
 // This implementation is used by test storage trie clients.
+impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
+	type Overlay = PrefixedMemoryDB<H>;
+
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+		Ok(hash_db::HashDB::get(self, key, prefix))
+	}
+}
+
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
+	type Overlay = MemoryDB<H>;
+
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
@@ -295,6 +310,8 @@ impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 
 // This implementation is used by changes trie clients.
 impl<'a, S, H: Hasher> TrieBackendStorage<H> for &'a S where S: ChangesTrieStorage<H> {
+	type Overlay = MemoryDB<H>;
+
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		ChangesTrieStorage::<H>::get(*self, key, prefix)
 	}

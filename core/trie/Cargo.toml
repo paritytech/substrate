@@ -20,9 +20,9 @@ memory-db = { version = "0.12", optional = true }
 
 [dev-dependencies]
 substrate-primitives = { path = "../primitives" }
-trie-bench = { version = "0.11" }
-trie-standardmap = { version = "0.11" }
-keccak-hasher = { version = "0.11" }
+trie-bench = { version = "0.12" }
+trie-standardmap = { version = "0.12" }
+keccak-hasher = { version = "0.12" }
 criterion = "0.2"
 hex-literal = "0.1.0"
 

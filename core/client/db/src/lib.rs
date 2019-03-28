@@ -40,7 +40,7 @@ use client::ExecutionStrategies;
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
-use trie::{MemoryDB, prefixed_key};
+use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::RwLock;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
@@ -259,7 +259,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, DbState, Block>,
-	db_updates: MemoryDB<H>,
+	db_updates: PrefixedMemoryDB<H>,
 	storage_updates: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	changes_trie_updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
@@ -310,7 +310,7 @@ where Block: BlockT<Hash=H256>,
 		// currently authorities are not cached on full nodes
 	}
 
-	fn update_db_storage(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
+	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -321,7 +321,7 @@ where Block: BlockT<Hash=H256>,
 			return Err(client::error::ErrorKind::GenesisInvalid.into());
 		}
 
-		let mut transaction: MemoryDB<Blake2Hasher> = Default::default();
+		let mut transaction: PrefixedMemoryDB<Blake2Hasher> = Default::default();
 
 		for (child_key, child_map) in children {
 			if !well_known_keys::is_child_storage_key(&child_key) {
@@ -1032,7 +1032,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			db_updates: MemoryDB::default(),
+			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			changes_trie_updates: MemoryDB::default(),
 			aux_ops: Vec::new(),
@@ -1550,7 +1550,7 @@ mod tests {
 			assert_eq!(backend.changes_tries_storage.root(&anchor, block), Ok(Some(changes_root)));
 
 			for (key, (val, _)) in changes_trie_update.drain() {
-				assert_eq!(backend.changes_trie_storage().unwrap().get(&H256::from_slice(key.as_slice()), &[]), Ok(Some(val)));
+				assert_eq!(backend.changes_trie_storage().unwrap().get(&key, &[]), Ok(Some(val)));
 			}
 		};
 
