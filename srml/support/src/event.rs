@@ -253,7 +253,7 @@ macro_rules! __decl_generic_event {
 		$event_generic_param:ident;
 		$($instance:ident $( = $event_default_instance:path)? )?;
 		{ $generic_type:ty, $($rest:tt)* };
-		{$($parsed:tt)*};
+		{ $($parsed:tt)* };
 	) => {
 		$crate::__decl_generic_event!(@cannot_parse $generic_type);
 	};
