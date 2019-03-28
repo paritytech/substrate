@@ -603,7 +603,13 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, P>(slot_now + 1, header, hash, &authorities[..], self.allow_old_seals)?;
+		let checked_header = check_header::<B, P>(
+			slot_now + 1,
+			header,
+			hash,
+			&authorities[..],
+			self.allow_old_seals,
+		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
