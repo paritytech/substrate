@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 47,
-	impl_version: 47,
+	spec_version: 49,
+	impl_version: 49,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -167,6 +167,7 @@ impl treasury::Trait for Runtime {
 }
 
 impl contract::Trait for Runtime {
+	type Currency = balances::Module<Runtime>;
 	type Call = Call;
 	type Event = Event;
 	type Gas = u64;

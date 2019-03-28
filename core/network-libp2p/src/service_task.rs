@@ -313,7 +313,12 @@ where TMessage: CustomMessage + Send + 'static {
 	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { peer_id, version, .. }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { peer_id, version, endpoint }))) => {
+					self.nodes_info.insert(peer_id.clone(), NodeInfo {
+						endpoint,
+						client_version: None,
+						latest_ping: None,
+					});
 					let debug_info = self.peer_debug_info(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::OpenedCustomProtocol {
 						peer_id,
@@ -323,6 +328,7 @@ where TMessage: CustomMessage + Send + 'static {
 				}
 				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { peer_id, .. }))) => {
 					let debug_info = self.peer_debug_info(&peer_id);
+					self.nodes_info.remove(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
 						peer_id,
 						debug_info,
