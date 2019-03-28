@@ -216,7 +216,7 @@
 //! Essentially, a validator gets slashed once they have been reported more than [`OfflineSlashGrace`] + [`unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold) times.
 //! Getting slashed due to offline report always leads to being _unstaked_ (_i.e._ removed as a validator candidate) as the consequence.
 //!
-//! The base slash value is computed per-slash-event by multiplying [`SlotStake`] and the `total` [`Exposure`]. This value
+//! The base slash value is computed _per slash-event_ by multiplying [`OfflineSlash`] and the `total` [`Exposure`]. This value
 //! is then multiplied by `2.pow(unstake_threshold)` to obtain the final slash value.
 //! All individual accounts' punishments are capped at their total stake (NOTE: This cap should never come into force in a correctly implemented, non-corrupted, well-configured system).
 //!
@@ -241,7 +241,7 @@
 //!
 //! ## GenesisConfig
 //!
-//! See the [`GensisConfig`] for a list of attributes that can be provided.
+//! See the [`GenesisConfig`] for a list of attributes that can be provided.
 //!
 //! ## Related Modules
 //!
