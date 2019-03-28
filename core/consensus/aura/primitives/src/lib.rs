@@ -21,6 +21,7 @@
 use substrate_client::decl_runtime_apis;
 use runtime_primitives::ConsensusEngineId;
 
+/// The `ConsensusEngineId` of AuRa.
 pub const AURA: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
 decl_runtime_apis! {

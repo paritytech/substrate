@@ -104,10 +104,10 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a, SealSignature: 'a> {
 	#[deprecated]
 	Seal(&'a u64, &'a SealSignature),
 	/// A sealed signature for testing
-	Consensus(&'a ConsensusEngineId, &'a Vec<u8>),
+	Consensus(&'a ConsensusEngineId, &'a [u8]),
 	/// Any 'non-system' digest item, opaque to the native code.
 	/// Reference to `DigestItem::Other`.
-	Other(&'a Vec<u8>),
+	Other(&'a [u8]),
 }
 
 /// Type of the digest item. Used to gain explicit control over `DigestItem` encoding

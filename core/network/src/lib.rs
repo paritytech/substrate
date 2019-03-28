@@ -53,5 +53,3 @@ pub use error::Error;
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;
-#[doc(hidden)]
-pub use runtime_primitives::ConsensusEngineId;
