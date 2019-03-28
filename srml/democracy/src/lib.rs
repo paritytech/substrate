@@ -183,13 +183,21 @@ decl_module! {
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
+			// Currency is locked indefinitely as long as it's delegated.
+			T::Currency::extend_lock(DEMOCRACY_ID, &who, Bounded::max_value(), T::BlockNumber::max_value(), WithdrawReason::Transfer.into());
 			Self::deposit_event(RawEvent::Delegated(who, to));
 		}
 
 		/// Undelegate vote.
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::remove(who.clone());
+			ensure!(<Delegations<T>>::exists(&who), "not delegated");
+			let d = <Delegations<T>>::take(&who);
+			// Indefinite lock is reduced to the maximum voting lock that could be possible.
+			let lock_period = Self::public_delay();
+			let now = <system::Module<T>>::block_number();
+			let locked_until = now + lock_period * T::BlockNumber::sa(d.1 as u64);
+			T::Currency::set_lock(DEMOCRACY_ID, &who, Bounded::max_value(), locked_until, WithdrawReason::Transfer.into());
 			Self::deposit_event(RawEvent::Undelegated(who));
 		}
 	}
