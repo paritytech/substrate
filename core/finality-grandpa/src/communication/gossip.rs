@@ -273,6 +273,26 @@ impl<N> VersionedNeighborPacket<N> {
 	}
 }
 
+// cost scalars for reporting peers.
+mod cost {
+	pub(super) const PAST_REJECTION: i32 = -50;
+	pub(super) const BAD_SIGNATURE: i32 = -100;
+	pub(super) const MALFORMED_COMMIT: i32 = -1000;
+	pub(super) const FUTURE_MESSAGE: i32 = -500;
+
+	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
+	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
+	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
+	pub(super) const PER_BLOCK_LOADED: i32 = -10;
+}
+
+// benefit scalars for reporting peers.
+mod benefit {
+	pub(super) const ROUND_MESSAGE: i32 = 100;
+	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
+	pub(super) const PER_EQUIVOCATION: i32 = 10;
+}
+
 /// Misbehavior that peers can perform.
 ///
 /// `cost` gives a cost that can be used to perform cost/benefit analysis of a
@@ -299,31 +319,20 @@ impl Misbehavior {
 		use Misbehavior::*;
 
 		match *self {
-			InvalidViewChange => -500,
-			UndecodablePacket(bytes) =>  bytes.saturating_mul(-5),
+			InvalidViewChange => cost::INVALID_VIEW_CHANGE,
+			UndecodablePacket(bytes) =>  bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
 			BadCommitMessage { signatures_checked, blocks_loaded, equivocations_caught } => {
-				let cost = 25i32.saturating_mul(signatures_checked)
-					.saturating_add(10i32.saturating_mul(blocks_loaded));
-				let benefit = equivocations_caught.saturating_mul(10);
+				let cost = cost::PER_SIGNATURE_CHECKED
+					.saturating_mul(signatures_checked)
+					.saturating_add(cost::PER_BLOCK_LOADED.saturating_mul(blocks_loaded));
 
-				(benefit as i32).saturating_sub(cost as i32)
+				let benefit = equivocations_caught.saturating_mul(benefit::PER_EQUIVOCATION);
+
+				(benefit as i32).saturating_add(cost as i32)
 			},
-			FutureMessage => -500,
+			FutureMessage => cost::FUTURE_MESSAGE,
 		}
 	}
-}
-
-// cost scalars for reporting peers.
-mod cost {
-	pub(super) const PAST_REJECTION: i32 = -50;
-	pub(super) const BAD_SIGNATURE: i32 = -100;
-	pub(super) const MALFORMED_COMMIT: i32 = -1000;
-}
-
-// benefit scalars for reporting peers.
-mod benefit {
-	pub(super) const ROUND_MESSAGE: i32 = 100;
-	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
 }
 
 struct PeerInfo<N> {
@@ -622,24 +631,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 	fn report(&self, _who: &PeerId, _cost_benefit: i32) {
 		// report
 	}
-}
 
-impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
-		let packet_data = {
-			let mut inner = self.inner.write();
-			inner.peers.new_peer(who.clone());
-			inner.construct_neighbor_packet().encode()
-		};
-		context.send_message(who, packet_data);
-	}
-
-	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: &PeerId) {
-		self.inner.write().peers.peer_disconnected(who);
-	}
-
-	fn validate(&self, context: &mut ValidatorContext<Block>, who: &PeerId, mut data: &[u8])
-		-> network_gossip::ValidationResult<Block::Hash>
+	fn do_validate(&self, who: &PeerId, mut data: &[u8])
+		-> (Action<Block::Hash>, Vec<Block::Hash>)
 	{
 		let mut broadcast_topics = Vec::new();
 		let action = {
@@ -666,6 +660,29 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				}
 			}
 		};
+
+		(action, broadcast_topics)
+	}
+}
+
+impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
+	fn new_peer(&self, context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
+		let packet_data = {
+			let mut inner = self.inner.write();
+			inner.peers.new_peer(who.clone());
+			inner.construct_neighbor_packet().encode()
+		};
+		context.send_message(who, packet_data);
+	}
+
+	fn peer_disconnected(&self, _context: &mut ValidatorContext<Block>, who: &PeerId) {
+		self.inner.write().peers.peer_disconnected(who);
+	}
+
+	fn validate(&self, context: &mut ValidatorContext<Block>, who: &PeerId, data: &[u8])
+		-> network_gossip::ValidationResult<Block::Hash>
+	{
+		let (action, broadcast_topics) = self.do_validate(who, data);
 
 		// not with lock held!
 		for topic in broadcast_topics {
@@ -775,6 +792,48 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use network_gossip::Validator as GossipValidatorT;
+	use network::test::Block;
+
+	// some random config (not really needed)
+	fn config() -> crate::Config {
+		crate::Config {
+			gossip_duration: Duration::from_millis(10),
+			justification_period: 256,
+			local_key: None,
+			name: None,
+		}
+	}
+
+	#[derive(Clone)]
+	struct StubNetwork;
+
+	impl<Block: BlockT> super::Network<Block> for StubNetwork {
+		type In = futures::stream::Empty<network_gossip::TopicNotification, ()>;
+
+		fn messages_for(&self, _topic: Block::Hash) -> Self::In {
+			futures::stream::empty()
+		}
+
+		fn register_validator(
+			&self,
+			_validator: std::sync::Arc<dyn network_gossip::Validator<Block>>,
+		) {
+
+		}
+
+		fn gossip_message(&self, _topic: Block::Hash, _data: Vec<u8>, _force: bool) {
+
+		}
+
+		fn send_message(&self, _who: Vec<network::PeerId>, _data: Vec<u8>) {
+
+		}
+
+		fn announce(&self, _block: Block::Hash) {
+
+		}
+	}
 
 	#[test]
 	fn view_vote_rules() {
@@ -913,5 +972,35 @@ mod tests {
 			set_id: SetId(9),
 			commit_finalized_height: 10,
 		});
+	}
+
+	#[test]
+	fn messages_not_expired_immediately() {
+		let val = GossipValidator::<Block>::new(config());
+
+		let set_id = 1;
+
+		for round_num in 1u64..10 {
+			val.note_round(Round(round_num), SetId(set_id), &StubNetwork);
+		}
+
+		{
+			let mut is_expired = val.message_expired();
+			let last_kept_round = 10u64 - KEEP_RECENT_ROUNDS as u64 - 1;
+
+			// messages from old rounds are expired.
+			for round_num in 1u64..last_kept_round {
+				println!("{} should be expired?", round_num);
+				let topic = crate::communication::round_topic::<Block>(round_num, 1);
+				assert!(is_expired(topic, &[1, 2, 3]));
+			}
+
+			// messages from not-too-old rounds are not expired.
+			for round_num in last_kept_round..10 {
+				println!("{} should not be expired?", round_num);
+				let topic = crate::communication::round_topic::<Block>(round_num, 1);
+				assert!(!is_expired(topic, &[1, 2, 3]));
+			}
+		}
 	}
 }
