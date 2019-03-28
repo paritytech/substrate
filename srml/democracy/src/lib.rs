@@ -501,7 +501,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero for Module<T> {
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<Proxy<T>>::remove(who)
 	}
