@@ -98,8 +98,8 @@ pub use service_integration::{LinkHalfForService, BlockImportForService};
 pub use communication::Network;
 pub use finality_proof::{prove_finality, check_finality_proof};
 
-use aux_schema::{PersistentData, VoterSetState};
-use environment::Environment;
+use aux_schema::PersistentData;
+use environment::{Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
@@ -283,7 +283,7 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
-	persistent_data: PersistentData<Block::Hash, NumberFor<Block>>,
+	persistent_data: PersistentData<Block>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
@@ -490,7 +490,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		set_id: authority_set.set_id(),
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
-		last_completed: environment::LastCompletedRound::new(set_state.round()),
+		voter_set_state: SharedVoterSetState::new(set_state.clone()),
 	});
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
@@ -502,7 +502,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		);
 
 		let mut maybe_voter = match set_state.clone() {
-			VoterSetState::Live(last_round_number, last_round_state) => {
+			VoterSetState::Live { last_completed_round, .. } => {
+				let (last_round_number, last_round_state) = last_completed_round;
 				let chain_info = match client.info() {
 					Ok(i) => i,
 					Err(e) => return future::Either::B(future::err(Error::Client(e))),
@@ -537,8 +538,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					last_round_state,
 					last_finalized,
 				))
-			}
-			VoterSetState::Paused(_, _) => None,
+			},
+			VoterSetState::Paused { .. } => None,
 		};
 
 		// needs to be combined with another future otherwise it can deadlock.
@@ -569,6 +570,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
+
+					let set_state = VoterSetState::Live {
+						last_completed_round: (0, genesis_state), // always start at round 0 when changing sets.
+						current_round: HasVoted::No,
+					};
+
 					let env = Arc::new(Environment {
 						inner: client,
 						config,
@@ -577,16 +584,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						network,
 						authority_set,
 						consensus_changes,
-						last_completed: environment::LastCompletedRound::new(
-							(0, genesis_state.clone())
-						),
+						voter_set_state: SharedVoterSetState::new(set_state.clone()),
 					});
-
-
-					let set_state = VoterSetState::Live(
-						0, // always start at round 0 when changing sets.
-						genesis_state,
-					);
 
 					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
 				}
@@ -594,11 +593,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					info!(target: "afg", "Pausing old validator set: {}", reason);
 
 					// not racing because old voter is shut down.
-					let (last_round_number, last_round_state) = env.last_completed.read();
-					let set_state = VoterSetState::Paused(
-						last_round_number,
-						last_round_state,
-					);
+					let last_completed_round = env.voter_set_state.last_completed_round();
+					let set_state = VoterSetState::Paused { last_completed_round };
 
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 

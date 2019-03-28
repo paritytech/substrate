@@ -43,6 +43,7 @@ use network::{consensus_gossip as network_gossip, Service as NetworkService,};
 use network_gossip::ConsensusMessage;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
+use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
@@ -184,7 +185,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
 		local_key: Option<Arc<ed25519::Pair>>,
-		has_voted: HasVoted,
+		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
@@ -370,47 +371,6 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	}
 }
 
-/// Whether we've voted already during a prior run of the program.
-#[derive(Decode, Encode)]
-pub(crate) enum HasVoted {
-	/// Has not voted already in this round.
-	#[codec(index = "0")]
-	No,
-	/// Has cast a proposal.
-	#[codec(index = "1")]
-	Proposed,
-	/// Has cast a prevote.
-	#[codec(index = "2")]
-	Prevoted,
-	/// Has cast a precommit (implies prevote.)
-	#[codec(index = "3")]
-	Precommitted,
-}
-
-impl HasVoted {
-	#[allow(unused)]
-	fn can_propose(&self) -> bool {
-		match *self {
-			HasVoted::No => true,
-			HasVoted::Proposed | HasVoted::Prevoted | HasVoted::Precommitted => false,
-		}
-	}
-
-	fn can_prevote(&self) -> bool {
-		match *self {
-			HasVoted::No | HasVoted::Proposed => true,
-			HasVoted::Prevoted | HasVoted::Precommitted => false,
-		}
-	}
-
-	fn can_precommit(&self) -> bool {
-		match *self {
-			HasVoted::No | HasVoted::Proposed | HasVoted::Prevoted => true,
-			HasVoted::Precommitted => false,
-		}
-	}
-}
-
 /// A sink for outgoing messages to the network.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
@@ -418,7 +378,7 @@ struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
-	has_voted: HasVoted,
+	has_voted: HasVoted<Block>,
 }
 
 impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>

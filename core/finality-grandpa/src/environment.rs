@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use log::{debug, warn, info};
-use parity_codec::Encode;
+use parity_codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
@@ -76,6 +76,101 @@ impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
 	}
 }
 
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub enum VoterSetState<Block: BlockT> {
+	Live {
+		last_completed_round: CompletedRound<Block::Hash, NumberFor<Block>>,
+		current_round: HasVoted<Block>,
+	},
+	Paused {
+		last_completed_round: CompletedRound<Block::Hash, NumberFor<Block>>,
+	},
+}
+
+/// Whether we've voted already during a prior run of the program.
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub enum HasVoted<Block: BlockT> {
+	/// Has not voted already in this round.
+	No,
+	/// Has voted in this round.
+	Yes(AuthorityId, Vote<Block>),
+}
+
+/// The votes cast by this voter already during a prior run of the program.
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub enum Vote<Block: BlockT> {
+	/// Has cast a proposal.
+	Propose(PrimaryPropose<Block>),
+	/// Has cast a prevote.
+	Prevote(Option<PrimaryPropose<Block>>, Prevote<Block>),
+	/// Has cast a precommit (implies prevote.)
+	Precommit(Option<PrimaryPropose<Block>>, Prevote<Block>, Precommit<Block>),
+}
+
+impl<Block: BlockT> HasVoted<Block> {
+	pub fn can_propose(&self) -> bool {
+		match *self {
+			HasVoted::No => true,
+			HasVoted::Yes(_, _) => false,
+		}
+	}
+
+	pub fn can_prevote(&self) -> bool {
+		match *self {
+			HasVoted::No | HasVoted::Yes(_, Vote::Propose(_)) => true,
+			HasVoted::Yes(_, Vote::Prevote(_, _)) | HasVoted::Yes(_, Vote::Precommit(_, _, _)) => false,
+		}
+	}
+
+	pub fn can_precommit(&self) -> bool {
+		match *self {
+			HasVoted::No | HasVoted::Yes(_, Vote::Propose(_)) | HasVoted::Yes(_, Vote::Prevote(_, _)) => true,
+			HasVoted::Yes(_, Vote::Precommit(_, _, _)) => false,
+		}
+	}
+}
+
+pub struct SharedVoterSetState<Block: BlockT> {
+	inner: RwLock<VoterSetState<Block>>,
+}
+
+impl<Block: BlockT> SharedVoterSetState<Block> {
+	/// Create a new tracker based on some starting last-completed round.
+	pub(crate) fn new(state: VoterSetState<Block>) -> Self {
+		SharedVoterSetState { inner: RwLock::new(state) }
+	}
+
+	pub(crate) fn has_voted(&self, current_id: Option<&AuthorityId>) -> HasVoted<Block> {
+		let current_id = match current_id {
+			Some(current_id) => current_id,
+			_ => return HasVoted::No,
+		};
+
+		match &*self.inner.read() {
+			VoterSetState::Live { current_round: HasVoted::Yes(id, vote), .. } if id == current_id =>
+				HasVoted::Yes(id.clone(), vote.clone()),
+			_ => HasVoted::No,
+		}
+	}
+
+	/// Read the last completed round.
+	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block::Hash, NumberFor<Block>> {
+		match &*self.inner.read() {
+			VoterSetState::Live { last_completed_round, .. } =>
+				last_completed_round.clone(),
+			VoterSetState::Paused { last_completed_round } =>
+				last_completed_round.clone(),
+		}
+	}
+
+	// NOTE: not exposed outside of this module intentionally.
+	fn with<F, R>(&self, f: F) -> R
+		where F: FnOnce(&mut VoterSetState<Block>) -> R
+	{
+		f(&mut *self.inner.write())
+	}
+}
+
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
@@ -85,7 +180,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
-	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
+	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
@@ -240,7 +335,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
 			local_key.cloned(),
-			crate::communication::HasVoted::No,
+			self.voter_set_state.has_voted(local_key.map(|pair| pair.public()).as_ref()),
 		);
 
 		// schedule incoming messages from the network to be held until
@@ -262,16 +357,92 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn proposed(&self, _round: u64, _propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		Ok(())
+	fn proposed(&self, round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
+		let local_id = self.config.local_key.as_ref()
+			.map(|pair| pair.public().into())
+			.filter(|id| self.voters.contains_key(&id));
+
+		let local_id = match local_id {
+			Some(id) => id,
+			None => return Ok(()),
+		};
+
+		self.voter_set_state.with(|voter_set_state| {
+			let last_completed_round = match voter_set_state {
+				VoterSetState::Live { last_completed_round, current_round: HasVoted::No } => last_completed_round,
+				_ => unreachable!("paused voters should not be voting; qed"),
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				last_completed_round: last_completed_round.clone(),
+				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
+			};
+
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			*voter_set_state = set_state; // after writing to DB successfully.
+
+			Ok(())
+		})
 	}
 
-	fn prevoted(&self, _round: u64, _prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		Ok(())
+	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
+		let local_id = self.config.local_key.as_ref()
+			.map(|pair| pair.public().into())
+			.filter(|id| self.voters.contains_key(&id));
+
+		let local_id = match local_id {
+			Some(id) => id,
+			None => return Ok(()),
+		};
+
+		self.voter_set_state.with(|voter_set_state| {
+			let (last_completed_round, propose) = match voter_set_state {
+				VoterSetState::Live { last_completed_round, current_round: HasVoted::No } =>
+					(last_completed_round, None),
+				VoterSetState::Live { last_completed_round, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
+					(last_completed_round, Some(propose)),
+				_ => unreachable!("paused voters should not be voting; qed"),
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				last_completed_round: last_completed_round.clone(),
+				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
+			};
+
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			*voter_set_state = set_state; // after writing to DB successfully.
+
+			Ok(())
+		})
 	}
 
-	fn precommitted(&self, _round: u64, _precommit: Precommit<Block>) -> Result<(), Self::Error> {
-		Ok(())
+	fn precommitted(&self, round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+		let local_id = self.config.local_key.as_ref()
+			.map(|pair| pair.public().into())
+			.filter(|id| self.voters.contains_key(&id));
+
+		let local_id = match local_id {
+			Some(id) => id,
+			None => return Ok(()),
+		};
+
+		self.voter_set_state.with(|voter_set_state| {
+			let (last_completed_round, propose, prevote) = match voter_set_state {
+				VoterSetState::Live { last_completed_round, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
+					(last_completed_round, propose, prevote),
+				_ => unreachable!("paused voters should not be voting; qed"),
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				last_completed_round: last_completed_round.clone(),
+				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
+			};
+
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			*voter_set_state = set_state; // after writing to DB successfully.
+
+			Ok(())
+		})
 	}
 
 	fn completed(
@@ -290,11 +461,15 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.finalized.as_ref().map(|e| e.1),
 		);
 
-		self.last_completed.with(|last_completed| {
-			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+		self.voter_set_state.with(|voter_set_state| {
+			let set_state = VoterSetState::<Block>::Live {
+				last_completed_round: (round, state.clone()),
+				current_round: HasVoted::No,
+			};
 
-			*last_completed = (round, state); // after writing to DB successfully.
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			*voter_set_state = set_state; // after writing to DB successfully.
+
 			Ok(())
 		})
 	}
@@ -517,7 +692,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		};
 
 		if status.changed {
-			let write_result = crate::aux_schema::update_authority_set(
+			let write_result = crate::aux_schema::update_authority_set::<Block, _, _>(
 				&authority_set,
 				new_authorities.as_ref(),
 				|insert| client.apply_aux(import_op, insert, &[]),
