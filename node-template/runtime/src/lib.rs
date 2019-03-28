@@ -67,8 +67,14 @@ pub mod opaque {
 
 	/// Opaque, encoded, unchecked extrinsic.
 	#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+	#[cfg(feature = "std")]
+	impl std::fmt::Debug for UncheckedExtrinsic {
+		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+			write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
+		}
+	}
 	impl traits::Extrinsic for UncheckedExtrinsic {
 		fn is_signed(&self) -> Option<bool> {
 			None

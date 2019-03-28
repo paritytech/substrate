@@ -20,7 +20,7 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug, warn};
+use log::{info, debug, warn, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -227,6 +227,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 						break;
 					}
 
+					trace!("[{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);
