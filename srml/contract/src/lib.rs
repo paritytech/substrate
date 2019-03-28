@@ -74,7 +74,7 @@ use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
-use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, TransactionFee};
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
 use timestamp;
 
@@ -137,7 +137,7 @@ pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>
 pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: timestamp::Trait {
-	type Currency: Currency<Self::AccountId> + TransactionFee<BalanceOf<Self>>;
+	type Currency: Currency<Self::AccountId>;
 
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
@@ -193,8 +193,8 @@ pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len());
-		let base_fee = T::Currency::transaction_base_fee();
-		let byte_fee = T::Currency::transaction_byte_fee();
+		let base_fee = <Module<T>>::transaction_base_fee();
+		let byte_fee = <Module<T>>::transaction_byte_fee();
 		base_fee + byte_fee * <BalanceOf<T> as As<u64>>::sa(encoded_len as u64)
 	}
 }
@@ -372,6 +372,14 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
+		/// The fee required to make a transfer.
+		TransferFee get(transfer_fee) config(): BalanceOf<T>;
+		/// The fee required to create an account.
+		CreationFee get(creation_fee) config(): BalanceOf<T>;
+		/// The fee to be paid for making a transaction; the base.
+		TransactionBaseFee get(transaction_base_fee) config(): BalanceOf<T>;
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
 		/// The fee required to create a contract.
 		ContractFee get(contract_fee) config(): BalanceOf<T> = BalanceOf::<T>::sa(21);
 		/// The fee charged for a call into a contract.
@@ -432,8 +440,8 @@ impl<T: Trait> Config<T> {
 			existential_deposit: T::Currency::minimum_balance(),
 			max_depth: <Module<T>>::max_depth(),
 			contract_account_instantiate_fee: <Module<T>>::contract_fee(),
-			account_create_fee: T::Currency::creation_fee(),
-			transfer_fee: T::Currency::transfer_fee(),
+			account_create_fee: <Module<T>>::creation_fee(),
+			transfer_fee: <Module<T>>::transfer_fee(),
 			call_base_fee: <Module<T>>::call_base_fee(),
 			instantiate_base_fee: <Module<T>>::create_base_fee(),
 		}

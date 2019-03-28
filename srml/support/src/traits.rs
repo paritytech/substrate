@@ -227,14 +227,6 @@ impl<
 	}
 }
 
-/// The fee to be paid for making a transaction
-pub trait TransactionFee<Balance> {
-	/// Base.
-	fn transaction_base_fee() -> Balance;
-	/// Per-byte portion.
-	fn transaction_byte_fee() -> Balance;
-}
-
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
@@ -249,12 +241,6 @@ pub trait Currency<AccountId> {
 	type NegativeImbalance: Imbalance<Self::Balance, Opposite=Self::PositiveImbalance>;
 
 	// PUBLIC IMMUTABLES
-
-	/// The fee required to create an account.
-	fn creation_fee() -> Self::Balance;
-
-	/// The fee required to make a transfer.
-	fn transfer_fee() -> Self::Balance;
 
 	/// The combined balance of `who`.
 	fn total_balance(who: &AccountId) -> Self::Balance;

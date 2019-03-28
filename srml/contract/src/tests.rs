@@ -199,6 +199,10 @@ impl ExtBuilder {
 		);
 		t.extend(
 			GenesisConfig::<Test> {
+				transaction_base_fee: 0,
+				transaction_byte_fee: 0,
+				transfer_fee: self.transfer_fee,
+				creation_fee: self.creation_fee,
 				contract_fee: 21,
 				call_base_fee: 135,
 				create_base_fee: 175,
