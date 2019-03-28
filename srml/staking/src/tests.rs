@@ -1441,44 +1441,42 @@ fn phragmen_poc_works() {
 #[test]
 fn phragmen_election_works_with_post_processing() {
 	// tests the encapsulated phragmen::elect function.
-	/*
-	Votes  [
-		('10', 1000, ['10']),
-		('20', 1000, ['20']),
-		('30', 1000, ['30']),
-		('2', 50, ['10', '20']),
-		('4', 1000, ['10', '30'])
-	]
-	Sequential Phragmén gives
-	10  is elected with stake  1705.7377049180327 and score  0.0004878048780487805
-	30  is elected with stake  1344.2622950819673 and score  0.0007439024390243903
+	// Votes  [
+	// 	('10', 1000, ['10']),
+	// 	('20', 1000, ['20']),
+	// 	('30', 1000, ['30']),
+	// 	('2', 50, ['10', '20']),
+	// 	('4', 1000, ['10', '30'])
+	// ]
+	// Sequential Phragmén gives
+	// 10  is elected with stake  1705.7377049180327 and score  0.0004878048780487805
+	// 30  is elected with stake  1344.2622950819673 and score  0.0007439024390243903
 
-	10  has load  0.0004878048780487805 and supported
-	10  with stake  1000.0
-	20  has load  0 and supported
-	20  with stake  0
-	30  has load  0.0007439024390243903 and supported
-	30  with stake  1000.0
-	2  has load  0.0004878048780487805 and supported
-	10  with stake  50.0 20  with stake  0.0
-	4  has load  0.0007439024390243903 and supported
-	10  with stake  655.7377049180328 30  with stake  344.26229508196724
+	// 10  has load  0.0004878048780487805 and supported
+	// 10  with stake  1000.0
+	// 20  has load  0 and supported
+	// 20  with stake  0
+	// 30  has load  0.0007439024390243903 and supported
+	// 30  with stake  1000.0
+	// 2  has load  0.0004878048780487805 and supported
+	// 10  with stake  50.0 20  with stake  0.0
+	// 4  has load  0.0007439024390243903 and supported
+	// 10  with stake  655.7377049180328 30  with stake  344.26229508196724
 
-	Sequential Phragmén with post processing gives
-	10  is elected with stake  1525.0 and score  0.0004878048780487805
-	30  is elected with stake  1525.0 and score  0.0007439024390243903
+	// Sequential Phragmén with post processing gives
+	// 10  is elected with stake  1525.0 and score  0.0004878048780487805
+	// 30  is elected with stake  1525.0 and score  0.0007439024390243903
 
-	10  has load  0.0004878048780487805 and supported
-	10  with stake  1000.0
-	20  has load  0 and supported
-	20  with stake  0
-	30  has load  0.0007439024390243903 and supported
-	30  with stake  1000.0
-	2  has load  0.0004878048780487805 and supported
-	10  with stake  50.0 20  with stake  0.0
-	4  has load  0.0007439024390243903 and supported
-	10  with stake  475.0 30  with stake  525.0
-	*/
+	// 10  has load  0.0004878048780487805 and supported
+	// 10  with stake  1000.0
+	// 20  has load  0 and supported
+	// 20  with stake  0
+	// 30  has load  0.0007439024390243903 and supported
+	// 30  with stake  1000.0
+	// 2  has load  0.0004878048780487805 and supported
+	// 10  with stake  50.0 20  with stake  0.0
+	// 4  has load  0.0007439024390243903 and supported
+	// 10  with stake  475.0 30  with stake  525.0
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		// initial setup of 10 and 20, both validators
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
@@ -1858,5 +1856,125 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Session::validators(), vec![4, 2]);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_validators() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+		let check_exposure = |a| {
+			let expo = Staking::stakers(&a);
+			assert_eq!(expo.total, expo.own + expo.others.iter().map(|e| e.value).sum::<u64>());
+		};
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		bond_validator(2, u64::max_value());
+		bond_validator(4, u64::max_value());
+
+		bond_nominator(6, u64::max_value()/2, vec![1, 3]);
+		bond_nominator(8, u64::max_value()/2, vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq_uvec!(Session::validators(), vec![4, 2]);
+		check_exposure(4);
+		check_exposure(2);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_nominators() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+		let check_exposure = |a| {
+			let expo = Staking::stakers(&a);
+			assert_eq!(expo.total, expo.own + expo.others.iter().map(|e| e.value).sum::<u64>());
+		};
+
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(2, u64::max_value()/2);
+		bond_validator(4, u64::max_value()/2);
+
+		bond_nominator(6, u64::max_value(), vec![1, 3]);
+		bond_nominator(8, u64::max_value(), vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq_uvec!(Session::validators(), vec![4, 2]);
+		check_exposure(4);
+		check_exposure(2);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_ultimate() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+		let check_exposure = |a| {
+			let expo = Staking::stakers(&a);
+			assert_eq!(expo.total, expo.own + expo.others.iter().map(|e| e.value).sum::<u64>());
+		};
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(2, u64::max_value());
+		bond_validator(4, u64::max_value());
+
+		bond_nominator(6, u64::max_value(), vec![1, 3]);
+		bond_nominator(8, u64::max_value(), vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq_uvec!(Session::validators(), vec![4, 2]);
+		check_exposure(4);
+		check_exposure(2);
 	})
 }
