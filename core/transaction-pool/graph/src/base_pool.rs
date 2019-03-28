@@ -19,13 +19,15 @@
 //! For a more full-featured pool, have a look at the `pool` module.
 
 use std::{
+	fmt,
 	hash,
 	sync::Arc,
 };
 
-use serde::Serialize;
 use error_chain::bail;
 use log::{trace, debug, warn};
+use serde::Serialize;
+use substrate_primitives::hexdisplay::HexDisplay;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
@@ -82,7 +84,7 @@ pub struct PruneStatus<Hash, Ex> {
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -98,6 +100,38 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub requires: Vec<Tag>,
 	/// Tags that this transaction provides.
 	pub provides: Vec<Tag>,
+}
+
+impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
+	Hash: fmt::Debug,
+	Extrinsic: fmt::Debug,
+{
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		fn print_tags(fmt: &mut fmt::Formatter, tags: &[Tag]) -> fmt::Result {
+			let mut it = tags.iter();
+			if let Some(t) = it.next() {
+				write!(fmt, "{}", HexDisplay::from(t))?;
+			}
+			for t in it {
+				write!(fmt, ",{}", HexDisplay::from(t))?;
+			}
+			Ok(())
+		}
+
+		write!(fmt, "Transaction {{ ")?;
+		write!(fmt, "hash: {:?}, ", &self.hash)?;
+		write!(fmt, "priority: {:?}, ", &self.priority)?;
+		write!(fmt, "valid_till: {:?}, ", &self.valid_till)?;
+		write!(fmt, "bytes: {:?}, ", &self.bytes)?;
+		write!(fmt, "requires: [")?;
+		print_tags(fmt, &self.requires)?;
+		write!(fmt, "], provides: [")?;
+		print_tags(fmt, &self.provides)?;
+		write!(fmt, "], ")?;
+		write!(fmt, "data: {:?}", &self.data)?;
+		write!(fmt, "}}")?;
+		Ok(())
+	}
 }
 
 /// Transaction pool.
@@ -360,6 +394,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 }
 
 /// Pool status
+#[derive(Debug)]
 pub struct Status {
 	/// Number of transactions in the ready queue.
 	pub ready: usize,
@@ -835,6 +870,22 @@ mod tests {
 		assert_eq!(pool.future.len(), 0);
 		assert_eq!(pool.ready.len(), 3);
 		assert_eq!(pool.ready().count(), 3);
+	}
+
+	#[test]
+	fn transaction_debug() {
+		assert_eq!(
+			format!("{:?}", Transaction {
+				data: vec![4u8],
+				bytes: 1,
+				hash: 4,
+				priority: 1_000u64,
+				valid_till: 64u64,
+				requires: vec![vec![3], vec![2]],
+				provides: vec![vec![4]],
+			}),
+			r#"Transaction { hash: 4, priority: 1000, valid_till: 64, bytes: 1, requires: [03,02], provides: [04], data: [4]}"#.to_owned()
+		);
 	}
 
 }
