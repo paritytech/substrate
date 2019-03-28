@@ -228,6 +228,7 @@ decl_module! {
 		}
 
 		// Manage upgrade. Remove after all networks upgraded.
+		// TODO: #2133
 		fn on_initialise() {
 			if let Some(period) = <BlockPeriod<T>>::take() {
 				if !<MinimumPeriod<T>>::exists() {
@@ -248,6 +249,7 @@ decl_storage! {
 		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
 
 		/// Old storage item provided for compatibility. Remove after all networks upgraded.
+		// TODO: #2133
 		pub BlockPeriod: Option<T::Moment>;
 
 		/// The minimum (and advised) period between blocks. This is half of the period provided
