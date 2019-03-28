@@ -40,7 +40,7 @@
 //! 
 //! * `get` - Gets the current time for the current block. If this function is called prior the setting to timestamp, it will return the timestamp of the previous block.
 //! 
-//! * `block_period` - Gets the minimum (and advised) period between blocks for the chain.
+//! * `minimum_period` - Gets the minimum (and advised) period between blocks for the chain.
 //! 
 //! ## Usage
 //! 
@@ -211,20 +211,30 @@ decl_module! {
 		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
 		/// if this call hasn't been invoked by that time.
 		///
-		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
+		/// The timestamp should be greater than the previous one by the amount specified by `minimum_period`.
 		/// 
 		/// The dispatch origin for this call must be `Inherent`.
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_inherent(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
-				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
+				Self::now().is_zero() || now >= Self::now() + <MinimumPeriod<T>>::get(),
 				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
 			);
 			<Self as Store>::Now::put(now.clone());
 			<Self as Store>::DidUpdate::put(true);
 
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
+		}
+
+		// Manage upgrade. Remove after all networks upgraded.
+		fn on_initialise() {
+			if let Some(period) = <BlockPeriod<T>>::take() {
+				println!("Upgrading {:?} {}", period, <MinimumPeriod<T>>::exists());
+				if !<MinimumPeriod<T>>::exists() {
+					<MinimumPeriod<T>>::put(period)
+				}
+			}
 		}
 
 		fn on_finalise() {
@@ -238,11 +248,23 @@ decl_storage! {
 		/// Current time for the current block.
 		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
 
-		/// The minimum (and advised) period between blocks.
-		pub BlockPeriod get(block_period) config(period): T::Moment = T::Moment::sa(5);
+		/// Old storage item provided for compatibility. Remove after all networks upgraded.
+		pub BlockPeriod: Option<T::Moment>;
+
+		/// The minimum (and advised) period between blocks. This is half of the period provided
+		/// into the genesis config since the consensus system essentially doubles it for the effective
+		/// period.
+		pub MinimumPeriod get(minimum_period) build(|config: &GenesisConfig<T>| {
+			println!("Initialising: {:?}", config.period);
+			(config.period.clone() + As::sa(1)) / As::sa(2)
+		}):
+			T::Moment = T::Moment::sa(3);
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
+	}
+	add_extra_genesis {
+		config(period): T::Moment;
 	}
 }
 
@@ -260,6 +282,11 @@ impl<T: Trait> Module<T> {
 	pub fn set_timestamp(now: T::Moment) {
 		<Self as Store>::Now::put(now);
 	}
+
+	pub fn min_period() -> T::Moment {
+		println!("min_period: {} {:?}", <MinimumPeriod<T>>::exists(), <MinimumPeriod<T>>::get());
+		Self::minimum_period()
+	}
 }
 
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
@@ -276,7 +303,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		let data = extract_inherent_data(data).expect("Gets and decodes timestamp inherent data");
 
-		let next_time = cmp::max(As::sa(data), Self::now() + Self::block_period());
+		let next_time = cmp::max(As::sa(data), Self::now() + <MinimumPeriod<T>>::get());
 		Some(Call::set(next_time.into()))
 	}
 
@@ -290,7 +317,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
-		let minimum = (Self::now() + Self::block_period()).as_();
+		let minimum = (Self::now() + <MinimumPeriod<T>>::get()).as_();
 		if t > data + MAX_TIMESTAMP_DRIFT {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
@@ -368,7 +395,7 @@ mod tests {
 
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
-	fn block_period_is_enforced() {
+	fn block_period_minimum_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,

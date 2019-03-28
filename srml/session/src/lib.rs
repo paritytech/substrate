@@ -200,7 +200,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
 	pub fn ideal_session_duration() -> T::Moment {
-		let block_period: T::Moment = <timestamp::Module<T>>::block_period();
+		let block_period: T::Moment = <timestamp::Module<T>>::min_period();
 		let session_length: T::BlockNumber = Self::length();
 		Mul::<T::BlockNumber>::mul(block_period, session_length)
 	}

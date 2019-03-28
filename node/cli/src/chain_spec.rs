@@ -359,7 +359,7 @@ mod tests {
 
 	fn local_testnet_genesis_instant() -> GenesisConfig {
 		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { period: 0 });
+		genesis.timestamp = Some(TimestampConfig { period: 1 });
 		genesis
 	}
 
