@@ -70,7 +70,6 @@ fn basic_setup_works() {
 
 		// initial slot_stake
 		assert_eq!(Staking::slot_stake(),  1124); // Naive
-		// assert_eq!(Staking::slot_stake(),  1250); // Post-process
 
 		// initial slash_count of validators
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -173,7 +172,7 @@ fn offline_grace_should_delay_slashing() {
 		assert_ok!(Staking::set_offline_slash_grace(offline_slash_grace));
 		assert_eq!(Staking::offline_slash_grace(), 1);
 
-		// Check unstaked_threshold is 3 (default)
+		// Check unstake_threshold is 3 (default)
 		let default_unstake_threshold = 3;
 		assert_eq!(Staking::validators(&11), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
 
