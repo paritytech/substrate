@@ -282,7 +282,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				// we share the storage for multiple checks, do it here
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-				if !storage.contains(&cht_root) {
+				if !storage.contains(&cht_root, &[]) {
 					return Err(ClientErrorKind::InvalidCHTProof.into());
 				}
 

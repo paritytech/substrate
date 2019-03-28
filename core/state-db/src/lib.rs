@@ -58,12 +58,12 @@ pub trait MetaDb {
 }
 
 /// Backend database trait. Read-only.
-pub trait HashDb {
-	type Hash: Hash;
+pub trait NodeDb {
+	type Key: ?Sized;
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
-	fn get(&self, key: &Self::Hash) -> Result<Option<DBValue>, Self::Error>;
+	fn get(&self, key: &Self::Key) -> Result<Option<DBValue>, Self::Error>;
 }
 
 /// Error type.
@@ -285,11 +285,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		self.pinned.remove(hash);
 	}
 
-	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
+	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
+		where Key: AsRef<D::Key>
+	{
 		if let Some(value) = self.non_canonical.get(key) {
 			return Ok(Some(value));
 		}
-		db.get(key).map_err(|e| Error::Db(e))
+		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
 	pub fn apply_pending(&mut self) {
@@ -349,7 +351,9 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
+	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
+		where Key: AsRef<D::Key>
+	{
 		self.db.read().get(key, db)
 	}
 
