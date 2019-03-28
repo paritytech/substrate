@@ -1,0 +1,144 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+use crate::codec;
+use runtime_io::twox_128;
+use crate::rstd::vec::Vec;
+
+/// Abstraction around storage with unhashed access.
+pub trait UnhashedStorage {
+	/// true if the key exists in storage.
+	fn exists(&self, key: &[u8]) -> bool;
+
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
+	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T>;
+
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
+	/// it's not there.
+	fn require<T: codec::Decode>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
+
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
+	/// default is returned if it's not there.
+	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
+
+	/// Put a value in under a key.
+	fn put<T: codec::Encode>(&self, key: &[u8], val: &T);
+
+	/// Remove the bytes of a key from storage.
+	fn kill(&self, key: &[u8]);
+
+	/// Remove the bytes of a key from storage.
+	fn kill_prefix(&self, prefix: &[u8]);
+
+	/// Take a value from storage, deleting it after reading.
+	fn take<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
+		let value = self.get(key);
+		self.kill(key);
+		value
+	}
+
+	/// Take a value from storage, deleting it after reading.
+	fn take_or_panic<T: codec::Decode>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+
+	/// Take a value from storage, deleting it after reading.
+	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+}
+
+// We use a construct like this during when genesis storage is being built.
+#[cfg(feature = "std")]
+impl<H> UnhashedStorage for (crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay>, H) {
+	fn exists(&self, key: &[u8]) -> bool {
+		self.0.borrow().contains_key(key)
+	}
+
+	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
+		self.0.borrow().get(key)
+			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
+	}
+
+	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
+		self.0.borrow_mut().insert(key.to_vec(), codec::Encode::encode(val));
+	}
+
+	fn kill(&self, key: &[u8]) {
+		self.0.borrow_mut().remove(key);
+	}
+
+	fn kill_prefix(&self, prefix: &[u8]) {
+		self.0.borrow_mut().retain(|key, _| {
+			!key.starts_with(prefix)
+		})
+	}
+}
+
+/// An implementation of a map with a two keys.
+///
+/// It provides an important ability to efficiently remove all entries
+/// that have a common first key.
+///
+/// # Mapping of keys to a storage path
+///
+/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
+/// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
+/// is a hash of a `Key2`.
+///
+/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
+pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> {
+	/// The type that get/take returns.
+	type Query;
+
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn key_for(k1: &K1, k2: &K2) -> Vec<u8>;
+
+	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
+	fn prefix_for(k1: &K1) -> Vec<u8> {
+		let mut key = Self::prefix().to_vec();
+		codec::Encode::encode_to(k1, &mut key);
+		twox_128(&key).to_vec()
+	}
+
+	/// true if the value is defined in storage.
+	fn exists<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> bool {
+		storage.exists(&Self::key_for(k1, k2))
+	}
+
+	/// Load the value associated with the given key from the map.
+	fn get<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+
+	/// Take the value under a key.
+	fn take<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<S: UnhashedStorage>(k1: &K1, k2: &K2, val: &V, storage: &S) {
+		storage.put(&Self::key_for(k1, k2), val);
+	}
+
+	/// Remove the value under a key.
+	fn remove<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) {
+		storage.kill(&Self::key_for(k1, k2));
+	}
+
+	/// Removes all entries that shares the `k1` as the first key.
+	fn remove_prefix<S: UnhashedStorage>(k1: &K1, storage: &S) {
+		storage.kill_prefix(&Self::prefix_for(k1));
+	}
+
+	/// Mutate the value under a key.
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &S) -> R;
+}
