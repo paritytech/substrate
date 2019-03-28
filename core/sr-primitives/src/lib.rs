@@ -661,8 +661,14 @@ macro_rules! impl_outer_log {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for OpaqueExtrinsic {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(fmt, "{}", substrate_primitives::hexdisplay::HexDisplay::from(&self.0))
+	}
+}
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {

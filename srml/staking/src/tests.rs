@@ -24,7 +24,7 @@ use phragmen;
 use primitives::Perquintill;
 use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
-use srml_support::traits::Currency;
+use srml_support::traits::{Currency, ReservableCurrency};
 
 #[test]
 fn basic_setup_works() {

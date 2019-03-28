@@ -533,11 +533,11 @@ fn run_thread<B: BlockT + 'static>(
 						network_service_2.lock().drop_node(&who)
 					},
 					Severity::Useless(message) => {
-						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						debug!(target: "sync", "Dropping {:?} because {:?}", who, message);
 						network_service_2.lock().drop_node(&who)
 					},
 					Severity::Timeout => {
-						info!(target: "sync", "Dropping {:?} because it timed out", who);
+						debug!(target: "sync", "Dropping {:?} because it timed out", who);
 						network_service_2.lock().drop_node(&who)
 					},
 				}
