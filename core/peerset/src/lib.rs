@@ -236,7 +236,9 @@ impl Peerset {
 		}
 
 		// Assign a slot for this reserved peer.
-		if let Some(pos) = self.data.out_slots.iter().position(|s| s.as_ref().map(|n| !self.data.reserved.contains(n)).unwrap_or(true)) {
+		// TODO: override slots that are occupied by not reserved peers
+		// send Message::Drop in those cases
+		if let Some(pos) = self.data.out_slots.iter().position(Option::is_none) {
 			self.message_queue.push_back(Message::Connect(peer_id.clone()));
 			self.data.out_slots[pos] = Some(peer_id);
 		} else {
@@ -311,7 +313,7 @@ impl Peerset {
 	fn on_dropped(&mut self, peer_id: PeerId) {
 		// Automatically connect back if reserved.
 		if self.data.reserved.contains(&peer_id) {
-			self.message_queue.push_back(Message::Connect(peer_id.clone()));
+			self.message_queue.push_back(Message::Connect(peer_id));
 			return
 		}
 
@@ -326,7 +328,7 @@ impl Peerset {
 		// Note: in this dummy implementation we consider that peers never expire. As soon as we
 		// are disconnected from a peer, we try again.
 		if self.data.discovered.iter().all(|p| p != &peer_id) {
-			self.data.discovered.push(peer_id.clone());
+			self.data.discovered.push(peer_id);
 		}
 		self.alloc_slots();
 	}
@@ -380,29 +382,80 @@ mod tests {
 	use futures::prelude::*;
 	use super::{PeersetConfig, Peerset, Message};
 
+	fn next_message(peerset: Peerset) -> Result<(Message, Peerset), ()> {
+		let (next, peerset) = peerset.into_future()
+			.wait()
+			.map_err(|_| ())?;
+		let message = next.ok_or_else(|| ())?;
+		Ok((message, peerset))
+	}
+
 	#[test]
 	fn test_peerset_from_config_with_bootnodes() {
 		let bootnode = PeerId::random();
+		let bootnode2 = PeerId::random();
 		let config = PeersetConfig {
 			in_peers: 0,
-			out_peers: 1,
-			bootnodes: vec![bootnode.clone()],
+			out_peers: 2,
+			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
 			reserved_only: false,
 			reserved_nodes: Vec::new(),
 		};
 
 		let peerset = Peerset::from_config(config);
-		let (next, _peerset) = peerset.into_future()
-			.wait()
-			.expect("Ok((Some(Message::Connect), peerset))");
 
-		let message = next.expect("Some(Message::Connect)");
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode");
 		assert_eq!(message, Message::Connect(bootnode));
+		let (message, _peerset) = next_message(peerset).expect("Message::Connect to bootnode2");
+		assert_eq!(message, Message::Connect(bootnode2));
+	}
+
+	#[test]
+	fn test_peerset_from_config_with_reserved_nodes() {
+		let bootnode = PeerId::random();
+		let bootnode2 = PeerId::random();
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 3,
+			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
+			reserved_only: false,
+			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
+		};
+
+		let peerset = Peerset::from_config(config);
+
+		// TODO: decide whether the order is correct. Should we first connect to bootnodes or reserved nodes?
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode");
+		assert_eq!(message, Message::Connect(bootnode));
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode2");
+		assert_eq!(message, Message::Connect(bootnode2));
+		let (message, _peerset) = next_message(peerset).expect("Message::Connect to reserved_peer");
+		assert_eq!(message, Message::Connect(reserved_peer));
 	}
 
 	#[test]
 	fn test_peerset_add_reserved_peer() {
-		//unimplemented!();
+		let bootnode = PeerId::random();
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 2,
+			bootnodes: vec![bootnode],
+			reserved_only: true,
+			reserved_nodes: Vec::new(),
+		};
+
+		let peerset = Peerset::from_config(config);
+		peerset.add_reserved_peer(reserved_peer.clone());
+		peerset.add_reserved_peer(reserved_peer2.clone());
+
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to reserved_peer");
+		assert_eq!(message, Message::Connect(reserved_peer));
+		let (message, _peerset) = next_message(peerset).expect("Message::Connect to reserved_peer2");
+		assert_eq!(message, Message::Connect(reserved_peer2));
 	}
 
 	#[test]
@@ -412,7 +465,35 @@ mod tests {
 
 	#[test]
 	fn test_peerset_set_reserved_only() {
-		//unimplemented!();
+		let bootnode = PeerId::random();
+		let bootnode2 = PeerId::random();
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 4,
+			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
+			reserved_only: false,
+			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
+		};
+
+		let peerset = Peerset::from_config(config);
+		peerset.set_reserved_only(true);
+
+		// TODO: decide whether the order is correct. Should we first connect to bootnodes or reserved nodes?
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode");
+		assert_eq!(message, Message::Connect(bootnode.clone()));
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode2");
+		assert_eq!(message, Message::Connect(bootnode2.clone()));
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to reserved_peer");
+		assert_eq!(message, Message::Connect(reserved_peer));
+		let (message, peerset) = next_message(peerset).expect("Message::Connect to reserved_peer2");
+		assert_eq!(message, Message::Connect(reserved_peer2));
+
+		let (message, peerset) = next_message(peerset).expect("Message::Drop the bootnode");
+		assert_eq!(message, Message::Drop(bootnode));
+		let (message, _peerset) = next_message(peerset).expect("Message::Drop the bootnode2");
+		assert_eq!(message, Message::Drop(bootnode2));
 	}
 
 	#[test]
