@@ -391,7 +391,7 @@ mod tests {
 	fn block_period_minimum_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
-			period: 10, // minimum period is have of this
+			period: 10, // minimum period is half of this
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
