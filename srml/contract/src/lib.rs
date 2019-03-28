@@ -326,7 +326,7 @@ decl_module! {
 		/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
-		/// - the contract is initialized
+		/// - The contract is initialized.
 		fn create(
 			origin,
 			#[compact] endowment: T::Balance,
