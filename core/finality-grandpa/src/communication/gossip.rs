@@ -686,8 +686,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 		// not with lock held!
 		for topic in broadcast_topics {
-			// TODO: only to this peer.
-			context.broadcast_topic(topic, false);
+			context.send_topic(who, topic, false);
 		}
 
 		match action {
