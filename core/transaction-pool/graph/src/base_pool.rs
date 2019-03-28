@@ -370,7 +370,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	pub fn prune_tags(&mut self, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash, Ex> {
 		let mut to_import = vec![];
 		let mut pruned = vec![];
-		let recently_pruned = &mut self.recently_pruned[self.recently_pruned_idx];
+		let recently_pruned = &mut self.recently_pruned[self.recently_pruned_index];
 		self.recently_pruned_index = (self.recently_pruned_index + 1) % RECENTLY_PRUNED_TAGS;
 		recently_pruned.clear();
 
