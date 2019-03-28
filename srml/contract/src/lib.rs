@@ -384,7 +384,7 @@ decl_event! {
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
-		/// Transfer happened `from` -> `to` with given `value` as part of a `call` or `create`.
+		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `create`.
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
