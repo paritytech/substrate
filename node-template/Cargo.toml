@@ -9,10 +9,6 @@ edition = "2018"
 name = "template-node"
 path = "src/main.rs"
 
-[features]
-default = ['allow-old-seals']
-allow-old-seals = []
-
 [dependencies]
 error-chain = "0.12"
 futures = "0.1"
