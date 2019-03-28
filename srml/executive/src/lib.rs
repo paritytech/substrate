@@ -14,7 +14,55 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Executive: Handles all of the top-level stuff; essentially just executing blocks/extrinsics.
+//! # Executive Module
+//!
+//! The executive module acts as the orchestration layer for the runtime. It dispatches incoming
+//! extrinsic calls to the respective modules in the runtime.
+//!
+//! ## Overview
+//!
+//! The executive module is coupled with the [system module](../../srml-system/index.html) and lets the runtime
+//! communicate with the SRML. It is unique from other modules in that it does not incorporate the `decl_event!`,
+//! `decl_storage!`, or `decl_module!` macros.
+//!
+//! The executive module provides functions to:
+//!
+//! - Check transaction validity.
+//! - Initialize a block.
+//! - Apply extrinsics.
+//! - Execute a block.
+//! - Finalize a block.
+//! - Start an off-chain worker.
+//!
+//! ### Implementations
+//!
+//! The executive module provides the following implementations:
+//!
+//! - `ExecuteBlock`: Trait that can be used to execute a block.
+//! - `Executive`: Type that can be used to make the SRML available from the runtime.
+//!
+//! ## Usage
+//!
+//! The default Substrate node template declares the `Executive` type in its library.
+//!
+//! ### Example
+//!
+//! `Executive` type declaration from the node template.
+//!
+//! ```ignore
+//! /// Executive: handles dispatch to the various modules.
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
+//! ```
+//!
+//! ## Genesis Config
+//!
+//! The executive module is not dependent on the genesis config.
+//!
+//! ## Related Modules
+//!
+//! The executive module depends on the [`system`](../../srml-system/index.html)  and
+//! [`srml_support`](../../srml_support/index.html) modules as well as Substrate Core
+//! libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -48,11 +96,11 @@ mod internal {
 	}
 }
 
-/// Something that can be used to execute a block.
+/// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
-	/// Actually execute all transitioning for `block`.
+	/// Actually execute all transitions for `block`.
 	fn execute_block(block: Block);
-	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
+	/// Execute all extrinsics like when executing a `block`, but without initial and final checks.
 	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>);
 }
 
@@ -106,20 +154,20 @@ impl<
 	fn initial_checks(block: &Block) {
 		let header = block.header();
 
-		// check parent_hash is correct.
+		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
 		assert!(
 			n > System::BlockNumber::zero() && <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
-		// check transaction trie root represents the transactions.
+		// Check that transaction trie root represents the transactions.
 		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
 		header.extrinsics_root().check_equal(&xts_root);
 		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
-	/// Actually execute all transitioning for `block`.
+	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		Self::initialise_block(block.header());
 
@@ -134,7 +182,7 @@ impl<
 		Self::final_checks(&header);
 	}
 
-	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
+	/// Execute all extrinsics like when executing a `block`, but without initial and final checks.
 	pub fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>) {
 		// Make the api happy, but maybe we should not set them at all.
 		let parent_hash = <Block::Header as Header>::Hashing::hash(b"parent_hash");
@@ -150,18 +198,18 @@ impl<
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
-		// post-extrinsics book-keeping.
+		// post-extrinsics book-keeping
 		<system::Module<System>>::note_finished_extrinsics();
 		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(block_number);
 	}
 
-	/// Finalise the block - it is up the caller to ensure that all header fields are valid
+	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
 		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(<system::Module<System>>::block_number());
 
-		// setup extrinsics
+		// set up extrinsics
 		<system::Module<System>>::derive_extrinsics();
 		<system::Module<System>>::finalise()
 	}
@@ -198,7 +246,7 @@ impl<
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
-		// Verify the signature is good.
+		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the size of the block if that extrinsic is applied.
@@ -213,7 +261,7 @@ impl<
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 
-			// pay any fees.
+			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
@@ -222,13 +270,13 @@ impl<
 			<system::Module<System>>::inc_account_nonce(sender);
 		}
 
-		// make sure to `note_extrinsic` only after we know it's going to be executed
+		// Make sure to `note_extrinsic` only after we know it's going to be executed
 		// to prevent it from leaking in storage.
 		if let Some(encoded) = to_note {
 			<system::Module<System>>::note_extrinsic(encoded);
 		}
 
-		// decode parameters and dispatch
+		// Decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -240,10 +288,10 @@ impl<
 	}
 
 	fn final_checks(header: &System::Header) {
-		// remove temporaries.
+		// remove temporaries
 		let new_header = <system::Module<System>>::finalise();
 
-		// check digest.
+		// check digest
 		assert_eq!(
 			header.digest().logs().len(),
 			new_header.digest().logs().len(),
@@ -255,7 +303,7 @@ impl<
 			assert!(header_item == computed_item, "Digest item must match that calculated.");
 		}
 
-		// check storage root.
+		// check storage root
 		let storage_root = System::Hashing::storage_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
