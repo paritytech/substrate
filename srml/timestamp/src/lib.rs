@@ -281,11 +281,6 @@ impl<T: Trait> Module<T> {
 	pub fn set_timestamp(now: T::Moment) {
 		<Self as Store>::Now::put(now);
 	}
-
-	pub fn min_period() -> T::Moment {
-		println!("min_period: {} {:?}", <MinimumPeriod<T>>::exists(), <MinimumPeriod<T>>::get());
-		Self::minimum_period()
-	}
 }
 
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
