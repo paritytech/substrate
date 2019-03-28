@@ -526,7 +526,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		recipient: GossipMessageRecipient,
 	) {
 		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
-		let message = ConsensusMessage{ data: message, engine_id };
+		let message = ConsensusMessage { data: message, engine_id };
 		match recipient {
 			GossipMessageRecipient::BroadcastToAll =>
 				self.consensus_gossip.multicast(&mut context, topic, message, true),
@@ -673,8 +673,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	fn tick(&mut self) {
-		self.consensus_gossip.collect_garbage();
-		self.consensus_gossip.rebroadcast(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
+		self.consensus_gossip.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand

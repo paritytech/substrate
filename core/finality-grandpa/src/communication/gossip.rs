@@ -693,7 +693,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		match action {
 			Action::Keep(topic, cb) => {
 				self.report(who, cb);
-				network_gossip::ValidationResult::KeepAndPropagate(topic)
+				network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {
 				self.report(who, cb);
