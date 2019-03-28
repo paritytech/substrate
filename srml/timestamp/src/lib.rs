@@ -394,11 +394,11 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
+	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
-			period: 5,
+			period: 10, // minimum period is have of this
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
