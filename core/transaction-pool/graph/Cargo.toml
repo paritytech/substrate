@@ -11,6 +11,7 @@ log = "0.4"
 parking_lot = "0.7.1"
 serde = "1.0"
 serde_derive = "1.0"
+substrate-primitives = { path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
 
 [dev-dependencies]

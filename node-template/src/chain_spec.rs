@@ -1,4 +1,4 @@
-use primitives::{ed25519, Pair};
+use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig,
@@ -31,7 +31,7 @@ fn authority_key(s: &str) -> AuthorityId {
 }
 
 fn account_key(s: &str) -> AccountId {
-	ed25519::Pair::from_string(&format!("//{}", s), None)
+	sr25519::Pair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
 }
