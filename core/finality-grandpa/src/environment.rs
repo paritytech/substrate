@@ -27,7 +27,8 @@ use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
+	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
+	voter, voter_set::VoterSet,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -37,8 +38,8 @@ use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
-	Commit, Config, Error, Network, Precommit, Prevote,
-	CommandOrError, NewAuthoritySet, VoterCommand,
+	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
+	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
 use crate::authorities::SharedAuthoritySet;
@@ -261,7 +262,25 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn completed(&self, round: u64, state: RoundState<Block::Hash, NumberFor<Block>>) -> Result<(), Self::Error> {
+	fn proposed(&self, _round: u64, _propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
+		Ok(())
+	}
+
+	fn prevoted(&self, _round: u64, _prevote: Prevote<Block>) -> Result<(), Self::Error> {
+		Ok(())
+	}
+
+	fn precommitted(&self, _round: u64, _precommit: Precommit<Block>) -> Result<(), Self::Error> {
+		Ok(())
+	}
+
+	fn completed(
+		&self,
+		round: u64,
+		state: RoundState<Block::Hash, NumberFor<Block>>,
+		_base: (Block::Hash, NumberFor<Block>),
+		_votes: Vec<SignedMessage<Block>>,
+	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
 			self.config.name(),

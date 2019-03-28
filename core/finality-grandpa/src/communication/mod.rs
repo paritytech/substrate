@@ -29,8 +29,8 @@
 
 use std::sync::Arc;
 
-use grandpa::VoterSet;
-use grandpa::Message::{Prevote, Precommit};
+use grandpa::voter_set::VoterSet;
+use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
@@ -220,6 +220,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						}
 
 						match &msg.message.message {
+							PrimaryPropose(propose) => {
+								telemetry!(CONSENSUS_INFO; "afg.received_propose";
+									"voter" => ?format!("{}", msg.message.id),
+									"target_number" => ?propose.target_number,
+									"target_hash" => ?propose.target_hash,
+								);
+							},
 							Prevote(prevote) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
 									"voter" => ?format!("{}", msg.message.id),
@@ -422,6 +429,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 	fn start_send(&mut self, msg: Message<Block>) -> StartSend<Message<Block>, Error> {
 		// only sign if we haven't voted in this round already.
 		let should_sign = match msg {
+			grandpa::Message::PrimaryPropose(_) => self.has_voted.can_propose(),
 			grandpa::Message::Prevote(_) => self.has_voted.can_prevote(),
 			grandpa::Message::Precommit(_) => self.has_voted.can_precommit(),
 		};

@@ -21,7 +21,7 @@ use client::backend::Backend;
 use client::blockchain::HeaderBackend;
 use client::error::{Error as ClientError, ErrorKind as ClientErrorKind};
 use parity_codec::{Encode, Decode};
-use grandpa::VoterSet;
+use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};

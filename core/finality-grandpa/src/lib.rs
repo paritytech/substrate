@@ -73,7 +73,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
+use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
 
 use std::fmt;
 use std::sync::Arc;
@@ -119,6 +119,8 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	AuthorityId,
 >;
 
+/// A primary propose message for this chain's block type.
+pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
@@ -335,6 +337,41 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	))
 }
 
+fn global_communication<Block: BlockT<Hash=H256>, I, O>(
+	commits_in: I,
+	commits_out: O,
+) -> (
+	impl Stream<
+		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Error = CommandOrError<H256, NumberFor<Block>>,
+	>,
+	impl Sink<
+		SinkItem = voter::CommunicationOut<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		SinkError = CommandOrError<H256, NumberFor<Block>>,
+	>,
+) where
+	I: Stream<
+		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
+		Error = CommandOrError<H256, NumberFor<Block>>,
+	>,
+	O: Sink<
+		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
+		SinkError = CommandOrError<H256, NumberFor<Block>>,
+	>,
+{
+	let global_in = commits_in.map(|(round, commit)| {
+		voter::CommunicationIn::Commit(round, commit)
+	});
+
+	// NOTE: eventually this will also handle catch-up requests
+	let global_out = commits_out.with(|global| match global {
+		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
+		_ => unimplemented!(),
+	});
+
+	(global_in, global_out)
+}
+
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	local_key: Option<&Arc<ed25519::Pair>>,
 	set_id: u64,
@@ -476,7 +513,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					chain_info.chain.finalized_number,
 				);
 
-				let committer_data = committer_communication(
+				let (commit_in, commit_out) = committer_communication(
 					config.local_key.as_ref(),
 					env.set_id,
 					&env.voters,
@@ -484,12 +521,18 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					&network,
 				);
 
+				let global_comms = global_communication::<Block, _, _>(
+					commit_in,
+					commit_out,
+				);
+
 				let voters = (*env.voters).clone();
 
 				Some(voter::Voter::new(
 					env.clone(),
+					config.local_key.as_ref().map(|key| key.public()),
 					voters,
-					committer_data,
+					global_comms,
 					last_round_number,
 					last_round_state,
 					last_finalized,
