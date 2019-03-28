@@ -119,16 +119,16 @@ decl_module! {
 
 		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
-		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) {
+		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(vote.multiplier() <= Self::max_lock_periods(), "vote has too great a strength");
-			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-			ensure!(!T::Currency::total_balance(&who).is_zero(),
-					"transactor must have balance to signal approval.");
-			if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
-			}
-			<VoteOf<T>>::insert(&(ref_index, who), vote);
+			Self::do_vote(who, ref_index, vote)
+		}
+
+		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact the proposal;
+		/// otherwise it is a vote to keep the status quo.
+		fn proxy_vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
+			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
+			Self::do_vote(who, ref_index, vote)
 		}
 
 		/// Start a referendum.
@@ -147,10 +147,9 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
-		pub fn cancel_queued(#[compact] when: T::BlockNumber, #[compact] which: u32) -> Result {
+		pub fn cancel_queued(#[compact] when: T::BlockNumber, #[compact] which: u32) {
 			let which = which as usize;
 			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
-			Ok(())
 		}
 
 		fn on_finalise(n: T::BlockNumber) {
@@ -159,20 +158,38 @@ decl_module! {
 			}
 		}
 
+		/// Specify a proxy. Called by the stash.
+		fn set_proxy(origin, proxy: T::AccountId) {
+			let who = ensure_signed(origin)?;
+			ensure!(!<Proxy<T>>::exists(&proxy), "already a proxy");
+			<Proxy<T>>::insert(proxy, who)
+		}
+
+		/// Clear the proxy. Called by the proxy.
+		fn resign_proxy(origin) {
+			let who = ensure_signed(origin)?;
+			<Proxy<T>>::remove(who);
+		}
+
+		/// Clear the proxy. Called by the stash.
+		fn remove_proxy(origin, proxy: T::AccountId) {
+			let who = ensure_signed(origin)?;
+			ensure!(&Self::proxy(&proxy).ok_or("not a proxy")? == &who, "wrong proxy");
+			<Proxy<T>>::remove(proxy);
+		}
+
 		/// Delegate vote.
-		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
+		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			Self::deposit_event(RawEvent::Delegated(who, to));
-			Ok(())
 		}
 
 		/// Undelegate vote.
-		fn undelegate(origin) -> Result {
+		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::remove(who.clone());
 			Self::deposit_event(RawEvent::Undelegated(who));
-			Ok(())
 		}
 	}
 }
@@ -235,6 +252,9 @@ decl_storage! {
 		/// voter when called with the referendum (you'll get the default `Vote` value otherwise). If you don't want to check
 		/// `voters_for`, then you can also check for simple existence with `VoteOf::exists` first.
 		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Vote;
+
+		/// Who is able to vote for whom. Value is the fund-holding account, key is the vote-transaction-sending account.
+		pub Proxy get(proxy): map T::AccountId => Option<T::AccountId>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, LockPeriods);
@@ -353,6 +373,17 @@ impl<T: Trait> Module<T> {
 
 	// private.
 
+	/// Actually enact a vote, if legit.
+	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
+		ensure!(vote.multiplier() <= Self::max_lock_periods(), "vote has too great a strength");
+		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
+		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
+			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
+		}
+		<VoteOf<T>>::insert(&(ref_index, who), vote);
+		Ok(())
+	}
+
 	/// Start a referendum
 	fn inject_referendum(
 		end: T::BlockNumber,
@@ -463,6 +494,8 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 }
+
+// TODO: OnFreeBalanceZero should kill proxy.
 
 #[cfg(test)]
 mod tests {
@@ -625,7 +658,59 @@ mod tests {
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 			assert_eq!(Democracy::tally(r), (10, 0, 10));
-			
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			assert_eq!(Balances::free_balance(&42), 2);
+		});
+	}
+
+	#[test]
+	fn proxy_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Democracy::proxy(10), None);
+			assert_ok!(Democracy::set_proxy(Origin::signed(1), 10));
+			assert_eq!(Democracy::proxy(10), Some(1));
+
+			// Can't set when already set.
+			assert_noop!(Democracy::set_proxy(Origin::signed(2), 10), "already a proxy");
+
+			// But this works because 11 isn't proxying.
+			assert_ok!(Democracy::set_proxy(Origin::signed(2), 11));
+			assert_eq!(Democracy::proxy(10), Some(1));
+			assert_eq!(Democracy::proxy(11), Some(2));
+
+			// 2 cannot fire 1's proxy:
+			assert_noop!(Democracy::remove_proxy(Origin::signed(2), 10), "wrong proxy");
+
+			// 1 fires his proxy:
+			assert_ok!(Democracy::remove_proxy(Origin::signed(1), 10));
+			assert_eq!(Democracy::proxy(10), None);
+			assert_eq!(Democracy::proxy(11), Some(2));
+
+			// 11 resigns:
+			assert_ok!(Democracy::resign_proxy(Origin::signed(11)));
+			assert_eq!(Democracy::proxy(10), None);
+			assert_eq!(Democracy::proxy(11), None);
+		});
+	}
+
+	#[test]
+	fn single_proposal_should_work_with_proxy() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_ok!(propose_set_balance(1, 2, 1));
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			System::set_block_number(2);
+			let r = 0;
+			assert_ok!(Democracy::set_proxy(Origin::signed(1), 10));
+			assert_ok!(Democracy::proxy_vote(Origin::signed(10), r, AYE));
+
+			assert_eq!(Democracy::referendum_count(), 1);
+			assert_eq!(Democracy::voters_for(r), vec![1]);
+			assert_eq!(Democracy::vote_of((r, 1)), AYE);
+			assert_eq!(Democracy::tally(r), (10, 0, 10));
+
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
