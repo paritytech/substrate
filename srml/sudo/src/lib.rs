@@ -46,7 +46,6 @@
 //! 
 //! ```ignore
 //! impl sudo::Trait for Runtime {
-//! 	/// The ubiquitous event type.
 //! 	type Event = Event;
 //! 	type Proposal = Call;
 //! }
@@ -119,7 +118,9 @@
 //! * [Consensus](https://crates.parity.io/srml_consensus/index.html)
 //! * [Democracy](https://crates.parity.io/srml_democracy/index.html)
 //! 
-//! ## References
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
+//! [`Origin`]: https://docs.substrate.dev/docs/substrate-types
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
