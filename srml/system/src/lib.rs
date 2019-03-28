@@ -45,13 +45,13 @@
 //! 
 //! ### Prerequisites
 //! 
-//! Import the system module and derive your module configuration trait from the system trait.
+//! Import the system module and derive your module's configuration trait from the system trait.
 //! 
 //! ### Example - Get random seed and extrinsic count for the current block
 //! 
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
-//! use system::ensure_signed;
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
+//! use srml_system::{self as system, ensure_signed};
 //! 
 //! pub trait Trait: system::Trait {}
 //! 
@@ -65,6 +65,7 @@
 //! 		}
 //! 	}
 //! }
+//! # fn main() { }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
