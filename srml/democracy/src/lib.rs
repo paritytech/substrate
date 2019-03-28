@@ -360,6 +360,11 @@ impl<T: Trait> Module<T> {
 
 	// Exposed mutables.
 
+	#[cfg(feature = "std")]
+	pub fn force_proxy(stash: T::AccountId, proxy: T::AccountId) {
+		<Proxy<T>>::insert(proxy, stash)
+	}
+
 	/// Start a referendum. Can be called directly by the council.
 	pub fn internal_start_referendum(proposal: T::Proposal, threshold: VoteThreshold, delay: T::BlockNumber) -> result::Result<ReferendumIndex, &'static str> {
 		<Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, threshold, delay)
