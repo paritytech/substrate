@@ -150,6 +150,10 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
+			transaction_base_fee: 1 * CENTS,
+			transaction_byte_fee: 10 * MILLICENTS,
+			transfer_fee: 1 * CENTS,
+			creation_fee: 1 * CENTS,
 			contract_fee: 1 * CENTS,
 			call_base_fee: 1000,
 			create_base_fee: 1000,
@@ -303,6 +307,10 @@ pub fn testnet_genesis(
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
 			contract_fee: 21,
 			call_base_fee: 135,
 			create_base_fee: 175,
