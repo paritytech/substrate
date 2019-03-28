@@ -166,7 +166,7 @@ impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
 			future: Default::default(),
 			ready: Default::default(),
 			recently_pruned: Default::default(),
-			recently_pruned_idx: 0,
+			recently_pruned_index: 0,
 		}
 	}
 }
