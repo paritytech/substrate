@@ -255,8 +255,7 @@ decl_storage! {
 		/// into the genesis config since the consensus system essentially doubles it for the effective
 		/// period.
 		pub MinimumPeriod get(minimum_period) build(|config: &GenesisConfig<T>| {
-			println!("Initialising: {:?}", config.period);
-			(config.period.clone() + As::sa(1)) / As::sa(2)
+			((config.period.clone() + As::sa(1)) / As::sa(2)).max(As::sa(1))
 		}):
 			T::Moment = T::Moment::sa(3);
 
