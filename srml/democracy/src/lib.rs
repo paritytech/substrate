@@ -24,7 +24,8 @@ use primitives::traits::{Zero, As, Bounded};
 use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier};
+use srml_support::traits::{Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
+	OnFreeBalanceZero};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -500,7 +501,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// TODO: OnFreeBalanceZero should kill proxy.
+impl<T: Trait> OnFreeBalanceZero for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		<Proxy<T>>::remove(who)
+	}
+}
 
 #[cfg(test)]
 mod tests {
