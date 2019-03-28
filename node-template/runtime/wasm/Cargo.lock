@@ -616,7 +616,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "hash256-std-hasher"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "crunchy 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2535,7 +2535,7 @@ dependencies = [
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hash256-std-hasher 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-serde 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2578,7 +2578,7 @@ dependencies = [
  "substrate-panic-handler 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-trie 0.4.0",
- "trie-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-db 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2606,7 +2606,7 @@ dependencies = [
  "hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "trie-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-db 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2887,7 +2887,7 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3183,7 +3183,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3c0f28c2f5bfb5960175af447a2da7c18900693738343dc896ffbcabd9839592"
 "checksum generic-array 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)" = "fceb69994e330afed50c93524be68c42fa898c2d9fd4ee8da03bd7363acd26f2"
 "checksum hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "07463834729d0ce8d475e7dd6d302e407093ad9a9c02d77eb07fb74b5373829d"
-"checksum hash256-std-hasher 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f5c13dbac3cc50684760f54af18545c9e80fb75e93a3e586d71ebdc13138f6a4"
+"checksum hash256-std-hasher 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1224388a21c88a80ae7087a2a245ca6d80acc97a9186b75789fb3eeefd0609af"
 "checksum hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "3bae29b6653b3412c2e71e9d486db9f9df5d701941d86683005efb9f2d28e3da"
 "checksum heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
 "checksum heck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "20564e78d53d2bb135c343b3f47714a56af2061f1c928fdb541dc7b9fdd94205"
@@ -3359,7 +3359,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum tokio-udp 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "66268575b80f4a4a710ef83d087fdfeeabdce9b74c797535fbac18a2cb906e92"
 "checksum tokio-uds 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "037ffc3ba0e12a0ab4aca92e5234e0dedeb48fddf6ccd260f1f150a36a9f2445"
 "checksum toml 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "758664fc71a3a69038656bee8b6be6477d2a6c315a6b81f7081f591bffa4111f"
-"checksum trie-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7f23230c31251bdbdba89cd9caa0cbe2aa9e4aa5f92a80e6eb6296bb290e9146"
+"checksum trie-db 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "843af112ba3a8c919cd961edf3cac9272353f5e277ad8678c7023fa70e5c0e2d"
 "checksum trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e45632ecaf2b8b4a40b5208383cd659b4e66f58ccd40086467a4614b45781430"
 "checksum twofish 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "712d261e83e727c8e2dbb75dacac67c36e35db36a958ee504f2164fc052434e1"
 "checksum twox-hash 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "555cd4909480122bbbf21e34faac4cb08a171f324775670447ed116726c474af"
