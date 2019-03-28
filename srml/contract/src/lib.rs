@@ -74,7 +74,7 @@ use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
-use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced};
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
 use timestamp;
 
@@ -133,7 +133,12 @@ where
 	}
 }
 
-pub trait Trait: balances::Trait + timestamp::Trait {
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+
+pub trait Trait: timestamp::Trait {
+	type Currency: Currency<Self::AccountId>;
+
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
 
@@ -141,7 +146,7 @@ pub trait Trait: balances::Trait + timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<BalanceOf<Self>> + As<u64> + As<u32>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -150,12 +155,13 @@ pub trait Trait: balances::Trait + timestamp::Trait {
 	///
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by executive module for regular dispatch.
-	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
+	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
+
 	/// trieid id generator
 	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
-	type GasPayment: OnUnbalanced<balances::NegativeImbalance<Self>>;
+	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 /// Simple contract address determintator.
@@ -184,12 +190,12 @@ where
 /// The default dispatch fee computor computes the fee in the same way that
 /// implementation of `MakePayment` for balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
-impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
-	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
+impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
+	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len());
-		let base_fee = <balances::Module<T>>::transaction_base_fee();
-		let byte_fee = <balances::Module<T>>::transaction_byte_fee();
-		base_fee + byte_fee * <T::Balance as As<u64>>::sa(encoded_len as u64)
+		let base_fee = <Module<T>>::transaction_base_fee();
+		let byte_fee = <Module<T>>::transaction_byte_fee();
+		base_fee + byte_fee * <BalanceOf<T> as As<u64>>::sa(encoded_len as u64)
 	}
 }
 
@@ -237,7 +243,7 @@ decl_module! {
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[compact] value: T::Balance,
+			#[compact] value: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
 			data: Vec<u8>
 		) -> Result {
@@ -291,7 +297,7 @@ decl_module! {
 		///   upon any message received by this account.
 		fn create(
 			origin,
-			#[compact] endowment: T::Balance,
+			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
@@ -342,7 +348,7 @@ decl_module! {
 decl_event! {
 	pub enum Event<T>
 	where
-		<T as balances::Trait>::Balance,
+		Balance = BalanceOf<T>,
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
@@ -366,14 +372,22 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
+		/// The fee required to make a transfer.
+		TransferFee get(transfer_fee) config(): BalanceOf<T>;
+		/// The fee required to create an account.
+		CreationFee get(creation_fee) config(): BalanceOf<T>;
+		/// The fee to be paid for making a transaction; the base.
+		TransactionBaseFee get(transaction_base_fee) config(): BalanceOf<T>;
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
 		/// The fee required to create a contract.
-		ContractFee get(contract_fee) config(): T::Balance = T::Balance::sa(21);
+		ContractFee get(contract_fee) config(): BalanceOf<T> = BalanceOf::<T>::sa(21);
 		/// The fee charged for a call into a contract.
 		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
 		/// The fee charged for a create of a contract.
 		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
 		/// The price of one unit of gas.
-		GasPrice get(gas_price) config(): T::Balance = T::Balance::sa(1);
+		GasPrice get(gas_price) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
 		/// The maximum nesting level of a call/create stack.
 		MaxDepth get(max_depth) config(): u32 = 100;
 		/// The maximum amount of gas that could be expended per block.
@@ -410,11 +424,11 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// course of transaction execution.
 pub struct Config<T: Trait> {
 	pub schedule: Schedule<T::Gas>,
-	pub existential_deposit: T::Balance,
+	pub existential_deposit: BalanceOf<T>,
 	pub max_depth: u32,
-	pub contract_account_instantiate_fee: T::Balance,
-	pub account_create_fee: T::Balance,
-	pub transfer_fee: T::Balance,
+	pub contract_account_instantiate_fee: BalanceOf<T>,
+	pub account_create_fee: BalanceOf<T>,
+	pub transfer_fee: BalanceOf<T>,
 	pub call_base_fee: T::Gas,
 	pub instantiate_base_fee: T::Gas,
 }
@@ -423,11 +437,11 @@ impl<T: Trait> Config<T> {
 	fn preload() -> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
-			existential_deposit: <balances::Module<T>>::existential_deposit(),
+			existential_deposit: T::Currency::minimum_balance(),
 			max_depth: <Module<T>>::max_depth(),
 			contract_account_instantiate_fee: <Module<T>>::contract_fee(),
-			account_create_fee: <balances::Module<T>>::creation_fee(),
-			transfer_fee: <balances::Module<T>>::transfer_fee(),
+			account_create_fee: <Module<T>>::creation_fee(),
+			transfer_fee: <Module<T>>::transfer_fee(),
 			call_base_fee: <Module<T>>::call_base_fee(),
 			instantiate_base_fee: <Module<T>>::create_base_fee(),
 		}

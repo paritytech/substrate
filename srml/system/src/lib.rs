@@ -14,8 +14,59 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System manager: Handles lowest level stuff like depositing logs, basic set up and take down of
-//! temporary storage entries, access to old block hashes.
+//! # System module
+//! 
+//! The system module provides low-level access to core types and cross-cutting utilities.
+//! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
+//! To use it in your module, you should ensure your module's trait implies the system [`Trait`].
+//! 
+//! ## Overview
+//! 
+//! The system module defines the core data types used in a Substrate runtime.
+//! It also provides several utility functions (see [`Module`]) for other runtime modules.
+//! 
+//! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, 
+//! among other things that support the execution of the current block.
+//! 
+//! It also handles low level tasks like depositing logs, basic set up and take down of
+//! temporary storage entries and access to previous block hashes.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable functions
+//! 
+//! The system module does not implement any dispatchable functions.
+//! 
+//! ### Public functions
+//! 
+//! All public functions are available as part of the [`Module`] type.
+//! 
+//! ## Usage
+//! 
+//! ### Prerequisites
+//! 
+//! Import the system module and derive your module's configuration trait from the system trait.
+//! 
+//! ### Example - Get random seed and extrinsic count for the current block
+//! 
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
+//! use srml_system::{self as system, ensure_signed};
+//! 
+//! pub trait Trait: system::Trait {}
+//! 
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn system_module_example(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _random_seed = <system::Module<T>>::random_seed();
+//! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! # fn main() { }
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -60,32 +111,64 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 	}
 }
 
-/// Compute the extrinsics root of a list of extrinsics.
+/// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: parity_codec::Encode>(extrinsics: &[E]) -> H::Output {
 	extrinsics_data_root::<H>(extrinsics.iter().map(parity_codec::Encode::encode).collect())
 }
 
-/// Compute the extrinsics root of a list of extrinsics.
+/// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	H::enumerated_trie_root(&xts)
 }
 
 pub trait Trait: 'static + Eq + Clone {
+	/// The aggregated `Origin` type used by dispatchable calls.
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
-	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
-	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
-	type Hash: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+
+	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
+	/// account.
+	type Index:
+		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+
+	/// The block number type used by the runtime.
+	type BlockNumber:
+		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
+		+ rstd::hash::Hash;
+	
+	/// The output of the `Hashing` function.
+	type Hash:
+		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
+		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+	
+	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+
+	/// Collection of (light-client-relevant) logs for a block to be included verbatim in the block header.
+	type Digest:
+		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+
+	/// The user account identifier type for the runtime.
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+
+	/// Converting trait to take a source type and convert to `AccountId`.
+	///
+	/// Used to define the type and conversion mechanism for referencing accounts in transactions. It's perfectly
+	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
+	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
+
+	/// The block header.
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
+
+	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
+
+	/// A piece of information which can be part of the digest (as a digest item).
 	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
@@ -191,7 +274,7 @@ impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestIte
 }
 
 // Create a Hash with 69 for each byte,
-// only used to build genesis config
+// only used to build genesis config.
 #[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
@@ -201,20 +284,27 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
-
+		/// Extrinsics nonce for accounts.
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
-
+		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
+		/// Total length in bytes for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
+		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		/// Extrinsics data for the current block (maps extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
+		/// Random seed of the current block.
 		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
+		/// Hash of the previous block.
 		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
+		/// Extrinsics root of the current block, also part of the block header.
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
+		/// Digest of the current block, also part of the block header.
 		Digest get(digest): T::Digest;
-
+		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event>>;
 	}
 	add_extra_genesis {
