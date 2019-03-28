@@ -262,7 +262,7 @@ decl_storage! {
 		DidUpdate: bool;
 	}
 	add_extra_genesis {
-		config(period): T::Moment;
+		config(period): T::Moment = T::Moment::sa(6);
 	}
 }
 
