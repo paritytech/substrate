@@ -120,10 +120,13 @@ impl<Block: BlockT> DbCache<Block> {
 			self.key_lookup_column,
 			self.header_column,
 			self.authorities_column,
-			&self.best_finalized_block)
+			&self.best_finalized_block
+		)
 	}
 }
 
+// This helper is needed because otherwise the borrow checker will require to
+// clone all parameters outside of the closure.
 fn get_cache_helper<'a, Block: BlockT>(
 	cache_at: &'a mut HashMap<Vec<u8>, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	name: Vec<u8>,
@@ -189,7 +192,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			.cloned()
 			.collect::<Vec<_>>();
 
-		for (name, data) in data_at.into_iter() {
+		let mut insert_op = |name: Vec<u8>, value: Option<Vec<u8>>| -> Result<(), client::error::Error> {
 			let cache = self.cache.get_cache(name.clone());
 			let op = cache.on_block_insert(
 				&mut self::list_storage::DbStorageTransaction::new(
@@ -198,34 +201,25 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				),
 				parent.clone(),
 				block.clone(),
-				Some(data),
+				value.or(cache.value_at_block(&parent)?),
 				is_final,
 			)?;
 			if let Some(op) = op {
 				self.cache_at_op.insert(name, op);
 			}
+			Ok(())
+		};
+
+		for (name, data) in data_at.into_iter() {
+			insert_op(name, Some(data))?;
 		}
 
 		for name in missed_caches.into_iter() {
-			let cache = self.cache.get_cache(name.clone());
-			let same_value = cache.value_at_block(&parent)?;
-			let op = cache.on_block_insert(
-				&mut self::list_storage::DbStorageTransaction::new(
-					cache.storage(),
-					&mut self.tx,
-				),
-				parent.clone(),
-				block.clone(),
-				same_value,
-				is_final,
-			)?;
-			if let Some(op) = op {
-				self.cache_at_op.insert(name.clone(), op);
-			}
+			insert_op(name, None)?;
 		}
 
 		if is_final {
-			self.best_finalized_block = Some(block.clone());
+			self.best_finalized_block = Some(block);
 		}
 
 		Ok(self)
@@ -254,7 +248,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			}
 		}
 
-		self.best_finalized_block = Some(block.clone());
+		self.best_finalized_block = Some(block);
 
 		Ok(self)
 	}
@@ -288,7 +282,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			},
 		};
 
-		cache.cache_at.get(key).unwrap().value_at_block(&at).ok()?
+		cache.cache_at.get(key)?.value_at_block(&at).ok()?
 	}
 }
 
