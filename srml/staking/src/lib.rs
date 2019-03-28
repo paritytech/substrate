@@ -152,6 +152,29 @@
 //! Staking::chill(Origin::signed(4));
 //! ```
 //!
+//! You can find the equivalent of the above calls in your [Substrate UI](https://substrate-ui.parity.io).
+//! ### Snippet: Reporting Misbehavior
+//!
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! use srml_staking::{self as staking};
+//!
+//! pub trait Trait: staking::Trait {}
+//!
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!			/// Report whoever calls this function as offline once.
+//! 		pub fn report_sender(origin) -> Result {
+//! 			let reported = ensure_signed(origin)?;
+//! 			<staking::Module<T>>::on_offline_validator(reported, 1);
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! # fn main() { }
+//! ```
+//!
 //! ## Implementation Details
 //!
 //! ### Slot Stake
@@ -533,7 +556,7 @@ decl_module! {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
 		/// account that controls it.
 		///
-		/// The dispatch origin for this call must be _Signed_.
+		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: RewardDestination) {
 			let stash = ensure_signed(origin)?;
 

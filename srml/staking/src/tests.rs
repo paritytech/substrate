@@ -1835,10 +1835,6 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
 		};
-		let bond_nominator = |a, b, v| {
-			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(a), v));
-		};
 
 		for i in 1..=8 {
 			let _ = Balances::make_free_balance_be(&i, u64::max_value());
@@ -1848,9 +1844,6 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 		bond_validator(4, u64::max_value());
 		bond_validator(6, u64::max_value()-1);
 		bond_validator(8, u64::max_value()-2);
-
-		// bond_nominator(6, u64::max_value(), vec![1, 3]);
-		// bond_nominator(8, u64::max_value(), vec![1, 3]);
 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());

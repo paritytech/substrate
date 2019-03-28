@@ -109,6 +109,27 @@ macro_rules! assert_ok {
 	}
 }
 
+/// Panic when the vectors are different, without taking the order into account.
+///
+/// # Examples
+///
+/// ```rust
+/// #[macro_use]
+/// # extern crate srml_support;
+/// # use srml_support::{assert_eq_uvec};
+/// # fn main() {
+/// assert_eq_uvec!(vec![1,2], vec![2,1]);
+/// # }
+/// ```
+///
+/// ```rust,should_panic
+/// #[macro_use]
+/// # extern crate srml_support;
+/// # use srml_support::{assert_eq_uvec};
+/// # fn main() {
+/// assert_eq_uvec!(vec![1,2,3], vec![2,1]);
+/// # }
+/// ```
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_eq_uvec {
@@ -117,6 +138,7 @@ macro_rules! assert_eq_uvec {
 		$crate::__assert_eq_uvec!($y, $x);
 	}
 }
+
 #[macro_export]
 #[doc(hidden)]
 #[cfg(feature = "std")]
