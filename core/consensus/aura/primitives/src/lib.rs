@@ -19,6 +19,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_client::decl_runtime_apis;
+use runtime_primitives::ConsensusEngineId;
+
+pub const AURA: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.

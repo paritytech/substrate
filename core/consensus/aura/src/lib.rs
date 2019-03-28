@@ -37,6 +37,7 @@ use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
+use aura_primitives::AURA;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
@@ -62,8 +63,6 @@ pub use consensus_common::SyncOracle;
 
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
-
-const AURA: [u8; 4] = [b'a', b'u', b'r', b'a'];
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
