@@ -136,7 +136,7 @@ pub trait Trait: 'static + Eq + Clone {
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
 		+ rstd::hash::Hash;
 	
-	/// The output of a hashing function.
+	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
 		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
