@@ -406,7 +406,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// The fee required to create a contract instance.  Must be at least as big as staking’s `ReclaimRebate`.
 		ContractFee get(contract_fee) config(): T::Balance = T::Balance::sa(21);
-		/// The base fee charged for a call into a contract.
+		/// The base fee charged for calling into a contract.
 		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
 		/// The base fee charged for creating a contract.
 		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
