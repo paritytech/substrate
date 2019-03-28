@@ -205,7 +205,7 @@ macro_rules! __decl_generic_event {
 		$event_generic_param:ident;
 		$($instance:ident $( = $event_default_instance:path)? )?;
 		{ $generic_rename:ident = $generic_type:ty $(,)? { $( $events:tt )* } };
-		{$( $parsed:tt)*};
+		{ $($parsed:tt)* };
 	) => {
 		$crate::__decl_generic_event!(@generate
 			$(#[$attr])*;
