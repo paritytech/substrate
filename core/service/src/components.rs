@@ -21,7 +21,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
 use crate::chain_spec::ChainSpec;
 use client_db;
-use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
+use client::{self, Client, runtime_api};
 use crate::{error, Service, maybe_start_server};
 use consensus_common::import_queue::ImportQueue;
 use network::{self, OnDemand};
@@ -150,7 +150,7 @@ pub trait StartRPC<C: Components> {
 
 impl<C: Components> StartRPC<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: Metadata<ComponentBlock<C>>,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
 {
 	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
 
@@ -192,14 +192,14 @@ impl<C: Components> StartRPC<Self> for C where
 
 /// Something that can maintain transaction pool on every imported block.
 pub trait MaintainTransactionPool<C: Components> {
-	fn on_block_imported(
+	fn maintain_transaction_pool(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,
 		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
 	) -> error::Result<()>;
 }
 
-fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
+fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	id: &BlockId<Block>,
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
@@ -207,7 +207,7 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
@@ -227,14 +227,35 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 
 impl<C: Components> MaintainTransactionPool<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<ComponentBlock<C>>,
 {
-	fn on_block_imported(
+	fn maintain_transaction_pool(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,
 		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
 	) -> error::Result<()> {
-		on_block_imported(id, client, transaction_pool)
+		maintain_transaction_pool(id, client, transaction_pool)
+	}
+}
+
+pub trait OffchainWorker<C: Components> {
+	fn offchain_workers(
+		number: &FactoryBlockNumber<C::Factory>,
+		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
+	) -> error::Result<()>;
+}
+
+impl<C: Components> OffchainWorker<Self> for C where
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: offchain::OffchainWorkerApi<ComponentBlock<C>>,
+{
+	fn offchain_workers(
+		number: &FactoryBlockNumber<C::Factory>,
+		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
+	) -> error::Result<()> {
+		Ok(offchain.on_block_imported(number, pool))
 	}
 }
 
@@ -246,9 +267,16 @@ pub trait ServiceTrait<C: Components>:
 	+ 'static
 	+ StartRPC<C>
 	+ MaintainTransactionPool<C>
+	+ OffchainWorker<C>
 {}
 impl<C: Components, T> ServiceTrait<C> for T where
-	T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + MaintainTransactionPool<C>
+	T: Deref<Target = Service<C>>
+	+ Send
+	+ Sync
+	+ 'static
+	+ StartRPC<C>
+	+ MaintainTransactionPool<C>
+	+ OffchainWorker<C>
 {}
 
 /// A collection of types and methods to build a service on top of the substrate service.
@@ -338,17 +366,14 @@ pub trait Components: Sized + 'static {
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync + Clone;
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
-	/// A type that can start the RPC.
-	type RPC: StartRPC<Self>;
+	/// A type that can start all runtime-dependent services.
+	type RuntimeServices: ServiceTrait<Self>;
 	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
-	/// A type that can maintain transaction pool.
-	type TransactionPool: MaintainTransactionPool<Self>;
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
 		Hash = <FactoryBlock<Self::Factory> as BlockT>::Hash,
 		Block = FactoryBlock<Self::Factory>
 	>;
-
 	/// Our Import Queue
 	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
 
@@ -382,6 +407,7 @@ pub struct FullComponents<Factory: ServiceFactory> {
 }
 
 impl<Factory: ServiceFactory> FullComponents<Factory> {
+	/// Create new `FullComponents`
 	pub fn new(
 		config: FactoryFullConfiguration<Factory>,
 		task_executor: TaskExecutor
@@ -416,8 +442,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type TransactionPoolApi = <Factory as ServiceFactory>::FullTransactionPoolApi;
 	type ImportQueue = Factory::FullImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
-	type RPC = Factory::FullService;
-	type TransactionPool = Factory::FullService;
+	type RuntimeServices = Factory::FullService;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -462,6 +487,7 @@ pub struct LightComponents<Factory: ServiceFactory> {
 }
 
 impl<Factory: ServiceFactory> LightComponents<Factory> {
+	/// Create new `LightComponents`
 	pub fn new(
 		config: FactoryFullConfiguration<Factory>,
 		task_executor: TaskExecutor
@@ -490,8 +516,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type TransactionPoolApi = <Factory as ServiceFactory>::LightTransactionPoolApi;
 	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
-	type RPC = Factory::LightService;
-	type TransactionPool = Factory::LightService;
+	type RuntimeServices = Factory::LightService;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -564,7 +589,7 @@ mod tests {
 
 		// fire notification - this should clean up the queue
 		assert_eq!(pool.status().ready, 1);
-		on_block_imported(
+		maintain_transaction_pool(
 			&id,
 			&client,
 			&pool,

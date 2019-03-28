@@ -58,7 +58,7 @@ spec:
           - sed -n -r "s/^${POD_NAME}-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/key;
             sed -n -r "s/^${POD_NAME}-node-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/node-key;
             sed -n -r "s/^${POD_NAME}-name ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/name;
-            test -z {{ .Values.image.basepath }}/name && echo "${POD_NAME}" > {{ .Values.image.basepath }}/name
+            test -s {{ .Values.image.basepath }}/name || echo "${POD_NAME}" > {{ .Values.image.basepath }}/name
         env:
           # from (workaround for hostname)
           # https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/

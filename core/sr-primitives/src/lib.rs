@@ -393,21 +393,6 @@ impl From<sr25519::Signature> for AnySignature {
 	}
 }
 
-/// Context for executing a call into the runtime.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
-pub enum ExecutionContext {
-	/// Context for general importing (including own blocks).
-	Importing,
-	/// Context used when syncing the blockchain.
-	Syncing,
-	/// Context used for block construction.
-	BlockConstruction,
-	/// Context used for other calls.
-	Other,
-}
-
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -676,8 +661,14 @@ macro_rules! impl_outer_log {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for OpaqueExtrinsic {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(fmt, "{}", substrate_primitives::hexdisplay::HexDisplay::from(&self.0))
+	}
+}
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {

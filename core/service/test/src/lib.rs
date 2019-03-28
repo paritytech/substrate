@@ -120,7 +120,9 @@ fn node_config<F: ServiceFactory> (
 		rpc_ws: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
+		offchain_worker: false,
 		force_authoring: false,
+		disable_grandpa: false,
 	}
 }
 

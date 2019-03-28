@@ -24,7 +24,7 @@ use phragmen;
 use primitives::Perquintill;
 use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
-use srml_support::traits::Currency;
+use srml_support::traits::{Currency, ReservableCurrency};
 
 #[test]
 fn basic_setup_works() {
@@ -728,7 +728,7 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		// new era, pay rewards,
-		System::set_block_number(2);
+		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
 		// Nominator stash didn't collect any.
@@ -1104,12 +1104,12 @@ fn bond_extra_works() {
 		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Call the bond_extra function from controller, add only 100
-		assert_ok!(Staking::bond_extra(Origin::signed(10), 100));
+		assert_ok!(Staking::bond_extra(Origin::signed(11), 100));
 		// There should be 100 more `total` and `active` in the ledger
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 
 		// Call the bond_extra function with a large number, should handle it
-		assert_ok!(Staking::bond_extra(Origin::signed(10), u64::max_value()));
+		assert_ok!(Staking::bond_extra(Origin::signed(11), u64::max_value()));
 		// The full amount of the funds should now be in the total and active
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000000, active: 1000000, unlocking: vec![] }));
 
@@ -1161,7 +1161,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_eq!(Staking::stakers(&11), Exposure { total: 1000, own: 1000, others: vec![] });
 
 		// deposit the extra 100 units
-		Staking::bond_extra(Origin::signed(10), 100).unwrap();
+		Staking::bond_extra(Origin::signed(11), 100).unwrap();
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
 		// Exposure is a snapshot! only updated after the next era update.
@@ -1883,5 +1883,107 @@ fn phragmen_chooses_correct_validators() {
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Session::validators().len(), 1);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_validators() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		bond_validator(2, u64::max_value());
+		bond_validator(4, u64::max_value());
+
+		bond_nominator(6, u64::max_value()/2, vec![1, 3]);
+		bond_nominator(8, u64::max_value()/2, vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![4, 2]);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_nominators() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(2, u64::max_value()/2);
+		bond_validator(4, u64::max_value()/2);
+
+		bond_nominator(6, u64::max_value(), vec![1, 3]);
+		bond_nominator(8, u64::max_value(), vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![4, 2]);
+	})
+}
+
+#[test]
+fn phragmen_should_not_overflow_ultimate() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.build()
+	, || {
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+
+		for i in 1..=8 {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(2, u64::max_value());
+		bond_validator(4, u64::max_value());
+
+		bond_nominator(6, u64::max_value(), vec![1, 3]);
+		bond_nominator(8, u64::max_value(), vec![1, 3]);
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![4, 2]);
 	})
 }
