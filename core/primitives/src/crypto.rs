@@ -218,6 +218,16 @@ pub trait Derive: Sized {
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> { None }
 }
 
+const PREFIX: &[u8] = b"SS58PRE";
+
+#[cfg(feature = "std")]
+fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
+	let mut context = blake2_rfc::blake2b::Blake2b::new(64);
+	context.update(PREFIX);
+	context.update(data);
+	context.finalize()
+}
+
 #[cfg(feature = "std")]
 impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
@@ -232,7 +242,8 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 			// Invalid version.
 			return Err(PublicError::UnknownVersion);
 		}
-		if d[len+1..len+3] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..len+1]).as_bytes()[0..2] {
+
+		if d[len+1..len+3] != ss58hash(&d[0..len+1]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
@@ -243,7 +254,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn to_ss58check(&self) -> String {
 		let mut v = vec![42u8];
 		v.extend(self.as_ref());
-		let r = blake2_rfc::blake2b::blake2b(64, &[], &v);
+		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
