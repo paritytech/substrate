@@ -47,7 +47,7 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future};
 use tokio::timer::Timeout;
-use log::{warn, debug, info, trace, error};
+use log::{warn, debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
