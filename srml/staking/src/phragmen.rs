@@ -17,11 +17,13 @@
 //! Rust implementation of the Phragmén election algorithm.
 
 use rstd::prelude::*;
-use primitives::Perquintill;
-use primitives::traits::{Zero, As, Bounded, CheckedMul, Saturating};
+use primitives::PerU128;
+use primitives::traits::{Zero, Saturating, Convert};
 use parity_codec::{HasCompact, Encode, Decode};
 use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
+type Fraction = PerU128;
+type ExtendedBalance = u128;
 
 /// Configure the behavior of the Phragmen election.
 /// Might be deprecated.
@@ -43,39 +45,39 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 	/// Exposure struct, holding info about the value that the validator has in stake.
 	pub exposure: Exposure<AccountId, Balance>,
 	/// Intermediary value used to sort candidates.
-	pub score: Perquintill,
+	pub score: Fraction,
 	/// Accumulator of the stake of this candidate based on received votes.
-	approval_stake: Balance,
+	approval_stake: ExtendedBalance,
 	/// Flag for being elected.
 	elected: bool,
 	/// This is most often equal to `Exposure.total` but not always. Needed for [`equalize`]
-	backing_stake: Balance
+	backing_stake: ExtendedBalance
 }
 
 /// Wrapper around the nomination info of a single nominator for a group of validators.
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Nominator<AccountId, Balance: HasCompact> {
+pub struct Nominator<AccountId> {
 	/// The nominator's account.
 	who: AccountId,
 	/// List of validators proposed by this nominator.
-	edges: Vec<Edge<AccountId, Balance>>,
+	edges: Vec<Edge<AccountId>>,
 	/// the stake amount proposed by the nominator as a part of the vote.
-	budget: Balance,
+	budget: ExtendedBalance,
 	/// Incremented each time a nominee that this nominator voted for has been elected.
-	load: Perquintill,
+	load: Fraction,
 }
 
 /// Wrapper around a nominator vote and the load of that vote.
 #[derive(Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Edge<AccountId, Balance: HasCompact> {
+pub struct Edge<AccountId> {
 	/// Account being voted for
 	who: AccountId,
 	/// Load of this vote.
-	load: Perquintill,
+	load: Fraction,
 	/// Final backing stake of this vote.
-	backing_stake: Balance,
+	backing_stake: ExtendedBalance,
 	/// Index of the candidate stored in the 'candidates' vector
 	candidate_index: usize,
 	/// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalize.
@@ -107,6 +109,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	>>,
 	for <'r> FS: Fn(&'r T::AccountId) -> BalanceOf<T>,
 {
+	let expand = |b: BalanceOf<T>|    <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
+	let shrink = |b: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
 	let rounds = get_rounds();
 	let mut elected_candidates;
 
@@ -121,14 +125,14 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
 	// 1.1- Add phantom votes.
-	let mut nominators: Vec<Nominator<T::AccountId, BalanceOf<T>>> = Vec::with_capacity(candidates.len());
+	let mut nominators: Vec<Nominator<T::AccountId>> = Vec::with_capacity(candidates.len());
 	candidates.iter_mut().enumerate().for_each(|(idx, c)| {
-		c.approval_stake += c.exposure.total;
+		c.approval_stake += expand(c.exposure.total);
 		nominators.push(Nominator {
 			who: c.who.clone(),
 			edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
-			budget: c.exposure.total,
-			load: Perquintill::zero(),
+			budget: expand(c.exposure.total),
+			load: Fraction::zero(),
 		})
 	});
 
@@ -136,10 +140,11 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	// Also collect approval stake along the way.
 	nominators.extend(get_nominators().map(|(who, nominees)| {
 		let nominator_stake = stash_of(&who);
-		let mut edges: Vec<Edge<T::AccountId, BalanceOf<T>>> = Vec::with_capacity(nominees.len());
+		let mut edges: Vec<Edge<T::AccountId>> = Vec::with_capacity(nominees.len());
 		for n in &nominees {
 			if let Some(idx) = candidates.iter_mut().position(|i| i.who == *n) {
-				candidates[idx].approval_stake = candidates[idx].approval_stake.saturating_add(nominator_stake);
+				candidates[idx].approval_stake = candidates[idx].approval_stake
+					.saturating_add(expand(nominator_stake));
 				edges.push(Edge { who: n.clone(), candidate_index: idx, ..Default::default() });
 			}
 		}
@@ -147,15 +152,15 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		Nominator {
 			who,
 			edges: edges,
-			budget: nominator_stake,
-			load: Perquintill::zero(),
+			budget: expand(nominator_stake),
+			load: Fraction::zero(),
 		}
 	}));
 
 
 	// 3- optimization:
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
-	let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
+	let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > 0)
 		.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
 	// 4- If we have more candidates then needed, run Phragmén.
@@ -166,7 +171,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			// Loop 1: initialize score
 			for c in &mut candidates {
 				if !c.elected {
-					c.score = Perquintill::from_xth(c.approval_stake.as_());
+					c.score = Fraction::from_xth(c.approval_stake);
 				}
 			}
 			// Loop 2: increment score.
@@ -174,10 +179,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				for e in &n.edges {
 					let c = &mut candidates[e.candidate_index];
 					if !c.elected {
-						// Note: This seems to never overflow, ok to be safe though
-						let temp = n.budget.as_().saturating_mul(*n.load) / c.approval_stake.as_();
-						// Note: This seems to never overflow, ok to be safe though
-						c.score = Perquintill::from_quintillionths((*c.score).saturating_add(temp));
+						let temp = n.budget.saturating_mul(*n.load) / c.approval_stake;
+						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
 					}
 				}
 			}
@@ -194,7 +197,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			for n in &mut nominators {
 				for e in &mut n.edges {
 					if e.who == winner.who {
-						e.load = Perquintill::from_quintillionths(*winner.score - *n.load);
+						e.load = Fraction::from_max_value(*winner.score - *n.load);
 						n.load = winner.score;
 					}
 				}
@@ -209,14 +212,14 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who) {
 					e.elected = true;
-					// NOTE: always divide last to avoid collapse to zero.
-					e.backing_stake = <BalanceOf<T>>::sa(n.budget.as_().saturating_mul(*e.load) / *n.load);
+					// NOTE: for now, always divide last to avoid collapse to zero.
+					e.backing_stake = n.budget.saturating_mul(*e.load) / *n.load;
 					c.backing_stake = c.backing_stake.saturating_add(e.backing_stake);
 					if c.who != n.who {
 						// Only update the exposure if this vote is from some other account.
-						c.exposure.total = c.exposure.total.saturating_add(e.backing_stake);
+						c.exposure.total = c.exposure.total.saturating_add(shrink(e.backing_stake));
 						c.exposure.others.push(
-							IndividualExposure { who: n.who.clone(), value: e.backing_stake }
+							IndividualExposure { who: n.who.clone(), value: shrink(e.backing_stake) }
 						);
 					}
 				}
@@ -250,7 +253,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				}
 			}
 		}
-
 	} else {
 		if candidates.len() > minimum_validator_count {
 			// if we don't have enough candidates, just choose all that have some vote.
@@ -259,9 +261,9 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				let nominator = n.who.clone();
 				for e in &mut n.edges {
 					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who && c.who != nominator) {
-						c.exposure.total = c.exposure.total.saturating_add(n.budget);
+						c.exposure.total = c.exposure.total.saturating_add(shrink(n.budget));
 						c.exposure.others.push(
-							IndividualExposure { who: n.who.clone(), value: n.budget }
+							IndividualExposure { who: n.who.clone(), value: shrink(n.budget) }
 						);
 					}
 				}
@@ -274,29 +276,40 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	Some(elected_candidates)
 }
 
+/// Performs equalize post-processing to the output of the election algorithm
+/// This function mutates the input parameters, most noticeably it updates the exposure of
+/// the elected candidates.
+/// The return value is to tolerance at which the function has stopped.
 pub fn equalize<T: Trait + 'static>(
-	nominator: &mut Nominator<T::AccountId, BalanceOf<T>>,
+	nominator: &mut Nominator<T::AccountId>,
 	elected_candidates: &mut Vec<Candidate<T::AccountId, BalanceOf<T>>>,
-	tolerance: BalanceOf<T>
+	_tolerance: BalanceOf<T>
 ) -> BalanceOf<T> {
+	let expand = |b: BalanceOf<T>|    <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
+	let shrink = |b: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
+	let tolerance = expand(_tolerance);
 
 	let mut elected_edges = nominator.edges
 		.iter_mut()
 		.filter(|e| e.elected)
-		.collect::<Vec<&mut Edge<T::AccountId, BalanceOf<T>>>>();
-	if elected_edges.len() == 0 { return <BalanceOf<T>>::zero(); }
+		.collect::<Vec<&mut Edge<T::AccountId>>>();
+
+	if elected_edges.len() == 0 {
+		return <BalanceOf<T>>::zero();
+	}
+
 	let stake_used = elected_edges
 		.iter()
-		.fold(<BalanceOf<T>>::zero(), |s, e| s.saturating_add(e.backing_stake));
+		.fold(0, |s, e| s.saturating_add(e.backing_stake));
 	let backed_stakes = elected_edges
 		.iter()
 		.map(|e| elected_candidates[e.elected_idx].backing_stake)
-		.collect::<Vec<BalanceOf<T>>>();
+		.collect::<Vec<ExtendedBalance>>();
 	let backing_backed_stake = elected_edges
 		.iter()
-		.filter(|e| e.backing_stake > <BalanceOf<T>>::zero())
+		.filter(|e| e.backing_stake > 0)
 		.map(|e| elected_candidates[e.elected_idx].backing_stake)
-		.collect::<Vec<BalanceOf<T>>>();
+		.collect::<Vec<ExtendedBalance>>();
 
 	let mut difference;
 	if backing_backed_stake.len() > 0 {
@@ -311,7 +324,7 @@ pub fn equalize<T: Trait + 'static>(
 		difference = max_stake.saturating_sub(min_stake);
 		difference = difference.saturating_add(nominator.budget.saturating_sub(stake_used));
 		if difference < tolerance {
-			return difference;
+			return shrink(difference);
 		}
 	} else {
 		difference = nominator.budget;
@@ -322,18 +335,19 @@ pub fn equalize<T: Trait + 'static>(
 		// NOTE: no assertions in the runtime, but this should nonetheless be indicative.
 		//assert_eq!(elected_candidates[e.elected_idx].who, e.who);
 		elected_candidates[e.elected_idx].backing_stake -= e.backing_stake;
-		elected_candidates[e.elected_idx].exposure.total -= e.backing_stake;
-		e.backing_stake = <BalanceOf<T>>::zero();
+		elected_candidates[e.elected_idx].exposure.total -= shrink(e.backing_stake);
+		e.backing_stake = 0;
 	});
 
 	elected_edges.sort_unstable_by_key(|e| elected_candidates[e.elected_idx].backing_stake);
 
-	let mut cumulative_stake = <BalanceOf<T>>::zero();
+	let mut cumulative_stake: ExtendedBalance = 0;
 	let mut last_index = elected_edges.len() - 1;
 	let budget = nominator.budget;
 	elected_edges.iter_mut().enumerate().for_each(|(idx, e)| {
 		let stake = elected_candidates[e.elected_idx].backing_stake;
-		let stake_mul = stake.checked_mul(&<BalanceOf<T>>::sa(idx as u64)).unwrap_or(<BalanceOf<T>>::max_value());
+
+		let stake_mul = stake.saturating_mul(idx as ExtendedBalance);
 		let stake_sub = stake_mul.saturating_sub(cumulative_stake);
 		if stake_sub > budget {
 			last_index = idx.checked_sub(1).unwrap_or(0);
@@ -346,19 +360,18 @@ pub fn equalize<T: Trait + 'static>(
 	let split_ways = last_index + 1;
 	let excess = nominator.budget
 		.saturating_add(cumulative_stake)
-		.saturating_sub(
-			last_stake.checked_mul(&<BalanceOf<T>>::sa(split_ways as u64))
-				.unwrap_or(<BalanceOf<T>>::max_value())
-		);
+		.saturating_sub(last_stake.saturating_mul(split_ways as ExtendedBalance));
 	let nominator_address = nominator.who.clone();
 	elected_edges.iter_mut().take(split_ways).for_each(|e| {
 		let c = &mut elected_candidates[e.elected_idx];
-		e.backing_stake = (excess / <BalanceOf<T>>::sa(split_ways as u64)).saturating_add(last_stake) - c.backing_stake;
-		c.exposure.total = c.exposure.total.saturating_add(e.backing_stake);
+		e.backing_stake = (excess / split_ways as ExtendedBalance)
+			.saturating_add(last_stake)
+			.saturating_sub(c.backing_stake);
+		c.exposure.total = c.exposure.total.saturating_add(shrink(e.backing_stake));
 		c.backing_stake = c.backing_stake.saturating_add(e.backing_stake);
 		if let Some(i_expo) = c.exposure.others.iter_mut().find(|i| i.who == nominator_address) {
-			i_expo.value = e.backing_stake;
+			i_expo.value = shrink(e.backing_stake);
 		}
 	});
-	difference
+	shrink(difference)
 }
