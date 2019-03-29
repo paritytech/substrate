@@ -17,16 +17,16 @@
 //! Light client blockchin backend. Only stores headers and justifications of recent
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
-use std::sync::Weak;
+use std::{sync::{Weak, Arc}, collections::HashMap};
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
 use runtime_primitives::{Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache};
 use crate::cht;
 use crate::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
@@ -40,7 +40,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		cache: HashMap<Vec<u8>, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
@@ -61,7 +61,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
 
 	/// Get storage cache.
-	fn cache(&self) -> Option<&BlockchainCache<Block>>;
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>>;
 }
 
 /// Light client blockchain.
@@ -156,7 +156,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 		self.storage.last_finalized()
 	}
 
-	fn cache(&self) -> Option<&BlockchainCache<Block>> {
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
 		self.storage.cache()
 	}
 
@@ -166,6 +166,12 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		unimplemented!()
+	}
+}
+
+impl<S: Storage<Block>, F, Block: BlockT> ProvideCache<Block> for Blockchain<S, F> {
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+		self.storage.cache()
 	}
 }
 
@@ -246,7 +252,7 @@ pub mod tests {
 		fn import_header(
 			&self,
 			_header: Header,
-			_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+			_cache: HashMap<Vec<u8>, Vec<u8>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
@@ -278,7 +284,7 @@ pub mod tests {
 				).into())
 		}
 
-		fn cache(&self) -> Option<&BlockchainCache<Block>> {
+		fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
 			None
 		}
 	}
