@@ -75,7 +75,7 @@ pub trait BlockImportOperation<Block, H> where
 	) -> error::Result<()>;
 
 	/// Update cached data.
-	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>);
+	fn update_cache(&mut self, cache: HashMap<[u8; 4], Vec<u8>>);
 	/// Inject storage data into the database.
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.

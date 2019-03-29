@@ -672,7 +672,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		import_block: ImportBlock<Block>,
-		new_cache: HashMap<Vec<u8>, Vec<u8>>,
+		new_cache: HashMap<[u8; 4], Vec<u8>>,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -743,7 +743,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
-		new_cache: HashMap<Vec<u8>, Vec<u8>>,
+		new_cache: HashMap<[u8; 4], Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -1396,7 +1396,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,
-		new_cache: HashMap<Vec<u8>, Vec<u8>>,
+		new_cache: HashMap<[u8; 4], Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)

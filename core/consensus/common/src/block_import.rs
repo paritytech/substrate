@@ -182,7 +182,7 @@ pub trait BlockImport<B: BlockT> {
 	fn import_block(
 		&self,
 		block: ImportBlock<B>,
-		cache: HashMap<Vec<u8>, Vec<u8>>,
+		cache: HashMap<[u8; 4], Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 

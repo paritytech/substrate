@@ -100,7 +100,7 @@ pub trait ProvideCache<Block: BlockT> {
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns cached value by the given key.
-	fn get_at(&self, key: &[u8], block: &BlockId<Block>) -> Option<Vec<u8>>;
+	fn get_at(&self, key: [u8; 4], block: &BlockId<Block>) -> Option<Vec<u8>>;
 }
 
 /// Blockchain info

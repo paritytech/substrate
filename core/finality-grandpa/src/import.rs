@@ -388,7 +388,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<Vec<u8>, Vec<u8>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<[u8; 4], Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();

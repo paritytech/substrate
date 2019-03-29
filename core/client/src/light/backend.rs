@@ -46,7 +46,7 @@ pub struct Backend<S, F, H> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F, H> {
 	header: Option<Block::Header>,
-	cache: HashMap<Vec<u8>, Vec<u8>>,
+	cache: HashMap<[u8; 4], Vec<u8>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
@@ -254,7 +254,7 @@ where
 		Ok(())
 	}
 
-	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>) {
+	fn update_cache(&mut self, cache: HashMap<[u8; 4], Vec<u8>>) {
 		self.cache = cache;
 	}
 

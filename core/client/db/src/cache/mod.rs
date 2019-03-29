@@ -64,7 +64,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
-	cache_at: HashMap<Vec<u8>, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
+	cache_at: HashMap<[u8; 4], ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	db: Arc<KeyValueDB>,
 	key_lookup_column: Option<u32>,
 	header_column: Option<u32>,
@@ -112,7 +112,7 @@ impl<Block: BlockT> DbCache<Block> {
 	}
 
 	/// Creates `ListCache` with the given name or returns a reference to the existing.
-	fn get_cache(&mut self, name: Vec<u8>) -> &mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
+	fn get_cache(&mut self, name: [u8; 4]) -> &mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
 		get_cache_helper(
 			&mut self.cache_at,
 			name,
@@ -128,17 +128,17 @@ impl<Block: BlockT> DbCache<Block> {
 // This helper is needed because otherwise the borrow checker will require to
 // clone all parameters outside of the closure.
 fn get_cache_helper<'a, Block: BlockT>(
-	cache_at: &'a mut HashMap<Vec<u8>, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
-	name: Vec<u8>,
+	cache_at: &'a mut HashMap<[u8; 4], ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
+	name: [u8; 4],
 	db: &Arc<KeyValueDB>,
 	key_lookup: Option<u32>,
 	header: Option<u32>,
 	cache: Option<u32>,
 	best_finalized_block: &ComplexBlockId<Block>,
 ) -> &'a mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
-	cache_at.entry(name.clone()).or_insert_with(|| {
+	cache_at.entry(name).or_insert_with(|| {
 		ListCache::new(
-			self::list_storage::DbStorage::new(name, db.clone(),
+			self::list_storage::DbStorage::new(name.to_vec(), db.clone(),
 				self::list_storage::DbColumns {
 					meta: COLUMN_META,
 					key_lookup,
@@ -154,7 +154,7 @@ fn get_cache_helper<'a, Block: BlockT>(
 
 /// Cache operations that are to be committed after database transaction is committed.
 pub struct DbCacheTransactionOps<Block: BlockT> {
-	cache_at_op: HashMap<Vec<u8>, self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	cache_at_op: HashMap<[u8; 4], self::list_cache::CommitOperation<Block, Vec<u8>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
@@ -162,7 +162,7 @@ pub struct DbCacheTransactionOps<Block: BlockT> {
 pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
 	tx: &'a mut DBTransaction,
-	cache_at_op: HashMap<Vec<u8>, self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	cache_at_op: HashMap<[u8; 4], self::list_cache::CommitOperation<Block, Vec<u8>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
@@ -180,7 +180,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		mut self,
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
-		data_at: HashMap<Vec<u8>, Vec<u8>>,
+		data_at: HashMap<[u8; 4], Vec<u8>>,
 		is_final: bool,
 	) -> ClientResult<Self> {
 		assert!(self.cache_at_op.is_empty());
@@ -192,8 +192,8 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			.cloned()
 			.collect::<Vec<_>>();
 
-		let mut insert_op = |name: Vec<u8>, value: Option<Vec<u8>>| -> Result<(), client::error::Error> {
-			let cache = self.cache.get_cache(name.clone());
+		let mut insert_op = |name: [u8; 4], value: Option<Vec<u8>>| -> Result<(), client::error::Error> {
+			let cache = self.cache.get_cache(name);
 			let op = cache.on_block_insert(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache.storage(),
@@ -253,9 +253,9 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
-	fn get_at(&self, key: &[u8], at: &BlockId<Block>) -> Option<Vec<u8>> {
+	fn get_at(&self, key: [u8; 4], at: &BlockId<Block>) -> Option<Vec<u8>> {
 		let cache = self.0.read();
-		let storage = cache.cache_at.get(key)?.storage();
+		let storage = cache.cache_at.get(&key)?.storage();
 		let db = storage.db();
 		let columns = storage.columns();
 		let at = match *at {
@@ -277,7 +277,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			},
 		};
 
-		cache.cache_at.get(key)?.value_at_block(&at).ok()?
+		cache.cache_at.get(&key)?.value_at_block(&at).ok()?
 	}
 }
 

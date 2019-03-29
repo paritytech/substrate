@@ -313,7 +313,7 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn update_cache(&mut self, _cache: HashMap<Vec<u8>, Vec<u8>>) {
+	fn update_cache(&mut self, _cache: HashMap<[u8; 4], Vec<u8>>) {
 		// Currently cache isn't implemented on full nodes.
 	}
 

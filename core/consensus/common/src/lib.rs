@@ -121,5 +121,5 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 /// A list of all well known keys in the cache.
 pub mod well_known_cache_keys {
 	/// A list of authorities.
-	pub const AUTHORITIES: &'static [u8] = b"auth";
+	pub const AUTHORITIES: [u8; 4] = *b"auth";
 }
