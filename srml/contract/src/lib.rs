@@ -14,41 +14,71 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! Smart-contract module for runtime; Allows deployment and execution of smart-contracts
-//! expressed in WebAssembly.
+//! # Contract Module
+//! 
+//! The contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+//! The supported dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
+//! 
+//! ## Overview
+//! 
+//! This module extends accounts (see `Balances` module) to have smart-contract functionality.
+//! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract 
+//! and non-contract accounts.
+//! 
+//! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
+//! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating 
+//! the code each time.
+//! 
+//! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
+//! This call can alter the storage entries of the smart-contract account, create new smart-contracts,
+//! or call other smart-contracts.
+//! 
+//! Finally, when the `Balances` module determines an account is dead (i.e. account balance fell below the
+//! existential deposit), it reaps the account. This will delete the associated code and storage of the 
+//! smart-contract account.
+//! 
+//! ### Gas
+//! 
+//! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
+//! Unused gas is refunded after the call, regardless of the execution outcome.
+//! 
+//! If the gas limit is reached, then all calls and state changes (including balance transfers) are only
+//! reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
+//! then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state 
+//! changes still persist. 
+//! 
+//! ### Notable Scenarios
+//! 
+//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
+//! and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
+//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable functions
+//! 
+//! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `code_hash`.
+//! 
+//! * `create` - Deploys a new contract from the given `code_hash`, optionally transferring some balance. 
+//! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
+//! 
+//! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
-//! This module provides an ability to create smart-contract accounts and send them messages.
-//! A smart-contract is an account with associated code and storage. When such an account receives a message,
-//! the code associated with that account gets executed.
-//!
-//! The code is allowed to alter the storage entries of the associated account,
-//! create smart-contracts or send messages to existing smart-contracts.
-//!
-//! For any actions invoked by the smart-contracts fee must be paid. The fee is paid in gas.
-//! Gas is bought upfront up to the, specified in transaction, limit. Any unused gas is refunded
-//! after the transaction (regardless of the execution outcome). If all gas is used,
-//! then changes made for the specific call or create are reverted (including balance transfers).
-//!
-//! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
-//! somehow, then A can decide if it should proceed or error.
-//!
-//! # Interaction with the system
-//!
-//! ## Finalization
-//!
-//! This module requires performing some finalization steps at the end of the block. If not performed
-//! the module will have incorrect behavior.
-//!
-//! Thus [`Module::on_finalise`] must be called at the end of the block. The order in relation to
-//! the other module doesn't matter.
-//!
-//! ## Account killing
-//!
-//! When `staking` module determines that account is dead (e.g. account's balance fell below
-//! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
-//! code and storage of the account.
-//!
-//! [`Module::on_finalise`]: struct.Module.html#impl-OnFinalise
+//! ### Public functions
+//! 
+//! See the [module](./struct.Module.html) for details on publicly available functions.
+//! 
+//! ## Usage
+//! 
+//! The contract module is a work in progress. The following examples show how this contract module can be 
+//! used to create and call contracts.
+//! 
+//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language which enables writing 
+//! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
+//! 
+//! ## Related Modules
+//! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
+//! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -218,7 +248,8 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Stores code in the storage. You can instantiate contracts only with stored code.
+		/// Stores the given binary Wasm code into the chains storage and returns its `codehash`. 
+		/// You can instantiate contracts only with stored code.
 		fn put_code(
 			origin,
 			#[compact] gas_limit: T::Gas,
@@ -239,7 +270,13 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Make a call to a specified account, optionally transferring some balance.
+		/// Makes a call to an account, optionally transferring some balance.
+		///
+		/// * If the account is a smart-contract account, the associated code will be 
+		/// executed and any value will be transferred.
+		/// * If the account is a regular account, any value will be transferred.
+		/// * If no account exists and the call value is not less than `existential_deposit`, 
+		/// a regular account will be created and any value will be transferred.
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -286,15 +323,16 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Create a new contract, optionally transferring some balance to the created account.
+		/// Creates a new contract from the `codehash` generated by `put_code`, optionally transferring some balance.
 		///
 		/// Creation is executed as follows:
 		///
 		/// - the destination address is computed based on the sender and hash of the code.
-		/// - account is created at the computed address.
+		/// - the smart-contract account is created at the computed address.
 		/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
 		///   after the execution is saved as the `code` of the account. That code will be invoked
-		///   upon any message received by this account.
+		///   upon any call received by this account.
+		/// - The contract is initialized.
 		fn create(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
@@ -304,7 +342,7 @@ decl_module! {
 		) -> Result {
 			let origin = ensure_signed(origin)?;
 
-			// Pay for the gas upfront.
+			// Commit the gas upfront.
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
@@ -352,7 +390,7 @@ decl_event! {
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
-		/// Transfer happened `from` -> `to` with given `value` as part of a `message-call` or `create`.
+		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `create`.
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
@@ -380,11 +418,11 @@ decl_storage! {
 		TransactionBaseFee get(transaction_base_fee) config(): BalanceOf<T>;
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
-		/// The fee required to create a contract.
+		/// The fee required to create a contract instance.
 		ContractFee get(contract_fee) config(): BalanceOf<T> = BalanceOf::<T>::sa(21);
-		/// The fee charged for a call into a contract.
+		/// The base fee charged for calling into a contract.
 		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
-		/// The fee charged for a create of a contract.
+		/// The base fee charged for creating a contract.
 		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
 		/// The price of one unit of gas.
 		GasPrice get(gas_price) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
