@@ -37,7 +37,7 @@ use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
-use aura_primitives::AURA;
+use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
@@ -132,7 +132,7 @@ impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
 	fn aura_seal(slot_number: u64, signature: Signature<P>) -> Self {
-		generic::DigestItem::Consensus(AURA, (slot_number, signature).encode())
+		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
 	}
 
 	/// If this item is an Aura seal, return the slot number and signature.
@@ -140,7 +140,7 @@ impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P
 	fn as_aura_seal(&self) -> Option<(u64, Signature<P>)> {
 		match self {
 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			generic::DigestItem::Consensus(AURA, seal) => Decode::decode(&mut &seal[..]),
+			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
 			_ => None,
 		}
 	}
