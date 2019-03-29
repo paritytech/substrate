@@ -25,7 +25,7 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-
+#![deny(deprecated)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
@@ -37,6 +37,7 @@ use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
+use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
@@ -113,27 +114,42 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 
 /// A digest item which is usable with aura consensus.
 pub trait CompatibleDigestItem<T: Pair>: Sized {
-	/// Construct a digest item which is a slot number and a signature on the
+	/// Construct a digest item which contains a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature<T>) -> Self;
+	fn aura_seal(slot_num: u64, signature: Signature<T>) -> Self;
 
 	/// If this item is an Aura seal, return the slot number and signature.
 	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)>;
+
+	/// Return `true` if this seal type is deprecated.  Otherwise, return
+	/// `false`.
+	fn is_deprecated(&self) -> bool;
 }
 
-impl<T: Pair, Hash, AuthorityId> CompatibleDigestItem<T> for generic::DigestItem<Hash, AuthorityId, Signature<T>>
-	where T::Signature: Clone
+impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P::Signature>
+	where P: Pair, P::Signature: Clone + Encode + Decode,
 {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature<T>) -> Self {
-		generic::DigestItem::Seal(slot_number, signature)
+	fn aura_seal(slot_number: u64, signature: Signature<P>) -> Self {
+		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
 	}
+
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)> {
+	#[allow(deprecated)]
+	fn as_aura_seal(&self) -> Option<(u64, Signature<P>)> {
 		match self {
 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			_ => None
+			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
+			_ => None,
+		}
+	}
+
+	#[allow(deprecated)]
+	fn is_deprecated(&self) -> bool {
+		match self {
+			generic::DigestItem::Seal(_, _) => true,
+			_ => false,
 		}
 	}
 }
@@ -171,6 +187,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	Error: From<C::Error> + From<I::Error> + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Encode + Decode + Eq + Clone + Debug + Hash + Send + Sync + 'static,
+	P::Signature: Encode,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	OnExit: Future<Item=(), Error=()> + Send + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>> + 'static,
@@ -217,6 +234,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	Error: From<C::Error> + From<I::Error>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
+	P::Signature: Encode,
 	SO: SyncOracle + Send + Sync + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
@@ -259,6 +277,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
+	P::Signature: Encode,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
@@ -416,19 +435,32 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block, P: Pair>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId<P>])
-	-> Result<CheckedHeader<B::Header, P::Signature>, String>
+#[forbid(deprecated)]
+fn check_header<B: Block, P: Pair>(
+	slot_now: u64,
+	mut header: B::Header,
+	hash: B::Hash,
+	authorities: &[AuthorityId<P>],
+	allow_old_seals: bool,
+) -> Result<CheckedHeader<B::Header, P::Signature>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Public: Clone + AsRef<P::Public>,
+		P::Signature: Decode,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-	let (slot_num, sig) = match digest_item.as_aura_seal() {
-		Some(x) => x,
-		None => return Err(format!("Header {:?} is unsealed", hash)),
-	};
+
+	if !allow_old_seals && digest_item.is_deprecated() {
+		debug!(target: "aura", "Header {:?} uses old seal format, rejecting", hash);
+		return Err(format!("Header {:?} uses old seal format, rejecting", hash))
+	}
+
+	let (slot_num, sig) = digest_item.as_aura_seal().ok_or_else(|| {
+		debug!(target: "aura", "Header {:?} is unsealed", hash);
+		format!("Header {:?} is unsealed", hash)
+	})?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
@@ -436,7 +468,6 @@ fn check_header<B: Block, P: Pair>(slot_now: u64, mut header: B::Header, hash: B
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-
 		let expected_author = match slot_author::<P>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author
@@ -473,6 +504,7 @@ pub struct AuraVerifier<C, E, P> {
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
+	allow_old_seals: bool,
 }
 
 impl<C, E, P> AuraVerifier<C, E, P>
@@ -539,6 +571,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 	}
 }
 
+#[forbid(deprecated)]
 impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
@@ -546,6 +579,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	E: ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
+	P::Signature: Encode + Decode,
 {
 	fn verify(
 		&self,
@@ -569,7 +603,13 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, P>(slot_now + 1, header, hash, &authorities[..])?;
+		let checked_header = check_header::<B, P>(
+			slot_now + 1,
+			header,
+			hash,
+			&authorities[..],
+			self.allow_old_seals,
+		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
@@ -654,6 +694,7 @@ pub fn import_queue<B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
+	allow_old_seals: bool,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
@@ -662,6 +703,7 @@ pub fn import_queue<B, C, E, P>(
 	E: 'static + ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Signature: Encode + Decode,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
@@ -671,6 +713,7 @@ pub fn import_queue<B, C, E, P>(
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
+			allow_old_seals,
 		}
 	);
 	Ok(BasicQueue::new(verifier, block_import, justification_import))
@@ -756,6 +799,7 @@ mod tests {
 				extra: NothingExtra,
 				inherent_data_providers,
 				phantom: Default::default(),
+				allow_old_seals: false,
 			})
 		}
 

@@ -2589,6 +2589,7 @@ dependencies = [
 name = "substrate-consensus-aura-primitives"
 version = "0.1.0"
 dependencies = [
+ "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
 ]
 
