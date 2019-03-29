@@ -227,7 +227,7 @@ decl_module! {
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
-			let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
+			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let stakes = Self::snapshoted_stakes();
 			let voters = Self::voters();
 			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(voters.len() as u64);
@@ -288,18 +288,18 @@ decl_module! {
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
-		/// invoke `finalise_vote`.
+		/// invoke `finalize_vote`.
 		fn set_presentation_duration(#[compact] count: T::BlockNumber) {
 			<PresentationDuration<T>>::put(count);
 		}
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
-		/// invoke `finalise_vote`.
+		/// invoke `finalize_vote`.
 		fn set_term_duration(#[compact] count: T::BlockNumber) {
 			<TermDuration<T>>::put(count);
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
@@ -332,7 +332,7 @@ decl_storage! {
 		/// Number of accounts that should be sitting on the council.
 		pub DesiredSeats get(desired_seats) config(): u32;
 
-		// permanent state (always relevant, changes only at the finalisation of voting)
+		// permanent state (always relevant, changes only at the finalization of voting)
 		/// The current council. When there's a vote going on, this should still be used for executive
 		/// matters. The block number (second element in the tuple) is the block that their position is
 		/// active until (calculated by the sum of the block number when the council member was elected
@@ -356,9 +356,9 @@ decl_storage! {
 		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
 		pub CandidateCount get(candidate_count): u32;
 
-		// temporary state (only relevant during finalisation/presentation)
+		// temporary state (only relevant during finalization/presentation)
 		/// The accounts holding the seats that will become free on the next tally.
-		pub NextFinalise get(next_finalise): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
+		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
 		/// The stakes as they were at the point that the vote ended.
 		pub SnapshotedStakes get(snapshoted_stakes): Vec<BalanceOf<T>>;
 		/// Get the leaderboard if we;re in the presentation phase.
@@ -375,7 +375,7 @@ decl_event!(
 		/// A tally (for approval votes of council seat(s)) has started.
 		TallyStarted(u32),
 		/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
-		TallyFinalised(Vec<AccountId>, Vec<AccountId>),
+		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
 	}
 );
 
@@ -384,7 +384,7 @@ impl<T: Trait> Module<T> {
 
 	/// True if we're currently in a presentation period.
 	pub fn presentation_active() -> bool {
-		<NextFinalise<T>>::exists()
+		<NextFinalize<T>>::exists()
 	}
 
 	/// If `who` a candidate at the moment?
@@ -407,7 +407,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			let c = Self::active_council();
 			let (next_possible, count, coming) =
-				if let Some((tally_end, comers, leavers)) = Self::next_finalise() {
+				if let Some((tally_end, comers, leavers)) = Self::next_finalize() {
 					// if there's a tally in progress, then next tally can begin immediately afterwards
 					(tally_end, c.len() - leavers.len() + comers as usize, comers)
 				} else {
@@ -438,9 +438,9 @@ impl<T: Trait> Module<T> {
 				}
 			}
 		}
-		if let Some((number, _, _)) = Self::next_finalise() {
+		if let Some((number, _, _)) = Self::next_finalize() {
 			if block_number == number {
-				Self::finalise_tally()?
+				Self::finalize_tally()?
 			}
 		}
 		Ok(())
@@ -487,13 +487,13 @@ impl<T: Trait> Module<T> {
 		let retaining_seats = active_council.len() - expiring.len();
 		if retaining_seats < desired_seats {
 			let empty_seats = desired_seats - retaining_seats;
-			<NextFinalise<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
+			<NextFinalize<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			let voters = Self::voters();
 			let votes = voters.iter().map(T::Currency::total_balance).collect::<Vec<_>>();
 			<SnapshotedStakes<T>>::put(votes);
 
-			// initialise leaderboard.
+			// initialize leaderboard.
 			let leaderboard_size = empty_seats + Self::carry_count() as usize;
 			<Leaderboard<T>>::put(vec![(BalanceOf::<T>::zero(), T::AccountId::default()); leaderboard_size]);
 
@@ -501,14 +501,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Finalise the vote, removing each of the `removals` and inserting `seats` of the most approved
+	/// Finalize the vote, removing each of the `removals` and inserting `seats` of the most approved
 	/// candidates in their place. If the total council members is less than the desired membership
 	/// a new vote is started.
 	/// Clears all presented candidates, returning the bond of the elected ones.
-	fn finalise_tally() -> Result {
+	fn finalize_tally() -> Result {
 		<SnapshotedStakes<T>>::kill();
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
-			<NextFinalise<T>>::take().ok_or("finalise can only be called after a tally is started.")?;
+			<NextFinalize<T>>::take().ok_or("finalize can only be called after a tally is started.")?;
 		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
@@ -558,7 +558,7 @@ impl<T: Trait> Module<T> {
 			new_candidates.truncate(last_index + 1);
 		}
 
-		Self::deposit_event(RawEvent::TallyFinalised(incoming, outgoing));
+		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
 
 		<Candidates<T>>::put(new_candidates);
 		<CandidateCount<T>>::put(count);
@@ -594,7 +594,7 @@ mod tests {
 			assert_eq!(Council::active_council(), vec![]);
 			assert_eq!(Council::next_tally(), Some(4));
 			assert_eq!(Council::presentation_active(), false);
-			assert_eq!(Council::next_finalise(), None);
+			assert_eq!(Council::next_finalize(), None);
 
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
 			assert_eq!(Council::is_a_candidate(&1), false);

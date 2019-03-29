@@ -93,7 +93,7 @@ impl<D: Drain> Drain for Multiply<D> {
 	}
 }
 
-/// Initialise telemetry.
+/// Initialize telemetry.
 pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
 	let mut endpoint_drains: Vec<Box<slog::Filter<_, _>>> = Vec::new();
 	let mut out_syncs = Vec::new();

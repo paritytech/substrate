@@ -94,6 +94,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					true,
 				).map_err(Into::into)
 			},
 		LightImportQueue = AuraImportQueue<
@@ -107,6 +108,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					true,
 				).map_err(Into::into)
 			},
 	}

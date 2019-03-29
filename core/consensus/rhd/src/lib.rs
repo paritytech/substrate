@@ -66,7 +66,7 @@ pub use rhododendron::{
 };
 pub use self::error::{Error, ErrorKind};
 
-// pub mod misbehaviour_check;
+// pub mod misbehavior_check;
 mod error;
 mod service;
 

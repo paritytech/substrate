@@ -117,7 +117,7 @@ decl_module! {
 			<Approvals<T>>::mutate(|v| v.push(proposal_id));
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
 			if (n % Self::spend_period()).is_zero() {
 				Self::spend_funds();
@@ -264,7 +264,7 @@ mod tests {
 	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256, OnFinalise, IdentityLookup};
+	use runtime_primitives::traits::{BlakeTwo256, OnFinalize, IdentityLookup};
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
@@ -380,7 +380,7 @@ mod tests {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
-			<Treasury as OnFinalise<u64>>::on_finalise(1);
+			<Treasury as OnFinalize<u64>>::on_finalize(1);
 			assert_eq!(Balances::free_balance(&3), 0);
 			assert_eq!(Treasury::pot(), 100);
 		});
@@ -391,7 +391,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 50);
 		});
 	}
@@ -404,7 +404,7 @@ mod tests {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
 
-			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Balances::free_balance(&3), 0);
 			assert_eq!(Treasury::pot(), 50);
 		});
@@ -454,7 +454,7 @@ mod tests {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
-			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Balances::free_balance(&3), 100);
 			assert_eq!(Treasury::pot(), 0);
 		});
@@ -468,11 +468,11 @@ mod tests {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
-			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 100);
 
 			Treasury::on_dilution(100, 100);
-			<Treasury as OnFinalise<u64>>::on_finalise(4);
+			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Balances::free_balance(&3), 150);
 			assert_eq!(Treasury::pot(), 25);
 		});

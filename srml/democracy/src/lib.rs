@@ -153,7 +153,7 @@ decl_module! {
 			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				runtime_io::print(e);
 			}
@@ -335,7 +335,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get the delegated voters for the current proposal.
-	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done. 
+	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done.
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
@@ -774,11 +774,11 @@ mod tests {
 			System::set_block_number(2);
 			let r = 0;
 
-			// Check behaviour with cycle.
+			// Check behavior with cycle.
 			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
 			assert_ok!(Democracy::delegate(Origin::signed(3), 2, 100));
 			assert_ok!(Democracy::delegate(Origin::signed(1), 3, 100));
-			
+
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 			assert_eq!(Democracy::referendum_count(), 1);
