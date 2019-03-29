@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,10 +26,7 @@
 use serde_derive::Serialize;
 #[cfg(feature = "std")]
 use parity_codec::{Decode, Input};
-#[cfg(feature = "std")]
-use parity_codec_derive::Decode;
 use parity_codec::{Encode, Output};
-use parity_codec_derive::Encode;
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -216,7 +213,7 @@ pub trait DefaultByte {
 	fn default_byte(&self) -> Vec<u8>;
 }
 
-/// Wrapper over dyn pointer for accessing a cached once byet value.
+/// Wrapper over dyn pointer for accessing a cached once byte value.
 #[derive(Clone)]
 pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 
@@ -264,7 +261,14 @@ pub enum StorageFunctionType {
 	Map {
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-	}
+		is_linked: bool,
+	},
+	DoubleMap {
+		key1: DecodeDifferentStr,
+		key2: DecodeDifferentStr,
+		value: DecodeDifferentStr,
+		key2_hasher: DecodeDifferentStr,
+	},
 }
 
 /// A storage function modifier.
@@ -304,8 +308,12 @@ pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
 pub enum RuntimeMetadata {
 	/// Unused; enum filler.
 	V0(RuntimeMetadataDeprecated),
-	/// Version 1 for runtime metadata.
-	V1(RuntimeMetadataV1),
+	/// Version 1 for runtime metadata. No longer used.
+	V1(RuntimeMetadataDeprecated),
+	/// Version 2 for runtime metadata. No longer used.
+	V2(RuntimeMetadataDeprecated),
+	/// Version 3 for runtime metadata.
+	V3(RuntimeMetadataV3),
 }
 
 /// Enum that should fail.
@@ -325,10 +333,10 @@ impl Decode for RuntimeMetadataDeprecated {
 	}
 }
 
-/// The metadata of a runtime version 1.
+/// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV1 {
+pub struct RuntimeMetadataV3 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,9 +16,7 @@
 
 //! Definition of a sandbox environment.
 
-#[cfg(test)]
-use parity_codec::Encode;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
@@ -166,7 +164,7 @@ pub const MEM_UNLIMITED: u32 = -1i32 as u32;
 /// For FFI purposes.
 pub const ERR_OK: u32 = 0;
 
-/// Validation or instantiation error occured when creating new
+/// Validation or instantiation error occurred when creating new
 /// sandboxed module instance.
 ///
 /// For FFI purposes.

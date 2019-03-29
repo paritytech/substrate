@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -31,7 +31,9 @@ use sr_std::borrow::Borrow;
 /// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
 /// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
 /// is a hash of a `Key2`.
-pub trait StorageDoubleMap {
+///
+/// Hasher are implemented in derive_key* methods.
+pub trait StorageDoubleMapWithHasher {
 	type Key1: Codec;
 	type Key2: Codec;
 	type Value: Codec + Default;
@@ -121,7 +123,7 @@ pub trait StorageDoubleMap {
 	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8>;
 
 	/// Returns a compound key that consist of the two parts: (prefix, `k1`) and `k2`.
-	/// The first part is hased and then concatenated with a hash of `k2`.
+	/// The first part is hashed and then concatenated with a hash of `k2`.
 	fn full_key<Q, R>(k1: &Q, k2: &R) -> Vec<u8>
 	where
 		Self::Key1: Borrow<Q>,

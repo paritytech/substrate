@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ pub use network::config::{NetworkConfiguration, Roles};
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
+use tel::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
@@ -64,9 +65,15 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
-	pub telemetry_url: Option<String>,
+	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
+	/// Should offchain workers be executed.
+	pub offchain_worker: bool,
+	/// Enable authoring even when offline.
+	pub force_authoring: bool,
+	/// Disable GRANDPA when running in validator mode
+	pub disable_grandpa: bool,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -90,11 +97,16 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
-			telemetry_url: None,
+			telemetry_endpoints: None,
 			default_heap_pages: None,
+			offchain_worker: Default::default(),
+			force_authoring: false,
+			disable_grandpa: false,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
-		configuration.telemetry_url = configuration.chain_spec.telemetry_url().map(str::to_owned);
+
+		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
+
 		configuration
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,15 +27,15 @@ use runtime_primitives::{
 };
 use consensus::{
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
-	BlockOrigin, ForkChoiceStrategy
+	BlockOrigin, ForkChoiceStrategy,
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
-use runtime_primitives::{BuildStorage, ExecutionContext};
+use runtime_primitives::BuildStorage;
 use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode};
@@ -43,7 +43,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
-	key_changes, key_changes_proof, OverlayedChanges,
+	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
 use hash_db::Hasher;
 
@@ -61,7 +61,7 @@ use crate::in_mem;
 use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
 use consensus;
-use substrate_telemetry::telemetry;
+use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
 use error_chain::bail;
@@ -84,6 +84,8 @@ pub struct ExecutionStrategies {
 	pub importing: ExecutionStrategy,
 	/// Execution strategy used when constructing blocks.
 	pub block_construction: ExecutionStrategy,
+	/// Execution strategy used for offchain workers.
+	pub offchain_worker: ExecutionStrategy,
 	/// Execution strategy used in other cases.
 	pub other: ExecutionStrategy,
 }
@@ -94,6 +96,7 @@ impl Default for ExecutionStrategies {
 			syncing: ExecutionStrategy::NativeElseWasm,
 			importing: ExecutionStrategy::NativeElseWasm,
 			block_construction: ExecutionStrategy::AlwaysWasm,
+			offchain_worker: ExecutionStrategy::NativeWhenPossible,
 			other: ExecutionStrategy::NativeElseWasm,
 		}
 	}
@@ -167,8 +170,10 @@ pub struct ClientInfo<Block: BlockT> {
 pub enum BlockStatus {
 	/// Added to the import queue.
 	Queued,
-	/// Already in the blockchain.
-	InChain,
+	/// Already in the blockchain and the state is available.
+	InChainWithState,
+	/// In the blockchain, but the state is not available.
+	InChainPruned,
 	/// Block or parent is known to be bad.
 	KnownBad,
 	/// Not in the queue or the blockchain.
@@ -341,7 +346,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityIdFor<Block>>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "Core_authorities", &[], ExecutionStrategy::NativeElseWasm)
+			None => self.executor.call(id, "Core_authorities", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())
 				.and_then(|r| Vec::<AuthorityIdFor<Block>>::decode(&mut &r[..])
 					.ok_or_else(|| error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
@@ -503,8 +508,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
-			fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
-				self.storage.get(key)
+			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+				self.storage.get(key, prefix)
 			}
 		}
 
@@ -619,9 +624,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Lock the import lock, and run operations inside.
-	pub fn lock_import_and_run<R, F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> error::Result<R>>(
-		&self, f: F
-	) -> error::Result<R> {
+	pub fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
+		F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> Result<R, Err>,
+		Err: From<error::Error>,
+	{
 		let inner = || {
 			let _import_lock = self.import_lock.lock();
 
@@ -729,7 +735,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		);
 
-		telemetry!("block.import";
+		telemetry!(SUBSTRATE_INFO; "block.import";
 			"height" => height,
 			"best" => ?hash,
 			"origin" => ?origin
@@ -827,7 +833,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
 		}
 
-		Ok(ImportResult::Queued)
+		Ok(ImportResult::imported())
 	}
 
 	fn block_execution(
@@ -859,7 +865,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							warn!("   Header {:?}", header);
 							warn!("   Native result {:?}", native_result);
 							warn!("   Wasm result {:?}", wasm_result);
-							telemetry!("block.execute.consensus_failure";
+							telemetry!(SUBSTRATE_INFO; "block.execute.consensus_failure";
 								"hash" => ?hash,
 								"origin" => ?origin,
 								"header" => ?header
@@ -868,7 +874,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
@@ -878,6 +884,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						_ => get_execution_manager(self.execution_strategies().importing),
 					},
 					None,
+					NeverOffchainExt::new(),
 				)?;
 
 				overlay.commit_prospective();
@@ -1072,9 +1079,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				return Ok(BlockStatus::Queued);
 			}
 		}
-		match self.backend.blockchain().header(*id).map_err(|e| error::Error::from_blockchain(Box::new(e)))?.is_some() {
-			true => Ok(BlockStatus::InChain),
-			false => Ok(BlockStatus::Unknown),
+		let hash_and_number = match id.clone() {
+			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
+		};
+		match hash_and_number {
+			Some((hash, number)) => {
+				if self.backend().have_state_at(&hash, number) {
+					Ok(BlockStatus::InChainWithState)
+				} else {
+					Ok(BlockStatus::InChainPruned)
+				}
+			}
+			None => Ok(BlockStatus::Unknown),
 		}
 	}
 
@@ -1326,7 +1343,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>
 {
 	fn call_api_at<
-		R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -1335,15 +1353,22 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
-		context: ExecutionContext
+		context: ExecutionContext,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction => self.execution_strategies.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.execution_strategies.syncing.get_manager(),
 			ExecutionContext::Importing => self.execution_strategies.importing.get_manager(),
+			ExecutionContext::OffchainWorker(_) => self.execution_strategies.offchain_worker.get_manager(),
 			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
 		};
-		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
+
+		let mut offchain_extensions = match context {
+			ExecutionContext::OffchainWorker(ext) => Some(ext),
+			_ => None,
+		};
+
+		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
 			at,
 			function,
 			&args,
@@ -1352,6 +1377,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			|| self.prepare_environment_block(at),
 			manager,
 			native_call,
+			offchain_extensions.as_mut(),
 		)
 	}
 
@@ -1385,19 +1411,23 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		hash: Block::Hash,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
+		match self.block_status(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+			BlockStatus::InChainWithState | BlockStatus::Queued => {},
+			BlockStatus::Unknown | BlockStatus::InChainPruned => return Ok(ImportResult::UnknownParent),
+			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
-		match self.backend.blockchain().status(BlockId::Hash(hash))
+
+		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
-			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
-			blockchain::BlockStatus::Unknown => {},
+			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
+			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
-		Ok(ImportResult::Queued)
+
+		Ok(ImportResult::imported())
 	}
 }
 
@@ -1414,7 +1444,7 @@ impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> 
 
 impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
@@ -1425,7 +1455,7 @@ impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
@@ -1517,11 +1547,10 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
-	use keyring::Keyring;
 	use primitives::twox_128;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient};
+	use test_client::{self, TestClient, AccountKeyring, AuthorityKeyring};
 	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
@@ -1538,10 +1567,10 @@ pub(crate) mod tests {
 	) {
 		// prepare block structure
 		let blocks_transfers = vec![
-			vec![(Keyring::Alice, Keyring::Dave), (Keyring::Bob, Keyring::Dave)],
-			vec![(Keyring::Charlie, Keyring::Eve)],
+			vec![(AccountKeyring::Alice, AccountKeyring::Dave), (AccountKeyring::Bob, AccountKeyring::Dave)],
+			vec![(AccountKeyring::Charlie, AccountKeyring::Eve)],
 			vec![],
-			vec![(Keyring::Alice, Keyring::Dave)],
+			vec![(AccountKeyring::Alice, AccountKeyring::Dave)],
 		];
 
 		// prepare client ang import blocks
@@ -1552,8 +1581,8 @@ pub(crate) mod tests {
 			let mut builder = remote_client.new_block().unwrap();
 			for (from, to) in block_transfers {
 				builder.push_transfer(Transfer {
-					from: from.to_raw_public().into(),
-					to: to.to_raw_public().into(),
+					from: from.into(),
+					to: to.into(),
 					amount: 1,
 					nonce: *nonces.entry(from).and_modify(|n| { *n = *n + 1 }).or_default(),
 				}).unwrap();
@@ -1568,12 +1597,12 @@ pub(crate) mod tests {
 		}
 
 		// prepare test cases
-		let alice = twox_128(&runtime::system::balance_of_key(Keyring::Alice.to_raw_public().into())).to_vec();
-		let bob = twox_128(&runtime::system::balance_of_key(Keyring::Bob.to_raw_public().into())).to_vec();
-		let charlie = twox_128(&runtime::system::balance_of_key(Keyring::Charlie.to_raw_public().into())).to_vec();
-		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
-		let eve = twox_128(&runtime::system::balance_of_key(Keyring::Eve.to_raw_public().into())).to_vec();
-		let ferdie = twox_128(&runtime::system::balance_of_key(Keyring::Ferdie.to_raw_public().into())).to_vec();
+		let alice = twox_128(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
+		let bob = twox_128(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
+		let charlie = twox_128(&runtime::system::balance_of_key(AccountKeyring::Charlie.into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let eve = twox_128(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
+		let ferdie = twox_128(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
 		let test_cases = vec![
 			(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
 			(1, 3, alice.clone(), vec![(1, 0)]),
@@ -1607,14 +1636,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				Keyring::Alice.to_raw_public().into()
+				AccountKeyring::Alice.into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				Keyring::Ferdie.to_raw_public().into()
+				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			0
 		);
@@ -1626,9 +1655,9 @@ pub(crate) mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.to_raw_public().into(),
-			Keyring::Bob.to_raw_public().into(),
-			Keyring::Charlie.to_raw_public().into()
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Bob.into(),
+			AuthorityKeyring::Charlie.into()
 		]);
 	}
 
@@ -1650,8 +1679,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block().unwrap();
 
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
@@ -1663,14 +1692,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				Keyring::Alice.to_raw_public().into()
+				AccountKeyring::Alice.into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				Keyring::Ferdie.to_raw_public().into()
+				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			42
 		);
@@ -1692,15 +1721,15 @@ pub(crate) mod tests {
 		let mut builder = client.new_block().unwrap();
 
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
 
 		assert!(builder.push_transfer(Transfer {
-			from: Keyring::Eve.to_raw_public().into(),
-			to: Keyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Eve.into(),
+			to: AccountKeyring::Alice.into(),
 			amount: 42,
 			nonce: 0,
 		}).is_err());
@@ -1786,8 +1815,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
 			nonce: 0,
 		}).unwrap();
@@ -1806,8 +1835,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 1,
 		}).unwrap();
@@ -1818,8 +1847,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
@@ -1907,8 +1936,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
 			nonce: 0,
 		}).unwrap();
@@ -1927,8 +1956,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 1,
 		}).unwrap();
@@ -1939,8 +1968,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 0,
 		}).unwrap();

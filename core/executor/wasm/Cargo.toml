@@ -18,3 +18,11 @@ lto = true
 
 [workspace]
 members = []
+
+[patch.crates-io]
+trie-db = { path = "../../../../parity-trie/trie-db" }
+trie-root = { path = "../../../../parity-trie/trie-root" }
+hash-db = { path = "../../../../parity-trie/hash-db" }
+memory-db = { path = "../../../../parity-trie/memory-db" }
+trie-bench = { path = "../../../../parity-trie/test-support/trie-bench" }
+hash256-std-hasher = { path = "../../../../parity-trie/hash256-std-hasher" }

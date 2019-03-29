@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,7 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crossbeam_channel::{self as channel, Receiver, Sender, select};
-use network_libp2p::{NodeIndex, Severity};
+use futures::sync::mpsc;
+use parking_lot::Mutex;
+use network_libp2p::{PeerId, Severity};
 use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
@@ -28,6 +30,7 @@ use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
 use crate::service::{NetworkChan, NetworkMsg, TransactionPool, ExHashT};
 use crate::config::{ProtocolConfig, Roles};
+use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -39,8 +42,12 @@ use client::light::fetcher::ChangesProof;
 use crate::{error, util::LruHashSet};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
-const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
-const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(5000);
+/// Interval at which we perform time based maintenance
+const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
+/// Interval at which we propagate exstrinsics;
+const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
+/// Interval at which we send status updates on the SyncProvider status stream.
+const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 2;
@@ -56,8 +63,10 @@ const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	network_chan: NetworkChan<B>,
 	port: Receiver<ProtocolMsg<B, S>>,
+	from_network_port: Receiver<FromNetworkMsg<B>>,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -66,9 +75,25 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	consensus_gossip: ConsensusGossip<B>,
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
-	handshaking_peers: HashMap<NodeIndex, time::Instant>,
+	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
+	// Connected peers from whom we received a Status message,
+	// similar to context_data.peers but shared with the SyncProvider.
+	connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	transaction_pool: Arc<TransactionPool<H, B>>,
 }
+
+/// A peer from whom we have received a Status message.
+#[derive(Clone)]
+pub struct ConnectedPeer<B: BlockT> {
+	pub peer_info: PeerInfo<B>
+}
+
+/// A peer that we are connected to
+/// and from whom we have not yet received a Status message.
+struct HandshakingPeer {
+	timestamp: time::Instant,
+}
+
 /// Syncing status and statistics
 #[derive(Clone)]
 pub struct ProtocolStatus<B: BlockT> {
@@ -115,13 +140,13 @@ pub trait Context<B: BlockT> {
 	fn client(&self) -> &crate::chain::Client<B>;
 
 	/// Point out that a peer has been malign or irresponsible or appeared lazy.
-	fn report_peer(&mut self, who: NodeIndex, reason: Severity);
+	fn report_peer(&mut self, who: PeerId, reason: Severity);
 
 	/// Get peer info.
-	fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>>;
+	fn peer_info(&self, peer: &PeerId) -> Option<PeerInfo<B>>;
 
 	/// Send a message to a peer.
-	fn send_message(&mut self, who: NodeIndex, data: crate::message::Message<B>);
+	fn send_message(&mut self, who: PeerId, data: crate::message::Message<B>);
 }
 
 /// Protocol context.
@@ -137,16 +162,16 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
+	fn send_message(&mut self, who: PeerId, message: Message<B>) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who, message)
 	}
 
-	fn report_peer(&mut self, who: NodeIndex, reason: Severity) {
+	fn report_peer(&mut self, who: PeerId, reason: Severity) {
 		self.network_chan.send(NetworkMsg::ReportPeer(who, reason))
 	}
 
-	fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(&who).map(|p| p.info.clone())
+	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
+		self.context_data.peers.get(who).map(|p| p.info.clone())
 	}
 
 	fn client(&self) -> &Client<B> {
@@ -157,7 +182,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 /// Data necessary to create a context.
 struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
-	peers: HashMap<NodeIndex, Peer<B, H>>,
+	peers: HashMap<PeerId, Peer<B, H>>,
 	pub chain: Arc<Client<B>>,
 }
 
@@ -183,44 +208,36 @@ impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<
     }
 }
 
-/// Messages sent to Protocol.
-pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
-	/// A peer connected, with debug info.
-	PeerConnected(NodeIndex, String),
-	/// A peer disconnected, with debug info.
-	PeerDisconnected(NodeIndex, String),
-	/// A custom message from another peer.
-	CustomMessage(NodeIndex, Message<B>),
-	/// Ask the protocol for its status.
-	Status(Sender<ProtocolStatus<B>>),
+/// Messages sent to Protocol from elsewhere inside the system.
+pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
+	/// A batch of blocks has been processed, with or without errors.
+	BlocksProcessed(Vec<B::Hash>, bool),
+	/// Tell protocol to restart sync.
+	RestartSync,
+	/// Propagate status updates.
+	Status,
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
+	/// Tell protocol that a block was imported (sent by the import-queue).
+	BlockImportedSync(B::Hash, NumberFor<B>),
+	/// Tell protocol to clear all pending justification requests.
+	ClearJustificationRequests,
+	/// Tell protocol to request justification for a block.
+	RequestJustification(B::Hash, NumberFor<B>),
+	/// Inform protocol whether a justification was successfully imported.
+	JustificationImportResult(B::Hash, NumberFor<B>, bool),
+	/// Propagate a block to peers.
+	AnnounceBlock(B::Hash),
+	/// A block has been imported (sent by the client).
+	BlockImported(B::Hash, B::Header),
+	/// A block has been finalized (sent by the client).
+	BlockFinalized(B::Hash, B::Header),
 	/// Execute a closure with the chain-specific network specialization.
 	ExecuteWithSpec(Box<SpecTask<B, S> + Send + 'static>),
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
-	/// Return a list of peers currently known to protocol.
-	Peers(Sender<Vec<(NodeIndex, PeerInfo<B>)>>),
-	/// Let protocol know a peer is currenlty clogged.
-	PeerClogged(NodeIndex, Option<Message<B>>),
-	/// Tell protocol to maintain sync.
-	MaintainSync,
-	/// Tell protocol to restart sync.
-	RestartSync,
-	/// Propagate a block to peers.
-	AnnounceBlock(B::Hash),
-	/// Tell protocol that a block was imported (sent by the import-queue).
-	BlockImportedSync(B::Hash, NumberFor<B>),
-	/// Tell protocol to request justification for a block.
-	RequestJustification(B::Hash, NumberFor<B>),
-	/// Inform protocol whether a justification was successfully imported.
-	JustificationImportResult(B::Hash, NumberFor<B>, bool),
-	/// A block has been imported (sent by the client).
-	BlockImported(B::Hash, B::Header),
-	/// A block has been finalized (sent by the client).
-	BlockFinalized(B::Hash, B::Header),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, bool),
 	/// Tell protocol to abort sync (does not stop protocol).
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -231,11 +248,30 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	Tick,
 }
 
+/// Messages sent to Protocol from Network-libp2p.
+pub enum FromNetworkMsg<B: BlockT> {
+	/// A peer connected, with debug info.
+	PeerConnected(PeerId, String),
+	/// A peer disconnected, with debug info.
+	PeerDisconnected(PeerId, String),
+	/// A custom message from another peer.
+	CustomMessage(PeerId, Message<B>),
+	/// Let protocol know a peer is currenlty clogged.
+	PeerClogged(PeerId, Option<Message<B>>),
+}
+
+enum Incoming<B: BlockT, S: NetworkSpecialization<B>> {
+	FromNetwork(FromNetworkMsg<B>),
+	FromClient(ProtocolMsg<B, S>)
+}
+
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
+		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 		is_offline: Arc<AtomicBool>,
 		is_major_syncing: Arc<AtomicBool>,
+		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
@@ -243,15 +279,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<Sender<ProtocolMsg<B, S>>> {
-		let (sender, port) = channel::unbounded();
+	) -> error::Result<(Sender<ProtocolMsg<B, S>>, Sender<FromNetworkMsg<B>>)> {
+		let (protocol_sender, port) = channel::unbounded();
+		let (from_network_sender, from_network_port) = channel::bounded(4);
 		let info = chain.info()?;
 		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
 		let _ = thread::Builder::new()
 			.name("Protocol".into())
 			.spawn(move || {
 				let mut protocol = Protocol {
+					status_sinks,
 					network_chan,
+					from_network_port,
 					port,
 					config: config,
 					context_data: ContextData {
@@ -264,56 +303,68 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					specialization: specialization,
 					consensus_gossip: ConsensusGossip::new(),
 					handshaking_peers: HashMap::new(),
+					connected_peers,
 					transaction_pool: transaction_pool,
 				};
 				let tick_timeout = channel::tick(TICK_TIMEOUT);
 				let propagate_timeout = channel::tick(PROPAGATE_TIMEOUT);
-				while protocol.run(&tick_timeout, &propagate_timeout) {
+				let status_interval = channel::tick(STATUS_INTERVAL);
+				while protocol.run(&tick_timeout, &propagate_timeout, &status_interval) {
 					// Running until all senders have been dropped...
 				}
 			})
 			.expect("Protocol thread spawning failed");
-		Ok(sender)
+		Ok((protocol_sender, from_network_sender))
 	}
 
 	fn run(
 		&mut self,
 		tick_timeout: &Receiver<time::Instant>,
 		propagate_timeout: &Receiver<time::Instant>,
+		status_interval: &Receiver<time::Instant>,
 	) -> bool {
 		let msg = select! {
 			recv(self.port) -> event => {
 				match event {
-					Ok(msg) => msg,
+					Ok(msg) => Incoming::FromClient(msg),
 					// Our sender has been dropped, quit.
 					Err(_) => {
-						ProtocolMsg::Stop
+						Incoming::FromClient(ProtocolMsg::Stop)
+					},
+				}
+			},
+			recv(self.from_network_port) -> event => {
+				match event {
+					Ok(msg) => Incoming::FromNetwork(msg),
+					// Our sender has been dropped, quit.
+					Err(_) => {
+						Incoming::FromClient(ProtocolMsg::Stop)
 					},
 				}
 			},
 			recv(tick_timeout) -> _ => {
-				ProtocolMsg::Tick
+				Incoming::FromClient(ProtocolMsg::Tick)
 			},
 			recv(propagate_timeout) -> _ => {
-				ProtocolMsg::PropagateExtrinsics
+				Incoming::FromClient(ProtocolMsg::PropagateExtrinsics)
+			},
+			recv(status_interval) -> _ => {
+				Incoming::FromClient(ProtocolMsg::Status)
 			},
 		};
 		self.handle_msg(msg)
 	}
 
-	fn handle_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
+	fn handle_msg(&mut self, msg: Incoming<B, S>) -> bool {
 		match msg {
-			ProtocolMsg::Peers(sender) => {
-				let peers = self.context_data.peers.iter().map(|(idx, p)| (*idx, p.info.clone())).collect();
-				let _ = sender.send(peers);
-			},
-			ProtocolMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected(who, debug_info),
-			ProtocolMsg::PeerConnected(who, debug_info) => self.on_peer_connected(who, debug_info),
-			ProtocolMsg::PeerClogged(who, message) => self.on_clogged_peer(who, message),
-			ProtocolMsg::CustomMessage(who, message) => {
-				self.on_custom_message(who, message)
-			},
-			ProtocolMsg::Status(sender) => self.status(sender),
+			Incoming::FromNetwork(msg) => self.handle_network_msg(msg),
+			Incoming::FromClient(msg) => self.handle_client_msg(msg),
+		}
+	}
+
+	fn handle_client_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
+		match msg {
+			ProtocolMsg::Status => self.on_status(),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
 			ProtocolMsg::ExecuteWithSpec(task) => {
@@ -326,14 +377,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
-				self.gossip_consensus_message(topic, engine_id, message)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, force) => {
+				self.gossip_consensus_message(topic, engine_id, message, force)
 			}
-			ProtocolMsg::MaintainSync => {
+			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
+				self.sync.blocks_processed(hashes, has_error);
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				self.sync.maintain_sync(&mut context);
-			}
+			},
 			ProtocolMsg::RestartSync => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
@@ -341,6 +393,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			ProtocolMsg::AnnounceBlock(hash) => self.announce_block(hash),
 			ProtocolMsg::BlockImportedSync(hash, number) => self.sync.block_imported(&hash, number),
+			ProtocolMsg::ClearJustificationRequests => self.sync.clear_justification_requests(),
 			ProtocolMsg::RequestJustification(hash, number) => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
@@ -359,7 +412,19 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		true
 	}
 
-	fn handle_response(&mut self, who: NodeIndex, response: &message::BlockResponse<B>) -> Option<message::BlockRequest<B>> {
+	fn handle_network_msg(&mut self, msg: FromNetworkMsg<B>) -> bool {
+		match msg {
+			FromNetworkMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected(who, debug_info),
+			FromNetworkMsg::PeerConnected(who, debug_info) => self.on_peer_connected(who, debug_info),
+			FromNetworkMsg::PeerClogged(who, message) => self.on_clogged_peer(who, message),
+			FromNetworkMsg::CustomMessage(who, message) => {
+				self.on_custom_message(who, message)
+			},
+		}
+		true
+	}
+
+	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>) -> Option<message::BlockRequest<B>> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			if let Some(_) = peer.obsolete_requests.remove(&response.id) {
 				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id,);
@@ -377,8 +442,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		None
 	}
 
-	/// Returns protocol status
-	fn status(&mut self, sender: Sender<ProtocolStatus<B>>) {
+	fn update_peer_info(&mut self, who: &PeerId) {
+		if let Some(info) = self.sync.peer_info(who) {
+			if let Some(ref mut peer) = self.context_data.peers.get_mut(who) {
+				peer.info.best_hash = info.best_hash;
+				peer.info.best_number = info.best_number;
+			}
+			let mut peers = self.connected_peers.write();
+			if let Some(ref mut peer) = peers.get_mut(who) {
+				peer.peer_info.best_hash = info.best_hash;
+				peer.peer_info.best_number = info.best_number;
+			}
+		}
+	}
+
+	/// Propagates protocol statuses.
+	fn on_status(&mut self) {
 		let status = ProtocolStatus {
 			sync: self.sync.status(),
 			num_peers: self.context_data.peers.values().count(),
@@ -389,19 +468,23 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.filter(|p| p.block_request.is_some())
 				.count(),
 		};
-		let _ = sender.send(status);
+		self.status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 	}
 
-	fn on_custom_message(&mut self, who: NodeIndex, message: Message<B>) {
+	fn on_custom_message(&mut self, who: PeerId, message: Message<B>) {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
-				if let Some(request) = self.handle_response(who, &r) {
-					self.on_block_response(who, request, r);
+				if let Some(request) = self.handle_response(who.clone(), &r) {
+					self.on_block_response(who.clone(), request, r);
+					self.update_peer_info(&who);
 				}
 			},
-			GenericMessage::BlockAnnounce(announce) => self.on_block_announce(who, announce),
+			GenericMessage::BlockAnnounce(announce) => {
+				self.on_block_announce(who.clone(), announce);
+				self.update_peer_info(&who);
+			},
 			GenericMessage::Transactions(m) => self.on_extrinsics(who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(who, response),
@@ -416,7 +499,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
 					msg,
-					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(
@@ -427,7 +509,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
+	fn send_message(&mut self, who: PeerId, message: Message<B>) {
 		send_message::<B, H>(
 			&mut self.context_data.peers,
 			&self.network_chan,
@@ -436,41 +518,49 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
+	fn gossip_consensus_message(
+		&mut self,
+		topic: B::Hash,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
+		force: bool,
+	) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
 			ConsensusMessage{ data: message, engine_id },
+			force,
 		);
 	}
 
 	/// Called when a new peer is connected
-	fn on_peer_connected(&mut self, who: NodeIndex, debug_info: String) {
+	fn on_peer_connected(&mut self, who: PeerId, debug_info: String) {
 		trace!(target: "sync", "Connecting {}: {}", who, debug_info);
-		self.handshaking_peers.insert(who, time::Instant::now());
+		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
 		self.send_status(who);
 	}
 
 	/// Called by peer when it is disconnecting
-	fn on_peer_disconnected(&mut self, peer: NodeIndex, debug_info: String) {
+	fn on_peer_disconnected(&mut self, peer: PeerId, debug_info: String) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, debug_info);
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
 			self.handshaking_peers.remove(&peer);
+			self.connected_peers.write().remove(&peer);
 			self.context_data.peers.remove(&peer).is_some()
 		};
 		if removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
-			self.consensus_gossip.peer_disconnected(&mut context, peer);
-			self.sync.peer_disconnected(&mut context, peer);
-			self.specialization.on_disconnect(&mut context, peer);
+			self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
+			self.sync.peer_disconnected(&mut context, peer.clone());
+			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
 		}
 	}
 
 	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
 	/// our messaging rate fast enough.
-	pub fn on_clogged_peer(&self, who: NodeIndex, _msg: Option<Message<B>>) {
+	pub fn on_clogged_peer(&self, who: PeerId, _msg: Option<Message<B>>) {
 		// We don't do anything but print some diagnostics for now.
 		if let Some(peer) = self.context_data.peers.get(&who) {
 			debug!(target: "sync", "Clogged peer {} (protocol_version: {:?}; roles: {:?}; \
@@ -482,7 +572,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_block_request(&mut self, peer: NodeIndex, request: message::BlockRequest<B>) {
+	fn on_block_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
 			request.id,
 			peer,
@@ -548,7 +638,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_block_response(
 		&mut self,
-		peer: NodeIndex,
+		peer: PeerId,
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) {
@@ -573,16 +663,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				response,
 			);
 		} else {
-			// import_queue.import_blocks also acquires sync.write();
-			// Break the cycle by doing these separately from the outside;
-			let new_blocks = {
-				self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response)
-			};
-
-			if let Some((origin, new_blocks)) = new_blocks {
-				let import_queue = self.sync.import_queue();
-				import_queue.import_blocks(origin, new_blocks);
-			}
+			self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response);
 		}
 	}
 
@@ -603,15 +684,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			for (who, peer) in self.context_data.peers.iter() {
 				if peer.block_request.as_ref().map_or(false, |(t, _)| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
 					trace!(target: "sync", "Reqeust timeout {}", who);
-					aborting.push(*who);
+					aborting.push(who.clone());
 				} else if peer.obsolete_requests.values().any(|t| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
 					trace!(target: "sync", "Obsolete timeout {}", who);
-					aborting.push(*who);
+					aborting.push(who.clone());
 				}
 			}
-			for (who, _) in self.handshaking_peers.iter().filter(|(_, t)| (tick - **t).as_secs() > REQUEST_TIMEOUT_SEC) {
+			for (who, _) in self.handshaking_peers.iter().filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC) {
 				trace!(target: "sync", "Handshake timeout {}", who);
-				aborting.push(*who);
+				aborting.push(who.clone());
 			}
 		}
 
@@ -624,7 +705,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&mut self, who: NodeIndex, status: message::Status<B>) {
+	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		{
 			if self.context_data.peers.contains_key(&who) {
@@ -676,13 +757,27 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 			let cache_limit = NonZeroUsize::new(1_000_000).expect("1_000_000 > 0; qed");
 
-			let peer = Peer {
-				info: PeerInfo {
-					protocol_version: status.version,
-					roles: status.roles,
-					best_hash: status.best_hash,
-					best_number: status.best_number
+			let info = match self.handshaking_peers.remove(&who) {
+				Some(_handshaking) => {
+					let peer_info = PeerInfo {
+						protocol_version: status.version,
+						roles: status.roles,
+						best_hash: status.best_hash,
+						best_number: status.best_number
+					};
+					self.connected_peers
+						.write()
+						.insert(who.clone(), ConnectedPeer { peer_info: peer_info.clone() });
+					peer_info
 				},
+				None => {
+					debug!(target: "sync", "Received status from previously unconnected node {}", who);
+					return;
+				},
+			};
+
+			let peer = Peer {
+				info,
 				block_request: None,
 				known_extrinsics: LruHashSet::new(cache_limit),
 				known_blocks: LruHashSet::new(cache_limit),
@@ -690,22 +785,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				obsolete_requests: HashMap::new(),
 			};
 			self.context_data.peers.insert(who.clone(), peer);
-			self.handshaking_peers.remove(&who);
+
 			debug!(target: "sync", "Connected {}", who);
 		}
 
 		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
 		self.on_demand
 			.as_ref()
-			.map(|s| s.on_connect(who, status.roles, status.best_number));
-		self.sync.new_peer(&mut context, who);
+			.map(|s| s.on_connect(who.clone(), status.roles, status.best_number));
+		self.sync.new_peer(&mut context, who.clone());
 		self.consensus_gossip
-			.new_peer(&mut context, who, status.roles);
+			.new_peer(&mut context, who.clone(), status.roles);
 		self.specialization.on_connect(&mut context, who, status);
 	}
 
 	/// Called when peer sends us new extrinsics
-	fn on_extrinsics(&mut self, who: NodeIndex, extrinsics: message::Transactions<B::Extrinsic>) {
+	fn on_extrinsics(&mut self, who: PeerId, extrinsics: message::Transactions<B::Extrinsic>) {
 		// Accept extrinsics only when fully synced
 		if self.sync.status().state != SyncState::Idle {
 			trace!(target: "sync", "{} Ignoring extrinsics while syncing", who);
@@ -734,7 +829,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		let extrinsics = self.transaction_pool.transactions();
 		let mut propagated_to = HashMap::new();
-		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
+		for (who, peer) in self.context_data.peers.iter_mut() {
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
 				.iter()
 				.filter(|&(ref hash, _)| peer.known_extrinsics.insert(hash.clone()))
@@ -742,21 +837,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.unzip();
 
 			if !to_send.is_empty() {
-				let (sender, port) = channel::unbounded();
-				let _ = self
-					.network_chan
-					.send(NetworkMsg::GetPeerId(who.clone(), sender));
-				let node_id = port.recv().expect("1. We are running 2. Network should be running too.");
-				if let Some(id) = node_id {
-					for hash in hashes {
-						propagated_to
-							.entry(hash)
-							.or_insert_with(Vec::new)
-							.push(id.clone());
-					}
+				for hash in hashes {
+					propagated_to
+						.entry(hash)
+						.or_insert_with(Vec::new)
+						.push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				self.network_chan.send(NetworkMsg::Outgoing(*who, GenericMessage::Transactions(to_send)))
+				self.network_chan.send(NetworkMsg::Outgoing(who.clone(), GenericMessage::Transactions(to_send)))
 			}
 		}
 		self.transaction_pool.on_broadcasted(propagated_to);
@@ -785,12 +873,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
 			peer.known_blocks.insert(hash);
-			self.network_chan.send(NetworkMsg::Outgoing(*who, message.clone()))
+			self.network_chan.send(NetworkMsg::Outgoing(who.clone(), message.clone()))
 		}
 	}
 
 	/// Send Status message
-	fn send_status(&mut self, who: NodeIndex) {
+	fn send_status(&mut self, who: PeerId) {
 		if let Ok(info) = self.context_data.chain.info() {
 			let status = message::generic::Status {
 				version: CURRENT_VERSION,
@@ -821,7 +909,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.abort();
 	}
 
-	fn on_block_announce(&mut self, who: NodeIndex, announce: message::BlockAnnounce<B::Header>) {
+	fn on_block_announce(&mut self, who: PeerId, announce: message::BlockAnnounce<B::Header>) {
 		let header = announce.header;
 		let hash = header.hash();
 		{
@@ -831,7 +919,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 		self.on_demand
 			.as_ref()
-			.map(|s| s.on_block_announce(who, *header.number()));
+			.map(|s| s.on_block_announce(who.clone(), *header.number()));
 		self.sync.on_block_announce(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			who,
@@ -860,7 +948,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			if peer.known_blocks.insert(hash.clone()) {
 				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
-				self.network_chan.send(NetworkMsg::Outgoing(*who, message.clone()))
+				self.network_chan.send(NetworkMsg::Outgoing(who.clone(), message.clone()))
 			}
 		}
 	}
@@ -875,7 +963,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_call_request(
 		&mut self,
-		who: NodeIndex,
+		who: PeerId,
 		request: message::RemoteCallRequest<B::Hash>,
 	) {
 		trace!(target: "sync", "Remote call request {} from {} ({} at {})", request.id, who, request.method, request.block);
@@ -901,7 +989,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn on_remote_call_response(&mut self, who: NodeIndex, response: message::RemoteCallResponse) {
+	fn on_remote_call_response(&mut self, who: PeerId, response: message::RemoteCallResponse) {
 		trace!(target: "sync", "Remote call response {} from {}", response.id, who);
 		self.on_demand
 			.as_ref()
@@ -910,7 +998,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_read_request(
 		&mut self,
-		who: NodeIndex,
+		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
@@ -931,7 +1019,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}),
 		);
 	}
-	fn on_remote_read_response(&mut self, who: NodeIndex, response: message::RemoteReadResponse) {
+	fn on_remote_read_response(&mut self, who: PeerId, response: message::RemoteReadResponse) {
 		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
 		self.on_demand
 			.as_ref()
@@ -940,7 +1028,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_header_request(
 		&mut self,
-		who: NodeIndex,
+		who: PeerId,
 		request: message::RemoteHeaderRequest<NumberFor<B>>,
 	) {
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
@@ -965,7 +1053,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_header_response(
 		&mut self,
-		who: NodeIndex,
+		who: PeerId,
 		response: message::RemoteHeaderResponse<B::Header>,
 	) {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
@@ -976,7 +1064,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_changes_request(
 		&mut self,
-		who: NodeIndex,
+		who: PeerId,
 		request: message::RemoteChangesRequest<B::Hash>,
 	) {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
@@ -1009,7 +1097,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_changes_response(
 		&mut self,
-		who: NodeIndex,
+		who: PeerId,
 		response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>,
 	) {
 		trace!(target: "sync", "Remote changes proof response {} from {} (max={})",
@@ -1021,9 +1109,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 }
 
 fn send_message<B: BlockT, H: ExHashT>(
-	peers: &mut HashMap<NodeIndex, Peer<B, H>>,
+	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	network_chan: &NetworkChan<B>,
-	who: NodeIndex,
+	who: PeerId,
 	mut message: Message<B>,
 ) {
 	if let GenericMessage::BlockRequest(ref mut r) = message {
@@ -1100,20 +1188,20 @@ macro_rules! construct_simple_protocol {
 			fn on_connect(
 				&mut self,
 				_ctx: &mut $crate::Context<$block>,
-				_who: $crate::NodeIndex,
+				_who: $crate::PeerId,
 				_status: $crate::StatusMessage<$block>
 			) {
 				$( self.$sub_protocol_name.on_connect(_ctx, _who, _status); )*
 			}
 
-			fn on_disconnect(&mut self, _ctx: &mut $crate::Context<$block>, _who: $crate::NodeIndex) {
+			fn on_disconnect(&mut self, _ctx: &mut $crate::Context<$block>, _who: $crate::PeerId) {
 				$( self.$sub_protocol_name.on_disconnect(_ctx, _who); )*
 			}
 
 			fn on_message(
 				&mut self,
 				_ctx: &mut $crate::Context<$block>,
-				_who: $crate::NodeIndex,
+				_who: $crate::PeerId,
 				_message: &mut Option<$crate::message::Message<$block>>
 			) {
 				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*

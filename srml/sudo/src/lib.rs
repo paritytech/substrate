@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -58,7 +58,6 @@ decl_module! {
 	}
 }
 
-/// An event in this module.
 decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 		/// A sudo just took place.

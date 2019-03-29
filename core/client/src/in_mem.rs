@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -742,8 +742,8 @@ impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage
 }
 
 impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
-	fn get(&self, key: &H::Out) -> Result<Option<state_machine::DBValue>, String> {
-		self.0.get(key)
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key, prefix)
 	}
 }
 

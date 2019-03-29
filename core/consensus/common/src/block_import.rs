@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,19 +23,43 @@ use std::borrow::Cow;
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
+	/// Block imported.
+	Imported(ImportedAux),
 	/// Already in the blockchain.
 	AlreadyInChain,
 	/// Block or parent is known to be bad.
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
-	/// Added to the import queue but must be justified
-	/// (usually required to safely enact consensus changes).
-	NeedsJustification,
+}
+
+/// Auxiliary data associated with an imported block result.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImportedAux {
+	/// Clear all pending justification requests.
+	pub clear_justification_requests: bool,
+	/// Request a justification for the given block.
+	pub needs_justification: bool,
+	/// Received a bad justification.
+	pub bad_justification: bool,
+}
+
+impl Default for ImportedAux {
+	fn default() -> ImportedAux {
+		ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+			bad_justification: false,
+		}
+	}
+}
+
+impl ImportResult {
+	/// Returns default value for `ImportResult::Imported` with both
+	/// `clear_justification_requests` and `needs_justification` set to false.
+	pub fn imported() -> ImportResult {
+		ImportResult::Imported(ImportedAux::default())
+	}
 }
 
 /// Block data origin.

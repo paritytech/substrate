@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug};
+use log::{info, debug, warn, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -28,15 +28,15 @@ use client::{
 };
 use codec::Decode;
 use consensus_common::{self, evaluation};
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
 };
-use runtime_primitives::ExecutionContext;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use inherents::InherentData;
+use inherents::{InherentData, pool::InherentsPool};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -114,6 +114,8 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<TransactionPool<A>>,
+	/// The inherents pool
+	pub inherents_pool: Arc<InherentsPool<<A::Block as BlockT>::Extrinsic>>,
 }
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
@@ -143,6 +145,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
+			inherents_pool: self.inherents_pool.clone(),
 			now: Box::new(time::Instant::now),
 		};
 
@@ -157,6 +160,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
+	inherents_pool: Arc<InherentsPool<<Block as BlockT>::Extrinsic>>,
 	now: Box<Fn() -> time::Instant>,
 }
 
@@ -200,17 +204,30 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			&self.parent_id,
 			inherent_data,
 			|block_builder| {
+				// Add inherents from the internal pool
+
+				let inherents = self.inherents_pool.drain();
+				debug!("Pushing {} queued inherents.", inherents.len());
+				for i in inherents {
+					if let Err(e) = block_builder.push_extrinsic(i) {
+						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
+					}
+				}
+
+				// proceed with transactions
 				let mut is_first = true;
 				let mut skipped = 0;
 				let mut unqueue_invalid = Vec::new();
 				let pending_iterator = self.transaction_pool.ready();
 
+				debug!("Attempting to push transactions from the pool.");
 				for pending in pending_iterator {
 					if (self.now)() > deadline {
 						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
 						break;
 					}
 
+					trace!("[{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);
@@ -252,6 +269,10 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
+		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+			"number" => ?block.header().number(),
+			"hash" => ?<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
 			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
@@ -273,17 +294,16 @@ mod tests {
 	use codec::Encode;
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
-	use test_client::keyring::Keyring;
-	use test_client::{self, runtime::{Extrinsic, Transfer}};
+	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		let tx = Transfer {
 			amount: Default::default(),
 			nonce,
-			from: Keyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
-		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	}
 
@@ -299,6 +319,7 @@ mod tests {
 		let proposer_factory = ProposerFactory {
 			client: client.clone(),
 			transaction_pool: txpool.clone(),
+			inherents_pool: Default::default(),
 		};
 
 		let mut proposer = proposer_factory.init(
@@ -321,4 +342,32 @@ mod tests {
 		assert_eq!(txpool.ready().count(), 2);
 	}
 
+	#[test]
+	fn should_include_inherents_from_the_pool() {
+		// given
+		let client = Arc::new(test_client::new());
+		let chain_api = transaction_pool::ChainApi::new(client.clone());
+		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+		let inpool = Arc::new(InherentsPool::default());
+
+		let proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+			inherents_pool: inpool.clone(),
+		};
+
+		inpool.add(extrinsic(0));
+
+		let proposer = proposer_factory.init(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&[]
+		).unwrap();
+
+		// when
+		let deadline = time::Duration::from_secs(3);
+		let block = proposer.propose(Default::default(), deadline).unwrap();
+
+		// then
+		assert_eq!(block.extrinsics().len(), 1);
+	}
 }

@@ -18,9 +18,8 @@ tokio = "0.1"
 exit-future = "0.1"
 parking_lot = "0.7.1"
 hex-literal = "0.1"
-slog = "^2"
-parity-codec = "3.0"
-trie-root = "0.11.0"
+parity-codec = "3.2"
+trie-root = "0.12"
 sr-io = { path = "../core/sr-io" }
 substrate-cli = { path = "../core/cli" }
 primitives = { package = "substrate-primitives", path = "../core/primitives" }
@@ -33,7 +32,6 @@ consensus = { package = "substrate-consensus-aura", path = "../core/consensus/au
 substrate-client = {  path = "../core/client" }
 basic-authorship = { package = "substrate-basic-authorship", path = "../core/basic-authorship" }
 node-template-runtime = { path = "runtime" }
-node-executor = { path = "../node/executor" }
 
 [build-dependencies]
 vergen = "3"

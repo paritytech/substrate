@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -63,27 +63,26 @@ mod wasm;
 mod tests;
 
 use crate::exec::ExecutionContext;
-use crate::account_db::AccountDb;
+use crate::account_db::{AccountDb, DirectAccountDb};
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
+use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use parity_codec::{Codec, Encode};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
-use srml_support::traits::OnFreeBalanceZero;
+use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
-use runtime_io::{blake2_256, twox_128};
 use timestamp;
-use fees;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
+pub type TrieId = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
-pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
+pub trait ContractAddressFor<CodeHash, AccountId> {
 	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
 }
 
@@ -92,7 +91,54 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
+#[derive(Encode,Decode,Clone,Debug)]
+/// Information for managing an acocunt and its sub trie abstraction.
+/// This is the required info to cache for an account
+pub struct AccountInfo {
+	/// unique ID for the subtree encoded as a byte
+	pub trie_id: TrieId,
+	/// the size of stored value in octet
+	pub current_mem_stored: u64,
+}
+
+/// Get a trie id (trie id must be unique and collision resistant depending upon its context)
+/// Note that it is different than encode because trie id should have collision resistance
+/// property (being a proper uniqueid).
+pub trait TrieIdGenerator<AccountId> {
+	/// get a trie id for an account, using reference to parent account trie id to ensure
+	/// uniqueness of trie id 
+	/// The implementation must ensure every new trie id is unique: two consecutive call with the
+	/// same parameter needs to return different trie id values.
+	fn trie_id(account_id: &AccountId) -> TrieId;
+}
+
+/// Get trie id from `account_id`
+pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
+
+/// This generator use inner counter for account id and apply hash over `AccountId +
+/// accountid_counter`
+impl<T: Trait> TrieIdGenerator<T::AccountId> for TrieIdFromParentCounter<T>
+where
+	T::AccountId: AsRef<[u8]>
+{
+	fn trie_id(account_id: &T::AccountId) -> TrieId {
+		// note that skipping a value due to error is not an issue here.
+		// we only need uniqueness, not sequence.
+		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
+
+		let mut buf = Vec::new();
+		buf.extend_from_slice(account_id.as_ref());
+		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
+		T::Hashing::hash(&buf[..]).as_ref().into()
+	}
+}
+
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+
+pub trait Trait: timestamp::Trait {
+	type Currency: Currency<Self::AccountId>;
+
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
 
@@ -100,7 +146,7 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<BalanceOf<Self>> + As<u64> + As<u32>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -109,7 +155,13 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	///
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by executive module for regular dispatch.
-	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
+	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
+
+	/// trieid id generator
+	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
+
+	/// Handler for the unbalanced reduction when making a gas payment.
+	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 /// Simple contract address determintator.
@@ -121,7 +173,7 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
-	T::AccountId: From<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
@@ -131,19 +183,19 @@ where
 		buf.extend_from_slice(data_hash.as_ref());
 		buf.extend_from_slice(origin.as_ref());
 
-		T::Hashing::hash(&buf[..]).into()
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf[..]))
 	}
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// implementation of `ChargeBytesFee` for fees module does.
+/// implementation of `MakePayment` for balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
-impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
-	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
+impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
+	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len());
-		let base_fee = <fees::Module<T>>::transaction_base_fee();
-		let byte_fee = <fees::Module<T>>::transaction_byte_fee();
-		<T::Balance as As<u64>>::sa(base_fee.as_() + byte_fee.as_() * encoded_len as u64)
+		let base_fee = <Module<T>>::transaction_base_fee();
+		let byte_fee = <Module<T>>::transaction_byte_fee();
+		base_fee + byte_fee * <BalanceOf<T> as As<u64>>::sa(encoded_len as u64)
 	}
 }
 
@@ -175,14 +227,14 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
 
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
 
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			result.map(|_| ())
 		}
@@ -191,7 +243,7 @@ decl_module! {
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[compact] value: T::Balance,
+			#[compact] value: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
 			data: Vec<u8>
 		) -> Result {
@@ -202,7 +254,7 @@ decl_module! {
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
@@ -213,7 +265,7 @@ decl_module! {
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -223,7 +275,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
@@ -234,7 +286,7 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Create a new contract, optionally transfering some balance to the created account.
+		/// Create a new contract, optionally transferring some balance to the created account.
 		///
 		/// Creation is executed as follows:
 		///
@@ -245,7 +297,7 @@ decl_module! {
 		///   upon any message received by this account.
 		fn create(
 			origin,
-			#[compact] endowment: T::Balance,
+			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
@@ -256,7 +308,7 @@ decl_module! {
 			//
 			// NOTE: it is very important to avoid any state changes before
 			// paying for the gas.
-			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
@@ -266,7 +318,7 @@ decl_module! {
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
-				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
@@ -276,7 +328,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
@@ -296,7 +348,7 @@ decl_module! {
 decl_event! {
 	pub enum Event<T>
 	where
-		<T as balances::Trait>::Balance,
+		Balance = BalanceOf<T>,
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
@@ -320,14 +372,22 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
-		/// The fee required to create a contract. At least as big as staking's ReclaimRebate.
-		ContractFee get(contract_fee) config(): T::Balance = T::Balance::sa(21);
+		/// The fee required to make a transfer.
+		TransferFee get(transfer_fee) config(): BalanceOf<T>;
+		/// The fee required to create an account.
+		CreationFee get(creation_fee) config(): BalanceOf<T>;
+		/// The fee to be paid for making a transaction; the base.
+		TransactionBaseFee get(transaction_base_fee) config(): BalanceOf<T>;
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
+		/// The fee required to create a contract.
+		ContractFee get(contract_fee) config(): BalanceOf<T> = BalanceOf::<T>::sa(21);
 		/// The fee charged for a call into a contract.
 		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
 		/// The fee charged for a create of a contract.
 		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
 		/// The price of one unit of gas.
-		GasPrice get(gas_price) config(): T::Balance = T::Balance::sa(1);
+		GasPrice get(gas_price) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
 		/// The maximum nesting level of a call/create stack.
 		MaxDepth get(max_depth) config(): u32 = 100;
 		/// The maximum amount of gas that could be expended per block.
@@ -342,34 +402,19 @@ decl_storage! {
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
-	}
-}
-
-/// The storage items associated with an account/key.
-///
-pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
-impl<T: Trait> StorageDoubleMap for StorageOf<T> {
-	const PREFIX: &'static [u8] = b"con:sto:";
-	type Key1 = T::AccountId;
-	type Key2 = Vec<u8>;
-	type Value = Vec<u8>;
-
-	/// Hashed by XX
-	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8> {
-		twox_128(&key1_data).to_vec()
-	}
-
-	/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
-	/// thus will be susceptible for a untrusted input.
-	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8> {
-		blake2_256(&key2_data).to_vec()
+		/// The subtrie counter
+		pub AccountCounter: u64 = 0;
+		/// The code associated with a given account.
+		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who);
+		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
+			child::kill_storage(&subtrie.trie_id);
+		});
 	}
 }
 
@@ -379,11 +424,11 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// course of transaction execution.
 pub struct Config<T: Trait> {
 	pub schedule: Schedule<T::Gas>,
-	pub existential_deposit: T::Balance,
+	pub existential_deposit: BalanceOf<T>,
 	pub max_depth: u32,
-	pub contract_account_instantiate_fee: T::Balance,
-	pub account_create_fee: T::Balance,
-	pub transfer_fee: T::Balance,
+	pub contract_account_instantiate_fee: BalanceOf<T>,
+	pub account_create_fee: BalanceOf<T>,
+	pub transfer_fee: BalanceOf<T>,
 	pub call_base_fee: T::Gas,
 	pub instantiate_base_fee: T::Gas,
 }
@@ -392,11 +437,11 @@ impl<T: Trait> Config<T> {
 	fn preload() -> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
-			existential_deposit: <balances::Module<T>>::existential_deposit(),
+			existential_deposit: T::Currency::minimum_balance(),
 			max_depth: <Module<T>>::max_depth(),
 			contract_account_instantiate_fee: <Module<T>>::contract_fee(),
-			account_create_fee: <balances::Module<T>>::creation_fee(),
-			transfer_fee: <balances::Module<T>>::transfer_fee(),
+			account_create_fee: <Module<T>>::creation_fee(),
+			transfer_fee: <Module<T>>::transfer_fee(),
 			call_base_fee: <Module<T>>::call_base_fee(),
 			instantiate_base_fee: <Module<T>>::create_base_fee(),
 		}

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ use futures::{Future, Stream};
 use tempdir::TempDir;
 use tokio::runtime::Runtime;
 use tokio::timer::Interval;
-use primitives::blake2_256;
 use service::{
 	ServiceFactory,
 	Configuration,
@@ -34,8 +33,8 @@ use service::{
 	Roles,
 	FactoryExtrinsic,
 };
-use network::{Protocol, SyncProvider, ManageNetwork};
-use network::config::{NetworkConfiguration, NonReservedPeerMode};
+use network::{multiaddr, SyncProvider, ManageNetwork};
+use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
@@ -64,10 +63,6 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-fn node_private_key_string(index: u32) -> String {
-	format!("N{}", index)
-}
-
 fn node_config<F: ServiceFactory> (
 	index: u32,
 	spec: &FactoryChainSpec<F>,
@@ -83,17 +78,20 @@ fn node_config<F: ServiceFactory> (
 		keys.push(seed);
 	}
 
+	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
+	let net_config_path = config_path.clone();
+
 	let network_config = NetworkConfiguration {
-		config_path: Some(root.join("network").to_str().unwrap().into()),
-		net_config_path: Some(root.join("network").to_str().unwrap().into()),
+		config_path,
+		net_config_path,
 		listen_addresses: vec! [
-			iter::once(Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(Protocol::Tcp(base_port + index as u16)))
+			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
 				.collect()
 		],
 		public_addresses: vec![],
 		boot_nodes: vec![],
-		use_secret: Some(blake2_256(node_private_key_string(index).as_bytes())),
+		node_key: NodeKeyConfig::Ed25519(Secret::New),
 		in_peers: 50,
 		out_peers: 450,
 		reserved_nodes: vec![],
@@ -120,8 +118,11 @@ fn node_config<F: ServiceFactory> (
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
-		telemetry_url: None,
+		telemetry_endpoints: None,
 		default_heap_pages: None,
+		offchain_worker: false,
+		force_authoring: false,
+		disable_grandpa: false,
 	}
 }
 
@@ -181,7 +182,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(|_index, service|
-				service.network().status().num_peers == NUM_NODES as usize - 1
+				service.network().peers().len() == NUM_NODES as usize - 1
 			);
 			network.runtime
 		};
@@ -201,7 +202,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				address = service.network().node_id().expect("No node address");
 			}
 			network.run_until_all_full(|_index, service| {
-				service.network().status().num_peers == NUM_NODES as usize - 1
+				service.network().peers().len() == NUM_NODES as usize - 1
 			});
 		}
 		temp.close().expect("Error removing temp dir");

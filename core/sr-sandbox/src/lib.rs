@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -140,7 +140,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		}
 	}
 
-	/// Register a host function in this environment defintion.
+	/// Register a host function in this environment definition.
 	///
 	/// NOTE that there is no constraints on type of this function. An instance
 	/// can import function passed here with any signature it wants. It can even import

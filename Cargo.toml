@@ -4,7 +4,7 @@ path = "node/src/main.rs"
 
 [package]
 name = "substrate"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 edition = "2018"
@@ -57,6 +57,7 @@ members = [
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
 	"srml/support/procedural/tools/derive",
+	"srml/support/test",
 	"srml/assets",
 	"srml/aura",
 	"srml/balances",
@@ -66,7 +67,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
-	"srml/fees",
+	"srml/finality-tracker",
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",
@@ -76,7 +77,6 @@ members = [
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
-	"srml/upgrade-key",
 	"node/cli",
 	"node/executor",
 	"node/primitives",
@@ -103,5 +103,8 @@ panic = "unwind"
 
 [patch.crates-io]
 trie-db = { path = "../parity-trie/trie-db" }
+trie-root = { path = "../parity-trie/trie-root" }
 hash-db = { path = "../parity-trie/hash-db" }
 memory-db = { path = "../parity-trie/memory-db" }
+trie-bench = { path = "../parity-trie/test-support/trie-bench" }
+hash256-std-hasher = { path = "../parity-trie/hash256-std-hasher" }

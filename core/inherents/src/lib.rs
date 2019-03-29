@@ -31,9 +31,10 @@
 //! information on how that is done.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 
 use parity_codec as codec;
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
@@ -42,6 +43,9 @@ use parking_lot::RwLock;
 
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
+
+#[cfg(feature = "std")]
+pub mod pool;
 
 pub use runtime_primitives::RuntimeString;
 
@@ -399,7 +403,7 @@ pub trait ProvideInherent {
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
 	/// Check the given inherent if it is valid.
-	/// Checking the inherent is optional and can be ommitted.
+	/// Checking the inherent is optional and can be omitted.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}

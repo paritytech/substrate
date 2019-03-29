@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -38,9 +38,9 @@ pub mod block_builder;
 #[cfg(feature = "std")]
 pub mod light;
 #[cfg(feature = "std")]
-pub mod children;
+pub mod leaves;
 #[cfg(feature = "std")]
-mod leaves;
+pub mod children;
 #[cfg(feature = "std")]
 mod call_executor;
 #[cfg(feature = "std")]

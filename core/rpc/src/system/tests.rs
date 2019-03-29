@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,38 +16,66 @@
 
 use super::*;
 
-use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::{self, ProtocolStatus, PeerId, PeerInfo as NetworkPeerInfo};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
+use futures::sync::mpsc;
 
-#[derive(Default)]
 struct Status {
 	pub peers: usize,
 	pub is_syncing: bool,
 	pub is_dev: bool,
+	pub peer_id: PeerId,
+}
+
+impl Default for Status {
+	fn default() -> Status {
+		Status {
+			peer_id: PeerId::random(),
+			peers: 0,
+			is_syncing: false,
+			is_dev: false,
+		}
+	}
 }
 
 impl network::SyncProvider<Block> for Status {
-	fn status(&self) -> ProtocolStatus<Block> {
-		ProtocolStatus {
-			sync: SyncStatus {
-				state: if self.is_syncing { SyncState::Downloading } else { SyncState::Idle },
-				best_seen_block: None,
-				num_peers: self.peers as u32,
-			},
-			num_peers: self.peers,
-			num_active_peers: 0,
+	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<Block>> {
+		let (_sink, stream) = mpsc::unbounded();
+		stream
+	}
+
+	fn network_state(&self) -> network::NetworkState {
+		network::NetworkState {
+			peer_id: String::new(),
+			listened_addresses: Default::default(),
+			external_addresses: Default::default(),
+			connected_peers: Default::default(),
+			not_connected_peers: Default::default(),
+			average_download_per_sec: 0,
+			average_upload_per_sec: 0,
+			peerset: serde_json::Value::Null,
 		}
 	}
 
-	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, NetworkPeerInfo<Block>)> {
-		vec![(1, Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()), NetworkPeerInfo {
-			roles: Roles::FULL,
-			protocol_version: 1,
-			best_hash: Default::default(),
-			best_number: 1
-		})]
+	fn peers(&self) -> Vec<(PeerId, NetworkPeerInfo<Block>)> {
+		let mut peers = vec![];
+		for _peer in 0..self.peers {
+			peers.push(
+				(self.peer_id.clone(), NetworkPeerInfo {
+					roles: Roles::FULL,
+					protocol_version: 1,
+					best_hash: Default::default(),
+					best_number: 1
+				})
+			);
+		}
+		peers
+	}
+
+	fn is_major_syncing(&self) -> bool {
+		self.is_syncing
 	}
 }
 
@@ -108,6 +136,7 @@ fn system_health() {
 
 	assert_matches!(
 		api(Status {
+			peer_id: PeerId::random(),
 			peers: 5,
 			is_syncing: true,
 			is_dev: true,
@@ -121,6 +150,7 @@ fn system_health() {
 
 	assert_eq!(
 		api(Status {
+			peer_id: PeerId::random(),
 			peers: 5,
 			is_syncing: false,
 			is_dev: false,
@@ -134,6 +164,7 @@ fn system_health() {
 
 	assert_eq!(
 		api(Status {
+			peer_id: PeerId::random(),
 			peers: 0,
 			is_syncing: false,
 			is_dev: true,
@@ -148,15 +179,37 @@ fn system_health() {
 
 #[test]
 fn system_peers() {
+	let peer_id = PeerId::random();
 	assert_eq!(
-		api(None).system_peers().unwrap(),
+		api(Status {
+			peer_id: peer_id.clone(),
+			peers: 1,
+			is_syncing: false,
+			is_dev: true,
+		}).system_peers().unwrap(),
 		vec![PeerInfo {
-			index: 1,
-			peer_id: "QmS5oyTmdjwBowwAH1D9YQnoe2HyWpVemH8qHiU5RqWPh4".into(),
+			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
 			protocol_version: 1,
 			best_hash: Default::default(),
 			best_number: 1u64,
 		}]
+	);
+}
+
+#[test]
+fn system_network_state() {
+	assert_eq!(
+		api(None).system_network_state().unwrap(),
+		network::NetworkState {
+			peer_id: String::new(),
+			listened_addresses: Default::default(),
+			external_addresses: Default::default(),
+			connected_peers: Default::default(),
+			not_connected_peers: Default::default(),
+			average_download_per_sec: 0,
+			average_upload_per_sec: 0,
+			peerset: serde_json::Value::Null,
+		}
 	);
 }

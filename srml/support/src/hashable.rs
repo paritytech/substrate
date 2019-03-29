@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,12 +27,12 @@ pub trait Hashable: Sized {
 
 impl<T: Codec> Hashable for T {
 	fn blake2_256(&self) -> [u8; 32] {
-		blake2_256(&self.encode())
+		self.using_encoded(blake2_256)
 	}
 	fn twox_128(&self) -> [u8; 16] {
-		twox_128(&self.encode())
+		self.using_encoded(twox_128)
 	}
 	fn twox_256(&self) -> [u8; 32] {
-		twox_256(&self.encode())
+		self.using_encoded(twox_256)
 	}
 }

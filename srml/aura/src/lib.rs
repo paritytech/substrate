@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,9 +27,7 @@ use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-#[cfg(feature = "std")]
-use parity_codec::Decode;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -167,7 +165,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> u64 {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
-		<timestamp::Module<T>>::block_period().as_().saturating_mul(2)
+		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
@@ -209,7 +207,7 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = staking::Module::<T>::validators();
+		let validators = session::Module::<T>::validators();
 
 		report.punish(
 			validators.len(),

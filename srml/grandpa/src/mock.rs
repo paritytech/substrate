@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,8 +23,7 @@ use primitives::generic::DigestItem as GenDigestItem;
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
-use parity_codec::Encode;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use crate::{GenesisConfig, Trait, Module, RawLog};
 
 impl_outer_origin!{
@@ -53,7 +52,7 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
-	type Lookup = IdentityLookup<u64>;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = TestEvent;
 	type Log = DigestItem;

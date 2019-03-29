@@ -1,6 +1,6 @@
 [package]
 name = "substrate-telemetry"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
@@ -9,6 +9,9 @@ edition = "2018"
 parking_lot = "0.7.1"
 lazy_static = "1.0"
 log = "0.4"
+rand = "0.6"
+serde = "1.0.81"
+serde_derive = "1.0"
 slog = "^2"
 slog-json = "^2"
 slog-async = "^2"

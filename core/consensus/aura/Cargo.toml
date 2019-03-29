@@ -6,7 +6,7 @@ description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.0"
+parity-codec = "3.2"
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
@@ -18,6 +18,7 @@ aura_primitives = { package = "substrate-consensus-aura-primitives", path = "pri
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
 srml-aura = { path = "../../../srml/aura" }
+substrate-telemetry = { path = "../../telemetry" }
 futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"

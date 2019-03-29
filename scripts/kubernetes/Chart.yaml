@@ -1,0 +1,12 @@
+name: substrate
+version: 0.2
+appVersion: 0.9.1
+description: "Substrate: The platform for blockchain innovators"
+home: https://substrate.network/
+icon: https://substrate.network/favicon.ico
+sources:
+  - https://github.com/paritytech/substrate/
+maintainers:
+  - name: Paritytech Devops Team
+    email: devops-team@parity.io
+tillerVersion: ">=2.8.0"

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Consensus Common.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -47,7 +47,9 @@ pub mod evaluation;
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::{Error, ErrorKind};
-pub use block_import::{BlockImport, JustificationImport, ImportBlock, BlockOrigin, ImportResult, ForkChoiceStrategy};
+pub use block_import::{
+	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, JustificationImport,
+};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {

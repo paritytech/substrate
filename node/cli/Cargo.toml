@@ -12,8 +12,7 @@ tokio = "0.1.7"
 futures = "0.1"
 exit-future = "0.1"
 cli = { package = "substrate-cli", path = "../../core/cli" }
-parity-codec = { version = "3.0" }
-slog = "^2"
+parity-codec = { version = "3.2" }
 sr-io = { path = "../../core/sr-io" }
 client = { package = "substrate-client", path = "../../core/client" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
@@ -30,6 +29,7 @@ grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
 substrate-keystore = { path = "../../core/keystore" }
+substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
 
 [dev-dependencies]
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }

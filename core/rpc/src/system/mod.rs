@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -60,6 +60,13 @@ pub trait SystemApi<Hash, Number> {
 	/// Returns currently connected peers
 	#[rpc(name = "system_peers")]
 	fn system_peers(&self) -> Result<Vec<PeerInfo<Hash, Number>>>;
+
+	/// Returns current state of the network.
+	///
+	/// **Warning**: This API is not stable.
+	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
+	#[rpc(name = "system_networkState")]
+	fn system_network_state(&self) -> Result<network::NetworkState>;
 }
 
 /// System API implementation
@@ -102,22 +109,24 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	}
 
 	fn system_health(&self) -> Result<Health> {
-		let status = self.sync.status();
 		Ok(Health {
-			peers: status.num_peers,
-			is_syncing: status.sync.is_major_syncing(),
+			peers: self.sync.peers().len(),
+			is_syncing: self.sync.is_major_syncing(),
 			should_have_peers: self.should_have_peers,
 		})
 	}
 
 	fn system_peers(&self) -> Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
-		Ok(self.sync.peers().into_iter().map(|(idx, peer_id, p)| PeerInfo {
-			index: idx,
-			peer_id: peer_id.map_or_else(Default::default, |p| p.to_base58()),
+		Ok(self.sync.peers().into_iter().map(|(peer_id, p)| PeerInfo {
+			peer_id: peer_id.to_base58(),
 			roles: format!("{:?}", p.roles),
 			protocol_version: p.protocol_version,
 			best_hash: p.best_hash,
 			best_number: p.best_number,
 		}).collect())
+	}
+
+	fn system_network_state(&self) -> Result<network::NetworkState> {
+		Ok(self.sync.network_state())
 	}
 }

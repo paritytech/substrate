@@ -1,0 +1,139 @@
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/
+# https://cloud.google.com/kubernetes-engine/docs/concepts/statefulset
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.app }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.GitlabEnvSlug | default .Values.app }}
+  serviceName: {{ .Values.app }}
+  replicas: {{ .Values.nodes.replicas }}
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.GitlabEnvSlug | default .Values.app }}
+    spec:
+      {{- if .Values.rbac.enable }}
+      serviceAccountName: {{ .Values.rbac.name }}
+      {{- else }}
+      serviceAccountName: default
+      {{- end }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+                - key: node
+                  operator: In
+                  values:
+                  - substrate
+        {{- if .Values.listen_node_port }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - {{ .Values.app }}
+              topologyKey: "kubernetes.io/hostname"
+        {{- end }}
+      terminationGracePeriodSeconds: 300
+      {{- if .Values.validator.keys }}
+      volumes:
+        - name: {{ .Values.app }}-validator-secrets
+          secret:
+            secretName: {{ .Values.app }}-secrets
+      initContainers:
+      - name: prepare-secrets
+        image: busybox
+        command: [ "/bin/sh" ]
+        args:
+          - -c
+          - sed -n -r "s/^${POD_NAME}-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/key;
+            sed -n -r "s/^${POD_NAME}-node-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/node-key;
+            sed -n -r "s/^${POD_NAME}-name ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/name;
+            test -s {{ .Values.image.basepath }}/name || echo "${POD_NAME}" > {{ .Values.image.basepath }}/name
+        env:
+          # from (workaround for hostname)
+          # https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        volumeMounts:
+        - name: {{ .Values.app }}-validator-secrets
+          readOnly: true
+          mountPath: "/etc/validator"
+        - name: {{ .Values.app }}dir
+          mountPath: {{ .Values.image.basepath }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.app }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        {{- if .Values.resources }}
+        resources:
+          requests:
+            memory: {{ .Values.resources.memory }}
+            cpu: {{ .Values.resources.cpu }}
+        {{- end }}
+        ports:
+        - containerPort: 30333
+          name: p2p
+        - containerPort: 9933
+          name: http-rpc
+        - containerPort: 9944
+          name: websocket-rpc
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - exec /usr/local/bin/substrate
+            --base-path {{ .Values.image.basepath }}
+            {{- if .Values.validator.keys }}
+            --validator
+            --name $(cat {{ .Values.image.basepath }}/name)
+            --key $(cat {{ .Values.image.basepath }}/key)
+            --node-key $(cat {{ .Values.image.basepath }}/node-key)
+            {{- else }}
+            --name $(POD_NAME)
+            {{- end }}
+            {{- range .Values.nodes.args }} {{ . }} {{- end }}
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        volumeMounts:
+        - name: {{ .Values.app }}dir
+          mountPath: {{ .Values.image.basepath }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http-rpc
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http-rpc
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ .Values.app }}dir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: ssd
+      resources:
+        requests:
+          storage: 32Gi
+

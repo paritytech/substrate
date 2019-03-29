@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,15 +17,15 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use parity_codec::Encode;
-use crate::blockchain::HeaderBackend;
+use runtime_primitives::ApplyOutcome;
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
 };
-use primitives::H256;
-use runtime_primitives::generic::BlockId;
+use primitives::{H256, ExecutionContext};
+use crate::blockchain::HeaderBackend;
 use crate::runtime_api::Core;
 use crate::error;
-use runtime_primitives::{ApplyOutcome, ExecutionContext};
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.

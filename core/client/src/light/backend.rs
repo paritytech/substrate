@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
 
-const IN_MEMORY_EXPECT_PROOF: &'static str = "InMemory state backend has Void error type and always suceeds; qed";
+const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
 /// Light client backend.
 pub struct Backend<S, F, H> {

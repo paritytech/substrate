@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,13 +23,12 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
-use substrate_primitives;
-use substrate_primitives::Blake2Hasher;
+use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{
-	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+pub use num_traits::{
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, Saturating
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -54,6 +53,20 @@ pub trait Verify {
 	type Signer;
 	/// Verify a signature. Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+}
+
+impl Verify for substrate_primitives::ed25519::Signature {
+	type Signer = substrate_primitives::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
+impl Verify for substrate_primitives::sr25519::Signature {
+	type Signer = substrate_primitives::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+	}
 }
 
 /// Some sort of check on the origin is performed by this object.
@@ -84,6 +97,8 @@ pub trait StaticLookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	/// Convert from Target back to Source.
+	fn unlookup(t: Self::Target) -> Self::Source;
 }
 
 /// A lookup implementation returning the input value.
@@ -93,6 +108,7 @@ impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+	fn unlookup(x: T) -> T { x }
 }
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
@@ -126,63 +142,20 @@ pub trait BlockNumberToHash {
 	}
 }
 
-/// Charge bytes fee trait
-pub trait ChargeBytesFee<AccountId> {
-	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return Ok iff the payment was successful.
-	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-/// Charge fee trait
-pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
-	/// The type of fee amount.
-	type Amount;
-
-	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
-	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
-	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-/// Transfer fungible asset trait
-pub trait TransferAsset<AccountId> {
-	/// The type of asset amount.
-	type Amount;
-
-	/// Transfer asset from `from` account to `to` account with `amount` of asset.
-	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Remove asset from `who` account by deducing `amount` in the account balances.
-	fn remove_from(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Add asset to `who` account by increasing `amount` in the account balances.
-	fn add_to(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-impl<T> ChargeBytesFee<T> for () {
-	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> ChargeFee<T> for () {
-	type Amount = ();
-
-	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> TransferAsset<T> for () {
-	type Amount = ();
-
-	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn remove_from(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn add_to(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
 	fn convert(a: A) -> B;
+}
+
+impl<A, B: Default> Convert<A, B> for () {
+	fn convert(_: A) -> B { Default::default() }
+}
+
+/// A structure that performs identity conversion.
+pub struct Identity;
+impl<T> Convert<T, T> for Identity {
+	fn convert(a: T) -> T { a }
 }
 
 /// Simple trait similar to `Into`, except that it can be used to convert numerics between each
@@ -212,15 +185,6 @@ macro_rules! impl_numerics {
 
 impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
-/// A structure that performs identity conversion.
-pub struct Identity;
-impl<T> Convert<T, T> for Identity {
-	fn convert(a: T) -> T { a }
-}
-impl<T> Convert<T, ()> for () {
-	fn convert(_: T) -> () { () }
-}
-
 /// A meta trait for arithmetic.
 pub trait SimpleArithmetic:
 	Zero + One + IntegerSquareRoot + As<u64> +
@@ -236,7 +200,8 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord +
+	Saturating +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 {}
 impl<T:
@@ -253,7 +218,8 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord +
+	Saturating +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 > SimpleArithmetic for T {}
 
@@ -304,6 +270,24 @@ pub trait OnInitialise<BlockNumber> {
 
 impl<N> OnInitialise<N> for () {}
 
+/// Off-chain computation trait.
+///
+/// Implementing this trait on a module allows you to perform a long-running tasks
+/// that make validators generate extrinsics (either transactions or inherents)
+/// with results of those long-running computations.
+///
+/// NOTE: This function runs off-chain, so it can access the block state,
+/// but cannot preform any alterations.
+pub trait OffchainWorker<BlockNumber> {
+	/// This function is being called on every block.
+	///
+	/// Implement this and use special `extern`s to generate transactions or inherents.
+	/// Any state alterations are lost and are not persisted.
+	fn generate_extrinsics(_n: BlockNumber) {}
+}
+
+impl<N> OffchainWorker<N> for () {}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
@@ -314,6 +298,11 @@ macro_rules! tuple_impl {
 		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
 			fn on_initialise(n: Number) {
 				$one::on_initialise(n);
+			}
+		}
+		impl<Number: Copy, $one: OffchainWorker<Number>> OffchainWorker<Number> for ($one,) {
+			fn generate_extrinsics(n: Number) {
+				$one::generate_extrinsics(n);
 			}
 		}
 	};
@@ -338,6 +327,16 @@ macro_rules! tuple_impl {
 				$($rest::on_initialise(n);)+
 			}
 		}
+		impl<
+			Number: Copy,
+			$first: OffchainWorker<Number>,
+			$($rest: OffchainWorker<Number>),+
+		> OffchainWorker<Number> for ($first, $($rest),+) {
+			fn generate_extrinsics(n: Number) {
+				$first::generate_extrinsics(n);
+				$($rest::generate_extrinsics(n);)+
+			}
+		}
 		tuple_impl!($($rest,)+);
 	}
 }
@@ -349,7 +348,10 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+
+	/// The associated hash_db Hasher type.
+	type Hasher: Hasher<Out=Self::Output>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -389,6 +391,7 @@ pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
+	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
@@ -530,6 +533,7 @@ impl<T: ::rstd::hash::Hash> MaybeHash for T {}
 pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
+
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
