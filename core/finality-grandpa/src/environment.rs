@@ -309,7 +309,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	fn round_data(
 		&self,
 		round: u64
-	) -> voter::RoundData<Self::Timer, Self::In, Self::Out> {
+	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
 		let now = Instant::now();
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
@@ -337,6 +337,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
 		voter::RoundData {
+			voter_id: self.config.local_key.as_ref().map(|pair| pair.public().clone()),
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
 			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			incoming,

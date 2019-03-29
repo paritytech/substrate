@@ -530,7 +530,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 				Some(voter::Voter::new(
 					env.clone(),
-					config.local_key.as_ref().map(|key| key.public()),
 					voters,
 					global_comms,
 					last_completed_round.number,
