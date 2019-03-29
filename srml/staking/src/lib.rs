@@ -260,11 +260,11 @@ use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Res
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
 	Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency, WithdrawReasons,
-	OnUnbalanced, Imbalance
+	OnUnbalanced, Imbalance,
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, As, StaticLookup, CheckedSub, Saturating, Bounded};
+use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -416,6 +416,10 @@ pub trait Trait: system::Trait + session::Trait {
 	type Currency:
 		Currency<Self::AccountId> +
 		LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+
+	/// Convert a balance into a number used for election calculation.
+	/// This must fit into a `u64` but is allowed to be sensibly lossy.
+	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
 	/// Some tokens minted.
 	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
