@@ -31,13 +31,13 @@ nodes:
     - --ws-external
     # - --log
     # - sub-libp2p=trace
-  
+
 
 validator: {}
   # providing 'keys' string via --set commandline parameter will run the nodes
   # in validator mode (--validator).
   #
-  # name, key and node-key can be given in a base64 encoded keyfile string (at 
+  # name, key and node-key can be given in a base64 encoded keyfile string (at
   # validator.keys) which has the following format:
   #
   # substrate-0-name <node-name>
@@ -47,8 +47,8 @@ validator: {}
   # substrate-1-key <key-seed>
   # substrate-1-node-key <node-secret-key>
   #
-  # pod names are canonical. changing these or providing different amount of 
-  # keys than the replicas count will lead to behaviour noone ever has 
+  # pod names are canonical. changing these or providing different amount of
+  # keys than the replicas count will lead to behavior noone ever has
   # experienced before.
 
 

@@ -570,7 +570,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
 				info!(target: "finality", "Imported justification for block #{} that triggers \
-					command {}, signalling voter.", number, command);
+					command {}, signaling voter.", number, command);
 
 				if let Err(e) = self.send_voter_commands.unbounded_send(command) {
 					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());

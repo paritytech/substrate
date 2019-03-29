@@ -323,7 +323,7 @@ mod tests {
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
 			assert_eq!(Example::dummy(), Some(69));
 
-			// Check that finalising the block removes Dummy from storage.
+			// Check that finalizing the block removes Dummy from storage.
 			<Example as OnFinalize<u64>>::on_finalize(1);
 			assert_eq!(Example::dummy(), None);
 
