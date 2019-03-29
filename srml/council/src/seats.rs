@@ -459,7 +459,7 @@ impl<T: Trait> Module<T> {
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
-		ensure!(!candidates.len().is_zero(), "amount of candidates to receive approval votes should be non-zero");
+		ensure!(!candidates.is_empty(), "amount of candidates to receive approval votes should be non-zero");
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
 		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
 		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
