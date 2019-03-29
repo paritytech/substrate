@@ -24,7 +24,7 @@ use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -46,7 +46,7 @@ pub struct Backend<S, F, H> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F, H> {
 	header: Option<Block::Header>,
-	authorities: Option<Vec<AuthorityIdFor<Block>>>,
+	cache: HashMap<Vec<u8>, Vec<u8>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
@@ -117,7 +117,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			header: None,
-			authorities: None,
+			cache: Default::default(),
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
@@ -146,7 +146,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			let is_genesis_import = header.number().is_zero();
 			self.blockchain.storage().import_header(
 				header,
-				operation.authorities,
+				operation.cache,
 				operation.leaf_state,
 				operation.aux_ops,
 			)?;
@@ -254,8 +254,8 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
-		self.authorities = Some(authorities);
+	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>) {
+		self.cache = cache;
 	}
 
 	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {

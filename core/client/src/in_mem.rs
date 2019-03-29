@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
+	NumberFor, As, Digest, DigestItem};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
@@ -104,12 +104,6 @@ struct BlockchainStorage<Block: BlockT> {
 /// In-memory blockchain. Supports concurrent reads.
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	cache: Cache<Block>,
-}
-
-struct Cache<Block: BlockT> {
-	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<AuthorityIdFor<Block>>>>>,
 }
 
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
@@ -117,10 +111,6 @@ impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
 			storage: storage.clone(),
-			cache: Cache {
-				storage,
-				authorities_at: RwLock::new(self.cache.authorities_at.read().clone()),
-			},
 		}
 	}
 }
@@ -152,10 +142,6 @@ impl<Block: BlockT> Blockchain<Block> {
 			}));
 		Blockchain {
 			storage: storage.clone(),
-			cache: Cache {
-				storage: storage,
-				authorities_at: Default::default(),
-			},
 		}
 	}
 
@@ -355,8 +341,8 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
-		Some(&self.cache)
+	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+		None
 	}
 
 	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
@@ -365,6 +351,12 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 
 	fn children(&self, _parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
 		unimplemented!()
+	}
+}
+
+impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {
+	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+		None
 	}
 }
 
@@ -398,16 +390,12 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		_cache: HashMap<Vec<u8>, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<()> {
 		let hash = header.hash();
-		let parent_hash = *header.parent_hash();
 		self.insert(hash, header, None, None, state)?;
-		if state.is_best() {
-			self.cache.insert(parent_hash, authorities);
-		}
 
 		self.write_aux(aux_ops);
 		Ok(())
@@ -435,15 +423,15 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 			.ok_or_else(|| error::ErrorKind::Backend(format!("Changes trie CHT for block {} not exists", block)).into())
 	}
 
-	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
-		Some(&self.cache)
+	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
+		None
 	}
 }
 
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
-	pending_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+	pending_cache: HashMap<Vec<u8>, Vec<u8>>,
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
@@ -480,8 +468,8 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
-		self.pending_authorities = Some(authorities);
+	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>) {
+		self.pending_cache = cache;
 	}
 
 	fn update_db_storage(&mut self, update: <InMemory<H> as StateBackend<H>>::Transaction) -> error::Result<()> {
@@ -602,7 +590,7 @@ where
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
-			pending_authorities: None,
+			pending_cache: Default::default(),
 			old_state,
 			new_state: None,
 			changes_trie_update: None,
@@ -629,7 +617,6 @@ where
 			let (header, body, justification) = pending_block.block.into_inner();
 
 			let hash = header.hash();
-			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 
@@ -642,10 +629,6 @@ where
 			}
 
 			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
-			// dumb implementation - store value for each block
-			if pending_block.state.is_best() {
-				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
-			}
 		}
 
 		if !operation.aux.is_empty() {
@@ -710,23 +693,6 @@ where
 	}
 }
 
-impl<Block: BlockT> Cache<Block> {
-	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityIdFor<Block>>>) {
-		self.authorities_at.write().insert(at, authorities);
-	}
-}
-
-impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>> {
-		let hash = match block {
-			BlockId::Hash(hash) => hash,
-			BlockId::Number(number) => self.storage.read().hashes.get(&number).cloned()?,
-		};
-
-		self.authorities_at.read().get(&hash).cloned().unwrap_or(None)
-	}
-}
-
 /// Prunable in-memory changes trie storage.
 pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>) where H::Out: HeapSizeOf;
 impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
@@ -745,15 +711,6 @@ impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> w
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}
-}
-
-/// Insert authorities entry into in-memory blockchain cache. Extracted as a separate function to use it in tests.
-pub fn cache_authorities_at<Block: BlockT>(
-	blockchain: &Blockchain<Block>,
-	at: Block::Hash,
-	authorities: Option<Vec<AuthorityIdFor<Block>>>
-) {
-	blockchain.cache.insert(at, authorities);
 }
 
 /// Check that genesis storage is valid.

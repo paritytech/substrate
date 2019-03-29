@@ -63,10 +63,6 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn authorities() -> Vec<SessionKey> {
-			Consensus::authorities()
-		}
-
 		fn execute_block(block: Block) {
 			Executive::execute_block(block)
 		}
