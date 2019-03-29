@@ -63,7 +63,7 @@ pub fn authorities() -> Vec<AuthorityId> {
 		.collect()
 }
 
-pub fn initialise_block(header: &Header) {
+pub fn initialize_block(header: &Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
@@ -201,8 +201,8 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
 	result
 }
 
-/// Finalise the block.
-pub fn finalise_block() -> Header {
+/// Finalize the block.
+pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
@@ -242,6 +242,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
+		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
 	}
 }
 
@@ -305,7 +306,7 @@ mod tests {
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
 	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
-	use crate::{Header, Extrinsic, Transfer};
+	use crate::{Header, Transfer};
 	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;

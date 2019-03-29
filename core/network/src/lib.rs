@@ -42,11 +42,13 @@ pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, NetworkM
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
-    NodeIndex, ProtocolId, Severity, Protocol, Multiaddr,
+	identity, multiaddr,
+	ProtocolId, Severity, Multiaddr,
 	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
-    obtain_private_key, build_multiaddr, PeerId, PublicKey
+	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
+	build_multiaddr, PeerId, PublicKey
 };
-pub use message::{generic as generic_message, RequestId, Status as StatusMessage, ConsensusEngineId};
+pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]

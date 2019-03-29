@@ -26,7 +26,7 @@ pub use tiny_keccak::keccak256 as keccak_256;
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, BasicExternalities, TestExternalities};
 
-use environmental::{environmental, thread_local_impl};
+use environmental::environmental;
 use primitives::{hexdisplay::HexDisplay, H256};
 use hash_db::Hasher;
 
@@ -216,6 +216,14 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 	let mut res = [0u8; 64];
 	res.copy_from_slice(&pubkey.serialize()[1..65]);
 	Ok(res)
+}
+
+/// Submit extrinsic.
+pub fn submit_extrinsic<T: codec::Encode>(data: &T) {
+	ext::with(|ext| ext
+		.submit_extrinsic(codec::Encode::encode(data))
+		.expect("submit_extrinsic can be called only in offchain worker context")
+	).expect("submit_extrinsic cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Execute the given closure with global function available whose functionality routes into the

@@ -15,36 +15,36 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! ## Overview
-//! 
-//! The consensus module manages the authority set for the native code. It provides support for reporting offline 
+//!
+//! The consensus module manages the authority set for the native code. It provides support for reporting offline
 //! behavior among validators and logging changes in the validator authority set.
 //!
 //! ## Interface
-//! 
+//!
 //! ### Dispatchable
-//! 
+//!
 //! The `Call` enum is documented [here](./enum.Call.html).
-//! 
+//!
 //! - `report_misbehavior` - Report some misbehavior. The origin of this call must be signed.
-//! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of 
+//! - `note_offline` - Note the previous block's validator missed their opportunity to propose a block. The origin of
 //! 	this call must be an inherent.
 //! - `remark` - Make some on-chain remark. The origin of this call must be signed.
 //! - `set_heap_pages` - Set the number of pages in the WebAssembly environment's heap.
 //! - `set_code` - Set the new code.
 //! - `set_storage` - Set some items of storage.
-//! 
+//!
 //! ### Public
-//! 
+//!
 //! See the [module](./struct.Module.html) for details on publicly available functions.
-//! 
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing 
+//!
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing
 //! any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! ### Prerequisites
-//! 
-//! To use functionality from the `consensus` module, implement the specific Trait or function that you are invoking 
+//!
+//! To use functionality from the `consensus` module, implement the specific Trait or function that you are invoking
 //! from the module:
 //! ```rust,ignore
 //! impl<T> for consensus::SomeTrait for Module<T> {
@@ -52,26 +52,26 @@
 //! 	/// more comprehensive example included below
 //! }
 //! ```
-//! 
+//!
 //! Alternatively, to set the authorities
 //! ```rust,ignore
 //! consensus::set_authorities(&[<authorities>]) // example included below
 //! ```
-//! 
+//!
 //! ### Simple Code Snippet
-//! 
+//!
 //! Set authorities
 //! ```rust,ignore
 //! consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)])
 //! ```
-//! 
+//!
 //! Log changes in the authorities set
 //! ```rust,ignore
 //! consensus::on_finalise(5); // finalize UintAuthorityId(5)
 //! ```
-//! 
+//!
 //! ### Example from SRML
-//! 
+//!
 //! In `staking`, the `consensus::OnOfflineReport` is implemented to monitor offline reporting amongst validators:
 //! ```rust,ignore
 //! impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
@@ -83,8 +83,8 @@
 //! 	}
 //! }
 //! ```
-//! 
-//! In `grandpa`, we use `consensus` to get the set of `next_authorities` before changing this set according to the 
+//!
+//! In `grandpa`, we use `consensus` to get the set of `next_authorities` before changing this set according to the
 //! consensus algorithm (which does not rotate sessions in the *normal* way):
 //! ```rust,ignore
 //! let next_authorities = <consensus::Module<T>>::authorities()
@@ -92,20 +92,20 @@
 //! 			.map(|key| (key, 1)) // evenly-weighted.
 //! 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 //! ```
-//! 
+//!
 //! ## Related Modules
-//! 
-//! - [`staking`](https://crates.parity.io/srml_staking/index.html): This module uses `consensus` to monitor offline 
+//!
+//! - [`staking`](https://crates.parity.io/srml_staking/index.html): This module uses `consensus` to monitor offline
 //! reporting amongst validators.
-//! - [`aura`](https://crates.parity.io/srml_aura/index.html): This module does not relate directly to `consensus`, 
+//! - [`aura`](https://crates.parity.io/srml_aura/index.html): This module does not relate directly to `consensus`,
 //! but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method.
 //! - [`grandpa`](https://crates.parity.io/srml_grandpa/index.html): Although GRANDPA does its own voter-set management,
 //!  it has a mode where it can track `consensus`, if desired.
-//! 
+//!
 //! ## References
-//! 
-//! If you're interested in hacking on this module, it is useful to understand the interaction with 
-//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` 
+//!
+//! If you're interested in hacking on this module, it is useful to understand the interaction with
+//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent`
 //! to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -143,6 +143,7 @@ impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	const PREFIX: &'static [u8] = well_known_keys::AUTHORITY_PREFIX;
 }
 
+pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// Handling offline validator reports in a generic way.
@@ -274,7 +275,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Report some misbehaviour.
+		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -308,8 +309,14 @@ decl_module! {
 			}
 		}
 
-		/// Log changes in the set of authorities
-		fn on_finalise() {
+		/// Kill some items from storage.
+		fn kill_storage(keys: Vec<Key>) {
+			for key in &keys {
+				storage::unhashed::kill(&key);
+			}
+		}
+
+		fn on_finalize() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
 				if current_authorities != original_authorities {
@@ -338,8 +345,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set a single authority by index.
+<<<<<<< HEAD
 	///
 	/// Called by `rotate_session` only.
+=======
+	pub fn set_authority_count(count: u32) {
+		Self::save_original_authorities(None);
+		AuthorityStorageVec::<T::SessionKey>::set_count(count);
+	}
+
+	/// Set a single authority by index.
+>>>>>>> origin/master
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		let current_authority = AuthorityStorageVec::<T::SessionKey>::item(index);
 		if current_authority != *key {

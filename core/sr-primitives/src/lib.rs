@@ -30,7 +30,7 @@ pub use serde_derive;
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
-use substrate_primitives::{ed25519, sr25519, hash::{H256, H512}};
+use substrate_primitives::{ed25519, sr25519, hash::H512};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -119,6 +119,9 @@ impl BuildStorage for StorageOverlay {
 		Ok(())
 	}
 }
+
+/// Consensus engine unique ID.
+pub type ConsensusEngineId = [u8; 4];
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -379,32 +382,18 @@ impl Verify for MultiSignature {
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct AnySignature(H512);
 
-/// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct AnySigner(H256);
-
 impl Verify for AnySignature {
-	type Signer = AnySigner;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AnySigner) -> bool {
-		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0.as_bytes()) ||
-			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0.as_bytes())
+	type Signer = sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
+		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0) ||
+			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0)
 	}
 }
 
-/// Context for executing a call into the runtime.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
-pub enum ExecutionContext {
-	/// Context for general importing (including own blocks).
-	Importing,
-	/// Context used when syncing the blockchain.
-	Syncing,
-	/// Context used for block construction.
-	BlockConstruction,
-	/// Context used for other calls.
-	Other,
+impl From<sr25519::Signature> for AnySignature {
+	fn from(s: sr25519::Signature) -> AnySignature {
+		AnySignature(s.0.into())
+	}
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
@@ -478,6 +467,13 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	(
+		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+	) => {
+		#[cfg(any(feature = "std", test))]
+		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
+		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+	};
+	(
 		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
@@ -504,12 +500,12 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident > )*, )*
+			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
+		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
 		#[cfg(any(feature = "std", test))]
-		#[derive(Serialize, Deserialize)]
+		#[derive($crate::serde_derive::Serialize, $crate::serde_derive::Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		pub struct $main {
@@ -551,7 +547,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident( $( $sitem:ident ),* ) ),*
+			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -564,13 +560,13 @@ macro_rules! impl_outer_log {
 
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
 			$(
-				$module($module::Log<$trait>),
+				$module($module::Log<$trait $(, $instance)? >),
 			)*
 		}
 
@@ -648,16 +644,16 @@ macro_rules! impl_outer_log {
 		}
 
 		$(
-			impl From<$module::Log<$trait>> for $name {
+			impl From<$module::Log<$trait $(, $instance)? >> for $name {
 				/// Converts single module log item into `$name`.
-				fn from(x: $module::Log<$trait>) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					$name(x.into())
 				}
 			}
 
-			impl From<$module::Log<$trait>> for InternalLog {
+			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
 				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait>) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					InternalLog::$module(x)
 				}
 			}
@@ -668,8 +664,14 @@ macro_rules! impl_outer_log {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for OpaqueExtrinsic {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(fmt, "{}", substrate_primitives::hexdisplay::HexDisplay::from(&self.0))
+	}
+}
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {

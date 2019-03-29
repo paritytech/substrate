@@ -48,7 +48,7 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = AccountIdType;
-	type Lookup = IdentityLookup<u64>;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
@@ -58,6 +58,9 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
+	type TransactionPayment = ();
+	type TransferPayment = ();
+	type DustRemoval = ();
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
@@ -72,6 +75,8 @@ impl Trait for Test {
 	type Currency = balances::Module<Self>;
 	type OnRewardMinted = ();
 	type Event = ();
+	type Slash = ();
+	type Reward = ();
 }
 
 pub struct ExtBuilder {
@@ -79,12 +84,12 @@ pub struct ExtBuilder {
 	session_length: u64,
 	sessions_per_era: u64,
 	current_era: u64,
-	monied: bool,
 	reward: u64,
 	validator_pool: bool,
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
+	fare: bool,
 }
 
 impl Default for ExtBuilder {
@@ -94,12 +99,12 @@ impl Default for ExtBuilder {
 			session_length: 1,
 			sessions_per_era: 1,
 			current_era: 0,
-			monied: true,
 			reward: 10,
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
+			fare: true
 		}
 	}
 }
@@ -121,16 +126,7 @@ impl ExtBuilder {
 		self.current_era = current_era;
 		self
 	}
-	pub fn _monied(mut self, monied: bool) -> Self {
-		self.monied = monied;
-		self
-	}
-	pub fn reward(mut self, reward: u64) -> Self {
-		self.reward = reward;
-		self
-	}
-	pub fn validator_pool(mut self, validator_pool: bool) -> Self { 
-		// NOTE: this should only be set to true with monied = false.
+	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
 		self.validator_pool = validator_pool;
 		self
 	}
@@ -145,6 +141,10 @@ impl ExtBuilder {
 	}
 	pub fn minimum_validator_count(mut self, count: u32) -> Self {
 		self.minimum_validator_count = count;
+		self
+	}
+	pub fn fare(mut self, is_fare: bool) -> Self {
+		self.fare = is_fare;
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -165,34 +165,24 @@ impl ExtBuilder {
 			keys: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = balances::GenesisConfig::<Test>{
-			balances: if self.monied {
-				if self.reward > 0 {
-					vec![
-						(1, 10 * balance_factor),
-						(2, 20 * balance_factor),
-						(3, 300 * balance_factor),
-						(4, 400 * balance_factor),
-						(10, balance_factor),
-						(11, balance_factor * 1000),
-						(20, balance_factor),
-						(21, balance_factor * 2000),
-						(100, 2000 * balance_factor),
-						(101, 2000 * balance_factor),
-					]
-				} else {
-					vec![
-						(1, 10 * balance_factor), (2, 20 * balance_factor),
-						(3, 300 * balance_factor), (4, 400 * balance_factor)
-					]
-				}
-			} else {
-				vec![
-					(10, balance_factor), (11, balance_factor * 10),
-					(20, balance_factor), (21, balance_factor * 20),
-					(30, balance_factor), (31, balance_factor * 30),
-					(40, balance_factor), (41, balance_factor * 40)
-				]
-			},
+			balances: vec![
+					(1, 10 * balance_factor),
+					(2, 20 * balance_factor),
+					(3, 300 * balance_factor),
+					(4, 400 * balance_factor),
+					(10, balance_factor),
+					(11, balance_factor * 1000),
+					(20, balance_factor),
+					(21, balance_factor * 2000),
+					(30, balance_factor),
+					(31, balance_factor * 2000),
+					(40, balance_factor),
+					(41, balance_factor * 2000),
+					(100, 2000 * balance_factor),
+					(101, 2000 * balance_factor),
+			],
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
 			existential_deposit: self.existential_deposit,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -204,32 +194,31 @@ impl ExtBuilder {
 			stakers: if self.validator_pool {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
-					(31, 30, balance_factor * 3000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
-					(41, 40, balance_factor * 4000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(31, 30, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					(41, 40, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			} else {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
 					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			},
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			bonding_duration: self.sessions_per_era * self.session_length * 3,
 			session_reward: Perbill::from_millionths((1000000 * self.reward / balance_factor) as u32),
-			offline_slash: if self.monied { Perbill::from_percent(40) } else { Perbill::zero() },
+			offline_slash: Perbill::from_percent(5),
 			current_session_reward: self.reward,
-			current_offline_slash: 20,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = timestamp::GenesisConfig::<Test>{
-			period: 5,
+			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 		t.into()
 	}
