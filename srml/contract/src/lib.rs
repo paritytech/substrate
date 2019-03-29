@@ -57,9 +57,9 @@
 //! 
 //! ### Dispatchable functions
 //! 
-//! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `codehash`.
+//! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `code_hash`.
 //! 
-//! * `create` - Deploys a new contract from the given `codehash`, optionally transferring some balance. 
+//! * `create` - Deploys a new contract from the given `code_hash`, optionally transferring some balance. 
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! 
 //! * `call` - Makes a call to an account, optionally transferring some balance.
