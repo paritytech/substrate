@@ -169,7 +169,8 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 
 impl Convert<u128, u128> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u128 {
-		if x >> 96 == 0 {
+		// if it practically fits in u64
+		if x >> 64 == 0 {
 			// Add zero dust; multiply by 2^32
 			x << 32
 		}
