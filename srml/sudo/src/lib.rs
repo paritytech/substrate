@@ -59,9 +59,9 @@
 //!
 //! ### Executing Privileged Functions
 //!
-//! The Sudo module itself is not intended to be used within other modules.
+//! The sudo module itself is not intended to be used within other modules.
 //! Instead, you can build "privileged functions" in other modules that require `Root` origin.
-//! You can execute these privileged functions by calling `sudo()` with the sudo key account.
+//! You can execute these privileged functions by calling `sudo` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
 //!
 //! Learn more about privileged functions and `Root` origin in the [`Origin`] type documentation.
@@ -180,7 +180,7 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
-		/// The `AccountId` of the sudo key
+		/// The `AccountId` of the sudo key.
 		Key get(key) config(): T::AccountId;
 	}
 }
