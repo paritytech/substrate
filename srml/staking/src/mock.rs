@@ -35,7 +35,6 @@ impl Convert<u64, u64> for CurrencyToVoteHandler {
 }
 impl Convert<u128, u64> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u64 {
-		// println!("Converting {} to u64 || will lead to {}", x, x as u64 );
 		x as u64
 	}
 }
