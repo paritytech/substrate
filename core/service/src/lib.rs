@@ -48,6 +48,7 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
+use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -227,9 +228,9 @@ impl<Components: components::Components> Service<Components> {
 			// A utility stream that drops all ready items and only returns the last one.
 			// This is used to only keep the last finality notification and avoid
 			// overloading the sync module with notifications.
-			struct MostRecentNotification<B: network::BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
+			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
 
-			impl<B: network::BlockT> Stream for MostRecentNotification<B> {
+			impl<B: BlockT> Stream for MostRecentNotification<B> {
 				type Item = <FinalityNotifications<B> as Stream>::Item;
 				type Error = <FinalityNotifications<B> as Stream>::Error;
 
