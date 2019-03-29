@@ -58,7 +58,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	fn block_hash(&self, hash: Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
 
 	/// Get hash of the last finalized block in the canon chain.
-	#[rpc(name = "chain_getFinalizedHead")]
+	#[rpc(name = "chain_getFinalizedHead", alias("chain_getFinalisedHead"))]
 	fn finalized_head(&self) -> Result<Hash>;
 
 	/// New head subscription
@@ -83,7 +83,8 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[pubsub(
 		subscription = "chain_finalizedHead",
 		subscribe,
-		name = "chain_subscribeFinalizedHeads"
+		name = "chain_subscribeFinalizedHeads",
+		alias("chain_subscribeFinalisedHeads")
 	)]
 	fn subscribe_finalized_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
 
@@ -91,7 +92,8 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[pubsub(
 		subscription = "chain_finalizedHead",
 		unsubscribe,
-		name = "chain_unsubscribeFinalizedHeads"
+		name = "chain_unsubscribeFinalizedHeads",
+		alias("chain_unsubscribeFinalisedHeads")
 	)]
 	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 }
