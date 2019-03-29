@@ -74,7 +74,7 @@ impl_runtime_apis! {
 		fn execute_block(_: Block) {
 			unimplemented!()
 		}
-		fn initialise_block(_: &<Block as BlockT>::Header) {
+		fn initialize_block(_: &<Block as BlockT>::Header) {
 			unimplemented!()
 		}
 	}

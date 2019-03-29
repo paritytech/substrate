@@ -728,7 +728,7 @@ mod tests {
 		use super::*;
 
 		#[test]
-		fn should_trigger_ready_and_finalised() {
+		fn should_trigger_ready_and_finalized() {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
@@ -748,12 +748,12 @@ mod tests {
 			// then
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalised(H256::from_low_u64_be(2).into()))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
 			assert_eq!(stream.next(), None);
 		}
 
 		#[test]
-		fn should_trigger_ready_and_finalised_when_pruning_via_hash() {
+		fn should_trigger_ready_and_finalized_when_pruning_via_hash() {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
@@ -773,7 +773,7 @@ mod tests {
 			// then
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalised(H256::from_low_u64_be(2).into()))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
 			assert_eq!(stream.next(), None);
 		}
 

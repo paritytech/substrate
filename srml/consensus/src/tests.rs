@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{generic, testing::{self, UintAuthorityId}, traits::OnFinalise};
+use primitives::{generic, testing::{self, UintAuthorityId}, traits::OnFinalize};
 use runtime_io::with_externalities;
 use crate::mock::{Consensus, System, new_test_ext};
 use inherents::{InherentData, ProvideInherent};
@@ -26,10 +26,10 @@ use inherents::{InherentData, ProvideInherent};
 #[test]
 fn authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
-		System::initialise(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default());
 		Consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)]);
-		Consensus::on_finalise(1);
-		let header = System::finalise();
+		Consensus::on_finalize(1);
+		let header = System::finalize();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
 				generic::DigestItem::AuthoritiesChange(
@@ -47,9 +47,9 @@ fn authorities_change_logged() {
 #[test]
 fn authorities_change_is_not_logged_when_not_changed() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
-		System::initialise(&1, &Default::default(), &Default::default());
-		Consensus::on_finalise(1);
-		let header = System::finalise();
+		System::initialize(&1, &Default::default(), &Default::default());
+		Consensus::on_finalize(1);
+		let header = System::finalize();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![],
 		});
@@ -59,11 +59,11 @@ fn authorities_change_is_not_logged_when_not_changed() {
 #[test]
 fn authorities_change_is_not_logged_when_changed_back_to_original() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
-		System::initialise(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default());
 		Consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)]);
 		Consensus::set_authorities(&[UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-		Consensus::on_finalise(1);
-		let header = System::finalise();
+		Consensus::on_finalize(1);
+		let header = System::finalize();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![],
 		});
@@ -73,7 +73,7 @@ fn authorities_change_is_not_logged_when_changed_back_to_original() {
 #[test]
 fn offline_report_can_be_excluded() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
-		System::initialise(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default());
 		assert!(Consensus::create_inherent(&InherentData::new()).is_none());
 
 		let offline_report: Vec<u32> = vec![0];
@@ -89,7 +89,7 @@ fn set_and_kill_storage_work() {
 	use srml_support::storage;
 
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
-		System::initialise(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default());
 
 		let item = (vec![42u8], vec![42u8]);
 
