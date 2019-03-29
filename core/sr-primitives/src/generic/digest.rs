@@ -221,23 +221,23 @@ impl<'a, Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for Di
 		match *self {
 			DigestItemRef::AuthoritiesChange(authorities) => {
 				DigestItemType::AuthoritiesChange.encode_to(&mut v);
-				authorities.encode_to(&mut v)
+				authorities.encode_to(&mut v);
 			},
 			DigestItemRef::ChangesTrieRoot(changes_trie_root) => {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
-				changes_trie_root.encode_to(&mut v)
+				changes_trie_root.encode_to(&mut v);
 			},
 			DigestItemRef::Seal(val, sig) => {
 				DigestItemType::Seal.encode_to(&mut v);
-				(val, sig).encode_to(&mut v)
+				(val, sig).encode_to(&mut v);
 			},
 			DigestItemRef::Consensus(val, sig) => {
 				DigestItemType::Consensus.encode_to(&mut v);
-				(val, sig).encode_to(&mut v)
+				(val, sig).encode_to(&mut v);
 			},
 			DigestItemRef::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
-				val.encode_to(&mut v)
+				val.encode_to(&mut v);
 			},
 		}
 
