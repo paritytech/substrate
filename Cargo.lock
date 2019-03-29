@@ -1927,7 +1927,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-trie 0.4.0",
- "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2009,7 +2009,7 @@ dependencies = [
  "substrate-service 0.3.0",
  "substrate-transaction-pool 0.1.0",
  "tokio 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4202,7 +4202,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-trie 0.4.0",
  "trie-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4317,7 +4317,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "trie-bench 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-standardmap 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4694,7 +4694,7 @@ dependencies = [
  "memory-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-standardmap 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4712,7 +4712,7 @@ dependencies = [
 
 [[package]]
 name = "trie-root"
-version = "0.12.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "hash-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5436,7 +5436,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum traitobject 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 "checksum trie-bench 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "eafa32a8662c06f5bf135984bc1a12821fd38770b5c2f2f9e8750327fcbe3955"
 "checksum trie-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1ba73747fd3a64ab531274c04cb588dfa9d30d972d62990831e63fbce2cfec59"
-"checksum trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e45632ecaf2b8b4a40b5208383cd659b4e66f58ccd40086467a4614b45781430"
+"checksum trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)" = "cfa2e20c4f1418ac2e71ddc418e35e1b56e34022e2146209ffdbf1b2de8b1bd9"
 "checksum trie-standardmap 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "006314f54f2ea7944a878e66fd93ad7978095bc355f30a2f26ec40f664d86c86"
 "checksum try-lock 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e604eb7b43c06650e854be16a2a03155743d3752dd1c943f6829e26b7a36e382"
 "checksum twofish 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "712d261e83e727c8e2dbb75dacac67c36e35db36a958ee504f2164fc052434e1"

@@ -289,6 +289,37 @@ fn benchmark_add_one(i: u64) -> u64 {
 #[cfg(not(feature = "std"))]
 static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction::new(benchmark_add_one);
 
+fn code_using_trie() -> u64 {
+	let pairs = [
+		(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
+		(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
+	].to_vec();
+
+	let mut mdb = PrefixedMemoryDB::default();
+	let mut root = rstd::default::Default::default();
+	let _ = {
+		let v = &pairs;
+		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+		for i in 0..v.len() {
+			let key: &[u8]= &v[i].0;
+			let val: &[u8] = &v[i].1;
+			t.insert(key, val).expect("static input");
+		}
+		t
+	};
+
+	let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).expect("on memory with static content");
+
+	let iter = trie.iter().expect("static input");
+	let mut iter_pairs = Vec::new();
+	for pair in iter {
+		let (key, value) = pair.expect("on memory with static content");
+		iter_pairs.push((key, value.to_vec()));
+	}
+	iter_pairs.len() as u64
+}
+
+
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
@@ -377,33 +408,7 @@ cfg_if! {
 				}
 
 				fn use_trie() -> u64 {
-					let pairs = vec![
-						(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
-						(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
-					];
-
-					let mut mdb = PrefixedMemoryDB::default();
-					let mut root = rstd::default::Default::default();
-					let _ = {
-						let v = &pairs;
-						let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
-						for i in 0..v.len() {
-							let key: &[u8]= &v[i].0;
-							let val: &[u8] = &v[i].1;
-							t.insert(key, val).unwrap();
-						}
-						t
-					};
-
-					let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).unwrap();
-
-					let iter = trie.iter().unwrap();
-					let mut iter_pairs = Vec::new();
-					for pair in iter {
-						let (key, value) = pair.unwrap();
-						iter_pairs.push((key, value.to_vec()));
-					}
-					iter_pairs.len() as u64
+					code_using_trie()
 				}
 
 				fn benchmark_indirect_call() -> u64 {
@@ -517,33 +522,7 @@ cfg_if! {
 				}
 
 				fn use_trie() -> u64 {
-					let pairs = [
-						(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
-						(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
-					].to_vec();
-
-					let mut mdb = PrefixedMemoryDB::default();
-					let mut root = rstd::default::Default::default();
-					let _ = {
-						let v = &pairs;
-						let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
-						for i in 0..v.len() {
-							let key: &[u8]= &v[i].0;
-							let val: &[u8] = &v[i].1;
-							t.insert(key, val).unwrap();
-						}
-						t
-					};
-
-					let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).unwrap();
-
-					let iter = trie.iter().unwrap();
-					let mut iter_pairs = Vec::new();
-					for pair in iter {
-						let (key, value) = pair.unwrap();
-						iter_pairs.push((key, value.to_vec()));
-					}
-					iter_pairs.len() as u64
+					code_using_trie()
 				}
 
 				fn benchmark_indirect_call() -> u64 {

@@ -14,10 +14,10 @@ harness = false
 [dependencies]
 codec = { package = "parity-codec", version = "3.2", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-hash-db = { version = "0.12", default-features = false }
-trie-db = { version = "0.12", default-features = false }
-trie-root = { version = "0.12", default-features = false }
-memory-db = { version = "0.12", default-features = false }
+hash-db = { version = "0.12.2", default-features = false }
+trie-db = { version = "0.12.2", default-features = false }
+trie-root = { version = "0.12.2", default-features = false }
+memory-db = { version = "0.12.2", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../primitives" }

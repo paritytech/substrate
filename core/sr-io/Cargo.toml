@@ -17,7 +17,7 @@ libsecp256k1 = { version = "0.2.1", optional = true }
 tiny-keccak = { version = "1.4.2", optional = true }
 environmental = { version = "1.0.1", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
-trie = { package = "substrate-trie", path = "../trie", default-features = false }
+trie = { package = "substrate-trie", path = "../trie", optional = true }
 
 [features]
 default = ["std"]
@@ -25,8 +25,8 @@ std = [
 	"primitives/std",
 	"parity-codec/std",
 	"rstd/std",
-	"trie/std",
 	"hash-db/std",
+	"trie",
 	"environmental",
 	"substrate-state-machine",
 	"libsecp256k1",
