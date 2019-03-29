@@ -28,11 +28,11 @@ type ExtendedBalance = u128;
 /// Configure the behavior of the Phragmen election.
 /// Might be deprecated.
 pub struct ElectionConfig<Balance: HasCompact> {
-	/// Perform equalise?.
-	pub equalise: bool,
-	/// Number of equalise iterations.
+	/// Perform equalize?.
+	pub equalize: bool,
+	/// Number of equalize iterations.
 	pub iterations: usize,
-	/// Tolerance of max change per equalise iteration.
+	/// Tolerance of max change per equalize iteration.
 	pub tolerance: Balance,
 }
 
@@ -50,7 +50,7 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 	approval_stake: ExtendedBalance,
 	/// Flag for being elected.
 	elected: bool,
-	/// This is most often equal to `Exposure.total` but not always. Needed for [`equalise`]
+	/// This is most often equal to `Exposure.total` but not always. Needed for [`equalize`]
 	backing_stake: ExtendedBalance
 }
 
@@ -80,9 +80,9 @@ pub struct Edge<AccountId> {
 	backing_stake: ExtendedBalance,
 	/// Index of the candidate stored in the 'candidates' vector
 	candidate_index: usize,
-	/// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalise.
+	/// Index of the candidate stored in the 'elected_candidates' vector. Used only with equalize.
 	elected_idx: usize,
-	/// Indicates if this edge is a vote for an elected candidate. Used only with equalise.
+	/// Indicates if this edge is a vote for an elected candidate. Used only with equalize.
 	elected: bool,
 }
 
@@ -226,10 +226,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			}
 		}
 
-		// Optionally perform equalise post-processing.
-		if config.equalise {
+		// Optionally perform equalize post-processing.
+		if config.equalize {
 			let tolerance = config.tolerance;
-			let equalise_iterations = config.iterations;
+			let equalize_iterations = config.iterations;
 
 			// Fix indexes
 			nominators.iter_mut().for_each(|n| {
@@ -240,10 +240,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				});
 			});
 
-			for _i in 0..equalise_iterations {
+			for _i in 0..equalize_iterations {
 				let mut max_diff = <BalanceOf<T>>::zero();
 				nominators.iter_mut().for_each(|mut n| {
-					let diff = equalise::<T>(&mut n, &mut elected_candidates, tolerance);
+					let diff = equalize::<T>(&mut n, &mut elected_candidates, tolerance);
 					if diff > max_diff {
 						max_diff = diff;
 					}
@@ -277,11 +277,11 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	Some(elected_candidates)
 }
 
-/// Performs equalise post-processing to the output of the election algorithm
+/// Performs equalize post-processing to the output of the election algorithm
 /// This function mutates the input parameters, most noticeably it updates the exposure of
 /// the elected candidates.
 /// The return value is to tolerance at which the function has stopped.
-pub fn equalise<T: Trait + 'static>(
+pub fn equalize<T: Trait + 'static>(
 	nominator: &mut Nominator<T::AccountId>,
 	elected_candidates: &mut Vec<Candidate<T::AccountId, BalanceOf<T>>>,
 	_tolerance: BalanceOf<T>

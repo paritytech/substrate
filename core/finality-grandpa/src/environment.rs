@@ -125,7 +125,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
 		// NOTE: when we finalize an authority set change through the sync protocol the voter is
-		//       signalled asynchronously. therefore the voter could still vote in the next round
+		//       signaled asynchronously. therefore the voter could still vote in the next round
 		//       before activating the new set. the `authority_set` is updated immediately thus we
 		//       restrict the voter based on that.
 		if self.set_id != self.authority_set.inner().read().current().0 {

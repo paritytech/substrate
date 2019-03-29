@@ -102,7 +102,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
 	) -> error::Result<NativeOrEncoded<R>>;
@@ -121,8 +121,8 @@ decl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 		/// Execute the given block.
 		fn execute_block(block: Block);
-		/// Initialise a block with the given header.
-		fn initialise_block(header: &<Block as BlockT>::Header);
+		/// Initialize a block with the given header.
+		fn initialize_block(header: &<Block as BlockT>::Header);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

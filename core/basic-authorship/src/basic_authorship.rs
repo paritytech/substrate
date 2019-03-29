@@ -177,7 +177,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	fn propose(&self, inherent_data: InherentData, max_duration: time::Duration)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		// leave some time for evaluation and block finalisation (33%)
+		// leave some time for evaluation and block finalization (33%)
 		let deadline = (self.now)() + max_duration - max_duration / 3;
 		self.propose_with(inherent_data, deadline)
 	}
@@ -197,7 +197,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
-		/// It allows us to increase block utilisation.
+		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
 		let block = self.client.build_block(

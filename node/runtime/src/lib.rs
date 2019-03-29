@@ -58,7 +58,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 49,
+	spec_version: 50,
 	impl_version: 51,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -251,8 +251,8 @@ impl_runtime_apis! {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: &<Block as BlockT>::Header) {
-			Executive::initialise_block(header)
+		fn initialize_block(header: &<Block as BlockT>::Header) {
+			Executive::initialize_block(header)
 		}
 	}
 
@@ -267,8 +267,8 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalise_block() -> <Block as BlockT>::Header {
-			Executive::finalise_block()
+		fn finalize_block() -> <Block as BlockT>::Header {
+			Executive::finalize_block()
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
