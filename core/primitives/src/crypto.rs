@@ -218,6 +218,7 @@ pub trait Derive: Sized {
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> { None }
 }
 
+#[cfg(feature = "std")]
 const PREFIX: &[u8] = b"SS58PRE";
 
 #[cfg(feature = "std")]
