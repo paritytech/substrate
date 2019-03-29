@@ -517,18 +517,18 @@ mod tests {
 		tx3.provides = vec![vec![4]];
 
 		// when
-		let x = WaitingTransaction::new(tx2, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx2, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx3, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
 		assert_eq!(ready.get().count(), 2);
 
 		// too low priority
-		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags());
+		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags(), &[]);
 		ready.import(x).unwrap_err();
 
 		tx1.priority = 10;
-		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags());
+		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
 
 		// then
@@ -562,15 +562,15 @@ mod tests {
 		};
 
 		// when
-		let x = WaitingTransaction::new(tx1, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx1, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx2, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx2, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx3, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx4, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx4, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
-		let x = WaitingTransaction::new(tx5, &ready.provided_tags());
+		let x = WaitingTransaction::new(tx5, &ready.provided_tags(), &[]);
 		ready.import(x).unwrap();
 
 		// then

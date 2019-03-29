@@ -460,7 +460,9 @@ mod tests {
 	use crate::watcher;
 
 	#[derive(Debug, Default)]
-	struct TestApi;
+	struct TestApi {
+		delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+	}
 
 	impl ChainApi for TestApi {
 		type Block = Block;
@@ -469,8 +471,19 @@ mod tests {
 
 		/// Verify extrinsic at given block.
 		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
+
+			// This is used to control the test flow.
+			if nonce > 0 {
+				let opt = self.delay.lock().take();
+				if let Some(delay) = opt {
+					if delay.recv().is_err() {
+						println!("Error waiting for delay!");
+					}
+				}
+			}
 
 			if nonce < block_number {
 				Ok(TransactionValidity::Invalid(0))
@@ -877,6 +890,60 @@ mod tests {
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Dropped)));
+		}
+
+		#[test]
+		fn should_handle_pruning_in_the_middle_of_import() {
+			let _ = env_logger::try_init();
+			// given
+			let (ready, is_ready) = std::sync::mpsc::sync_channel(0);
+			let (tx, rx) = std::sync::mpsc::sync_channel(1);
+			let mut api = TestApi::default();
+			api.delay = Mutex::new(rx.into());
+			let pool = Arc::new(Pool::new(Default::default(), api));
+
+			// when
+			let xt = uxt(Transfer {
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
+				amount: 5,
+				nonce: 1,
+			});
+
+			// This transaction should go to future, since we use `nonce: 1`
+			let pool2 = pool.clone();
+			std::thread::spawn(move || {
+				pool2.submit_one(&BlockId::Number(0), xt).unwrap();
+				ready.send(()).unwrap();
+			});
+
+			// But now before the previous one is imported we import
+			// the one that it depends on.
+			let xt = uxt(Transfer {
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
+				amount: 4,
+				nonce: 0,
+			});
+			// The tag the above transaction provides (TestApi is using just nonce as u8)
+			let provides = vec![0_u8];
+			pool.submit_one(&BlockId::Number(0), xt).unwrap();
+			assert_eq!(pool.status().ready, 1);
+
+			// Now block import happens before the second transaction is able to finish verification.
+			pool.prune_tags(&BlockId::Number(1), vec![provides], vec![]).unwrap();
+			assert_eq!(pool.status().ready, 0);
+
+
+			// so when we release the verification of the previous one it will have
+			// something in `requires`, but should go to ready directly, since the previous transaction was imported
+			// correctly.
+			tx.send(()).unwrap();
+
+			// then
+			is_ready.recv().unwrap(); // wait for finish
+			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.status().future, 0);
 		}
 	}
 }
