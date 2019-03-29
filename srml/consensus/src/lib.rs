@@ -14,7 +14,105 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus module for runtime; manages the authority set ready for the native code.
+//! # Consensus Module
+//!
+//! ## Overview
+//!
+//! The consensus module manages the authority set for the native code. It provides support for reporting offline
+//! behavior among validators and logging changes in the validator authority set.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! - `report_misbehavior` - Report some misbehavior. The origin of this call must be signed.
+//! - `note_offline` - Note that the previous block's validator missed its opportunity to propose a block.
+//!  The origin of this call must be an inherent.
+//! - `remark` - Make some on-chain remark. The origin of this call must be signed.
+//! - `set_heap_pages` - Set the number of pages in the WebAssembly environment's heap.
+//! - `set_code` - Set the new code.
+//! - `set_storage` - Set some items of storage.
+//!
+//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//!
+//! ### Public Functions
+//!
+//! See the [module](./struct.Module.html) for details on publicly available functions.
+//!
+//! ## Usage
+//!
+//! ### Prerequisites
+//!
+//! To use functionality from the consensus module, implement the specific Trait or function that you are invoking
+//! from the module:
+//!
+//! ```rust,ignore
+//! impl<T> for consensus::SomeTrait for Module<T> {
+//! 	/// required functions and types for trait included here
+//! 	/// more comprehensive example included below
+//! }
+//! ```
+//!
+//! Alternatively, to set the authorities:
+//!
+//! ```rust,ignore
+//! consensus::set_authorities(&[<authorities>]) // example included below
+//! ```
+//!
+//! ### Simple Code Snippet
+//!
+//! Set authorities:
+//!
+//! ```rust,ignore
+//! <consensus::Module<T>>::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)])
+//! ```
+//!
+//! Log changes in the authorities set:
+//!
+//! ```rust,ignore
+//! <consensus::Module<T>>::on_finalise(5); // finalize UintAuthorityId(5)
+//! ```
+//!
+//! ### Example from SRML
+//!
+//! In the staking module, the `consensus::OnOfflineReport` is implemented to monitor offline
+//! reporting among validators:
+//!
+//! ```rust,ignore
+//! impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
+//! 	fn handle_report(reported_indices: Vec<u32>) {
+//! 		for validator_index in reported_indices {
+//! 			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+//! 			Self::on_offline_validator(v, 1);
+//! 		}
+//! 	}
+//! }
+//! ```
+//!
+//! In the GRANDPA module, we use `srml-consensus` to get the set of `next_authorities` before changing
+//! this set according to the consensus algorithm (which does not rotate sessions in the *normal* way):
+//!
+//! ```rust,ignore
+//! let next_authorities = <consensus::Module<T>>::authorities()
+//! 			.into_iter()
+//! 			.map(|key| (key, 1)) // evenly-weighted.
+//! 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
+//! ```
+//!
+//! ## Related Modules
+//!
+//! - [`staking`](../srml_staking/index.html): This module uses `srml-consensus` to monitor offline
+//! reporting among validators.
+//! - [`aura`](../srml_aura/index.html): This module does not relate directly to `srml-consensus`,
+//! but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method.
+//! - [`grandpa`](../srml_grandpa/index.html): Although GRANDPA does its own voter-set management,
+//!  it has a mode where it can track `consensus`, if desired.
+//!
+//! ## References
+//!
+//! If you're interested in hacking on this module, it is useful to understand the interaction with
+//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent`
+//! to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -88,9 +186,9 @@ impl InherentOfflineReport for () {
 	}
 }
 
-/// A variant of the `OfflineReport` which is useful for instant-finality blocks.
+/// A variant of the `OfflineReport` that is useful for instant-finality blocks.
 ///
-/// This assumes blocks are only finalized
+/// This assumes blocks are only finalized.
 pub struct InstantFinalityReportVec<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: OnOfflineReport<Vec<u32>>> InherentOfflineReport for InstantFinalityReportVec<T> {
@@ -117,7 +215,7 @@ pub type Log<T> = RawLog<
 	<T as Trait>::SessionKey,
 >;
 
-/// A logs in this module.
+/// Logs in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<SessionKey> {
@@ -159,7 +257,7 @@ pub trait Trait: system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Consensus {
-		// Authorities set actual at the block execution start. IsSome only if
+		// Actual authorities set at the block execution start. Is `Some` iff
 		// the set has been changed.
 		OriginalAuthorities: Option<Vec<T::SessionKey>>;
 	}
@@ -188,7 +286,7 @@ decl_module! {
 			ensure_signed(origin)?;
 		}
 
-		/// Note the previous block's validator missed their opportunity to propose a block.
+		/// Note that the previous block's validator missed its opportunity to propose a block.
 		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) {
 			ensure_inherent(origin)?;
 
@@ -243,7 +341,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of authorities' session keys.
 	///
-	/// Called by `next_session` only.
+	/// Called by `rotate_session` only.
 	pub fn set_authorities(authorities: &[T::SessionKey]) {
 		let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
 		if current_authorities != authorities {
@@ -284,11 +382,16 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// Implementing `ProvideInherent` enables this module to create and check inherents.
 impl<T: Trait> ProvideInherent for Module<T> {
+	/// The call type of the module.
 	type Call = Call<T>;
+	/// The error returned by `check_inherent`.
 	type Error = MakeFatalError<RuntimeString>;
+	/// The inherent identifier used by this inherent.
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
+	/// Creates an inherent from the `InherentData`.
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		if let Ok(Some(data)) =
 			data.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent>(
@@ -305,6 +408,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		}
 	}
 
+	/// Verify the validity of the given inherent.
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> Result<(), Self::Error> {
 		let offline = match call {
 			Call::note_offline(ref offline) => offline,

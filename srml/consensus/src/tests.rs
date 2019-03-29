@@ -45,6 +45,27 @@ fn authorities_change_logged() {
 }
 
 #[test]
+fn partial_authorities_change_logged() {
+	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
+		System::initialise(&2, &Default::default(), &Default::default());
+		Consensus::set_authorities(&[UintAuthorityId(2), UintAuthorityId(4), UintAuthorityId(5)]);
+		Consensus::on_finalise(2);
+		let header = System::finalise();
+		assert_eq!(header.digest, testing::Digest {
+			logs: vec![
+				generic::DigestItem::AuthoritiesChange(
+					vec![
+						UintAuthorityId(2).into(),
+						UintAuthorityId(4).into(),
+						UintAuthorityId(5).into()
+					]
+				),
+			],
+		});
+	});
+}
+
+#[test]
 fn authorities_change_is_not_logged_when_not_changed() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
 		System::initialize(&1, &Default::default(), &Default::default());
