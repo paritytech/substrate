@@ -118,10 +118,10 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a, SealSignature: 'a> {
 #[derive(Encode, Decode)]
 enum DigestItemType {
 	Other = 0,
-	AuthoritiesChange,
-	ChangesTrieRoot,
-	Seal,
-	Consensus,
+	AuthoritiesChange = 1,
+	ChangesTrieRoot = 2,
+	Seal = 3,
+	Consensus = 4,
 }
 
 impl<Hash, AuthorityId, SealSignature> DigestItem<Hash, AuthorityId, SealSignature> {
