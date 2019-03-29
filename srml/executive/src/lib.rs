@@ -21,7 +21,7 @@
 //!
 //! ## Overview
 //!
-//! The executive module is coupled with the [system module](../../srml-system/index.html) and lets the runtime
+//! The executive module is coupled with the [system module](../srml_system/index.html) and lets the runtime
 //! communicate with the SRML. It is unique from other modules in that it does not incorporate the `decl_event!`,
 //! `decl_storage!`, or `decl_module!` macros.
 //!
@@ -43,7 +43,7 @@
 //!
 //! ## Usage
 //!
-//! The default Substrate node template declares the `Executive` type in its library.
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
 //!
 //! ### Example
 //!
@@ -60,8 +60,8 @@
 //!
 //! ## Related Modules
 //!
-//! The executive module depends on the [`system`](../../srml-system/index.html)  and
-//! [`srml_support`](../../srml_support/index.html) modules as well as Substrate Core
+//! The executive module depends on the [`system`](../srml_system/index.html)  and
+//! [`srml_support`](../srml_support/index.html) modules as well as Substrate Core
 //! libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -194,7 +194,7 @@ impl<
 		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number);
 	}
 
-	/// Execute given extrinsics and take care of post-extrinsics book-keeping
+	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
@@ -288,7 +288,7 @@ impl<
 	}
 
 	fn final_checks(header: &System::Header) {
-		// remove temporaries.
+		// remove temporaries
 		let new_header = <system::Module<System>>::finalize();
 
 		// check digest
@@ -312,7 +312,7 @@ impl<
 	/// Check a given transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	///
-	/// Changes made to the storage should be discarded.
+	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		// Note errors > 0 are from ApplyError
 		const UNKNOWN_ERROR: i8 = -127;
@@ -333,7 +333,7 @@ impl<
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
-			// pay any fees.
+			// pay any fees
 			if Payment::make_payment(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
