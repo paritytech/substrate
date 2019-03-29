@@ -297,7 +297,7 @@ pub trait ExternTrieCrypto {
 	fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32];
 }
 
-// Ensures we use a Blake2_256-flavoured Hasher when calling into native
+// Ensures we use a Blake2_256-flavored Hasher when calling into native
 impl ExternTrieCrypto for Blake2Hasher {
 	fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32] {
 		let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();

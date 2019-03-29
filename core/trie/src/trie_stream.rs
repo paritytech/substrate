@@ -25,7 +25,7 @@ use rstd::vec::Vec;
 use super::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,
 	EXTENSION_NODE_BIG, branch_node};
 
-/// Codec-flavoured TrieStream
+/// Codec-flavored TrieStream
 pub struct TrieStream {
 	buffer: Vec<u8>,
 }

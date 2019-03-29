@@ -102,7 +102,7 @@ decl_module! {
 			<VotingPeriod<T>>::put(blocks);
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);

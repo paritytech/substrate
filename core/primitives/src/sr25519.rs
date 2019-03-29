@@ -633,13 +633,6 @@ mod test {
 	}
 
 	#[test]
-	fn ss58check_known_works() {
-		let k = "5CGavy93sZgPPjHyziRohwVumxiHXMGmQLyuqQP4ZFx5vRU9";
-		let enc = hex!["090fa15cb5b1666222fff584b4cc2b1761fe1e238346b340491b37e25ea183ff"];
-		assert_eq!(Public::from_ss58check(k).unwrap(), Public::from_raw(enc));
-	}
-
-	#[test]
 	fn verify_from_wasm_works() {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
 		// 

@@ -34,7 +34,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -58,8 +58,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 48,
-	impl_version: 49,
+	spec_version: 52,
+	impl_version: 52,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -129,6 +129,7 @@ impl session::Trait for Runtime {
 
 impl staking::Trait for Runtime {
 	type Currency = balances::Module<Self>;
+	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
 	type Slash = ();
@@ -250,8 +251,8 @@ impl_runtime_apis! {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: &<Block as BlockT>::Header) {
-			Executive::initialise_block(header)
+		fn initialize_block(header: &<Block as BlockT>::Header) {
+			Executive::initialize_block(header)
 		}
 	}
 
@@ -266,8 +267,8 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalise_block() -> <Block as BlockT>::Header {
-			Executive::finalise_block()
+		fn finalize_block() -> <Block as BlockT>::Header {
+			Executive::finalize_block()
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {

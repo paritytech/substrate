@@ -111,7 +111,7 @@ use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 #[cfg(test)]
 mod tests;
 
-const GRANDPA_ENGINE_ID: network::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
+const GRANDPA_ENGINE_ID: runtime_primitives::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
 const MESSAGE_ROUND_TOLERANCE: u64 = 2;
 
 /// A GRANDPA message for a substrate chain.

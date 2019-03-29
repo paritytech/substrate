@@ -110,6 +110,47 @@ macro_rules! assert_ok {
 	}
 }
 
+/// Panic when the vectors are different, without taking the order into account.
+///
+/// # Examples
+///
+/// ```rust
+/// #[macro_use]
+/// # extern crate srml_support;
+/// # use srml_support::{assert_eq_uvec};
+/// # fn main() {
+/// assert_eq_uvec!(vec![1,2], vec![2,1]);
+/// # }
+/// ```
+///
+/// ```rust,should_panic
+/// #[macro_use]
+/// # extern crate srml_support;
+/// # use srml_support::{assert_eq_uvec};
+/// # fn main() {
+/// assert_eq_uvec!(vec![1,2,3], vec![2,1]);
+/// # }
+/// ```
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_uvec {
+	( $x:expr, $y:expr ) => {
+		$crate::__assert_eq_uvec!($x, $y);
+		$crate::__assert_eq_uvec!($y, $x);
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+#[cfg(feature = "std")]
+macro_rules! __assert_eq_uvec {
+	( $x:expr, $y:expr ) => {
+		$x.iter().for_each(|e| {
+			if !$y.contains(e) { panic!(format!("vectors not equal: {:?} != {:?}", $x, $y)); }
+		});
+	}
+}
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq)]
@@ -193,7 +234,7 @@ mod tests {
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			// initialised during genesis
+			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
 
 			// get / insert / take
@@ -272,7 +313,7 @@ mod tests {
 	fn double_map_basic_insert_remove_remove_prefix_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			type DoubleMap = DataDM<Test>;
-			// initialised during genesis
+			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
