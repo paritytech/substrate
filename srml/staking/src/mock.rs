@@ -18,15 +18,26 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
+use primitives::{traits::{IdentityLookup, Convert}, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait, StakerStatus};
 
-// The AccountId alias in this test module.
+/// The AccountId alias in this test module.
 pub type AccountIdType = u64;
+
+/// Simple structure that exposes how u64 currency can be represented as... u64.
+pub struct CurrencyToVoteHandler;
+impl Convert<u64, u64> for CurrencyToVoteHandler {
+	fn convert(x: u64) -> u64 { x }
+}
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 {
+		x as u64
+	}
+}
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -73,6 +84,7 @@ impl timestamp::Trait for Test {
 }
 impl Trait for Test {
 	type Currency = balances::Module<Self>;
+	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = ();
 	type Event = ();
 	type Slash = ();
@@ -131,7 +143,6 @@ impl ExtBuilder {
 		self
 	}
 	pub fn nominate(mut self, nominate: bool) -> Self {
-		// NOTE: this only sets a dummy nominator for tests that want 10 and 20 (default validators) to be chosen by default.
 		self.nominate = nominate;
 		self
 	}

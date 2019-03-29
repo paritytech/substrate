@@ -34,7 +34,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
 	AuthorityIdFor,
 };
 use version::RuntimeVersion;
@@ -130,6 +130,7 @@ impl session::Trait for Runtime {
 
 impl staking::Trait for Runtime {
 	type Currency = balances::Module<Self>;
+	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
 	type Slash = ();
