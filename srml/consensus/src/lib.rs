@@ -64,7 +64,7 @@
 //! Set authorities:
 //!
 //! ```rust,ignore
-//! consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)])
+//! <consensus::Module<T>>::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)])
 //! ```
 //!
 //! Log changes in the authorities set:
