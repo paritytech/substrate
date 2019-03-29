@@ -12,8 +12,7 @@ crate-type = ["cdylib"]
 substrate-test-runtime = { path = "..", default-features = false }
 
 [features]
-default = [
-]
+default = []
 std = [
 	"substrate-test-runtime/std",
 ]
