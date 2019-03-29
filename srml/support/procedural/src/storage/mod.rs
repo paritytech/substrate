@@ -131,6 +131,7 @@ struct DeclStorageBuild {
 enum DeclStorageType {
 	Map(DeclStorageMap),
 	LinkedMap(DeclStorageLinkedMap),
+	DoubleMap(DeclStorageDoubleMap),
 	Simple(syn::Type),
 }
 
@@ -151,6 +152,24 @@ struct DeclStorageLinkedMap {
 }
 
 #[derive(Parse, ToTokens, Debug)]
+struct DeclStorageDoubleMap {
+	pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
+	pub key1: syn::Type,
+	pub comma_keyword: Token![,],
+	pub key2_hasher: DeclStorageDoubleMapHasher,
+	pub key2: ext::Parens<syn::Type>,
+	pub ass_keyword: Token![=>],
+	pub value: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+enum DeclStorageDoubleMapHasher {
+	Blake2_256(ext::CustomToken<Blake2_256Keyword>),
+	Twox256(ext::CustomToken<Twox256Keyword>),
+	Twox128(ext::CustomToken<Twox128Keyword>),
+}
+
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
@@ -165,4 +184,8 @@ custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesi
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
+custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
+custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
+custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
+custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");
 custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
