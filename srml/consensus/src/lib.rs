@@ -183,7 +183,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Report some misbehaviour.
+		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -224,7 +224,7 @@ decl_module! {
 			}
 		}
 
-		fn on_finalise() {
+		fn on_finalize() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
 				if current_authorities != original_authorities {

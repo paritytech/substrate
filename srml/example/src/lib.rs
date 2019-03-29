@@ -201,14 +201,14 @@ decl_module! {
 			<Dummy<T>>::put(new_value);
 		}
 
-		// The signature could also look like: `fn on_initialise()`
-		fn on_initialise(_n: T::BlockNumber) {
+		// The signature could also look like: `fn on_initialize()`
+		fn on_initialize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 		}
 
-		// The signature could also look like: `fn on_finalise()`
-		fn on_finalise(_n: T::BlockNumber) {
+		// The signature could also look like: `fn on_finalize()`
+		fn on_finalize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
 			<Dummy<T>>::kill();
@@ -258,7 +258,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnInitialise, OnFinalise, IdentityLookup},
+		BuildStorage, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 		testing::{Digest, DigestItem, Header}
 	};
 
@@ -323,12 +323,12 @@ mod tests {
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
 			assert_eq!(Example::dummy(), Some(69));
 
-			// Check that finalising the block removes Dummy from storage.
-			<Example as OnFinalise<u64>>::on_finalise(1);
+			// Check that finalizing the block removes Dummy from storage.
+			<Example as OnFinalize<u64>>::on_finalize(1);
 			assert_eq!(Example::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
-			<Example as OnInitialise<u64>>::on_initialise(2);
+			<Example as OnInitialize<u64>>::on_initialize(2);
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
 			assert_eq!(Example::dummy(), Some(42));
 		});

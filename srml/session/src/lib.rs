@@ -78,7 +78,7 @@ decl_module! {
 			Self::apply_force_new_session(apply_rewards)
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			Self::check_rotate_session(n);
 		}
 	}
