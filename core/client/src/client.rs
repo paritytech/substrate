@@ -16,7 +16,7 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe, result};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc, panic::UnwindSafe, result};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -31,7 +31,7 @@ use consensus::{
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
-	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
+	ApiRef, ProvideRuntimeApi, Digest, DigestItem
 };
 use runtime_primitives::BuildStorage;
 use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
@@ -49,7 +49,8 @@ use hash_db::Hasher;
 
 use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
 use crate::blockchain::{
-	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend
+	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend,
+	ProvideCache, Cache,
 };
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -340,16 +341,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
 		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
-	}
-
-	/// Get the set of authorities at a given block.
-	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityIdFor<Block>>> {
-		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
-			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "Core_authorities", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())
-				.and_then(|r| Vec::<AuthorityIdFor<Block>>::decode(&mut &r[..])
-					.ok_or_else(|| error::ErrorKind::InvalidAuthoritiesSet.into()))
-		}
 	}
 
 	/// Get the RuntimeVersion at a given block.
@@ -681,7 +672,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		new_cache: HashMap<Vec<u8>, Vec<u8>>,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -729,7 +720,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_headers,
 			justification,
 			body,
-			new_authorities,
+			new_cache,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -752,7 +743,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
-		authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		new_cache: HashMap<Vec<u8>, Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -810,9 +801,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			leaf_state,
 		)?;
 
-		if let Some(authorities) = authorities {
-			operation.op.update_authorities(authorities);
-		}
+		operation.op.update_cache(new_cache);
 		if let Some(storage_update) = storage_update {
 			operation.op.update_db_storage(storage_update)?;
 		}
@@ -1324,6 +1313,15 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	}
 }
 
+impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn cache(&self) -> Option<Arc<Cache<Block>>> {
+		self.backend.blockchain().cache()
+	}
+}
+
 impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
@@ -1398,10 +1396,10 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		new_cache: HashMap<Vec<u8>, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
-			self.apply_block(operation, import_block, new_authorities)
+			self.apply_block(operation, import_block, new_cache)
 		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
 
@@ -1428,17 +1426,6 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		}
 
 		Ok(ImportResult::imported())
-	}
-}
-
-impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT<Hash=H256>,
-{
-	type Error = Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityIdFor<Block>>, Self::Error> {
-		self.authorities_at(at).map_err(|e| e.into())
 	}
 }
 
@@ -1550,7 +1537,7 @@ pub(crate) mod tests {
 	use primitives::twox_128;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient, AccountKeyring, AuthorityKeyring};
+	use test_client::{self, TestClient, AccountKeyring};
 	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
@@ -1650,18 +1637,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn authorities_call_works() {
-		let client = test_client::new();
-
-		assert_eq!(client.info().unwrap().chain.best_number, 0);
-		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Bob.into(),
-			AuthorityKeyring::Charlie.into()
-		]);
-	}
-
-	#[test]
 	fn block_builder_works_with_no_transactions() {
 		let client = test_client::new();
 
@@ -1703,15 +1678,6 @@ pub(crate) mod tests {
 			).unwrap(),
 			42
 		);
-	}
-
-	#[test]
-	fn client_uses_authorities_from_blockchain_cache() {
-		let client = test_client::new_light();
-		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
-		// authorities cache is first filled in genesis block
-		// => should be read from cache here (remote request will fail in this test)
-		assert!(!client.authorities_at(&BlockId::Hash(genesis_hash)).unwrap().is_empty());
 	}
 
 	#[test]

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT, AuthorityIdFor};
+use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT};
 use runtime_primitives::generic::BlockId;
 use client::runtime_api::{self, RuntimeApiInfo};
 use client::{error::Result, decl_runtime_apis, impl_runtime_apis};
@@ -66,9 +66,6 @@ impl_runtime_apis! {
 
 	impl runtime_api::Core<Block> for Runtime {
 		fn version() -> runtime_api::RuntimeVersion {
-			unimplemented!()
-		}
-		fn authorities() -> Vec<AuthorityIdFor<Block>> {
 			unimplemented!()
 		}
 		fn execute_block(_: Block) {

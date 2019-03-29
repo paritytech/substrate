@@ -28,6 +28,7 @@ use crate::block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
 };
 use crossbeam_channel::{self as channel, Receiver, Sender};
+use parity_codec::Encode;
 
 use std::sync::Arc;
 use std::thread;
@@ -38,6 +39,7 @@ use runtime_primitives::traits::{
 use runtime_primitives::Justification;
 
 use crate::error::Error as ConsensusError;
+use parity_codec::alloc::collections::hash_map::HashMap;
 
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
@@ -566,7 +568,12 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			BlockImportError::VerificationFailed(peer.clone(), msg)
 		})?;
 
-	import_error(import_handle.import_block(import_block, new_authorities))
+	let mut cache = HashMap::new();
+	if let Some(authorities) = new_authorities {
+		cache.insert(crate::well_known_cache_keys::AUTHORITIES.to_vec(), authorities.encode());
+	}
+
+	import_error(import_handle.import_block(import_block, cache))
 }
 
 #[cfg(test)]
