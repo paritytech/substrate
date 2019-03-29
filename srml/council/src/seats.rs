@@ -103,31 +103,16 @@ decl_module! {
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
-		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) {
+		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
 			let who = ensure_signed(origin)?;
-			let candidates = Self::candidates();
+			Self::do_set_approvals(who, votes, index)
+		}
 
-			ensure!(!Self::presentation_active(), "no approval changes during presentation period");
-			ensure!(index == Self::vote_index(), "incorrect vote index");
-			ensure!(!candidates.len().is_zero(), "amount of candidates to receive approval votes should be non-zero");
-			// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
-			// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
-			// the amount of candidates and waste more computation than a reasonable voting bond would cover.
-			ensure!(candidates.len() >= votes.len(), "amount of candidate approval votes cannot exceed amount of candidates");
-
-			if !<LastActiveOf<T>>::exists(&who) {
-				// not yet a voter - deduct bond.
-				// NOTE: this must be the last potential bailer, since it changes state.
-				T::Currency::reserve(&who, Self::voting_bond())?;
-
-				<Voters<T>>::put({
-					let mut v = Self::voters();
-					v.push(who.clone());
-					v
-				});
-			}
-			<LastActiveOf<T>>::insert(&who, index);
-			<ApprovalsOf<T>>::insert(&who, votes);
+		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in those slots
+		/// are registered.
+		fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
+			let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
+			Self::do_set_approvals(who, votes, index)
 		}
 
 		/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
@@ -468,6 +453,31 @@ impl<T: Trait> Module<T> {
 		<LastActiveOf<T>>::remove(voter);
 	}
 
+	// Actually do the voting.
+	fn do_set_approvals(who: T::AccountId, votes: Vec<bool>, index: VoteIndex) -> Result {
+		let candidates = Self::candidates();
+
+		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
+		ensure!(index == Self::vote_index(), "incorrect vote index");
+		ensure!(!candidates.is_empty(), "amount of candidates to receive approval votes should be non-zero");
+		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
+		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
+		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
+		ensure!(candidates.len() >= votes.len(), "amount of candidate approval votes cannot exceed amount of candidates");
+
+		if !<LastActiveOf<T>>::exists(&who) {
+			// not yet a voter - deduct bond.
+			// NOTE: this must be the last potential bailer, since it changes state.
+			T::Currency::reserve(&who, Self::voting_bond())?;
+
+			<Voters<T>>::mutate(|mut v| v.push(who.clone()));
+		}
+		<LastActiveOf<T>>::insert(&who, index);
+		<ApprovalsOf<T>>::insert(&who, votes);
+
+		Ok(())
+	}
+
 	/// Close the voting, snapshot the staking and the number of seats that are actually up for grabs.
 	fn start_tally() {
 		let active_council = Self::active_council();
@@ -731,6 +741,40 @@ mod tests {
 
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![false, true, true], 0));
 			assert_ok!(Council::set_approvals(Origin::signed(3), vec![false, true, true], 0));
+
+			assert_eq!(Council::approvals_of(1), vec![true]);
+			assert_eq!(Council::approvals_of(4), vec![true]);
+			assert_eq!(Council::approvals_of(2), vec![false, true, true]);
+			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
+
+			assert_eq!(Council::voters(), vec![1, 4, 2, 3]);
+		});
+	}
+
+	#[test]
+	fn proxy_voting_should_work() {
+		with_externalities(&mut new_test_ext(false), || {
+			System::set_block_number(1);
+
+			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0));
+
+			Democracy::force_proxy(1, 11);
+			Democracy::force_proxy(2, 12);
+			Democracy::force_proxy(3, 13);
+			Democracy::force_proxy(4, 14);
+
+			assert_ok!(Council::proxy_set_approvals(Origin::signed(11), vec![true], 0));
+			assert_ok!(Council::proxy_set_approvals(Origin::signed(14), vec![true], 0));
+
+			assert_eq!(Council::approvals_of(1), vec![true]);
+			assert_eq!(Council::approvals_of(4), vec![true]);
+			assert_eq!(Council::voters(), vec![1, 4]);
+
+			assert_ok!(Council::submit_candidacy(Origin::signed(2), 1));
+			assert_ok!(Council::submit_candidacy(Origin::signed(3), 2));
+
+			assert_ok!(Council::proxy_set_approvals(Origin::signed(12), vec![false, true, true], 0));
+			assert_ok!(Council::proxy_set_approvals(Origin::signed(13), vec![false, true, true], 0));
 
 			assert_eq!(Council::approvals_of(1), vec![true]);
 			assert_eq!(Council::approvals_of(4), vec![true]);
