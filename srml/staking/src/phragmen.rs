@@ -253,7 +253,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 				}
 			}
 		}
-
 	} else {
 		if candidates.len() > minimum_validator_count {
 			// if we don't have enough candidates, just choose all that have some vote.
