@@ -210,13 +210,8 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			Ok(())
 		};
 
-		for (name, data) in data_at.into_iter() {
-			insert_op(name, Some(data))?;
-		}
-
-		for name in missed_caches.into_iter() {
-			insert_op(name, None)?;
-		}
+		data_at.into_iter().try_for_each(|(name, data)| insert_op(name, Some(data)))?;
+		missed_caches.into_iter().try_for_each(|name| insert_op(name, None))?;
 
 		if is_final {
 			self.best_finalized_block = Some(block);
