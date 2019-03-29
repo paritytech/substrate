@@ -21,9 +21,9 @@
 //!
 //! ## Overview
 //!
-//! The executive module is coupled with the [system module](../srml_system/index.html) and lets the runtime
-//! communicate with the SRML. It is unique from other modules in that it does not incorporate the `decl_event!`,
-//! `decl_storage!`, or `decl_module!` macros.
+//! The executive module is not a typical SRML module providing functionality around a specific feature.
+//! It is cross-cutting framework component for the SRML. It works in conjunction with the
+//! [SRML system module](../srml_system/index.html) to perform these cross-cutting functions.
 //!
 //! The executive module provides functions to:
 //!
@@ -53,16 +53,6 @@
 //! /// Executive: handles dispatch to the various modules.
 //! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
 //! ```
-//!
-//! ## Genesis Config
-//!
-//! The executive module is not dependent on the genesis config.
-//!
-//! ## Related Modules
-//!
-//! The executive module depends on the [`system`](../srml_system/index.html)  and
-//! [`srml_support`](../srml_support/index.html) modules as well as Substrate Core
-//! libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
