@@ -25,11 +25,11 @@ use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
 
-/// The root phrase for our publically known keys.
+/// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
-/// The address of the associated root phrase for our publically known keys.
-pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqAS7";
+/// The address of the associated root phrase for our publicly known keys.
+pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
 
 /// The infallible type.
 #[derive(Debug)]
