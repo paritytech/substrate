@@ -66,7 +66,7 @@ pub enum UpdateBalanceOutcome {
 /// It operates over a single generic `AccountId` type.
 pub trait MakePayment<AccountId> {
 	/// Make transaction payment from `who` for an extrinsic of encoded length
-	/// `encoded_len` bytes. Return `Ok` if the payment was successful.
+	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
 	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
 }
 
