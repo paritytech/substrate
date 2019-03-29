@@ -183,6 +183,38 @@ macro_rules! __decl_generic_event {
 			{};
 		);
 	};
+	// Finish formatting on an unnamed one
+	(@format_generic
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		$($instance:ident $( = $event_default_instance:path)? )?;
+		{ <$generic:ident as $trait:path>::$trait_type:ident $(,)? { $( $events:tt )* } };
+		{$( $parsed:tt)*};
+	) => {
+		$crate::__decl_generic_event!(@generate
+			$( #[ $attr ] )*;
+			$event_generic_param;
+			$($instance $( = $event_default_instance)? )?;
+			{ $($events)* };
+			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type };
+		);
+	};
+	// Finish formatting on a named one
+	(@format_generic
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		$($instance:ident $( = $event_default_instance:path)? )?;
+		{ $generic_rename:ident = $generic_type:ty $(,)? { $( $events:tt )* } };
+		{ $($parsed:tt)* };
+	) => {
+		$crate::__decl_generic_event!(@generate
+			$(#[$attr])*;
+			$event_generic_param;
+			$($instance $( = $event_default_instance)? )?;
+			{ $($events)* };
+			{ $($parsed)*, $generic_rename = $generic_type };
+		);
+	};
 	// Parse named
 	(@format_generic
 		$(#[$attr:meta])*;
@@ -194,7 +226,7 @@ macro_rules! __decl_generic_event {
 		$crate::__decl_generic_event!(@format_generic
 			$( #[ $attr ] )*;
 			$event_generic_param;
-			$($instance $( = $event_default_instance)? )?;
+			$( $instance $( = $event_default_instance)? )?;
 			{ $($rest)* };
 			{ $($parsed)*, $generic_rename = $generic_type };
 		);
@@ -221,41 +253,9 @@ macro_rules! __decl_generic_event {
 		$event_generic_param:ident;
 		$($instance:ident $( = $event_default_instance:path)? )?;
 		{ $generic_type:ty, $($rest:tt)* };
-		{$($parsed:tt)*};
+		{ $($parsed:tt)* };
 	) => {
 		$crate::__decl_generic_event!(@cannot_parse $generic_type);
-	};
-	// Finish formatting on an unnamed one
-	(@format_generic
-		$(#[$attr:meta])*;
-		$event_generic_param:ident;
-		$($instance:ident $( = $event_default_instance:path)? )?;
-		{ <$generic:ident as $trait:path>::$trait_type:ident { $( $events:tt )* } };
-		{$( $parsed:tt)*};
-	) => {
-		$crate::__decl_generic_event!(@generate
-			$( #[ $attr ] )*;
-			$event_generic_param;
-			$($instance $( = $event_default_instance)? )?;
-			{ $($events)* };
-			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type};
-		);
-	};
-	// Finish formatting on a named one
-	(@format_generic
-		$(#[$attr:meta])*;
-		$event_generic_param:ident;
-		$($instance:ident $( = $event_default_instance:path)? )?;
-		{ $generic_rename:ident = $generic_type:ty { $( $events:tt )* } };
-		{$( $parsed:tt)*};
-	) => {
-		$crate::__decl_generic_event!(@generate
-			$(#[$attr])*;
-			$event_generic_param;
-			$($instance $( = $event_default_instance)? )?;
-			{ $($events)* };
-			{ $($parsed)*, $generic_rename = $generic_type};
-		);
 	};
 	// Final unnamed type can't be parsed
 	(@format_generic
@@ -595,6 +595,50 @@ mod tests {
 		decl_event!(
 			pub enum Event {
 				HiEvent,
+			}
+		);
+	}
+
+	mod event_module4 {
+		pub trait Trait {
+			type Origin;
+			type Balance;
+			type BlockNumber;
+		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
+		decl_event!(
+			/// Event finish formatting on an unnamed one with trailling comma
+			pub enum Event<T> where
+				<T as Trait>::Balance,
+				<T as Trait>::Origin,
+			{
+				TestEvent(Balance, Origin),
+			}
+		);
+	}
+
+	mod event_module5 {
+		pub trait Trait {
+			type Origin;
+			type Balance;
+			type BlockNumber;
+		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
+		decl_event!(
+			/// Event finish formatting on an named one with trailling comma
+			pub enum Event<T> where
+				BalanceRenamed = <T as Trait>::Balance,
+				OriginRenamed = <T as Trait>::Origin,
+			{
+				TestEvent(BalanceRenamed, OriginRenamed),
 			}
 		);
 	}
