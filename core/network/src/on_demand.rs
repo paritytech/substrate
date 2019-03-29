@@ -423,7 +423,7 @@ impl<B> OnDemandCore<B> where
 				None => break,
 			};
 
-			// check if request can (optimiztically) be processed by the peer
+			// check if request can (optimistically) be processed by the peer
 			let can_be_processed_by_peer = {
 				let request = match self.pending_requests.front() {
 					Some(r) => r,
