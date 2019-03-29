@@ -17,7 +17,7 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use bitflags::bitflags;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
 use parity_codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
@@ -28,9 +28,6 @@ pub use self::generic::{
 
 /// A unique ID of a request.
 pub type RequestId = u64;
-
-/// Consensus engine unique ID.
-pub type ConsensusEngineId = [u8; 4];
 
 /// Type alias for using the message type using block type parameters.
 pub type Message<B> = generic::Message<

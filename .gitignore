@@ -18,3 +18,5 @@ polkadot.*
 .idea/
 nohup.out
 rls*.log
+*.orig
+*.rej
