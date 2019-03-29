@@ -49,6 +49,8 @@ use proc_macro::TokenStream;
 /// * storage value: `Foo: type`: implements [StorageValue](https://crates.parity.io/srml_support/storage/trait.StorageValue.html)
 /// * storage map: `Foo: map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html)
 /// * storage linked map: `Foo: linked_map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html) and [EnumarableStorageMap](https://crates.parity.io/srml_support/storage/trait.EnumerableStorageMap.html)
+/// * storage double map: Foo: double_map u32, $hash(u32) => u32;` implements `StorageDoubleMap` with hasher $hash one available in `Hashable` trait
+/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
 ///
 /// And it can be extended as such:
 ///
@@ -87,7 +89,7 @@ use proc_macro::TokenStream;
 /// ```
 /// This struct can be expose as `Config` by `decl_runtime` macro.
 ///
-/// ## Module with instances
+/// ### Module with instances
 ///
 /// `decl_storage!` macro support building modules with instances with the following syntax: (DefaultInstance type
 /// is optional)

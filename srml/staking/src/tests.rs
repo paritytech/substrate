@@ -1525,7 +1525,7 @@ fn phragmen_election_works_example_2() {
 			Staking::slashable_balance_of,
 			min_validator_count,
 			ElectionConfig::<BalanceOf<Test>> {
-				equalise: true,
+				equalize: true,
 				tolerance: <BalanceOf<Test>>::sa(10 as u64),
 				iterations: 10,
 			}
@@ -1806,7 +1806,7 @@ fn bond_with_little_staked_value() {
 
 #[test]
 #[ignore] // Enable this once post-processing is on.
-fn phragmen_linear_worse_case_equalise() {
+fn phragmen_linear_worse_case_equalize() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)

@@ -73,7 +73,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<B>>,
+		initialized_block: &mut Option<BlockId<B>>,
 		prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -213,14 +213,14 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		mut side_effects_handler: Option<&mut O>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
-		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+		if method != "Core_initialize_block" && initialized_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
 			state_machine::new(
 				&state,
@@ -228,14 +228,14 @@ where
 				side_effects_handler.as_mut().map(|x| &mut **x),
 				changes,
 				&self.executor,
-				"Core_initialise_block",
+				"Core_initialize_block",
 				&header.encode(),
 			).execute_using_consensus_failure_handler::<_, R, fn() -> _>(
 				execution_manager.clone(),
 				false,
 				None,
 			)?;
-			*initialised_block = Some(*at);
+			*initialized_block = Some(*at);
 		}
 
 		let result = state_machine::new(
@@ -252,9 +252,9 @@ where
 			native_call,
 		).map(|(result, _, _)| result)?;
 
-		// If the method is `initialise_block` we need to set the `initialised_block`
-		if method == "Core_initialise_block" {
-			*initialised_block = Some(*at);
+		// If the method is `initialize_block` we need to set the `initialized_block`
+		if method == "Core_initialize_block" {
+			*initialized_block = Some(*at);
 		}
 
 		self.backend.destroy_state(state)?;

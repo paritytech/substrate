@@ -18,7 +18,7 @@ VERSIONS_FILE="node/runtime/src/lib.rs"
 
 github_label () {
 	echo
-	echo "# run github-api job for labelling it ${1}"
+	echo "# run github-api job for labeling it ${1}"
 	curl -sS -X POST \
 		-F "token=${CI_JOB_TOKEN}" \
 		-F "ref=master" \

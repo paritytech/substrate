@@ -229,7 +229,7 @@ decl_module! {
 
 		// Manage upgrade. Remove after all networks upgraded.
 		// TODO: #2133
-		fn on_initialise() {
+		fn on_initialize() {
 			if let Some(period) = <BlockPeriod<T>>::take() {
 				if !<MinimumPeriod<T>>::exists() {
 					<MinimumPeriod<T>>::put(period)
@@ -237,7 +237,7 @@ decl_module! {
 			}
 		}
 
-		fn on_finalise() {
+		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
 	}
