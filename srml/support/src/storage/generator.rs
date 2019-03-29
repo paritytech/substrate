@@ -227,7 +227,7 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	fn enumerate<'a, S: Storage>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }
 
-// FIXME #1466 Remove this in favour of `decl_storage` macro.
+// FIXME #1466 Remove this in favor of `decl_storage` macro.
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 #[macro_export]
 macro_rules! storage_items {

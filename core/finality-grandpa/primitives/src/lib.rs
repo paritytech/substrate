@@ -58,8 +58,8 @@ decl_runtime_apis! {
 	/// This should be implemented on the runtime side.
 	///
 	/// This is primarily used for negotiating authority-set changes for the
-	/// gadget. GRANDPA uses a signalling model of changing authority sets:
-	/// changes should be signalled with a delay of N blocks, and then automatically
+	/// gadget. GRANDPA uses a signaling model of changing authority sets:
+	/// changes should be signaled with a delay of N blocks, and then automatically
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
@@ -83,7 +83,7 @@ decl_runtime_apis! {
 		/// Check a digest for forced changes.
 		/// Return `None` if there are no forced changes. Otherwise, return a
 		/// tuple containing the pending change and the median last finalized
-		/// block number at the time the change was signalled.
+		/// block number at the time the change was signaled.
 		///
 		/// Added in version 2.
 		///

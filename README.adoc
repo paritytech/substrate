@@ -10,9 +10,9 @@ Substrate is a next-generation framework for blockchain innovation.
 
 == Description
 
-At its heart, Substrate is a combination of three technologies: https://webassembly.org/[WebAssembly], https://libp2p.io/[Libp2p] and GRANDPA Consensus. About GRANDPA, see this https://hackmd.io/Jd0byWX0RiqFiXUVC78Bdw?view#GRANDPA[definition], https://medium.com/polkadot-network/grandpa-block-finality-in-polkadot-an-introduction-part-1-d08a24a021b5[introduction] and https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf[formal specification]. It is both a library for building new blockchains and a "skeleton key" of a blockchain client, able to synchronise to any Substrate-based chain.
+At its heart, Substrate is a combination of three technologies: https://webassembly.org/[WebAssembly], https://libp2p.io/[Libp2p] and GRANDPA Consensus. About GRANDPA, see this https://hackmd.io/Jd0byWX0RiqFiXUVC78Bdw?view#GRANDPA[definition], https://medium.com/polkadot-network/grandpa-block-finality-in-polkadot-an-introduction-part-1-d08a24a021b5[introduction] and https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf[formal specification]. It is both a library for building new blockchains and a "skeleton key" of a blockchain client, able to synchronize to any Substrate-based chain.
 
-Substrate chains have three distinct features that make them "next-generation": a dynamic, self-defining state-transition function; light-client functionality from day one; and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and procedures for replacing any aspect of itself or of the blockchain's state ("governance"). Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organism".
+Substrate chains have three distinct features that make them "next-generation": a dynamic, self-defining state-transition function; light-client functionality from day one; and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and procedures for replacing any aspect of itself or of the blockchain's state ("governance"). Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organizm".
 
 See also https://www.parity.io/what-is-substrate/.
 
@@ -39,7 +39,7 @@ Block := Header + Extrinsics + Justifications
 
 === Extrinsics
 
-Extrinsics in Substrate are pieces of information from "the outside world" that are contained in the blocks of the chain. You might think "ahh, that means *transactions*": in fact, no. Extrinsics fall into two broad categories of which only one is *transactions*. The other is known as *inherents*. The difference between these two is that transactions are signed and gossipped on the network and can be deemed useful *per se*. This fits the mould of what you would call transactions in Bitcoin or Ethereum.
+Extrinsics in Substrate are pieces of information from "the outside world" that are contained in the blocks of the chain. You might think "ahh, that means *transactions*": in fact, no. Extrinsics fall into two broad categories of which only one is *transactions*. The other is known as *inherents*. The difference between these two is that transactions are signed and gossipped on the network and can be deemed useful *per se*. This fits the mold of what you would call transactions in Bitcoin or Ethereum.
 
 Inherents, meanwhile, are not passed on the network and are not signed. They represent data which describes the environment but which cannot call upon anything to prove it such as a signature. Rather they are assumed to be "true" simply because a sufficiently large number of validators have agreed on them being reasonable.
 
@@ -71,8 +71,8 @@ impl_runtime_apis! {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			Executive::initialise_block(&header)
+		fn initialize_block(header: <Block as BlockT>::Header) {
+			Executive::initialize_block(&header)
 		}
 	}
 	// ---snip---
@@ -86,9 +86,9 @@ The Substrate Runtime Module Library includes functionality for timestamps and s
 
 === Block-authoring Logic
 
-In Substrate, there is a major distinction between blockchain *syncing* and block *authoring* ("authoring" is a more general term for what is called "mining" in Bitcoin). The first case might be referred to as a "full node" (or "light node" - Substrate supports both): authoring necessarily requires a synced node and, therefore, all authoring clients must necessarily be able to synchronise. However, the reverse is not true. The primary functionality that authoring nodes have which is not in "sync nodes" is threefold: transaction queue logic, inherent transaction knowledge and BFT consensus logic. BFT consensus logic is provided as a core element of Substrate and can be ignored since it is only exposed in the SDK under the `authorities()` API entry.
+In Substrate, there is a major distinction between blockchain *syncing* and block *authoring* ("authoring" is a more general term for what is called "mining" in Bitcoin). The first case might be referred to as a "full node" (or "light node" - Substrate supports both): authoring necessarily requires a synced node and, therefore, all authoring clients must necessarily be able to synchronize. However, the reverse is not true. The primary functionality that authoring nodes have which is not in "sync nodes" is threefold: transaction queue logic, inherent transaction knowledge and BFT consensus logic. BFT consensus logic is provided as a core element of Substrate and can be ignored since it is only exposed in the SDK under the `authorities()` API entry.
 
-Transaction queue logic in Substrate is designed to be as generic as possible, allowing a runtime to express which transactions are fit for inclusion in a block through the `initialize_block` and `apply_extrinsic` calls. However, more subtle aspects like prioritisation and replacement policy must currently be expressed "hard coded" as part of the blockchain's authoring code. That said, Substrate's reference implementation for a transaction queue should be sufficient for an initial chain implementation.
+Transaction queue logic in Substrate is designed to be as generic as possible, allowing a runtime to express which transactions are fit for inclusion in a block through the `initialize_block` and `apply_extrinsic` calls. However, more subtle aspects like prioritization and replacement policy must currently be expressed "hard coded" as part of the blockchain's authoring code. That said, Substrate's reference implementation for a transaction queue should be sufficient for an initial chain implementation.
 
 Inherent extrinsic knowledge is again somewhat generic, and the actual construction of the extrinsics is, by convention, delegated to the "soft code" in the runtime. If ever there needs to be additional extrinsic information in the chain, then both the block authoring logic will need to be altered to provide it into the runtime and the runtime's `inherent_extrinsics` call will need to use this extra information in order to construct any additional extrinsic transactions for inclusion in the block.
 
@@ -167,7 +167,7 @@ It won't do much until you start producing blocks though, so to do that you'll n
 substrate --chain ~/mychain.json --validator --key ...
 ----
 
-You can distribute `mychain.json` so that everyone can synchronise and (depending on your authorities list) validate on your chain.
+You can distribute `mychain.json` so that everyone can synchronize and (depending on your authorities list) validate on your chain.
 
 
 == Building

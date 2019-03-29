@@ -25,10 +25,10 @@ use rand::{self, seq::SliceRandom};
 use lru_cache::LruCache;
 use network_libp2p::{Severity, PeerId};
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
+use runtime_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
-use crate::ConsensusEngineId;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
