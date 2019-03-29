@@ -470,11 +470,7 @@ impl<T: Trait> Module<T> {
 			// NOTE: this must be the last potential bailer, since it changes state.
 			T::Currency::reserve(&who, Self::voting_bond())?;
 
-			<Voters<T>>::put({
-				let mut v = Self::voters();
-				v.push(who.clone());
-				v
-			});
+			<Voters<T>>::mutate(|mut v| v.push(who.clone()));
 		}
 		<LastActiveOf<T>>::insert(&who, index);
 		<ApprovalsOf<T>>::insert(&who, votes);
