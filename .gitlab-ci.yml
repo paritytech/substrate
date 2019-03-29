@@ -156,7 +156,7 @@ build-linux-release:               &build
         tee ./artifacts/VERSION;
       fi
     - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
-    - echo "\n# building node-template\n"
+    - printf '\n# building node-template\n\n'
     - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
     - cp -r scripts/docker/* ./artifacts
     - sccache -s
