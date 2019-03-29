@@ -34,7 +34,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
 	AuthorityIdFor,
 };
 use version::RuntimeVersion;
