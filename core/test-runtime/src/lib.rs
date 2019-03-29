@@ -167,9 +167,9 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
-	print("deserialised block.");
+	print("deserialized block.");
 	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
-	print("reserialised transactions.");
+	print("reserialized transactions.");
 	[stxs.len() as u8].encode()
 }
 
@@ -297,8 +297,8 @@ cfg_if! {
 					system::execute_block(block)
 				}
 
-				fn initialise_block(header: &<Block as BlockT>::Header) {
-					system::initialise_block(header)
+				fn initialize_block(header: &<Block as BlockT>::Header) {
+					system::initialize_block(header)
 				}
 			}
 
@@ -319,8 +319,8 @@ cfg_if! {
 					system::execute_transaction(extrinsic)
 				}
 
-				fn finalise_block() -> <Block as BlockT>::Header {
-					system::finalise_block()
+				fn finalize_block() -> <Block as BlockT>::Header {
+					system::finalize_block()
 				}
 
 				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
@@ -402,8 +402,8 @@ cfg_if! {
 					system::execute_block(block)
 				}
 
-				fn initialise_block(header: &<Block as BlockT>::Header) {
-					system::initialise_block(header)
+				fn initialize_block(header: &<Block as BlockT>::Header) {
+					system::initialize_block(header)
 				}
 			}
 
@@ -424,8 +424,8 @@ cfg_if! {
 					system::execute_transaction(extrinsic)
 				}
 
-				fn finalise_block() -> <Block as BlockT>::Header {
-					system::finalise_block()
+				fn finalize_block() -> <Block as BlockT>::Header {
+					system::finalize_block()
 				}
 
 				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {

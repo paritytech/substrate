@@ -742,8 +742,8 @@ impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage
 }
 
 impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
-	fn get(&self, key: &H::Out) -> Result<Option<state_machine::DBValue>, String> {
-		self.0.get(key)
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key, prefix)
 	}
 }
 

@@ -218,7 +218,7 @@ impl ExtBuilder {
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = timestamp::GenesisConfig::<Test>{
-			period: 5,
+			minimum_period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 		t.into()
 	}

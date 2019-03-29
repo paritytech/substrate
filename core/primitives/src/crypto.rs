@@ -414,7 +414,7 @@ mod tests {
 		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Result<Self, Self::DeriveError> {
 			Err(())
 		}
-		fn from_seed(_seed: Self::Seed) -> Self { TestPair::Seed(vec![]) }
+		fn from_seed(_seed: <TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { () }
 		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(_sig: &Self::Signature, _message: M, _pubkey: P) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_sig: &[u8], _message: M, _pubkey: P) -> bool { true }

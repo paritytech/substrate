@@ -120,6 +120,9 @@ impl BuildStorage for StorageOverlay {
 	}
 }
 
+/// Consensus engine unique ID.
+pub type ConsensusEngineId = [u8; 4];
+
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
