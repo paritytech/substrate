@@ -108,7 +108,7 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   before_script:
-    - test -d ${CARGO_HOME} -a -d ./target &&
+    - test -d "${CARGO_HOME}" -a -d ./target &&
       echo "build cache size:" &&
       du -h --max-depth=2 "${CARGO_HOME}" ./target
     - sccache -s
