@@ -451,11 +451,12 @@ fn check_header<B: Block, P: Pair>(
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-	trace!("Unsealing {:?}", hash);
+
 	if !allow_old_seals && digest_item.is_deprecated() {
 		debug!(target: "aura", "Header {:?} uses old seal format, rejecting", hash);
 		return Err(format!("Header {:?} uses old seal format, rejecting", hash))
 	}
+
 	let (slot_num, sig) = digest_item.as_aura_seal().ok_or_else(|| {
 		debug!(target: "aura", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
@@ -467,7 +468,6 @@ fn check_header<B: Block, P: Pair>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-
 		let expected_author = match slot_author::<P>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author
