@@ -105,7 +105,8 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// Special functions are executed once per block and have reserved function signatures.
 ///
-/// * `deposit_event`: Emits events for the module. [Optional]: `deposit_event<T>` if the event contains generics.
+/// * `deposit_event`: Emits [events](https://docs.substrate.dev/docs/event-enum) for the module.
+/// [Optional]: `deposit_event<T>` if the event contains generics.
 ///
 /// The following functions also take in one optional parameter `n: T::BlockNumber`:
 ///
