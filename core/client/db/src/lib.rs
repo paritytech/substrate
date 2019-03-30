@@ -33,6 +33,7 @@ mod utils;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
+use std::collections::HashMap;
 
 use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
@@ -45,7 +46,7 @@ use parking_lot::RwLock;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem, AuthorityIdFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -243,7 +244,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<&client::blockchain::Cache<Block>> {
+	fn cache(&self) -> Option<Arc<client::blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -253,6 +254,12 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>, client::error::Error> {
 		children::read_children(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
+	}
+}
+
+impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
+	fn cache(&self) -> Option<Arc<client::blockchain::Cache<Block>>> {
+		None
 	}
 }
 
@@ -306,8 +313,8 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, _authorities: Vec<AuthorityIdFor<Block>>) {
-		// currently authorities are not cached on full nodes
+	fn update_cache(&mut self, _cache: HashMap<Vec<u8>, Vec<u8>>) {
+		// Currently cache isn't implemented on full nodes.
 	}
 
 	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
