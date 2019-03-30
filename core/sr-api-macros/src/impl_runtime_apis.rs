@@ -271,7 +271,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		pub struct RuntimeApiImpl<C: #crate_::runtime_api::CallRuntimeAt<#block> + 'static> {
 			call: &'static C,
 			commit_on_success: ::std::cell::RefCell<bool>,
-			initialised_block: ::std::cell::RefCell<Option<#block_id>>,
+			initialized_block: ::std::cell::RefCell<Option<#block_id>>,
 			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
 		}
 
@@ -320,7 +320,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				RuntimeApiImpl {
 					call: unsafe { ::std::mem::transmute(call) },
 					commit_on_success: true.into(),
-					initialised_block: None.into(),
+					initialized_block: None.into(),
 					changes: Default::default(),
 				}.into()
 			}
@@ -345,7 +345,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						function,
 						args,
 						&mut *self.changes.borrow_mut(),
-						&mut *self.initialised_block.borrow_mut(),
+						&mut *self.initialized_block.borrow_mut(),
 						native_call,
 						context
 					)

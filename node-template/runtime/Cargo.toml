@@ -26,6 +26,7 @@ runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitiv
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
 consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
+consensus_authorities = { package = "substrate-consensus-authorities", path = "../../core/consensus/authorities", default-features = false }
 
 [features]
 default = ["std"]

@@ -33,10 +33,10 @@ Merging pull requests once CI is successful:
 
 When reviewing a pull request, the end-goal is to suggest useful changes to the author. Reviews should finish with approval unless there are issues that would result in:
 
-. Buggy behaviour.
+. Buggy behavior.
 . Undue maintenance burden.
 . Breaking with house coding style.
-. Pessimisation (i.e. reduction of speed as measured in the projects benchmarks).
+. Pessimization (i.e. reduction of speed as measured in the projects benchmarks).
 . Feature reduction (i.e. it removes some aspect of functionality that a significant minority of users rely on).
 . Uselessness (i.e. it does not strictly add a feature or fix a known issue).
 
@@ -47,7 +47,7 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 
 == Helping out
 
-We use https://github.com/paritytech/substrate/labels[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. Furthermore we are organising issues in https://github.com/paritytech/substrate/milestones[milestones]. Best way to get started is to a pick a ticket from the current milestone tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ2-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ3-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AX1-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.
+We use https://github.com/paritytech/substrate/labels[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. Furthermore we are organizing issues in https://github.com/paritytech/substrate/milestones[milestones]. Best way to get started is to a pick a ticket from the current milestone tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ2-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ3-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AX1-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.
 
 == Releases
 

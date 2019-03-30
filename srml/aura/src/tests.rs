@@ -73,18 +73,18 @@ fn aura_reports_offline() {
 	}
 
 	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
-		System::initialise(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default());
 		let slot_duration = Aura::slot_duration();
 
 		Aura::on_timestamp_set::<HandleTestReport>(5 * slot_duration, slot_duration);
-		let header = System::finalise();
+		let header = System::finalize();
 
 		// no slashing when last step was 0.
 		assert_eq!(SLASH_COUNTS.lock().as_slice(), &[0, 0, 0, 0]);
 
-		System::initialise(&2, &header.hash(), &Default::default());
+		System::initialize(&2, &header.hash(), &Default::default());
 		Aura::on_timestamp_set::<HandleTestReport>(8 * slot_duration, slot_duration);
-		let _header = System::finalise();
+		let _header = System::finalize();
 
 		// Steps 6 and 7 were skipped.
 		assert_eq!(SLASH_COUNTS.lock().as_slice(), &[0, 0, 1, 1]);

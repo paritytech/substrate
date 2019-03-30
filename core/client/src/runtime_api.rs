@@ -38,7 +38,6 @@ use rstd::result;
 pub use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
-use rstd::vec::Vec;
 use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
@@ -102,7 +101,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
 	) -> error::Result<NativeOrEncoded<R>>;
@@ -112,17 +111,15 @@ pub trait CallRuntimeAt<Block: BlockT> {
 }
 
 decl_runtime_apis! {
-	/// The `Core` api trait that is mandantory for each runtime.
+	/// The `Core` api trait that is mandatory for each runtime.
 	#[core_trait]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
-		/// Returns the authorities.
-		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 		/// Execute the given block.
 		fn execute_block(block: Block);
-		/// Initialise a block with the given header.
-		fn initialise_block(header: &<Block as BlockT>::Header);
+		/// Initialize a block with the given header.
+		fn initialize_block(header: &<Block as BlockT>::Header);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

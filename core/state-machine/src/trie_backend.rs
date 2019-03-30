@@ -19,7 +19,7 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, TrieError, Trie, MemoryDB, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
 
@@ -63,7 +63,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;
-	type Transaction = MemoryDB<H>;
+	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -83,7 +83,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
@@ -107,7 +107,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
@@ -126,10 +126,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		let mut write_overlay = MemoryDB::default();
+		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
 		{
@@ -154,7 +154,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	{
 		let default_root = default_child_trie_root::<H>(storage_key);
 
-		let mut write_overlay = MemoryDB::default();
+		let mut write_overlay = S::Overlay::default();
 		let mut root = match self.storage(storage_key) {
 			Ok(value) => value.unwrap_or(default_child_trie_root::<H>(storage_key)),
 			Err(e) => {
@@ -189,12 +189,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
-	use trie::{TrieMut, TrieDBMut};
+	use trie::{TrieMut, TrieDBMut, PrefixedMemoryDB};
 	use super::*;
 
-	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
+	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::default();
+		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -208,7 +208,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher> {
+	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
 		let (mdb, root) = test_db();
 		TrieBackend::new(mdb, root)
 	}
@@ -230,8 +230,8 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher>::new(
-			MemoryDB::default(),
+		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>::new(
+			PrefixedMemoryDB::default(),
 			Default::default(),
 		).pairs().is_empty());
 	}

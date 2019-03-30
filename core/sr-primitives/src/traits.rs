@@ -152,6 +152,35 @@ impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B { Default::default() }
 }
 
+/// A structure that converts the currency type into a lossy u64
+/// And back from u128
+pub struct CurrencyToVoteHandler;
+
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 {
+		if x >> 96 == 0 {
+			// Remove dust; divide by 2^32
+			(x >> 32) as u64
+		} else {
+			u64::max_value()
+		}
+	}
+}
+
+impl Convert<u128, u128> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u128 {
+		// if it practically fits in u64
+		if x >> 64 == 0 {
+			// Add zero dust; multiply by 2^32
+			x << 32
+		}
+		else {
+			// 0000_0000_FFFF_FFFF_FFFF_FFFF_0000_0000
+			(u64::max_value() << 32) as u128
+		}
+	}
+}
+
 /// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
@@ -252,23 +281,23 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// The block finalisation trait. Implementing this lets you express what should happen
+/// The block finalization trait. Implementing this lets you express what should happen
 /// for your module when the block is ending.
-pub trait OnFinalise<BlockNumber> {
-	/// The block is being finalised. Implement to have something happen.
-	fn on_finalise(_n: BlockNumber) {}
+pub trait OnFinalize<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
 }
 
-impl<N> OnFinalise<N> for () {}
+impl<N> OnFinalize<N> for () {}
 
-/// The block initialisation trait. Implementing this lets you express what should happen
+/// The block initialization trait. Implementing this lets you express what should happen
 /// for your module when the block is beginning (right before the first extrinsic is executed).
-pub trait OnInitialise<BlockNumber> {
-	/// The block is being initialised. Implement to have something happen.
-	fn on_initialise(_n: BlockNumber) {}
+pub trait OnInitialize<BlockNumber> {
+	/// The block is being initialized. Implement to have something happen.
+	fn on_initialize(_n: BlockNumber) {}
 }
 
-impl<N> OnInitialise<N> for () {}
+impl<N> OnInitialize<N> for () {}
 
 /// Off-chain computation trait.
 ///
@@ -290,14 +319,14 @@ impl<N> OffchainWorker<N> for () {}
 
 macro_rules! tuple_impl {
 	($one:ident,) => {
-		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
-			fn on_finalise(n: Number) {
-				$one::on_finalise(n);
+		impl<Number: Copy, $one: OnFinalize<Number>> OnFinalize<Number> for ($one,) {
+			fn on_finalize(n: Number) {
+				$one::on_finalize(n);
 			}
 		}
-		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
-			fn on_initialise(n: Number) {
-				$one::on_initialise(n);
+		impl<Number: Copy, $one: OnInitialize<Number>> OnInitialize<Number> for ($one,) {
+			fn on_initialize(n: Number) {
+				$one::on_initialize(n);
 			}
 		}
 		impl<Number: Copy, $one: OffchainWorker<Number>> OffchainWorker<Number> for ($one,) {
@@ -309,22 +338,22 @@ macro_rules! tuple_impl {
 	($first:ident, $($rest:ident,)+) => {
 		impl<
 			Number: Copy,
-			$first: OnFinalise<Number>,
-			$($rest: OnFinalise<Number>),+
-		> OnFinalise<Number> for ($first, $($rest),+) {
-			fn on_finalise(n: Number) {
-				$first::on_finalise(n);
-				$($rest::on_finalise(n);)+
+			$first: OnFinalize<Number>,
+			$($rest: OnFinalize<Number>),+
+		> OnFinalize<Number> for ($first, $($rest),+) {
+			fn on_finalize(n: Number) {
+				$first::on_finalize(n);
+				$($rest::on_finalize(n);)+
 			}
 		}
 		impl<
 			Number: Copy,
-			$first: OnInitialise<Number>,
-			$($rest: OnInitialise<Number>),+
-		> OnInitialise<Number> for ($first, $($rest),+) {
-			fn on_initialise(n: Number) {
-				$first::on_initialise(n);
-				$($rest::on_initialise(n);)+
+			$first: OnInitialize<Number>,
+			$($rest: OnInitialize<Number>),+
+		> OnInitialize<Number> for ($first, $($rest),+) {
+			fn on_initialize(n: Number) {
+				$first::on_initialize(n);
+				$($rest::on_initialize(n);)+
 			}
 		}
 		impl<
