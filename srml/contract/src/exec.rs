@@ -15,12 +15,10 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, TrieId, BalanceOf};
-use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb, AccountTrieIdMapping};
+use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
-use rstd::cell::RefCell;
-use rstd::rc::Rc;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 use srml_support::traits::{WithdrawReason, Currency};
 use timestamp;
@@ -226,7 +224,7 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_account: T::AccountId,
-	pub self_trieid: TrieId,
+	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
@@ -246,13 +244,12 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
-		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb, Rc::new(RefCell::new(AccountTrieIdMapping::new())), true);
-		let self_trieid = overlay.get_or_create_trieid(&origin);
+		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb);
 		ExecutionContext {
+			self_trie_id: overlay.get_final_trie_id(&origin),
 			self_account: origin,
-			self_trieid,
-			depth: 0,
 			overlay,
+			depth: 0,
 			events: Vec::new(),
 			calls: Vec::new(),
 			config: &cfg,
@@ -262,11 +259,10 @@ where
 	}
 
 	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
-		let self_trieid = overlay.get_or_create_trieid(&dest);
 		ExecutionContext {
-			overlay,
+			self_trie_id: overlay.get_final_trie_id(&dest),
 			self_account: dest,
-			self_trieid,
+			overlay,
 			depth: self.depth + 1,
 			events: Vec::new(),
 			calls: Vec::new(),
@@ -301,7 +297,7 @@ where
 
 		let (change_set, events, calls) = {
 			let mut nested = self.nested(
-				OverlayAccountDb::new(&self.overlay, self.overlay.reg_cache_new_rc(), false),
+				OverlayAccountDb::new(&self.overlay),
 				dest.clone()
 			);
 
@@ -376,7 +372,7 @@ where
 		}
 
 		let (change_set, events, calls) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay, self.overlay.reg_cache_new_rc(), false);
+			let mut overlay = OverlayAccountDb::new(&self.overlay);
 				
 			overlay.set_code(&dest, Some(code_hash.clone()));
 			let mut nested = self.nested(overlay, dest.clone());
@@ -561,7 +557,7 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.ctx.overlay.get_storage(&self.ctx.self_trieid, key)
+		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
 	}
 
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {

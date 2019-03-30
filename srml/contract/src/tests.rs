@@ -359,6 +359,8 @@ fn instantiate_and_call() {
 					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
 				}
 			]);
+
+			assert!(AccountInfoOf::<Test>::exists(BOB));
 		},
 	);
 }
