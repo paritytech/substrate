@@ -20,6 +20,7 @@ use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as Heade
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use crate::well_known_cache_keys;
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -182,7 +183,7 @@ pub trait BlockImport<B: BlockT> {
 	fn import_block(
 		&self,
 		block: ImportBlock<B>,
-		cache: HashMap<Vec<u8>, Vec<u8>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 

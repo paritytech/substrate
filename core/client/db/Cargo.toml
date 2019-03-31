@@ -21,12 +21,12 @@ parity-codec = { version = "3.2", features = ["derive"] }
 executor = { package = "substrate-executor", path = "../../executor" }
 state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
+consensus_common = { package = "substrate-consensus-common", path = "../../consensus/common" }
 
 [dev-dependencies]
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 substrate-keyring = { path = "../../keyring" }
 test-client = { package = "substrate-test-client", path = "../../test-client" }
-consensus_common = { package = "substrate-consensus-common", path = "../../consensus/common" }
 env_logger = { version = "0.6" }
 
 [features]
