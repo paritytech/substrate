@@ -47,6 +47,8 @@ pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>
 
 pub trait AccountDb<T: Trait> {
 	fn get_final_trie_id(&self, account: &T::AccountId) -> Option<TrieId>;
+	/// Account is used when overlayed otherwise trie_id must be provided.
+	/// This is for performance reason.
 	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
