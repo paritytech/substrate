@@ -29,6 +29,7 @@ use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::MemoryDB;
+use consensus::well_known_cache_keys::Id as CacheKeyId;
 
 use crate::error;
 use crate::backend::{self, NewBlockState};
@@ -390,7 +391,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		_cache: HashMap<Vec<u8>, Vec<u8>>,
+		_cache: HashMap<CacheKeyId, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<()> {
@@ -431,7 +432,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
-	pending_cache: HashMap<Vec<u8>, Vec<u8>>,
+	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
@@ -468,7 +469,7 @@ where
 		Ok(())
 	}
 
-	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>) {
+	fn update_cache(&mut self, cache: HashMap<CacheKeyId, Vec<u8>>) {
 		self.pending_cache = cache;
 	}
 

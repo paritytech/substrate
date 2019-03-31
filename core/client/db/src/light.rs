@@ -33,6 +33,7 @@ use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor, Digest, DigestItem};
+use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId};
 use crate::utils::{self, meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
@@ -370,7 +371,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		cache_at: HashMap<Vec<u8>, Vec<u8>>,
+		cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
@@ -539,7 +540,6 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use runtime_primitives::traits::AuthorityIdFor;
-	use consensus_common::well_known_cache_keys;
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
@@ -569,7 +569,7 @@ pub(crate) mod tests {
 
 	pub fn insert_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		cache: HashMap<Vec<u8>, Vec<u8>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -580,7 +580,7 @@ pub(crate) mod tests {
 
 	fn insert_final_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		cache: HashMap<Vec<u8>, Vec<u8>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -591,7 +591,7 @@ pub(crate) mod tests {
 
 	fn insert_non_best_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		cache: HashMap<Vec<u8>, Vec<u8>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -828,18 +828,18 @@ pub(crate) mod tests {
 			}
 		}
 
-		fn same_authorities() -> HashMap<Vec<u8>, Vec<u8>> {
+		fn same_authorities() -> HashMap<well_known_cache_keys::Id, Vec<u8>> {
 			HashMap::new()
 		}
 
-		fn make_authorities(authorities: Vec<AuthorityId>) -> HashMap<Vec<u8>, Vec<u8>> {
+		fn make_authorities(authorities: Vec<AuthorityId>) -> HashMap<well_known_cache_keys::Id, Vec<u8>> {
 			let mut map = HashMap::new();
-			map.insert(well_known_cache_keys::AUTHORITIES.to_vec(), authorities.encode());
+			map.insert(well_known_cache_keys::AUTHORITIES, authorities.encode());
 			map
 		}
 
 		fn get_authorities(cache: &BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
 		}
 
 		let auth1 = || AuthorityId::from_raw([1u8; 32]);

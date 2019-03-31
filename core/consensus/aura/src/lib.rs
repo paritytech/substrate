@@ -694,7 +694,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(well_known_cache_keys::AUTHORITIES, at)
+		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
 		.or_else(|| client.runtime_api().authorities(at).ok())
 		.ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
