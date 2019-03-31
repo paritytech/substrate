@@ -85,14 +85,14 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 			identify,
 			mdns: if enable_mdns {
 				match Mdns::new() {
-					Ok(mdns) => From::from(Some(mdns)),
+					Ok(mdns) => Some(mdns).into(),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-						From::from(None)
+						None.into()
 					}
 				}
 			} else {
-				From::from(None)
+				None.into()
 			},
 			events: Vec::new(),
 		}
