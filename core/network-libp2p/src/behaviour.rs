@@ -20,8 +20,10 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
+use libp2p::core::swarm::toggle::Toggle;
 use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut};
+use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::ping::{Ping, PingEvent};
 use log::{debug, trace, warn};
 use std::{cmp, io, fmt, time::Duration, time::Instant};
@@ -41,6 +43,8 @@ pub struct Behaviour<TMessage, TSubstream> {
 	discovery: DiscoveryBehaviour<TSubstream>,
 	/// Periodically identifies the remote and responds to incoming requests.
 	identify: Identify<TSubstream>,
+	/// Discovers nodes on the local network.
+	mdns: Toggle<Mdns<TSubstream>>,
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
@@ -55,6 +59,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		protocol: RegisteredProtocol<TMessage>,
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		peerset: substrate_peerset::PeersetMut,
+		enable_mdns: bool,
 	) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
@@ -78,6 +83,17 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 				duration_to_next_kad: Duration::from_secs(1),
 			},
 			identify,
+			mdns: if enable_mdns {
+				match Mdns::new() {
+					Ok(mdns) => Some(mdns).into(),
+					Err(err) => {
+						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+						None.into()
+					}
+				}
+			} else {
+				None.into()
+			},
 			events: Vec::new(),
 		}
 	}
@@ -279,6 +295,19 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour
 				trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer, time);
 				self.events.push(BehaviourOut::PingSuccess { peer_id: peer, ping_time: time });
 			}
+		}
+	}
+}
+
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour<TMessage, TSubstream> {
+	fn inject_event(&mut self, event: MdnsEvent) {
+		match event {
+			MdnsEvent::Discovered(list) => {
+				for (peer_id, _) in list {
+					self.custom_protocols.add_discovered_node(&peer_id);
+				}
+			},
+			MdnsEvent::Expired(_) => {}
 		}
 	}
 }
