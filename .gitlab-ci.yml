@@ -23,9 +23,6 @@ variables:
   ARCH:                            "x86_64"
 
 
-
-cache:                             {}
-
 .collect-artifacts:                &collect-artifacts
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
@@ -34,22 +31,17 @@ cache:                             {}
     paths:
       - artifacts/
 
-
-
 .kubernetes-build:                 &kubernetes-build
   tags:
     - kubernetes-parity-build
   environment:
     name: parity-build
 
-
-
 #### stage:                        merge-test
 
 check-merge-conflict:
   stage:                           merge-test
   image:                           parity/tools:latest
-  cache:                           {}
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -60,15 +52,11 @@ check-merge-conflict:
   script:
     - ./scripts/gitlab/check_merge_conflict.sh
 
-
-
-
 #### stage:                        test
 
 check-runtime:
   stage:                           test
   image:                           parity/tools:latest
-  cache:                           {}
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -77,9 +65,6 @@ check-runtime:
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./scripts/gitlab/check_runtime.sh
-
-
-
 
 test-linux-stable:                 &test
   stage:                           test
@@ -107,16 +92,11 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
-
-
-
-
 .build-only:                      &build-only
   only:
     - master
     - tags
     - web
-
 
 #### stage:                        build
 
@@ -150,8 +130,6 @@ build-linux-release:               &build
     - cp -r scripts/docker/* ./artifacts
     - sccache -s
 
-
-
 build-rust-doc-release:            &build
   stage:                           build
   allow_failure:                   true
@@ -172,20 +150,14 @@ build-rust-doc-release:            &build
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
-
-
-
-### stage:                        publish
+#### stage:                        publish
 
 .publish-build:                    &publish-build
   stage:                           publish
   dependencies:
     - build-linux-release
-  cache:                           {}
   <<:                              *build-only
   <<:                              *kubernetes-build
-
-
 
 publish-docker-release:
   <<:                              *publish-build
@@ -218,9 +190,6 @@ publish-docker-release:
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -not -name artifacts -delete
 
-
-
-
 publish-s3-release:
   <<:                              *publish-build
   image:                           parity/awscli:latest
@@ -240,8 +209,6 @@ publish-s3-release:
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
-
-
 
 publish-s3-doc:
   stage:                           publish
@@ -266,14 +233,9 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-
-
-
-
 .deploy-template:                  &deploy
   stage:                           deploy
   when:                            manual
-  cache:                           {}
   retry:                           1
   image:                           parity/kubectl-helm:$HELM_VERSION
   <<:                              *build-only
@@ -304,10 +266,7 @@ publish-s3-doc:
     - echo "# wait for the rollout to complete"
     - kubectl -n ${KUBE_NAMESPACE} rollout status statefulset/substrate
 
-
-
 # have environment:url eventually point to the logs
-
 
 .deploy-cibuild:                   &deploy-cibuild
   <<:                              *deploy
@@ -320,9 +279,8 @@ publish-s3-doc:
     variables:
       - $DEPLOY_TAG
 
-
-
 # have environment:url eventually point to the logs
+
 deploy-ew3:
   <<:                              *deploy-cibuild
   environment:
@@ -342,3 +300,4 @@ deploy-ue1-tag:
   <<:                              *deploy-tag
   environment:
     name: parity-prod-ue1
+
