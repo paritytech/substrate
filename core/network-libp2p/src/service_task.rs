@@ -89,7 +89,7 @@ where TMessage: CustomMessage + Send + 'static {
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset);
+		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset, config.enable_mdns);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};

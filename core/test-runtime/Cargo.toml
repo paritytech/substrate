@@ -23,6 +23,7 @@ runtime_support = { package = "srml-support", path = "../../srml/support", defau
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
 cfg-if = "0.1.6"
+consensus_authorities = { package = "substrate-consensus-authorities", path = "../../core/consensus/authorities", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }

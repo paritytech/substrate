@@ -34,7 +34,7 @@ use runtime_primitives::{
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType,
+		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -289,10 +289,6 @@ cfg_if! {
 					version()
 				}
 
-				fn authorities() -> Vec<AuthorityId> {
-					system::authorities()
-				}
-
 				fn execute_block(block: Block) {
 					system::execute_block(block)
 				}
@@ -386,16 +382,18 @@ cfg_if! {
 					runtime_io::submit_extrinsic(&ex)
 				}
 			}
+
+			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
+				fn authorities() -> Vec<AuthorityIdFor<Block>> {
+					crate::system::authorities()
+				}
+			}
 		}
 	} else {
 		impl_runtime_apis! {
 			impl client_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
-				}
-
-				fn authorities() -> Vec<AuthorityId> {
-					system::authorities()
 				}
 
 				fn execute_block(block: Block) {
@@ -494,6 +492,12 @@ cfg_if! {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::submit_extrinsic(&ex)
+				}
+			}
+
+			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
+				fn authorities() -> Vec<AuthorityIdFor<Block>> {
+					crate::system::authorities()
 				}
 			}
 		}
