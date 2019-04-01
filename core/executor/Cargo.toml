@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
-parity-codec = "3.2"
+parity-codec = "3.3"
 runtime_io = { package = "sr-io", path = "../sr-io" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 trie = { package = "substrate-trie", path = "../trie" }

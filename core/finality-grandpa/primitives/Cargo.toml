@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 client = { package = "substrate-client", path = "../../client", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }
-parity-codec = { version = "3.2", default-features = false, features = ["derive"] }
+parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 sr-primitives = { path = "../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 
