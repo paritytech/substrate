@@ -14,66 +14,72 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! # Aura Module
+//!
 //! ## Overview
-//! 
-//! The `aura` module extends Aura consensus by managing offline reporting.
-//! 
+//!
+//! The aura module extends Aura consensus by managing offline reporting.
+//!
 //! ## Interface
-//! 
-//! ### Dispatchable
-//! 
-//! There are no dispatchable functions for this module as it mainly serves to monitor offline interaction in the 
+//!
+//! ### Dispatchable Functions
+//!
+//! There are no dispatchable functions for this module as it mainly serves to monitor offline interaction in the
 //! context of Aura consensus and doesn't operate independent of this consensus algorithm.
-//! 
-//! ### Public
-//! 
-//! See the [module](https://crates.parity.io/srml_aura/struct.Module.html) for details on publicly available functions.
-//! 
+//!
+//! ### Public Functions
+//!
+//! See the [`Module`](./struct.Module.html) struct for details on publicly available functions.
+//!
 //! ## Usage
-//! 
+//!
 //! ### Prerequisites
-//! 
+//!
 //! Use of this module implies selection of the Aura algorithm. More details on consensus configuration will be revealed
 //! once [Swappable Consensus](https://github.com/paritytech/substrate/issues/1304) is formalized.
-//! 
+//!
 //! ### Simple Code Snippet
-//! 
-//! Instantiate a report of skipped authorities
+//!
+//! Instantiate a report of skipped authorities:
+//!
 //! ```rust,ignore
 //! let mut report = AuraReport {
-//!     start_slot: 6, // The first skipped slot
-//!     skipped: 3,   // The number of authorities skipped
+//! 	start_slot: 6, // The first skipped slot
+//! 	skipped: 3,   // The number of authorities skipped
 //! }
 //! ```
-//! 
-//! Punish validators that did not fulfill their duties (*skipped*)
+//!
+//! Punish validators that did not fulfill their duties (*skipped*):
+//!
 //! ```rust,ignore
 //! let mut validators = vec![0; 10];
 //! report.punish(10, |idx, count| validators[idx] += count);
 //! assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0]);
 //! ```
-//! 
-//! See the `test.rs` file in this module's directory for other simple code snippets that may make this module's 
+//!
+//! See the `tests.rs` file in this module's directory for other simple code snippets that may make this module's
 //! functionalities clearer.
-//! 
+//!
 //! ### Example from SRML
-//! 
+//!
 //! This module is not used in other Substrate Runtime Module Libraries.
-//! 
+//!
 //! ## Related Modules
-//! 
-//! - [`staking`](https://crates.parity.io/srml_staking/index.html): this module is called in `aura` to enforce slashing
-//!  if validators miss a certain number of slots (see the `StakingSlasher` struct and associated method)
-//! - [`timestamp`](https://crates.parity.io/srml_timestamp/index.html): this module is used in `aura` to track 
-//! consensus rounds (via `slots`)
-//! - [`consensus`](https://crates.parity.io/srml_consensus/index.html): this module does not relate directly to `aura`,
-//!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way
-//! 
+//!
+//! - [`staking`](../srml_staking/index.html): The staking module is called in aura to enforce slashing
+//!  if validators miss a certain number of slots (see the [`StakingSlasher`](./struct.StakingSlasher.html)
+//!  struct and associated method).
+//! - [`timestamp`](../srml_timestamp/index.html): The timestamp module is used in aura to track
+//! consensus rounds (via `slots`).
+//! - [`consensus`](../srml_consensus/index.html): The consensus module does not relate directly to aura,
+//!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
+//!
 //! ## References
-//! 
-//! If you're interested in hacking on this module, it is useful to understand the interaction with 
-//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of `ProvideInherent` and 
-//! `ProvideInherentData` to create and check inherents.
+//!
+//! If you're interested in hacking on this module, it is useful to understand the interaction with
+//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of
+//! [`ProvideInherent`](../substrate_inherents/trait.ProvideInherent.html) and
+//! [`ProvideInherentData`](../substrate_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -166,7 +172,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-/// Something which can handle Aura consensus reports.
+/// Something that can handle Aura consensus reports.
 pub trait HandleReport {
 	fn handle_report(report: AuraReport);
 }
@@ -182,7 +188,7 @@ pub trait Trait: timestamp::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
-		// The last timestamp.
+		/// The last timestamp.
 		LastTimestamp get(last) build(|_| T::Moment::sa(0)): T::Moment;
 	}
 }
@@ -202,14 +208,14 @@ pub struct AuraReport {
 }
 
 impl AuraReport {
-	/// Call the closure with (validator_indices, punishment_count) for each
+	/// Call the closure with (`validator_indices`, `punishment_count`) for each
 	/// validator to punish.
 	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
 		where F: FnMut(usize, usize)
 	{
-		// If all validators have been skipped, then it implies some sort of 
+		// If all validators have been skipped, then it implies some sort of
 		// systematic problem common to all rather than a minority of validators
-		// unfulfilling their specific duties. In this case, it doesn't make
+		// not fulfilling their specific duties. In this case, it doesn't make
 		// sense to punish anyone, so we guard against it.
 		if self.skipped < validator_count {
 			for index in 0..self.skipped {
@@ -223,7 +229,7 @@ impl<T: Trait> Module<T> {
 	/// Determine the Aura slot-duration based on the timestamp module configuration.
 	pub fn slot_duration() -> u64 {
 		// we double the minimum block-period so each author can always propose within
-		// the majority of their slot.
+		// the majority of its slot.
 		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
 	}
 
@@ -287,7 +293,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		None
 	}
 
-	/// Verify the validity of the inherent using the timestamp
+	/// Verify the validity of the inherent using the timestamp.
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
 			timestamp::Call::set(ref timestamp) => timestamp.clone(),
