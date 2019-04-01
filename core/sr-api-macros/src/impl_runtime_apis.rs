@@ -407,7 +407,8 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	node_block_id: &'a TokenStream,
 	runtime_mod_path: &'a Path,
 	runtime_type: &'a Type,
-	trait_generic_arguments: &'a [GenericArgument]
+	trait_generic_arguments: &'a [GenericArgument],
+	impl_trait: &'a Ident,
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -463,7 +464,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(&input.sig.ident);
+			input.sig.ident = generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.decl.output);
 
 			// Generate the correct return type.
@@ -554,6 +555,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			runtime_mod_path: &runtime_mod_path,
 			runtime_type: &*runtime_type,
 			trait_generic_arguments: &trait_generic_arguments,
+			impl_trait: &impl_trait.ident,
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));

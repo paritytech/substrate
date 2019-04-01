@@ -123,6 +123,8 @@ decl_runtime_apis! {
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
 		fn initialize_block(header: &<Block as BlockT>::Header);
+		/// Returns the authorities.
+		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

@@ -251,6 +251,10 @@ impl_runtime_apis! {
 		fn initialize_block(header: &<Block as BlockT>::Header) {
 			Executive::initialize_block(header)
 		}
+
+		fn authorities() -> Vec<AuthorityIdFor<Block>> {
+			panic!("Not implemented anymore")
+		}
 	}
 
 	impl client_api::Metadata<Block> for Runtime {

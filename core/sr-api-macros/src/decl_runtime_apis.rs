@@ -479,6 +479,7 @@ struct ToClientSideDecl<'a> {
 	found_attributes: &'a mut HashMap<&'static str, Attribute>,
 	/// Any error that we found while converting this declaration.
 	errors: &'a mut Vec<TokenStream>,
+	trait_: &'a Ident,
 }
 
 impl<'a> ToClientSideDecl<'a> {
@@ -545,7 +546,7 @@ impl<'a> ToClientSideDecl<'a> {
 				Vec::new()
 			}
 		};
-		let name = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let name = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
 
@@ -582,7 +583,7 @@ impl<'a> ToClientSideDecl<'a> {
 			&self.block_id,
 			&self.crate_
 		);
-		let name_impl = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let name_impl = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
 		let crate_ = self.crate_;
 
 		let found_attributes = remove_supported_attributes(&mut method.attrs);
@@ -768,6 +769,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 		let block_id = quote!( #crate_::runtime_api::BlockId<Block> );
 		let mut found_attributes = HashMap::new();
 		let mut errors = Vec::new();
+		let trait_ = decl.ident.clone();
 
 		let decl = {
 			let mut to_client_side = ToClientSideDecl {
@@ -775,6 +777,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 				block_id: &block_id,
 				found_attributes: &mut found_attributes,
 				errors: &mut errors,
+				trait_: &trait_,
 			};
 			to_client_side.fold_item_trait(decl)
 		};
