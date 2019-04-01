@@ -43,6 +43,7 @@ use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::panic::UnwindSafe;
+use rstd::vec::Vec;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
