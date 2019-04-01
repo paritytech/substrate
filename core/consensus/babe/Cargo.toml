@@ -1,0 +1,42 @@
+[package]
+name = "substrate-consensus-babe"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "BABE consensus algorithm for substrate"
+edition = "2018"
+
+[dependencies]
+parity-codec = "3.2"
+parity-codec-derive = "3.2"
+client = { package = "substrate-client", path = "../../client" }
+babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
+primitives = { package = "substrate-primitives", path = "../../primitives" }
+runtime_support = { package = "srml-support", path = "../../../srml/support" }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+runtime_version = { package = "sr-version", path = "../../sr-version" }
+runtime_io = { package = "sr-io", path = "../../sr-io" }
+inherents = { package = "substrate-inherents", path = "../../inherents" }
+srml-consensus = { path = "../../../srml/consensus" }
+substrate-telemetry = { path = "../../telemetry" }
+futures = "^0.1.17"
+tokio = "^0.1.7"
+parking_lot = "^0.7.1"
+error-chain = "^0.12"
+serde = "^1.0.89"
+log = "^0.4"
+consensus_common = { package = "substrate-consensus-common", path = "../common" }
+authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
+
+[dependencies.schnorrkel]
+git = "https://github.com/paritytech/schnorrkel"
+branch = "master"
+features = ["serde"]
+
+[dev-dependencies]
+keyring = { package = "substrate-keyring", path = "../../keyring" }
+substrate-executor = { path = "../../executor" }
+network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
+service = { package = "substrate-service", path = "../../service" }
+test_client = { package = "substrate-test-client", path = "../../test-client" }
+env_logger = "^0.6"
+serde = "^1.0.89"

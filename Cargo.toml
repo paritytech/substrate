@@ -25,6 +25,7 @@ members = [
 	"core/client/db",
 	"core/consensus/common",
 	"core/consensus/aura",
+	"core/consensus/babe",
 	"core/consensus/rhd",
 	"core/executor",
 	"core/finality-grandpa",
