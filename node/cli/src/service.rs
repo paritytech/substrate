@@ -85,6 +85,7 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
+						inherents_pool: service.inherents_pool(),
 					});
 
 					let client = service.client();
@@ -97,16 +98,23 @@ construct_service_factory! {
 						service.network(),
 						service.on_exit(),
 						service.config.custom.inherent_data_providers.clone(),
+						service.config.force_authoring,
 					)?);
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
 
+				let local_key = if service.config.disable_grandpa {
+					None
+				} else {
+					local_key
+				};
+
 				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
 						// FIXME #1578 make this available through chainspec
-						gossip_duration: Duration::new(4, 0),
+						gossip_duration: Duration::from_millis(333),
 						justification_period: 4096,
 						name: Some(service.config.name.clone())
 					},
@@ -142,6 +150,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					true,
 				).map_err(Into::into)
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
@@ -166,6 +175,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					true,
 				).map_err(Into::into)
 			}},
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {

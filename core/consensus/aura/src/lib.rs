@@ -25,27 +25,30 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-
+#![deny(deprecated)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
-use consensus_common::{
-	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
+use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
+	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 };
+use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
+use client::blockchain::ProvideCache;
 use client::runtime_api::ApiExt;
-use consensus_common::{ImportBlock, BlockOrigin};
+use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
+	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
 };
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
+use authorities::AuthoritiesApi;
 
 use futures::{Stream, Future, IntoFuture, future};
 use tokio::timer::Timeout;
@@ -116,27 +119,42 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 
 /// A digest item which is usable with aura consensus.
 pub trait CompatibleDigestItem<T: Pair>: Sized {
-	/// Construct a digest item which is a slot number and a signature on the
+	/// Construct a digest item which contains a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature<T>) -> Self;
+	fn aura_seal(slot_num: u64, signature: Signature<T>) -> Self;
 
 	/// If this item is an Aura seal, return the slot number and signature.
 	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)>;
+
+	/// Return `true` if this seal type is deprecated.  Otherwise, return
+	/// `false`.
+	fn is_deprecated(&self) -> bool;
 }
 
-impl<T: Pair, Hash, AuthorityId> CompatibleDigestItem<T> for generic::DigestItem<Hash, AuthorityId, Signature<T>>
-	where T::Signature: Clone
+impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P::Signature>
+	where P: Pair, P::Signature: Clone + Encode + Decode,
 {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature<T>) -> Self {
-		generic::DigestItem::Seal(slot_number, signature)
+	fn aura_seal(slot_number: u64, signature: Signature<P>) -> Self {
+		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
 	}
+
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)> {
+	#[allow(deprecated)]
+	fn as_aura_seal(&self) -> Option<(u64, Signature<P>)> {
 		match self {
 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			_ => None
+			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
+			_ => None,
+		}
+	}
+
+	#[allow(deprecated)]
+	fn is_deprecated(&self) -> bool {
+		match self {
+			generic::DigestItem::Seal(_, _) => true,
+			_ => false,
 		}
 	}
 }
@@ -163,23 +181,32 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: Authorities<B> + ChainHead<B> + Send + Sync + 'static,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
+	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<C::Error> + From<I::Error> + 'static,
+	Error: From<I::Error> + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Encode + Decode + Eq + Clone + Debug + Hash + Send + Sync + 'static,
+	P::Signature: Encode,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	OnExit: Future<Item=(), Error=()> + Send + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(), sync_oracle: sync_oracle.clone(),
+		client: client.clone(),
+		block_import,
+		env,
+		local_key,
+		inherent_data_providers: inherent_data_providers.clone(),
+		sync_oracle: sync_oracle.clone(),
+		force_authoring,
 	};
 
 	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
@@ -202,23 +229,32 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: Authorities<B> + ChainHead<B>,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<C::Error> + From<I::Error>,
+	Error: From<I::Error>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
+	P::Signature: Encode,
 	SO: SyncOracle + Send + Sync + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(), sync_oracle: sync_oracle.clone(),
+		client: client.clone(),
+		block_import,
+		env,
+		local_key,
+		inherent_data_providers: inherent_data_providers.clone(),
+		sync_oracle: sync_oracle.clone(),
+		force_authoring,
 	};
 	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
 		slot_duration,
@@ -237,17 +273,20 @@ struct AuraWorker<C, E, I, P, SO> {
 	local_key: Arc<P>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
+	force_authoring: bool,
 }
 
 impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	C: Authorities<B>,
+	C: ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
-	Error: From<C::Error> + From<I::Error>,
+	P::Signature: Encode,
+	Error: From<I::Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
@@ -275,7 +314,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let authorities = match client.authorities(&BlockId::Hash(chain_head.hash())) {
+		let authorities = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
 			Err(e) => {
 				warn!(
@@ -290,7 +329,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 			}
 		};
 
-		if self.sync_oracle.is_offline() && authorities.len() > 1 {
+		if !self.force_authoring && self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "aura", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "aura.skipping_proposal_slot";
 				"authorities_len" => authorities.len()
@@ -387,7 +426,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 						"hash_previously" => ?pre_hash
 					);
 
-					if let Err(e) = block_import.import_block(import_block, None) {
+					if let Err(e) = block_import.import_block(import_block, Default::default()) {
 						warn!(target: "aura", "Error with block built on {:?}: {:?}",
 							  parent_hash, e);
 						telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
@@ -404,19 +443,32 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block, P: Pair>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId<P>])
-	-> Result<CheckedHeader<B::Header, P::Signature>, String>
+#[forbid(deprecated)]
+fn check_header<B: Block, P: Pair>(
+	slot_now: u64,
+	mut header: B::Header,
+	hash: B::Hash,
+	authorities: &[AuthorityId<P>],
+	allow_old_seals: bool,
+) -> Result<CheckedHeader<B::Header, P::Signature>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Public: Clone + AsRef<P::Public>,
+		P::Signature: Decode,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-	let (slot_num, sig) = match digest_item.as_aura_seal() {
-		Some(x) => x,
-		None => return Err(format!("Header {:?} is unsealed", hash)),
-	};
+
+	if !allow_old_seals && digest_item.is_deprecated() {
+		debug!(target: "aura", "Header {:?} uses old seal format, rejecting", hash);
+		return Err(format!("Header {:?} uses old seal format, rejecting", hash))
+	}
+
+	let (slot_num, sig) = digest_item.as_aura_seal().ok_or_else(|| {
+		debug!(target: "aura", "Header {:?} is unsealed", hash);
+		format!("Header {:?} is unsealed", hash)
+	})?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
@@ -424,7 +476,6 @@ fn check_header<B: Block, P: Pair>(slot_now: u64, mut header: B::Header, hash: B
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-
 		let expected_author = match slot_author::<P>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author
@@ -461,6 +512,7 @@ pub struct AuraVerifier<C, E, P> {
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
+	allow_old_seals: bool,
 }
 
 impl<C, E, P> AuraVerifier<C, E, P>
@@ -527,13 +579,16 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 	}
 }
 
+#[forbid(deprecated)]
 impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
-	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
+	C: ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
+	P::Signature: Encode + Decode,
+	Self: Authorities<B>,
 {
 	fn verify(
 		&self,
@@ -547,7 +602,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))
+		let authorities = self.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
 		let extra_verification = self.extra.verify(
@@ -557,7 +612,13 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, P>(slot_now + 1, header, hash, &authorities[..])?;
+		let checked_header = check_header::<B, P>(
+			slot_now + 1,
+			header,
+			hash,
+			&authorities[..],
+			self.allow_old_seals,
+		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
@@ -620,6 +681,63 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	}
 }
 
+impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
+	B: Block,
+	C: ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: AuthoritiesApi<B>,
+{
+	type Error = ConsensusError;
+
+	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error> {
+		authorities(self.client.as_ref(), at)
+	}
+}
+
+fn initialize_genesis_authorities<B, C>(genesis_hash: B::Hash, client: &C) -> Result<(), ConsensusError> where
+	B: Block,
+	C: ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: AuthoritiesApi<B>,
+{
+	// no cache => no initialization
+	let cache = match client.cache() {
+		Some(cache) => cache,
+		None => return Ok(()),
+	};
+
+	// check if we already have initialized the cache
+	let genesis_id = BlockId::Hash(genesis_hash);
+	let genesis_authorities: Option<Vec<AuthorityIdFor<B>>> = cache
+		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
+		.and_then(|v| Decode::decode(&mut &v[..]));
+	if genesis_authorities.is_some() {
+		return Ok(());
+	}
+
+	let map_err = |error| consensus_common::Error::from(consensus_common::ErrorKind::ClientImport(
+		format!(
+			"Error initializing authorities cache: {}",
+			error,
+		)));
+	let genesis_authorities = client.runtime_api().authorities(&genesis_id).map_err(map_err)?;
+	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_hash, genesis_authorities.encode())
+		.map_err(map_err)?;
+
+	Ok(())
+}
+
+fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
+	B: Block,
+	C: ProvideRuntimeApi + ProvideCache<B>,
+	C::Api: AuthoritiesApi<B>,
+{
+	client
+		.cache()
+		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..])))
+		.or_else(|| client.runtime_api().authorities(at).ok())
+		.ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
+}
+
 /// The Aura import queue type.
 pub type AuraImportQueue<B> = BasicQueue<B>;
 
@@ -647,14 +765,16 @@ pub fn import_queue<B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
+	allow_old_seals: bool,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
-	C::Api: BlockBuilderApi<B>,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
+	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Signature: Encode + Decode,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
@@ -664,6 +784,7 @@ pub fn import_queue<B, C, E, P>(
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
+			allow_old_seals,
 		}
 	);
 	Ok(BasicQueue::new(
@@ -757,6 +878,7 @@ mod tests {
 						extra: NothingExtra,
 						inherent_data_providers,
 						phantom: Default::default(),
+						allow_old_seals: false,
 					})
 				},
 				PeersClient::Light(_) => unreachable!("No (yet) tests for light client + Aura"),
@@ -827,6 +949,7 @@ mod tests {
 				DummyOracle,
 				futures::empty(),
 				inherent_data_providers,
+				false,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);
@@ -847,5 +970,17 @@ mod tests {
 			.map_err(|_| ());
 
 		runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	}
+
+	#[test]
+	fn authorities_call_works() {
+		let client = test_client::new();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 0);
+		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
+			Keyring::Alice.into(),
+			Keyring::Bob.into(),
+			Keyring::Charlie.into()
+		]);
 	}
 }

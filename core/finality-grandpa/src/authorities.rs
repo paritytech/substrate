@@ -136,7 +136,7 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		debug!(target: "afg", "Inserting potential standard set change signalled at block {:?} \
+		debug!(target: "afg", "Inserting potential standard set change signaled at block {:?} \
 							   (delayed by {:?} blocks).",
 			   (&number, &hash), pending.delay);
 
@@ -257,7 +257,7 @@ where
 			.take_while(|c| c.effective_number() <= best_number) // to prevent iterating too far
 			.filter(|c| c.effective_number() == best_number)
 		{
-			// check if the given best block is in the same branch as the block that signalled the change.
+			// check if the given best block is in the same branch as the block that signaled the change.
 			if is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
@@ -351,14 +351,18 @@ where
 	/// authority set change (without triggering it), ensuring that if there are
 	/// multiple changes in the same branch, finalizing this block won't
 	/// finalize past multiple transitions (i.e. transitions must be finalized
-	/// in-order). The given function `is_descendent_of` should return `true` if
-	/// the second hash (target) is a descendent of the first hash (base).
+	/// in-order). Returns `Some(true)` if the block being finalized enacts a
+	/// change that can be immediately applied, `Some(false)` if the block being
+	/// finalized enacts a change but it cannot be applied yet since there are
+	/// other dependent changes, and `None` if no change is enacted. The given
+	/// function `is_descendent_of` should return `true` if the second hash
+	/// (target) is a descendent of the first hash (base).
 	pub fn enacts_standard_change<F, E>(
 		&self,
 		finalized_hash: H,
 		finalized_number: N,
 		is_descendent_of: &F,
-	) -> Result<bool, fork_tree::Error<E>>
+	) -> Result<Option<bool>, fork_tree::Error<E>>
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{
@@ -377,7 +381,7 @@ pub(crate) enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain. The median last finalized block is calculated at the time the
-	/// change was signalled.
+	/// change was signaled.
 	Best { median_last_finalized: N },
 }
 
@@ -546,7 +550,7 @@ mod tests {
 			vec![&change_b, &change_a],
 		);
 
-		// finalizing "hash_c" won't enact the change signalled at "hash_a" but it will prune out "hash_b"
+		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"
 		let status = authorities.apply_standard_changes("hash_c", 11, &is_descendent_of(|base, hash| match (*base, *hash) {
 			("hash_a", "hash_c") => true,
 			("hash_b", "hash_c") => false,
@@ -560,7 +564,7 @@ mod tests {
 			vec![&change_a],
 		);
 
-		// finalizing "hash_d" will enact the change signalled at "hash_a"
+		// finalizing "hash_d" will enact the change signaled at "hash_a"
 		let status = authorities.apply_standard_changes("hash_d", 15, &is_descendent_of(|base, hash| match (*base, *hash) {
 			("hash_a", "hash_d") => true,
 			_ => unreachable!(),
@@ -659,21 +663,51 @@ mod tests {
 			delay_kind: DelayKind::Finalized,
 		};
 
+		let change_b = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 10,
+			canon_height: 20,
+			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
+		};
+
 		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(true)).unwrap();
 
 		let is_descendent_of = is_descendent_of(|base, hash| match (*base, *hash) {
-			("hash_a", "hash_b") => true,
+			("hash_a", "hash_d") => true,
+			("hash_a", "hash_e") => true,
+			("hash_b", "hash_d") => true,
+			("hash_b", "hash_e") => true,
 			("hash_a", "hash_c") => false,
+			("hash_b", "hash_c") => false,
 			_ => unreachable!(),
 		});
 
 		// "hash_c" won't finalize the existing change since it isn't a descendent
-		assert!(!authorities.enacts_standard_change("hash_c", 15, &is_descendent_of).unwrap());
-		// "hash_b" at depth 14 won't work either
-		assert!(!authorities.enacts_standard_change("hash_b", 14, &is_descendent_of).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_c", 15, &is_descendent_of).unwrap(),
+			None,
+		);
+
+		// "hash_d" at depth 14 won't work either
+		assert_eq!(
+			authorities.enacts_standard_change("hash_d", 14, &is_descendent_of).unwrap(),
+			None,
+		);
 
 		// but it should work at depth 15 (change height + depth)
-		assert!(authorities.enacts_standard_change("hash_b", 15, &is_descendent_of).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_d", 15, &is_descendent_of).unwrap(),
+			Some(true),
+		);
+
+		// finalizing "hash_e" at depth 20 will trigger change at "hash_b", but
+		// it can't be applied yet since "hash_a" must be applied first
+		assert_eq!(
+			authorities.enacts_standard_change("hash_e", 30, &is_descendent_of).unwrap(),
+			Some(false),
+		);
 	}
 
 	#[test]
@@ -709,7 +743,10 @@ mod tests {
 
 		// there's an effective change triggered at block 15 but not a standard one.
 		// so this should do nothing.
-		assert!(!authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap(),
+			None,
+		);
 
 		// throw a standard change into the mix to prove that it's discarded
 		// for being on the same fork.

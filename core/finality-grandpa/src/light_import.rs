@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
@@ -26,7 +27,7 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::{Verifier, SharedFinalityProofRequestBuilder},
+	import_queue::{Verifier, SharedFinalityProofRequestBuilder}, well_known_cache_keys,
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind, FinalityProofRequestBuilder,
 };
@@ -118,9 +119,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	fn import_block(
 		&self,
 		block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityId>>,
+		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(&*self.client, &mut *self.data.write(), block, new_authorities)
+		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(&*self.client, &mut *self.data.write(), block, new_cache)
 	}
 
 	fn check_block(
@@ -219,7 +220,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	client: &Client<B, E, Block, RA>,
 	data: &mut LightImportData<Block>,
 	mut block: ImportBlock<Block>,
-	new_authorities: Option<Vec<AuthorityId>>,
+	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 ) -> Result<ImportResult, ConsensusError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -235,8 +236,8 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
-	let enacts_consensus_change = new_authorities.is_some();
-	let import_result = client.import_block(block, new_authorities);
+	let enacts_consensus_change = !new_cache.is_empty();
+	let import_result = client.import_block(block, new_cache);
 
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
@@ -305,7 +306,12 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	for header_to_import in finality_effects.headers_to_import {
 		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)?;
 		assert!(block_to_import.justification.is_none(), "We have passed None as justification to verifier.verify");
-		do_import_block::<_, _, _, _, J>(client, data, block_to_import, new_authorities)?;
+
+		let mut cache = HashMap::new();
+		if let Some(authorities) = new_authorities {
+			cache.insert(well_known_cache_keys::AUTHORITIES, authorities.encode());
+		}
+		do_import_block::<_, _, _, _, J>(client, data, block_to_import, cache)?;
 	}
 
 	// try to import latest justification
@@ -544,10 +550,10 @@ pub mod tests {
 		fn import_block(
 			&self,
 			mut block: ImportBlock<Block>,
-			new_authorities: Option<Vec<AuthorityId>>,
+			new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
 			block.justification.take();
-			self.0.import_block(block, new_authorities)
+			self.0.import_block(block, new_cache)
 		}
 
 		fn check_block(
@@ -602,7 +608,7 @@ pub mod tests {
 	}
 
 	fn import_block(
-		new_authorities: Option<Vec<AuthorityId>>,
+		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		justification: Option<Justification>,
 	) -> ImportResult {
 		let client = test_client::new_light();
@@ -631,13 +637,13 @@ pub mod tests {
 			&client,
 			&mut import_data,
 			block,
-			new_authorities,
+			new_cache,
 		).unwrap()
 	}
 
 	#[test]
 	fn finality_proof_not_required_when_consensus_data_does_not_changes_and_no_justification_provided() {
-		assert_eq!(import_block(None, None), ImportResult::Imported(ImportedAux {
+		assert_eq!(import_block(HashMap::new(), None), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
 			bad_justification: false,
@@ -648,7 +654,7 @@ pub mod tests {
 	#[test]
 	fn finality_proof_not_required_when_consensus_data_does_not_changes_and_correct_justification_provided() {
 		let justification = TestJustification(true, Vec::new()).encode();
-		assert_eq!(import_block(None, Some(justification)), ImportResult::Imported(ImportedAux {
+		assert_eq!(import_block(HashMap::new(), Some(justification)), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
 			bad_justification: false,
@@ -658,7 +664,9 @@ pub mod tests {
 
 	#[test]
 	fn finality_proof_required_when_consensus_data_changes_and_no_justification_provided() {
-		assert_eq!(import_block(Some(vec![AuthorityId([2; 32])]), None), ImportResult::Imported(ImportedAux {
+		let mut cache = HashMap::new();
+		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId([2; 32])].encode());
+		assert_eq!(import_block(cache, None), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
 			bad_justification: false,
@@ -669,8 +677,10 @@ pub mod tests {
 	#[test]
 	fn finality_proof_required_when_consensus_data_changes_and_incorrect_justification_provided() {
 		let justification = TestJustification(false, Vec::new()).encode();
+		let mut cache = HashMap::new();
+		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId([2; 32])].encode());
 		assert_eq!(
-			import_block(Some(vec![AuthorityId([2; 32])]), Some(justification)),
+			import_block(cache, Some(justification)),
 			ImportResult::Imported(ImportedAux {
 				clear_justification_requests: false,
 				needs_justification: false,

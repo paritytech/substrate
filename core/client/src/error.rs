@@ -62,12 +62,6 @@ error_chain! {
 			display("Blockchain: {}", e),
 		}
 
-		/// Invalid authorities set received from the runtime.
-		InvalidAuthoritiesSet {
-			description("authorities set is invalid"),
-			display("Current state of blockchain has invalid authorities set"),
-		}
-
 		/// Could not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),

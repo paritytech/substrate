@@ -37,7 +37,7 @@ use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
 	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
 	light::fetcher::{FetchChecker, RemoteCallRequest},
-	ExecutionStrategy,
+	ExecutionStrategy, NeverOffchainExt,
 };
 use parity_codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
@@ -72,6 +72,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 			"GrandpaApi_grandpa_authorities",
 			&[],
 			ExecutionStrategy::NativeElseWasm,
+			NeverOffchainExt::new(),
 		).and_then(|call_result| Decode::decode(&mut &call_result[..])
 			.ok_or_else(|| ClientError::from(ClientErrorKind::CallResultDecode(
 				"failed to decode GRANDPA authorities set proof".into(),

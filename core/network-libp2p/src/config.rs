@@ -48,6 +48,9 @@ pub struct NetworkConfiguration {
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
 	pub node_name: String,
+	/// If true, the network will use mDNS to discover other libp2p nodes on the local network
+	/// and connect to them if they support the same chain.
+	pub enable_mdns: bool,
 }
 
 impl Default for NetworkConfiguration {
@@ -65,6 +68,7 @@ impl Default for NetworkConfiguration {
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
+			enable_mdns: false,
 		}
 	}
 }

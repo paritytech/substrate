@@ -16,7 +16,7 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
-	ModuleMetadata, RuntimeMetadataV1,
+	ModuleMetadata, RuntimeMetadataV3,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
 };
 
@@ -36,8 +36,8 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
-				$crate::metadata::RuntimeMetadata::V1 (
-					$crate::metadata::RuntimeMetadataV1 {
+				$crate::metadata::RuntimeMetadata::V3 (
+					$crate::metadata::RuntimeMetadataV3 {
 						modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
 				).into()
@@ -377,8 +377,8 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1(
-		RuntimeMetadataV1 {
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V3(
+		RuntimeMetadataV3 {
 		modules: DecodeDifferent::Encode(&[
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("system"),

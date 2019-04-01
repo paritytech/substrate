@@ -36,8 +36,7 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::ExecutionContext;
-use substrate_primitives::NativeOrEncoded;
+use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -315,16 +314,6 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<AuthorityId>>> {
-		unimplemented!("Not required for testing!")
-	}
-
 	fn execute_block_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
@@ -335,7 +324,7 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn initialise_block_runtime_api_impl(
+	fn initialize_block_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
 		_: ExecutionContext,
@@ -1056,7 +1045,7 @@ fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -1066,7 +1055,7 @@ fn allows_reimporting_change_blocks() {
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
@@ -1105,7 +1094,7 @@ fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -1115,7 +1104,7 @@ fn test_bad_justification() {
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }

@@ -31,7 +31,9 @@ use sr_std::borrow::Borrow;
 /// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
 /// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
 /// is a hash of a `Key2`.
-pub trait StorageDoubleMap {
+///
+/// Hasher are implemented in derive_key* methods.
+pub trait StorageDoubleMapWithHasher {
 	type Key1: Codec;
 	type Key2: Codec;
 	type Value: Codec + Default;

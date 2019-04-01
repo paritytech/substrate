@@ -62,6 +62,7 @@ construct_service_factory! {
 					let proposer = Arc::new(ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
+						inherents_pool: service.inherents_pool(),
 					});
 					let client = service.client();
 					executor.spawn(start_aura(
@@ -73,6 +74,7 @@ construct_service_factory! {
 						service.network(),
 						service.on_exit(),
 						service.config.custom.inherent_data_providers.clone(),
+						service.config.force_authoring,
 					)?);
 				}
 
@@ -84,7 +86,7 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>|
+			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				import_queue::<_, _, _, Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					client.clone(),
@@ -94,12 +96,13 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					true,
 				).map_err(Into::into)
-			},
+			}},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>|
+			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 				import_queue::<_, _, _, Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					client.clone(),
@@ -109,8 +112,9 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					true,
 				).map_err(Into::into)
-			},
+			}},
 		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {
 			Ok(None)
 		}},

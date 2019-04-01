@@ -16,9 +16,11 @@
 
 //! Block import helpers.
 
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
+use std::collections::HashMap;
+use crate::well_known_cache_keys;
 
 use crate::import_queue::Verifier;
 
@@ -180,11 +182,13 @@ pub trait BlockImport<B: BlockT> {
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error>;
 
-	/// Import a Block alongside the new authorities valid from this block forward
+	/// Import a block.
+	///
+	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
 		&self,
 		block: ImportBlock<B>,
-		new_authorities: Option<Vec<AuthorityIdFor<B>>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
