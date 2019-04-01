@@ -59,7 +59,7 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_final_trie_id(&self, account: &T::AccountId) -> Option<TrieId> {
-		<AccountInfoOf<T>>::get(account).map(|s|s.trie_id)
+		<AccountInfoOf<T>>::get(account).map(|s| s.trie_id)
 	}
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, location))

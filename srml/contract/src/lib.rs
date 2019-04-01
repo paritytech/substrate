@@ -450,7 +450,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<AccountInfoOf<T>>::get(who).map(|subtrie| child::kill_storage(&subtrie.trie_id));
+		<AccountInfoOf<T>>::get(who).map(|info| child::kill_storage(&info.trie_id));
 	}
 }
 
