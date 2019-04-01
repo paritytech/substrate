@@ -35,6 +35,7 @@ pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
 use rstd::result;
+#[doc(hidden)]
 pub use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
@@ -113,12 +114,14 @@ pub trait CallRuntimeAt<Block: BlockT> {
 decl_runtime_apis! {
 	/// The `Core` api trait that is mandatory for each runtime.
 	#[core_trait]
+	#[api_version(2)]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
+		#[renamed("initialise_block", 2)]
 		fn initialize_block(header: &<Block as BlockT>::Header);
 	}
 
