@@ -432,7 +432,9 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 }
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
-/// if it's successful, returns the pre-header, the slot number, and the signat.
+/// if it's successful, returns the pre-header and the digest item containing the seal.
+///
+/// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(deprecated)]
@@ -442,7 +444,7 @@ fn check_header<B: Block, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	allow_old_seals: bool,
-) -> Result<CheckedHeader<B::Header, P::Signature>, String>
+) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Public: AsRef<P::Public>,
 		P::Signature: Decode,
@@ -470,7 +472,7 @@ fn check_header<B: Block, P: Pair>(
 		// chain state.
 		let expected_author = match slot_author::<P>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
-			Some(author) => author
+			Some(author) => author,
 		};
 
 		let pre_hash = header.hash();
@@ -478,7 +480,7 @@ fn check_header<B: Block, P: Pair>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			Ok(CheckedHeader::Checked(header, slot_num, sig))
+			Ok(CheckedHeader::Checked(header, digest_item))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -612,8 +614,9 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 			self.allow_old_seals,
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, slot_num, sig) => {
-				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
+			CheckedHeader::Checked(pre_header, seal) => {
+				let (slot_num, _) = seal.as_aura_seal()
+					.expect("check_header always returns a seal digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -648,7 +651,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
-					post_digests: vec![item],
+					post_digests: vec![seal],
 					body,
 					finalized: false,
 					justification,
