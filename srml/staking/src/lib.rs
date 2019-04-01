@@ -944,15 +944,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new SlotStake value.
 	fn select_validators() -> BalanceOf<T> {
-		let validator_count = Self::validator_count() as usize;
-		let min_validator_count = Self::minimum_validator_count().max(1) as usize;
-		let validators = || <Validators<T>>::enumerate();
-		let nominators = || <Nominators<T>>::enumerate();
 		let maybe_elected_candidates = elect::<T, _, _, _>(
-			validator_count,
-			min_validator_count,
-			validators,
-			nominators,
+			Self::validator_count() as usize,
+			Self::minimum_validator_count().max(1) as usize,
+			<Validators<T>>::enumerate(),
+			<Nominators<T>>::enumerate(),
 			Self::slashable_balance_of,
 			ElectionConfig::<BalanceOf<T>> {
 				equalize: false,

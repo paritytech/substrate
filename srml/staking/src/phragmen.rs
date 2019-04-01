@@ -92,33 +92,26 @@ pub struct Edge<AccountId> {
 ///
 /// Returns an Option of elected candidates, if election is performed.
 /// Returns None if not enough candidates exist.
-pub fn elect<T: Trait + 'static, FN, FV, FS>(
+pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	validator_count: usize,
 	minimum_validator_count: usize,
-	get_validators: FV,
-	get_nominators: FN,
+	validator_iter: FV,
+	nominator_iter: FN,
 	stash_of: FS,
 	config: ElectionConfig<BalanceOf<T>>,
 ) -> Option<Vec<Candidate<T::AccountId, BalanceOf<T>>>> where
-	FV: Fn() -> Box<dyn Iterator<
-		Item =(T::AccountId, ValidatorPrefs<BalanceOf<T>>)
-	>>,
-	FN: Fn() -> Box<dyn Iterator<
-		Item =(T::AccountId, Vec<T::AccountId>)
-	>>,
+	FV: Iterator<Item=(T::AccountId, ValidatorPrefs<BalanceOf<T>>)>,
+	FN: Iterator<Item=(T::AccountId, Vec<T::AccountId>)>,
 	for <'r> FS: Fn(&'r T::AccountId) -> BalanceOf<T>,
 {
 	let into_currency = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 	let into_votes = |b: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
 	let mut elected_candidates;
 
-	let get_validators = get_validators();
-	let get_nominators = get_nominators();
-
 	// 1- Pre-process candidates and place them in a container, optimisation and add phantom votes.
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
-	let mut nominators: Vec<Nominator<T::AccountId>> = Vec::with_capacity(get_validators.size_hint().0 + get_nominators.size_hint().0);
-	let mut candidates = get_validators.map(|(who, _)| {
+	let mut nominators: Vec<Nominator<T::AccountId>> = Vec::with_capacity(validator_iter.size_hint().0 + nominator_iter.size_hint().0);
+	let mut candidates = validator_iter.map(|(who, _)| {
 			let stash_balance = stash_of(&who);
 			Candidate {
 				who,
@@ -148,7 +141,7 @@ pub fn elect<T: Trait + 'static, FN, FV, FS>(
 
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
-	nominators.extend(get_nominators.map(|(who, nominees)| {
+	nominators.extend(nominator_iter.map(|(who, nominees)| {
 		let nominator_stake = stash_of(&who);
 		let mut edges: Vec<Edge<T::AccountId>> = Vec::with_capacity(nominees.len());
 		for n in &nominees {
