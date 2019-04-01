@@ -70,7 +70,7 @@
 //! Log changes in the authorities set:
 //!
 //! ```rust,ignore
-//! <consensus::Module<T>>::on_finalise(5); // finalize UintAuthorityId(5)
+//! <consensus::Module<T>>::on_finalize(5); // finalize UintAuthorityId(5)
 //! ```
 //!
 //! ### Example from SRML
