@@ -453,6 +453,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 		result.push(quote!(
 			#[doc(hidden)]
 			#[allow(dead_code)]
+			#[allow(deprecated)]
 			pub mod #mod_name {
 				use super::*;
 

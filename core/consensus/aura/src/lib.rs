@@ -687,6 +687,7 @@ impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
 	}
 }
 
+#[allow(deprecated)]
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,

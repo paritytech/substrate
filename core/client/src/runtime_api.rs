@@ -124,6 +124,7 @@ decl_runtime_apis! {
 		#[renamed("initialise_block", 2)]
 		fn initialize_block(header: &<Block as BlockT>::Header);
 		/// Returns the authorities.
+		#[deprecated(since = "1.0", note = "Please switch to `AuthoritiesApi`.")]
 		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 	}
 
