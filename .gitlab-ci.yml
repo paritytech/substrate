@@ -181,7 +181,7 @@ build-rust-doc-release:            &build
   stage:                           publish
   dependencies:
     - build-linux-release
-  cache: {}
+  cache:                           {}
   <<:                              *build-only
   <<:                              *kubernetes-build
 
@@ -248,7 +248,7 @@ publish-s3-doc:
   allow_failure:                   true
   dependencies:
     - build-rust-doc-release
-  cache: {}
+  cache:                           {}
   <<:                              *build-only
   <<:                              *kubernetes-build
   variables:
