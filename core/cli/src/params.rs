@@ -118,6 +118,11 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
 	pub in_peers: u32,
 
+	/// By default, the network will use mDNS to discover other nodes on the local network. This
+	/// disables it.
+	#[structopt(long = "no-mdns")]
+	pub no_mdns: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams
