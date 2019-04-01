@@ -24,11 +24,11 @@ use srml_support::rstd as rstd;
 use srml_support::codec::{Encode, Decode};
 use srml_support::runtime_primitives::{generic, BuildStorage};
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify, Digest};
-use srml_support::{Parameter, construct_runtime, decl_module, decl_storage, decl_event};
+use srml_support::Parameter;
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
-use srml_support::{StorageValue, StorageMap};
+use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
 use primitives::{H256, sr25519};
 
 pub trait Currency {
@@ -50,7 +50,7 @@ mod system {
 
 	pub type DigestItemOf<T> = <<T as Trait>::Digest as Digest>::Item;
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			pub fn deposit_event(_event: T::Event) {
 			}
@@ -62,7 +62,7 @@ mod system {
 		}
 	}
 
-	decl_event!(
+	srml_support::decl_event!(
 		pub enum Event {
 			ExtrinsicSuccess,
 			ExtrinsicFailed,
@@ -122,7 +122,7 @@ mod module1 {
 		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, I>() = default;
 
@@ -140,7 +140,7 @@ mod module1 {
 		}
 	}
 
-	decl_storage! {
+	srml_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 {
 			pub Value config(value): u64;
 			pub Map: map u32 => u64;
@@ -148,7 +148,7 @@ mod module1 {
 		}
 	}
 
-	decl_event! {
+	srml_support::decl_event! {
 		pub enum Event<T, I> where Phantom = rstd::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
@@ -207,22 +207,23 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, I>() = default;
 		}
 	}
 
-	decl_storage! {
+	srml_support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
 			pub LinkedMap config(linked_map): linked_map u64 => u64;
+			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
 		}
 		extra_genesis_skip_phantom_data_field;
 	}
 
-	decl_event! {
+	srml_support::decl_event! {
 		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
 			Variant(Amount),
 		}
@@ -275,7 +276,7 @@ mod module3 {
 		type Currency2: Currency;
 	}
 
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		}
 	}
@@ -335,7 +336,7 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
-construct_runtime!(
+srml_support::construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, (), ()>) where
 		Block = Block,
 		NodeBlock = Block,
@@ -368,10 +369,16 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		}),
 		module2: Some(module2::GenesisConfig {
 			value: 4,
-			map: vec![],
-			linked_map: vec![],
+			map: vec![(0, 0)],
+			linked_map: vec![(0, 0)],
+			double_map: vec![(0, 0, 0)],
 		}),
-		module2_Instance1: None,
+		module2_Instance1: Some(module2::GenesisConfig {
+			value: 4,
+			map: vec![(0, 0)],
+			linked_map: vec![(0, 0)],
+			double_map: vec![(0, 0, 0)],
+		}),
 		module2_Instance2: None,
 		module2_Instance3: None,
 	}.build_storage().unwrap().0.into()
@@ -381,7 +388,7 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 fn storage_instance_independance() {
 	with_externalities(&mut new_test_ext(), || {
 		let mut map = rstd::collections::btree_map::BTreeMap::new();
-		for key in &[
+		for key in [
 			module2::Value::<Runtime>::key().to_vec(),
 			module2::Value::<Runtime, module2::Instance1>::key().to_vec(),
 			module2::Value::<Runtime, module2::Instance2>::key().to_vec(),
@@ -394,6 +401,10 @@ fn storage_instance_independance() {
 			module2::LinkedMap::<Runtime, module2::Instance1>::prefix().to_vec(),
 			module2::LinkedMap::<Runtime, module2::Instance2>::prefix().to_vec(),
 			module2::LinkedMap::<Runtime, module2::Instance3>::prefix().to_vec(),
+			module2::DoubleMap::<Runtime>::prefix().to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance1>::prefix().to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance2>::prefix().to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance3>::prefix().to_vec(),
 			module2::Map::<Runtime>::key_for(0),
 			module2::Map::<Runtime, module2::Instance1>::key_for(0).to_vec(),
 			module2::Map::<Runtime, module2::Instance2>::key_for(0).to_vec(),
@@ -410,11 +421,21 @@ fn storage_instance_independance() {
 			module2::LinkedMap::<Runtime, module2::Instance1>::key_for(1).to_vec(),
 			module2::LinkedMap::<Runtime, module2::Instance2>::key_for(1).to_vec(),
 			module2::LinkedMap::<Runtime, module2::Instance3>::key_for(1).to_vec(),
-		] {
+			module2::DoubleMap::<Runtime>::prefix_for(1),
+			module2::DoubleMap::<Runtime, module2::Instance1>::prefix_for(1).to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance2>::prefix_for(1).to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance3>::prefix_for(1).to_vec(),
+			module2::DoubleMap::<Runtime>::key_for(1, 1),
+			module2::DoubleMap::<Runtime, module2::Instance1>::key_for(1, 1).to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance2>::key_for(1, 1).to_vec(),
+			module2::DoubleMap::<Runtime, module2::Instance3>::key_for(1, 1).to_vec(),
+		].iter() {
 			assert!(map.insert(key, ()).is_none())
 		}
 	});
 }
+
+// TODO TODO: check configuration doublemapstorage in instances
 
 #[test]
 fn storage_with_instance_basic_operation() {
@@ -422,8 +443,10 @@ fn storage_with_instance_basic_operation() {
 		type Value = module2::Value<Runtime, module2::Instance1>;
 		type Map = module2::Map<Runtime, module2::Instance1>;
 		type LinkedMap = module2::LinkedMap<Runtime, module2::Instance1>;
+		type DoubleMap = module2::DoubleMap<Runtime, module2::Instance1>;
 
-		assert_eq!(Value::exists(), false);
+		assert_eq!(Value::exists(), true);
+		assert_eq!(Value::get(), 4);
 		Value::put(1);
 		assert_eq!(Value::get(), 1);
 		assert_eq!(Value::take(), 1);
@@ -431,10 +454,12 @@ fn storage_with_instance_basic_operation() {
 		Value::mutate(|a| *a=2);
 		assert_eq!(Value::get(), 2);
 		Value::kill();
+		assert_eq!(Value::exists(), false);
 		assert_eq!(Value::get(), 0);
 
 		let key = 1;
-		assert_eq!(Map::exists(1), false);
+		assert_eq!(Map::exists(0), true);
+		assert_eq!(Map::exists(key), false);
 		Map::insert(key, 1);
 		assert_eq!(Map::get(key), 1);
 		assert_eq!(Map::take(key), 1);
@@ -442,9 +467,11 @@ fn storage_with_instance_basic_operation() {
 		Map::mutate(key, |a| *a=2);
 		assert_eq!(Map::get(key), 2);
 		Map::remove(key);
+		assert_eq!(Map::exists(key), false);
 		assert_eq!(Map::get(key), 0);
 
-		assert_eq!(LinkedMap::exists(1), false);
+		assert_eq!(LinkedMap::exists(0), true);
+		assert_eq!(LinkedMap::exists(key), false);
 		LinkedMap::insert(key, 1);
 		assert_eq!(LinkedMap::get(key), 1);
 		assert_eq!(LinkedMap::take(key), 1);
@@ -452,6 +479,20 @@ fn storage_with_instance_basic_operation() {
 		LinkedMap::mutate(key, |a| *a=2);
 		assert_eq!(LinkedMap::get(key), 2);
 		LinkedMap::remove(key);
+		assert_eq!(LinkedMap::exists(key), false);
 		assert_eq!(LinkedMap::get(key), 0);
+
+		let key1 = 1;
+		let key2 = 1;
+		assert_eq!(DoubleMap::exists(0, 0), true);
+		assert_eq!(DoubleMap::exists(key1, key2), false);
+		DoubleMap::insert(key1, key2, 1);
+		assert_eq!(DoubleMap::get(key1, key2), 1);
+		assert_eq!(DoubleMap::take(key1, key2), 1);
+		assert_eq!(DoubleMap::get(key1, key2), 0);
+		DoubleMap::mutate(key1, key2, |a| *a=2);
+		assert_eq!(DoubleMap::get(key1, key2), 2);
+		DoubleMap::remove(key1, key2);
+		assert_eq!(DoubleMap::get(key1, key2), 0);
 	});
 }

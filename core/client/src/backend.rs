@@ -16,12 +16,14 @@
 
 //! Substrate Client data backend
 
+use std::collections::HashMap;
 use crate::error;
 use primitives::ChangesTrieConfiguration;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
+use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
 
@@ -73,9 +75,8 @@ pub trait BlockImportOperation<Block, H> where
 		state: NewBlockState,
 	) -> error::Result<()>;
 
-	/// Append authorities set to the transaction. This is a set of parent block (set which
-	/// has been used to check justification of this block).
-	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>);
+	/// Update cached data.
+	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>);
 	/// Inject storage data into the database.
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
@@ -142,6 +143,10 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
+	/// Returns true if state for given block is available.
+	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
+		self.state_at(BlockId::Hash(hash.clone())).is_ok()
+	}
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
 	/// Destroy state and save any useful data, such as cache.

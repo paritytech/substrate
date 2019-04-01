@@ -32,6 +32,8 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
+/// Various re-exports from the `memory-db` crate.
+pub use memory_db::{KeyFunction, prefixed_key};
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -42,8 +44,12 @@ impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
+/// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
+/// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// As in `memory_db`, but less generic, trait exposed.
-pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
+pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
@@ -313,7 +319,6 @@ mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
 	use substrate_primitives::Blake2Hasher;
-	use memory_db::MemoryDB;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};

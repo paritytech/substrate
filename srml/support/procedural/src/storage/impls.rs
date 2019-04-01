@@ -541,4 +541,93 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			}
 		}
 	}
+
+	pub fn double_map(self, k1ty: &syn::Type, k2ty: &syn::Type, k2_hasher: TokenStream2) -> TokenStream2 {
+		let Self {
+			scrate,
+			visibility,
+			traitinstance,
+			traittype,
+			type_infos,
+			fielddefault,
+			prefix,
+			name,
+			attrs,
+			instance_opts,
+			..
+		} = self;
+
+		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
+		let option_simple_1 = option_unwrap(is_option);
+
+		let as_double_map = quote!{ <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>> };
+
+		let mutate_impl = if !is_option {
+			quote!{
+				#as_double_map::insert(key1, key2, &val, storage)
+			}
+		} else {
+			quote!{
+				match val {
+					Some(ref val) => #as_double_map::insert(key1, key2, &val, storage),
+					None => #as_double_map::remove(key1, key2, storage),
+				}
+			}
+		};
+
+		let InstanceOpts {
+			comma_instance,
+			equal_default_instance,
+			bound_instantiable,
+			instance,
+			..
+		} = instance_opts;
+
+		let final_prefix = if let Some(instance) = instance {
+			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
+		} else {
+			quote!{ #prefix.as_bytes() }
+		};
+
+		// generator for double map
+		quote!{
+			#( #[ #attrs ] )*
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
+
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ> for #name<#traitinstance, #instance> {
+				type Query = #value_type;
+
+				fn prefix() -> &'static [u8] {
+					#final_prefix
+				}
+
+				fn key_for(k1: &#k1ty, k2: &#k2ty) -> Vec<u8> {
+					let mut key = #as_double_map::prefix_for(k1);
+					key.extend(&#scrate::Hashable::#k2_hasher(k2));
+					key
+				}
+
+				fn get<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+					let key = #as_double_map::key_for(key1, key2);
+					storage.get(&key).#option_simple_1(|| #fielddefault)
+				}
+
+				fn take<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+					let key = #as_double_map::key_for(key1, key2);
+					storage.take(&key).#option_simple_1(|| #fielddefault)
+				}
+
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &S) -> R {
+					let mut val = #as_double_map::get(key1, key2, storage);
+
+					let ret = f(&mut val);
+					#mutate_impl ;
+					ret
+				}
+
+			}
+		}
+
+	}
 }

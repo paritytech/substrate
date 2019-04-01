@@ -22,6 +22,7 @@ use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use runtime;
+use parity_codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
 pub trait TestClient: Sized {
@@ -60,7 +61,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
-		self.import_block(import, None).map(|_| ())
+		self.import_block(import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
@@ -77,7 +78,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
-		self.import_block(import, None).map(|_| ())
+		self.import_block(import, HashMap::new()).map(|_| ())
 	}
 
 	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()> {

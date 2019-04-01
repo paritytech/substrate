@@ -57,9 +57,9 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
 	fn block_hash(&self, hash: Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
 
-	/// Get hash of the last finalised block in the canon chain.
-	#[rpc(name = "chain_getFinalisedHead")]
-	fn finalised_head(&self) -> Result<Hash>;
+	/// Get hash of the last finalized block in the canon chain.
+	#[rpc(name = "chain_getFinalizedHead", alias("chain_getFinalisedHead"))]
+	fn finalized_head(&self) -> Result<Hash>;
 
 	/// New head subscription
 	#[pubsub(
@@ -81,19 +81,21 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 
 	/// New head subscription
 	#[pubsub(
-		subscription = "chain_finalisedHead",
+		subscription = "chain_finalizedHead",
 		subscribe,
-		name = "chain_subscribeFinalisedHeads"
+		name = "chain_subscribeFinalizedHeads",
+		alias("chain_subscribeFinalisedHeads")
 	)]
-	fn subscribe_finalised_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
+	fn subscribe_finalized_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
 	#[pubsub(
-		subscription = "chain_finalisedHead",
+		subscription = "chain_finalizedHead",
 		unsubscribe,
-		name = "chain_unsubscribeFinalisedHeads"
+		name = "chain_unsubscribeFinalizedHeads",
+		alias("chain_unsubscribeFinalisedHeads")
 	)]
-	fn unsubscribe_finalised_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 }
 
 /// Chain API with subscriptions support.
@@ -192,7 +194,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		})
 	}
 
-	fn finalised_head(&self) -> Result<Block::Hash> {
+	fn finalized_head(&self) -> Result<Block::Hash> {
 		Ok(self.client.info()?.chain.finalized_hash)
 	}
 
@@ -210,7 +212,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		Ok(self.subscriptions.cancel(id))
 	}
 
-	fn subscribe_finalised_heads(&self, _meta: Self::Metadata, subscriber: Subscriber<Block::Header>) {
+	fn subscribe_finalized_heads(&self, _meta: Self::Metadata, subscriber: Subscriber<Block::Header>) {
 		self.subscribe_headers(
 			subscriber,
 			|| Ok(Some(self.client.info()?.chain.finalized_hash)),
@@ -219,7 +221,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		)
 	}
 
-	fn unsubscribe_finalised_heads(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_finalized_heads(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 }

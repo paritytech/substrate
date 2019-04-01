@@ -501,7 +501,7 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{Pair as PairT, crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS}};
+	use crate::crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS};
 	use hex_literal::{hex, hex_impl};
 
 	#[test]
@@ -630,13 +630,6 @@ mod test {
 		println!("Correct: {}", s);
 		let cmp = Public::from_ss58check(&s).unwrap();
 		assert_eq!(cmp, public);
-	}
-
-	#[test]
-	fn ss58check_known_works() {
-		let k = "5CGavy93sZgPPjHyziRohwVumxiHXMGmQLyuqQP4ZFx5vRU9";
-		let enc = hex!["090fa15cb5b1666222fff584b4cc2b1761fe1e238346b340491b37e25ea183ff"];
-		assert_eq!(Public::from_ss58check(k).unwrap(), Public::from_raw(enc));
 	}
 
 	#[test]

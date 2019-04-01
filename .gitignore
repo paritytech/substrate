@@ -16,3 +16,7 @@ node/runtime/wasm/target/
 polkadot.*
 .DS_Store
 .idea/
+nohup.out
+rls*.log
+*.orig
+*.rej
