@@ -109,8 +109,8 @@ pub enum RuntimeToken<Gas> {
 	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
 	ComputedDispatchFee(Gas),
 	/// The given number of bytes is read from the sandbox memory and
-	/// send as an event.
-	SendEvent(u32),
+	/// deposit in as an event.
+	DepositEvent(u32),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
@@ -129,7 +129,7 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			SendEvent(byte_count) => metadata
+			DepositEvent(byte_count) => metadata
 				.event_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
 			ComputedDispatchFee(gas) => Some(gas),
@@ -589,13 +589,13 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Register a contract event with the data buffer.
-	ext_send_event(ctx, data_ptr: u32, data_len: u32) => {
+	// Deposit a contract event with the data buffer.
+	ext_deposit_event(ctx, data_ptr: u32, data_len: u32) => {
 		match ctx
 			.gas_meter
 			.charge(
 				ctx.schedule,
-				RuntimeToken::SendEvent(data_len)
+				RuntimeToken::DepositEvent(data_len)
 			)
 		{
 			GasMeterResult::Proceed => (),
@@ -603,7 +603,7 @@ define_env!(Env, <E: Ext>,
 		}
 
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
-		ctx.ext.send_event(event_data);
+		ctx.ext.deposit_event(event_data);
 
 		Ok(())
 	},

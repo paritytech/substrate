@@ -105,8 +105,8 @@ pub trait Ext {
 	/// Returns a reference to the random seed for the current block
 	fn random_seed(&self) -> &SeedOf<Self::T>;
 
-	/// Register an event.
-	fn send_event(&mut self, data: Vec<u8>);
+	/// Deposit an event.
+	fn deposit_event(&mut self, data: Vec<u8>);
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -625,7 +625,7 @@ where
 		&self.timestamp
 	}
 
-	fn send_event(&mut self, data: Vec<u8>) {
+	fn deposit_event(&mut self, data: Vec<u8>) {
 		self.ctx.events.push(RawEvent::Contract(self.ctx.self_account.clone(), data));
 	}
 }

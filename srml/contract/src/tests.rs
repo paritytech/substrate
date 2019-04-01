@@ -291,12 +291,12 @@ fn account_removal_removes_storage() {
 const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
-	(import "env" "ext_send_event" (func $ext_send_event (param i32 i32)))
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
-		(call $ext_send_event
+		(call $ext_deposit_event
 			(i32.const 8)
 			(i32.const 4)
 		)
@@ -318,7 +318,7 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("5e6a50c08c4156e29cf73caced2a20e551ec4a02b8f043564061471a5ed800ab");
 
 #[test]
-fn instantiate_and_call_and_send_event() {
+fn instantiate_and_call_and_deposit_event() {
 	let wasm = wabt::wat2wasm(CODE_RETURN_FROM_START_FN).unwrap();
 
 	with_externalities(

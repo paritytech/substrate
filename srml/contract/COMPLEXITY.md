@@ -275,12 +275,12 @@ This function receives a `data` buffer as an argument. Execution of the function
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 
-## ext_send_event
+## ext_deposit_event
 
 This function receives a `data` buffer as an argument. Execution of the function consists of the following steps:
 
 1. Loading `data` buffer from the sandbox memory (see sandboxing memory get),
-2. Register the event.
+2. Deposit the event.
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 

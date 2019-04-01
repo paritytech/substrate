@@ -508,7 +508,7 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte returned.
 	pub return_data_per_byte_cost: Gas,
 
-	/// Gas cost per one byte send in event.
+	/// Gas cost per one byte deposit in event.
 	pub event_data_per_byte_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
