@@ -92,15 +92,14 @@ pub struct Edge<AccountId> {
 ///
 /// Returns an Option of elected candidates, if election is performed.
 /// Returns None if not enough candidates exist.
-pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
-	get_rounds: FR,
+pub fn elect<T: Trait + 'static, FN, FV, FS>(
+	validator_count: usize,
+	minimum_validator_count: usize,
 	get_validators: FV,
 	get_nominators: FN,
 	stash_of: FS,
-	minimum_validator_count: usize,
 	config: ElectionConfig<BalanceOf<T>>,
 ) -> Option<Vec<Candidate<T::AccountId, BalanceOf<T>>>> where
-	FR: Fn() -> usize,
 	FV: Fn() -> Box<dyn Iterator<
 		Item =(T::AccountId, ValidatorPrefs<BalanceOf<T>>)
 	>>,
@@ -111,7 +110,6 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 {
 	let expand = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 	let shrink = |b: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
-	let rounds = get_rounds();
 	let mut elected_candidates;
 
 	// 1- Pre-process candidates and place them in a container
@@ -164,10 +162,10 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
 	// 4- If we have more candidates then needed, run Phragmén.
-	if candidates.len() > rounds {
-		elected_candidates = Vec::with_capacity(rounds);
+	if candidates.len() > validator_count {
+		elected_candidates = Vec::with_capacity(validator_count);
 		// Main election loop
-		for _round in 0..rounds {
+		for _round in 0..validator_count {
 			// Loop 1: initialize score
 			for c in &mut candidates {
 				if !c.elected {

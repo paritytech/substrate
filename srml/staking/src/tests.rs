@@ -1494,17 +1494,17 @@ fn phragmen_election_works_with_post_processing() {
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 31]));
 
-		let rounds =     || 2 as usize;
+		let validator_count = 2;
 		let validators = || <Validators<Test>>::enumerate();
 		let nominators = || <Nominators<Test>>::enumerate();
 		let min_validator_count = Staking::minimum_validator_count() as usize;
 
-		let winners = phragmen::elect::<Test, _, _, _, _>(
-			rounds,
+		let winners = phragmen::elect::<Test, _, _, _>(
+			validator_count,
+			min_validator_count,
 			validators,
 			nominators,
 			Staking::slashable_balance_of,
-			min_validator_count,
 			ElectionConfig::<BalanceOf<Test>> {
 				equalize: true,
 				tolerance: <BalanceOf<Test>>::sa(10 as u64),
