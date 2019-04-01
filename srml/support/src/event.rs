@@ -292,6 +292,7 @@ macro_rules! __decl_generic_event {
 			)*
 			$(
 				#[doc(hidden)]
+				#[codec(skip)]
 				PhantomData($crate::rstd::marker::PhantomData<$instance>),
 			)?
 		}
