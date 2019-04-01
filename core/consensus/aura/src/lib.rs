@@ -79,9 +79,7 @@ pub trait Network: Clone {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<AuthorityId<P>>
-	where P::Public: Clone,
-{
+fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
@@ -90,10 +88,9 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 
 	let current_author = authorities.get(idx as usize)
 		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed")
-		.clone();
+				this is a valid index; qed");
 
-	Some(current_author.clone())
+	Some(current_author)
 }
 
 fn duration_now() -> Option<Duration> {
@@ -235,13 +232,12 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<I::Error>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	P::Signature: Encode,
 	SO: SyncOracle + Send + Sync + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
+	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
@@ -283,10 +279,9 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	P::Signature: Encode,
-	Error: From<I::Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
+	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
 
@@ -336,7 +331,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 		let maybe_author = slot_author::<P>(slot_num, &authorities);
 		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
-			Some(author) => if author == public_key {
+			Some(author) => if author == &public_key {
 				debug!(
 					target: "aura", "Starting authorship at slot {}; timestamp = {}",
 					slot_num,
@@ -449,7 +444,7 @@ fn check_header<B: Block, P: Pair>(
 	allow_old_seals: bool,
 ) -> Result<CheckedHeader<B::Header, P::Signature>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Public: Clone + AsRef<P::Public>,
+		P::Public: AsRef<P::Public>,
 		P::Signature: Decode,
 {
 	let digest_item = match header.digest_mut().pop() {
