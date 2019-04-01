@@ -359,6 +359,8 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
+	config.enable_mdns = !cli.no_mdns;
+
 	Ok(())
 }
 
