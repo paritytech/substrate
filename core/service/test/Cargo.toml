@@ -1,6 +1,6 @@
 [package]
 name = "substrate-service-test"
-version = "0.3.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 

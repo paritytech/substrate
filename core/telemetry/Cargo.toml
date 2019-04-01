@@ -1,6 +1,6 @@
 [package]
 name = "substrate-telemetry"
-version = "0.3.1"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
