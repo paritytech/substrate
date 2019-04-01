@@ -21,14 +21,16 @@
 //!
 //! ## Overview
 //!
-//! The assets module provides functionality for asset management of fungible asset classes with a fixed supply, including:
+//! The assets module provides functionality for asset management of fungible asset classes
+//! with a fixed supply, including:
 //!
 //! * Asset Issuance
 //! * Asset Transfer
 //! * Asset Destruction
 //!
-//! To use it in your module, you need to implement the assets [`Trait`].<br />
-//! The supported dispatchable functions are documented in the [`Call`] enum.
+//! To use it in your module, you need to implement the assets [`Trait`](./trait.Trait.html).
+//!
+//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
 //!
 //! ### Terminology
 //!
@@ -42,25 +44,24 @@
 //! <!-- Original inspiration of paragraph: @gavofyork / staking module documentation -->
 //! <!-- FIXME - assumptions only. require an expert to peer review (or re-write) -->
 //!
-//! The assets system in Substrate is designed to achieve the following goals:
-//! * It should be possible to create a unique fungible asset.
-//! * It should be possible to issue fungible assets that are controlled by a cold wallet.
-//! * It should be possible to transfer fungible assets between cold wallets.
-//! * It should be possible to destroy a portion of fungible assets that are controlled by a cold wallet.
+//! The assets system in Substrate is designed to make the following possible:
+//!
+//! * Create a unique, fungible asset.
+//! * Issue fungible assets that are controlled by a cold wallet.
+//! * Transfer fungible assets between cold wallets.
+//! * Destroy a portion of fungible assets that are controlled by a cold wallet.
 //!
 //! ## Interface
 //!
-//! ### Supported Origins
-//!
-//! **signed** - Used to issue, transfer, and destroy an asset holding.
-//!
-//! ### Dispatchable Functions ([`Call`])
+//! ### Dispatchable Functions
 //!
 //! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
-//! * `transfer` - Transfers an `amount` of units of fungible asset `id` from the balance of the function caller's account (`origin`) to a `target` account.
-//! * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account that called the function.
-//! 
-//! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
+//! * `transfer` - Transfers an `amount` of units of fungible asset `id` from the balance of
+//! the function caller's account (`origin`) to a `target` account.
+//! * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account
+//! that called the function.
+//!
+//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
 //!
 //! ### Public Functions ([`Module`])
 //! <!-- Original author of descriptions: @gavofyork -->
@@ -68,29 +69,27 @@
 //! * `balance` - Get the asset `id` balance of `who`.
 //! * `total_supply` - Get the total supply of an asset `id`.
 //!
-//! Please refer to the [`Module`] enum for details of publicly available functions.
-//!
-//! <!-- Original author of paragraph: @joepetrowski  -->
-//! Note that when using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
 //!
 //! ### Events:
 //!
-//! * [`Issued`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
-//! * [`Transferred`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
-//! * [`Destroyed`](https://crates.parity.io/srml_system/enum.RawEvent.html#variants)
+//! * [`Issued`](../srml_system/enum.RawEvent.html#variants)
+//! * [`Transferred`](../srml_system/enum.RawEvent.html#variants)
+//! * [`Destroyed`](../srml_system/enum.RawEvent.html#variants)
 //!
 //! Please refer to the [`RawEvent`] enum and its associated variants for a detailed list of events.
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the Assets Module in your custom module by exposing public functions to:
+//! The following example shows how to use the assets module in your custom module by exposing public functions to:
+//!
 //! * Issue a new fungible asset for a token distribution event (airdrop).
 //! * Query the fungible asset holding balance of an account.
 //! * Query the total supply of a fungible asset that has been issued.
 //!
 //! ### Prerequisites
 //!
-//! Import the `assets` module and types and derive your custom module configuration traits from the `assets` module trait.
+//! Import the assets module and types and derive your custom module configuration traits from the assets module trait.
 //!
 //! ### Simple Code Snippet
 //! <!-- Original author of example approach: @gautamdhameja, @shawntabrizi. See documentation for other SRML modules -->
@@ -102,51 +101,50 @@
 //! pub trait Trait: assets::Trait { }
 //!
 //! decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!         pub fn get_time(origin) -> Result {
-//!             let _sender = ensure_signed(origin)?;
-//!             let _now = <timestamp::Module<T>>::get();
-//!             Ok(())
-//!         }
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _now = <timestamp::Module<T>>::get();
+//! 			Ok(())
+//! 		}
 //!
-//!         pub fn issue_token_airdrop(origin) -> Result {
-//!             const ACCOUNT_ALICE: u64 = 1;
-//!             const ACCOUNT_BOB: u64 = 2;
-//!             const COUNT_AIRDROP_RECIPIENTS = 2;
-//!             const TOKENS_FIXED_SUPPLY: u64 = 100;
+//! 		pub fn issue_token_airdrop(origin) -> Result {
+//! 			const ACCOUNT_ALICE: u64 = 1;
+//! 			const ACCOUNT_BOB: u64 = 2;
+//! 			const COUNT_AIRDROP_RECIPIENTS = 2;
+//! 			const TOKENS_FIXED_SUPPLY: u64 = 100;
 //!
-//!             <!-- Original author of line: @joepetrowski -->
-//!             ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), "Divide by zero error.");
+//! 			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), "Divide by zero error.");
 //!
-//!             let _sender = ensure_signed(origin)?;
-//!             let _asset_id = Self::next_asset_id();
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _asset_id = Self::next_asset_id();
 //!
-//!             <NextAssetId<T>>::mutate(|_asset_id| *_asset_id += 1);
-//!             <Balances<T>>::insert((_asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//!             <Balances<T>>::insert((_asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//!             <TotalSupply<T>>::insert(_asset_id, TOKENS_FIXED_SUPPLY);
+//! 			<NextAssetId<T>>::mutate(|_asset_id| *_asset_id += 1);
+//! 			<Balances<T>>::insert((_asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+//! 			<Balances<T>>::insert((_asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+//! 			<TotalSupply<T>>::insert(_asset_id, TOKENS_FIXED_SUPPLY);
 //!
-//!             Self::deposit_event(RawEvent::Issued(_asset_id, origin, TOKENS_FIXED_SUPPLY));
-//!             Ok(())
-//!         }
+//! 			Self::deposit_event(RawEvent::Issued(_asset_id, origin, TOKENS_FIXED_SUPPLY));
+//! 			Ok(())
+//! 		}
 //!
-//!         pub fn get_balance(asset_id, who) -> Result {
-//!             let _balance = <assets::Module<T>>::balance::get(asset_id, who);
-//!             Ok(())
-//!         }
+//! 		pub fn get_balance(asset_id, who) -> Result {
+//! 			let _balance = <assets::Module<T>>::balance::get(asset_id, who);
+//! 			Ok(())
+//! 		}
 //!
-//!         pub fn get_total_supply(asset_id) -> Result {
-//!             let _total_supply = <assets::Module<T>>::total_supply::get(asset_id);
-//!             Ok(())
-//!         }
-//!     }
+//! 		pub fn get_total_supply(asset_id) -> Result {
+//! 			let _total_supply = <assets::Module<T>>::total_supply::get(asset_id);
+//! 			Ok(())
+//! 		}
+//! 	}
 //! }
 //! ```
 //!
 //! ## Related Modules
 //!
-//! * [`System`](https://crates.parity.io/srml_system/index.html)
-//! * [`Support`](https://crates.parity.io/srml_support/index.html)
+//! * [`System`](../srml_system/index.html)
+//! * [`Support`](../srml_support/index.html)
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -155,7 +153,7 @@ use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event,
 use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 
-/// The module configuration trait
+/// The module configuration trait.
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -167,7 +165,6 @@ pub trait Trait: system::Trait {
 type AssetId = u32;
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
@@ -232,7 +229,7 @@ decl_storage! {
 		Balances: map (AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
 		NextAssetId get(next_asset_id): AssetId;
-		/// The total unit supply of an asset
+		/// The total unit supply of an asset.
 		TotalSupply: map AssetId => T::Balance;
 	}
 }
@@ -246,7 +243,7 @@ impl<T: Trait> Module<T> {
 		<Balances<T>>::get((id, who))
 	}
 
-	// Get the total supply of an asset `id`
+	/// Get the total supply of an asset `id`.
 	pub fn total_supply(id: AssetId) -> T::Balance {
 		<TotalSupply<T>>::get(id)
 	}
