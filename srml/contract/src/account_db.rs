@@ -87,7 +87,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				let mut info = if !<AccountInfoOf<T>>::exists(&address) {
 					let info = AccountInfo {
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
-						current_mem_stored: 0,
+						storage_size: 0,
 					};
 					<AccountInfoOf<T>>::insert(&address, &info);
 					info
@@ -103,21 +103,21 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					}
 				}
 
-				let mut new_mem_stored = info.current_mem_stored;
+				let mut new_storage_size = info.storage_size;
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get::<Vec<u8>>(&info.trie_id[..], &k) {
-						new_mem_stored -= value.len() as u64;
+						new_storage_size -= value.len() as u64;
 					}
 					if let Some(value) = v {
-						new_mem_stored += value.len() as u64;
+						new_storage_size += value.len() as u64;
 						child::put_raw(&info.trie_id[..], &k, &value[..]);
 					} else {
 						child::kill(&info.trie_id[..], &k);
 					}
 				}
 
-				if new_mem_stored != info.current_mem_stored {
-					info.current_mem_stored = new_mem_stored;
+				if new_storage_size != info.storage_size {
+					info.storage_size = new_storage_size;
 					<AccountInfoOf<T>>::insert(&address, info);
 				}
 			}

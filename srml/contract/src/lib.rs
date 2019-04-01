@@ -128,7 +128,7 @@ pub struct AccountInfo {
 	/// unique ID for the subtree encoded as a byte
 	pub trie_id: TrieId,
 	/// the size of stored value in octet
-	pub current_mem_stored: u64,
+	pub storage_size: u64,
 }
 
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context)
