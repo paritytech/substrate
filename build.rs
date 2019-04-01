@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use vergen::{ConstantsFlags, generate_cargo_keys};
+use vergen::{generate_cargo_keys, ConstantsFlags};
 
 const ERROR_MSG: &str = "Failed to generate metadata files";
 
 fn main() {
-	generate_cargo_keys(ConstantsFlags::all()).expect(ERROR_MSG);
-	println!("cargo:rerun-if-changed=.git/HEAD");
+    generate_cargo_keys(ConstantsFlags::all()).expect(ERROR_MSG);
+    println!("cargo:rerun-if-changed=.git/HEAD");
 }

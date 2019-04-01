@@ -18,62 +18,72 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header}};
+use crate::{GenesisConfig, Module, RawLog, Trait};
+use parity_codec::{Decode, Encode};
 use primitives::generic::DigestItem as GenDigestItem;
+use primitives::{
+    testing::{Digest, DigestItem, Header},
+    traits::IdentityLookup,
+    BuildStorage,
+};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event};
-use substrate_primitives::{H256, Blake2Hasher};
-use parity_codec::{Encode, Decode};
-use crate::{GenesisConfig, Trait, Module, RawLog};
+use srml_support::{impl_outer_event, impl_outer_origin};
+use substrate_primitives::{Blake2Hasher, H256};
 
-impl_outer_origin!{
-	pub enum Origin for Test {}
+impl_outer_origin! {
+    pub enum Origin for Test {}
 }
 
 impl From<RawLog<u64, u64>> for DigestItem {
-	fn from(log: RawLog<u64, u64>) -> DigestItem {
-		GenDigestItem::Other(log.encode())
-	}
+    fn from(log: RawLog<u64, u64>) -> DigestItem {
+        GenDigestItem::Other(log.encode())
+    }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
 impl Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = u64;
-	type Event = TestEvent;
+    type Log = DigestItem;
+    type SessionKey = u64;
+    type Event = TestEvent;
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = TestEvent;
-	type Log = DigestItem;
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Hash = H256;
+    type Hashing = ::primitives::traits::BlakeTwo256;
+    type Digest = Digest;
+    type AccountId = u64;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = TestEvent;
+    type Log = DigestItem;
 }
 
 mod grandpa {
-	pub use crate::Event;
+    pub use crate::Event;
 }
 
-impl_outer_event!{
-	pub enum TestEvent for Test {
-		grandpa<T>,
-	}
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        grandpa<T>,
+    }
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(GenesisConfig::<Test> {
-		authorities,
-	}.build_storage().unwrap().0);
-	t.into()
+    let mut t = system::GenesisConfig::<Test>::default()
+        .build_storage()
+        .unwrap()
+        .0;
+    t.extend(
+        GenesisConfig::<Test> { authorities }
+            .build_storage()
+            .unwrap()
+            .0,
+    );
+    t.into()
 }
 
 pub type System = system::Module<Test>;

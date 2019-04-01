@@ -17,28 +17,27 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use log::{debug, warn, info};
-use parity_codec::Encode;
 use futures::prelude::*;
-use tokio::timer::Delay;
+use log::{debug, info, warn};
+use parity_codec::Encode;
 use parking_lot::RwLock;
+use tokio::timer::Delay;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+    backend::Backend, error::Error as ClientError, BlockchainEvents, CallExecutor, Client,
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
+    round::State as RoundState, voter, BlockNumberOps, Equivocation, Error as GrandpaError,
+    VoterSet,
 };
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
-};
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero};
+use substrate_primitives::{ed25519, Blake2Hasher, Pair, H256};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
-	Commit, Config, Error, Network, Precommit, Prevote,
-	CommandOrError, NewAuthoritySet, VoterCommand,
+    CommandOrError, Commit, Config, Error, Network, NewAuthoritySet, Precommit, Prevote,
+    VoterCommand,
 };
 
 use crate::authorities::SharedAuthoritySet;
@@ -53,348 +52,400 @@ pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
 
 /// A read-only view of the last completed round.
 pub(crate) struct LastCompletedRound<H, N> {
-	inner: RwLock<CompletedRound<H, N>>,
+    inner: RwLock<CompletedRound<H, N>>,
 }
 
 impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
-	/// Create a new tracker based on some starting last-completed round.
-	pub(crate) fn new(round: CompletedRound<H, N>) -> Self {
-		LastCompletedRound { inner: RwLock::new(round) }
-	}
+    /// Create a new tracker based on some starting last-completed round.
+    pub(crate) fn new(round: CompletedRound<H, N>) -> Self {
+        LastCompletedRound {
+            inner: RwLock::new(round),
+        }
+    }
 
-	/// Read the last completed round.
-	pub(crate) fn read(&self) -> CompletedRound<H, N> {
-		self.inner.read().clone()
-	}
+    /// Read the last completed round.
+    pub(crate) fn read(&self) -> CompletedRound<H, N> {
+        self.inner.read().clone()
+    }
 
-	// NOTE: not exposed outside of this module intentionally.
-	fn with<F, R>(&self, f: F) -> R
-		where F: FnOnce(&mut CompletedRound<H, N>) -> R
-	{
-		f(&mut *self.inner.write())
-	}
+    // NOTE: not exposed outside of this module intentionally.
+    fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut CompletedRound<H, N>) -> R,
+    {
+        f(&mut *self.inner.write())
+    }
 }
 
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
-	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
-	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
-	pub(crate) config: Config,
-	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) network: N,
-	pub(crate) set_id: u64,
-	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
+    pub(crate) inner: Arc<Client<B, E, Block, RA>>,
+    pub(crate) voters: Arc<VoterSet<AuthorityId>>,
+    pub(crate) config: Config,
+    pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+    pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
+    pub(crate) network: N,
+    pub(crate) set_id: u64,
+    pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
-	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	N: Network<Block> + 'static,
-	N::In: 'static,
-	NumberFor<Block>: BlockNumberOps,
+impl<Block: BlockT<Hash = H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>>
+    for Environment<B, E, Block, N, RA>
+where
+    Block: 'static,
+    B: Backend<Block, Blake2Hasher> + 'static,
+    E: CallExecutor<Block, Blake2Hasher> + 'static,
+    N: Network<Block> + 'static,
+    N::In: 'static,
+    NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-		if base == block { return Err(GrandpaError::NotDescendent) }
+    fn ancestry(
+        &self,
+        base: Block::Hash,
+        block: Block::Hash,
+    ) -> Result<Vec<Block::Hash>, GrandpaError> {
+        if base == block {
+            return Err(GrandpaError::NotDescendent);
+        }
 
-		let tree_route_res = ::client::blockchain::tree_route(
-			self.inner.backend().blockchain(),
-			BlockId::Hash(block),
-			BlockId::Hash(base),
-		);
+        let tree_route_res = ::client::blockchain::tree_route(
+            self.inner.backend().blockchain(),
+            BlockId::Hash(block),
+            BlockId::Hash(base),
+        );
 
-		let tree_route = match tree_route_res {
-			Ok(tree_route) => tree_route,
-			Err(e) => {
-				debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
+        let tree_route = match tree_route_res {
+            Ok(tree_route) => tree_route,
+            Err(e) => {
+                debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
 					block, base, e);
 
-				return Err(GrandpaError::NotDescendent);
-			}
-		};
+                return Err(GrandpaError::NotDescendent);
+            }
+        };
 
-		if tree_route.common_block().hash != base {
-			return Err(GrandpaError::NotDescendent);
-		}
+        if tree_route.common_block().hash != base {
+            return Err(GrandpaError::NotDescendent);
+        }
 
-		// skip one because our ancestry is meant to start from the parent of `block`,
-		// and `tree_route` includes it.
-		Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
-	}
+        // skip one because our ancestry is meant to start from the parent of `block`,
+        // and `tree_route` includes it.
+        Ok(tree_route
+            .retracted()
+            .iter()
+            .skip(1)
+            .map(|e| e.hash)
+            .collect())
+    }
 
-	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-		// NOTE: when we finalize an authority set change through the sync protocol the voter is
-		//       signaled asynchronously. therefore the voter could still vote in the next round
-		//       before activating the new set. the `authority_set` is updated immediately thus we
-		//       restrict the voter based on that.
-		if self.set_id != self.authority_set.inner().read().current().0 {
-			return None;
-		}
+    fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+        // NOTE: when we finalize an authority set change through the sync protocol the voter is
+        //       signaled asynchronously. therefore the voter could still vote in the next round
+        //       before activating the new set. the `authority_set` is updated immediately thus we
+        //       restrict the voter based on that.
+        if self.set_id != self.authority_set.inner().read().current().0 {
+            return None;
+        }
 
-		// we refuse to vote beyond the current limit number where transitions are scheduled to
-		// occur.
-		// once blocks are finalized that make that transition irrelevant or activate it,
-		// we will proceed onwards. most of the time there will be no pending transition.
-		let limit = self.authority_set.current_limit();
-		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+        // we refuse to vote beyond the current limit number where transitions are scheduled to
+        // occur.
+        // once blocks are finalized that make that transition irrelevant or activate it,
+        // we will proceed onwards. most of the time there will be no pending transition.
+        let limit = self.authority_set.current_limit();
+        debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
-		match self.inner.best_containing(block, None) {
-			Ok(Some(mut best_hash)) => {
-				let base_header = self.inner.header(&BlockId::Hash(block)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
+        match self.inner.best_containing(block, None) {
+            Ok(Some(mut best_hash)) => {
+                let base_header = self
+                    .inner
+                    .header(&BlockId::Hash(block))
+                    .ok()?
+                    .expect("Header known to exist after `best_containing` call; qed");
 
-				if let Some(limit) = limit {
-					// this is a rare case which might cause issues,
-					// might be better to return the header itself.
-					if *base_header.number() > limit {
-						debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
-							block,
-							limit,
-						);
-						return None;
-					}
-				}
+                if let Some(limit) = limit {
+                    // this is a rare case which might cause issues,
+                    // might be better to return the header itself.
+                    if *base_header.number() > limit {
+                        debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
+                            block,
+                            limit,
+                        );
+                        return None;
+                    }
+                }
 
-				let mut best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
-					.expect("Header known to exist after `best_containing` call; qed");
+                let mut best_header = self
+                    .inner
+                    .header(&BlockId::Hash(best_hash))
+                    .ok()?
+                    .expect("Header known to exist after `best_containing` call; qed");
 
-				// we target a vote towards 3/4 of the unfinalized chain (rounding up)
-				let target = {
-					let two = NumberFor::<Block>::one() + One::one();
-					let three = two + One::one();
-					let four = three + One::one();
+                // we target a vote towards 3/4 of the unfinalized chain (rounding up)
+                let target = {
+                    let two = NumberFor::<Block>::one() + One::one();
+                    let three = two + One::one();
+                    let four = three + One::one();
 
-					let diff = *best_header.number() - *base_header.number();
-					let diff = ((diff * three) + two) / four;
+                    let diff = *best_header.number() - *base_header.number();
+                    let diff = ((diff * three) + two) / four;
 
-					*base_header.number() + diff
-				};
+                    *base_header.number() + diff
+                };
 
-				// unless our vote is currently being limited due to a pending change
-				let target = limit.map(|limit| limit.min(target)).unwrap_or(target);
+                // unless our vote is currently being limited due to a pending change
+                let target = limit.map(|limit| limit.min(target)).unwrap_or(target);
 
-				// walk backwards until we find the target block
-				loop {
-					if *best_header.number() < target { unreachable!(); }
-					if *best_header.number() == target {
-						return Some((best_hash, *best_header.number()));
-					}
+                // walk backwards until we find the target block
+                loop {
+                    if *best_header.number() < target {
+                        unreachable!();
+                    }
+                    if *best_header.number() == target {
+                        return Some((best_hash, *best_header.number()));
+                    }
 
-					best_hash = *best_header.parent_hash();
-					best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
-						.expect("Header known to exist after `best_containing` call; qed");
-				}
-			},
-			Ok(None) => {
-				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
-				None
-			}
-			Err(e) => {
-				debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
-				None
-			}
-		}
-	}
+                    best_hash = *best_header.parent_hash();
+                    best_header = self
+                        .inner
+                        .header(&BlockId::Hash(best_hash))
+                        .ok()?
+                        .expect("Header known to exist after `best_containing` call; qed");
+                }
+            }
+            Ok(None) => {
+                debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
+                None
+            }
+            Err(e) => {
+                debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+                None
+            }
+        }
+    }
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
-	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network<Block> + 'static + Send,
-	N::In: 'static + Send,
-	RA: 'static + Send + Sync,
-	NumberFor<Block>: BlockNumberOps,
+impl<B, E, Block: BlockT<Hash = H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>>
+    for Environment<B, E, Block, N, RA>
+where
+    Block: 'static,
+    B: Backend<Block, Blake2Hasher> + 'static,
+    E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+    N: Network<Block> + 'static + Send,
+    N::In: 'static + Send,
+    RA: 'static + Send + Sync,
+    NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
-	type Id = AuthorityId;
-	type Signature = ed25519::Signature;
+    type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
+    type Id = AuthorityId;
+    type Signature = ed25519::Signature;
 
-	// regular round message streams
-	type In = Box<dyn Stream<
-		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
-		Error = Self::Error,
-	> + Send>;
-	type Out = Box<dyn Sink<
-		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
-		SinkError = Self::Error,
-	> + Send>;
+    // regular round message streams
+    type In = Box<
+        dyn Stream<
+                Item = ::grandpa::SignedMessage<
+                    Block::Hash,
+                    NumberFor<Block>,
+                    Self::Signature,
+                    Self::Id,
+                >,
+                Error = Self::Error,
+            > + Send,
+    >;
+    type Out = Box<
+        dyn Sink<
+                SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
+                SinkError = Self::Error,
+            > + Send,
+    >;
 
-	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
+    type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
-	fn round_data(
-		&self,
-		round: u64
-	) -> voter::RoundData<Self::Timer, Self::In, Self::Out> {
-		let now = Instant::now();
-		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
-		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
+    fn round_data(&self, round: u64) -> voter::RoundData<Self::Timer, Self::In, Self::Out> {
+        let now = Instant::now();
+        let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
+        let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let incoming = crate::communication::checked_message_stream::<Block, _>(
-			self.network.messages_for(round, self.set_id),
-			self.voters.clone(),
-		);
+        let incoming = crate::communication::checked_message_stream::<Block, _>(
+            self.network.messages_for(round, self.set_id),
+            self.voters.clone(),
+        );
 
-		let local_key = self.config.local_key.as_ref()
-			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+        let local_key = self
+            .config
+            .local_key
+            .as_ref()
+            .filter(|pair| self.voters.contains_key(&pair.public().into()));
 
-		let (out_rx, outgoing) = crate::communication::outgoing_messages::<Block, _>(
-			round,
-			self.set_id,
-			local_key.cloned(),
-			self.voters.clone(),
-			self.network.clone(),
-		);
+        let (out_rx, outgoing) = crate::communication::outgoing_messages::<Block, _>(
+            round,
+            self.set_id,
+            local_key.cloned(),
+            self.voters.clone(),
+            self.network.clone(),
+        );
 
-		// schedule incoming messages from the network to be held until
-		// corresponding blocks are imported.
-		let incoming = UntilVoteTargetImported::new(
-			self.inner.import_notification_stream(),
-			self.inner.clone(),
-			incoming,
-		);
+        // schedule incoming messages from the network to be held until
+        // corresponding blocks are imported.
+        let incoming = UntilVoteTargetImported::new(
+            self.inner.import_notification_stream(),
+            self.inner.clone(),
+            incoming,
+        );
 
-		// join incoming network messages with locally originating ones.
-		let incoming = Box::new(out_rx.select(incoming).map_err(Into::into));
+        // join incoming network messages with locally originating ones.
+        let incoming = Box::new(out_rx.select(incoming).map_err(Into::into));
 
-		// schedule network message cleanup when sink drops.
-		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
+        // schedule network message cleanup when sink drops.
+        let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
-		voter::RoundData {
-			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
-			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
-			incoming,
-			outgoing,
-		}
-	}
+        voter::RoundData {
+            prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
+            precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
+            incoming,
+            outgoing,
+        }
+    }
 
-	fn completed(&self, round: u64, state: RoundState<Block::Hash, NumberFor<Block>>) -> Result<(), Self::Error> {
-		debug!(
-			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
-			self.config.name(),
-			round,
-			self.set_id,
-			state.estimate.as_ref().map(|e| e.1),
-			state.finalized.as_ref().map(|e| e.1),
-		);
+    fn completed(
+        &self,
+        round: u64,
+        state: RoundState<Block::Hash, NumberFor<Block>>,
+    ) -> Result<(), Self::Error> {
+        debug!(
+            target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+            self.config.name(),
+            round,
+            self.set_id,
+            state.estimate.as_ref().map(|e| e.1),
+            state.finalized.as_ref().map(|e| e.1),
+        );
 
-		self.last_completed.with(|last_completed| {
-			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+        self.last_completed.with(|last_completed| {
+            let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
+            crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
-			*last_completed = (round, state); // after writing to DB successfully.
-			Ok(())
-		})
-	}
+            *last_completed = (round, state); // after writing to DB successfully.
+            Ok(())
+        })
+    }
 
-	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		use client::blockchain::HeaderBackend;
+    fn finalize_block(
+        &self,
+        hash: Block::Hash,
+        number: NumberFor<Block>,
+        round: u64,
+        commit: Commit<Block>,
+    ) -> Result<(), Self::Error> {
+        use client::blockchain::HeaderBackend;
 
-		let status = self.inner.backend().blockchain().info()?;
-		if number <= status.finalized_number && self.inner.backend().blockchain().hash(number)? == Some(hash) {
-			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
-			// the voter will be restarted at the median last finalized block, which can be lower than the local best
-			// finalized block.
-			warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
-				  hash,
-				  number,
-				  status.finalized_number,
-			);
+        let status = self.inner.backend().blockchain().info()?;
+        if number <= status.finalized_number
+            && self.inner.backend().blockchain().hash(number)? == Some(hash)
+        {
+            // This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
+            // the voter will be restarted at the median last finalized block, which can be lower than the local best
+            // finalized block.
+            warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
+                  hash,
+                  number,
+                  status.finalized_number,
+            );
 
-			return Ok(());
-		}
+            return Ok(());
+        }
 
-		finalize_block(
-			&*self.inner,
-			&self.authority_set,
-			&self.consensus_changes,
-			Some(As::sa(self.config.justification_period)),
-			hash,
-			number,
-			(round, commit).into(),
-		)
-	}
+        finalize_block(
+            &*self.inner,
+            &self.authority_set,
+            &self.consensus_changes,
+            Some(As::sa(self.config.justification_period)),
+            hash,
+            number,
+            (round, commit).into(),
+        )
+    }
 
-	fn round_commit_timer(&self) -> Self::Timer {
-		use rand::{thread_rng, Rng};
+    fn round_commit_timer(&self) -> Self::Timer {
+        use rand::{thread_rng, Rng};
 
-		//random between 0-1 seconds.
-		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(
-			Instant::now() + Duration::from_millis(delay)
-		).map_err(|e| Error::Timer(e).into()))
-	}
+        //random between 0-1 seconds.
+        let delay: u64 = thread_rng().gen_range(0, 1000);
+        Box::new(
+            Delay::new(Instant::now() + Duration::from_millis(delay))
+                .map_err(|e| Error::Timer(e).into()),
+        )
+    }
 
-	fn prevote_equivocation(
-		&self,
-		_round: u64,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
-	) {
-		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet; this could craft misbehavior reports of some kind.
-	}
+    fn prevote_equivocation(
+        &self,
+        _round: u64,
+        equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>,
+    ) {
+        warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+        // nothing yet; this could craft misbehavior reports of some kind.
+    }
 
-	fn precommit_equivocation(
-		&self,
-		_round: u64,
-		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
-	) {
-		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet
-	}
+    fn precommit_equivocation(
+        &self,
+        _round: u64,
+        equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>,
+    ) {
+        warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
+        // nothing yet
+    }
 }
 
 pub(crate) enum JustificationOrCommit<Block: BlockT> {
-	Justification(GrandpaJustification<Block>),
-	Commit((u64, Commit<Block>)),
+    Justification(GrandpaJustification<Block>),
+    Commit((u64, Commit<Block>)),
 }
 
 impl<Block: BlockT> From<(u64, Commit<Block>)> for JustificationOrCommit<Block> {
-	fn from(commit: (u64, Commit<Block>)) -> JustificationOrCommit<Block> {
-		JustificationOrCommit::Commit(commit)
-	}
+    fn from(commit: (u64, Commit<Block>)) -> JustificationOrCommit<Block> {
+        JustificationOrCommit::Commit(commit)
+    }
 }
 
 impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<Block> {
-	fn from(justification: GrandpaJustification<Block>) -> JustificationOrCommit<Block> {
-		JustificationOrCommit::Justification(justification)
-	}
+    fn from(justification: GrandpaJustification<Block>) -> JustificationOrCommit<Block> {
+        JustificationOrCommit::Justification(justification)
+    }
 }
 
 /// Finalize the given block and apply any authority set changes. If an
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
 /// This method assumes that the block being finalized has already been imported.
-pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
-	client: &Client<B, E, Block, RA>,
-	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	justification_period: Option<NumberFor<Block>>,
-	hash: Block::Hash,
-	number: NumberFor<Block>,
-	justification_or_commit: JustificationOrCommit<Block>,
-) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	RA: Send + Sync,
+pub(crate) fn finalize_block<B, Block: BlockT<Hash = H256>, E, RA>(
+    client: &Client<B, E, Block, RA>,
+    authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+    consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
+    justification_period: Option<NumberFor<Block>>,
+    hash: Block::Hash,
+    number: NumberFor<Block>,
+    justification_or_commit: JustificationOrCommit<Block>,
+) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
+where
+    B: Backend<Block, Blake2Hasher>,
+    E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+    RA: Send + Sync,
 {
-	// lock must be held through writing to DB to avoid race
-	let mut authority_set = authority_set.inner().write();
+    // lock must be held through writing to DB to avoid race
+    let mut authority_set = authority_set.inner().write();
 
-	// FIXME #1483: clone only when changed
-	let old_authority_set = authority_set.clone();
-	// holds the old consensus changes in case it is changed below, needed for
-	// reverting in case of failure
-	let mut old_consensus_changes = None;
+    // FIXME #1483: clone only when changed
+    let old_authority_set = authority_set.clone();
+    // holds the old consensus changes in case it is changed below, needed for
+    // reverting in case of failure
+    let mut old_consensus_changes = None;
 
-	let mut consensus_changes = consensus_changes.lock();
-	let canon_at_height = |canon_number| {
-		// "true" because the block is finalized
-		canonical_at_height(client, (hash, number), true, canon_number)
-	};
+    let mut consensus_changes = consensus_changes.lock();
+    let canon_at_height = |canon_number| {
+        // "true" because the block is finalized
+        canonical_at_height(client, (hash, number), true, canon_number)
+    };
 
-	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
+    let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
 		let status = authority_set.apply_standard_changes(
 			hash,
 			number,
@@ -517,70 +568,71 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		Ok(new_authorities.map(VoterCommand::ChangeAuthorities))
 	});
 
-	match update_res {
-		Ok(Some(command)) => Err(CommandOrError::VoterCommand(command)),
-		Ok(None) => Ok(()),
-		Err(e) => {
-			*authority_set = old_authority_set;
+    match update_res {
+        Ok(Some(command)) => Err(CommandOrError::VoterCommand(command)),
+        Ok(None) => Ok(()),
+        Err(e) => {
+            *authority_set = old_authority_set;
 
-			if let Some(old_consensus_changes) = old_consensus_changes {
-				*consensus_changes = old_consensus_changes;
-			}
+            if let Some(old_consensus_changes) = old_consensus_changes {
+                *consensus_changes = old_consensus_changes;
+            }
 
-			Err(CommandOrError::Error(e))
-		}
-	}
+            Err(CommandOrError::Error(e))
+        }
+    }
 }
 
 /// Using the given base get the block at the given height on this chain. The
 /// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &Client<B, E, Block, RA>,
-	base: (Block::Hash, NumberFor<Block>),
-	base_is_canonical: bool,
-	height: NumberFor<Block>,
-) -> Result<Option<Block::Hash>, ClientError> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash = H256>, RA>(
+    client: &Client<B, E, Block, RA>,
+    base: (Block::Hash, NumberFor<Block>),
+    base_is_canonical: bool,
+    height: NumberFor<Block>,
+) -> Result<Option<Block::Hash>, ClientError>
+where
+    B: Backend<Block, Blake2Hasher>,
+    E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 {
-	use runtime_primitives::traits::{One, Zero, BlockNumberToHash};
+    use runtime_primitives::traits::{BlockNumberToHash, One, Zero};
 
-	if height > base.1 {
-		return Ok(None);
-	}
+    if height > base.1 {
+        return Ok(None);
+    }
 
-	if height == base.1 {
-		if base_is_canonical {
-			return Ok(Some(base.0));
-		} else {
-			return Ok(client.block_number_to_hash(height));
-		}
-	} else if base_is_canonical {
-		return Ok(client.block_number_to_hash(height));
-	}
+    if height == base.1 {
+        if base_is_canonical {
+            return Ok(Some(base.0));
+        } else {
+            return Ok(client.block_number_to_hash(height));
+        }
+    } else if base_is_canonical {
+        return Ok(client.block_number_to_hash(height));
+    }
 
-	let one = NumberFor::<Block>::one();
+    let one = NumberFor::<Block>::one();
 
-	// start by getting _canonical_ block with number at parent position and then iterating
-	// backwards by hash.
-	let mut current = match client.header(&BlockId::Number(base.1 - one))? {
-		Some(header) => header,
-		_ => return Ok(None),
-	};
+    // start by getting _canonical_ block with number at parent position and then iterating
+    // backwards by hash.
+    let mut current = match client.header(&BlockId::Number(base.1 - one))? {
+        Some(header) => header,
+        _ => return Ok(None),
+    };
 
-	// we've already checked that base > height above.
-	let mut steps = base.1 - height - one;
+    // we've already checked that base > height above.
+    let mut steps = base.1 - height - one;
 
-	while steps > NumberFor::<Block>::zero() {
-		current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
-			Some(header) => header,
-			_ => return Ok(None),
-		};
+    while steps > NumberFor::<Block>::zero() {
+        current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
+            Some(header) => header,
+            _ => return Ok(None),
+        };
 
-		steps -= one;
-	}
+        steps -= one;
+    }
 
-	Ok(Some(current.hash()))
+    Ok(Some(current.hash()))
 }
 
 /// Returns a function for checking block ancestry, the returned function will
@@ -589,34 +641,39 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 /// represent the current block `hash` and its `parent hash`, if given the
 /// function that's returned will assume that `hash` isn't part of the local DB
 /// yet, and all searches in the DB will instead reference the parent.
-pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &'a Client<B, E, Block, RA>,
-	current: Option<(&'a H256, &'a H256)>,
+pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash = H256>, RA>(
+    client: &'a Client<B, E, Block, RA>,
+    current: Option<(&'a H256, &'a H256)>,
 ) -> impl Fn(&H256, &H256) -> Result<bool, client::error::Error> + 'a
-where B: Backend<Block, Blake2Hasher>,
-	  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+where
+    B: Backend<Block, Blake2Hasher>,
+    E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 {
-	move |base, hash| {
-		if base == hash { return Ok(false); }
+    move |base, hash| {
+        if base == hash {
+            return Ok(false);
+        }
 
-		let mut hash = hash;
-		if let Some((current_hash, current_parent_hash)) = current {
-			if base == current_hash { return Ok(false); }
-			if hash == current_hash {
-				if base == current_parent_hash {
-					return Ok(true);
-				} else {
-					hash = current_parent_hash;
-				}
-			}
-		}
+        let mut hash = hash;
+        if let Some((current_hash, current_parent_hash)) = current {
+            if base == current_hash {
+                return Ok(false);
+            }
+            if hash == current_hash {
+                if base == current_parent_hash {
+                    return Ok(true);
+                } else {
+                    hash = current_parent_hash;
+                }
+            }
+        }
 
-		let tree_route = client::blockchain::tree_route(
-			client.backend().blockchain(),
-			BlockId::Hash(*hash),
-			BlockId::Hash(*base),
-		)?;
+        let tree_route = client::blockchain::tree_route(
+            client.backend().blockchain(),
+            BlockId::Hash(*hash),
+            BlockId::Hash(*base),
+        )?;
 
-		Ok(tree_route.common_block().hash == *base)
-	}
+        Ok(tree_route.common_block().hash == *base)
+    }
 }

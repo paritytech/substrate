@@ -18,14 +18,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use substrate_client::decl_runtime_apis;
-use runtime_primitives::traits::AuthorityIdFor;
 use rstd::vec::Vec;
+use runtime_primitives::traits::AuthorityIdFor;
+use substrate_client::decl_runtime_apis;
 
 decl_runtime_apis! {
-	/// Authorities API.
-	pub trait AuthoritiesApi {
-		/// Returns the authorities at the given block.
-		fn authorities() -> Vec<AuthorityIdFor<Block>>;
-	}
+    /// Authorities API.
+    pub trait AuthoritiesApi {
+        /// Returns the authorities at the given block.
+        fn authorities() -> Vec<AuthorityIdFor<Block>>;
+    }
 }

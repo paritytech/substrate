@@ -16,57 +16,80 @@
 
 //! Tool for creating the genesis block.
 
-use std::collections::HashMap;
-use runtime_io::twox_128;
 use super::AccountId;
-use parity_codec::{Encode, KeyedVec, Joiner};
-use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
-use runtime_primitives::traits::Block;
+use parity_codec::{Encode, Joiner, KeyedVec};
 use primitives::ed25519::Public as AuthorityId;
+use primitives::{map, storage::well_known_keys, ChangesTrieConfiguration};
+use runtime_io::twox_128;
+use runtime_primitives::traits::Block;
+use std::collections::HashMap;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
-	pub changes_trie_config: Option<ChangesTrieConfiguration>,
-	pub authorities: Vec<AuthorityId>,
-	pub balances: Vec<(AccountId, u64)>,
+    pub changes_trie_config: Option<ChangesTrieConfiguration>,
+    pub authorities: Vec<AuthorityId>,
+    pub balances: Vec<(AccountId, u64)>,
 }
 
 impl GenesisConfig {
-	pub fn new(support_changes_trie: bool, authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, balance: u64) -> Self {
-		GenesisConfig {
-			changes_trie_config: match support_changes_trie {
-				true => Some(super::changes_trie_config()),
-				false => None,
-			},
-			authorities: authorities.clone(),
-			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
-		}
-	}
+    pub fn new(
+        support_changes_trie: bool,
+        authorities: Vec<AuthorityId>,
+        endowed_accounts: Vec<AccountId>,
+        balance: u64,
+    ) -> Self {
+        GenesisConfig {
+            changes_trie_config: match support_changes_trie {
+                true => Some(super::changes_trie_config()),
+                false => None,
+            },
+            authorities: authorities.clone(),
+            balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
+        }
+    }
 
-	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
-		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm").to_vec();
-		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
-			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
-			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
-			.chain(vec![
-				(well_known_keys::CODE.into(), wasm_runtime),
-				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
-				(well_known_keys::AUTHORITY_COUNT.into(), vec![].and(&(self.authorities.len() as u32))),
-			].into_iter())
-			.chain(self.authorities.iter()
-				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), vec![].and(account)))
-			)
-			.collect();
-		if let Some(ref changes_trie_config) = self.changes_trie_config {
-			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
-		}
-		map
-	}
+    pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
+        let wasm_runtime = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"
+        )
+        .to_vec();
+        let mut map: HashMap<Vec<u8>, Vec<u8>> = self
+            .balances
+            .iter()
+            .map(|&(ref account, balance)| {
+                (account.to_keyed_vec(b"balance:"), vec![].and(&balance))
+            })
+            .map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
+            .chain(
+                vec![
+                    (well_known_keys::CODE.into(), wasm_runtime),
+                    (well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
+                    (
+                        well_known_keys::AUTHORITY_COUNT.into(),
+                        vec![].and(&(self.authorities.len() as u32)),
+                    ),
+                ]
+                .into_iter(),
+            )
+            .chain(self.authorities.iter().enumerate().map(|(i, account)| {
+                (
+                    (i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX),
+                    vec![].and(account),
+                )
+            }))
+            .collect();
+        if let Some(ref changes_trie_config) = self.changes_trie_config {
+            map.insert(
+                well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+                changes_trie_config.encode(),
+            );
+        }
+        map
+    }
 }
 
 pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {
-	map![
-		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
-	]
+    map![
+        twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
+    ]
 }

@@ -21,10 +21,10 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 
-mod impl_runtime_apis;
-mod decl_runtime_apis;
-mod utils;
 mod compile_fail_tests;
+mod decl_runtime_apis;
+mod impl_runtime_apis;
+mod utils;
 
 /// Tags given trait implementations as runtime apis.
 ///
@@ -110,7 +110,7 @@ mod compile_fail_tests;
 /// ```
 #[proc_macro]
 pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
-	impl_runtime_apis::impl_runtime_apis_impl(input)
+    impl_runtime_apis::impl_runtime_apis_impl(input)
 }
 
 /// Declares given traits as runtime apis.
@@ -191,5 +191,5 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 /// check if the runtime at the given block id implements the requested runtime api trait.
 #[proc_macro]
 pub fn decl_runtime_apis(input: TokenStream) -> TokenStream {
-	decl_runtime_apis::decl_runtime_apis_impl(input)
+    decl_runtime_apis::decl_runtime_apis_impl(input)
 }

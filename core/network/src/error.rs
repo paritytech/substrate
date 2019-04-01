@@ -20,19 +20,19 @@
 // https://github.com/paritytech/substrate/issues/1547
 #![allow(deprecated)]
 
+use client;
 use error_chain::*;
 use std::io::Error as IoError;
-use client;
 
 error_chain! {
-	foreign_links {
-		Io(IoError) #[doc = "IO error."];
-	}
+    foreign_links {
+        Io(IoError) #[doc = "IO error."];
+    }
 
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-	}
+    links {
+        Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
+    }
 
-	errors {
-	}
+    errors {
+    }
 }

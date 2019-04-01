@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 criterion_group!(benches, benchmark);
 criterion_main!(benches);
 
 fn benchmark(c: &mut Criterion) {
-	trie_bench::standard_benchmark::<
-		substrate_primitives::Blake2Hasher,
-		substrate_trie::NodeCodec<substrate_primitives::Blake2Hasher>,
-		substrate_trie::TrieStream,
-	>(c, "substrate-blake2");
-	trie_bench::standard_benchmark::<
-		keccak_hasher::KeccakHasher,
-		substrate_trie::NodeCodec<keccak_hasher::KeccakHasher>,
-		substrate_trie::TrieStream,
-	>(c, "substrate-keccak");
+    trie_bench::standard_benchmark::<
+        substrate_primitives::Blake2Hasher,
+        substrate_trie::NodeCodec<substrate_primitives::Blake2Hasher>,
+        substrate_trie::TrieStream,
+    >(c, "substrate-blake2");
+    trie_bench::standard_benchmark::<
+        keccak_hasher::KeccakHasher,
+        substrate_trie::NodeCodec<keccak_hasher::KeccakHasher>,
+        substrate_trie::TrieStream,
+    >(c, "substrate-keccak");
 }

@@ -19,10 +19,10 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyword_impl};
+use srml_support_procedural_tools::{custom_keyword, custom_keyword_impl, Parse, ToTokens};
 
-use syn::{Ident, Token};
 use syn::token::CustomKeyword;
+use syn::{Ident, Token};
 
 mod impls;
 
@@ -31,148 +31,147 @@ pub mod transformation;
 /// Parsing usage only
 #[derive(Parse, ToTokens, Debug)]
 struct StorageDefinition {
-	pub hidden_crate: Option<SpecificHiddenCrate>,
-	pub visibility: syn::Visibility,
-	pub trait_token: Token![trait],
-	pub ident: Ident,
-	pub for_token: Token![for],
-	pub module_ident: Ident,
-	pub mod_lt_token: Token![<],
-	pub mod_param: syn::GenericParam,
-	pub mod_instance_param_token: Option<Token![,]>,
-	pub mod_instance: Option<syn::Ident>,
-	pub mod_instantiable_token: Option<Token![:]>,
-	pub mod_instantiable: Option<syn::Ident>,
-	pub mod_default_instance_token: Option<Token![=]>,
-	pub mod_default_instance: Option<syn::Ident>,
-	pub mod_gt_token: Token![>],
-	pub as_token: Token![as],
-	pub crate_ident: Ident,
-	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
-	pub extra_genesis: Option<AddExtraGenesis>,
-	pub extra_genesis_skip_phantom_data_field: Option<ExtraGenesisSkipPhantomDataField>,
+    pub hidden_crate: Option<SpecificHiddenCrate>,
+    pub visibility: syn::Visibility,
+    pub trait_token: Token![trait],
+    pub ident: Ident,
+    pub for_token: Token![for],
+    pub module_ident: Ident,
+    pub mod_lt_token: Token![<],
+    pub mod_param: syn::GenericParam,
+    pub mod_instance_param_token: Option<Token![,]>,
+    pub mod_instance: Option<syn::Ident>,
+    pub mod_instantiable_token: Option<Token![:]>,
+    pub mod_instantiable: Option<syn::Ident>,
+    pub mod_default_instance_token: Option<Token![=]>,
+    pub mod_default_instance: Option<syn::Ident>,
+    pub mod_gt_token: Token![>],
+    pub as_token: Token![as],
+    pub crate_ident: Ident,
+    pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
+    pub extra_genesis: Option<AddExtraGenesis>,
+    pub extra_genesis_skip_phantom_data_field: Option<ExtraGenesisSkipPhantomDataField>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct SpecificHiddenCrate {
-	pub keyword: ext::CustomToken<SpecificHiddenCrate>,
-	pub ident: ext::Parens<Ident>,
+    pub keyword: ext::CustomToken<SpecificHiddenCrate>,
+    pub ident: ext::Parens<Ident>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesis {
-	pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
-	pub content: ext::Braces<AddExtraGenesisContent>,
+    pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
+    pub content: ext::Braces<AddExtraGenesisContent>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct ExtraGenesisSkipPhantomDataField {
-	pub genesis_phantom_keyword: ext::CustomToken<ExtraGenesisSkipPhantomDataField>,
-	pub token: Token![;],
+    pub genesis_phantom_keyword: ext::CustomToken<ExtraGenesisSkipPhantomDataField>,
+    pub token: Token![;],
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisContent {
-	pub lines: ext::Punctuated<AddExtraGenesisLineEnum, Token![;]>,
+    pub lines: ext::Punctuated<AddExtraGenesisLineEnum, Token![;]>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 enum AddExtraGenesisLineEnum {
-	AddExtraGenesisLine(AddExtraGenesisLine),
-	AddExtraGenesisBuild(DeclStorageBuild),
+    AddExtraGenesisLine(AddExtraGenesisLine),
+    AddExtraGenesisBuild(DeclStorageBuild),
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisLine {
-	pub attrs: ext::OuterAttributes,
-	pub config_keyword: ext::CustomToken<ConfigKeyword>,
-	pub extra_field: ext::Parens<Ident>,
-	pub coldot_token: Token![:],
-	pub extra_type: syn::Type,
-	pub default_value: ext::Opt<DeclStorageDefault>,
+    pub attrs: ext::OuterAttributes,
+    pub config_keyword: ext::CustomToken<ConfigKeyword>,
+    pub extra_field: ext::Parens<Ident>,
+    pub coldot_token: Token![:],
+    pub extra_type: syn::Type,
+    pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLine {
-	// attrs (main use case is doc)
-	pub attrs: ext::OuterAttributes,
-	// visibility (no need to make optional
-	pub visibility: syn::Visibility,
-	// name
-	pub name: Ident,
-	pub getter: Option<DeclStorageGetter>,
-	pub config: Option<DeclStorageConfig>,
-	pub build: Option<DeclStorageBuild>,
-	pub coldot_token: Token![:],
-	pub storage_type: DeclStorageType,
-	pub default_value: ext::Opt<DeclStorageDefault>,
+    // attrs (main use case is doc)
+    pub attrs: ext::OuterAttributes,
+    // visibility (no need to make optional
+    pub visibility: syn::Visibility,
+    // name
+    pub name: Ident,
+    pub getter: Option<DeclStorageGetter>,
+    pub config: Option<DeclStorageConfig>,
+    pub build: Option<DeclStorageBuild>,
+    pub coldot_token: Token![:],
+    pub storage_type: DeclStorageType,
+    pub default_value: ext::Opt<DeclStorageDefault>,
 }
-
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageGetter {
-	pub getter_keyword: ext::CustomToken<DeclStorageGetter>,
-	pub getfn: ext::Parens<Ident>,
+    pub getter_keyword: ext::CustomToken<DeclStorageGetter>,
+    pub getfn: ext::Parens<Ident>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageConfig {
-	pub config_keyword: ext::CustomToken<DeclStorageConfig>,
-	pub expr: ext::Parens<Option<syn::Ident>>,
+    pub config_keyword: ext::CustomToken<DeclStorageConfig>,
+    pub expr: ext::Parens<Option<syn::Ident>>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageBuild {
-	pub build_keyword: ext::CustomToken<DeclStorageBuild>,
-	pub expr: ext::Parens<syn::Expr>,
+    pub build_keyword: ext::CustomToken<DeclStorageBuild>,
+    pub expr: ext::Parens<syn::Expr>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 enum DeclStorageType {
-	Map(DeclStorageMap),
-	LinkedMap(DeclStorageLinkedMap),
-	DoubleMap(DeclStorageDoubleMap),
-	Simple(syn::Type),
+    Map(DeclStorageMap),
+    LinkedMap(DeclStorageLinkedMap),
+    DoubleMap(DeclStorageDoubleMap),
+    Simple(syn::Type),
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
-	pub map_keyword: ext::CustomToken<MapKeyword>,
-	pub key: syn::Type,
-	pub ass_keyword: Token![=>],
-	pub value: syn::Type,
+    pub map_keyword: ext::CustomToken<MapKeyword>,
+    pub key: syn::Type,
+    pub ass_keyword: Token![=>],
+    pub value: syn::Type,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLinkedMap {
-	pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
-	pub key: syn::Type,
-	pub ass_keyword: Token![=>],
-	pub value: syn::Type,
+    pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
+    pub key: syn::Type,
+    pub ass_keyword: Token![=>],
+    pub value: syn::Type,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDoubleMap {
-	pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
-	pub key1: syn::Type,
-	pub comma_keyword: Token![,],
-	pub key2_hasher: DeclStorageDoubleMapHasher,
-	pub key2: ext::Parens<syn::Type>,
-	pub ass_keyword: Token![=>],
-	pub value: syn::Type,
+    pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
+    pub key1: syn::Type,
+    pub comma_keyword: Token![,],
+    pub key2_hasher: DeclStorageDoubleMapHasher,
+    pub key2: ext::Parens<syn::Type>,
+    pub ass_keyword: Token![=>],
+    pub value: syn::Type,
 }
 
 #[derive(Parse, ToTokens, Debug)]
 enum DeclStorageDoubleMapHasher {
-	Blake2_256(ext::CustomToken<Blake2_256Keyword>),
-	Twox256(ext::CustomToken<Twox256Keyword>),
-	Twox128(ext::CustomToken<Twox128Keyword>),
+    Blake2_256(ext::CustomToken<Blake2_256Keyword>),
+    Twox256(ext::CustomToken<Twox256Keyword>),
+    Twox128(ext::CustomToken<Twox128Keyword>),
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
-	pub equal_token: Token![=],
-	pub expr: syn::Expr,
+    pub equal_token: Token![=],
+    pub expr: syn::Expr,
 }
 
 custom_keyword_impl!(SpecificHiddenCrate, "hiddencrate", "hiddencrate as keyword");
@@ -180,7 +179,11 @@ custom_keyword_impl!(DeclStorageConfig, "config", "build as keyword");
 custom_keyword!(ConfigKeyword, "config", "config as keyword");
 custom_keyword!(BuildKeyword, "build", "build as keyword");
 custom_keyword_impl!(DeclStorageBuild, "build", "storage build config");
-custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis");
+custom_keyword_impl!(
+    AddExtraGenesis,
+    "add_extra_genesis",
+    "storage extra genesis"
+);
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
@@ -188,4 +191,8 @@ custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
 custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
 custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
 custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");
-custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
+custom_keyword_impl!(
+    ExtraGenesisSkipPhantomDataField,
+    "extra_genesis_skip_phantom_data_field",
+    "extra_genesis_skip_phantom_data_field as keyword"
+);

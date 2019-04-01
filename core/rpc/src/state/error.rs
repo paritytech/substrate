@@ -14,35 +14,35 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use error_chain::*;
-use client;
-use crate::rpc;
 use crate::errors;
+use crate::rpc;
+use client;
+use error_chain::*;
 
 error_chain! {
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
-	}
+    links {
+        Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+    }
 
-	errors {
-		/// Provided block range couldn't be resolved to a list of blocks.
-		InvalidBlockRange(from: String, to: String, details: String) {
-			description("Invalid block range"),
-			display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
-		}
-		/// Not implemented yet
-		Unimplemented {
-			description("not implemented yet"),
-			display("Method Not Implemented"),
-		}
-	}
+    errors {
+        /// Provided block range couldn't be resolved to a list of blocks.
+        InvalidBlockRange(from: String, to: String, details: String) {
+            description("Invalid block range"),
+            display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
+        }
+        /// Not implemented yet
+        Unimplemented {
+            description("not implemented yet"),
+            display("Method Not Implemented"),
+        }
+    }
 }
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
-			e => errors::internal(e),
-		}
-	}
+    fn from(e: Error) -> Self {
+        match e {
+            Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+            e => errors::internal(e),
+        }
+    }
 }

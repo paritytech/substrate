@@ -16,35 +16,35 @@
 
 //! Authoring RPC module errors.
 
-use error_chain::*;
-use client;
-use transaction_pool::txpool;
 use crate::rpc;
+use client;
+use error_chain::*;
+use transaction_pool::txpool;
 
 use crate::errors;
 
 error_chain! {
-	links {
-		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
-	}
-	errors {
-		/// Not implemented yet
-		Unimplemented {
-			description("not yet implemented"),
-			display("Method Not Implemented"),
-		}
-		/// Incorrect extrinsic format.
-		BadFormat {
-			description("bad format"),
-			display("Invalid extrinsic format"),
-		}
-		/// Verification error
-		Verification(e: Box<::std::error::Error + Send>) {
-			description("extrinsic verification error"),
-			display("Extrinsic verification error: {}", e.description()),
-		}
-	}
+    links {
+        Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+        Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+    }
+    errors {
+        /// Not implemented yet
+        Unimplemented {
+            description("not yet implemented"),
+            display("Method Not Implemented"),
+        }
+        /// Incorrect extrinsic format.
+        BadFormat {
+            description("bad format"),
+            display("Invalid extrinsic format"),
+        }
+        /// Verification error
+        Verification(e: Box<::std::error::Error + Send>) {
+            description("extrinsic verification error"),
+            display("Extrinsic verification error: {}", e.description()),
+        }
+    }
 }
 
 /// Base code for all authorship errors.
@@ -70,8 +70,8 @@ const POOL_CYCLE_DETECTED: i64 = POOL_INVALID_TX + 5;
 const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
+    fn from(e: Error) -> Self {
+        match e {
 			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
 			Error(ErrorKind::BadFormat, _) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BAD_FORMAT),
@@ -120,5 +120,5 @@ impl From<Error> for rpc::Error {
 			},
 			e => errors::internal(e),
 		}
-	}
+    }
 }

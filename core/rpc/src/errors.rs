@@ -18,18 +18,18 @@ use crate::rpc;
 use log::warn;
 
 pub fn unimplemented() -> rpc::Error {
-	rpc::Error {
-		code: rpc::ErrorCode::ServerError(1),
-		message: "Not implemented yet".into(),
-		data: None,
-	}
+    rpc::Error {
+        code: rpc::ErrorCode::ServerError(1),
+        message: "Not implemented yet".into(),
+        data: None,
+    }
 }
 
 pub fn internal<E: ::std::fmt::Debug>(e: E) -> rpc::Error {
-	warn!("Unknown error: {:?}", e);
-	rpc::Error {
-		code: rpc::ErrorCode::InternalError,
-		message: "Unknown error occured".into(),
-		data: Some(format!("{:?}", e).into()),
-	}
+    warn!("Unknown error: {:?}", e);
+    rpc::Error {
+        code: rpc::ErrorCode::InternalError,
+        message: "Unknown error occured".into(),
+        data: Some(format!("{:?}", e).into()),
+    }
 }

@@ -18,45 +18,60 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
-use srml_support::impl_outer_origin;
+use crate::{GenesisConfig, Module, Trait};
+use primitives::{
+    testing::{Digest, DigestItem, Header, UintAuthorityId},
+    traits::IdentityLookup,
+    BuildStorage,
+};
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher};
-use crate::{GenesisConfig, Trait, Module};
+use srml_support::impl_outer_origin;
+use substrate_primitives::{Blake2Hasher, H256};
 
-impl_outer_origin!{
-	pub enum Origin for Test {}
+impl_outer_origin! {
+    pub enum Origin for Test {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = crate::InstantFinalityReportVec<()>;
+    type Log = DigestItem;
+    type SessionKey = UintAuthorityId;
+    type InherentOfflineReport = crate::InstantFinalityReportVec<()>;
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = ();
-	type Log = DigestItem;
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Hash = H256;
+    type Hashing = ::primitives::traits::BlakeTwo256;
+    type Digest = Digest;
+    type AccountId = u64;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = ();
+    type Log = DigestItem;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(GenesisConfig::<Test>{
-		code: vec![],
-		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().0);
-	t.into()
+    let mut t = system::GenesisConfig::<Test>::default()
+        .build_storage()
+        .unwrap()
+        .0;
+    t.extend(
+        GenesisConfig::<Test> {
+            code: vec![],
+            authorities: authorities
+                .into_iter()
+                .map(|a| UintAuthorityId(a))
+                .collect(),
+        }
+        .build_storage()
+        .unwrap()
+        .0,
+    );
+    t.into()
 }
 
 pub type System = system::Module<Test>;

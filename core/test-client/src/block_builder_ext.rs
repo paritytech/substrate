@@ -16,30 +16,31 @@
 
 //! Block Builder extensions for tests.
 
-use client;
 use super::AccountKeyring;
+use client;
+use client::block_builder::api::BlockBuilder;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
-use client::block_builder::api::BlockBuilder;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
-	/// Add transfer extrinsic to the block.
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
+    /// Add transfer extrinsic to the block.
+    fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
-	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
-	A::Api: BlockBuilder<runtime::Block>
+impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A>
+where
+    A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
+    A::Api: BlockBuilder<runtime::Block>,
 {
-	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
-		self.push(sign_tx(transfer))
-	}
+    fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
+        self.push(sign_tx(transfer))
+    }
 }
 
 fn sign_tx(transfer: runtime::Transfer) -> runtime::Extrinsic {
-	let signature = AccountKeyring::from_public(&transfer.from)
-		.unwrap()
-		.sign(&parity_codec::Encode::encode(&transfer));
-	runtime::Extrinsic::Transfer(transfer, signature)
+    let signature = AccountKeyring::from_public(&transfer.from)
+        .unwrap()
+        .sign(&parity_codec::Encode::encode(&transfer));
+    runtime::Extrinsic::Transfer(transfer, signature)
 }

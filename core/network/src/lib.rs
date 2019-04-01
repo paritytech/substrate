@@ -24,32 +24,32 @@ mod service;
 mod sync;
 #[macro_use]
 mod protocol;
-mod chain;
 mod blocks;
-mod on_demand;
-mod util;
+mod chain;
 pub mod config;
 pub mod consensus_gossip;
 pub mod error;
 pub mod message;
+mod on_demand;
 pub mod specialization;
+mod util;
 
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test;
 
 pub use chain::Client as ClientHandle;
-pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg, SyncProvider, ExHashT};
-pub use protocol::{ProtocolStatus, PeerInfo, Context};
-pub use sync::{Status as SyncStatus, SyncState};
-pub use network_libp2p::{
-	identity, multiaddr,
-	ProtocolId, Severity, Multiaddr,
-	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
-	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
-	build_multiaddr, PeerId, PublicKey
-};
-pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
+pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
+pub use network_libp2p::{
+    build_multiaddr, identity, multiaddr, Ed25519Secret, Multiaddr, NetworkState,
+    NetworkStateNotConnectedPeer, NetworkStatePeer, NetworkStatePeerEndpoint, NodeKeyConfig,
+    PeerId, ProtocolId, PublicKey, Secp256k1Secret, Secret, Severity,
+};
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
+pub use protocol::{Context, PeerInfo, ProtocolStatus};
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;
+pub use service::{
+    ExHashT, FetchFuture, ManageNetwork, NetworkMsg, Service, SyncProvider, TransactionPool,
+};
+pub use sync::{Status as SyncStatus, SyncState};

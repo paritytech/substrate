@@ -34,6 +34,9 @@ pub mod base_pool;
 pub mod error;
 pub mod watcher;
 
+pub use self::base_pool::{Status, Transaction};
 pub use self::error::IntoPoolError;
-pub use self::base_pool::{Transaction, Status};
-pub use self::pool::{Pool, Options, ChainApi, EventStream, ExtrinsicFor, BlockHash, ExHash, NumberFor, TransactionFor};
+pub use self::pool::{
+    BlockHash, ChainApi, EventStream, ExHash, ExtrinsicFor, NumberFor, Options, Pool,
+    TransactionFor,
+};

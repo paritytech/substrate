@@ -26,34 +26,34 @@
 //! It is left as is for now as it might be removed before this is ever done.
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 #[macro_use]
 mod wasm_utils;
 mod wasm_executor;
 #[macro_use]
 mod native_executor;
-mod sandbox;
 mod allocator;
+mod sandbox;
 
 pub mod error;
-pub use wasmi;
-pub use wasm_executor::WasmExecutor;
-pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use state_machine::Externalities;
-pub use runtime_version::{RuntimeVersion, NativeVersion};
+pub use native_executor::{with_native_environment, NativeExecutionDispatch, NativeExecutor};
 pub use parity_codec::Codec;
 #[doc(hidden)]
 pub use primitives::Blake2Hasher;
+pub use runtime_version::{NativeVersion, RuntimeVersion};
+pub use state_machine::Externalities;
+pub use wasm_executor::WasmExecutor;
+pub use wasmi;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
-	/// Native runtime information.
-	fn native_version(&self) -> &NativeVersion;
+    /// Native runtime information.
+    fn native_version(&self) -> &NativeVersion;
 
-	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<Blake2Hasher>> (
-		&self,
-		ext: &mut E,
-	) -> Option<RuntimeVersion>;
+    /// Extract RuntimeVersion of given :code block
+    fn runtime_version<E: Externalities<Blake2Hasher>>(
+        &self,
+        ext: &mut E,
+    ) -> Option<RuntimeVersion>;
 }

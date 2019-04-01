@@ -21,23 +21,23 @@
 #![allow(deprecated)]
 
 use client;
-use network;
-use keystore;
 use consensus_common;
 use error_chain::*;
+use keystore;
+use network;
 
 error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-	}
+    foreign_links {
+        Io(::std::io::Error) #[doc="IO error"];
+    }
 
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-		Consensus(consensus_common::Error, consensus_common::ErrorKind) #[doc="Consesus error"];
-		Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
-		Keystore(keystore::Error, keystore::ErrorKind) #[doc="Keystore error"];
-	}
+    links {
+        Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
+        Consensus(consensus_common::Error, consensus_common::ErrorKind) #[doc="Consesus error"];
+        Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
+        Keystore(keystore::Error, keystore::ErrorKind) #[doc="Keystore error"];
+    }
 
-	errors {
-	}
+    errors {
+    }
 }

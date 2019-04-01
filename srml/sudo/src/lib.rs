@@ -124,63 +124,68 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
+use sr_std::prelude::*;
+use srml_support::{
+    decl_event, decl_module, decl_storage, ensure, Dispatchable, Parameter, StorageValue,
+};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    /// The overarching event type.
+    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
+    /// A sudo-able call.
+    type Proposal: Parameter + Dispatchable<Origin = Self::Origin>;
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+    // Simple declaration of the `Module` type. Lets the macro know what it's working on.
+    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+        fn deposit_event<T>() = default;
 
-		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		fn sudo(origin, proposal: Box<T::Proposal>) {
-			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+        /// Authenticates the sudo key and dispatches a function call with `Root` origin.
+        ///
+        /// The dispatch origin for this call must be _Signed_.
+        fn sudo(origin, proposal: Box<T::Proposal>) {
+            // This is a public call, so we ensure that the origin is some signed account.
+            let sender = ensure_signed(origin)?;
+            ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
-			Self::deposit_event(RawEvent::Sudid(ok));
-		}
+            let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
+            Self::deposit_event(RawEvent::Sudid(ok));
+        }
 
-		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
-			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
-			let new = T::Lookup::lookup(new)?;
+        /// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
+        ///
+        /// The dispatch origin for this call must be _Signed_.
+        fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
+            // This is a public call, so we ensure that the origin is some signed account.
+            let sender = ensure_signed(origin)?;
+            ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
+            let new = T::Lookup::lookup(new)?;
 
-			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
-			<Key<T>>::put(new);
-		}
-	}
+            Self::deposit_event(RawEvent::KeyChanged(Self::key()));
+            <Key<T>>::put(new);
+        }
+    }
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		/// A sudo just took place.
-		Sudid(bool),
-		/// The sudoer just switched identity; the old key is supplied.
-		KeyChanged(AccountId),
-	}
+    pub enum Event<T>
+    where
+        AccountId = <T as system::Trait>::AccountId,
+    {
+        /// A sudo just took place.
+        Sudid(bool),
+        /// The sudoer just switched identity; the old key is supplied.
+        KeyChanged(AccountId),
+    }
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
-		/// The `AccountId` of the sudo key.
-		Key get(key) config(): T::AccountId;
-	}
+    trait Store for Module<T: Trait> as Sudo {
+        /// The `AccountId` of the sudo key.
+        Key get(key) config(): T::AccountId;
+    }
 }

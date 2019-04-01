@@ -16,101 +16,108 @@
 
 //! Rust implementation of Substrate contracts.
 
+use secp256k1;
 use std::collections::HashMap;
 use tiny_keccak;
-use secp256k1;
 
-use wasmi::{
-	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
-};
-use wasmi::RuntimeValue::{I32, I64, self};
-use wasmi::memory_units::{Pages};
-use state_machine::Externalities;
+use crate::allocator;
 use crate::error::{Error, ErrorKind, Result};
+use crate::sandbox;
 use crate::wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
+use log::trace;
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher};
+use primitives::{blake2_256, ed25519, sr25519, twox_128, twox_256, Pair};
+use primitives::{Blake2Hasher, H256};
+use state_machine::Externalities;
 use trie::ordered_trie_root;
-use crate::sandbox;
-use crate::allocator;
-use log::trace;
+use wasmi::memory_units::Pages;
+use wasmi::RuntimeValue::{self, I32, I64};
+use wasmi::{
+    ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef, TableRef,
+};
 
-#[cfg(feature="wasm-extern-trace")]
+#[cfg(feature = "wasm-extern-trace")]
 macro_rules! debug_trace {
 	( $( $x:tt )* ) => ( trace!( $( $x )* ) )
 }
-#[cfg(not(feature="wasm-extern-trace"))]
+#[cfg(not(feature = "wasm-extern-trace"))]
 macro_rules! debug_trace {
-	( $( $x:tt )* ) => ()
+    ( $( $x:tt )* ) => {};
 }
 
 struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
-	sandbox_store: sandbox::Store,
-	heap: allocator::FreeingBumpHeapAllocator,
-	memory: MemoryRef,
-	table: Option<TableRef>,
-	ext: &'e mut E,
-	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
+    sandbox_store: sandbox::Store,
+    heap: allocator::FreeingBumpHeapAllocator,
+    memory: MemoryRef,
+    table: Option<TableRef>,
+    ext: &'e mut E,
+    hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
-		Ok(FunctionExecutor {
-			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
-			memory: m,
-			table: t,
-			ext: e,
-			hash_lookup: HashMap::new(),
-		})
-	}
+    fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+        Ok(FunctionExecutor {
+            sandbox_store: sandbox::Store::new(),
+            heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
+            memory: m,
+            table: t,
+            ext: e,
+            hash_lookup: HashMap::new(),
+        })
+    }
 }
 
 impl<'e, E: Externalities<Blake2Hasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
-	fn store(&self) -> &sandbox::Store {
-		&self.sandbox_store
-	}
-	fn store_mut(&mut self) -> &mut sandbox::Store {
-		&mut self.sandbox_store
-	}
-	fn allocate(&mut self, len: u32) -> ::std::result::Result<u32, UserError> {
-		self.heap.allocate(len)
-	}
-	fn deallocate(&mut self, ptr: u32) -> ::std::result::Result<(), UserError> {
-		self.heap.deallocate(ptr)
-	}
-	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), UserError> {
-		self.memory.set(ptr, data).map_err(|_| UserError("Invalid attempt to write_memory"))
-	}
-	fn read_memory(&self, ptr: u32, len: u32) -> ::std::result::Result<Vec<u8>, UserError> {
-		self.memory.get(ptr, len as usize).map_err(|_| UserError("Invalid attempt to write_memory"))
-	}
+    fn store(&self) -> &sandbox::Store {
+        &self.sandbox_store
+    }
+    fn store_mut(&mut self) -> &mut sandbox::Store {
+        &mut self.sandbox_store
+    }
+    fn allocate(&mut self, len: u32) -> ::std::result::Result<u32, UserError> {
+        self.heap.allocate(len)
+    }
+    fn deallocate(&mut self, ptr: u32) -> ::std::result::Result<(), UserError> {
+        self.heap.deallocate(ptr)
+    }
+    fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), UserError> {
+        self.memory
+            .set(ptr, data)
+            .map_err(|_| UserError("Invalid attempt to write_memory"))
+    }
+    fn read_memory(&self, ptr: u32, len: u32) -> ::std::result::Result<Vec<u8>, UserError> {
+        self.memory
+            .get(ptr, len as usize)
+            .map_err(|_| UserError("Invalid attempt to write_memory"))
+    }
 }
 
 trait WritePrimitive<T: Sized> {
-	fn write_primitive(&self, offset: u32, t: T) -> ::std::result::Result<(), UserError>;
+    fn write_primitive(&self, offset: u32, t: T) -> ::std::result::Result<(), UserError>;
 }
 
 impl WritePrimitive<u32> for MemoryInstance {
-	fn write_primitive(&self, offset: u32, t: u32) -> ::std::result::Result<(), UserError> {
-		use byteorder::{LittleEndian, ByteOrder};
-		let mut r = [0u8; 4];
-		LittleEndian::write_u32(&mut r, t);
-		self.set(offset, &r).map_err(|_| UserError("Invalid attempt to write_primitive"))
-	}
+    fn write_primitive(&self, offset: u32, t: u32) -> ::std::result::Result<(), UserError> {
+        use byteorder::{ByteOrder, LittleEndian};
+        let mut r = [0u8; 4];
+        LittleEndian::write_u32(&mut r, t);
+        self.set(offset, &r)
+            .map_err(|_| UserError("Invalid attempt to write_primitive"))
+    }
 }
 
 trait ReadPrimitive<T: Sized> {
-	fn read_primitive(&self, offset: u32) -> ::std::result::Result<T, UserError>;
+    fn read_primitive(&self, offset: u32) -> ::std::result::Result<T, UserError>;
 }
 
 impl ReadPrimitive<u32> for MemoryInstance {
-	fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, UserError> {
-		use byteorder::{LittleEndian, ByteOrder};
-		Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(|_| UserError("Invalid attempt to read_primitive"))?))
-	}
+    fn read_primitive(&self, offset: u32) -> ::std::result::Result<u32, UserError> {
+        use byteorder::{ByteOrder, LittleEndian};
+        Ok(LittleEndian::read_u32(&self.get(offset, 4).map_err(
+            |_| UserError("Invalid attempt to read_primitive"),
+        )?))
+    }
 }
 
 impl_function_executor!(this: FunctionExecutor<'e, E>,
@@ -651,352 +658,460 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 pub struct WasmExecutor;
 
 impl WasmExecutor {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        WasmExecutor
+    }
 
-	/// Create a new instance.
-	pub fn new() -> Self {
-		WasmExecutor
-	}
+    /// Call a given method in the given code.
+    ///
+    /// Signature of this method needs to be `(I32, I32) -> I64`.
+    ///
+    /// This should be used for tests only.
+    pub fn call<E: Externalities<Blake2Hasher>>(
+        &self,
+        ext: &mut E,
+        heap_pages: usize,
+        code: &[u8],
+        method: &str,
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let module = ::wasmi::Module::from_buffer(code)?;
+        let module = self.prepare_module(ext, heap_pages, &module)?;
+        self.call_in_wasm_module(ext, &module, method, data)
+    }
 
-	/// Call a given method in the given code.
-	///
-	/// Signature of this method needs to be `(I32, I32) -> I64`.
-	///
-	/// This should be used for tests only.
-	pub fn call<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>> {
-		let module = ::wasmi::Module::from_buffer(code)?;
-		let module = self.prepare_module(ext, heap_pages, &module)?;
-		self.call_in_wasm_module(ext, &module, method, data)
-	}
+    /// Call a given method with a custom signature in the given code.
+    ///
+    /// This should be used for tests only.
+    pub fn call_with_custom_signature<
+        E: Externalities<Blake2Hasher>,
+        F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+        FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+        R,
+    >(
+        &self,
+        ext: &mut E,
+        heap_pages: usize,
+        code: &[u8],
+        method: &str,
+        create_parameters: F,
+        filter_result: FR,
+    ) -> Result<R> {
+        let module = wasmi::Module::from_buffer(code)?;
+        let module = self.prepare_module(ext, heap_pages, &module)?;
+        self.call_in_wasm_module_with_custom_signature(
+            ext,
+            &module,
+            method,
+            create_parameters,
+            filter_result,
+        )
+    }
 
-	/// Call a given method with a custom signature in the given code.
-	///
-	/// This should be used for tests only.
-	pub fn call_with_custom_signature<
-		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
-		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
-		R,
-	>(
-		&self,
-		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
-		method: &str,
-		create_parameters: F,
-		filter_result: FR,
-	) -> Result<R> {
-		let module = wasmi::Module::from_buffer(code)?;
-		let module = self.prepare_module(ext, heap_pages, &module)?;
-		self.call_in_wasm_module_with_custom_signature(ext, &module, method, create_parameters, filter_result)
-	}
+    fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
+        Ok(module
+            .export_by_name("memory")
+            .ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
+            .as_memory()
+            .ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
+            .clone())
+    }
 
-	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
-		Ok(module
-			.export_by_name("memory")
-			.ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
-			.as_memory()
-			.ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
-			.clone())
-	}
+    /// Call a given method in the given wasm-module runtime.
+    pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
+        &self,
+        ext: &mut E,
+        module_instance: &ModuleRef,
+        method: &str,
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        self.call_in_wasm_module_with_custom_signature(
+            ext,
+            module_instance,
+            method,
+            |alloc| {
+                let offset = alloc(data)?;
+                Ok(vec![I32(offset as i32), I32(data.len() as i32)])
+            },
+            |res, memory| {
+                if let Some(I64(r)) = res {
+                    let offset = r as u32;
+                    let length = (r as u64 >> 32) as usize;
+                    memory
+                        .get(offset, length)
+                        .map_err(|_| ErrorKind::Runtime.into())
+                        .map(Some)
+                } else {
+                    Ok(None)
+                }
+            },
+        )
+    }
 
-	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
-		module_instance: &ModuleRef,
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>> {
-		self.call_in_wasm_module_with_custom_signature(
-			ext,
-			module_instance,
-			method,
-			|alloc| {
-				let offset = alloc(data)?;
-				Ok(vec![I32(offset as i32), I32(data.len() as i32)])
-			},
-			|res, memory| {
-				if let Some(I64(r)) = res {
-					let offset = r as u32;
-					let length = (r as u64 >> 32) as usize;
-					memory.get(offset, length).map_err(|_| ErrorKind::Runtime.into()).map(Some)
-				} else {
-					Ok(None)
-				}
-			}
-		)
-	}
+    /// Call a given method in the given wasm-module runtime.
+    fn call_in_wasm_module_with_custom_signature<
+        E: Externalities<Blake2Hasher>,
+        F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+        FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+        R,
+    >(
+        &self,
+        ext: &mut E,
+        module_instance: &ModuleRef,
+        method: &str,
+        create_parameters: F,
+        filter_result: FR,
+    ) -> Result<R> {
+        // extract a reference to a linear memory, optional reference to a table
+        // and then initialize FunctionExecutor.
+        let memory = Self::get_mem_instance(module_instance)?;
+        let table: Option<TableRef> = module_instance
+            .export_by_name("__indirect_function_table")
+            .and_then(|e| e.as_table().cloned());
 
-	/// Call a given method in the given wasm-module runtime.
-	fn call_in_wasm_module_with_custom_signature<
-		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
-		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
-		R,
-	>(
-		&self,
-		ext: &mut E,
-		module_instance: &ModuleRef,
-		method: &str,
-		create_parameters: F,
-		filter_result: FR,
-	) -> Result<R> {
-		// extract a reference to a linear memory, optional reference to a table
-		// and then initialize FunctionExecutor.
-		let memory = Self::get_mem_instance(module_instance)?;
-		let table: Option<TableRef> = module_instance
-			.export_by_name("__indirect_function_table")
-			.and_then(|e| e.as_table().cloned());
+        let low = memory.lowest_used();
+        let used_mem = memory.used_size();
+        let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+        let parameters = create_parameters(&mut |data: &[u8]| {
+            let offset = fec
+                .heap
+                .allocate(data.len() as u32)
+                .map_err(|_| ErrorKind::Runtime)?;
+            memory.set(offset, &data)?;
+            Ok(offset)
+        })?;
 
-		let low = memory.lowest_used();
-		let used_mem = memory.used_size();
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
-		let parameters = create_parameters(&mut |data: &[u8]| {
-			let offset = fec.heap.allocate(data.len() as u32).map_err(|_| ErrorKind::Runtime)?;
-			memory.set(offset, &data)?;
-			Ok(offset)
-		})?;
+        let result = module_instance.invoke_export(method, &parameters, &mut fec);
+        let result = match result {
+            Ok(val) => match filter_result(val, &memory)? {
+                Some(val) => Ok(val),
+                None => Err(ErrorKind::InvalidReturn.into()),
+            },
+            Err(e) => {
+                trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);
+                Err(e.into())
+            }
+        };
 
-		let result = module_instance.invoke_export(
-			method,
-			&parameters,
-			&mut fec
-		);
-		let result = match result {
-			Ok(val) => match filter_result(val, &memory)? {
-				Some(val) => Ok(val),
-				None => Err(ErrorKind::InvalidReturn.into()),
-			},
-			Err(e) => {
-				trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);
-				Err(e.into())
-			},
-		};
+        // cleanup module instance for next use
+        let new_low = memory.lowest_used();
+        if new_low < low {
+            memory.zero(new_low as usize, (low - new_low) as usize)?;
+            memory.reset_lowest_used(low);
+        }
+        memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
+        result
+    }
 
-		// cleanup module instance for next use
-		let new_low = memory.lowest_used();
-		if new_low < low {
-			memory.zero(new_low as usize, (low - new_low) as usize)?;
-			memory.reset_lowest_used(low);
-		}
-		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
-		result
-	}
+    /// Prepare module instance
+    pub fn prepare_module<E: Externalities<Blake2Hasher>>(
+        &self,
+        ext: &mut E,
+        heap_pages: usize,
+        module: &Module,
+    ) -> Result<ModuleRef> {
+        // start module instantiation. Don't run 'start' function yet.
+        let intermediate_instance = ModuleInstance::new(
+            module,
+            &ImportsBuilder::new().with_resolver("env", FunctionExecutor::<E>::resolver()),
+        )?;
 
-	/// Prepare module instance
-	pub fn prepare_module<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
-		heap_pages: usize,
-		module: &Module,
-		) -> Result<ModuleRef>
-	{
-		// start module instantiation. Don't run 'start' function yet.
-		let intermediate_instance = ModuleInstance::new(
-			module,
-			&ImportsBuilder::new()
-			.with_resolver("env", FunctionExecutor::<E>::resolver())
-		)?;
+        // extract a reference to a linear memory, optional reference to a table
+        // and then initialize FunctionExecutor.
+        let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
+        memory
+            .grow(Pages(heap_pages))
+            .map_err(|_| Error::from(ErrorKind::Runtime))?;
+        let table: Option<TableRef> = intermediate_instance
+            .not_started_instance()
+            .export_by_name("__indirect_function_table")
+            .and_then(|e| e.as_table().cloned());
+        let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 
-		// extract a reference to a linear memory, optional reference to a table
-		// and then initialize FunctionExecutor.
-		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
-		memory.grow(Pages(heap_pages)).map_err(|_| Error::from(ErrorKind::Runtime))?;
-		let table: Option<TableRef> = intermediate_instance
-			.not_started_instance()
-			.export_by_name("__indirect_function_table")
-			.and_then(|e| e.as_table().cloned());
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
-
-		// finish instantiation by running 'start' function (if any).
-		Ok(intermediate_instance.run_start(&mut fec)?)
-	}
+        // finish instantiation by running 'start' function (if any).
+        Ok(intermediate_instance.run_start(&mut fec)?)
+    }
 }
-
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+    use super::*;
 
-	use parity_codec::Encode;
+    use parity_codec::Encode;
 
-	use state_machine::TestExternalities;
-	use hex_literal::{hex, hex_impl};
-	use primitives::map;
+    use hex_literal::{hex, hex_impl};
+    use primitives::map;
+    use state_machine::TestExternalities;
 
-	#[test]
-	fn returning_should_work() {
-		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+    #[test]
+    fn returning_should_work() {
+        let mut ext = TestExternalities::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
-		assert_eq!(output, vec![0u8; 0]);
-	}
+        let output = WasmExecutor::new()
+            .call(&mut ext, 8, &test_code[..], "test_empty_return", &[])
+            .unwrap();
+        assert_eq!(output, vec![0u8; 0]);
+    }
 
-	#[test]
-	fn panicking_should_work() {
-		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+    #[test]
+    fn panicking_should_work() {
+        let mut ext = TestExternalities::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
-		assert!(output.is_err());
+        let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
+        assert!(output.is_err());
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
-		assert_eq!(output.unwrap(), vec![0u8; 0]);
+        let output =
+            WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
+        assert_eq!(output.unwrap(), vec![0u8; 0]);
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
-		assert!(output.is_err());
-	}
+        let output =
+            WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
+        assert!(output.is_err());
+    }
 
-	#[test]
-	fn storage_should_work() {
-		let mut ext = TestExternalities::default();
-		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+    #[test]
+    fn storage_should_work() {
+        let mut ext = TestExternalities::default();
+        ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
+        let output = WasmExecutor::new()
+            .call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world")
+            .unwrap();
 
-		assert_eq!(output, b"all ok!".to_vec());
+        assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::new(map![
-			b"input".to_vec() => b"Hello world".to_vec(),
-			b"foo".to_vec() => b"bar".to_vec(),
-			b"baz".to_vec() => b"bar".to_vec()
-		]);
-		assert_eq!(ext, expected);
-	}
+        let expected = TestExternalities::new(map![
+            b"input".to_vec() => b"Hello world".to_vec(),
+            b"foo".to_vec() => b"bar".to_vec(),
+            b"baz".to_vec() => b"bar".to_vec()
+        ]);
+        assert_eq!(ext, expected);
+    }
 
-	#[test]
-	fn clear_prefix_should_work() {
-		let mut ext = TestExternalities::default();
-		ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
-		ext.set_storage(b"aab".to_vec(), b"2".to_vec());
-		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
-		ext.set_storage(b"abb".to_vec(), b"4".to_vec());
-		ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+    #[test]
+    fn clear_prefix_should_work() {
+        let mut ext = TestExternalities::default();
+        ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
+        ext.set_storage(b"aab".to_vec(), b"2".to_vec());
+        ext.set_storage(b"aba".to_vec(), b"3".to_vec());
+        ext.set_storage(b"abb".to_vec(), b"4".to_vec());
+        ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
 
-		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+        // This will clear all entries which prefix is "ab".
+        let output = WasmExecutor::new()
+            .call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab")
+            .unwrap();
 
-		assert_eq!(output, b"all ok!".to_vec());
+        assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_> = map![
-			b"aaa".to_vec() => b"1".to_vec(),
-			b"aab".to_vec() => b"2".to_vec(),
-			b"bbb".to_vec() => b"5".to_vec()
-		];
-		assert_eq!(expected, ext);
-	}
+        let expected: TestExternalities<_> = map![
+            b"aaa".to_vec() => b"1".to_vec(),
+            b"aab".to_vec() => b"2".to_vec(),
+            b"bbb".to_vec() => b"5".to_vec()
+        ];
+        assert_eq!(expected, ext);
+    }
 
-	#[test]
-	fn blake2_256_should_work() {
-		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
-			blake2_256(&b""[..]).encode()
-		);
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
-			blake2_256(&b"Hello world!"[..]).encode()
-		);
-	}
+    #[test]
+    fn blake2_256_should_work() {
+        let mut ext = TestExternalities::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(&mut ext, 8, &test_code[..], "test_blake2_256", &[])
+                .unwrap(),
+            blake2_256(&b""[..]).encode()
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_blake2_256",
+                    b"Hello world!"
+                )
+                .unwrap(),
+            blake2_256(&b"Hello world!"[..]).encode()
+        );
+    }
 
-	#[test]
-	fn twox_256_should_work() {
-		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
-			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
-		);
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
-			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
-		);
-	}
+    #[test]
+    fn twox_256_should_work() {
+        let mut ext = TestExternalities::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(&mut ext, 8, &test_code[..], "test_twox_256", &[])
+                .unwrap(),
+            hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_twox_256",
+                    b"Hello world!"
+                )
+                .unwrap(),
+            hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
+        );
+    }
 
-	#[test]
-	fn twox_128_should_work() {
-		let mut ext = TestExternalities::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
-			hex!("99e9d85137db46ef4bbea33613baafd5")
-		);
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
-			hex!("b27dfd7f223f177f2a13647b533599af")
-		);
-	}
+    #[test]
+    fn twox_128_should_work() {
+        let mut ext = TestExternalities::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(&mut ext, 8, &test_code[..], "test_twox_128", &[])
+                .unwrap(),
+            hex!("99e9d85137db46ef4bbea33613baafd5")
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_twox_128",
+                    b"Hello world!"
+                )
+                .unwrap(),
+            hex!("b27dfd7f223f177f2a13647b533599af")
+        );
+    }
 
-	#[test]
-	fn ed25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(blake2_256(b"test"));
-		let sig = key.sign(b"all ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(sig.as_ref());
+    #[test]
+    fn ed25519_verify_should_work() {
+        let mut ext = TestExternalities::<Blake2Hasher>::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
+        let key = ed25519::Pair::from_seed(blake2_256(b"test"));
+        let sig = key.sign(b"all ok!");
+        let mut calldata = vec![];
+        calldata.extend_from_slice(key.public().as_ref());
+        calldata.extend_from_slice(sig.as_ref());
 
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
-			vec![1]
-		);
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_ed25519_verify",
+                    &calldata
+                )
+                .unwrap(),
+            vec![1]
+        );
 
-		let other_sig = key.sign(b"all is not ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(other_sig.as_ref());
+        let other_sig = key.sign(b"all is not ok!");
+        let mut calldata = vec![];
+        calldata.extend_from_slice(key.public().as_ref());
+        calldata.extend_from_slice(other_sig.as_ref());
 
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
-			vec![0]
-		);
-	}
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_ed25519_verify",
+                    &calldata
+                )
+                .unwrap(),
+            vec![0]
+        );
+    }
 
-	#[test]
-	fn sr25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = sr25519::Pair::from_seed(blake2_256(b"test"));
-		let sig = key.sign(b"all ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(sig.as_ref());
+    #[test]
+    fn sr25519_verify_should_work() {
+        let mut ext = TestExternalities::<Blake2Hasher>::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
+        let key = sr25519::Pair::from_seed(blake2_256(b"test"));
+        let sig = key.sign(b"all ok!");
+        let mut calldata = vec![];
+        calldata.extend_from_slice(key.public().as_ref());
+        calldata.extend_from_slice(sig.as_ref());
 
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
-			vec![1]
-		);
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_sr25519_verify",
+                    &calldata
+                )
+                .unwrap(),
+            vec![1]
+        );
 
-		let other_sig = key.sign(b"all is not ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(other_sig.as_ref());
+        let other_sig = key.sign(b"all is not ok!");
+        let mut calldata = vec![];
+        calldata.extend_from_slice(key.public().as_ref());
+        calldata.extend_from_slice(other_sig.as_ref());
 
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
-			vec![0]
-		);
-	}
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_sr25519_verify",
+                    &calldata
+                )
+                .unwrap(),
+            vec![0]
+        );
+    }
 
-	#[test]
-	fn enumerated_trie_root_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
-		);
-	}
+    #[test]
+    fn enumerated_trie_root_should_work() {
+        let mut ext = TestExternalities::<Blake2Hasher>::default();
+        let test_code = include_bytes!(
+            "../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm"
+        );
+        assert_eq!(
+            WasmExecutor::new()
+                .call(
+                    &mut ext,
+                    8,
+                    &test_code[..],
+                    "test_enumerated_trie_root",
+                    &[]
+                )
+                .unwrap(),
+            ordered_trie_root::<Blake2Hasher, _, _>(
+                vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()
+            )
+            .as_fixed_bytes()
+            .encode()
+        );
+    }
 }

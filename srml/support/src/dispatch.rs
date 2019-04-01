@@ -17,15 +17,15 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
+pub use crate::codec::{Codec, Decode, Encode, EncodeAsRef, HasCompact, Input, Output};
+pub use crate::rstd::prelude::{Clone, Eq, PartialEq, Vec};
+pub use crate::rstd::result;
+pub use srml_metadata::{
+    DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata, FunctionMetadata,
+    OuterDispatchCall, OuterDispatchMetadata,
+};
 #[cfg(feature = "std")]
 pub use std::fmt;
-pub use crate::rstd::result;
-pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use srml_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
-	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
-};
 
 /// A type that can not be instantiated.
 pub enum Never {}
@@ -37,18 +37,18 @@ pub type Result = result::Result<(), &'static str>;
 /// A lazy call (module function and argument values) that can be executed via its dispatch()
 /// method.
 pub trait Dispatchable {
-	/// Every function call to your runtime has an origin which specifies where the extrinsic was
-	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
-	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
-	type Origin;
-	type Trait;
-	fn dispatch(self, origin: Self::Origin) -> Result;
+    /// Every function call to your runtime has an origin which specifies where the extrinsic was
+    /// generated from. In the case of a signed extrinsic (transaction), the origin contains an
+    /// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
+    type Origin;
+    type Trait;
+    fn dispatch(self, origin: Self::Origin) -> Result;
 }
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable {
-	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
+    type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -952,7 +952,7 @@ macro_rules! __impl_encode {
 }
 
 pub trait IsSubType<T: Callable> {
-	fn is_aux_sub_type(&self) -> Option<&<T as Callable>::Call>;
+    fn is_aux_sub_type(&self) -> Option<&<T as Callable>::Call>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1061,7 +1061,6 @@ macro_rules! __call_to_functions {
 	};
 }
 
-
 /// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]
 #[doc(hidden)]
@@ -1142,115 +1141,109 @@ macro_rules! __function_to_metadata {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use super::*;
-	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
+    use super::*;
+    use crate::runtime_primitives::traits::{OnFinalize, OnInitialize};
 
-	pub trait Trait {
-		type Origin;
-		type BlockNumber: Into<u32>;
-	}
+    pub trait Trait {
+        type Origin;
+        type BlockNumber: Into<u32>;
+    }
 
-	pub mod system {
-		use super::Result;
+    pub mod system {
+        use super::Result;
 
-		pub fn ensure_root<R>(_: R) -> Result {
-			Ok(())
-		}
-	}
+        pub fn ensure_root<R>(_: R) -> Result {
+            Ok(())
+        }
+    }
 
-	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-			/// Hi, this is a comment.
-			fn aux_0(_origin) -> Result { unreachable!() }
-			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
-			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			fn aux_3() -> Result { unreachable!() }
-			fn aux_4(_data: i32) -> Result { unreachable!() }
+    decl_module! {
+        pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+            /// Hi, this is a comment.
+            fn aux_0(_origin) -> Result { unreachable!() }
+            fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
+            fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
+            fn aux_3() -> Result { unreachable!() }
+            fn aux_4(_data: i32) -> Result { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
-			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
-			fn offchain_worker() {}
-		}
-	}
+            fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
+            fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
+            fn offchain_worker() {}
+        }
+    }
 
-	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_0"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[
-						" Hi, this is a comment."
-					])
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_1"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("Compact<u32>")
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_2"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						},
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data2"),
-							ty: DecodeDifferent::Encode("String"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_3"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_4"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}
-			];
+    const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_0"),
+            arguments: DecodeDifferent::Encode(&[]),
+            documentation: DecodeDifferent::Encode(&[" Hi, this is a comment."]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_1"),
+            arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+                name: DecodeDifferent::Encode("_data"),
+                ty: DecodeDifferent::Encode("Compact<u32>"),
+            }]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_2"),
+            arguments: DecodeDifferent::Encode(&[
+                FunctionArgumentMetadata {
+                    name: DecodeDifferent::Encode("_data"),
+                    ty: DecodeDifferent::Encode("i32"),
+                },
+                FunctionArgumentMetadata {
+                    name: DecodeDifferent::Encode("_data2"),
+                    ty: DecodeDifferent::Encode("String"),
+                },
+            ]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_3"),
+            arguments: DecodeDifferent::Encode(&[]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_4"),
+            arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+                name: DecodeDifferent::Encode("_data"),
+                ty: DecodeDifferent::Encode("i32"),
+            }]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+    ];
 
-	struct TraitImpl {}
+    struct TraitImpl {}
 
-	impl Trait for TraitImpl {
-		type Origin = u32;
-		type BlockNumber = u32;
-	}
+    impl Trait for TraitImpl {
+        type Origin = u32;
+        type BlockNumber = u32;
+    }
 
-	#[test]
-	fn module_json_metadata() {
-		let metadata = Module::<TraitImpl>::call_functions();
-		assert_eq!(EXPECTED_METADATA, metadata);
-	}
+    #[test]
+    fn module_json_metadata() {
+        let metadata = Module::<TraitImpl>::call_functions();
+        assert_eq!(EXPECTED_METADATA, metadata);
+    }
 
-	#[test]
-	fn compact_attr() {
-		let call: Call<TraitImpl> = Call::aux_1(0);
-		let encoded = call.encode();
-		assert_eq!(encoded.len(), 2);
-	}
+    #[test]
+    fn compact_attr() {
+        let call: Call<TraitImpl> = Call::aux_1(0);
+        let encoded = call.encode();
+        assert_eq!(encoded.len(), 2);
+    }
 
-	#[test]
-	#[should_panic(expected = "on_initialize")]
-	fn on_initialize_should_work() {
-		<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(42);
-	}
+    #[test]
+    #[should_panic(expected = "on_initialize")]
+    fn on_initialize_should_work() {
+        <Module<TraitImpl> as OnInitialize<u32>>::on_initialize(42);
+    }
 
-	#[test]
-	#[should_panic(expected = "on_finalize")]
-	fn on_finalize_should_work() {
-		<Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
-	}
+    #[test]
+    #[should_panic(expected = "on_finalize")]
+    fn on_finalize_should_work() {
+        <Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
+    }
 }

@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde_derive::Deserialize;
 use primitives::U256;
 use runtime_primitives::traits;
+use serde_derive::Deserialize;
 
 /// RPC Block number type
 ///
@@ -28,43 +28,43 @@ use runtime_primitives::traits;
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum NumberOrHex<Number> {
-	/// The original header number type of block.
-	Number(Number),
-	/// Hex representation of the block number.
-	Hex(U256),
+    /// The original header number type of block.
+    Number(Number),
+    /// Hex representation of the block number.
+    Hex(U256),
 }
 
 impl<Number: traits::As<u64>> NumberOrHex<Number> {
-	/// Attempts to convert into concrete block number.
-	///
-	/// Fails in case hex number is too big.
-	pub fn to_number(self) -> Result<Number, String> {
-		match self {
-			NumberOrHex::Number(n) => Ok(n),
-			NumberOrHex::Hex(h) => {
-				// FIXME #1377 this only supports `u64` since `BlockNumber`
-				// is `As<u64>` we could possibly go with `u128`.
-				let l = h.low_u64();
-				if U256::from(l) != h {
-					Err(format!("`{}` does not fit into the block number type.", h))
-				} else {
-					Ok(traits::As::sa(l))
-				}
-			},
-		}
-	}
+    /// Attempts to convert into concrete block number.
+    ///
+    /// Fails in case hex number is too big.
+    pub fn to_number(self) -> Result<Number, String> {
+        match self {
+            NumberOrHex::Number(n) => Ok(n),
+            NumberOrHex::Hex(h) => {
+                // FIXME #1377 this only supports `u64` since `BlockNumber`
+                // is `As<u64>` we could possibly go with `u128`.
+                let l = h.low_u64();
+                if U256::from(l) != h {
+                    Err(format!("`{}` does not fit into the block number type.", h))
+                } else {
+                    Ok(traits::As::sa(l))
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 impl From<u64> for NumberOrHex<u64> {
-	fn from(n: u64) -> Self {
-		NumberOrHex::Number(n)
-	}
+    fn from(n: u64) -> Self {
+        NumberOrHex::Number(n)
+    }
 }
 
 #[cfg(test)]
 impl<Number> From<U256> for NumberOrHex<Number> {
-	fn from(n: U256) -> Self {
-		NumberOrHex::Hex(n)
-	}
+    fn from(n: U256) -> Self {
+        NumberOrHex::Hex(n)
+    }
 }

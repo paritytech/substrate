@@ -19,50 +19,49 @@
 
 #![warn(missing_docs)]
 
-mod components;
-mod error;
-mod chain_spec;
-pub mod config;
 pub mod chain_ops;
+mod chain_spec;
+mod components;
+pub mod config;
+mod error;
 
+use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
-use std::collections::HashMap;
 
 use client::BlockchainEvents;
 use exit_future::Signal;
 use futures::prelude::*;
 use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
-use log::{info, warn, debug};
-use parity_codec::{Encode, Decode};
+use log::{debug, info, warn};
+use parity_codec::{Decode, Encode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{As, Header};
 use substrate_executor::NativeExecutor;
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Roles, PruningMode};
+pub use self::error::{Error, ErrorKind};
 pub use chain_spec::{ChainSpec, Properties};
-pub use transaction_pool::txpool::{
-	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
-};
 use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
-
-pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
-	LightExecutor, Components, PoolApi, ComponentClient,
-	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
-	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+pub use config::{Configuration, PruningMode, Roles};
+pub use transaction_pool::txpool::{
+    self, ChainApi, IntoPoolError, Options as TransactionPoolOptions, Pool as TransactionPool,
 };
-use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
-#[doc(hidden)]
-pub use std::{ops::Deref, result::Result, sync::Arc};
+
+pub use components::{
+    CodeExecutor, ComponentBlock, ComponentClient, ComponentExHash, ComponentExtrinsic, Components,
+    FactoryBlock, FactoryChainSpec, FactoryExtrinsic, FactoryFullConfiguration, FactoryGenesis,
+    FullBackend, FullClient, FullComponents, FullExecutor, LightBackend, LightClient,
+    LightComponents, LightExecutor, NetworkService, PoolApi, RuntimeGenesis, ServiceFactory,
+};
+use components::{MaintainTransactionPool, OffchainWorker, StartRPC};
 #[doc(hidden)]
 pub use network::OnDemand;
+#[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 
@@ -70,421 +69,453 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {
-	client: Arc<ComponentClient<Components>>,
-	network: Option<Arc<components::NetworkService<Components::Factory>>>,
-	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
-	keystore: Keystore,
-	exit: ::exit_future::Exit,
-	signal: Option<Signal>,
-	/// Configuration of this Service
-	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<Arc<tel::Telemetry>>,
-	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
+    client: Arc<ComponentClient<Components>>,
+    network: Option<Arc<components::NetworkService<Components::Factory>>>,
+    transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+    inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
+    keystore: Keystore,
+    exit: ::exit_future::Exit,
+    signal: Option<Signal>,
+    /// Configuration of this Service
+    pub config: FactoryFullConfiguration<Components::Factory>,
+    _rpc: Box<::std::any::Any + Send + Sync>,
+    _telemetry: Option<Arc<tel::Telemetry>>,
+    _offchain_workers: Option<
+        Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>,
+    >,
 }
 
 /// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
-	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
-{
-	let executor = NativeExecutor::new(config.default_heap_pages);
-	let (client, _) = components::FullComponents::<Factory>::build_client(
-		config,
-		executor,
-	)?;
-	Ok(client)
+pub fn new_client<Factory: components::ServiceFactory>(
+    config: &FactoryFullConfiguration<Factory>,
+) -> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error> {
+    let executor = NativeExecutor::new(config.default_heap_pages);
+    let (client, _) = components::FullComponents::<Factory>::build_client(config, executor)?;
+    Ok(client)
 }
 
 impl<Components: components::Components> Service<Components> {
-	/// Creates a new service.
-	pub fn new(
-		mut config: FactoryFullConfiguration<Components::Factory>,
-		task_executor: TaskExecutor,
-	) -> Result<Self, error::Error> {
-		let (signal, exit) = ::exit_future::signal();
+    /// Creates a new service.
+    pub fn new(
+        mut config: FactoryFullConfiguration<Components::Factory>,
+        task_executor: TaskExecutor,
+    ) -> Result<Self, error::Error> {
+        let (signal, exit) = ::exit_future::signal();
 
-		// Create client
-		let executor = NativeExecutor::new(config.default_heap_pages);
+        // Create client
+        let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+        let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 
-		// This is meant to be for testing only
-		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
-		// Keep the public key for telemetry
-		let public_key = match keystore.contents()?.get(0) {
-			Some(public_key) => public_key.clone(),
-			None => {
-				let key = keystore.generate("")?;
-				let public_key = key.public();
-				info!("Generated a new keypair: {:?}", public_key);
+        // This is meant to be for testing only
+        // FIXME #1063 remove this
+        for seed in &config.keys {
+            keystore.generate_from_seed(seed)?;
+        }
+        // Keep the public key for telemetry
+        let public_key = match keystore.contents()?.get(0) {
+            Some(public_key) => public_key.clone(),
+            None => {
+                let key = keystore.generate("")?;
+                let public_key = key.public();
+                info!("Generated a new keypair: {:?}", public_key);
 
-				public_key
-			}
-		};
+                public_key
+            }
+        };
 
-		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
-		let best_header = client.best_block_header()?;
+        let (client, on_demand) = Components::build_client(&config, executor)?;
+        let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
+        let best_header = client.best_block_header()?;
 
-		let version = config.full_version();
-		info!("Best block: #{}", best_header.number());
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+        let version = config.full_version();
+        info!("Best block: #{}", best_header.number());
+        telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
-		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
-		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !(config.roles == Roles::LIGHT),
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-		 });
+        let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+        let transaction_pool = Arc::new(Components::build_transaction_pool(
+            config.transaction_pool.clone(),
+            client.clone(),
+        )?);
+        let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
+            imports_external_transactions: !(config.roles == Roles::LIGHT),
+            pool: transaction_pool.clone(),
+            client: client.clone(),
+        });
 
-		let network_params = network::config::Params {
-			config: network::config::ProtocolConfig { roles: config.roles },
-			network_config: config.network.clone(),
-			chain: client.clone(),
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
-			transaction_pool: transaction_pool_adapter.clone() as _,
-			specialization: network_protocol,
-		};
+        let network_params = network::config::Params {
+            config: network::config::ProtocolConfig {
+                roles: config.roles,
+            },
+            network_config: config.network.clone(),
+            chain: client.clone(),
+            on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+            transaction_pool: transaction_pool_adapter.clone() as _,
+            specialization: network_protocol,
+        };
 
-		let protocol_id = {
-			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
-			let mut protocol_id = network::ProtocolId::default();
-			if protocol_id_full.len() > protocol_id.len() {
-				warn!("Protocol ID truncated to {} chars", protocol_id.len());
-			}
-			let id_len = protocol_id_full.len().min(protocol_id.len());
-			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
-			protocol_id
-		};
+        let protocol_id = {
+            let protocol_id_full = config
+                .chain_spec
+                .protocol_id()
+                .unwrap_or(DEFAULT_PROTOCOL_ID)
+                .as_bytes();
+            let mut protocol_id = network::ProtocolId::default();
+            if protocol_id_full.len() > protocol_id.len() {
+                warn!("Protocol ID truncated to {} chars", protocol_id.len());
+            }
+            let id_len = protocol_id_full.len().min(protocol_id.len());
+            &mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+            protocol_id
+        };
 
-		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let (network, network_chan) = network::Service::new(
-			network_params,
-			protocol_id,
-			import_queue
-		)?;
-		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
+        let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+        let (network, network_chan) =
+            network::Service::new(network_params, protocol_id, import_queue)?;
+        on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
-		let inherents_pool = Arc::new(InherentsPool::default());
-		let offchain_workers =  if config.offchain_worker {
-			Some(Arc::new(offchain::OffchainWorkers::new(
-				client.clone(),
-				inherents_pool.clone(),
-				task_executor.clone(),
-			)))
-		} else {
-			None
-		};
+        let inherents_pool = Arc::new(InherentsPool::default());
+        let offchain_workers = if config.offchain_worker {
+            Some(Arc::new(offchain::OffchainWorkers::new(
+                client.clone(),
+                inherents_pool.clone(),
+                task_executor.clone(),
+            )))
+        } else {
+            None
+        };
 
-		{
-			// block notifications
-			let network = Arc::downgrade(&network);
-			let txpool = Arc::downgrade(&transaction_pool);
-			let wclient = Arc::downgrade(&client);
-			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
+        {
+            // block notifications
+            let network = Arc::downgrade(&network);
+            let txpool = Arc::downgrade(&transaction_pool);
+            let wclient = Arc::downgrade(&client);
+            let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 
-			let events = client.import_notification_stream()
-				.for_each(move |notification| {
-					let number = *notification.header.number();
+            let events = client
+                .import_notification_stream()
+                .for_each(move |notification| {
+                    let number = *notification.header.number();
 
-					if let Some(network) = network.upgrade() {
-						network.on_block_imported(notification.hash, notification.header);
-					}
+                    if let Some(network) = network.upgrade() {
+                        network.on_block_imported(notification.hash, notification.header);
+                    }
 
-					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
-						Components::RuntimeServices::maintain_transaction_pool(
-							&BlockId::hash(notification.hash),
-							&*client,
-							&*txpool,
-						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
-					}
+                    if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
+                        Components::RuntimeServices::maintain_transaction_pool(
+                            &BlockId::hash(notification.hash),
+                            &*client,
+                            &*txpool,
+                        )
+                        .map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
+                    }
 
-					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
-						Components::RuntimeServices::offchain_workers(
-							&number,
-							&offchain,
-							&txpool,
-						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
-					}
+                    if let (Some(txpool), Some(offchain)) = (
+                        txpool.upgrade(),
+                        offchain.as_ref().and_then(|o| o.upgrade()),
+                    ) {
+                        Components::RuntimeServices::offchain_workers(&number, &offchain, &txpool)
+                            .map_err(|e| {
+                                warn!("Offchain workers error processing new block: {:?}", e)
+                            })?;
+                    }
 
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
-			task_executor.spawn(events);
-		}
+                    Ok(())
+                })
+                .select(exit.clone())
+                .then(|_| Ok(()));
+            task_executor.spawn(events);
+        }
 
-		{
-			// finality notifications
-			let network = Arc::downgrade(&network);
+        {
+            // finality notifications
+            let network = Arc::downgrade(&network);
 
-			// A utility stream that drops all ready items and only returns the last one.
-			// This is used to only keep the last finality notification and avoid
-			// overloading the sync module with notifications.
-			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
+            // A utility stream that drops all ready items and only returns the last one.
+            // This is used to only keep the last finality notification and avoid
+            // overloading the sync module with notifications.
+            struct MostRecentNotification<B: BlockT>(
+                futures::stream::Fuse<FinalityNotifications<B>>,
+            );
 
-			impl<B: BlockT> Stream for MostRecentNotification<B> {
-				type Item = <FinalityNotifications<B> as Stream>::Item;
-				type Error = <FinalityNotifications<B> as Stream>::Error;
+            impl<B: BlockT> Stream for MostRecentNotification<B> {
+                type Item = <FinalityNotifications<B> as Stream>::Item;
+                type Error = <FinalityNotifications<B> as Stream>::Error;
 
-				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-					let mut last = None;
-					let last = loop {
-						match self.0.poll()? {
-							Async::Ready(Some(item)) => { last = Some(item) }
-							Async::Ready(None) => match last {
-								None => return Ok(Async::Ready(None)),
-								Some(last) => break last,
-							},
-							Async::NotReady => match last {
-								None => return Ok(Async::NotReady),
-								Some(last) => break last,
-							},
-						}
-					};
+                fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+                    let mut last = None;
+                    let last = loop {
+                        match self.0.poll()? {
+                            Async::Ready(Some(item)) => last = Some(item),
+                            Async::Ready(None) => match last {
+                                None => return Ok(Async::Ready(None)),
+                                Some(last) => break last,
+                            },
+                            Async::NotReady => match last {
+                                None => return Ok(Async::NotReady),
+                                Some(last) => break last,
+                            },
+                        }
+                    };
 
-					Ok(Async::Ready(Some(last)))
-				}
-			}
+                    Ok(Async::Ready(Some(last)))
+                }
+            }
 
-			let events = MostRecentNotification(client.finality_notification_stream().fuse())
-				.for_each(move |notification| {
-					if let Some(network) = network.upgrade() {
-						network.on_block_finalized(notification.hash, notification.header);
-					}
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
+            let events = MostRecentNotification(client.finality_notification_stream().fuse())
+                .for_each(move |notification| {
+                    if let Some(network) = network.upgrade() {
+                        network.on_block_finalized(notification.hash, notification.header);
+                    }
+                    Ok(())
+                })
+                .select(exit.clone())
+                .then(|_| Ok(()));
 
-			task_executor.spawn(events);
-		}
+            task_executor.spawn(events);
+        }
 
-		{
-			// extrinsic notifications
-			let network = Arc::downgrade(&network);
-			let events = transaction_pool.import_notification_stream()
-				.for_each(move |_| {
-					if let Some(network) = network.upgrade() {
-						network.trigger_repropagate();
-					}
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
+        {
+            // extrinsic notifications
+            let network = Arc::downgrade(&network);
+            let events = transaction_pool
+                .import_notification_stream()
+                .for_each(move |_| {
+                    if let Some(network) = network.upgrade() {
+                        network.trigger_repropagate();
+                    }
+                    Ok(())
+                })
+                .select(exit.clone())
+                .then(|_| Ok(()));
 
-			task_executor.spawn(events);
-		}
+            task_executor.spawn(events);
+        }
 
+        // RPC
+        let system_info = rpc::apis::system::SystemInfo {
+            chain_name: config.chain_spec.name().into(),
+            impl_name: config.impl_name.into(),
+            impl_version: config.impl_version.into(),
+            properties: config.chain_spec.properties(),
+        };
+        let rpc = Components::RuntimeServices::start_rpc(
+            client.clone(),
+            network.clone(),
+            has_bootnodes,
+            system_info,
+            config.rpc_http,
+            config.rpc_ws,
+            task_executor.clone(),
+            transaction_pool.clone(),
+        )?;
 
-		// RPC
-		let system_info = rpc::apis::system::SystemInfo {
-			chain_name: config.chain_spec.name().into(),
-			impl_name: config.impl_name.into(),
-			impl_version: config.impl_version.into(),
-			properties: config.chain_spec.properties(),
-		};
-		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
-		)?;
+        // Telemetry
+        let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
+            let is_authority = config.roles == Roles::AUTHORITY;
+            let network_id = network.local_peer_id().to_base58();
+            let pubkey = format!("{}", public_key);
+            let name = config.name.clone();
+            let impl_name = config.impl_name.to_owned();
+            let version = version.clone();
+            let chain_name = config.chain_spec.name().to_owned();
+            Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+                endpoints,
+                on_connect: Box::new(move || {
+                    telemetry!(SUBSTRATE_INFO; "system.connected";
+                        "name" => name.clone(),
+                        "implementation" => impl_name.clone(),
+                        "version" => version.clone(),
+                        "config" => "",
+                        "chain" => chain_name.clone(),
+                        "pubkey" => &pubkey,
+                        "authority" => is_authority,
+                        "network_id" => network_id.clone()
+                    );
+                }),
+            }))
+        });
 
-		// Telemetry
-		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
-			let network_id = network.local_peer_id().to_base58();
-			let pubkey = format!("{}", public_key);
-			let name = config.name.clone();
-			let impl_name = config.impl_name.to_owned();
-			let version = version.clone();
-			let chain_name = config.chain_spec.name().to_owned();
-			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
-				endpoints,
-				on_connect: Box::new(move || {
-					telemetry!(SUBSTRATE_INFO; "system.connected";
-						"name" => name.clone(),
-						"implementation" => impl_name.clone(),
-						"version" => version.clone(),
-						"config" => "",
-						"chain" => chain_name.clone(),
-						"pubkey" => &pubkey,
-						"authority" => is_authority,
-						"network_id" => network_id.clone()
-					);
-				}),
-			}))
-		});
+        Ok(Service {
+            client,
+            network: Some(network),
+            transaction_pool,
+            inherents_pool,
+            signal: Some(signal),
+            keystore,
+            config,
+            exit,
+            _rpc: Box::new(rpc),
+            _telemetry: telemetry,
+            _offchain_workers: offchain_workers,
+        })
+    }
 
-		Ok(Service {
-			client,
-			network: Some(network),
-			transaction_pool,
-			inherents_pool,
-			signal: Some(signal),
-			keystore,
-			config,
-			exit,
-			_rpc: Box::new(rpc),
-			_telemetry: telemetry,
-			_offchain_workers: offchain_workers,
-		})
-	}
+    /// give the authority key, if we are an authority and have a key
+    pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+        if self.config.roles != Roles::AUTHORITY {
+            return None;
+        }
+        let keystore = &self.keystore;
+        if let Ok(Some(Ok(key))) = keystore
+            .contents()
+            .map(|keys| keys.get(0).map(|k| keystore.load(k, "")))
+        {
+            Some(key)
+        } else {
+            None
+        }
+    }
 
-	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
-		if self.config.roles != Roles::AUTHORITY { return None }
-		let keystore = &self.keystore;
-		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, "")))
-		{
-			Some(key)
-		} else {
-			None
-		}
-	}
-
-	/// return a shared instance of Telemtry (if enabled)
-	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
-		self._telemetry.as_ref().map(|t| t.clone())
-	}
+    /// return a shared instance of Telemtry (if enabled)
+    pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+        self._telemetry.as_ref().map(|t| t.clone())
+    }
 }
 
-impl<Components> Service<Components> where Components: components::Components {
-	/// Get shared client instance.
-	pub fn client(&self) -> Arc<ComponentClient<Components>> {
-		self.client.clone()
-	}
+impl<Components> Service<Components>
+where
+    Components: components::Components,
+{
+    /// Get shared client instance.
+    pub fn client(&self) -> Arc<ComponentClient<Components>> {
+        self.client.clone()
+    }
 
-	/// Get shared network instance.
-	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.as_ref().expect("self.network always Some").clone()
-	}
+    /// Get shared network instance.
+    pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
+        self.network
+            .as_ref()
+            .expect("self.network always Some")
+            .clone()
+    }
 
-	/// Get shared transaction pool instance.
-	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
-		self.transaction_pool.clone()
-	}
+    /// Get shared transaction pool instance.
+    pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
+        self.transaction_pool.clone()
+    }
 
-	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
-		self.inherents_pool.clone()
-	}
+    /// Get shared inherents pool instance.
+    pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
+        self.inherents_pool.clone()
+    }
 
-	/// Get shared keystore.
-	pub fn keystore(&self) -> &Keystore {
-		&self.keystore
-	}
+    /// Get shared keystore.
+    pub fn keystore(&self) -> &Keystore {
+        &self.keystore
+    }
 
-	/// Get a handle to a future that will resolve on exit.
-	pub fn on_exit(&self) -> ::exit_future::Exit {
-		self.exit.clone()
-	}
+    /// Get a handle to a future that will resolve on exit.
+    pub fn on_exit(&self) -> ::exit_future::Exit {
+        self.exit.clone()
+    }
 }
 
+impl<Components> Drop for Service<Components>
+where
+    Components: components::Components,
+{
+    fn drop(&mut self) {
+        debug!(target: "service", "Substrate service shutdown");
 
-impl<Components> Drop for Service<Components> where Components: components::Components {
-	fn drop(&mut self) {
-		debug!(target: "service", "Substrate service shutdown");
+        drop(self.network.take());
 
-		drop(self.network.take());
-
-		if let Some(signal) = self.signal.take() {
-			signal.fire();
-		}
-	}
+        if let Some(signal) = self.signal.take() {
+            signal.fire();
+        }
+    }
 }
 
 fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error>
-	where F: Fn(&SocketAddr) -> Result<T, io::Error>,
+where
+    F: Fn(&SocketAddr) -> Result<T, io::Error>,
 {
-	Ok(match address {
-		Some(mut address) => Some(start(&address)
-			.or_else(|e| match e.kind() {
-				io::ErrorKind::AddrInUse |
-				io::ErrorKind::PermissionDenied => {
-					warn!("Unable to bind server to {}. Trying random port.", address);
-					address.set_port(0);
-					start(&address)
-				},
-				_ => Err(e),
-			})?),
-		None => None,
-	})
+    Ok(match address {
+        Some(mut address) => Some(start(&address).or_else(|e| match e.kind() {
+            io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
+                warn!("Unable to bind server to {}. Trying random port.", address);
+                address.set_port(0);
+                start(&address)
+            }
+            _ => Err(e),
+        })?),
+        None => None,
+    })
 }
 
 /// Transaction pool adapter.
 pub struct TransactionPoolAdapter<C: Components> {
-	imports_external_transactions: bool,
-	pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	client: Arc<ComponentClient<C>>,
+    imports_external_transactions: bool,
+    pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+    client: Arc<ComponentClient<C>>,
 }
 
 impl<C: Components> TransactionPoolAdapter<C> {
-	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		self.client.info()
-			.map(|info| BlockId::hash(info.chain.best_hash))
-			.map_err(|e| {
-				debug!("Error getting best block: {:?}", e);
-			})
-			.ok()
-	}
+    fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
+        self.client
+            .info()
+            .map(|info| BlockId::hash(info.chain.best_hash))
+            .map_err(|e| {
+                debug!("Error getting best block: {:?}", e);
+            })
+            .ok()
+    }
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
-	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>>
+    for TransactionPoolAdapter<C>
+where
+    <C as components::Components>::RuntimeApi: Send + Sync,
 {
-	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready()
-			.map(|t| {
-				let hash = t.hash.clone();
-				let ex: ComponentExtrinsic<C> = t.data.clone();
-				(hash, ex)
-			})
-			.collect()
-	}
+    fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
+        self.pool
+            .ready()
+            .map(|t| {
+                let hash = t.hash.clone();
+                let ex: ComponentExtrinsic<C> = t.data.clone();
+                (hash, ex)
+            })
+            .collect()
+    }
 
-	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
-		if !self.imports_external_transactions {
-			debug!("Transaction rejected");
-			return None;
-		}
+    fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
+        if !self.imports_external_transactions {
+            debug!("Transaction rejected");
+            return None;
+        }
 
-		let encoded = transaction.encode();
-		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
-			let best_block_id = self.best_block_id()?;
-			match self.pool.submit_one(&best_block_id, uxt) {
-				Ok(hash) => Some(hash),
-				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
-						hash.downcast::<ComponentExHash<C>>().ok()
-							.map(|x| x.as_ref().clone())
-					},
-					Ok(e) => {
-						debug!("Error adding transaction to the pool: {:?}", e);
-						None
-					},
-					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
-						None
-					},
-				}
-			}
-		} else {
-			debug!("Error decoding transaction");
-			None
-		}
-	}
+        let encoded = transaction.encode();
+        if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
+            let best_block_id = self.best_block_id()?;
+            match self.pool.submit_one(&best_block_id, uxt) {
+                Ok(hash) => Some(hash),
+                Err(e) => match e.into_pool_error() {
+                    Ok(txpool::error::Error(
+                        txpool::error::ErrorKind::AlreadyImported(hash),
+                        _,
+                    )) => hash
+                        .downcast::<ComponentExHash<C>>()
+                        .ok()
+                        .map(|x| x.as_ref().clone()),
+                    Ok(e) => {
+                        debug!("Error adding transaction to the pool: {:?}", e);
+                        None
+                    }
+                    Err(e) => {
+                        debug!("Error converting pool error: {:?}", e);
+                        None
+                    }
+                },
+            }
+        } else {
+            debug!("Error decoding transaction");
+            None
+        }
+    }
 
-	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
-		self.pool.on_broadcasted(propagations)
-	}
+    fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
+        self.pool.on_broadcasted(propagations)
+    }
 }
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.

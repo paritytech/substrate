@@ -16,135 +16,137 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
-use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use crate::exec::{CallReceipt, EmptyOutputBuf, Ext, InstantiateReceipt, OutputBuf, VmExecResult};
+use crate::gas::{approx_gas_for_balance, GasMeter, GasMeterResult, Token};
+use crate::{BalanceOf, CodeHash, ComputeDispatchFee, Schedule, Trait};
+use parity_codec::{Decode, Encode};
+use rstd::mem;
+use rstd::prelude::*;
+use runtime_primitives::traits::{As, Bounded, CheckedMul};
 use sandbox;
 use system;
-use rstd::prelude::*;
-use rstd::mem;
-use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, Bounded};
 
 /// Enumerates all possible *special* trap conditions.
 ///
 /// In this runtime traps used not only for signaling about errors but also
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
-	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(OutputBuf),
+    /// Signals that trap was generated in response to call `ext_return` host function.
+    Return(OutputBuf),
 }
 
 /// Can only be used for one call.
 pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
-	ext: &'a mut E,
-	input_data: &'data [u8],
-	// A VM can return a result only once and only by value. So
-	// we wrap output buffer to make it possible to take the buffer out.
-	empty_output_buf: Option<EmptyOutputBuf>,
-	scratch_buf: Vec<u8>,
-	schedule: &'a Schedule<<E::T as Trait>::Gas>,
-	memory: sandbox::Memory,
-	gas_meter: &'a mut GasMeter<E::T>,
-	special_trap: Option<SpecialTrap>,
+    ext: &'a mut E,
+    input_data: &'data [u8],
+    // A VM can return a result only once and only by value. So
+    // we wrap output buffer to make it possible to take the buffer out.
+    empty_output_buf: Option<EmptyOutputBuf>,
+    scratch_buf: Vec<u8>,
+    schedule: &'a Schedule<<E::T as Trait>::Gas>,
+    memory: sandbox::Memory,
+    gas_meter: &'a mut GasMeter<E::T>,
+    special_trap: Option<SpecialTrap>,
 }
 impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
-	pub(crate) fn new(
-		ext: &'a mut E,
-		input_data: &'data [u8],
-		empty_output_buf: EmptyOutputBuf,
-		schedule: &'a Schedule<<E::T as Trait>::Gas>,
-		memory: sandbox::Memory,
-		gas_meter: &'a mut GasMeter<E::T>,
-	) -> Self {
-		Runtime {
-			ext,
-			input_data,
-			empty_output_buf: Some(empty_output_buf),
-			scratch_buf: Vec::new(),
-			schedule,
-			memory,
-			gas_meter,
-			special_trap: None,
-		}
-	}
+    pub(crate) fn new(
+        ext: &'a mut E,
+        input_data: &'data [u8],
+        empty_output_buf: EmptyOutputBuf,
+        schedule: &'a Schedule<<E::T as Trait>::Gas>,
+        memory: sandbox::Memory,
+        gas_meter: &'a mut GasMeter<E::T>,
+    ) -> Self {
+        Runtime {
+            ext,
+            input_data,
+            empty_output_buf: Some(empty_output_buf),
+            scratch_buf: Vec::new(),
+            schedule,
+            memory,
+            gas_meter,
+            special_trap: None,
+        }
+    }
 
-	fn memory(&self) -> &sandbox::Memory {
-		&self.memory
-	}
+    fn memory(&self) -> &sandbox::Memory {
+        &self.memory
+    }
 }
 
 pub(crate) fn to_execution_result<E: Ext>(
-	runtime: Runtime<E>,
-	sandbox_err: Option<sandbox::Error>,
+    runtime: Runtime<E>,
+    sandbox_err: Option<sandbox::Error>,
 ) -> VmExecResult {
-	// Check the exact type of the error. It could be plain trap or
-	// special runtime trap the we must recognize.
-	match (sandbox_err, runtime.special_trap) {
-		// No traps were generated. Proceed normally.
-		(None, None) => VmExecResult::Ok,
-		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(buf))) => VmExecResult::Returned(buf),
-		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => VmExecResult::Trap("during execution"),
-		// Any other case (such as special trap flag without actual trap) signifies
-		// a logic error.
-		_ => unreachable!(),
-	}
+    // Check the exact type of the error. It could be plain trap or
+    // special runtime trap the we must recognize.
+    match (sandbox_err, runtime.special_trap) {
+        // No traps were generated. Proceed normally.
+        (None, None) => VmExecResult::Ok,
+        // Special case. The trap was the result of the execution `return` host function.
+        (Some(sandbox::Error::Execution), Some(SpecialTrap::Return(buf))) => {
+            VmExecResult::Returned(buf)
+        }
+        // Any other kind of a trap should result in a failure.
+        (Some(_), _) => VmExecResult::Trap("during execution"),
+        // Any other case (such as special trap flag without actual trap) signifies
+        // a logic error.
+        _ => unreachable!(),
+    }
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
 pub enum RuntimeToken<Gas> {
-	/// Explicit call to the `gas` function. Charge the gas meter
-	/// with the value provided.
-	Explicit(u32),
-	/// The given number of bytes is read from the sandbox memory.
-	ReadMemory(u32),
-	/// The given number of bytes is written to the sandbox memory.
-	WriteMemory(u32),
-	/// The given number of bytes is read from the sandbox memory and
-	/// is returned as the return data buffer of the call.
-	ReturnData(u32),
-	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
-	ComputedDispatchFee(Gas),
+    /// Explicit call to the `gas` function. Charge the gas meter
+    /// with the value provided.
+    Explicit(u32),
+    /// The given number of bytes is read from the sandbox memory.
+    ReadMemory(u32),
+    /// The given number of bytes is written to the sandbox memory.
+    WriteMemory(u32),
+    /// The given number of bytes is read from the sandbox memory and
+    /// is returned as the return data buffer of the call.
+    ReturnData(u32),
+    /// Dispatch fee calculated by `T::ComputeDispatchFee`.
+    ComputedDispatchFee(Gas),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
-	type Metadata = Schedule<T::Gas>;
+    type Metadata = Schedule<T::Gas>;
 
-	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
-		use self::RuntimeToken::*;
-		let value = match *self {
-			Explicit(amount) => Some(<T::Gas as As<u32>>::sa(amount)),
-			ReadMemory(byte_count) => metadata
-				.sandbox_data_read_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			WriteMemory(byte_count) => metadata
-				.sandbox_data_write_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			ReturnData(byte_count) => metadata
-				.return_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			ComputedDispatchFee(gas) => Some(gas),
-		};
+    fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
+        use self::RuntimeToken::*;
+        let value = match *self {
+            Explicit(amount) => Some(<T::Gas as As<u32>>::sa(amount)),
+            ReadMemory(byte_count) => metadata
+                .sandbox_data_read_cost
+                .checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+            WriteMemory(byte_count) => metadata
+                .sandbox_data_write_cost
+                .checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+            ReturnData(byte_count) => metadata
+                .return_data_per_byte_cost
+                .checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+            ComputedDispatchFee(gas) => Some(gas),
+        };
 
-		value.unwrap_or_else(|| Bounded::max_value())
-	}
+        value.unwrap_or_else(|| Bounded::max_value())
+    }
 }
 
 /// Charge the gas meter with the specified token.
 ///
 /// Returns `Err(HostError)` if there is not enough gas.
 fn charge_gas<T: Trait, Tok: Token<T>>(
-	gas_meter: &mut GasMeter<T>,
-	metadata: &Tok::Metadata,
-	token: Tok,
+    gas_meter: &mut GasMeter<T>,
+    metadata: &Tok::Metadata,
+    token: Tok,
 ) -> Result<(), sandbox::HostError> {
-	match gas_meter.charge(metadata, token) {
-		GasMeterResult::Proceed => Ok(()),
-		GasMeterResult::OutOfGas => Err(sandbox::HostError),
-	}
+    match gas_meter.charge(metadata, token) {
+        GasMeterResult::Proceed => Ok(()),
+        GasMeterResult::OutOfGas => Err(sandbox::HostError),
+    }
 }
 
 /// Read designated chunk from the sandbox memory, consuming an appropriate amount of
@@ -156,18 +158,18 @@ fn charge_gas<T: Trait, Tok: Token<T>>(
 /// - out of gas
 /// - requested buffer is not within the bounds of the sandbox memory.
 fn read_sandbox_memory<E: Ext>(
-	ctx: &mut Runtime<E>,
-	ptr: u32,
-	len: u32,
+    ctx: &mut Runtime<E>,
+    ptr: u32,
+    len: u32,
 ) -> Result<Vec<u8>, sandbox::HostError> {
-	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
+    charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
-	let mut buf = Vec::new();
-	buf.resize(len as usize, 0);
+    let mut buf = Vec::new();
+    buf.resize(len as usize, 0);
 
-	ctx.memory().get(ptr, &mut buf)?;
+    ctx.memory().get(ptr, &mut buf)?;
 
-	Ok(buf)
+    Ok(buf)
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -179,17 +181,21 @@ fn read_sandbox_memory<E: Ext>(
 /// - out of gas
 /// - designated area is not within the bounds of the sandbox memory.
 fn write_sandbox_memory<T: Trait>(
-	schedule: &Schedule<T::Gas>,
-	gas_meter: &mut GasMeter<T>,
-	memory: &sandbox::Memory,
-	ptr: u32,
-	buf: &[u8],
+    schedule: &Schedule<T::Gas>,
+    gas_meter: &mut GasMeter<T>,
+    memory: &sandbox::Memory,
+    ptr: u32,
+    buf: &[u8],
 ) -> Result<(), sandbox::HostError> {
-	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
+    charge_gas(
+        gas_meter,
+        schedule,
+        RuntimeToken::WriteMemory(buf.len() as u32),
+    )?;
 
-	memory.set(ptr, buf)?;
+    memory.set(ptr, buf)?;
 
-	Ok(())
+    Ok(())
 }
 
 // ***********************************************************

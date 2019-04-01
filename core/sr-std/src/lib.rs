@@ -20,9 +20,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
-
-#![cfg_attr(feature = "std", doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
-#![cfg_attr(not(feature = "std"), doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
+#![cfg_attr(
+    feature = "std",
+    doc = "Substrate runtime standard library as compiled when linked with Rust's standard library."
+)]
+#![cfg_attr(
+    not(feature = "std"),
+    doc = "Substrate's runtime standard library as compiled without Rust's standard library."
+)]
 
 #[macro_export]
 macro_rules! map {
@@ -41,13 +46,13 @@ include!("../without_std.rs");
 ///
 /// This should include only things which are in the normal std prelude.
 pub mod prelude {
-	pub use crate::vec::Vec;
-	pub use crate::boxed::Box;
-	pub use crate::cmp::{Eq, PartialEq};
-	pub use crate::clone::Clone;
+    pub use crate::boxed::Box;
+    pub use crate::clone::Clone;
+    pub use crate::cmp::{Eq, PartialEq};
+    pub use crate::vec::Vec;
 
-	// Re-export `vec!` macro here, but not in `std` mode, since
-	// std's prelude already brings `vec!` into the scope.
-	#[cfg(not(feature = "std"))]
-	pub use crate::vec;
+    // Re-export `vec!` macro here, but not in `std` mode, since
+    // std's prelude already brings `vec!` into the scope.
+    #[cfg(not(feature = "std"))]
+    pub use crate::vec;
 }

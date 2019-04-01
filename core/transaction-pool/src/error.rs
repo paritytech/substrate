@@ -17,23 +17,24 @@
 //! Transaction pool error.
 
 use client;
-use txpool;
 use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed, impl_extract_backtrace, impl_error_chain_kind
+    error_chain, error_chain_processing, impl_error_chain_kind, impl_error_chain_processed,
+    impl_extract_backtrace,
 };
+use txpool;
 
 error_chain! {
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
-		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
-	}
+    links {
+        Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+        Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+    }
 }
 
 impl txpool::IntoPoolError for Error {
-	fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
-		match self {
-			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
-			e => Err(e),
-		}
-	}
+    fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
+        match self {
+            Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
+            e => Err(e),
+        }
+    }
 }

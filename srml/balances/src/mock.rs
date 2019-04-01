@@ -18,116 +18,132 @@
 
 #![cfg(test)]
 
+use crate::{GenesisConfig, Module, Trait};
 use primitives::BuildStorage;
-use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{
+    testing::{Digest, DigestItem, Header},
+    traits::IdentityLookup,
+};
 use runtime_io;
 use srml_support::impl_outer_origin;
-use crate::{GenesisConfig, Module, Trait};
+use substrate_primitives::{Blake2Hasher, H256};
 
-impl_outer_origin!{
-	pub enum Origin for Runtime {}
+impl_outer_origin! {
+    pub enum Origin for Runtime {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = ();
-	type Log = DigestItem;
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Hash = H256;
+    type Hashing = ::primitives::traits::BlakeTwo256;
+    type Digest = Digest;
+    type AccountId = u64;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = ();
+    type Log = DigestItem;
 }
 impl Trait for Runtime {
-	type Balance = u64;
-	type OnFreeBalanceZero = ();
-	type OnNewAccount = ();
-	type Event = ();
-	type TransactionPayment = ();
-	type DustRemoval = ();
-	type TransferPayment = ();
+    type Balance = u64;
+    type OnFreeBalanceZero = ();
+    type OnNewAccount = ();
+    type Event = ();
+    type TransactionPayment = ();
+    type DustRemoval = ();
+    type TransferPayment = ();
 }
 
 pub struct ExtBuilder {
-	transaction_base_fee: u64,
-	transaction_byte_fee: u64,
-	existential_deposit: u64,
-	transfer_fee: u64,
-	creation_fee: u64,
-	monied: bool,
-	vesting: bool,
+    transaction_base_fee: u64,
+    transaction_byte_fee: u64,
+    existential_deposit: u64,
+    transfer_fee: u64,
+    creation_fee: u64,
+    monied: bool,
+    vesting: bool,
 }
 impl Default for ExtBuilder {
-	fn default() -> Self {
-		Self {
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			monied: false,
-			vesting: false,
-		}
-	}
+    fn default() -> Self {
+        Self {
+            transaction_base_fee: 0,
+            transaction_byte_fee: 0,
+            existential_deposit: 0,
+            transfer_fee: 0,
+            creation_fee: 0,
+            monied: false,
+            vesting: false,
+        }
+    }
 }
 impl ExtBuilder {
-	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
-		self.existential_deposit = existential_deposit;
-		self
-	}
-	#[allow(dead_code)]
-	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
-		self.transfer_fee = transfer_fee;
-		self
-	}
-	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
-		self.creation_fee = creation_fee;
-		self
-	}
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
-		self.transaction_base_fee = base_fee;
-		self.transaction_byte_fee = byte_fee;
-		self
-	}
-	pub fn monied(mut self, monied: bool) -> Self {
-		self.monied = monied;
-		if self.existential_deposit == 0 {
-			self.existential_deposit = 1;
-		}
-		self
-	}
-	pub fn vesting(mut self, vesting: bool) -> Self {
-		self.vesting = vesting;
-		self
-	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Runtime> {
-			transaction_base_fee: self.transaction_base_fee,
-			transaction_byte_fee: self.transaction_byte_fee,
-			balances: if self.monied {
-				vec![(1, 10 * self.existential_deposit), (2, 20 * self.existential_deposit), (3, 30 * self.existential_deposit), (4, 40 * self.existential_deposit)]
-			} else {
-				vec![]
-			},
-			existential_deposit: self.existential_deposit,
-			transfer_fee: self.transfer_fee,
-			creation_fee: self.creation_fee,
-			vesting: if self.vesting && self.monied {
-				vec![(1, 0, 10), (2, 10, 20)]
-			} else {
-				vec![]
-			},
-		}.build_storage().unwrap().0);
-		t.into()
-	}
+    pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+        self.existential_deposit = existential_deposit;
+        self
+    }
+    #[allow(dead_code)]
+    pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
+        self.transfer_fee = transfer_fee;
+        self
+    }
+    pub fn creation_fee(mut self, creation_fee: u64) -> Self {
+        self.creation_fee = creation_fee;
+        self
+    }
+    pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
+        self.transaction_base_fee = base_fee;
+        self.transaction_byte_fee = byte_fee;
+        self
+    }
+    pub fn monied(mut self, monied: bool) -> Self {
+        self.monied = monied;
+        if self.existential_deposit == 0 {
+            self.existential_deposit = 1;
+        }
+        self
+    }
+    pub fn vesting(mut self, vesting: bool) -> Self {
+        self.vesting = vesting;
+        self
+    }
+    pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+        let mut t = system::GenesisConfig::<Runtime>::default()
+            .build_storage()
+            .unwrap()
+            .0;
+        t.extend(
+            GenesisConfig::<Runtime> {
+                transaction_base_fee: self.transaction_base_fee,
+                transaction_byte_fee: self.transaction_byte_fee,
+                balances: if self.monied {
+                    vec![
+                        (1, 10 * self.existential_deposit),
+                        (2, 20 * self.existential_deposit),
+                        (3, 30 * self.existential_deposit),
+                        (4, 40 * self.existential_deposit),
+                    ]
+                } else {
+                    vec![]
+                },
+                existential_deposit: self.existential_deposit,
+                transfer_fee: self.transfer_fee,
+                creation_fee: self.creation_fee,
+                vesting: if self.vesting && self.monied {
+                    vec![(1, 0, 10), (2, 10, 20)]
+                } else {
+                    vec![]
+                },
+            }
+            .build_storage()
+            .unwrap()
+            .0,
+        );
+        t.into()
+    }
 }
 
 pub type System = system::Module<Runtime>;

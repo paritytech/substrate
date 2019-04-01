@@ -22,10 +22,10 @@ use std::fmt;
 #[cfg(feature = "std")]
 use serde_derive::Serialize;
 
-use rstd::prelude::*;
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
+use crate::codec::{Codec, Decode, Encode};
+use crate::traits::{self, Block as BlockT, Header as HeaderT, MaybeSerialize, Member};
 use crate::Justification;
+use rstd::prelude::*;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone)]
@@ -33,31 +33,31 @@ use crate::Justification;
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub enum BlockId<Block: BlockT> {
-	/// Identify by block header hash.
-	Hash(<<Block as BlockT>::Header as HeaderT>::Hash),
-	/// Identify by block number.
-	Number(<<Block as BlockT>::Header as HeaderT>::Number),
+    /// Identify by block header hash.
+    Hash(<<Block as BlockT>::Header as HeaderT>::Hash),
+    /// Identify by block number.
+    Number(<<Block as BlockT>::Header as HeaderT>::Number),
 }
 
 impl<Block: BlockT> BlockId<Block> {
-	/// Create a block ID from a hash.
-	pub fn hash(hash: Block::Hash) -> Self {
-		BlockId::Hash(hash)
-	}
+    /// Create a block ID from a hash.
+    pub fn hash(hash: Block::Hash) -> Self {
+        BlockId::Hash(hash)
+    }
 
-	/// Create a block ID from a number.
-	pub fn number(number: <Block::Header as HeaderT>::Number) -> Self {
-		BlockId::Number(number)
-	}
+    /// Create a block ID from a number.
+    pub fn number(number: <Block::Header as HeaderT>::Number) -> Self {
+        BlockId::Number(number)
+    }
 }
 
 impl<Block: BlockT> Copy for BlockId<Block> {}
 
 #[cfg(feature = "std")]
 impl<Block: BlockT> fmt::Display for BlockId<Block> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{:?}", self)
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 /// Abstraction over a substrate block.
@@ -66,33 +66,33 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Block<Header, Extrinsic: MaybeSerialize> {
-	/// The block header.
-	pub header: Header,
-	/// The accompanying extrinsics.
-	pub extrinsics: Vec<Extrinsic>,
+    /// The block header.
+    pub header: Header,
+    /// The accompanying extrinsics.
+    pub extrinsics: Vec<Extrinsic>,
 }
 
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
-	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic,
+    Header: HeaderT,
+    Extrinsic: Member + Codec + traits::Extrinsic,
 {
-	type Extrinsic = Extrinsic;
-	type Header = Header;
-	type Hash = <Self::Header as traits::Header>::Hash;
+    type Extrinsic = Extrinsic;
+    type Header = Header;
+    type Hash = <Self::Header as traits::Header>::Hash;
 
-	fn header(&self) -> &Self::Header {
-		&self.header
-	}
-	fn extrinsics(&self) -> &[Self::Extrinsic] {
-		&self.extrinsics[..]
-	}
-	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
-		(self.header, self.extrinsics)
-	}
-	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
-		Block { header, extrinsics }
-	}
+    fn header(&self) -> &Self::Header {
+        &self.header
+    }
+    fn extrinsics(&self) -> &[Self::Extrinsic] {
+        &self.extrinsics[..]
+    }
+    fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
+        (self.header, self.extrinsics)
+    }
+    fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
+        Block { header, extrinsics }
+    }
 }
 
 /// Abstraction over a substrate block and justification.
@@ -101,8 +101,8 @@ where
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct SignedBlock<Block> {
-	/// Full block.
-	pub block: Block,
-	/// Block justification.
-	pub justification: Option<Justification>,
+    /// Full block.
+    pub block: Block,
+    /// Block justification.
+    pub justification: Option<Justification>,
 }

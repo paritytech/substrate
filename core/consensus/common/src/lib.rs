@@ -22,54 +22,59 @@
 
 // This provides "unused" building blocks to other crates
 #![allow(dead_code)]
-
 // our error-chain could potentially blow up otherwise
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-#[macro_use] extern crate crossbeam_channel;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate crossbeam_channel;
+#[macro_use]
+extern crate log;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block};
 use futures::prelude::*;
 pub use inherents::InherentData;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{AuthorityIdFor, Block};
 
-pub mod offline_tracker;
-pub mod error;
 mod block_import;
-pub mod import_queue;
+pub mod error;
 pub mod evaluation;
+pub mod import_queue;
+pub mod offline_tracker;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::{Error, ErrorKind};
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, JustificationImport,
+    BlockImport, BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult, ImportedAux,
+    JustificationImport,
 };
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
-	type Error: std::error::Error + Send + 'static;
+    type Error: std::error::Error + Send + 'static;
 
-	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
+    /// Get the authorities at the given block.
+    fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: Block> {
-	/// The proposer type this creates.
-	type Proposer: Proposer<B>;
-	/// Error which can occur upon creation.
-	type Error: From<Error>;
+    /// The proposer type this creates.
+    type Proposer: Proposer<B>;
+    /// Error which can occur upon creation.
+    type Error: From<Error>;
 
-	/// Initialize the proposal logic on top of a specific header. Provide
-	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>])
-		-> Result<Self::Proposer, Self::Error>;
+    /// Initialize the proposal logic on top of a specific header. Provide
+    /// the authorities at that header.
+    fn init(
+        &self,
+        parent_header: &B::Header,
+        authorities: &[AuthorityIdFor<B>],
+    ) -> Result<Self::Proposer, Self::Error>;
 }
 
 /// Logic for a proposer.
@@ -79,12 +84,12 @@ pub trait Environment<B: Block> {
 ///
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
 pub trait Proposer<B: Block> {
-	/// Error type which can occur when proposing or evaluating.
-	type Error: From<Error> + ::std::fmt::Debug + 'static;
-	/// Future that resolves to a committed proposal.
-	type Create: IntoFuture<Item=B, Error=Self::Error>;
-	/// Create a proposal.
-	fn propose(&self, inherent_data: InherentData, max_duration: Duration) -> Self::Create;
+    /// Error type which can occur when proposing or evaluating.
+    type Error: From<Error> + ::std::fmt::Debug + 'static;
+    /// Future that resolves to a committed proposal.
+    type Create: IntoFuture<Item = B, Error = Self::Error>;
+    /// Create a proposal.
+    fn propose(&self, inherent_data: InherentData, max_duration: Duration) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.
@@ -92,12 +97,12 @@ pub trait Proposer<B: Block> {
 /// Generally, consensus authoring work isn't undertaken while well behind
 /// the head of the chain.
 pub trait SyncOracle {
-	/// Whether the synchronization service is undergoing major sync.
-	/// Returns true if so.
-	fn is_major_syncing(&self) -> bool;
-	/// Whether the synchronization service is offline.
-	/// Returns true if so.
-	fn is_offline(&self) -> bool;
+    /// Whether the synchronization service is undergoing major sync.
+    /// Returns true if so.
+    fn is_major_syncing(&self) -> bool;
+    /// Whether the synchronization service is offline.
+    /// Returns true if so.
+    fn is_offline(&self) -> bool;
 }
 
 /// A synchronization oracle for when there is no network.
@@ -105,24 +110,28 @@ pub trait SyncOracle {
 pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
-	fn is_major_syncing(&self) -> bool { false }
-	fn is_offline(&self) -> bool { false }
+    fn is_major_syncing(&self) -> bool {
+        false
+    }
+    fn is_offline(&self) -> bool {
+        false
+    }
 }
 
 impl<T: SyncOracle> SyncOracle for Arc<T> {
-	fn is_major_syncing(&self) -> bool {
-		T::is_major_syncing(&*self)
-	}
-	fn is_offline(&self) -> bool {
-		T::is_offline(&*self)
-	}
+    fn is_major_syncing(&self) -> bool {
+        T::is_major_syncing(&*self)
+    }
+    fn is_offline(&self) -> bool {
+        T::is_offline(&*self)
+    }
 }
 
 /// A list of all well known keys in the cache.
 pub mod well_known_cache_keys {
-	/// The type representing cache keys.
-	pub type Id = [u8; 4];
+    /// The type representing cache keys.
+    pub type Id = [u8; 4];
 
-	/// A list of authorities.
-	pub const AUTHORITIES: Id = *b"auth";
+    /// A list of authorities.
+    pub const AUTHORITIES: Id = *b"auth";
 }

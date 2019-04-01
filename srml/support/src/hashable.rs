@@ -20,19 +20,19 @@ use crate::codec::Codec;
 use runtime_io::{blake2_256, twox_128, twox_256};
 
 pub trait Hashable: Sized {
-	fn blake2_256(&self) -> [u8; 32];
-	fn twox_128(&self) -> [u8; 16];
-	fn twox_256(&self) -> [u8; 32];
+    fn blake2_256(&self) -> [u8; 32];
+    fn twox_128(&self) -> [u8; 16];
+    fn twox_256(&self) -> [u8; 32];
 }
 
 impl<T: Codec> Hashable for T {
-	fn blake2_256(&self) -> [u8; 32] {
-		self.using_encoded(blake2_256)
-	}
-	fn twox_128(&self) -> [u8; 16] {
-		self.using_encoded(twox_128)
-	}
-	fn twox_256(&self) -> [u8; 32] {
-		self.using_encoded(twox_256)
-	}
+    fn blake2_256(&self) -> [u8; 32] {
+        self.using_encoded(blake2_256)
+    }
+    fn twox_128(&self) -> [u8; 16] {
+        self.using_encoded(twox_128)
+    }
+    fn twox_256(&self) -> [u8; 32] {
+        self.using_encoded(twox_256)
+    }
 }

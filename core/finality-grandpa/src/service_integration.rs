@@ -15,26 +15,25 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 /// Integrate grandpa finality with substrate service
-
 use client;
 use service::{FullBackend, FullExecutor, ServiceFactory};
 
 pub type BlockImportForService<F> = crate::GrandpaBlockImport<
-	FullBackend<F>,
-	FullExecutor<F>,
-	<F as ServiceFactory>::Block,
-	<F as ServiceFactory>::RuntimeApi,
-	client::Client<
+    FullBackend<F>,
+    FullExecutor<F>,
+    <F as ServiceFactory>::Block,
+    <F as ServiceFactory>::RuntimeApi,
+    client::Client<
         FullBackend<F>,
         FullExecutor<F>,
         <F as ServiceFactory>::Block,
-        <F as ServiceFactory>::RuntimeApi
+        <F as ServiceFactory>::RuntimeApi,
     >,
 >;
 
 pub type LinkHalfForService<F> = crate::LinkHalf<
-	FullBackend<F>,
-	FullExecutor<F>,
-	<F as ServiceFactory>::Block,
-	<F as ServiceFactory>::RuntimeApi
+    FullBackend<F>,
+    FullExecutor<F>,
+    <F as ServiceFactory>::Block,
+    <F as ServiceFactory>::RuntimeApi,
 >;

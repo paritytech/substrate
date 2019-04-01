@@ -18,38 +18,38 @@
 
 use error_chain::*;
 
-use crate::rpc;
 use crate::errors;
+use crate::rpc;
 use crate::system::helpers::Health;
 
 error_chain! {
-	errors {
-		/// Node is not fully functional
-		NotHealthy(h: Health) {
-			description("node is not healthy"),
-			display("Node is not fully functional: {}", h)
-		}
+    errors {
+        /// Node is not fully functional
+        NotHealthy(h: Health) {
+            description("node is not healthy"),
+            display("Node is not fully functional: {}", h)
+        }
 
-		/// Not implemented yet
-		Unimplemented {
-			description("not yet implemented"),
-			display("Method Not Implemented"),
-		}
-	}
+        /// Not implemented yet
+        Unimplemented {
+            description("not yet implemented"),
+            display("Method Not Implemented"),
+        }
+    }
 }
 
 const ERROR: i64 = 2000;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
-			Error(ErrorKind::NotHealthy(h), _) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(ERROR + 1),
-				message: "node is not healthy".into(),
-				data:serde_json::to_value(h).ok(),
-			},
-			e => errors::internal(e),
-		}
-	}
+    fn from(e: Error) -> Self {
+        match e {
+            Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+            Error(ErrorKind::NotHealthy(h), _) => rpc::Error {
+                code: rpc::ErrorCode::ServerError(ERROR + 1),
+                message: "node is not healthy".into(),
+                data: serde_json::to_value(h).ok(),
+            },
+            e => errors::internal(e),
+        }
+    }
 }

@@ -14,212 +14,225 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::*;
 use self::error::{Error, ErrorKind};
+use super::*;
 
-use sr_io::twox_128;
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
-use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt};
+use sr_io::twox_128;
+use test_client::{self, runtime, AccountKeyring, BlockBuilderExt, TestClient};
 
 #[test]
 fn should_return_storage() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::new());
-	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(core.executor()));
+    let core = ::tokio::runtime::Runtime::new().unwrap();
+    let client = Arc::new(test_client::new());
+    let genesis_hash = client.genesis_hash();
+    let client = State::new(client, Subscriptions::new(core.executor()));
 
-	assert_matches!(
-		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
-		Ok(None)
-	)
+    assert_matches!(
+        client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
+        Ok(None)
+    )
 }
 
 #[test]
 fn should_call_contract() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::new());
-	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(core.executor()));
+    let core = ::tokio::runtime::Runtime::new().unwrap();
+    let client = Arc::new(test_client::new());
+    let genesis_hash = client.genesis_hash();
+    let client = State::new(client, Subscriptions::new(core.executor()));
 
-	assert_matches!(
-		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
-		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
-	)
+    assert_matches!(
+        client.call(
+            "balanceOf".into(),
+            Bytes(vec![1, 2, 3]),
+            Some(genesis_hash).into()
+        ),
+        Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
+    )
 }
 
 #[test]
 fn should_notify_about_storage_changes() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+    let mut core = ::tokio::runtime::Runtime::new().unwrap();
+    let remote = core.executor();
+    let (subscriber, id, transport) = Subscriber::new_test("test");
 
-	{
-		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
+    {
+        let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
-		api.subscribe_storage(Default::default(), subscriber, None.into());
+        api.subscribe_storage(Default::default(), subscriber, None.into());
 
-		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+        // assert id assigned
+        assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let mut builder = api.client.new_block().unwrap();
-		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
-		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-	}
+        let mut builder = api.client.new_block().unwrap();
+        builder
+            .push_transfer(runtime::Transfer {
+                from: AccountKeyring::Alice.into(),
+                to: AccountKeyring::Ferdie.into(),
+                amount: 42,
+                nonce: 0,
+            })
+            .unwrap();
+        api.client
+            .import(BlockOrigin::Own, builder.bake().unwrap())
+            .unwrap();
+    }
 
-	// assert notification sent to transport
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+    // assert notification sent to transport
+    let (notification, next) = core.block_on(transport.into_future()).unwrap();
+    assert!(notification.is_some());
+    // no more notifications on this channel
+    assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
 
 #[test]
 fn should_send_initial_storage_changes_and_notifications() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+    let mut core = ::tokio::runtime::Runtime::new().unwrap();
+    let remote = core.executor();
+    let (subscriber, id, transport) = Subscriber::new_test("test");
 
-	{
-		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
+    {
+        let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
-		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+        let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(
+            AccountKeyring::Alice.into(),
+        ));
 
-		api.subscribe_storage(Default::default(), subscriber, Some(vec![
-			StorageKey(alice_balance_key.to_vec()),
-		]).into());
+        api.subscribe_storage(
+            Default::default(),
+            subscriber,
+            Some(vec![StorageKey(alice_balance_key.to_vec())]).into(),
+        );
 
-		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+        // assert id assigned
+        assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let mut builder = api.client.new_block().unwrap();
-		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
-		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-	}
+        let mut builder = api.client.new_block().unwrap();
+        builder
+            .push_transfer(runtime::Transfer {
+                from: AccountKeyring::Alice.into(),
+                to: AccountKeyring::Ferdie.into(),
+                amount: 42,
+                nonce: 0,
+            })
+            .unwrap();
+        api.client
+            .import(BlockOrigin::Own, builder.bake().unwrap())
+            .unwrap();
+    }
 
-	// assert initial values sent to transport
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = core.block_on(next.into_future()).unwrap();
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+    // assert initial values sent to transport
+    let (notification, next) = core.block_on(transport.into_future()).unwrap();
+    assert!(notification.is_some());
+    // assert notification sent to transport
+    let (notification, next) = core.block_on(next.into_future()).unwrap();
+    assert!(notification.is_some());
+    // no more notifications on this channel
+    assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
 
 #[test]
 fn should_query_storage() {
-	type TestClient = test_client::client::Client<
-		test_client::Backend,
-		test_client::Executor,
-		runtime::Block,
-		runtime::RuntimeApi
-	>;
+    type TestClient = test_client::client::Client<
+        test_client::Backend,
+        test_client::Executor,
+        runtime::Block,
+        runtime::RuntimeApi,
+    >;
 
-	fn run_tests(client: Arc<TestClient>) {
-		let core = ::tokio::runtime::Runtime::new().unwrap();
-		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+    fn run_tests(client: Arc<TestClient>) {
+        let core = ::tokio::runtime::Runtime::new().unwrap();
+        let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
-		let add_block = |nonce| {
-			let mut builder = client.new_block().unwrap();
-			builder.push_transfer(runtime::Transfer {
-				from: AccountKeyring::Alice.into(),
-				to: AccountKeyring::Ferdie.into(),
-				amount: 42,
-				nonce,
-			}).unwrap();
-			let block = builder.bake().unwrap();
-			let hash = block.header.hash();
-			client.import(BlockOrigin::Own, block).unwrap();
-			hash
-		};
-		let block1_hash = add_block(0);
-		let block2_hash = add_block(1);
-		let genesis_hash = client.genesis_hash();
+        let add_block = |nonce| {
+            let mut builder = client.new_block().unwrap();
+            builder
+                .push_transfer(runtime::Transfer {
+                    from: AccountKeyring::Alice.into(),
+                    to: AccountKeyring::Ferdie.into(),
+                    amount: 42,
+                    nonce,
+                })
+                .unwrap();
+            let block = builder.bake().unwrap();
+            let hash = block.header.hash();
+            client.import(BlockOrigin::Own, block).unwrap();
+            hash
+        };
+        let block1_hash = add_block(0);
+        let block2_hash = add_block(1);
+        let genesis_hash = client.genesis_hash();
 
-		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+        let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(
+            AccountKeyring::Alice.into(),
+        ));
 
-		let mut expected = vec![
-			StorageChangeSet {
-				block: genesis_hash,
-				changes: vec![
-					(
-						StorageKey(alice_balance_key.to_vec()),
-						Some(StorageData(vec![232, 3, 0, 0, 0, 0, 0, 0]))
-					),
-				],
-			},
-			StorageChangeSet {
-				block: block1_hash,
-				changes: vec![
-					(
-						StorageKey(alice_balance_key.to_vec()),
-						Some(StorageData(vec![190, 3, 0, 0, 0, 0, 0, 0]))
-					),
-				],
-			},
-		];
+        let mut expected = vec![
+            StorageChangeSet {
+                block: genesis_hash,
+                changes: vec![(
+                    StorageKey(alice_balance_key.to_vec()),
+                    Some(StorageData(vec![232, 3, 0, 0, 0, 0, 0, 0])),
+                )],
+            },
+            StorageChangeSet {
+                block: block1_hash,
+                changes: vec![(
+                    StorageKey(alice_balance_key.to_vec()),
+                    Some(StorageData(vec![190, 3, 0, 0, 0, 0, 0, 0])),
+                )],
+            },
+        ];
 
-		// Query changes only up to block1
-		let result = api.query_storage(
-			vec![StorageKey(alice_balance_key.to_vec())],
-			genesis_hash,
-			Some(block1_hash).into(),
-		);
+        // Query changes only up to block1
+        let result = api.query_storage(
+            vec![StorageKey(alice_balance_key.to_vec())],
+            genesis_hash,
+            Some(block1_hash).into(),
+        );
 
-		assert_eq!(result.unwrap(), expected);
+        assert_eq!(result.unwrap(), expected);
 
-		// Query all changes
-		let result = api.query_storage(
-			vec![StorageKey(alice_balance_key.to_vec())],
-			genesis_hash,
-			None.into(),
-		);
+        // Query all changes
+        let result = api.query_storage(
+            vec![StorageKey(alice_balance_key.to_vec())],
+            genesis_hash,
+            None.into(),
+        );
 
-		expected.push(StorageChangeSet {
-			block: block2_hash,
-			changes: vec![
-				(
-					StorageKey(alice_balance_key.to_vec()),
-					Some(StorageData(vec![148, 3, 0, 0, 0, 0, 0, 0]))
-				),
-			],
-		});
-		assert_eq!(result.unwrap(), expected);
-	}
+        expected.push(StorageChangeSet {
+            block: block2_hash,
+            changes: vec![(
+                StorageKey(alice_balance_key.to_vec()),
+                Some(StorageData(vec![148, 3, 0, 0, 0, 0, 0, 0])),
+            )],
+        });
+        assert_eq!(result.unwrap(), expected);
+    }
 
-	run_tests(Arc::new(test_client::new()));
-	run_tests(Arc::new(test_client::new_with_changes_trie()));
+    run_tests(Arc::new(test_client::new()));
+    run_tests(Arc::new(test_client::new_with_changes_trie()));
 }
 
 #[test]
 fn should_split_ranges() {
-	assert_eq!(split_range(1, None), (0..1, None));
-	assert_eq!(split_range(100, None), (0..100, None));
-	assert_eq!(split_range(1, Some(0)), (0..1, None));
-	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
-	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
+    assert_eq!(split_range(1, None), (0..1, None));
+    assert_eq!(split_range(100, None), (0..100, None));
+    assert_eq!(split_range(1, Some(0)), (0..1, None));
+    assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
+    assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
 }
-
 
 #[test]
 fn should_return_runtime_version() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+    let core = ::tokio::runtime::Runtime::new().unwrap();
 
-	let client = Arc::new(test_client::new());
-	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+    let client = Arc::new(test_client::new());
+    let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
-	assert_eq!(
+    assert_eq!(
 		::serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
 		r#"{"specName":"test","implName":"parity-test","authoringVersion":1,"specVersion":1,"implVersion":1,"apis":[["0xdf6acb689907609b",1],["0x37e397fc7c91f5e4",1],["0xd2bc9897eed08f15",1],["0x40fe3ad401f8959a",2],["0xc6e9a76309f39b09",1],["0xdd718d5cc53262d4",1],["0xf78b278be53f454c",1],["0x7801759919ee83e5",1]]}"#
 	);
@@ -227,22 +240,22 @@ fn should_return_runtime_version() {
 
 #[test]
 fn should_notify_on_runtime_version_initially() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let (subscriber, id, transport) = Subscriber::new_test("test");
+    let mut core = ::tokio::runtime::Runtime::new().unwrap();
+    let (subscriber, id, transport) = Subscriber::new_test("test");
 
-	{
-		let client = Arc::new(test_client::new());
-		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+    {
+        let client = Arc::new(test_client::new());
+        let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
-		api.subscribe_runtime_version(Default::default(), subscriber);
+        api.subscribe_runtime_version(Default::default(), subscriber);
 
-		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
-	}
+        // assert id assigned
+        assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+    }
 
-	// assert initial version sent.
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
-	assert!(notification.is_some());
-		// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+    // assert initial version sent.
+    let (notification, next) = core.block_on(transport.into_future()).unwrap();
+    assert!(notification.is_some());
+    // no more notifications on this channel
+    assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }

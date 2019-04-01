@@ -18,36 +18,35 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 #[macro_use]
 pub mod runtime_api;
 #[cfg(feature = "std")]
-pub mod error;
+pub mod backend;
+pub mod block_builder;
 #[cfg(feature = "std")]
 pub mod blockchain;
 #[cfg(feature = "std")]
-pub mod backend;
-#[cfg(feature = "std")]
-pub mod cht;
-#[cfg(feature = "std")]
-pub mod in_mem;
-#[cfg(feature = "std")]
-pub mod genesis;
-pub mod block_builder;
-#[cfg(feature = "std")]
-pub mod light;
-#[cfg(feature = "std")]
-pub mod leaves;
+mod call_executor;
 #[cfg(feature = "std")]
 pub mod children;
 #[cfg(feature = "std")]
-mod call_executor;
+pub mod cht;
 #[cfg(feature = "std")]
 mod client;
 #[cfg(feature = "std")]
+pub mod error;
+#[cfg(feature = "std")]
+pub mod genesis;
+#[cfg(feature = "std")]
+pub mod in_mem;
+#[cfg(feature = "std")]
+pub mod leaves;
+#[cfg(feature = "std")]
+pub mod light;
+#[cfg(feature = "std")]
 mod notifications;
-
 
 #[cfg(feature = "std")]
 pub use crate::blockchain::Info as ChainInfo;
@@ -55,17 +54,16 @@ pub use crate::blockchain::Info as ChainInfo;
 pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
 #[cfg(feature = "std")]
 pub use crate::client::{
-	new_with_backend,
-	new_in_mem,
-	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	BlockImportNotification, Client, ClientInfo, ChainHead, ExecutionStrategies,
+    new_in_mem, new_with_backend, BlockBody, BlockImportNotification, BlockStatus,
+    BlockchainEvents, ChainHead, Client, ClientInfo, ExecutionStrategies, FinalityNotifications,
+    ImportNotifications,
 };
 #[cfg(feature = "std")]
-pub use crate::notifications::{StorageEventStream, StorageChangeSet};
+pub use crate::leaves::LeafSet;
+#[cfg(feature = "std")]
+pub use crate::notifications::{StorageChangeSet, StorageEventStream};
 #[cfg(feature = "std")]
 pub use state_machine::ExecutionStrategy;
-#[cfg(feature = "std")]
-pub use crate::leaves::LeafSet;
 
 #[doc(inline)]
 pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

@@ -16,68 +16,68 @@
 
 //! Chain api required for the transaction pool.
 
-use std::{
-	sync::Arc,
-	marker::PhantomData,
-};
-use client::{runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
+use client::{blockchain::HeaderBackend, runtime_api::TaggedTransactionQueue};
 use parity_codec::Encode;
+use sr_primitives::{generic::BlockId, traits, transaction_validity::TransactionValidity};
+use std::{marker::PhantomData, sync::Arc};
+use substrate_primitives::{Blake2Hasher, Hasher, H256};
 use txpool;
-use substrate_primitives::{
-	H256,
-	Blake2Hasher,
-	Hasher,
-};
-use sr_primitives::{
-	generic::BlockId,
-	traits,
-	transaction_validity::TransactionValidity,
-};
 
 use crate::error;
 
 /// The transaction pool logic
 pub struct ChainApi<T, Block> {
-	client: Arc<T>,
-	_marker: PhantomData<Block>,
+    client: Arc<T>,
+    _marker: PhantomData<Block>,
 }
 
-impl<T, Block> ChainApi<T, Block> where
-	Block: traits::Block,
-	T: traits::ProvideRuntimeApi + HeaderBackend<Block> {
-	/// Create new transaction pool logic.
-	pub fn new(client: Arc<T>) -> Self {
-		ChainApi {
-			client,
-			_marker: Default::default()
-		}
-	}
-}
-
-impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
-	Block: traits::Block<Hash=H256>,
-	T: traits::ProvideRuntimeApi + HeaderBackend<Block>,
-	T::Api: TaggedTransactionQueue<Block>
+impl<T, Block> ChainApi<T, Block>
+where
+    Block: traits::Block,
+    T: traits::ProvideRuntimeApi + HeaderBackend<Block>,
 {
-	type Block = Block;
-	type Hash = H256;
-	type Error = error::Error;
+    /// Create new transaction pool logic.
+    pub fn new(client: Arc<T>) -> Self {
+        ChainApi {
+            client,
+            _marker: Default::default(),
+        }
+    }
+}
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
-	}
+impl<T, Block> txpool::ChainApi for ChainApi<T, Block>
+where
+    Block: traits::Block<Hash = H256>,
+    T: traits::ProvideRuntimeApi + HeaderBackend<Block>,
+    T::Api: TaggedTransactionQueue<Block>,
+{
+    type Block = Block;
+    type Hash = H256;
+    type Error = error::Error;
 
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
-		Ok(self.client.block_number_from_id(at)?)
-	}
+    fn validate_transaction(
+        &self,
+        at: &BlockId<Self::Block>,
+        uxt: txpool::ExtrinsicFor<Self>,
+    ) -> error::Result<TransactionValidity> {
+        Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
+    }
 
-	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::BlockHash<Self>>> {
-		Ok(self.client.block_hash_from_id(at)?)
-	}
+    fn block_id_to_number(
+        &self,
+        at: &BlockId<Self::Block>,
+    ) -> error::Result<Option<txpool::NumberFor<Self>>> {
+        Ok(self.client.block_number_from_id(at)?)
+    }
 
-	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
-		ex.using_encoded(|x| {
-			(Blake2Hasher::hash(x), x.len())
-		})
-	}
+    fn block_id_to_hash(
+        &self,
+        at: &BlockId<Self::Block>,
+    ) -> error::Result<Option<txpool::BlockHash<Self>>> {
+        Ok(self.client.block_hash_from_id(at)?)
+    }
+
+    fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+        ex.using_encoded(|x| (Blake2Hasher::hash(x), x.len()))
+    }
 }

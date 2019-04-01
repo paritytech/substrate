@@ -18,14 +18,18 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
-use srml_support::impl_outer_origin;
+use crate::{Module, Trait};
+use primitives::{
+    testing::{Digest, DigestItem, Header, UintAuthorityId},
+    traits::IdentityLookup,
+    BuildStorage,
+};
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher};
-use crate::{Trait, Module};
+use srml_support::impl_outer_origin;
+use substrate_primitives::{Blake2Hasher, H256};
 
-impl_outer_origin!{
-	pub enum Origin for Test {}
+impl_outer_origin! {
+    pub enum Origin for Test {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -33,44 +37,58 @@ impl_outer_origin!{
 pub struct Test;
 
 impl consensus::Trait for Test {
-	type Log = DigestItem;
-	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ();
+    type Log = DigestItem;
+    type SessionKey = UintAuthorityId;
+    type InherentOfflineReport = ();
 }
 
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
-	type Digest = Digest;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = ();
-	type Log = DigestItem;
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Hash = H256;
+    type Hashing = ::primitives::traits::BlakeTwo256;
+    type Digest = Digest;
+    type AccountId = u64;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = ();
+    type Log = DigestItem;
 }
 
 impl timestamp::Trait for Test {
-	type Moment = u64;
-	type OnTimestampSet = Aura;
+    type Moment = u64;
+    type OnTimestampSet = Aura;
 }
 
 impl Trait for Test {
-	type HandleReport = ();
+    type HandleReport = ();
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(consensus::GenesisConfig::<Test>{
-		code: vec![],
-		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().0);
-	t.extend(timestamp::GenesisConfig::<Test>{
-		minimum_period: 1,
-	}.build_storage().unwrap().0);
-	t.into()
+    let mut t = system::GenesisConfig::<Test>::default()
+        .build_storage()
+        .unwrap()
+        .0;
+    t.extend(
+        consensus::GenesisConfig::<Test> {
+            code: vec![],
+            authorities: authorities
+                .into_iter()
+                .map(|a| UintAuthorityId(a))
+                .collect(),
+        }
+        .build_storage()
+        .unwrap()
+        .0,
+    );
+    t.extend(
+        timestamp::GenesisConfig::<Test> { minimum_period: 1 }
+            .build_storage()
+            .unwrap()
+            .0,
+    );
+    t.into()
 }
 
 pub type System = system::Module<Test>;

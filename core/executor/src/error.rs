@@ -20,70 +20,70 @@
 // https://github.com/paritytech/substrate/issues/1547
 #![allow(deprecated)]
 
-use state_machine;
-use serializer;
-use wasmi;
 use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind
+    error_chain, error_chain_processing, impl_error_chain_kind, impl_error_chain_processed,
+    impl_extract_backtrace,
 };
+use serializer;
+use state_machine;
+use wasmi;
 
 error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-		Trap(wasmi::Trap) #[doc = "Trap occured during execution"];
-		Wasmi(wasmi::Error) #[doc = "Wasmi loading/instantiating error"];
-	}
+    foreign_links {
+        InvalidData(serializer::Error) #[doc = "Unserializable Data"];
+        Trap(wasmi::Trap) #[doc = "Trap occured during execution"];
+        Wasmi(wasmi::Error) #[doc = "Wasmi loading/instantiating error"];
+    }
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+    errors {
+        /// Method is not found
+        MethodNotFound(t: String) {
+            description("method not found"),
+            display("Method not found: '{}'", t),
+        }
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
-		}
+        /// Code is invalid (expected single byte)
+        InvalidCode(c: Vec<u8>) {
+            description("invalid code"),
+            display("Invalid Code: {:?}", c),
+        }
 
-		/// Could not get runtime version.
-		VersionInvalid {
-			description("Runtime version error"),
-			display("On-chain runtime does not specify version"),
-		}
+        /// Could not get runtime version.
+        VersionInvalid {
+            description("Runtime version error"),
+            display("On-chain runtime does not specify version"),
+        }
 
-		/// Externalities have failed.
-		Externalities {
-			description("externalities failure"),
-			display("Externalities error"),
-		}
+        /// Externalities have failed.
+        Externalities {
+            description("externalities failure"),
+            display("Externalities error"),
+        }
 
-		/// Invalid index.
-		InvalidIndex {
-			description("index given was not in range"),
-			display("Invalid index provided"),
-		}
+        /// Invalid index.
+        InvalidIndex {
+            description("index given was not in range"),
+            display("Invalid index provided"),
+        }
 
-		/// Invalid return type.
-		InvalidReturn {
-			description("u64 was not returned"),
-			display("Invalid type returned (should be u64)"),
-		}
+        /// Invalid return type.
+        InvalidReturn {
+            description("u64 was not returned"),
+            display("Invalid type returned (should be u64)"),
+        }
 
-		/// Runtime failed.
-		Runtime {
-			description("runtime failure"),
-			display("Runtime error"),
-		}
+        /// Runtime failed.
+        Runtime {
+            description("runtime failure"),
+            display("Runtime error"),
+        }
 
-		/// Runtime failed.
-		InvalidMemoryReference {
-			description("invalid memory reference"),
-			display("Invalid memory reference"),
-		}
-	}
+        /// Runtime failed.
+        InvalidMemoryReference {
+            description("invalid memory reference"),
+            display("Invalid memory reference"),
+        }
+    }
 }
 
 impl state_machine::Error for Error {}

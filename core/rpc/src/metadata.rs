@@ -17,8 +17,8 @@
 //! RPC Metadata
 use std::sync::Arc;
 
-use jsonrpc_pubsub::{Session, PubSubMetadata};
 use crate::rpc::futures::sync::mpsc;
+use jsonrpc_pubsub::{PubSubMetadata, Session};
 
 /// RPC Metadata.
 ///
@@ -27,28 +27,28 @@ use crate::rpc::futures::sync::mpsc;
 /// (like remote client IP address, request headers, etc)
 #[derive(Default, Clone)]
 pub struct Metadata {
-	session: Option<Arc<Session>>,
+    session: Option<Arc<Session>>,
 }
 
 impl crate::rpc::Metadata for Metadata {}
 impl PubSubMetadata for Metadata {
-	fn session(&self) -> Option<Arc<Session>> {
-		self.session.clone()
-	}
+    fn session(&self) -> Option<Arc<Session>> {
+        self.session.clone()
+    }
 }
 
 impl Metadata {
-	/// Create new `Metadata` with session (Pub/Sub) support.
-	pub fn new(transport: mpsc::Sender<String>) -> Self {
-		Metadata {
-			session: Some(Arc::new(Session::new(transport))),
-		}
-	}
+    /// Create new `Metadata` with session (Pub/Sub) support.
+    pub fn new(transport: mpsc::Sender<String>) -> Self {
+        Metadata {
+            session: Some(Arc::new(Session::new(transport))),
+        }
+    }
 
-	/// Create new `Metadata` for tests.
-	#[cfg(test)]
-	pub fn new_test() -> (mpsc::Receiver<String>, Self) {
-		let (tx, rx) = mpsc::channel(1);
-		(rx, Self::new(tx))
-	}
+    /// Create new `Metadata` for tests.
+    #[cfg(test)]
+    pub fn new_test() -> (mpsc::Receiver<String>, Self) {
+        let (tx, rx) = mpsc::channel(1);
+        (rx, Self::new(tx))
+    }
 }

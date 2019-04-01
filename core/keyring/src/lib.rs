@@ -31,6 +31,6 @@ pub use sr25519::Keyring as AccountKeyring;
 pub use ed25519::Keyring as AuthorityKeyring;
 
 pub mod test {
-	/// The keyring for use with accounts when using the test runtime.
-	pub use super::ed25519::Keyring as AccountKeyring;
+    /// The keyring for use with accounts when using the test runtime.
+    pub use super::ed25519::Keyring as AccountKeyring;
 }

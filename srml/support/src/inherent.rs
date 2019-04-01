@@ -19,8 +19,7 @@ pub use crate::rstd::vec::Vec;
 #[doc(hidden)]
 pub use crate::runtime_primitives::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
-
+pub use inherents::{CheckInherentsResult, InherentData, IsFatalError, ProvideInherent};
 
 /// Implement the outer inherent.
 /// All given modules need to implement `ProvideInherent`.

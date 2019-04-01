@@ -20,4 +20,4 @@
 
 mod basic_authorship;
 
-pub use crate::basic_authorship::{ProposerFactory, BlockBuilder, AuthoringApi, Proposer};
+pub use crate::basic_authorship::{AuthoringApi, BlockBuilder, Proposer, ProposerFactory};

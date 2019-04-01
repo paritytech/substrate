@@ -18,46 +18,51 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::marker::PhantomData;
-use rstd::result;
-use primitives::traits::{
-	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, Hash, As, Digest, NumberFor, Block as BlockT, OffchainWorker
-};
-use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
+use primitives::traits::{
+    self, Applyable, As, Block as BlockT, CheckEqual, Checkable, Digest, Hash, Header, NumberFor,
+    OffchainWorker, OnFinalize, OnInitialize, One, Zero,
+};
+use primitives::transaction_validity::{
+    TransactionLongevity, TransactionPriority, TransactionValidity,
+};
+use primitives::{ApplyError, ApplyOutcome};
+use rstd::marker::PhantomData;
+use rstd::prelude::*;
+use rstd::result;
+use srml_support::{traits::MakePayment, Dispatchable};
 use system::extrinsics_root;
-use primitives::{ApplyOutcome, ApplyError};
-use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 
 mod internal {
-	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
+    pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
 
-	pub enum ApplyError {
-		BadSignature(&'static str),
-		Stale,
-		Future,
-		CantPay,
-		FullBlock,
-	}
+    pub enum ApplyError {
+        BadSignature(&'static str),
+        Stale,
+        Future,
+        CantPay,
+        FullBlock,
+    }
 
-	pub enum ApplyOutcome {
-		Success,
-		Fail(&'static str),
-	}
+    pub enum ApplyOutcome {
+        Success,
+        Fail(&'static str),
+    }
 }
 
 /// Something that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
-	/// Actually execute all transitioning for `block`.
-	fn execute_block(block: Block);
-	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
-	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>);
+    /// Actually execute all transitioning for `block`.
+    fn execute_block(block: Block);
+    /// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
+    fn execute_extrinsics_without_checks(
+        block_number: NumberFor<Block>,
+        extrinsics: Vec<Block::Extrinsic>,
+    );
 }
 
 pub struct Executive<System, Block, Context, Payment, AllModules>(
-	PhantomData<(System, Block, Context, Payment, AllModules)>
+    PhantomData<(System, Block, Context, Payment, AllModules)>,
 );
 
 impl<
@@ -328,175 +333,230 @@ impl<
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use balances::Call;
-	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, DigestItem, Header, Block};
-	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
-	use system;
-	use hex_literal::{hex, hex_impl};
+    use super::*;
+    use balances::Call;
+    use hex_literal::{hex, hex_impl};
+    use primitives::testing::{Block, Digest, DigestItem, Header};
+    use primitives::traits::{BlakeTwo256, Header as HeaderT, IdentityLookup};
+    use primitives::BuildStorage;
+    use runtime_io::with_externalities;
+    use srml_support::{impl_outer_event, impl_outer_origin, traits::Currency};
+    use substrate_primitives::{Blake2Hasher, H256};
+    use system;
 
-	impl_outer_origin! {
-		pub enum Origin for Runtime {
-		}
-	}
+    impl_outer_origin! {
+        pub enum Origin for Runtime {
+        }
+    }
 
-	impl_outer_event!{
-		pub enum MetaEvent for Runtime {
-			balances<T>,
-		}
-	}
+    impl_outer_event! {
+        pub enum MetaEvent for Runtime {
+            balances<T>,
+        }
+    }
 
-	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Runtime;
-	impl system::Trait for Runtime {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = substrate_primitives::H256;
-		type Hashing = BlakeTwo256;
-		type Digest = Digest;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
-		type Header = Header;
-		type Event = MetaEvent;
-		type Log = DigestItem;
-	}
-	impl balances::Trait for Runtime {
-		type Balance = u64;
-		type OnFreeBalanceZero = ();
-		type OnNewAccount = ();
-		type Event = MetaEvent;
-		type TransactionPayment = ();
-		type DustRemoval = ();
-		type TransferPayment = ();
-	}
+    // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+    #[derive(Clone, Eq, PartialEq)]
+    pub struct Runtime;
+    impl system::Trait for Runtime {
+        type Origin = Origin;
+        type Index = u64;
+        type BlockNumber = u64;
+        type Hash = substrate_primitives::H256;
+        type Hashing = BlakeTwo256;
+        type Digest = Digest;
+        type AccountId = u64;
+        type Lookup = IdentityLookup<u64>;
+        type Header = Header;
+        type Event = MetaEvent;
+        type Log = DigestItem;
+    }
+    impl balances::Trait for Runtime {
+        type Balance = u64;
+        type OnFreeBalanceZero = ();
+        type OnNewAccount = ();
+        type Event = MetaEvent;
+        type TransactionPayment = ();
+        type DustRemoval = ();
+        type TransferPayment = ();
+    }
 
-	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
+    type TestXt = primitives::testing::TestXt<Call<Runtime>>;
+    type Executive = super::Executive<
+        Runtime,
+        Block<TestXt>,
+        system::ChainContext<Runtime>,
+        balances::Module<Runtime>,
+        (),
+    >;
 
-	#[test]
-	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime> {
-			transaction_base_fee: 10,
-			transaction_byte_fee: 0,
-			balances: vec![(1, 111)],
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			vesting: vec![],
-		}.build_storage().unwrap().0);
-		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
-		with_externalities(&mut t, || {
-			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
-				[69u8; 32].into(), Digest::default()));
-			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
-		});
-	}
+    #[test]
+    fn balance_transfer_dispatch_works() {
+        let mut t = system::GenesisConfig::<Runtime>::default()
+            .build_storage()
+            .unwrap()
+            .0;
+        t.extend(
+            balances::GenesisConfig::<Runtime> {
+                transaction_base_fee: 10,
+                transaction_byte_fee: 0,
+                balances: vec![(1, 111)],
+                existential_deposit: 0,
+                transfer_fee: 0,
+                creation_fee: 0,
+                vesting: vec![],
+            }
+            .build_storage()
+            .unwrap()
+            .0,
+        );
+        let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
+        let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
+        with_externalities(&mut t, || {
+            Executive::initialize_block(&Header::new(
+                1,
+                H256::default(),
+                H256::default(),
+                [69u8; 32].into(),
+                Digest::default(),
+            ));
+            Executive::apply_extrinsic(xt).unwrap();
+            assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
+            assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
+        });
+    }
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
-		t.into()
-	}
+    fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+        let mut t = system::GenesisConfig::<Runtime>::default()
+            .build_storage()
+            .unwrap()
+            .0;
+        t.extend(
+            balances::GenesisConfig::<Runtime>::default()
+                .build_storage()
+                .unwrap()
+                .0,
+        );
+        t.into()
+    }
 
-	#[test]
-	fn block_import_works() {
-		with_externalities(&mut new_test_ext(), || {
-			Executive::execute_block(Block {
-				header: Header {
-					parent_hash: [69u8; 32].into(),
-					number: 1,
-					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
-					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-					digest: Digest { logs: vec![], },
-				},
-				extrinsics: vec![],
-			});
-		});
-	}
+    #[test]
+    fn block_import_works() {
+        with_externalities(&mut new_test_ext(), || {
+            Executive::execute_block(Block {
+                header: Header {
+                    parent_hash: [69u8; 32].into(),
+                    number: 1,
+                    state_root: hex!(
+                        "49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
+                    )
+                    .into(),
+                    extrinsics_root: hex!(
+                        "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+                    )
+                    .into(),
+                    digest: Digest { logs: vec![] },
+                },
+                extrinsics: vec![],
+            });
+        });
+    }
 
-	#[test]
-	#[should_panic]
-	fn block_import_of_bad_state_root_fails() {
-		with_externalities(&mut new_test_ext(), || {
-			Executive::execute_block(Block {
-				header: Header {
-					parent_hash: [69u8; 32].into(),
-					number: 1,
-					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-					digest: Digest { logs: vec![], },
-				},
-				extrinsics: vec![],
-			});
-		});
-	}
+    #[test]
+    #[should_panic]
+    fn block_import_of_bad_state_root_fails() {
+        with_externalities(&mut new_test_ext(), || {
+            Executive::execute_block(Block {
+                header: Header {
+                    parent_hash: [69u8; 32].into(),
+                    number: 1,
+                    state_root: [0u8; 32].into(),
+                    extrinsics_root: hex!(
+                        "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+                    )
+                    .into(),
+                    digest: Digest { logs: vec![] },
+                },
+                extrinsics: vec![],
+            });
+        });
+    }
 
-	#[test]
-	#[should_panic]
-	fn block_import_of_bad_extrinsic_root_fails() {
-		with_externalities(&mut new_test_ext(), || {
-			Executive::execute_block(Block {
-				header: Header {
-					parent_hash: [69u8; 32].into(),
-					number: 1,
-					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
-					extrinsics_root: [0u8; 32].into(),
-					digest: Digest { logs: vec![], },
-				},
-				extrinsics: vec![],
-			});
-		});
-	}
+    #[test]
+    #[should_panic]
+    fn block_import_of_bad_extrinsic_root_fails() {
+        with_externalities(&mut new_test_ext(), || {
+            Executive::execute_block(Block {
+                header: Header {
+                    parent_hash: [69u8; 32].into(),
+                    number: 1,
+                    state_root: hex!(
+                        "49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
+                    )
+                    .into(),
+                    extrinsics_root: [0u8; 32].into(),
+                    digest: Digest { logs: vec![] },
+                },
+                extrinsics: vec![],
+            });
+        });
+    }
 
-	#[test]
-	fn bad_extrinsic_not_inserted() {
-		let mut t = new_test_ext();
-		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33, 69));
-		with_externalities(&mut t, || {
-			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
-			assert!(Executive::apply_extrinsic(xt).is_err());
-			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
-		});
-	}
+    #[test]
+    fn bad_extrinsic_not_inserted() {
+        let mut t = new_test_ext();
+        let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33, 69));
+        with_externalities(&mut t, || {
+            Executive::initialize_block(&Header::new(
+                1,
+                H256::default(),
+                H256::default(),
+                [69u8; 32].into(),
+                Digest::default(),
+            ));
+            assert!(Executive::apply_extrinsic(xt).is_err());
+            assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
+        });
+    }
 
-	#[test]
-	fn block_size_limit_enforced() {
-		let run_test = |should_fail: bool| {
-			let mut t = new_test_ext();
-			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
-			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
-			let encoded = xt2.encode();
-			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
-			with_externalities(&mut t, || {
-				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
-				assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
+    #[test]
+    fn block_size_limit_enforced() {
+        let run_test = |should_fail: bool| {
+            let mut t = new_test_ext();
+            let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+            let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
+            let encoded = xt2.encode();
+            let len = if should_fail {
+                (internal::MAX_TRANSACTIONS_SIZE - 1) as usize
+            } else {
+                encoded.len()
+            };
+            with_externalities(&mut t, || {
+                Executive::initialize_block(&Header::new(
+                    1,
+                    H256::default(),
+                    H256::default(),
+                    [69u8; 32].into(),
+                    Digest::default(),
+                ));
+                assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
 
-				Executive::apply_extrinsic(xt).unwrap();
-				let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
+                Executive::apply_extrinsic(xt).unwrap();
+                let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
 
-				if should_fail {
-					assert!(res.is_err());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 28);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
-				} else {
-					assert!(res.is_ok());
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 56);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
-				}
-			});
-		};
+                if should_fail {
+                    assert!(res.is_err());
+                    assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 28);
+                    assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
+                } else {
+                    assert!(res.is_ok());
+                    assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 56);
+                    assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
+                }
+            });
+        };
 
-		run_test(false);
-		run_test(true);
-	}
+        run_test(false);
+        run_test(true);
+    }
 }

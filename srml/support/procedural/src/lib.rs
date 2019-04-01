@@ -18,7 +18,7 @@
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
 
 extern crate proc_macro;
 
@@ -102,5 +102,5 @@ use proc_macro::TokenStream;
 /// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::transformation::decl_storage_impl(input)
+    storage::transformation::decl_storage_impl(input)
 }
