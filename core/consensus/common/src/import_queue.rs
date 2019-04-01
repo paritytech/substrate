@@ -570,7 +570,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 
 	let mut cache = HashMap::new();
 	if let Some(authorities) = new_authorities {
-		cache.insert(crate::well_known_cache_keys::AUTHORITIES.to_vec(), authorities.encode());
+		cache.insert(crate::well_known_cache_keys::AUTHORITIES, authorities.encode());
 	}
 
 	import_error(import_handle.import_block(import_block, cache))

@@ -23,6 +23,7 @@ use parking_lot::Mutex;
 
 use runtime_primitives::{Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use consensus::well_known_cache_keys;
 
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
@@ -40,7 +41,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		cache: HashMap<Vec<u8>, Vec<u8>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
@@ -252,7 +253,7 @@ pub mod tests {
 		fn import_header(
 			&self,
 			_header: Header,
-			_cache: HashMap<Vec<u8>, Vec<u8>>,
+			_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
