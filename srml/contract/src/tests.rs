@@ -315,7 +315,7 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
-const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("5e6a50c08c4156e29cf73caced2a20e551ec4a02b8f043564061471a5ed800ab");
+const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("abb4194bdea47b2904fe90b4fd674bd40d96f423956627df8c39d2b1a791ab9d");
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {
