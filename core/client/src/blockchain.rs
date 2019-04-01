@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,9 +16,12 @@
 
 //! Substrate blockchain trait
 
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor};
+use std::sync::Arc;
+
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
+use consensus::well_known_cache_keys;
 
 use crate::error::{ErrorKind, Result};
 
@@ -78,7 +81,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// Get last finalized block hash.
 	fn last_finalized(&self) -> Result<Block::Hash>;
 	/// Returns data cache reference, if it is enabled on this backend.
-	fn cache(&self) -> Option<&Cache<Block>>;
+	fn cache(&self) -> Option<Arc<Cache<Block>>>;
 
 	/// Returns hashes of all blocks that are leaves of the block tree.
 	/// in other words, that have no children, are chain heads.
@@ -89,10 +92,16 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 }
 
+/// Provides access to the optional cache.
+pub trait ProvideCache<Block: BlockT> {
+	/// Returns data cache reference, if it is enabled on this backend.
+	fn cache(&self) -> Option<Arc<Cache<Block>>>;
+}
+
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
-	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>>;
+	/// Returns cached value by the given key.
+	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<Vec<u8>>;
 }
 
 /// Blockchain info

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
 use runtime_version::RuntimeVersion;
-use state_machine::ExecutionStrategy;
+use state_machine::{self, ExecutionStrategy};
 
 use crate::subscriptions::Subscriptions;
 
@@ -298,7 +298,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 			.executor()
 			.call(
 				&BlockId::Hash(block),
-				&method, &data.0, ExecutionStrategy::NativeElseWasm
+				&method, &data.0, ExecutionStrategy::NativeElseWasm, state_machine::NeverOffchainExt::new(),
 			)?;
 		Ok(Bytes(return_data))
 	}

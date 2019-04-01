@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -115,7 +115,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H>, H: Hasher>(
 
 	let mut proof_db = MemoryDB::<H>::default();
 	for item in proof {
-		proof_db.insert(&item);
+		proof_db.insert(&[], &item);
 	}
 
 	let proof_db = InMemoryStorage::with_db(proof_db);

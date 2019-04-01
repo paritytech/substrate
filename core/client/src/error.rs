@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -60,12 +60,6 @@ error_chain! {
 		Blockchain(e: Box<std::error::Error + Send>) {
 			description("Blockchain error"),
 			display("Blockchain: {}", e),
-		}
-
-		/// Invalid authorities set received from the runtime.
-		InvalidAuthoritiesSet {
-			description("authorities set is invalid"),
-			display("Current state of blockchain has invalid authorities set"),
 		}
 
 		/// Could not get runtime version.

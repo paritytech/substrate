@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,8 +23,7 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
-use substrate_primitives;
-use substrate_primitives::Blake2Hasher;
+use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -56,6 +55,20 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+impl Verify for substrate_primitives::ed25519::Signature {
+	type Signer = substrate_primitives::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
+impl Verify for substrate_primitives::sr25519::Signature {
+	type Signer = substrate_primitives::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
@@ -84,6 +97,8 @@ pub trait StaticLookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	/// Convert from Target back to Source.
+	fn unlookup(t: Self::Target) -> Self::Source;
 }
 
 /// A lookup implementation returning the input value.
@@ -93,6 +108,7 @@ impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+	fn unlookup(x: T) -> T { x }
 }
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
@@ -132,6 +148,45 @@ pub trait Convert<A, B> {
 	fn convert(a: A) -> B;
 }
 
+impl<A, B: Default> Convert<A, B> for () {
+	fn convert(_: A) -> B { Default::default() }
+}
+
+/// A structure that converts the currency type into a lossy u64
+/// And back from u128
+pub struct CurrencyToVoteHandler;
+
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 {
+		if x >> 96 == 0 {
+			// Remove dust; divide by 2^32
+			(x >> 32) as u64
+		} else {
+			u64::max_value()
+		}
+	}
+}
+
+impl Convert<u128, u128> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u128 {
+		// if it practically fits in u64
+		if x >> 64 == 0 {
+			// Add zero dust; multiply by 2^32
+			x << 32
+		}
+		else {
+			// 0000_0000_FFFF_FFFF_FFFF_FFFF_0000_0000
+			(u64::max_value() << 32) as u128
+		}
+	}
+}
+
+/// A structure that performs identity conversion.
+pub struct Identity;
+impl<T> Convert<T, T> for Identity {
+	fn convert(a: T) -> T { a }
+}
+
 /// Simple trait similar to `Into`, except that it can be used to convert numerics between each
 /// other.
 pub trait As<T> {
@@ -159,15 +214,6 @@ macro_rules! impl_numerics {
 
 impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
-/// A structure that performs identity conversion.
-pub struct Identity;
-impl<T> Convert<T, T> for Identity {
-	fn convert(a: T) -> T { a }
-}
-impl<T> Convert<T, ()> for () {
-	fn convert(_: T) -> () { () }
-}
-
 /// A meta trait for arithmetic.
 pub trait SimpleArithmetic:
 	Zero + One + IntegerSquareRoot + As<u64> +
@@ -184,7 +230,7 @@ pub trait SimpleArithmetic:
 	CheckedMul +
 	CheckedDiv +
 	Saturating +
-	PartialOrd<Self> + Ord +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 {}
 impl<T:
@@ -202,7 +248,7 @@ impl<T:
 	CheckedMul +
 	CheckedDiv +
 	Saturating +
-	PartialOrd<Self> + Ord +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 > SimpleArithmetic for T {}
 
@@ -235,56 +281,89 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// The block finalisation trait. Implementing this lets you express what should happen
+/// The block finalization trait. Implementing this lets you express what should happen
 /// for your module when the block is ending.
-pub trait OnFinalise<BlockNumber> {
-	/// The block is being finalised. Implement to have something happen.
-	fn on_finalise(_n: BlockNumber) {}
+pub trait OnFinalize<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
 }
 
-impl<N> OnFinalise<N> for () {}
+impl<N> OnFinalize<N> for () {}
 
-/// The block initialisation trait. Implementing this lets you express what should happen
+/// The block initialization trait. Implementing this lets you express what should happen
 /// for your module when the block is beginning (right before the first extrinsic is executed).
-pub trait OnInitialise<BlockNumber> {
-	/// The block is being initialised. Implement to have something happen.
-	fn on_initialise(_n: BlockNumber) {}
+pub trait OnInitialize<BlockNumber> {
+	/// The block is being initialized. Implement to have something happen.
+	fn on_initialize(_n: BlockNumber) {}
 }
 
-impl<N> OnInitialise<N> for () {}
+impl<N> OnInitialize<N> for () {}
+
+/// Off-chain computation trait.
+///
+/// Implementing this trait on a module allows you to perform a long-running tasks
+/// that make validators generate extrinsics (either transactions or inherents)
+/// with results of those long-running computations.
+///
+/// NOTE: This function runs off-chain, so it can access the block state,
+/// but cannot preform any alterations.
+pub trait OffchainWorker<BlockNumber> {
+	/// This function is being called on every block.
+	///
+	/// Implement this and use special `extern`s to generate transactions or inherents.
+	/// Any state alterations are lost and are not persisted.
+	fn generate_extrinsics(_n: BlockNumber) {}
+}
+
+impl<N> OffchainWorker<N> for () {}
 
 macro_rules! tuple_impl {
 	($one:ident,) => {
-		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
-			fn on_finalise(n: Number) {
-				$one::on_finalise(n);
+		impl<Number: Copy, $one: OnFinalize<Number>> OnFinalize<Number> for ($one,) {
+			fn on_finalize(n: Number) {
+				$one::on_finalize(n);
 			}
 		}
-		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
-			fn on_initialise(n: Number) {
-				$one::on_initialise(n);
+		impl<Number: Copy, $one: OnInitialize<Number>> OnInitialize<Number> for ($one,) {
+			fn on_initialize(n: Number) {
+				$one::on_initialize(n);
+			}
+		}
+		impl<Number: Copy, $one: OffchainWorker<Number>> OffchainWorker<Number> for ($one,) {
+			fn generate_extrinsics(n: Number) {
+				$one::generate_extrinsics(n);
 			}
 		}
 	};
 	($first:ident, $($rest:ident,)+) => {
 		impl<
 			Number: Copy,
-			$first: OnFinalise<Number>,
-			$($rest: OnFinalise<Number>),+
-		> OnFinalise<Number> for ($first, $($rest),+) {
-			fn on_finalise(n: Number) {
-				$first::on_finalise(n);
-				$($rest::on_finalise(n);)+
+			$first: OnFinalize<Number>,
+			$($rest: OnFinalize<Number>),+
+		> OnFinalize<Number> for ($first, $($rest),+) {
+			fn on_finalize(n: Number) {
+				$first::on_finalize(n);
+				$($rest::on_finalize(n);)+
 			}
 		}
 		impl<
 			Number: Copy,
-			$first: OnInitialise<Number>,
-			$($rest: OnInitialise<Number>),+
-		> OnInitialise<Number> for ($first, $($rest),+) {
-			fn on_initialise(n: Number) {
-				$first::on_initialise(n);
-				$($rest::on_initialise(n);)+
+			$first: OnInitialize<Number>,
+			$($rest: OnInitialize<Number>),+
+		> OnInitialize<Number> for ($first, $($rest),+) {
+			fn on_initialize(n: Number) {
+				$first::on_initialize(n);
+				$($rest::on_initialize(n);)+
+			}
+		}
+		impl<
+			Number: Copy,
+			$first: OffchainWorker<Number>,
+			$($rest: OffchainWorker<Number>),+
+		> OffchainWorker<Number> for ($first, $($rest),+) {
+			fn generate_extrinsics(n: Number) {
+				$first::generate_extrinsics(n);
+				$($rest::generate_extrinsics(n);)+
 			}
 		}
 		tuple_impl!($($rest,)+);
@@ -298,7 +377,10 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+
+	/// The associated hash_db Hasher type.
+	type Hasher: Hasher<Out=Self::Output>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -338,6 +420,7 @@ pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
+	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
@@ -479,6 +562,7 @@ impl<T: ::rstd::hash::Hash> MaybeHash for T {}
 pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
+
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}

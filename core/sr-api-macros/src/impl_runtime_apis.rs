@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ use crate::utils::{
 	return_type_extract_type
 };
 
-use proc_macro;
 use proc_macro2::{Span, TokenStream};
 
 use quote::quote;
@@ -272,7 +271,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		pub struct RuntimeApiImpl<C: #crate_::runtime_api::CallRuntimeAt<#block> + 'static> {
 			call: &'static C,
 			commit_on_success: ::std::cell::RefCell<bool>,
-			initialised_block: ::std::cell::RefCell<Option<#block_id>>,
+			initialized_block: ::std::cell::RefCell<Option<#block_id>>,
 			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
 		}
 
@@ -321,7 +320,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				RuntimeApiImpl {
 					call: unsafe { ::std::mem::transmute(call) },
 					commit_on_success: true.into(),
-					initialised_block: None.into(),
+					initialized_block: None.into(),
 					changes: Default::default(),
 				}.into()
 			}
@@ -346,7 +345,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						function,
 						args,
 						&mut *self.changes.borrow_mut(),
-						&mut *self.initialised_block.borrow_mut(),
+						&mut *self.initialized_block.borrow_mut(),
 						native_call,
 						context
 					)
@@ -408,7 +407,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 }
 
 
-/// Auxilariy data structure that is used to convert `impl Api for Runtime` to
+/// Auxiliary data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
 /// This requires us to replace the runtime `Block` with the node `Block`,
 /// `impl Api for Runtime` with `impl Api for RuntimeApi` and replace the method implementations
@@ -470,7 +469,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			};
 
 			let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
-	
+
 			// Rewrite the input parameters.
 			input.sig.decl.inputs = parse_quote! {
 				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
@@ -484,7 +483,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				-> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>
 			);
 
-			// Generate the new method implementation that calls into the runime.
+			// Generate the new method implementation that calls into the runtime.
 			parse_quote!(
 				{
 					// Get the error to the user (if we have one).
@@ -616,7 +615,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
-	
+
 	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));

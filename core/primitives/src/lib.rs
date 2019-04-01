@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-/// Initalise a key-value collection from array.
+/// Initialize a key-value collection from array.
 ///
 /// Creates a vector of given pairs and calls `collect` on the iterator from it.
 /// Can be used to create a `HashMap`.
@@ -49,19 +49,17 @@ pub mod hashing;
 pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
-#[cfg(feature = "std")]
-pub mod ed25519;
-#[cfg(feature = "std")]
-pub mod sr25519;
+pub mod crypto;
 
 pub mod u32_trait;
 
+pub mod ed25519;
+pub mod sr25519;
 pub mod hash;
 mod hasher;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
-mod authority_id;
 mod changes_trie;
 
 #[cfg(test)]
@@ -69,18 +67,45 @@ mod tests;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
-pub use authority_id::Ed25519AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
+#[cfg(feature = "std")]
+pub use crypto::{DeriveJunction, Pair};
 
 pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
-/// A 512-bit value interpreted as a signature.
-pub type Signature = hash::H512;
+/// Context for executing a call into the runtime.
+#[repr(u8)]
+pub enum ExecutionContext {
+	/// Context for general importing (including own blocks).
+	Importing,
+	/// Context used when syncing the blockchain.
+	Syncing,
+	/// Context used for block construction.
+	BlockConstruction,
+	/// Offchain worker context.
+	OffchainWorker(Box<OffchainExt>),
+	/// Context used for other calls.
+	Other,
+}
 
-/// Hex-serialised shim for `Vec<u8>`.
+/// An extended externalities for offchain workers.
+pub trait OffchainExt {
+	/// Submits an extrinsics.
+	///
+	/// The extrinsic will either go to the pool (signed)
+	/// or to the next produced block (inherent).
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
+}
+impl<T: OffchainExt + ?Sized> OffchainExt for Box<T> {
+	fn submit_extrinsic(&mut self, ex: Vec<u8>) {
+		(&mut **self).submit_extrinsic(ex)
+	}
+}
+
+/// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);

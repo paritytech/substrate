@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -40,10 +40,11 @@ use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
-use primitives::traits::{CurrentHeight, Convert};
-use substrate_primitives::Ed25519AuthorityId;
+use primitives::traits::CurrentHeight;
+use substrate_primitives::ed25519;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
+use ed25519::Public as AuthorityId;
 
 mod mock;
 mod tests;
@@ -72,7 +73,7 @@ pub trait GrandpaChangeSignal<N> {
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<N, SessionKey> {
-	/// Authorities set change has been signalled. Contains the new set of authorities
+	/// Authorities set change has been signaled. Contains the new set of authorities
 	/// and the delay in blocks _to finalize_ before applying.
 	AuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
 	/// A forced authorities set change. Contains in this order: the median last
@@ -100,7 +101,7 @@ impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 }
 
 impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
-	where N: Clone, SessionKey: Clone + Into<Ed25519AuthorityId>,
+	where N: Clone, SessionKey: Clone + Into<AuthorityId>,
 {
 	fn as_signal(&self) -> Option<ScheduledChange<N>> {
 		RawLog::as_signal(self).map(|(delay, next_authorities)| ScheduledChange {
@@ -175,7 +176,6 @@ impl<N: Decode, SessionKey: Decode> Decode for StoredPendingChange<N, SessionKey
 	}
 }
 
-/// GRANDPA events.
 decl_event!(
 	pub enum Event<T> where <T as Trait>::SessionKey {
 		/// New authority set has been applied.
@@ -185,7 +185,7 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
-		// Pending change: (signalled at, scheduled change).
+		// Pending change: (signaled at, scheduled change).
 		PendingChange get(pending_change): Option<StoredPendingChange<T::BlockNumber, T::SessionKey>>;
 		// next block number where we can force a change.
 		NextForced get(next_forced): Option<T::BlockNumber>;
@@ -215,13 +215,13 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Report some misbehaviour.
+		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
-		fn on_finalise(block_number: T::BlockNumber) {
+		fn on_finalize(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				if block_number == pending_change.scheduled_at {
 					if let Some(median) = pending_change.forced {
@@ -268,7 +268,7 @@ impl<T: Trait> Module<T> {
 	/// indicates the median last finalized block number and it should be used
 	/// as the canon block when starting the new grandpa voter.
 	///
-	/// No change should be signalled while any change is pending. Returns
+	/// No change should be signaled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn schedule_change(
 		next_authorities: Vec<(T::SessionKey, u64)>,
@@ -309,7 +309,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> where Ed25519AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
+impl<T: Trait> Module<T> where AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
 	/// See if the digest contains any standard scheduled change.
 	pub fn scrape_digest_change(log: &Log<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>
@@ -340,19 +340,14 @@ impl<T> Default for SyncedAuthorities<T> {
 }
 
 impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
-	T: Trait,
-	T: session::Trait,
-	<T as session::Trait>::ConvertAccountIdToSessionKey: Convert<
-		<T as system::Trait>::AccountId,
-		<T as Trait>::SessionKey,
-	>,
+	T: Trait + consensus::Trait<SessionKey=<T as Trait>::SessionKey>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<T as Trait>::SessionKey>>
 {
 	fn on_session_change(_: X, _: bool) {
 		use primitives::traits::Zero;
 
-		let next_authorities = <session::Module<T>>::validators()
+		let next_authorities = <consensus::Module<T>>::authorities()
 			.into_iter()
-			.map(T::ConvertAccountIdToSessionKey::convert)
 			.map(|key| (key, 1)) // evenly-weighted.
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 
@@ -365,22 +360,17 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 }
 
 impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthorities<T> where
-	T: Trait,
-	T: session::Trait,
+	T: Trait + consensus::Trait<SessionKey=<T as Trait>::SessionKey>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<T as Trait>::SessionKey>>,
 	T: finality_tracker::Trait,
-	<T as session::Trait>::ConvertAccountIdToSessionKey: Convert<
-		<T as system::Trait>::AccountId,
-		<T as Trait>::SessionKey,
-	>,
 {
 	fn on_stalled(further_wait: T::BlockNumber) {
 		// when we record old authority sets, we can use `finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
 
-		let next_authorities = <session::Module<T>>::validators()
+		let next_authorities = <consensus::Module<T>>::authorities()
 			.into_iter()
-			.map(T::ConvertAccountIdToSessionKey::convert)
 			.map(|key| (key, 1)) // evenly-weighted.
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 use runtime_version::RuntimeVersion;
 use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
 	impl_extract_backtrace, impl_error_chain_kind};
+use primitives::ed25519::{Public, Signature};
 
 error_chain! {
 	errors {
@@ -52,13 +53,19 @@ error_chain! {
 		}
 
 		/// Error checking signature
-		InvalidSignature(s: ::primitives::ed25519::Signature, a: ::primitives::Ed25519AuthorityId) {
+		InvalidSignature(s: Signature, a: Public) {
 			description("Message signature is invalid"),
 			display("Message signature {:?} by {:?} is invalid.", s, a),
 		}
 
+		/// Invalid authorities set received from the runtime.
+		InvalidAuthoritiesSet {
+			description("authorities set is invalid"),
+			display("Current state of blockchain has invalid authorities set"),
+		}
+
 		/// Account is not an authority.
-		InvalidAuthority(a: ::primitives::Ed25519AuthorityId) {
+		InvalidAuthority(a: Public) {
 			description("Message sender is not a valid authority"),
 			display("Message sender {:?} is not a valid authority.", a),
 		}

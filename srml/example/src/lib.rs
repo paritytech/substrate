@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -66,16 +66,15 @@ decl_storage! {
 		// A map that has enumerable entries.
 		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
 
-
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
 	}
 }
 
-/// An event in this module. Events are simple means of reporting specific conditions and
-/// circumstances that have happened that users, Dapps and/or chain explorers would find
-/// interesting and otherwise difficult to detect.
 decl_event!(
+	/// Events are a simple means of reporting specific conditions and
+	/// circumstances that have happened that users, Dapps and/or chain explorers would find
+	/// interesting and otherwise difficult to detect.
 	pub enum Event<T> where B = <T as balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
@@ -202,17 +201,26 @@ decl_module! {
 			<Dummy<T>>::put(new_value);
 		}
 
-		// The signature could also look like: `fn on_initialise()`
-		fn on_initialise(_n: T::BlockNumber) {
+		// The signature could also look like: `fn on_initialize()`
+		fn on_initialize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 		}
 
-		// The signature could also look like: `fn on_finalise()`
-		fn on_finalise(_n: T::BlockNumber) {
+		// The signature could also look like: `fn on_finalize()`
+		fn on_finalize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
 			<Dummy<T>>::kill();
+		}
+
+		// A runtime code run after every block and have access to extended set of APIs.
+		//
+		// For instance you can generate extrinsics for the upcoming produced block.
+		fn offchain_worker(_n: T::BlockNumber) {
+			// We don't do anything here.
+			// but we could dispatch extrinsic (transaction/inherent) using
+			// runtime_io::submit_extrinsic
 		}
 	}
 }
@@ -250,7 +258,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnInitialise, OnFinalise, IdentityLookup},
+		BuildStorage, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 		testing::{Digest, DigestItem, Header}
 	};
 
@@ -271,7 +279,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
@@ -280,8 +288,10 @@ mod tests {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type EnsureAccountLiquid = ();
 		type Event = ();
+		type TransactionPayment = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -313,12 +323,12 @@ mod tests {
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
 			assert_eq!(Example::dummy(), Some(69));
 
-			// Check that finalising the block removes Dummy from storage.
-			<Example as OnFinalise<u64>>::on_finalise(1);
+			// Check that finalizing the block removes Dummy from storage.
+			<Example as OnFinalize<u64>>::on_finalize(1);
 			assert_eq!(Example::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
-			<Example as OnInitialise<u64>>::on_initialise(2);
+			<Example as OnInitialize<u64>>::on_initialize(2);
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
 			assert_eq!(Example::dummy(), Some(42));
 		});

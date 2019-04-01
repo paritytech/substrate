@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ use codec::Encode;
 use super::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,
 	EXTENSION_NODE_BIG, branch_node};
 
-/// Codec-flavoured TrieStream
+/// Codec-flavored TrieStream
 pub struct TrieStream {
 	buffer: Vec<u8>,
 }

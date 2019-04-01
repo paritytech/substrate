@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -93,7 +93,7 @@ impl<D: Drain> Drain for Multiply<D> {
 	}
 }
 
-/// Initialise telemetry.
+/// Initialize telemetry.
 pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
 	let mut endpoint_drains: Vec<Box<slog::Filter<_, _>>> = Vec::new();
 	let mut out_syncs = Vec::new();

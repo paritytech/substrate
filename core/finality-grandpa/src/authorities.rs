@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,15 +18,18 @@
 
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519;
 use grandpa::VoterSet;
 use parity_codec::{Encode, Decode};
 use log::{debug, info};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
+
+use ed25519::Public as AuthorityId;
 
 /// A shared authority set.
 pub(crate) struct SharedAuthoritySet<H, N> {
@@ -61,7 +64,7 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> VoterSet<Ed25519AuthorityId> {
+	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
@@ -85,7 +88,7 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
-	pub(crate) current_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub(crate) current_authorities: Vec<(AuthorityId, u64)>,
 	pub(crate) set_id: u64,
 	// Tree of pending standard changes across forks. Standard changes are
 	// enacted on finality and must be enacted (i.e. finalized) in-order across
@@ -102,7 +105,7 @@ where H: PartialEq,
 	  N: Ord,
 {
 	/// Get a genesis set with given authorities.
-	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
+	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
@@ -112,7 +115,7 @@ where H: PartialEq,
 	}
 
 	/// Get the current set id and a reference to the current authority set.
-	pub(crate) fn current(&self) -> (u64, &[(Ed25519AuthorityId, u64)]) {
+	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
 		(self.set_id, &self.current_authorities[..])
 	}
 }
@@ -133,7 +136,7 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		debug!(target: "afg", "Inserting potential standard set change signalled at block {:?} \
+		debug!(target: "afg", "Inserting potential standard set change signaled at block {:?} \
 							   (delayed by {:?} blocks).",
 			   (&number, &hash), pending.delay);
 
@@ -254,11 +257,14 @@ where
 			.take_while(|c| c.effective_number() <= best_number) // to prevent iterating too far
 			.filter(|c| c.effective_number() == best_number)
 		{
-			// check if the given best block is in the same branch as the block that signalled the change.
+			// check if the given best block is in the same branch as the block that signaled the change.
 			if is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
+				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
+					"block" => ?change.canon_height
+				);
 
 				let median_last_finalized = match change.delay_kind {
 					DelayKind::Best { ref median_last_finalized } => median_last_finalized.clone(),
@@ -322,6 +328,9 @@ where
 				if let Some(change) = change {
 					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
 						  change.canon_height);
+					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
+						"block" => ?change.canon_height
+					);
 
 					self.current_authorities = change.next_authorities;
 					self.set_id += 1;
@@ -342,14 +351,18 @@ where
 	/// authority set change (without triggering it), ensuring that if there are
 	/// multiple changes in the same branch, finalizing this block won't
 	/// finalize past multiple transitions (i.e. transitions must be finalized
-	/// in-order). The given function `is_descendent_of` should return `true` if
-	/// the second hash (target) is a descendent of the first hash (base).
+	/// in-order). Returns `Some(true)` if the block being finalized enacts a
+	/// change that can be immediately applied, `Some(false)` if the block being
+	/// finalized enacts a change but it cannot be applied yet since there are
+	/// other dependent changes, and `None` if no change is enacted. The given
+	/// function `is_descendent_of` should return `true` if the second hash
+	/// (target) is a descendent of the first hash (base).
 	pub fn enacts_standard_change<F, E>(
 		&self,
 		finalized_hash: H,
 		finalized_number: N,
 		is_descendent_of: &F,
-	) -> Result<bool, fork_tree::Error<E>>
+	) -> Result<Option<bool>, fork_tree::Error<E>>
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{
@@ -368,7 +381,7 @@ pub(crate) enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain. The median last finalized block is calculated at the time the
-	/// change was signalled.
+	/// change was signaled.
 	Best { median_last_finalized: N },
 }
 
@@ -379,7 +392,7 @@ pub(crate) enum DelayKind<N> {
 #[derive(Debug, Clone, Encode, PartialEq)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
-	pub(crate) next_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub(crate) next_authorities: Vec<(AuthorityId, u64)>,
 	/// How deep in the chain the announcing block must be
 	/// before the change is applied.
 	pub(crate) delay: N,
@@ -509,8 +522,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![([1; 32].into(), 5)];
-		let set_b = vec![([2; 32].into(), 5)];
+		let set_a = vec![(AuthorityId([1; 32]), 5)];
+		let set_b = vec![(AuthorityId([2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -537,7 +550,7 @@ mod tests {
 			vec![&change_b, &change_a],
 		);
 
-		// finalizing "hash_c" won't enact the change signalled at "hash_a" but it will prune out "hash_b"
+		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"
 		let status = authorities.apply_standard_changes("hash_c", 11, &is_descendent_of(|base, hash| match (*base, *hash) {
 			("hash_a", "hash_c") => true,
 			("hash_b", "hash_c") => false,
@@ -551,7 +564,7 @@ mod tests {
 			vec![&change_a],
 		);
 
-		// finalizing "hash_d" will enact the change signalled at "hash_a"
+		// finalizing "hash_d" will enact the change signaled at "hash_a"
 		let status = authorities.apply_standard_changes("hash_d", 15, &is_descendent_of(|base, hash| match (*base, *hash) {
 			("hash_a", "hash_d") => true,
 			_ => unreachable!(),
@@ -574,8 +587,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![([1; 32].into(), 5)];
-		let set_c = vec![([2; 32].into(), 5)];
+		let set_a = vec![(AuthorityId([1; 32]), 5)];
+		let set_c = vec![(AuthorityId([2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -640,7 +653,7 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![([1; 32].into(), 5)];
+		let set_a = vec![(AuthorityId([1; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -650,21 +663,51 @@ mod tests {
 			delay_kind: DelayKind::Finalized,
 		};
 
+		let change_b = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 10,
+			canon_height: 20,
+			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
+		};
+
 		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(true)).unwrap();
 
 		let is_descendent_of = is_descendent_of(|base, hash| match (*base, *hash) {
-			("hash_a", "hash_b") => true,
+			("hash_a", "hash_d") => true,
+			("hash_a", "hash_e") => true,
+			("hash_b", "hash_d") => true,
+			("hash_b", "hash_e") => true,
 			("hash_a", "hash_c") => false,
+			("hash_b", "hash_c") => false,
 			_ => unreachable!(),
 		});
 
 		// "hash_c" won't finalize the existing change since it isn't a descendent
-		assert!(!authorities.enacts_standard_change("hash_c", 15, &is_descendent_of).unwrap());
-		// "hash_b" at depth 14 won't work either
-		assert!(!authorities.enacts_standard_change("hash_b", 14, &is_descendent_of).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_c", 15, &is_descendent_of).unwrap(),
+			None,
+		);
+
+		// "hash_d" at depth 14 won't work either
+		assert_eq!(
+			authorities.enacts_standard_change("hash_d", 14, &is_descendent_of).unwrap(),
+			None,
+		);
 
 		// but it should work at depth 15 (change height + depth)
-		assert!(authorities.enacts_standard_change("hash_b", 15, &is_descendent_of).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_d", 15, &is_descendent_of).unwrap(),
+			Some(true),
+		);
+
+		// finalizing "hash_e" at depth 20 will trigger change at "hash_b", but
+		// it can't be applied yet since "hash_a" must be applied first
+		assert_eq!(
+			authorities.enacts_standard_change("hash_e", 30, &is_descendent_of).unwrap(),
+			Some(false),
+		);
 	}
 
 	#[test]
@@ -676,8 +719,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![([1; 32].into(), 5)];
-		let set_b = vec![([2; 32].into(), 5)];
+		let set_a = vec![(AuthorityId([1; 32]), 5)];
+		let set_b = vec![(AuthorityId([2; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -700,7 +743,10 @@ mod tests {
 
 		// there's an effective change triggered at block 15 but not a standard one.
 		// so this should do nothing.
-		assert!(!authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap());
+		assert_eq!(
+			authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap(),
+			None,
+		);
 
 		// throw a standard change into the mix to prove that it's discarded
 		// for being on the same fork.

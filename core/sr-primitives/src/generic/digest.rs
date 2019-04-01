@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,10 +21,9 @@ use serde_derive::Serialize;
 
 use rstd::prelude::*;
 
+use crate::ConsensusEngineId;
 use crate::codec::{Decode, Encode, Codec, Input};
 use crate::traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
-
-use substrate_primitives::hash::H512 as Signature;
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -63,7 +62,8 @@ impl<Item> traits::Digest for Digest<Item> where
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum DigestItem<Hash, AuthorityId> {
+#[allow(deprecated)]
+pub enum DigestItem<Hash, AuthorityId, SealSignature> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
 	AuthoritiesChange(Vec<AuthorityId>),
@@ -71,14 +71,17 @@ pub enum DigestItem<Hash, AuthorityId> {
 	/// block. It is created for every block iff runtime supports changes
 	/// trie creation.
 	ChangesTrieRoot(Hash),
+	/// The old way to put a Seal on it.  Deprecated.
+	#[deprecated]
+	Seal(u64, SealSignature),
 	/// Put a Seal on it
-	Seal(u64, Signature),
+	Consensus(ConsensusEngineId, Vec<u8>),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Encode, AuthorityId: Encode> ::serde::Serialize for DigestItem<Hash, AuthorityId> {
+impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> ::serde::Serialize for DigestItem<Hash, AuthorityId, SealSignature> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| {
 			::substrate_primitives::bytes::serialize(bytes, seq)
@@ -91,16 +94,20 @@ impl<Hash: Encode, AuthorityId: Encode> ::serde::Serialize for DigestItem<Hash, 
 /// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
+#[allow(deprecated)]
+pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a, SealSignature: 'a> {
 	/// Reference to `DigestItem::AuthoritiesChange`.
 	AuthoritiesChange(&'a [AuthorityId]),
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
+	/// A deprecated sealed signature for testing
+	#[deprecated]
+	Seal(&'a u64, &'a SealSignature),
 	/// A sealed signature for testing
-	Seal(&'a u64, &'a Signature),
+	Consensus(&'a ConsensusEngineId, &'a [u8]),
 	/// Any 'non-system' digest item, opaque to the native code.
 	/// Reference to `DigestItem::Other`.
-	Other(&'a Vec<u8>),
+	Other(&'a [u8]),
 }
 
 /// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
@@ -111,12 +118,13 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
 #[derive(Encode, Decode)]
 enum DigestItemType {
 	Other = 0,
-	AuthoritiesChange,
-	ChangesTrieRoot,
-	Seal,
+	AuthoritiesChange = 1,
+	ChangesTrieRoot = 2,
+	Seal = 3,
+	Consensus = 4,
 }
 
-impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
+impl<Hash, AuthorityId, SealSignature> DigestItem<Hash, AuthorityId, SealSignature> {
 	/// Returns Some if `self` is a `DigestItem::Other`.
 	pub fn as_other(&self) -> Option<&Vec<u8>> {
 		match *self {
@@ -126,11 +134,13 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 	}
 
 	/// Returns a 'referencing view' for this digest item.
-	fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash, AuthorityId> {
+	#[allow(deprecated)]
+	fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash, AuthorityId, SealSignature> {
 		match *self {
 			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
 			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
+			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
@@ -139,7 +149,8 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 impl<
 	Hash: Codec + Member,
 	AuthorityId: Codec + Member + MaybeHash,
-> traits::DigestItem for DigestItem<Hash, AuthorityId> {
+	SealSignature: Codec + Member,
+> traits::DigestItem for DigestItem<Hash, AuthorityId, SealSignature> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;
 
@@ -152,13 +163,14 @@ impl<
 	}
 }
 
-impl<Hash: Encode, AuthorityId: Encode> Encode for DigestItem<Hash, AuthorityId> {
+impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for DigestItem<Hash, AuthorityId, SealSignature> {
 	fn encode(&self) -> Vec<u8> {
 		self.dref().encode()
 	}
 }
 
-impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId> {
+impl<Hash: Decode, AuthorityId: Decode, SealSignature: Decode> Decode for DigestItem<Hash, AuthorityId, SealSignature> {
+	#[allow(deprecated)]
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let item_type: DigestItemType = Decode::decode(input)?;
 		match item_type {
@@ -169,9 +181,13 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 				Decode::decode(input)?,
 			)),
 			DigestItemType::Seal => {
-				let vals: (u64, Signature) = Decode::decode(input)?;
+				let vals: (u64, SealSignature) = Decode::decode(input)?;
 				Some(DigestItem::Seal(vals.0, vals.1))
 			},
+			DigestItemType::Consensus => {
+				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
+				Some(DigestItem::Consensus(vals.0, vals.1))
+			}
 			DigestItemType::Other => Some(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
@@ -179,7 +195,7 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 	}
 }
 
-impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member> DigestItemRef<'a, Hash, AuthorityId> {
+impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member, SealSignature: Codec + Member> DigestItemRef<'a, Hash, AuthorityId, SealSignature> {
 	/// Cast this digest item into `AuthoritiesChange`.
 	pub fn as_authorities_change(&self) -> Option<&'a [AuthorityId]> {
 		match *self {
@@ -197,7 +213,8 @@ impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member> DigestItemRef<'a, Ha
 	}
 }
 
-impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, AuthorityId> {
+#[allow(deprecated)]
+impl<'a, Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for DigestItemRef<'a, Hash, AuthorityId, SealSignature> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
@@ -214,6 +231,10 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 				DigestItemType::Seal.encode_to(&mut v);
 				(val, sig).encode_to(&mut v);
 			},
+			DigestItemRef::Consensus(val, sig) => {
+				DigestItemType::Consensus.encode_to(&mut v);
+				(val, sig).encode_to(&mut v);
+			},
 			DigestItemRef::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
@@ -227,8 +248,10 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use substrate_primitives::hash::H512 as Signature;
 
 	#[test]
+	#[allow(deprecated)]
 	fn should_serialize_digest() {
 		let digest = Digest {
 			logs: vec![

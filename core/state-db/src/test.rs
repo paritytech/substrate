@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use primitives::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -34,9 +34,9 @@ impl MetaDb for TestDb {
 	}
 }
 
-impl HashDb for TestDb {
+impl NodeDb for TestDb {
 	type Error = ();
-	type Hash = H256;
+	type Key = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
 		Ok(self.data.get(key).cloned())

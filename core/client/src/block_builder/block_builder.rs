@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,15 +17,15 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use parity_codec::Encode;
-use crate::blockchain::HeaderBackend;
+use runtime_primitives::ApplyOutcome;
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
 };
-use primitives::H256;
-use runtime_primitives::generic::BlockId;
+use primitives::{H256, ExecutionContext};
+use crate::blockchain::HeaderBackend;
 use crate::runtime_api::Core;
 use crate::error;
-use runtime_primitives::{ApplyOutcome, ExecutionContext};
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
@@ -64,7 +64,7 @@ where
 			Default::default()
 		);
 		let api = api.runtime_api();
-		api.initialise_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
+		api.initialize_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
@@ -97,7 +97,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.finalise_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+		self.header = self.api.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

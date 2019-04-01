@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,15 +16,13 @@
 
 //! Support code for the runtime. A set of test accounts.
 
-use std::collections::HashMap;
-use std::ops::Deref;
+use std::{collections::HashMap, ops::Deref};
 use lazy_static::lazy_static;
-use hex_literal::{hex, hex_impl};
-use substrate_primitives::ed25519::{Pair, Public, Signature};
+use substrate_primitives::{ed25519::{Pair, Public, Signature}, Pair as PairT, H256};
 pub use substrate_primitives::ed25519;
 
 /// Set of test accounts.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
 pub enum Keyring {
 	Alice,
 	Bob,
@@ -37,7 +35,7 @@ pub enum Keyring {
 }
 
 impl Keyring {
-	pub fn from_public(who: Public) -> Option<Keyring> {
+	pub fn from_public(who: &Public) -> Option<Keyring> {
 		[
 			Keyring::Alice,
 			Keyring::Bob,
@@ -49,15 +47,23 @@ impl Keyring {
 			Keyring::Two,
 		].iter()
 			.map(|i| *i)
-			.find(|&k| Public::from(k) == who)
+			.find(|&k| &Public::from(k) == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
-		Self::from_public(Public::from_raw(who))
+		Self::from_public(&Public::from_raw(who))
 	}
 
 	pub fn to_raw_public(self) -> [u8; 32] {
 		*Public::from(self).as_array_ref()
+	}
+
+	pub fn from_h256_public(who: H256) -> Option<Keyring> {
+		Self::from_public(&Public::from_raw(who.into()))
+	}
+
+	pub fn to_h256_public(self) -> H256 {
+		Public::from(self).as_array_ref().into()
 	}
 
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
@@ -69,16 +75,13 @@ impl Keyring {
 	}
 
 	pub fn pair(self) -> Pair {
-		match self {
-			Keyring::Alice => Pair::from_seed(b"Alice                           "),
-			Keyring::Bob => Pair::from_seed(b"Bob                             "),
-			Keyring::Charlie => Pair::from_seed(b"Charlie                         "),
-			Keyring::Dave => Pair::from_seed(b"Dave                            "),
-			Keyring::Eve => Pair::from_seed(b"Eve                             "),
-			Keyring::Ferdie => Pair::from_seed(b"Ferdie                          "),
-			Keyring::One => Pair::from_seed(b"12345678901234567890123456789012"),
-			Keyring::Two => Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
-		}
+		Pair::from_string(&format!("//{}", <&'static str>::from(self)), None)
+			.expect("static values are known good; qed")
+	}
+
+	/// Returns an interator over all test accounts.
+	pub fn iter() -> impl Iterator<Item=Keyring> {
+		<Self as strum::IntoEnumIterator>::iter()
 	}
 }
 
@@ -91,24 +94,15 @@ impl From<Keyring> for &'static str {
 			Keyring::Dave => "Dave",
 			Keyring::Eve => "Eve",
 			Keyring::Ferdie => "Ferdie",
-			Keyring::One => "one",
-			Keyring::Two => "two",
+			Keyring::One => "One",
+			Keyring::Two => "Two",
 		}
 	}
 }
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter().map(|&i| (i, i.pair())).collect()
+		Keyring::iter().map(|i| (i, i.pair())).collect()
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
@@ -131,6 +125,12 @@ impl From<Keyring> for Pair {
 impl From<Keyring> for [u8; 32] {
 	fn from(k: Keyring) -> Self {
 		*(*PUBLIC_KEYS).get(&k).unwrap().as_array_ref()
+	}
+}
+
+impl From<Keyring> for H256 {
+	fn from(k: Keyring) -> Self {
+		(*PUBLIC_KEYS).get(&k).unwrap().as_array_ref().into()
 	}
 }
 
@@ -162,12 +162,12 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ed25519::Verifiable;
+	use substrate_primitives::{ed25519::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {
-		assert!(Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Alice));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Bob!", Keyring::Alice));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Bob));
+		assert!(Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Alice));
+		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Bob!", Keyring::Alice));
+		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Bob));
 	}
 }

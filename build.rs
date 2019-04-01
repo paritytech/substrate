@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
-const ERROR_MSG: &'static str = "Failed to generate metadata files";
+const ERROR_MSG: &str = "Failed to generate metadata files";
 
 fn main() {
 	generate_cargo_keys(ConstantsFlags::all()).expect(ERROR_MSG);

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -282,7 +282,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				// we share the storage for multiple checks, do it here
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-				if !storage.contains(&cht_root) {
+				if !storage.contains(&cht_root, &[]) {
 					return Err(ClientErrorKind::InvalidCHTProof.into());
 				}
 
@@ -390,12 +390,14 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number
 pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
-	use keyring::Keyring;
+	use parity_codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
-	use test_client::{self, TestClient, blockchain::HeaderBackend};
-	use test_client::runtime::{self, Hash, Block, Header};
+	use test_client::{
+		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
+		runtime::{self, Hash, Block, Header}
+	};
 	use consensus::BlockOrigin;
 
 	use crate::in_mem::{Blockchain as InMemoryBlockchain};
@@ -435,7 +437,7 @@ pub mod tests {
 
 	type TestChecker = LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>;
 
-	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, usize) {
+	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, u32) {
 		// prepare remote client
 		let remote_client = test_client::new();
 		let remote_block_id = BlockId::Number(0);
@@ -444,7 +446,9 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let authorities_len = remote_client.authorities_at(&remote_block_id).unwrap().len();
+		let authorities_len = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::AUTHORITY_COUNT.to_vec()))
+			.unwrap()
+			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
 
 		// check remote read proof locally
@@ -583,7 +587,7 @@ pub mod tests {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
-		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
@@ -695,7 +699,7 @@ pub mod tests {
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
-		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:

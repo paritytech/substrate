@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,17 +23,19 @@
 extern crate alloc;
 
 use parity_codec::{Encode, Decode};
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+
+use ed25519::Public as AuthorityId;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
 #[derive(Clone, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
-	pub next_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub next_authorities: Vec<(AuthorityId, u64)>,
 	/// The number of blocks to delay.
 	pub delay: N,
 }
@@ -56,8 +58,8 @@ decl_runtime_apis! {
 	/// This should be implemented on the runtime side.
 	///
 	/// This is primarily used for negotiating authority-set changes for the
-	/// gadget. GRANDPA uses a signalling model of changing authority sets:
-	/// changes should be signalled with a delay of N blocks, and then automatically
+	/// gadget. GRANDPA uses a signaling model of changing authority sets:
+	/// changes should be signaled with a delay of N blocks, and then automatically
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
@@ -81,7 +83,7 @@ decl_runtime_apis! {
 		/// Check a digest for forced changes.
 		/// Return `None` if there are no forced changes. Otherwise, return a
 		/// tuple containing the pending change and the median last finalized
-		/// block number at the time the change was signalled.
+		/// block number at the time the change was signaled.
 		///
 		/// Added in version 2.
 		///
@@ -106,6 +108,6 @@ decl_runtime_apis! {
 		/// When called at block B, it will return the set of authorities that should be
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
-		fn grandpa_authorities() -> Vec<(Ed25519AuthorityId, u64)>;
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
 	}
 }

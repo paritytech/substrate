@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Consensus Common.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -53,7 +53,9 @@ pub use block_import::{
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
-	type Error: ::std::error::Error + Send + 'static;	/// Get the authorities at the given block.
+	type Error: std::error::Error + Send + 'static;
+
+	/// Get the authorities at the given block.
 	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
 }
 
@@ -114,4 +116,13 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 	fn is_offline(&self) -> bool {
 		T::is_offline(&*self)
 	}
+}
+
+/// A list of all well known keys in the cache.
+pub mod well_known_cache_keys {
+	/// The type representing cache keys.
+	pub type Id = [u8; 4];
+
+	/// A list of authorities.
+	pub const AUTHORITIES: Id = *b"auth";
 }

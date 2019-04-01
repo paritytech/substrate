@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
+use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
 /// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
@@ -39,6 +39,7 @@ arg_enum! {
 		Wasm,
 		Both,
 		NativeElseWasm,
+		NativeWhenPossible,
 	}
 }
 
@@ -49,7 +50,18 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::NativeWhenPossible => client::ExecutionStrategy::NativeWhenPossible,
 		}
+	}
+}
+
+arg_enum! {
+	/// How to execute blocks
+	#[derive(Debug, Clone)]
+	pub enum OffchainWorkerEnabled {
+		Always,
+		Never,
+		WhenValidating,
 	}
 }
 
@@ -68,7 +80,7 @@ pub struct SharedParams {
 	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
-	///Sets a custom logging filter
+	/// Sets a custom logging filter
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
 }
@@ -98,10 +110,6 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
-	/// Specify node secret key (64-character hex string)
-	#[structopt(long = "node-key", value_name = "KEY")]
-	pub node_key: Option<String>,
-
 	/// Specify the number of outgoing connections we're trying to maintain
 	#[structopt(long = "out-peers", value_name = "OUT_PEERS", default_value = "25")]
 	pub out_peers: u32,
@@ -109,6 +117,98 @@ pub struct NetworkConfigurationParams {
 	/// Specify the maximum number of incoming connections we're accepting
 	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
 	pub in_peers: u32,
+
+	/// By default, the network will use mDNS to discover other nodes on the local network. This
+	/// disables it.
+	#[structopt(long = "no-mdns")]
+	pub no_mdns: bool,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub node_key_params: NodeKeyParams
+}
+
+arg_enum! {
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	pub enum NodeKeyType {
+		Secp256k1,
+		Ed25519
+	}
+}
+
+/// Parameters used to create the `NodeKeyConfig`, which determines the keypair
+/// used for libp2p networking.
+#[derive(Debug, StructOpt, Clone)]
+pub struct NodeKeyParams {
+	/// The secret key to use for libp2p networking.
+	///
+	/// The value is a string that is parsed according to the choice of
+	/// `--node-key-type` as follows:
+	///
+	///   `secp256k1`:
+	///   The value is parsed as a hex-encoded Secp256k1 32 bytes secret key,
+	///   i.e. 64 hex characters.
+	///
+	///   `ed25519`:
+	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
+	///   i.e. 64 hex characters.
+	///
+	/// The value of this option takes precedence over `--node-key-file`.
+	///
+	/// WARNING: Secrets provided as command-line arguments are easily exposed.
+	/// Use of this option should be limited to development and testing. To use
+	/// an externally managed secret key, use `--node-key-file` instead.
+	#[structopt(long = "node-key", value_name = "KEY")]
+	pub node_key: Option<String>,
+
+	/// The type of secret key to use for libp2p networking.
+	///
+	/// The secret key of the node is obtained as follows:
+	///
+	///   * If the `--node-key` option is given, the value is parsed as a secret key
+	///     according to the type. See the documentation for `--node-key`.
+	///
+	///   * If the `--node-key-file` option is given, the secret key is read from the
+	///     specified file. See the documentation for `--node-key-file`.
+	///
+	///   * Otherwise, the secret key is read from a file with a predetermined,
+	///     type-specific name from the chain-specific network config directory
+	///     inside the base directory specified by `--base-dir`. If this file does
+	///     not exist, it is created with a newly generated secret key of the
+	///     chosen type.
+	///
+	/// The node's secret key determines the corresponding public key and hence the
+	/// node's peer ID in the context of libp2p.
+	///
+	/// NOTE: The current default key type is `secp256k1` for a transition period only
+	/// but will eventually change to `ed25519` in a future release. To continue using
+	/// `secp256k1` keys, use `--node-key-type=secp256k1`.
+	#[structopt(
+		long = "node-key-type",
+		value_name = "TYPE",
+		raw(
+			possible_values = "&NodeKeyType::variants()",
+			case_insensitive = "true",
+			default_value = r#""Secp256k1""#
+		)
+	)]
+	pub node_key_type: NodeKeyType,
+
+	/// The file from which to read the node's secret key to use for libp2p networking.
+	///
+	/// The contents of the file are parsed according to the choice of `--node-key-type`
+	/// as follows:
+	///
+	///   `secp256k1`:
+	///   The file must contain an unencoded 32 bytes Secp256k1 secret key.
+	///
+	///   `ed25519`:
+	///   The file must contain an unencoded 32 bytes Ed25519 secret key.
+	///
+	/// If the file does not exist, it is created with a newly generated secret key of
+	/// the chosen type.
+	#[structopt(long = "node-key-file", value_name = "FILE")]
+	pub node_key_file: Option<PathBuf>
 }
 
 /// Parameters used to create the pool configuration.
@@ -122,63 +222,9 @@ pub struct TransactionPoolParams {
 	pub pool_kbytes: usize,
 }
 
-/// The `run` command used to run a node.
+/// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
-pub struct RunCmd {
-	/// Specify custom keystore path
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
-	/// Specify additional key seed
-	#[structopt(long = "key", value_name = "STRING")]
-	pub key: Option<String>,
-
-	/// Enable validator mode
-	#[structopt(long = "validator")]
-	pub validator: bool,
-
-	/// Run in light client mode
-	#[structopt(long = "light")]
-	pub light: bool,
-
-	/// Limit the memory the database cache can use
-	#[structopt(long = "db-cache", value_name = "MiB")]
-	pub database_cache_size: Option<u32>,
-
-	/// Listen to all RPC interfaces (default is local)
-	#[structopt(long = "rpc-external")]
-	pub rpc_external: bool,
-
-	/// Listen to all Websocket interfaces (default is local)
-	#[structopt(long = "ws-external")]
-	pub ws_external: bool,
-
-	/// Specify HTTP RPC server TCP port
-	#[structopt(long = "rpc-port", value_name = "PORT")]
-	pub rpc_port: Option<u16>,
-
-	/// Specify WebSockets RPC server TCP port
-	#[structopt(long = "ws-port", value_name = "PORT")]
-	pub ws_port: Option<u16>,
-
-	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
-
-	/// The human-readable name for this node, as reported to the telemetry server, if enabled
-	#[structopt(long = "name", value_name = "NAME")]
-	pub name: Option<String>,
-
-	/// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
-	#[structopt(long = "no-telemetry")]
-	pub no_telemetry: bool,
-
-	/// The URL of the telemetry server to connect to. This flag can be passed multiple times
-	/// as a mean to specify multiple telemetry endpoints. Verbosity levels range from 0-9, with
-	/// 0 denoting the least verbosity. If no verbosity level is specified the default is 0.
-	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
-	pub telemetry_endpoints: Vec<(String, u8)>,
-
+pub struct ExecutionStrategies {
 	/// The means of execution used when calling into the runtime while syncing blocks.
 	#[structopt(
 		long = "syncing-execution",
@@ -215,6 +261,18 @@ pub struct RunCmd {
 	)]
 	pub block_construction_execution: ExecutionStrategy,
 
+	/// The means of execution used when calling into the runtime while constructing blocks.
+	#[structopt(
+		long = "offchain-worker-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeWhenPossible""#
+		)
+	)]
+	pub offchain_worker_execution: ExecutionStrategy,
+
 	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
 	#[structopt(
 		long = "other-execution",
@@ -226,8 +284,86 @@ pub struct RunCmd {
 		)
 	)]
 	pub other_execution: ExecutionStrategy,
+}
 
-	
+/// The `run` command used to run a node.
+#[derive(Debug, StructOpt, Clone)]
+pub struct RunCmd {
+	/// Specify custom keystore path
+	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+	pub keystore_path: Option<PathBuf>,
+
+	/// Specify additional key seed
+	#[structopt(long = "key", value_name = "STRING")]
+	pub key: Option<String>,
+
+	/// Enable validator mode
+	#[structopt(long = "validator")]
+	pub validator: bool,
+
+	/// Disable GRANDPA when running in validator mode
+	#[structopt(long = "no-grandpa")]
+	pub no_grandpa: bool,
+
+	/// Run in light client mode
+	#[structopt(long = "light")]
+	pub light: bool,
+
+	/// Limit the memory the database cache can use
+	#[structopt(long = "db-cache", value_name = "MiB")]
+	pub database_cache_size: Option<u32>,
+
+	/// Listen to all RPC interfaces (default is local)
+	#[structopt(long = "rpc-external")]
+	pub rpc_external: bool,
+
+	/// Listen to all Websocket interfaces (default is local)
+	#[structopt(long = "ws-external")]
+	pub ws_external: bool,
+
+	/// Specify HTTP RPC server TCP port
+	#[structopt(long = "rpc-port", value_name = "PORT")]
+	pub rpc_port: Option<u16>,
+
+	/// Specify WebSockets RPC server TCP port
+	#[structopt(long = "ws-port", value_name = "PORT")]
+	pub ws_port: Option<u16>,
+
+	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
+	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
+	pub pruning: Option<String>,
+
+	/// The human-readable name for this node, as reported to the telemetry server, if enabled
+	#[structopt(long = "name", value_name = "NAME")]
+	pub name: Option<String>,
+
+	/// Disable connecting to the Substrate telemetry server (telemetry is on by default on global chains).
+	#[structopt(long = "no-telemetry")]
+	pub no_telemetry: bool,
+
+	/// The URL of the telemetry server to connect to. This flag can be passed multiple times
+	/// as a mean to specify multiple telemetry endpoints. Verbosity levels range from 0-9, with
+	/// 0 denoting the least verbosity. If no verbosity level is specified the default is 0.
+	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
+	pub telemetry_endpoints: Vec<(String, u8)>,
+
+	/// Should execute offchain workers on every block. By default it's only enabled for nodes that are authoring new
+	/// blocks.
+	#[structopt(
+		long = "offchain-worker",
+		value_name = "ENABLED",
+		raw(
+			possible_values = "&OffchainWorkerEnabled::variants()",
+			case_insensitive = "true",
+			default_value = r#""WhenValidating""#
+		)
+	)]
+	pub offchain_worker: OffchainWorkerEnabled,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub execution_strategies: ExecutionStrategies,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -239,6 +375,84 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub keyring: Keyring,
+
+	/// Enable authoring even when offline.
+	#[structopt(long = "force-authoring")]
+	pub force_authoring: bool,
+}
+
+/// Stores all required Cli values for a keyring test account.
+struct KeyringTestAccountCliValues {
+	help: String,
+	conflicts_with: Vec<String>,
+	name: String,
+	variant: keyring::AuthorityKeyring,
+}
+
+lazy_static::lazy_static! {
+	/// The Cli values for all test accounts.
+	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
+		keyring::AuthorityKeyring::iter().map(|a| {
+			let help = format!("Shortcut for `--key //{} --name {}`.", a, a);
+			let conflicts_with = keyring::AuthorityKeyring::iter()
+				.filter(|b| a != *b)
+				.map(|b| b.to_string().to_lowercase())
+				.chain(["name", "key"].iter().map(|s| s.to_string()))
+				.collect::<Vec<_>>();
+			let name = a.to_string().to_lowercase();
+
+			KeyringTestAccountCliValues {
+				help,
+				conflicts_with,
+				name,
+				variant: a,
+			}
+		}).collect()
+	};
+}
+
+/// Wrapper for exposing the keyring test accounts into the Cli.
+#[derive(Debug, Clone)]
+pub struct Keyring {
+	pub account: Option<keyring::AuthorityKeyring>,
+}
+
+impl StructOpt for Keyring {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		unimplemented!("Should not be called for `TestAccounts`.")
+	}
+
+	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
+		Keyring {
+			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
+		}
+	}
+}
+
+impl AugmentClap for Keyring {
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
+			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+			app.arg(
+				Arg::with_name(&a.name)
+					.long(&a.name)
+					.help(&a.help)
+					.conflicts_with_all(&conflicts_with_strs)
+					.takes_value(false)
+			)
+		})
+	}
+}
+
+impl Keyring {
+	fn is_subcommand() -> bool {
+		false
+	}
 }
 
 /// Default to verbosity level 0, if none is provided.
@@ -270,9 +484,9 @@ pub struct BuildSpecCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
-	/// Specify node secret key (64-character hex string)
-	#[structopt(long = "node-key", value_name = "KEY")]
-	pub node_key: Option<String>,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub node_key_params: NodeKeyParams,
 }
 
 impl_get_log_filter!(BuildSpecCmd);
@@ -338,6 +552,10 @@ impl_get_log_filter!(RevertCmd);
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
+	/// Skip interactive prompt by answering yes automatically.
+	#[structopt(short = "y")]
+	pub yes: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,

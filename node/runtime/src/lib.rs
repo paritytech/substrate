@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,13 +21,10 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
-#[cfg(feature = "std")]
-use support::{Serialize, Deserialize};
 use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -37,7 +34,8 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
+	AuthorityIdFor,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -54,14 +52,15 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
+pub use staking::StakerStatus;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 33,
-	impl_version: 33,
+	spec_version: 53,
+	impl_version: 53,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -101,22 +100,19 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = (((Staking, Contract), Democracy), Session);
+	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
-	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
-}
-
-impl fees::Trait for Runtime {
-	type Event = Event;
-	type TransferAsset = Balances;
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
 }
 
 impl consensus::Trait for Runtime {
 	type Log = Log;
-	type SessionKey = SessionKey;
+	type SessionKey = AuthorityId;
 
-	// the aura module handles offline-reports internally
+	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
 	type InherentOfflineReport = ();
 }
@@ -126,24 +122,19 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
-/// Session key conversion.
-pub struct SessionKeyConversion;
-impl Convert<AccountId, SessionKey> for SessionKeyConversion {
-	fn convert(a: AccountId) -> SessionKey {
-		a.to_fixed_bytes().into()
-	}
-}
-
 impl session::Trait for Runtime {
-	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type ConvertAccountIdToSessionKey = ();
 	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
 	type Event = Event;
 }
 
 impl staking::Trait for Runtime {
 	type Currency = balances::Module<Self>;
+	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
+	type Slash = ();
+	type Reward = ();
 }
 
 impl democracy::Trait for Runtime {
@@ -154,6 +145,8 @@ impl democracy::Trait for Runtime {
 
 impl council::Trait for Runtime {
 	type Event = Event;
+	type BadPresentation = ();
+	type BadReaper = ();
 }
 
 impl council::voting::Trait for Runtime {
@@ -171,14 +164,19 @@ impl treasury::Trait for Runtime {
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
+	type MintedForSpending = ();
+	type ProposalRejection = ();
 }
 
 impl contract::Trait for Runtime {
+	type Currency = balances::Module<Runtime>;
 	type Call = Call;
 	type Event = Event;
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
+	type TrieIdGenerator = contract::TrieIdFromParentCounter<Runtime>;
+	type GasPayment = ();
 }
 
 impl sudo::Trait for Runtime {
@@ -187,7 +185,7 @@ impl sudo::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
-	type SessionKey = SessionKey;
+	type SessionKey = AuthorityId;
 	type Log = Log;
 	type Event = Event;
 }
@@ -197,7 +195,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -220,7 +218,6 @@ construct_runtime!(
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
-		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -239,7 +236,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Fees, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Balances, AllModules>;
 
 impl_runtime_apis! {
 	impl client_api::Core<Block> for Runtime {
@@ -247,16 +244,12 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn authorities() -> Vec<SessionKey> {
-			Consensus::authorities()
-		}
-
 		fn execute_block(block: Block) {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: &<Block as BlockT>::Header) {
-			Executive::initialise_block(header)
+		fn initialize_block(header: &<Block as BlockT>::Header) {
+			Executive::initialize_block(header)
 		}
 	}
 
@@ -271,8 +264,8 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalise_block() -> <Block as BlockT>::Header {
-			Executive::finalise_block()
+		fn finalize_block() -> <Block as BlockT>::Header {
+			Executive::finalize_block()
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
@@ -291,6 +284,12 @@ impl_runtime_apis! {
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+		fn offchain_worker(number: NumberFor<Block>) {
+			Executive::offchain_worker(number)
 		}
 	}
 
@@ -323,7 +322,7 @@ impl_runtime_apis! {
 			None
 		}
 
-		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 			Grandpa::grandpa_authorities()
 		}
 	}
@@ -331,6 +330,12 @@ impl_runtime_apis! {
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+	}
+
+	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
+		fn authorities() -> Vec<AuthorityIdFor<Block>> {
+			Consensus::authorities()
 		}
 	}
 }

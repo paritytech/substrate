@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -175,6 +175,8 @@ impl<B: ChainApi> Pool<B> {
 		let status = self.pool.read().status();
 		let ready_limit = &self.options.ready;
 		let future_limit = &self.options.future;
+
+		debug!(target: "txpool", "Pool Status: {:?}", status);
 
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
 			|| future_limit.is_exceeded(status.future, status.future_bytes) {
@@ -453,12 +455,14 @@ mod tests {
 	use super::*;
 	use futures::Stream;
 	use parity_codec::Encode;
-	use test_runtime::{Block, Extrinsic, Transfer, H256};
+	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use crate::watcher;
 
 	#[derive(Debug, Default)]
-	struct TestApi;
+	struct TestApi {
+		delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+	}
 
 	impl ChainApi for TestApi {
 		type Block = Block;
@@ -467,8 +471,19 @@ mod tests {
 
 		/// Verify extrinsic at given block.
 		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
+
+			// This is used to control the test flow.
+			if nonce > 0 {
+				let opt = self.delay.lock().take();
+				if let Some(delay) = opt {
+					if delay.recv().is_err() {
+						println!("Error waiting for delay!");
+					}
+				}
+			}
 
 			if nonce < block_number {
 				Ok(TransactionValidity::Invalid(0))
@@ -493,7 +508,7 @@ mod tests {
 		/// Returns a block hash given the block id.
 		fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
 			Ok(match at {
-				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)),
+				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 				BlockId::Hash(_) => None,
 			})
 		}
@@ -502,7 +517,7 @@ mod tests {
 		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 			let len = uxt.encode().len();
 			(
-				(uxt.transfer().from.to_low_u64_be() << 5) + uxt.transfer().nonce,
+				(H256::from(uxt.transfer().from.clone()).to_low_u64_be() << 5) + uxt.transfer().nonce,
 				len
 			)
 		}
@@ -524,8 +539,8 @@ mod tests {
 
 		// when
 		let hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
 		})).unwrap();
@@ -539,8 +554,8 @@ mod tests {
 		// given
 		let pool = pool();
 		let uxt = uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
 		});
@@ -564,21 +579,21 @@ mod tests {
 
 			// when
 			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
 			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
 			})).unwrap();
 			// future doesn't count
 			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 3,
 			})).unwrap();
@@ -600,20 +615,20 @@ mod tests {
 		// given
 		let pool = pool();
 		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
 		})).unwrap();
 		let hash2 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 1,
 		})).unwrap();
 		let hash3 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 3,
 		})).unwrap();
@@ -636,8 +651,8 @@ mod tests {
 		// given
 		let pool = pool();
 		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
 		})).unwrap();
@@ -662,8 +677,8 @@ mod tests {
 		}, TestApi::default());
 
 		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 1,
 		})).unwrap();
@@ -671,8 +686,8 @@ mod tests {
 
 		// when
 		let hash2 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(2),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(2)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 10,
 		})).unwrap();
@@ -697,8 +712,8 @@ mod tests {
 
 		// when
 		pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: H256::from_low_u64_be(1),
-			to: H256::from_low_u64_be(2),
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 1,
 		})).unwrap_err();
@@ -713,12 +728,12 @@ mod tests {
 		use super::*;
 
 		#[test]
-		fn should_trigger_ready_and_finalised() {
+		fn should_trigger_ready_and_finalized() {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
@@ -733,17 +748,17 @@ mod tests {
 			// then
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalised(H256::from_low_u64_be(2)))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
 			assert_eq!(stream.next(), None);
 		}
 
 		#[test]
-		fn should_trigger_ready_and_finalised_when_pruning_via_hash() {
+		fn should_trigger_ready_and_finalized_when_pruning_via_hash() {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
@@ -758,7 +773,7 @@ mod tests {
 			// then
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalised(H256::from_low_u64_be(2)))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -767,8 +782,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
 			})).unwrap();
@@ -777,8 +792,8 @@ mod tests {
 
 			// when
 			pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
@@ -795,8 +810,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			});
@@ -819,8 +834,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			});
@@ -853,8 +868,8 @@ mod tests {
 			}, TestApi::default());
 
 			let xt = uxt(Transfer {
-				from: H256::from_low_u64_be(1),
-				to: H256::from_low_u64_be(2),
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			});
@@ -863,8 +878,8 @@ mod tests {
 
 			// when
 			let xt = uxt(Transfer {
-				from: H256::from_low_u64_be(2),
-				to: H256::from_low_u64_be(1),
+				from: AccountId::from_h256(H256::from_low_u64_be(2)),
+				to: AccountId::from_h256(H256::from_low_u64_be(1)),
 				amount: 4,
 				nonce: 1,
 			});
@@ -875,6 +890,60 @@ mod tests {
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Dropped)));
+		}
+
+		#[test]
+		fn should_handle_pruning_in_the_middle_of_import() {
+			let _ = env_logger::try_init();
+			// given
+			let (ready, is_ready) = std::sync::mpsc::sync_channel(0);
+			let (tx, rx) = std::sync::mpsc::sync_channel(1);
+			let mut api = TestApi::default();
+			api.delay = Mutex::new(rx.into());
+			let pool = Arc::new(Pool::new(Default::default(), api));
+
+			// when
+			let xt = uxt(Transfer {
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
+				amount: 5,
+				nonce: 1,
+			});
+
+			// This transaction should go to future, since we use `nonce: 1`
+			let pool2 = pool.clone();
+			std::thread::spawn(move || {
+				pool2.submit_one(&BlockId::Number(0), xt).unwrap();
+				ready.send(()).unwrap();
+			});
+
+			// But now before the previous one is imported we import
+			// the one that it depends on.
+			let xt = uxt(Transfer {
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
+				amount: 4,
+				nonce: 0,
+			});
+			// The tag the above transaction provides (TestApi is using just nonce as u8)
+			let provides = vec![0_u8];
+			pool.submit_one(&BlockId::Number(0), xt).unwrap();
+			assert_eq!(pool.status().ready, 1);
+
+			// Now block import happens before the second transaction is able to finish verification.
+			pool.prune_tags(&BlockId::Number(1), vec![provides], vec![]).unwrap();
+			assert_eq!(pool.status().ready, 0);
+
+
+			// so when we release the verification of the previous one it will have
+			// something in `requires`, but should go to ready directly, since the previous transaction was imported
+			// correctly.
+			tx.send(()).unwrap();
+
+			// then
+			is_ready.recv().unwrap(); // wait for finish
+			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.status().future, 0);
 		}
 	}
 }

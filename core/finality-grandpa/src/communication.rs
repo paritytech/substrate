@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,15 +21,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use grandpa::VoterSet;
+use grandpa::Message::{Prevote, Precommit};
 use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
-use substrate_primitives::{ed25519, Ed25519AuthorityId};
+use substrate_primitives::{ed25519, Pair};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
 	CompactCommit, GossipMessage, FullCommitMessage, VoteOrPrecommitMessage};
+use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
@@ -127,12 +130,12 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 			if rebroadcast {
 				let SetId(set_id) = self.set_id;
 				if let Some((Round(c_round), ref c_commit)) = self.last_commit {
-					self.network.send_commit(c_round, set_id, c_commit.clone());
+					self.network.send_commit(c_round, set_id, c_commit.clone(), true);
 				}
 
 				let Round(round) = self.round_messages.0;
 				for message in self.round_messages.1.iter().cloned() {
-					self.network.send_message(round, set_id, message);
+					self.network.send_message(round, set_id, message, true);
 				}
 
 				for (&announce_hash, &Round(round)) in &self.announcements {
@@ -140,6 +143,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 				}
 			}
 		}
+
 		loop {
 			match self.incoming_broadcast.poll().expect("UnboundedReceiver does not yield errors; qed") {
 				Async::NotReady => return Ok(Async::NotReady),
@@ -165,7 +169,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_commit(round.0, self.set_id.0, commit);
+							self.network.send_commit(round.0, self.set_id.0, commit, false);
 						}
 						Broadcast::Message(round, set_id, message) => {
 							if self.set_id == set_id {
@@ -179,7 +183,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							}
 
 							// always send out to network.
-							self.network.send_message(round.0, set_id.0, message);
+							self.network.send_message(round.0, set_id.0, message, false);
 						}
 						Broadcast::Announcement(round, set_id, hash) => {
 							if self.set_id == set_id {
@@ -212,7 +216,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.messages_for(round, set_id)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Message(Round(round), SetId(set_id), message));
 	}
 
@@ -228,7 +232,7 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		self.network.commit_messages(set_id)
 	}
 
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>, _force: bool) {
 		let _ = self.relay.unbounded_send(Broadcast::Commit(Round(round), SetId(set_id), message));
 	}
 
@@ -242,14 +246,14 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
-	id: &Ed25519AuthorityId,
-	signature: &ed25519::Signature,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
 	round: u64,
 	set_id: u64,
 ) -> Result<(), ()> {
-	let as_public = ed25519::Public::from_raw(id.0);
+	let as_public = AuthorityId::from_raw(id.0);
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ed25519::verify_strong(signature, &encoded_raw, as_public) {
+	if ed25519::Pair::verify(signature, &encoded_raw, as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -261,7 +265,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// the output stream checks signatures also.
 pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	inner: S,
-	voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
@@ -282,6 +286,24 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 						debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 						return Ok(None);
 					}
+
+					match &msg.message.message {
+						Prevote(prevote) => {
+							telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+								"voter" => ?format!("{}", msg.message.id),
+								"target_number" => ?prevote.target_number,
+								"target_hash" => ?prevote.target_hash,
+							);
+						},
+						Precommit(precommit) => {
+							telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+								"voter" => ?format!("{}", msg.message.id),
+								"target_number" => ?precommit.target_number,
+								"target_hash" => ?precommit.target_hash,
+							);
+						},
+					};
+
 					Ok(Some(msg.message))
 				}
 				_ => {
@@ -297,7 +319,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 pub(crate) struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
-	locals: Option<(Arc<ed25519::Pair>, Ed25519AuthorityId)>,
+	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 }
@@ -309,7 +331,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 	fn start_send(&mut self, msg: Message<Block>) -> StartSend<Message<Block>, Error> {
 		// when locals exist, sign messages on import
-		if let Some((ref pair, local_id)) = self.locals {
+		if let Some((ref pair, ref local_id)) = self.locals {
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
 
@@ -317,7 +339,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			let signed = SignedMessage::<Block> {
 				message: msg,
 				signature,
-				id: local_id,
+				id: local_id.clone(),
 			};
 
 			let message = GossipMessage::VoteOrPrecommit(VoteOrPrecommitMessage::<Block> {
@@ -329,7 +351,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			// announce our block hash to peers and propagate the
 			// message.
 			self.network.announce(self.round, self.set_id, target_hash);
-			self.network.send_message(self.round, self.set_id, message.encode());
+			self.network.send_message(self.round, self.set_id, message.encode(), false);
 
 			// forward the message to the inner sender.
 			let _ = self.sender.unbounded_send(signed);
@@ -361,7 +383,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 	round: u64,
 	set_id: u64,
 	local_key: Option<Arc<ed25519::Pair>>,
-	voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: Arc<VoterSet<AuthorityId>>,
 	network: N,
 ) -> (
 	impl Stream<Item=SignedMessage<Block>,Error=Error>,
@@ -369,7 +391,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 ) {
 	let locals = local_key.and_then(|pair| {
 		let public = pair.public();
-		let id = Ed25519AuthorityId(public.0);
+		let id = AuthorityId(public.0);
 		if voters.contains_key(&id) {
 			Some((pair, id))
 		} else {
@@ -395,7 +417,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 
 fn check_compact_commit<Block: BlockT>(
 	msg: CompactCommit<Block>,
-	voters: &VoterSet<Ed25519AuthorityId>,
+	voters: &VoterSet<AuthorityId>,
 ) -> Option<CompactCommit<Block>> {
 	if msg.precommits.len() != msg.auth_data.len() || msg.precommits.is_empty() {
 		debug!(target: "afg", "Skipping malformed compact commit");
@@ -417,7 +439,7 @@ fn check_compact_commit<Block: BlockT>(
 /// messages.
 pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	inner: S,
-	voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	voters: Arc<VoterSet<AuthorityId>>,
 )
 	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
@@ -435,6 +457,15 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 			match msg {
 				GossipMessage::Commit(msg) => {
 					let round = msg.round;
+					let precommits_signed_by: Vec<String> =
+						msg.message.auth_data.iter().map(move |(_, a)| {
+							format!("{}", a)
+						}).collect();
+					telemetry!(CONSENSUS_INFO; "afg.received_commit";
+						"contains_precommits_signed_by" => ?precommits_signed_by,
+						"target_number" => ?msg.message.target_number,
+						"target_hash" => ?msg.message.target_hash,
+					);
 					check_compact_commit::<Block>(msg.message, &*voters).map(move |c| (round, c))
 				},
 				_ => {
@@ -476,6 +507,9 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		}
 
 		let (round, commit) = input;
+		telemetry!(CONSENSUS_INFO; "afg.commit_issued";
+			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
+		);
 		let (precommits, auth_data) = commit.precommits.into_iter()
 			.map(|signed| (signed.precommit, (signed.signature, signed.id)))
 			.unzip();
@@ -493,7 +527,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			message: compact_commit,
 		});
 
-		self.network.send_commit(round, self.set_id, Encode::encode(&message));
+		self.network.send_commit(round, self.set_id, Encode::encode(&message), false);
 
 		Ok(AsyncSink::Ready)
 	}

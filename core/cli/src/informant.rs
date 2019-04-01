@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -82,9 +82,12 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				(proc.cpu_usage(), proc.memory())
 			} else { (0.0, 0) };
 
+			let network_state = serde_json::to_string(&network.network_state()).unwrap_or_default();
+
 			telemetry!(
 				SUBSTRATE_INFO;
 				"system.interval";
+				"network_state" => network_state,
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
 				"height" => best_number,

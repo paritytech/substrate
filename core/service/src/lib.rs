@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
 
-#![warn(unused_extern_crates)]
+#![warn(missing_docs)]
 
 mod components;
 mod error;
@@ -28,19 +28,18 @@ pub mod chain_ops;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-#[doc(hidden)]
-pub use std::{ops::Deref, result::Result, sync::Arc};
-use log::{info, warn, debug};
-use futures::prelude::*;
-use keystore::Store as Keystore;
+
 use client::BlockchainEvents;
+use exit_future::Signal;
+use futures::prelude::*;
+use inherents::pool::InherentsPool;
+use keystore::Store as Keystore;
+use log::{info, warn, debug};
+use parity_codec::{Encode, Decode};
+use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
-use exit_future::Signal;
-#[doc(hidden)]
-pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
-use parity_codec::{Encode, Decode};
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
@@ -49,6 +48,7 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
+use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -58,17 +58,22 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
 };
-use components::{StartRPC, MaintainTransactionPool};
+use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
+#[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use network::OnDemand;
+#[doc(hidden)]
+pub use tokio::runtime::TaskExecutor;
 
-const DEFAULT_PROTOCOL_ID: &'static str = "sup";
+const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
@@ -76,6 +81,7 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
+	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 }
 
 /// Creates bare client without any networking.
@@ -95,9 +101,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
-	)
-		-> Result<Self, error::Error>
-	{
+	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
@@ -168,24 +172,48 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
+		let inherents_pool = Arc::new(InherentsPool::default());
+		let offchain_workers =  if config.offchain_worker {
+			Some(Arc::new(offchain::OffchainWorkers::new(
+				client.clone(),
+				inherents_pool.clone(),
+				task_executor.clone(),
+			)))
+		} else {
+			None
+		};
+
 		{
 			// block notifications
 			let network = Arc::downgrade(&network);
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
+			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
+					let number = *notification.header.number();
+
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, notification.header);
 					}
+
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
-						Components::TransactionPool::on_block_imported(
+						Components::RuntimeServices::maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
 							&*client,
 							&*txpool,
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
 					}
+
+					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
+						Components::RuntimeServices::offchain_workers(
+							&number,
+							&offchain,
+							&txpool,
+						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
+					}
+
 					Ok(())
 				})
 				.select(exit.clone())
@@ -200,9 +228,9 @@ impl<Components: components::Components> Service<Components> {
 			// A utility stream that drops all ready items and only returns the last one.
 			// This is used to only keep the last finality notification and avoid
 			// overloading the sync module with notifications.
-			struct MostRecentNotification<B: network::BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
+			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
 
-			impl<B: network::BlockT> Stream for MostRecentNotification<B> {
+			impl<B: BlockT> Stream for MostRecentNotification<B> {
 				type Item = <FinalityNotifications<B> as Stream>::Item;
 				type Error = <FinalityNotifications<B> as Stream>::Error;
 
@@ -263,7 +291,7 @@ impl<Components: components::Components> Service<Components> {
 			impl_version: config.impl_version.into(),
 			properties: config.chain_spec.properties(),
 		};
-		let rpc = Components::RPC::start_rpc(
+		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
 			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
 		)?;
@@ -298,12 +326,14 @@ impl<Components: components::Components> Service<Components> {
 			client,
 			network: Some(network),
 			transaction_pool,
+			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
 			exit,
 			_rpc: Box::new(rpc),
 			_telemetry: telemetry,
+			_offchain_workers: offchain_workers,
 		})
 	}
 
@@ -320,6 +350,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
+	/// return a shared instance of Telemtry (if enabled)
 	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
@@ -336,9 +367,14 @@ impl<Components> Service<Components> where Components: components::Components {
 		self.network.as_ref().expect("self.network always Some").clone()
 	}
 
-	/// Get shared extrinsic pool instance.
+	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
+	}
+
+	/// Get shared inherents pool instance.
+	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
+		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -375,7 +375,12 @@ mod tests {
 		};
 
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+		let mut ext = Ext::new(
+			&mut overlay,
+			&backend,
+			Some(&changes_trie_storage),
+			crate::NeverOffchainExt::new(),
+		);
 		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}

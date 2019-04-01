@@ -33,7 +33,8 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_primitives::{Blake2Hasher, ed25519,Ed25519AuthorityId, H256};
+use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
@@ -44,6 +45,8 @@ use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
+
+use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.
 pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
@@ -75,7 +78,7 @@ impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
-	pub(crate) voters: Arc<VoterSet<Ed25519AuthorityId>>,
+	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -122,7 +125,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
 		// NOTE: when we finalize an authority set change through the sync protocol the voter is
-		//       signalled asynchronously. therefore the voter could still vote in the next round
+		//       signaled asynchronously. therefore the voter could still vote in the next round
 		//       before activating the new set. the `authority_set` is updated immediately thus we
 		//       restrict the voter based on that.
 		if self.set_id != self.authority_set.inner().read().current().0 {
@@ -205,7 +208,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
-	type Id = Ed25519AuthorityId;
+	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
 
 	// regular round message streams
@@ -467,6 +470,9 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
+		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
+			"number" => ?number, "hash" => ?hash,
+		);
 
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
@@ -478,6 +484,11 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
+			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";
+				"number" => ?canon_number, "hash" => ?canon_hash,
+				"authorities" => ?set_ref.to_vec(),
+				"set_id" => ?new_id,
+			);
 			Some(NewAuthoritySet {
 				canon_hash,
 				canon_number,

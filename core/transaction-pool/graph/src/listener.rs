@@ -1,5 +1,5 @@
 
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -93,6 +93,6 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone> Listener<H, H2> {
 
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, header_hash: H2, tx: &H) {
-		self.fire(tx, |watcher| watcher.finalised(header_hash))
+		self.fire(tx, |watcher| watcher.finalized(header_hash))
 	}
 }

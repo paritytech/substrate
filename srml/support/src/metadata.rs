@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
-	ModuleMetadata, RuntimeMetadataV1,
+	ModuleMetadata, RuntimeMetadataV3,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
 };
 
@@ -36,8 +36,8 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
-				$crate::metadata::RuntimeMetadata::V1 (
-					$crate::metadata::RuntimeMetadataV1 {
+				$crate::metadata::RuntimeMetadata::V3 (
+					$crate::metadata::RuntimeMetadataV3 {
 						modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
 				).into()
@@ -52,17 +52,17 @@ macro_rules! __runtime_modules_to_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
-		$mod:ident::$module:ident $(with)+ $($kw:ident)*,
+		$mod:ident::$module:ident $( < $instance:ident > )? $(with)+ $($kw:ident)*,
 		$( $rest:tt )*
 	) => {
 		$crate::__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
-				prefix: $crate::__runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
-				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
-				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
-				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
+				prefix: $crate::__runtime_modules_to_metadata_calls_storagename!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
+				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
+				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
+				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module $( <$instance> )?, $runtime, $(with $kw)*),
 			};
 			$( $rest )*
 		)
@@ -81,7 +81,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 	// skip system
 	(
 		system,
-		$skip_module: ident,
+		$skip_module: ident $( <$instance:ident> )?,
 		$skip_runtime: ident,
 		with Call
 		$(with $kws:ident)*
@@ -90,29 +90,29 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with Call
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
-				$mod::$module::<$runtime>::call_functions
+				$mod::$module::<$runtime $(, $mod::$instance )?>::call_functions
 			)
 		))
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
- 		$crate::__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_call!( $mod, $module $( <$instance> )?, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 	) => {
 		None
@@ -125,7 +125,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 macro_rules! __runtime_modules_to_metadata_calls_event {
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with Event
 		$(with $kws:ident)*
@@ -133,23 +133,23 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		Some($crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
 				$crate::paste::expr!{
-					$runtime:: [< __module_events_ $mod >]
+					$runtime:: [< __module_events_ $mod $(_ $instance)?>]
 				}
 			)
 		))
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		$crate::__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_event!( $mod, $module $( <$instance> )?, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 	) => {
 		None
@@ -161,29 +161,29 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 macro_rules! __runtime_modules_to_metadata_calls_storagename {
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with Storage
 		$(with $kws:ident)*
 	) => {
 		$crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
-				$mod::$module::<$runtime>::store_metadata_name
+				$mod::$module::<$runtime $(, $mod::$instance )?>::store_metadata_name
 			)
 		)
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		$crate::__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_storagename!( $mod, $module $( <$instance> )?, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 	) => {
 		$crate::metadata::DecodeDifferent::Encode(
@@ -197,29 +197,29 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 macro_rules! __runtime_modules_to_metadata_calls_storage {
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with Storage
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
-				$mod::$module::<$runtime>::store_metadata_functions
+				$mod::$module::<$runtime $(, $mod::$instance )?>::store_metadata_functions
 			)
 		))
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		$crate::__runtime_modules_to_metadata_calls_storage!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_storage!( $mod, $module $( <$instance> )?, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
-		$module: ident,
+		$module: ident $( <$instance:ident> )?,
 		$runtime: ident,
 	) => {
 		None
@@ -377,8 +377,8 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1(
-		RuntimeMetadataV1 {
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V3(
+		RuntimeMetadataV3 {
 		modules: DecodeDifferent::Encode(&[
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("system"),
