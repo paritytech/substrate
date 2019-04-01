@@ -71,14 +71,6 @@
 //!
 //! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
 //!
-//! ### Events:
-//!
-//! * [`Issued`](../srml_system/enum.RawEvent.html#variants)
-//! * [`Transferred`](../srml_system/enum.RawEvent.html#variants)
-//! * [`Destroyed`](../srml_system/enum.RawEvent.html#variants)
-//!
-//! Please refer to the [`RawEvent`] enum and its associated variants for a detailed list of events.
-//!
 //! ## Usage
 //!
 //! The following example shows how to use the assets module in your custom module by exposing public functions to:
