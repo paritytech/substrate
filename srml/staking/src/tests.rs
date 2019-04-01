@@ -1638,24 +1638,23 @@ fn bond_with_no_staked_value() {
 	.minimum_validator_count(1)
 	.build(), || {
 		// setup
-		assert_ok!(Staking::chill(Origin::signed(30)));
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 		let _ = Balances::deposit_creating(&3, 1000);
 		let initial_balance_2 = Balances::free_balance(&2);
 		let initial_balance_4 = Balances::free_balance(&4);
 
 		// Stingy validator.
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 0, RewardDestination::Controller));
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
 		// Not elected even though we want 3.
-		assert_eq_uvec!(Session::validators(), vec![20, 10]);
+		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
-		// min of 10 and 20.
-		assert_eq!(Staking::slot_stake(), 1000);
+		// min of 10, 20 and 30 (30 got a payout into staking so it raised it from 1 to 11).
+		assert_eq!(Staking::slot_stake(), 11);
 
 		// let's make the stingy one elected.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
@@ -1670,9 +1669,9 @@ fn bond_with_no_staked_value() {
 
 		// Stingy one is selected
 		assert_eq_uvec!(Session::validators(), vec![20, 10, 2]);
-		assert_eq!(Staking::stakers(1), Exposure { own: 0, total: 500, others: vec![IndividualExposure { who: 3, value: 500}]});
+		assert_eq!(Staking::stakers(1), Exposure { own: 1, total: 501, others: vec![IndividualExposure { who: 3, value: 500}]});
 		// New slot stake.
-		assert_eq!(Staking::slot_stake(), 500);
+		assert_eq!(Staking::slot_stake(), 501);
 
 		// no rewards paid to 2 and 4 yet
 		assert_eq!(Balances::free_balance(&2), initial_balance_2);
@@ -1682,10 +1681,10 @@ fn bond_with_no_staked_value() {
 		Session::check_rotate_session(System::block_number());
 
 		let reward = Staking::current_session_reward();
-		// 2 will not get any reward
-		// 4 will get all the reward share
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
-		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward);
+		// 2 will not get a reward of only 1
+		// 4 will get the rest
+		assert_eq!(Balances::free_balance(&2), initial_balance_2 + 1);
+		assert_eq!(Balances::free_balance(&4), initial_balance_4 + reward - 1);
 	});
 }
 
