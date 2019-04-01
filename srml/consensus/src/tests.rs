@@ -47,10 +47,10 @@ fn authorities_change_logged() {
 #[test]
 fn partial_authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
-		System::initialise(&2, &Default::default(), &Default::default());
+		System::initialize(&2, &Default::default(), &Default::default());
 		Consensus::set_authorities(&[UintAuthorityId(2), UintAuthorityId(4), UintAuthorityId(5)]);
-		Consensus::on_finalise(2);
-		let header = System::finalise();
+		Consensus::on_finalize(2);
+		let header = System::finalize();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
 				generic::DigestItem::AuthoritiesChange(
