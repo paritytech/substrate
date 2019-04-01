@@ -45,6 +45,7 @@ fn basic_setup_works() {
 
 		// ValidatorPrefs are default, thus unstake_threshold is 3, other values are default for their type
 		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
+			(31, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
 			(21, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
 			(11, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 })
 		]);
@@ -435,7 +436,7 @@ fn staking_should_work() {
 	with_externalities(&mut ExtBuilder::default()
 		.sessions_per_era(3)
 		.nominate(false)
-		.fare(false) // to give 20 more staked value
+		.fair(false) // to give 20 more staked value
 		.build(),
 	|| {
 		// remember + compare this along with the test.
@@ -879,7 +880,7 @@ fn cannot_transfer_staked_balance_2() {
 	// 21 has 2000 free balance but 1000 at stake
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
-		.fare(true)
+		.fair(true)
 		.build(),
 	|| {
 		// Confirm account 21 is stashed
@@ -1182,7 +1183,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 	// Test that slot_stake is the maximum punishment that can happen to a validator
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
-		.fare(false)
+		.fair(false)
 		.build(),
 	|| {
 		// Confirm validator count is 2
@@ -1750,7 +1751,7 @@ fn phragmen_linear_worse_case_equalize() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
-		.fare(true)
+		.fair(true)
 		.build(),
 	|| {
 		let bond_validator = |a, b| {
@@ -1810,7 +1811,7 @@ fn phragmen_chooses_correct_number_of_validators() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(true)
 		.validator_pool(true)
-		.fare(true)
+		.fair(true)
 		.validator_count(1)
 		.build(),
 	|| {
