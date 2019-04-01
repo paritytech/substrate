@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "substrate-tmp-2019-03-20", default-features = false }
+libp2p = { version = "0.6.0", default-features = false }
 log = "0.4"
 parking_lot = "0.7"
 rand = "0.6"
