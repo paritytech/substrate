@@ -73,8 +73,8 @@ where TMessage: CustomMessage + Send + 'static {
 
 	// Build the peerset.
 	let peerset = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
-		in_peers: config.in_peers,
-		out_peers: config.out_peers,
+		in_peers: config.in_peers as usize,
+		out_peers: config.out_peers as usize,
 		bootnodes,
 		reserved_only: config.non_reserved_mode == NonReservedPeerMode::Deny,
 		reserved_nodes,

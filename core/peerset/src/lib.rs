@@ -47,9 +47,6 @@ enum Action {
 	RemoveReservedPeer(PeerId),
 	SetReservedOnly(bool),
 	ReportPeer(PeerId, i32),
-	Incoming(PeerId, IncomingIndex),
-	Dropped(PeerId),
-	Discovered(PeerId),
 }
 
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
@@ -85,35 +82,6 @@ impl PeersetHandle {
 	/// Reports an adjustement to the reputation of the given peer.
 	pub fn report_peer(&self, peer_id: PeerId, score_diff: i32) {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
-	}
-
-	/// Indicate that we received an incoming connection. Must be answered either with
-	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
-	///
-	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
-	/// connection implicitely means `Accept`, but incoming connections aren't cancelled by
-	/// `dropped`.
-	///
-	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
-	/// peerset is already connected to, in which case it must not answer.
-	pub fn incoming(&self, peer_id: PeerId, index: IncomingIndex) {
-		let _ = self.tx.unbounded_send(Action::Incoming(peer_id, index));
-	}
-
-	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
-	///
-	/// Must only be called after the PSM has either generated a `Connect` message with this
-	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&self, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::Dropped(peer_id));
-	}
-
-	/// Adds a discovered peer id to the PSM.
-	///
-	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
-	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
-	pub fn discovered(&self, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::Discovered(peer_id));
 	}
 }
 
@@ -311,7 +279,16 @@ impl Peerset {
 		}
 	}
 
-	fn on_incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
+	/// Indicate that we received an incoming connection. Must be answered either with
+	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
+	///
+	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
+	/// connection implicitely means `Accept`, but incoming connections aren't cancelled by
+	/// `dropped`.
+	///
+	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
+	/// peerset is already connected to, in which case it must not answer.
+	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
 		// check if we are already connected to this peer
 		if self.data.out_slots.contains(&peer_id) {
 			self.message_queue.push_back(Message::Reject(index));
@@ -333,7 +310,11 @@ impl Peerset {
 		}
 	}
 
-	fn on_dropped(&mut self, peer_id: PeerId) {
+	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
+	///
+	/// Must only be called after the PSM has either generated a `Connect` message with this
+	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
+	pub fn dropped(&mut self, peer_id: PeerId) {
 		// Automatically connect back if reserved.
 		if self.data.in_slots.is_reserved(&peer_id) || self.data.out_slots.is_reserved(&peer_id) {
 			self.message_queue.push_back(Message::Connect(peer_id));
@@ -353,7 +334,11 @@ impl Peerset {
 		self.alloc_slots();
 	}
 
-	fn on_discovered(&mut self, peer_id: PeerId) {
+	/// Adds a discovered peer id to the PSM.
+	///
+	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
+	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
+	pub fn discovered(&mut self, peer_id: PeerId) {
 		if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
 			return;
 		}
@@ -387,9 +372,6 @@ impl Stream for Peerset {
 					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(&peer_id),
 					Action::SetReservedOnly(reserved) => self.on_set_reserved_only(reserved),
 					Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
-					Action::Incoming(peer_id, index) => self.on_incoming(peer_id, index),
-					Action::Dropped(peer_id) => self.on_dropped(peer_id),
-					Action::Discovered(peer_id) => self.on_discovered(peer_id),
 				}
 			}
 		}
@@ -402,13 +384,14 @@ mod tests {
 	use futures::prelude::*;
 	use super::{PeersetConfig, Peerset, Message};
 
-	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) {
+	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
 		for expected_message in messages {
 			let (message, p) = next_message(peerset).expect("expected message");
 			assert_eq!(message, expected_message);
 			peerset = p;
 		}
-		assert!(peerset.message_queue.is_empty())
+		assert!(peerset.message_queue.is_empty());
+		peerset
 	}
 
 	fn next_message(peerset: Peerset) -> Result<(Message, Peerset), ()> {
@@ -548,12 +531,16 @@ mod tests {
 		};
 
 		let peerset = Peerset::from_config(config);
-		peerset.dropped(reserved_peer.clone());
-		peerset.dropped(bootnode.clone());
 
-		assert_messages(peerset, vec![
+		let mut peerset = assert_messages(peerset, vec![
 			Message::Connect(reserved_peer.clone()),
-			Message::Connect(bootnode),
+			Message::Connect(bootnode.clone()),
+		]);
+
+		peerset.dropped(reserved_peer.clone());
+		peerset.dropped(bootnode);
+
+		let _peerset = assert_messages(peerset, vec![
 			Message::Connect(reserved_peer),
 			Message::Connect(bootnode2),
 		]);
