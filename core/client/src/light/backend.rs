@@ -36,6 +36,7 @@ use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
+use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
@@ -48,7 +49,7 @@ pub struct Backend<S, F, H> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F, H> {
 	header: Option<Block::Header>,
-	authorities: Option<Vec<AuthorityIdFor<Block>>>,
+	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
@@ -119,7 +120,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			header: None,
-			authorities: None,
+			cache: Default::default(),
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
@@ -148,7 +149,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			let is_genesis_import = header.number().is_zero();
 			self.blockchain.storage().import_header(
 				header,
-				operation.authorities,
+				operation.cache,
 				operation.leaf_state,
 				operation.aux_ops,
 			)?;
@@ -256,8 +257,8 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
-		self.authorities = Some(authorities);
+	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>) {
+		self.cache = cache;
 	}
 
 	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {

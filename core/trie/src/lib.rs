@@ -33,6 +33,8 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
+/// Various re-exports from the `memory-db` crate.
+pub use memory_db::{KeyFunction, prefixed_key};
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -43,8 +45,12 @@ impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `hash_db`, but less generic, trait exposed.
 pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
+/// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
+/// As in `memory_db::MemoryDB` that uses prefixed storage key scheme.
+pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
 /// As in `memory_db`, but less generic, trait exposed.
-pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
+pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
@@ -340,36 +346,37 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 	H: Hasher,
 	T: From<&'static [u8]>,
 {
-	fn get(&self, key: &H::Out) -> Option<T> {
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<T> {
 		if key == &self.2 {
 			return Some(NULL_NODE.into());
 		}
 		// TODO use interal buffer for derive key to avoid alloc?
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.get(&derived_key)
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		self.0.get(key, &derived_prefix)
 	}
 
-	fn contains(&self, key: &H::Out) -> bool {
+	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool {
 		if key == &self.2 {
 			return true;
 		}
 	
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.contains(&derived_key)
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		self.0.contains(key, &derived_prefix)
 	}
 }
 
+// TODO makes plainDB use prefix
 impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB, K> where
 	DB: hash_db::PlainDBRef<K, V>,
 	K: AsMut<[u8]> + AsRef<[u8]> + Clone + Hasher
 {
 	fn get(&self, key: &K) -> Option<V> {
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.get(&derived_key)
+		//self.0.get(key)
+    unimplemented!("does not avoid key collision");
 	}
 	fn contains(&self, key: &K) -> bool {
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.contains(&derived_key)
+		//self.0.contains(&key)
+    unimplemented!("does not avoid key collision");
 	}
 }
 
@@ -378,53 +385,53 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	H: Hasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
-	fn get(&self, key: &H::Out) -> Option<T> {
+	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<T> {
 		if key == &self.2 {
 			return Some(NULL_NODE.into());
 		}
 		// TODO use interal buffer for derive key to avoid alloc
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.get(&derived_key)
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		self.0.get(key, &derived_prefix)
 	}
 
-	fn contains(&self, key: &H::Out) -> bool {
+	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool {
 		if key == &self.2 {
 			return true;
 		}
 
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.contains(&derived_key)
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		self.0.contains(key, &derived_prefix)
 	}
 
-	fn insert(&mut self, value: &[u8]) -> H::Out {
+	fn insert(&mut self, prefix: &[u8], value: &[u8]) -> H::Out {
 		if value == NULL_NODE {
 			return self.2.clone();
 		}
 
-
 		// TODO avoid buff for every keyspace db (using internal vec as buf)
 		let key = H::hash(value);
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, &key);
-		Self::emplace(self, derived_key, value.into());
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		Self::emplace(self, key, &derived_prefix, value.into());
 		key
 	}
 
-	fn emplace(&mut self, key: H::Out, value: T) {
+	fn emplace(&mut self, key: H::Out, prefix: &[u8], value: T) {
 		if key == self.2 {
       return;
     }
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, &key);
-		self.0.emplace(derived_key, value)
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		self.0.emplace(key, &derived_prefix, value)
 	}
 
-	fn remove(&mut self, key: &H::Out) {
+	fn remove(&mut self, key: &H::Out, prefix: &[u8]) {
 		if key == &self.2 {
       return;
     }
-		let derived_key = substrate_primitives::keyspace_as_prefix_alloc(self.1, key);
-		self.0.remove(&derived_key)
+		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		self.0.remove(key, &derived_prefix)
 	}
 }
+
 impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
 	H: Hasher,
@@ -442,7 +449,6 @@ mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
 	use substrate_primitives::Blake2Hasher;
-	use memory_db::MemoryDB;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};

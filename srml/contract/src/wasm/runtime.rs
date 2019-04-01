@@ -16,8 +16,8 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee};
-use crate::exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
+use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
+use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
 use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;

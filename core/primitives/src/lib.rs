@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-/// Initalise a key-value collection from array.
+/// Initialize a key-value collection from array.
 ///
 /// Creates a vector of given pairs and calls `collect` on the iterator from it.
 /// Can be used to create a `HashMap`.
@@ -105,45 +105,30 @@ impl<T: OffchainExt + ?Sized> OffchainExt for Box<T> {
 	}
 }
 
-/// Hex-serialised shim for `Vec<u8>`.
+/// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-// use prefixed key for keyspace TODO put keyspace support at KeyValueDB level
-// TODO for default impl in kvdb run a hashing first?? -> warn to keep key for no ks (some
-// test code is accessing directly the db over the memorydb key!!
-// Note that this scheme must produce new key same as old key if ks is the empty vec
-// TODO put it as inner SubTrie function (requires changing child trie proto first)
-// TODO switch to simple mixing until trie pr changing Hashdb get merged (not even prefixed)
+// TODO consider memorydb change trait to avoid those allocations eg : move prefix encoding to 
+// KeyFunction implementation (and put keyspace in key function instance).
 /// temp function to keyspace data above the db level
-pub fn keyspace_as_prefix<H: AsRef<[u8]>>(ks: &KeySpace, key: &H, dst: &mut[u8]) {
-	assert!(dst.len() == keyspace_expected_len(ks, key));
-	//dst[..ks.len()].copy_from_slice(&ks[..]);
-	dst[..].copy_from_slice(key.as_ref());
-	let high = rstd::cmp::min(ks.len(), key.as_ref().len());
-	// TODO this mixing will be useless after trie pr merge (keeping it until then)
-	// same thing we use H dest but not after pr merge
-	for (k, a) in dst[..high].iter_mut().zip(key.as_ref()[..high].iter()) {
-	//for (k, a) in dst[ks.len()..high].iter_mut().zip(key.as_ref()[..high].iter()) {
-		// TODO any use of xor val? (preventing some targeted collision I would say)
-		*k ^= *a;
-	}
+pub fn keyspace_in_prefix(ks: &KeySpace, prefix: &[u8], dst: &mut[u8]) {
+	assert!(dst.len() == keyspace_prefixed_expected_len(ks, prefix));
+	dst[..ks.len()].copy_from_slice(&ks);
+	dst[ks.len()..].copy_from_slice(prefix);
 }
 
-/// TODO when things work SubTrie will need to use key as param type, same for KeySpace
-pub fn keyspace_expected_len<H: AsRef<[u8]>>(_ks: &KeySpace, key: &H) -> usize {
-	//ks.len() + key.as_ref().len()
-	key.as_ref().len()
+/// len of targeted prefix with keyspace
+pub fn keyspace_prefixed_expected_len(ks: &KeySpace, prefix: &[u8]) -> usize {
+	ks.len() + prefix.len()
 }
 
-/// keyspace as prefix with allocation
-pub fn keyspace_as_prefix_alloc<H: AsRef<[u8]> + Clone + AsMut<[u8]>>(ks: &KeySpace, key: &H) -> H {
-	//let mut res = Vec::with_capacity(keyspace_expected_len(ks, key));
-	let mut res = key.clone();
-	keyspace_as_prefix(ks, key, res.as_mut());
+/// keyspace and prefix with allocation
+pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
+	let mut res = Vec::with_capacity(keyspace_prefixed_expected_len(ks, prefix));
+	keyspace_in_prefix(ks, prefix, res.as_mut());
 	res
-
 }
 
 impl From<Vec<u8>> for Bytes {

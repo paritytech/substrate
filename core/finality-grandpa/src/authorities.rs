@@ -136,7 +136,7 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		debug!(target: "afg", "Inserting potential standard set change signalled at block {:?} \
+		debug!(target: "afg", "Inserting potential standard set change signaled at block {:?} \
 							   (delayed by {:?} blocks).",
 			   (&number, &hash), pending.delay);
 
@@ -257,7 +257,7 @@ where
 			.take_while(|c| c.effective_number() <= best_number) // to prevent iterating too far
 			.filter(|c| c.effective_number() == best_number)
 		{
-			// check if the given best block is in the same branch as the block that signalled the change.
+			// check if the given best block is in the same branch as the block that signaled the change.
 			if is_descendent_of(&change.canon_hash, &best_hash)? {
 				// apply this change: make the set canonical
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
@@ -381,7 +381,7 @@ pub(crate) enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain. The median last finalized block is calculated at the time the
-	/// change was signalled.
+	/// change was signaled.
 	Best { median_last_finalized: N },
 }
 
@@ -550,7 +550,7 @@ mod tests {
 			vec![&change_b, &change_a],
 		);
 
-		// finalizing "hash_c" won't enact the change signalled at "hash_a" but it will prune out "hash_b"
+		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"
 		let status = authorities.apply_standard_changes("hash_c", 11, &is_descendent_of(|base, hash| match (*base, *hash) {
 			("hash_a", "hash_c") => true,
 			("hash_b", "hash_c") => false,
@@ -564,7 +564,7 @@ mod tests {
 			vec![&change_a],
 		);
 
-		// finalizing "hash_d" will enact the change signalled at "hash_a"
+		// finalizing "hash_d" will enact the change signaled at "hash_a"
 		let status = authorities.apply_standard_changes("hash_d", 15, &is_descendent_of(|base, hash| match (*base, *hash) {
 			("hash_a", "hash_d") => true,
 			_ => unreachable!(),

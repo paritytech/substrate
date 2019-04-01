@@ -22,8 +22,8 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
-	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT, OffchainWorker
+	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
+	OnInitialize, Hash, As, Digest, NumberFor, Block as BlockT, OffchainWorker
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -65,7 +65,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
@@ -86,7 +86,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
@@ -94,13 +94,13 @@ impl<
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	/// Start the execution of a particular block.
-	pub fn initialise_block(header: &System::Header) {
-		Self::initialise_block_impl(header.number(), header.parent_hash(), header.extrinsics_root());
+	pub fn initialize_block(header: &System::Header) {
+		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root());
 	}
 
-	fn initialise_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash) {
-		<system::Module<System>>::initialise(block_number, parent_hash, extrinsics_root);
-		<AllModules as OnInitialise<System::BlockNumber>>::on_initialise(*block_number);
+	fn initialize_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash) {
+		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root);
+		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 	}
 
 	fn initial_checks(block: &Block) {
@@ -121,7 +121,7 @@ impl<
 
 	/// Actually execute all transitioning for `block`.
 	pub fn execute_block(block: Block) {
-		Self::initialise_block(block.header());
+		Self::initialize_block(block.header());
 
 		// any initial checks
 		Self::initial_checks(&block);
@@ -140,7 +140,7 @@ impl<
 		let parent_hash = <Block::Header as Header>::Hashing::hash(b"parent_hash");
 		let extrinsics_root = <Block::Header as Header>::Hashing::hash(b"extrinsics_root");
 
-		Self::initialise_block_impl(&block_number, &parent_hash, &extrinsics_root);
+		Self::initialize_block_impl(&block_number, &parent_hash, &extrinsics_root);
 
 		// execute extrinsics
 		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number);
@@ -152,18 +152,18 @@ impl<
 
 		// post-extrinsics book-keeping.
 		<system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(block_number);
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
-	/// Finalise the block - it is up the caller to ensure that all header fields are valid
+	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
-	pub fn finalise_block() -> System::Header {
+	pub fn finalize_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(<system::Module<System>>::block_number());
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(<system::Module<System>>::block_number());
 
 		// setup extrinsics
 		<system::Module<System>>::derive_extrinsics();
-		<system::Module<System>>::finalise()
+		<system::Module<System>>::finalize()
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -241,7 +241,7 @@ impl<
 
 	fn final_checks(header: &System::Header) {
 		// remove temporaries.
-		let new_header = <system::Module<System>>::finalise();
+		let new_header = <system::Module<System>>::finalize();
 
 		// check digest.
 		assert_eq!(
@@ -394,7 +394,7 @@ mod tests {
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
+			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(),
 				[69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
@@ -463,7 +463,7 @@ mod tests {
 		let mut t = new_test_ext();
 		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33, 69));
 		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
 			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});
@@ -478,7 +478,7 @@ mod tests {
 			let encoded = xt2.encode();
 			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
 			with_externalities(&mut t, || {
-				Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+				Executive::initialize_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 				assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 				Executive::apply_extrinsic(xt).unwrap();

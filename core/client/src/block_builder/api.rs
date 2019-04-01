@@ -28,7 +28,7 @@ decl_runtime_apis! {
 		/// Apply the given extrinsics.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.
-		fn finalise_block() -> <Block as BlockT>::Header;
+		fn finalize_block() -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics. The inherent data will vary from chain to chain.
 		fn inherent_extrinsics(inherent: InherentData) -> Vec<<Block as BlockT>::Extrinsic>;
 		/// Check that the inherents are valid. The inherent data will vary from chain to chain.

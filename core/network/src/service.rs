@@ -27,12 +27,12 @@ use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
 use peerset::Peerset;
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
-use crate::message::{Message, ConsensusEngineId};
+use crate::message::Message;
 use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use crate::specialization::NetworkSpecialization;
 
 use tokio::prelude::task::AtomicTask;
@@ -295,6 +295,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle f
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
+
 	fn is_offline(&self) -> bool {
 		self.is_offline.load(Ordering::Relaxed)
 	}
@@ -315,6 +316,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
+
 	/// Get sync status
 	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
 		let (sink, stream) = mpsc::unbounded();
@@ -533,11 +535,11 @@ fn run_thread<B: BlockT + 'static>(
 						network_service_2.lock().drop_node(&who)
 					},
 					Severity::Useless(message) => {
-						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						debug!(target: "sync", "Dropping {:?} because {:?}", who, message);
 						network_service_2.lock().drop_node(&who)
 					},
 					Severity::Timeout => {
-						info!(target: "sync", "Dropping {:?} because it timed out", who);
+						debug!(target: "sync", "Dropping {:?} because it timed out", who);
 						network_service_2.lock().drop_node(&who)
 					},
 				}

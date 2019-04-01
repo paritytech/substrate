@@ -50,10 +50,12 @@ impl network::SyncProvider<Block> for Status {
 		network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
+			external_addresses: Default::default(),
 			connected_peers: Default::default(),
 			not_connected_peers: Default::default(),
 			average_download_per_sec: 0,
 			average_upload_per_sec: 0,
+			peerset: serde_json::Value::Null,
 		}
 	}
 
@@ -202,10 +204,12 @@ fn system_network_state() {
 		network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),
+			external_addresses: Default::default(),
 			connected_peers: Default::default(),
 			not_connected_peers: Default::default(),
 			average_download_per_sec: 0,
 			average_upload_per_sec: 0,
+			peerset: serde_json::Value::Null,
 		}
 	);
 }
