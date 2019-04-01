@@ -248,7 +248,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&1, 110);
 				AccountInfoOf::<Test>::insert(1, &AccountInfo {
 					trie_id: unique_id1.to_vec(),
-					current_mem_stored: 0,
+					storage_size: 0,
 				});
 				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
 				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
@@ -257,7 +257,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&2, 110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
 					trie_id: unique_id2.to_vec(),
-					current_mem_stored: 0,
+					storage_size: 0,
 				});
 				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
 				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
@@ -359,6 +359,8 @@ fn instantiate_and_call() {
 					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
 				}
 			]);
+
+			assert!(AccountInfoOf::<Test>::exists(BOB));
 		},
 	);
 }
