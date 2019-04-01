@@ -13,14 +13,14 @@ stages:
   - publish
   - deploy
 
-image:                             parity/rust-substrate-build:stretch # parity/rust:nightly
+image:                             parity/rust-substrate-build:stretch
 
 variables:
   GIT_STRATEGY:                    fetch
   CI_SERVER_NAME:                  "GitLab CI"
   CARGO_HOME:                      "/ci-cache/substrate/cargo/${CI_JOB_NAME}"
   # have OS based build containers in the future
-  DOCKER_OS:                       "debian:stretch" # "ubuntu:xenial"
+  DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
 
 
@@ -84,11 +84,6 @@ check-runtime:
 
 test-linux-stable:                 &test
   stage:                           test
-  # cache:
-  #   key:                           "${CI_JOB_NAME}"
-  #   paths:
-  #     - ${CARGO_HOME}
-  #     - ./target
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
@@ -108,9 +103,6 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   before_script:
-    - test -d "${CARGO_HOME}" -a -d ./target &&
-      echo "build cache size:" &&
-      du -h --max-depth=2 "${CARGO_HOME}" ./target
     - sccache -s
     - ./scripts/build.sh
   script:
