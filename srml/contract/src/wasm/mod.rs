@@ -276,6 +276,9 @@ mod tests {
 		fn random_seed(&self) -> &H256{
 			&self.random_seed
 		}
+
+		fn send_event(&mut self, _data: Vec<u8>) {
+		}
 	}
 
 	fn execute<E: Ext>(

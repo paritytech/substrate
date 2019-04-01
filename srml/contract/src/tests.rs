@@ -291,10 +291,15 @@ fn account_removal_removes_storage() {
 const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_send_event" (func $ext_send_event (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
+		(call $ext_send_event
+			(i32.const 8)
+			(i32.const 4)
+		)
 		(call $ext_return
 			(i32.const 8)
 			(i32.const 4)
@@ -310,10 +315,10 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
-const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("e6411d12daa2a19e4e9c7d8306c31c7d53a352cb8ed84385c8a1d48fc232e708");
+const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("5e6a50c08c4156e29cf73caced2a20e551ec4a02b8f043564061471a5ed800ab");
 
 #[test]
-fn instantiate_and_call() {
+fn instantiate_and_call_and_send_event() {
 	let wasm = wabt::wat2wasm(CODE_RETURN_FROM_START_FN).unwrap();
 
 	with_externalities(
@@ -327,13 +332,14 @@ fn instantiate_and_call() {
 				wasm,
 			));
 
-			assert_ok!(Contract::create(
+			// Check at the end to get hash on error easily
+			let creation = Contract::create(
 				Origin::signed(ALICE),
 				100,
 				100_000,
 				HASH_RETURN_FROM_START_FN.into(),
 				vec![],
-			));
+			);
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -356,9 +362,15 @@ fn instantiate_and_call() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4]))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
 				}
 			]);
+
+			assert_ok!(creation);
 		},
 	);
 }
