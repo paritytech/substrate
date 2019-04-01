@@ -519,16 +519,13 @@ fn less_than_needed_candidates_works() {
 	// The expected behavior is to choose all the candidates that have some vote.
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(1)
-		.validator_count(3)
+		.validator_count(4)
 		.nominate(false)
 		.build(),
 	|| {
 		assert_eq!(Staking::era_length(), 1);
-		assert_eq!(Staking::validator_count(), 3);
+		assert_eq!(Staking::validator_count(), 4);
 		assert_eq!(Staking::minimum_validator_count(), 1);
-
-		// initial validators
-		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// 10 and 20 are now valid candidates.
 		// trigger era
@@ -537,11 +534,12 @@ fn less_than_needed_candidates_works() {
 		assert_eq!(Staking::current_era(), 1);
 
 		// both validators will be chosen again. NO election algorithm is even executed.
-		assert_eq_uvec!(Session::validators(), vec![20, 10]);
+		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
 		// But the exposure is updated in a simple way. No external votes exists. This is purely self-vote.
 		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![]);
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![]);
+		assert_eq!(Staking::stakers(30).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![]);
 	});
 }
 
@@ -703,9 +701,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 10 has not been reported offline
 		assert_eq!(Staking::slash_count(&10), 0);
-		// initial validators
-		assert_eq_uvec!(Session::validators(), vec![20, 10]);
-		<OfflineSlash<Test>>::put(Perbill::from_percent(12));
+	<OfflineSlash<Test>>::put(Perbill::from_percent(12));
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -1483,7 +1479,7 @@ fn phragmen_election_works_with_post_processing() {
 		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// Bond [30, 31] as the third validator
-		assert_ok!(Staking::bond(Origin::signed(31), 30, 1000, RewardDestination::default()));
+		assert_ok!(Staking::bond_extra(Origin::signed(31), 999));
 		assert_ok!(Staking::validate(Origin::signed(30), ValidatorPrefs::default()));
 
 		// bond [2,1](A), [4,3](B), as 2 nominators
@@ -1642,13 +1638,11 @@ fn bond_with_no_staked_value() {
 	.minimum_validator_count(1)
 	.build(), || {
 		// setup
+		assert_ok!(Staking::chill(Origin::signed(30)));
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 		let _ = Balances::deposit_creating(&3, 1000);
 		let initial_balance_2 = Balances::free_balance(&2);
 		let initial_balance_4 = Balances::free_balance(&4);
-
-		// initial validators
-		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// Stingy validator.
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 0, RewardDestination::Controller));
@@ -1705,13 +1699,12 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		.minimum_validator_count(1)
 		.build(),
 	|| {
+
 		// setup
+		assert_ok!(Staking::chill(Origin::signed(30)));
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 		let initial_balance_2 = Balances::free_balance(&2);
 		let initial_balance_10 = Balances::free_balance(&10);
-
-		// initial validators
-		assert_eq_uvec!(Session::validators(), vec![20, 10]);
 
 		// Stingy validator.
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
