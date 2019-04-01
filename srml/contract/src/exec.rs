@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, TrieId, BalanceOf};
+use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, TrieId, BalanceOf, AccountInfoOf};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
-use srml_support::traits::{WithdrawReason, Currency};
+use srml_support::{StorageMap, traits::{WithdrawReason, Currency}};
 use timestamp;
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -244,11 +244,10 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
-		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb);
 		ExecutionContext {
-			self_trie_id: overlay.get_final_trie_id(&origin),
+			self_trie_id: <AccountInfoOf<T>>::get(&origin).map(|s| s.trie_id),
 			self_account: origin,
-			overlay,
+			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
 			events: Vec::new(),
 			calls: Vec::new(),
@@ -260,7 +259,7 @@ where
 
 	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
 		ExecutionContext {
-			self_trie_id: overlay.get_final_trie_id(&dest),
+			self_trie_id: <AccountInfoOf<T>>::get(&dest).map(|s| s.trie_id),
 			self_account: dest,
 			overlay,
 			depth: self.depth + 1,

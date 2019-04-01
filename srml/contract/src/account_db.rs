@@ -46,9 +46,11 @@ impl<T: Trait> Default for ChangeEntry<T> {
 pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 pub trait AccountDb<T: Trait> {
-	fn get_final_trie_id(&self, account: &T::AccountId) -> Option<TrieId>;
 	/// Account is used when overlayed otherwise trie_id must be provided.
 	/// This is for performance reason.
+	///
+	/// Trie id can be None iff account doesn't have an associated trie id in <AccountInfoOf<T>>.
+	/// Because DirectAccountDb bypass the lookup for this association.
 	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
@@ -58,9 +60,6 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_final_trie_id(&self, account: &T::AccountId) -> Option<TrieId> {
-		<AccountInfoOf<T>>::get(account).map(|s| s.trie_id)
-	}
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, location))
 	}
@@ -182,9 +181,6 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_final_trie_id(&self, account: &T::AccountId) -> Option<TrieId> {
-		self.underlying.get_final_trie_id(account)
-	}
 	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
