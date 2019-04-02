@@ -21,7 +21,7 @@ mod slots;
 
 use std::collections::{HashMap, VecDeque};
 use std::ops;
-use futures::{prelude::*, sync::mpsc};
+use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
 use slots::{SlotType, SlotError, Slots};
@@ -117,7 +117,7 @@ impl PeersetHandle {
 		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
 	}
 
-	/// Reports an adjustement to the reputation of the given peer.
+	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&self, peer_id: PeerId, score_diff: i32) {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
@@ -394,10 +394,9 @@ impl Stream for Peerset {
 			if let Some(message) = self.message_queue.pop_front() {
 				return Ok(Async::Ready(Some(message)));
 			}
-			match self.rx.poll()? {
-				Async::NotReady => return Ok(Async::NotReady),
-				Async::Ready(None) => return Ok(Async::Ready(None)),
-				Async::Ready(Some(action)) => match action {
+			match try_ready!(self.rx.poll()) {
+				None => return Ok(Async::Ready(None)),
+				Some(action) => match action {
 					Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(&peer_id),
 					Action::SetReservedOnly(reserved) => self.on_set_reserved_only(reserved),
