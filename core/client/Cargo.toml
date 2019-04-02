@@ -18,7 +18,7 @@ state-machine = { package = "substrate-state-machine", path = "../state-machine"
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 substrate-telemetry = { path = "../telemetry", optional = true }
-hash-db = { version = "0.12", optional = true }
+hash-db = { version = "0.12.2", default-features = false }
 kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
@@ -35,10 +35,14 @@ kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b031
 [features]
 default = ["std"]
 std = [
+	"rstd/std",
 	"parity-codec/std",
-	"consensus",
 	"primitives/std",
 	"inherents/std",
+	"runtime-primitives/std",
+	"runtime-version/std",
+	"hash-db/std",
+	"consensus",
 	"parking_lot",
 	"error-chain",
 	"fnv",
@@ -47,13 +51,9 @@ std = [
 	"futures",
 	"heapsize",
 	"executor",
-	"runtime-primitives/std",
-	"runtime-version/std",
-	"rstd/std",
 	"state-machine",
 	"keyring",
 	"trie",
 	"substrate-telemetry",
-	"hash-db",
 	"kvdb"
 ]
