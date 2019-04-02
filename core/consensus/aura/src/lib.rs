@@ -37,7 +37,7 @@ use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, Sh
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::blockchain::ProvideCache;
-use client::runtime_api::ApiExt;
+use client::runtime_api::{ApiExt, Core as CoreApi};
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
@@ -685,6 +685,7 @@ impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
 	}
 }
 
+#[allow(deprecated)]
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
@@ -694,8 +695,13 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
-		.or_else(|| client.runtime_api().authorities(at).ok())
-		.ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
+		.or_else(|| {
+			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
+				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
+			} else {
+				CoreApi::authorities(&*client.runtime_api(), at).ok()
+			}
+		}).ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.
