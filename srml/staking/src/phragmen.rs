@@ -179,7 +179,6 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for e in &n.edges {
 					let c = &mut candidates[e.candidate_index];
 					if !c.elected && !c.approval_stake.is_zero() {
-						
 						let temp =
 							// Basic fixed-point shifting by 64.
 							// This will never saturate since n.budget cannot exceed u64,

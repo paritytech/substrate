@@ -1984,7 +1984,6 @@ fn large_scale_test() {
 			assert_eq!(e.total, e.own + e.others.iter().fold(0, |s, v| s + v.value));
 		};
 
-		// for validators
 		let prefix = 200;
 		for i in prefix..=(prefix+50) {
 			let _ = Balances::make_free_balance_be(&i, u64::max_value());
@@ -2040,10 +2039,10 @@ fn large_scale_test() {
 			prefix + 45]
 		);
 
-
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
+		// Each exposure => total == own + sum(others)
 		Session::validators().iter().for_each(|acc| check_expo(Staking::stakers(acc-1)));
 
 		// aside from some error, stake must be divided correctly
