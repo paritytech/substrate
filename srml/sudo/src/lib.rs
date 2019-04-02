@@ -25,8 +25,6 @@
 //!
 //! You can start using the sudo module by implementing the sudo [`Trait`].
 //!
-//! Supported dispatchable functions are documented in the [`Call`] enum.
-//!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
@@ -36,7 +34,7 @@
 //! * `sudo` - Make a `Root` call to a dispatchable function.
 //! * `set_key` - Assign a new account to be the sudo key.
 //!
-//! Please refer to the [`Call`] enum and its associated variants for documentation on each function.
+//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
 //!
 //! ## Usage
 //!
@@ -60,7 +58,7 @@
 //! ### Executing Privileged Functions
 //!
 //! The sudo module itself is not intended to be used within other modules.
-//! Instead, you can build "privileged functions" in other modules that require `Root` origin.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other modules.
 //! You can execute these privileged functions by calling `sudo` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
 //!
@@ -103,7 +101,8 @@
 //!
 //! ## Genesis Config
 //!
-//! To use the sudo module, you need to set an initial superuser account as the sudo `key`.
+//! The balances module depends on the [genesis configuration](./struct.GenesisConfig.html).
+//! You need to set an initial superuser account as the sudo `key`.
 //!
 //! ```ignore
 //! GenesisConfig {

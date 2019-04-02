@@ -133,7 +133,7 @@
 //!
 //! ## Genesis config
 //!
-//! The balances module depends on the [genesis configuration](./struct.GenesisConfig.html)
+//! The balances module depends on the [genesis configuration](./struct.GenesisConfig.html).
 //!
 //! ## Related Modules
 //!
