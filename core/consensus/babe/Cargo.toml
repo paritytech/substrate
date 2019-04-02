@@ -30,7 +30,6 @@ authorities = { package = "substrate-consensus-authorities", path = "../authorit
 [dependencies.schnorrkel]
 git = "https://github.com/paritytech/schnorrkel"
 branch = "master"
-features = ["serde"]
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }

@@ -20,66 +20,84 @@ extern crate parity_codec_derive;
 use babe_primitives::BABE_ENGINE_ID;
 use parity_codec::{Decode, Encode, Input};
 use runtime_primitives::generic;
-use schnorrkel::{
-    sign::Signature,
-    vrf::{VRFProof, VRF_PROOF_LENGTH},
-    PublicKey, SecretKey, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
+use primitives::sr25519::{
+	Public,
+	Signature,
+	LocalizedSignature,
 };
 
+use schnorrkel::{
+	SecretKey as Secret,
+	vrf::{VRFProof, VRF_PROOF_LENGTH},
+	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
+};
+
+/// A BABE seal.  It includes:
+/// 
+/// * The public key
+/// * The VRF proof
+/// * The signature
+/// * The slot number
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabeSealSignature {
-    public_key: PublicKey,
-    proof: VRFProof,
-    signature: Signature,
+	proof: VRFProof,
+	signature: LocalizedSignature,
+	slot_num: u64,
 }
 
 impl Encode for BabeSealSignature {
-    fn encode(&self) -> Vec<u8> {
-        parity_codec::Encode::encode(&(
-            self.public_key.to_bytes(),
-            self.proof.to_bytes(),
-            self.signature.to_bytes(),
-        ))
-    }
+	fn encode(&self) -> Vec<u8> {
+		parity_codec::Encode::encode(&(
+			self.proof.to_bytes(),
+			self.signature.signature.0,
+			self.signature.signer.0,
+			self.slot_num,
+		))
+	}
 }
 
 impl Decode for BabeSealSignature {
-    fn decode<R: Input>(i: &mut R) -> Option<Self> {
-        let (public_key, proof, sig): (
-            [u8; PUBLIC_KEY_LENGTH],
-            [u8; VRF_PROOF_LENGTH],
-            [u8; SIGNATURE_LENGTH],
-        ) = Decode::decode(i)?;
-        Some(BabeSealSignature {
-            public_key: PublicKey::from_bytes(&public_key).ok()?,
-            proof: VRFProof::from_bytes(&proof).ok()?,
-            signature: Signature::from_bytes(&sig).ok()?,
-        })
-    }
+	fn decode<R: Input>(i: &mut R) -> Option<Self> {
+		let (public_key, proof, sig, slot_num): (
+			[u8; PUBLIC_KEY_LENGTH],
+			[u8; VRF_PROOF_LENGTH],
+			[u8; SIGNATURE_LENGTH],
+			u64,
+		) = Decode::decode(i)?;
+		Some(BabeSealSignature {
+			proof: VRFProof::from_bytes(&proof).ok()?,
+			signature: LocalizedSignature {
+				signature: Signature(sig),
+				signer: Public(public_key),
+			},
+			slot_num,
+		})
+	}
 }
 
 /// A digest item which is usable with BABE consensus.
 pub trait CompatibleDigestItem: Sized {
-    /// Construct a digest item which contains a slot number and a signature on the
-    /// hash.
-    fn babe_seal(slot_num: u64, signature: BabeSealSignature) -> Self;
+	/// Construct a digest item which contains a slot number and a signature on the
+	/// hash.
+	fn babe_seal(signature: BabeSealSignature) -> Self;
 
-    /// If this item is an Babe seal, return the slot number and signature.
-    fn as_babe_seal(&self) -> Option<(u64, BabeSealSignature)>;
+	/// If this item is an Babe seal, return the slot number and signature.
+	fn as_babe_seal(&self) -> Option<BabeSealSignature>;
 }
 
-impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, PublicKey, SecretKey> {
-    /// Construct a digest item which is a slot number and a signature on the
-    /// hash.
-    fn babe_seal(slot_number: u64, signature: BabeSealSignature) -> Self {
-        generic::DigestItem::Consensus(BABE_ENGINE_ID, (slot_number, signature).encode())
-    }
+impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, Secret> {
+	/// Construct a digest item which is a slot number and a signature on the
+	/// hash.
+	fn babe_seal(signature: BabeSealSignature) -> Self {
+		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
+	}
 
-    /// If this item is an BABE seal, return the slot number and signature.
-    fn as_babe_seal(&self) -> Option<(u64, BabeSealSignature)> {
-        match self {
-            generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-            _ => None,
-        }
-    }
+	/// If this item is an BABE seal, return the slot number and signature.
+	fn as_babe_seal(&self) -> Option<BabeSealSignature> {
+		match self {
+
+			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
+			_ => None,
+		}
+	}
 }
