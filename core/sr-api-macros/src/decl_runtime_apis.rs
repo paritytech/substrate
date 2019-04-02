@@ -18,7 +18,7 @@ use crate::utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
 	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
-	generate_method_runtime_api_impl_name
+	generate_method_runtime_api_impl_name, generate_call_api_at_fn_name, prefix_function_with_trait,
 };
 
 use proc_macro2::{TokenStream, Span};
@@ -45,15 +45,21 @@ const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_APIS";
 /// The `core_trait` attribute.
 const CORE_TRAIT_ATTRIBUTE: &str = "core_trait";
 /// The `api_version` attribute.
+///
 /// Is used to set the current version of the trait.
 const API_VERSION_ATTRIBUTE: &str = "api_version";
 /// The `changed_in` attribute.
+///
 /// Is used when the function signature changed between different versions of a trait.
 /// This attribute should be placed on the old signature of the function.
 const CHANGED_IN_ATTRIBUTE: &str = "changed_in";
+/// The `renamed` attribute.
+///
+/// Is used when a trait method was renamed.
+const RENAMED_ATTRIBUTE: &str = "renamed";
 /// All attributes that we support in the declaration of a runtime api trait.
 const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[
-	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE
+	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE, RENAMED_ATTRIBUTE
 ];
 
 /// The structure used for parsing the runtime api declarations.
@@ -88,7 +94,7 @@ fn extend_generics_with_block(generics: &mut Generics) {
 fn remove_supported_attributes(attrs: &mut Vec<Attribute>) -> HashMap<&'static str, Attribute> {
 	let mut result = HashMap::new();
 	attrs.retain(|v| {
-		match SUPPORTED_ATTRIBUTE_NAMES.iter().filter(|a| v.path.is_ident(a)).next() {
+		match SUPPORTED_ATTRIBUTE_NAMES.iter().find(|a| v.path.is_ident(a)) {
 			Some(attribute) => {
 				result.insert(*attribute, v.clone());
 				false
@@ -152,6 +158,7 @@ fn return_type_replace_block_with_node_block(return_type: ReturnType) -> ReturnT
 	fold::fold_return_type(&mut replace, return_type)
 }
 
+/// Generate the functions that generate the native call closure for each trait method.
 fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	let fns = decl.items.iter().filter_map(|i| match i {
 		TraitItem::Method(ref m) => Some(&m.sig),
@@ -227,11 +234,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 			.map(|v| match v {
 				FnArg::Captured(ref arg) => {
 					let mut arg = arg.clone();
-					match arg.ty {
-						Type::Reference(ref mut r) => {
-							r.lifetime = Some(parse_quote!( 'a ));
-						},
-						_ => {}
+					if let Type::Reference(ref mut r) = arg.ty {
+						r.lifetime = Some(parse_quote!( 'a ));
 					}
 					FnArg::Captured(arg)
 				},
@@ -240,7 +244,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 
 		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();
 		// We need to parse them again, to get an easy access to the actual parameters.
-		let impl_generics: Generics = parse_quote!(#impl_generics);
+		let impl_generics: Generics = parse_quote!( #impl_generics );
 		let impl_generics_params = impl_generics.params.iter().map(|p| {
 			match p {
 				GenericParam::Type(ref ty) => {
@@ -274,6 +278,147 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	Ok(quote!( #( #result )* ))
 }
 
+/// Try to parse the given `Attribute` as `renamed` attribute.
+fn parse_renamed_attribute(renamed: &Attribute) -> Result<(String, u32)> {
+	let meta = renamed.parse_meta()?;
+
+	let err = Err(Error::new(
+			meta.span(),
+			&format!(
+				"Unexpected `{renamed}` attribute. The supported format is `{renamed}(\"old_name\", version_it_was_renamed)`",
+				renamed = RENAMED_ATTRIBUTE,
+			)
+		)
+	);
+
+	match meta {
+		Meta::List(list) => {
+			if list.nested.len() > 2 && list.nested.is_empty() {
+				err
+			} else {
+				let mut itr = list.nested.iter();
+				let old_name = match itr.next() {
+					Some(NestedMeta::Literal(Lit::Str(i))) => {
+						i.value()
+					},
+					_ => return err,
+				};
+
+				let version = match itr.next() {
+					Some(NestedMeta::Literal(Lit::Int(i))) => {
+						i.value() as u32
+					},
+					_ => return err,
+				};
+
+				Ok((old_name, version))
+			}
+		},
+		_ => err,
+	}
+}
+
+/// Generate the functions that call the api at a given block for a given trait method.
+fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
+	let fns = decl.items.iter().filter_map(|i| match i {
+		TraitItem::Method(ref m) => Some((&m.attrs, &m.sig)),
+		_ => None,
+	});
+
+	let mut result = Vec::new();
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+
+	// Generate a native call generator for each function of the given trait.
+	for (attrs, fn_) in fns {
+		let trait_name = &decl.ident;
+		let trait_fn_name = prefix_function_with_trait(&trait_name, &fn_.ident);
+		let fn_name = generate_call_api_at_fn_name(&fn_.ident);
+
+		let attrs = remove_supported_attributes(&mut attrs.clone());
+
+		if attrs.contains_key(RENAMED_ATTRIBUTE) && attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
+			return Err(Error::new(
+				fn_.span(), format!("`{}` and `{}` are not supported at once.", RENAMED_ATTRIBUTE, CHANGED_IN_ATTRIBUTE)
+			));
+		}
+
+		// We do not need to generate this function for a method that signature was changed.
+		if attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
+			continue;
+		}
+
+		// Parse the renamed attributes.
+		let mut renames = Vec::new();
+		if let Some((_, a)) = attrs
+			.iter()
+			.find(|a| a.0 == &RENAMED_ATTRIBUTE)
+		{
+			let (old_name, version) = parse_renamed_attribute(a)?;
+			renames.push((version, prefix_function_with_trait(&trait_name, &old_name)));
+		}
+
+		renames.sort_unstable_by(|l, r| r.cmp(l));
+		let (versions, old_names) = renames.into_iter().fold(
+			(Vec::new(), Vec::new()),
+			|(mut versions, mut old_names), (version, old_name)| {
+				versions.push(version);
+				old_names.push(old_name);
+				(versions, old_names)
+			}
+		);
+
+		// Generate the generator function
+		result.push(quote!(
+			#[cfg(any(feature = "std", test))]
+			pub fn #fn_name<
+				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
+				NC: FnOnce() -> ::std::result::Result<R, &'static str> + ::std::panic::UnwindSafe,
+				Block: #crate_::runtime_api::BlockT,
+				T: #crate_::runtime_api::CallRuntimeAt<Block>,
+			>(
+				call_runtime_at: &T,
+				at: &#crate_::runtime_api::BlockId<Block>,
+				args: Vec<u8>,
+				changes: &mut #crate_::runtime_api::OverlayedChanges,
+				initialized_block: &mut Option<#crate_::runtime_api::BlockId<Block>>,
+				native_call: Option<NC>,
+				context: #crate_::runtime_api::ExecutionContext,
+			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
+				let version = call_runtime_at.runtime_version_at(at)?;
+
+				#(
+					// Check if we need to call the function by an old name.
+					if version.apis.iter().any(|(s, v)| {
+						s == &ID && #versions < *v
+					}) {
+						return call_runtime_at.call_api_at::<R, fn() -> _>(
+							at,
+							#old_names,
+							args,
+							changes,
+							initialized_block,
+							None,
+							context
+						);
+					}
+				)*
+
+				call_runtime_at.call_api_at(
+					at,
+					#trait_fn_name,
+					args,
+					changes,
+					initialized_block,
+					native_call,
+					context
+				)
+			}
+		));
+	}
+
+	Ok(quote!( #( #result )* ))
+}
+
 /// Generate the declaration of the trait for the runtime.
 fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 	let mut result = Vec::new();
@@ -287,6 +432,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 			generate_runtime_api_version(v as u32)
 		}));
 		let id = generate_runtime_api_id(&decl.ident.to_string());
+
+		let call_api_at_calls = unwrap_or_error(generate_call_api_at_calls(&decl));
 
 		// Remove methods that have the `changed_in` attribute as they are not required for the
 		// runtime anymore.
@@ -306,6 +453,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 		result.push(quote!(
 			#[doc(hidden)]
 			#[allow(dead_code)]
+			#[allow(deprecated)]
 			pub mod #mod_name {
 				use super::*;
 
@@ -316,6 +464,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 				pub #id
 
 				#native_call_generators
+
+				#call_api_at_calls
 			}
 		));
 	}
@@ -330,6 +480,7 @@ struct ToClientSideDecl<'a> {
 	found_attributes: &'a mut HashMap<&'static str, Attribute>,
 	/// Any error that we found while converting this declaration.
 	errors: &'a mut Vec<TokenStream>,
+	trait_: &'a Ident,
 }
 
 impl<'a> ToClientSideDecl<'a> {
@@ -396,7 +547,7 @@ impl<'a> ToClientSideDecl<'a> {
 				Vec::new()
 			}
 		};
-		let name = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let name = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
 
@@ -433,7 +584,7 @@ impl<'a> ToClientSideDecl<'a> {
 			&self.block_id,
 			&self.crate_
 		);
-		let name_impl = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let name_impl = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
 		let crate_ = self.crate_;
 
 		let found_attributes = remove_supported_attributes(&mut method.attrs);
@@ -619,6 +770,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 		let block_id = quote!( #crate_::runtime_api::BlockId<Block> );
 		let mut found_attributes = HashMap::new();
 		let mut errors = Vec::new();
+		let trait_ = decl.ident.clone();
 
 		let decl = {
 			let mut to_client_side = ToClientSideDecl {
@@ -626,6 +778,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 				block_id: &block_id,
 				found_attributes: &mut found_attributes,
 				errors: &mut errors,
+				trait_: &trait_,
 			};
 			to_client_side.fold_item_trait(decl)
 		};
@@ -682,7 +835,7 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 
 	fn visit_generic_param(&mut self, input: &'ast GenericParam) {
 		match input {
-			GenericParam::Type(ty) if &ty.ident == BLOCK_GENERIC_IDENT => {
+			GenericParam::Type(ty) if ty.ident == BLOCK_GENERIC_IDENT => {
 				self.errors.push(
 					Error::new(
 						input.span(),
