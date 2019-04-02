@@ -70,6 +70,7 @@ pub struct DbCache<Block: BlockT> {
 	key_lookup_column: Option<u32>,
 	header_column: Option<u32>,
 	authorities_column: Option<u32>,
+	genesis_hash: Block::Hash,
 	best_finalized_block: ComplexBlockId<Block>,
 }
 
@@ -80,6 +81,7 @@ impl<Block: BlockT> DbCache<Block> {
 		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		authorities_column: Option<u32>,
+		genesis_hash: Block::Hash,
 		best_finalized_block: ComplexBlockId<Block>,
 	) -> Self {
 		Self {
@@ -88,8 +90,14 @@ impl<Block: BlockT> DbCache<Block> {
 			key_lookup_column,
 			header_column,
 			authorities_column,
+			genesis_hash,
 			best_finalized_block,
 		}
+	}
+
+	/// Set genesis block hash.
+	pub fn set_genesis_hash(&mut self, genesis_hash: Block::Hash) {
+		self.genesis_hash = genesis_hash;
 	}
 
 	/// Begin cache transaction.
@@ -254,8 +262,9 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
-	fn initialize(&self, key: &CacheKeyId, genesis_hash: Block::Hash, data: Vec<u8>) -> ClientResult<()> {
+	fn initialize(&self, key: &CacheKeyId, data: Vec<u8>) -> ClientResult<()> {
 		let mut cache = self.0.write();
+		let genesis_hash = cache.genesis_hash;
 		let cache_contents = vec![(*key, data)].into_iter().collect();
 		let db = cache.db.clone();
 		let mut dbtx = DBTransaction::new();

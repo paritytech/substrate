@@ -91,6 +91,7 @@ impl<Block> LightStorage<Block>
 			columns::KEY_LOOKUP,
 			columns::HEADER,
 			columns::CACHE,
+			meta.genesis_hash,
 			ComplexBlockId::new(meta.finalized_hash, meta.finalized_number),
 		);
 
@@ -406,6 +407,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let is_genesis = number.is_zero();
 		if is_genesis {
+			self.cache.0.write().set_genesis_hash(hash);
 			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 		}
 

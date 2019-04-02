@@ -44,7 +44,7 @@ use client::runtime_api::ApiExt;
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
 };
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
@@ -693,7 +693,7 @@ impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
 	}
 }
 
-fn initialize_genesis_authorities<B, C>(genesis_hash: B::Hash, client: &C) -> Result<(), ConsensusError> where
+fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -705,7 +705,7 @@ fn initialize_genesis_authorities<B, C>(genesis_hash: B::Hash, client: &C) -> Re
 	};
 
 	// check if we already have initialized the cache
-	let genesis_id = BlockId::Hash(genesis_hash);
+	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_authorities: Option<Vec<AuthorityIdFor<B>>> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
 		.and_then(|v| Decode::decode(&mut &v[..]));
@@ -719,7 +719,7 @@ fn initialize_genesis_authorities<B, C>(genesis_hash: B::Hash, client: &C) -> Re
 			error,
 		)));
 	let genesis_authorities = client.runtime_api().authorities(&genesis_id).map_err(map_err)?;
-	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_hash, genesis_authorities.encode())
+	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
 		.map_err(map_err)?;
 
 	Ok(())
@@ -777,6 +777,7 @@ pub fn import_queue<B, C, E, P>(
 	P::Signature: Encode + Decode,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+	initialize_authorities_cache(&*client)?;
 
 	let verifier = Arc::new(
 		AuraVerifier {

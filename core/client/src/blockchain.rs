@@ -104,7 +104,7 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 	///
 	/// The operation should be performed once before anything else is inserted in the cache.
 	/// Otherwise cache may end up in inconsistent state.
-	fn initialize(&self, key: &well_known_cache_keys::Id, genesis_hash: Block::Hash, value: Vec<u8>) -> Result<()>;
+	fn initialize(&self, key: &well_known_cache_keys::Id, value_at_genesis: Vec<u8>) -> Result<()>;
 	/// Returns cached value by the given key.
 	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<Vec<u8>>;
 }
