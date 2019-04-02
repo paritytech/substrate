@@ -202,7 +202,9 @@ pub enum CheckedHeader<H, S> {
 	Deferred(H, u64),
 	/// A header which is fully checked, including signature. This is the pre-header
 	/// accompanied by the seal components.
-	Checked(H, u64, S),
+	///
+	/// Includes the digest item that encoded the seal.
+	Checked(H, S),
 }
 
 /// A slot duration. Create with `get_or_compute`.

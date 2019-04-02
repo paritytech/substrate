@@ -128,7 +128,7 @@ pub struct AccountInfo {
 	/// unique ID for the subtree encoded as a byte
 	pub trie_id: TrieId,
 	/// the size of stored value in octet
-	pub current_mem_stored: u64,
+	pub storage_size: u64,
 }
 
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context)
@@ -450,9 +450,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
-			child::kill_storage(&subtrie.trie_id);
-		});
+		<AccountInfoOf<T>>::get(who).map(|info| child::kill_storage(&info.trie_id));
 	}
 }
 

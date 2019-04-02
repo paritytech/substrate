@@ -16,13 +16,16 @@
 
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
-// FIXME: no_std - https://github.com/paritytech/substrate/issues/1574
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 mod error;
 mod node_header;
 mod node_codec;
 mod trie_stream;
 
+use rstd::boxed::Box;
+use rstd::vec::Vec;
 use hash_db::Hasher;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -290,7 +293,7 @@ fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
 fn partial_to_key(partial: &[u8], offset: u8, big: u8) -> Vec<u8> {
 	let nibble_count = (partial.len() - 1) * 2 + if partial[0] & 16 == 16 { 1 } else { 0 };
 	let (first_byte_small, big_threshold) = (offset, (big - offset) as usize);
-	let mut output = vec![first_byte_small + nibble_count.min(big_threshold) as u8];
+	let mut output = [first_byte_small + nibble_count.min(big_threshold) as u8].to_vec();
 	if nibble_count >= big_threshold { output.push((nibble_count - big_threshold) as u8) }
 	if nibble_count % 2 == 1 {
 		output.push(partial[0] & 0x0f);

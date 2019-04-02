@@ -13,7 +13,7 @@ futures = "0.1.25"
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
-parity-codec = { version = "3.1", features = ["derive"] }
+parity-codec = { version = "3.3", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 tokio = "0.1.7"

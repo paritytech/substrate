@@ -87,14 +87,13 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
-				import_queue::<_, _, _, Pair>(
+					import_queue::<_, _, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
-					true,
 					).map_err(Into::into)
 				}
 			},
@@ -102,14 +101,13 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-				import_queue::<_, _, _, Pair>(
+					import_queue::<_, _, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
-					true,
 					).map_err(Into::into)
 				}
 			},
