@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, TrieId, BalanceOf, AccountInfoOf};
+use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
+	TrieId, BalanceOf, ContractInfoOf, pay_rent};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
@@ -65,6 +66,7 @@ pub trait Ext {
 	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
+		rent_allowance: BalanceOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: &[u8],
@@ -245,7 +247,8 @@ where
 	/// The specified `origin` address will be used as `sender` for
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
-			self_trie_id: <AccountInfoOf<T>>::get(&origin).map(|s| s.trie_id),
+			self_trie_id: <ContractInfoOf<T>>::get(&origin)
+				.and_then(|i| i.as_alive().map(|i| i.trie_id.clone())),
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
@@ -259,7 +262,8 @@ where
 
 	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
 		ExecutionContext {
-			self_trie_id: <AccountInfoOf<T>>::get(&dest).map(|s| s.trie_id),
+			self_trie_id: <ContractInfoOf<T>>::get(&dest)
+				.and_then(|i| i.as_alive().map(|i| i.trie_id.clone())),
 			self_account: dest,
 			overlay,
 			depth: self.depth + 1,
@@ -291,7 +295,11 @@ where
 			return Err("not enough gas to pay base call fee");
 		}
 
-		let dest_code_hash = self.overlay.get_code(&dest);
+		// Assumption: pay_rent doesn't collide with overlay because
+		// pay_rent will be done on first call and dest contract and balance
+		// cannot be change before first call
+		pay_rent::<T>(&dest);
+
 		let mut output_data = Vec::new();
 
 		let (change_set, events, calls) = {
@@ -311,7 +319,7 @@ where
 				)?;
 			}
 
-			if let Some(dest_code_hash) = dest_code_hash {
+			if let Some(dest_code_hash) = self.overlay.get_alive_code_hash(&dest) {
 				let executable = self.loader.load_main(&dest_code_hash)?;
 				output_data = self
 					.vm
@@ -346,6 +354,7 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
+		rent_allowance: BalanceOf<T>,
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<T::AccountId>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
@@ -365,15 +374,12 @@ where
 			&self.self_account,
 		);
 
-		if self.overlay.get_code(&dest).is_some() {
-			// It should be enough to check only the code.
-			return Err("contract already exists");
-		}
-
 		let (change_set, events, calls) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
-				
-			overlay.set_code(&dest, Some(code_hash.clone()));
+
+			overlay.create_new_contract(&dest, code_hash.clone(), rent_allowance)
+				.map_err(|_| "contract or tombstone already exsists")?;
+
 			let mut nested = self.nested(overlay, dest.clone());
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
@@ -568,11 +574,12 @@ where
 	fn instantiate(
 		&mut self,
 		code_hash: &CodeHash<T>,
+		rent_allowance: BalanceOf<T>,
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
-		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
+		self.ctx.instantiate(endowment, gas_meter, code_hash, rent_allowance, input_data)
 	}
 
 	fn call(

@@ -16,7 +16,8 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, Trait, TrieId, AccountInfoOf, BalanceOf, AccountInfo, TrieIdGenerator};
+use super::{CodeHash, Trait, TrieId, ContractInfoOf, BalanceOf, ContractInfo,
+	AliveContractInfo, TrieIdGenerator};
 use system;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
@@ -25,10 +26,12 @@ use runtime_primitives::traits::Zero;
 use srml_support::{StorageMap, traits::{UpdateBalanceOutcome,
 	SignedImbalance, Currency, Imbalance}, storage::child};
 
+// TODO TODO: be careful update current doc !!
+
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<BalanceOf<T>>,
-	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
-	code: Option<Option<CodeHash<T>>>,
+	/// If None, the code_hash remains untouched.
+	contract: Option<NewContract<T>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -37,10 +40,15 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	fn default() -> Self {
 		ChangeEntry {
 			balance: Default::default(),
-			code: Default::default(),
+			contract: Default::default(),
 			storage: Default::default(),
 		}
 	}
+}
+
+pub struct NewContract<T: Trait> {
+	code_hash: CodeHash<T>,
+	rent_allowance: BalanceOf<T>,
 }
 
 pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
@@ -49,10 +57,11 @@ pub trait AccountDb<T: Trait> {
 	/// Account is used when overlayed otherwise trie_id must be provided.
 	/// This is for performance reason.
 	///
-	/// Trie id can be None iff account doesn't have an associated trie id in <AccountInfoOf<T>>.
+	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
 	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>>;
-	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
+	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
+	fn contract_exists(&self, account: &T::AccountId) -> bool;
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
@@ -63,8 +72,11 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, location))
 	}
-	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
-		<CodeHashOf<T>>::get(account)
+	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
+		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
+	}
+	fn contract_exists(&self, account: &T::AccountId) -> bool {
+		<ContractInfoOf<T>>::exists(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		T::Currency::free_balance(account)
@@ -82,42 +94,38 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					continue;
 				}
 			}
-			if changed.code.is_some() || !changed.storage.is_empty() {
-				let mut info = if !<AccountInfoOf<T>>::exists(&address) {
-					let info = AccountInfo {
-						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
+
+			if changed.contract.is_some() || !changed.storage.is_empty() {
+				let old_info = <ContractInfoOf<T>>::get(&address).map(|c| {
+					c.get_alive().expect("Changes are only expected on alive contracts if existing")
+				});
+				let mut new_info = if let Some(contract) = changed.contract {
+					assert!(!<ContractInfoOf<T>>::exists(&address), "Cannot overlap already existing contract with a new one");
+					AliveContractInfo {
+						code_hash: contract.code_hash,
 						storage_size: 0,
-					};
-					<AccountInfoOf<T>>::insert(&address, &info);
-					info
+						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
+						deduct_block: <system::Module<T>>::block_number(),
+						rent_allowance: contract.rent_allowance,
+					}
 				} else {
-					<AccountInfoOf<T>>::get(&address).unwrap()
+					old_info.clone().expect("Changes on storage requires a contract either instantiated or pre-existing")
 				};
 
-				if let Some(code) = changed.code {
-					if let Some(code) = code {
-						<CodeHashOf<T>>::insert(&address, code);
-					} else {
-						<CodeHashOf<T>>::remove(&address);
-					}
-				}
-
-				let mut new_storage_size = info.storage_size;
 				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get::<Vec<u8>>(&info.trie_id[..], &k) {
-						new_storage_size -= value.len() as u64;
+					if let Some(value) = child::get::<Vec<u8>>(&new_info.trie_id[..], &k) {
+						new_info.storage_size -= value.len() as u64;
 					}
 					if let Some(value) = v {
-						new_storage_size += value.len() as u64;
-						child::put_raw(&info.trie_id[..], &k, &value[..]);
+						new_info.storage_size += value.len() as u64;
+						child::put_raw(&new_info.trie_id[..], &k, &value[..]);
 					} else {
-						child::kill(&info.trie_id[..], &k);
+						child::kill(&new_info.trie_id[..], &k);
 					}
 				}
 
-				if new_storage_size != info.storage_size {
-					info.storage_size = new_storage_size;
-					<AccountInfoOf<T>>::insert(&address, info);
+				if old_info.map(|old_info| old_info == new_info).unwrap_or(false) {
+					<ContractInfoOf<T>>::insert(&address, ContractInfo::Alive(new_info));
 				}
 			}
 		}
@@ -164,12 +172,21 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.insert(location, value);
 	}
 
-	pub fn set_code(&mut self, account: &T::AccountId, code: Option<CodeHash<T>>) {
+	pub fn create_new_contract(&mut self, account: &T::AccountId, code_hash: CodeHash<T>, rent_allowance: BalanceOf<T>) -> Result<(), ()> {
+		if self.contract_exists(account) {
+			return Err(());
+		}
+
 		self.local
 			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
-			.code = Some(code);
+			.contract = Some(NewContract {
+				code_hash,
+				rent_allowance,
+			});
+
+		Ok(())
 	}
 	pub fn set_balance(&mut self, account: &T::AccountId, balance: BalanceOf<T>) {
 		self.local
@@ -189,12 +206,19 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, location))
 	}
-	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
+	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local
 			.borrow()
 			.get(account)
-			.and_then(|a| a.code.clone())
-			.unwrap_or_else(|| self.underlying.get_code(account))
+			.and_then(|changes| changes.contract.as_ref().map(|c| c.code_hash))
+			.or_else(|| self.underlying.get_alive_code_hash(account))
+	}
+	fn contract_exists(&self, account: &T::AccountId) -> bool {
+		self.local
+			.borrow()
+			.get(account)
+			.map(|a| a.contract.is_some())
+			.unwrap_or_else(|| self.underlying.contract_exists(account))
 	}
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		self.local
@@ -213,8 +237,8 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 					if changed.balance.is_some() {
 						value.balance = changed.balance;
 					}
-					if changed.code.is_some() {
-						value.code = changed.code;
+					if changed.contract.is_some() {
+						value.contract = changed.contract;
 					}
 					value.storage.extend(changed.storage.into_iter());
 				}
