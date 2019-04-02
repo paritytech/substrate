@@ -165,7 +165,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> u64 {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
-		<timestamp::Module<T>>::block_period().as_().saturating_mul(2)
+		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {

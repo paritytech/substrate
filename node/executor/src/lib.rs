@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A `CodeExecutor` specialisation which uses natively compiled runtime when the wasm to be
+//! A `CodeExecutor` specialization which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
 #![cfg_attr(feature = "benchmarks", feature(test))]
@@ -132,7 +132,7 @@ mod tests {
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u64)),
 			true,
 			None,
@@ -165,7 +165,7 @@ mod tests {
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u64)),
 			true,
 			None,
@@ -198,7 +198,7 @@ mod tests {
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u64)),
 			true,
 			None,
@@ -235,7 +235,7 @@ mod tests {
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u64)),
 			true,
 			None,
@@ -353,7 +353,7 @@ mod tests {
 		// execute the block to get the real header.
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			env,
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&header.encode(),
 			true,
 			None,
@@ -371,7 +371,7 @@ mod tests {
 
 		let header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			env,
-			"BlockBuilder_finalise_block",
+			"BlockBuilder_finalize_block",
 			&[0u8;0],
 			true,
 			None,
@@ -807,7 +807,7 @@ mod tests {
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialise_block", &vec![].and(&from_block_number(1u64)));
+		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
@@ -829,7 +829,7 @@ mod tests {
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
-		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialise_block", &vec![].and(&from_block_number(1u64)));
+		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();

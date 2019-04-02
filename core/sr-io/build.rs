@@ -3,7 +3,7 @@
 use rustc_version::{version, version_meta, Channel};
 
 fn main() {
-    // Assert we haven't travelled back in time
+    // Assert we haven't traveled back in time
     assert!(version().unwrap().major >= 1);
 
     // Set cfg flags depending on release channel

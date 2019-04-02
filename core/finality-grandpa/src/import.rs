@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 
 use log::{debug, trace, info};
 use parity_codec::Encode;
@@ -27,7 +27,7 @@ use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use consensus_common::{
 	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
-	ImportBlock, ImportResult, JustificationImport,
+	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::Justification;
@@ -388,7 +388,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();
@@ -406,8 +406,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
-		let enacts_consensus_change = new_authorities.is_some();
-		let import_result = self.inner.import_block(block, new_authorities);
+		let enacts_consensus_change = !new_cache.is_empty();
+		let import_result = self.inner.import_block(block, new_cache);
 
 		let mut imported_aux = {
 			match import_result {
@@ -570,7 +570,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
 				info!(target: "finality", "Imported justification for block #{} that triggers \
-					command {}, signalling voter.", number, command);
+					command {}, signaling voter.", number, command);
 
 				if let Err(e) = self.send_voter_commands.unbounded_send(command) {
 					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());

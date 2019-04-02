@@ -243,12 +243,12 @@ fn account_removal_removes_storage() {
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
-			// Setup two accounts with free balance above than exsistential threshold.
+			// Set up two accounts with free balance above the existential threshold.
 			{
 				Balances::deposit_creating(&1, 110);
 				AccountInfoOf::<Test>::insert(1, &AccountInfo {
 					trie_id: unique_id1.to_vec(),
-					current_mem_stored: 0,
+					storage_size: 0,
 				});
 				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
 				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
@@ -257,14 +257,14 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&2, 110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
 					trie_id: unique_id2.to_vec(),
-					current_mem_stored: 0,
+					storage_size: 0,
 				});
 				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
 				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
-			// the balance of account 1 is will be below than exsistential threshold.
+			// the balance of account 1 will be below the existential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
 			assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
@@ -359,6 +359,8 @@ fn instantiate_and_call() {
 					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
 				}
 			]);
+
+			assert!(AccountInfoOf::<Test>::exists(BOB));
 		},
 	);
 }

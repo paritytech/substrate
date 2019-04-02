@@ -86,28 +86,32 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>|
+			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				import_queue::<_, _, _, Pair>(
-					SlotDuration::get_or_compute(&*client)?,
-					client.clone(),
-					None,
-					client,
-					NothingExtra,
-					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+						SlotDuration::get_or_compute(&*client)?,
+						client.clone(),
+						None,
+						client,
+						NothingExtra,
+						config.custom.inherent_data_providers.clone(),
+					true,
+					).map_err(Into::into)
+				}
 			},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>|
+			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 				import_queue::<_, _, _, Pair>(
-					SlotDuration::get_or_compute(&*client)?,
-					client.clone(),
-					None,
-					client,
-					NothingExtra,
-					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+						SlotDuration::get_or_compute(&*client)?,
+						client.clone(),
+						None,
+						client,
+						NothingExtra,
+						config.custom.inherent_data_providers.clone(),
+					true,
+					).map_err(Into::into)
+				}
 			},
 	}
 }

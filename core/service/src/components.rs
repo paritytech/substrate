@@ -356,7 +356,7 @@ pub trait ServiceFactory: 'static + Sized {
 	}
 }
 
-/// A collection of types and function to generalise over full / light client type.
+/// A collection of types and function to generalize over full / light client type.
 pub trait Components: Sized + 'static {
 	/// Associated service factory.
 	type Factory: ServiceFactory;

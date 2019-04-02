@@ -69,7 +69,7 @@
 //! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayent`](https://crates.parity.io/srml_support/traits/trait.MakePayment.html): Simple trait designed
+//! - [`MakePayment`](https://crates.parity.io/srml_support/traits/trait.MakePayment.html): Simple trait designed
 //! for hooking into a transaction payment.
 //! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
