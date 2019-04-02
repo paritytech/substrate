@@ -2775,11 +2775,11 @@ name = "substrate-trie"
 version = "1.0.0"
 dependencies = [
  "hash-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "memory-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "memory-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 1.0.0",
  "trie-db 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-std 1.0.0",
 ]
 
 [[package]]
