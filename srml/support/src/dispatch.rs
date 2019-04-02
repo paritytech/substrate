@@ -1167,6 +1167,7 @@ mod tests {
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
+			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
@@ -1220,7 +1221,21 @@ mod tests {
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
-				}
+				},
+				FunctionMetadata {
+					name: DecodeDifferent::Encode("aux_5"),
+					arguments: DecodeDifferent::Encode(&[
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("_data"),
+							ty: DecodeDifferent::Encode("i32"),
+						},
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("_data2"),
+							ty: DecodeDifferent::Encode("Compact<u32>")
+						}
+					]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
 			];
 
 	struct TraitImpl {}
@@ -1242,6 +1257,11 @@ mod tests {
 		let encoded = call.encode();
 		assert_eq!(2, encoded.len());
 		assert_eq!(vec![1, 4], encoded);
+
+		let call: Call<TraitImpl> = Call::aux_5(1, 2);
+		let encoded = call.encode();
+		assert_eq!(6, encoded.len());
+		assert_eq!(vec![5, 1, 0, 0, 0, 8], encoded);
 	}
 
 	#[test]
