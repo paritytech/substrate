@@ -20,7 +20,6 @@
 mod slots;
 
 use std::collections::{HashMap, VecDeque};
-use std::ops;
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
@@ -182,22 +181,13 @@ pub struct PeersetConfig {
 #[derive(Debug)]
 pub struct Peerset {
 	data: PeersetData,
-	handle: PeersetHandle,
 	rx: mpsc::UnboundedReceiver<Action>,
 	message_queue: VecDeque<Message>,
 }
 
-impl ops::Deref for Peerset {
-	type Target = PeersetHandle;
-
-	fn deref(&self) -> &Self::Target {
-		&self.handle
-	}
-}
-
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
-	pub fn from_config(config: PeersetConfig) -> Peerset {
+	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
 		let (tx, rx) = mpsc::unbounded();
 
 		let data = PeersetData {
@@ -208,11 +198,12 @@ impl Peerset {
 			scores: Default::default(),
 		};
 
+		let handle = PeersetHandle {
+			tx,
+		};
+
 		let mut peerset = Peerset {
 			data,
-			handle: PeersetHandle {
-				tx,
-			},
 			rx,
 			message_queue: VecDeque::new(),
 		};
@@ -226,12 +217,7 @@ impl Peerset {
 		}
 
 		peerset.alloc_slots();
-		peerset
-	}
-
-	/// Creates shared handle to the peer set manager (PSM).
-	pub fn handle(&self) -> PeersetHandle {
-		self.handle.clone()
+		(peerset, handle)
 	}
 
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
@@ -443,7 +429,7 @@ mod tests {
 			reserved_nodes: Vec::new(),
 		};
 
-		let peerset = Peerset::from_config(config);
+		let (peerset, _handle) = Peerset::from_config(config);
 
 		assert_messages(peerset, vec![
 			Message::Connect(bootnode),
@@ -465,7 +451,7 @@ mod tests {
 			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
 		};
 
-		let peerset = Peerset::from_config(config);
+		let (peerset, _handle) = Peerset::from_config(config);
 
 		assert_messages(peerset, vec![
 			Message::Connect(reserved_peer),
@@ -487,9 +473,9 @@ mod tests {
 			reserved_nodes: Vec::new(),
 		};
 
-		let peerset = Peerset::from_config(config);
-		peerset.add_reserved_peer(reserved_peer.clone());
-		peerset.add_reserved_peer(reserved_peer2.clone());
+		let (peerset, handle) = Peerset::from_config(config);
+		handle.add_reserved_peer(reserved_peer.clone());
+		handle.add_reserved_peer(reserved_peer2.clone());
 
 		assert_messages(peerset, vec![
 			Message::Connect(reserved_peer),
@@ -516,8 +502,8 @@ mod tests {
 			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
 		};
 
-		let peerset = Peerset::from_config(config);
-		peerset.set_reserved_only(true);
+		let (peerset, handle) = Peerset::from_config(config);
+		handle.set_reserved_only(true);
 
 		let peerset = assert_messages(peerset, vec![
 			Message::Connect(reserved_peer),
@@ -546,9 +532,9 @@ mod tests {
 			reserved_nodes: Vec::new(),
 		};
 
-		let peerset = Peerset::from_config(config);
-		peerset.report_peer(bootnode2, -1);
-		peerset.report_peer(bootnode.clone(), -1);
+		let (peerset, handle) = Peerset::from_config(config);
+		handle.report_peer(bootnode2, -1);
+		handle.report_peer(bootnode.clone(), -1);
 
 		assert_messages(peerset, vec![
 			Message::Connect(bootnode.clone()),
@@ -572,7 +558,7 @@ mod tests {
 			reserved_nodes: Vec::new(),
 		};
 
-		let mut peerset = Peerset::from_config(config);
+		let (mut peerset, _handle) = Peerset::from_config(config);
 		peerset.incoming(incoming.clone(), ii);
 		peerset.incoming(incoming2.clone(), ii2);
 		peerset.incoming(incoming.clone(), ii3);
@@ -598,7 +584,7 @@ mod tests {
 			reserved_nodes: vec![reserved_peer.clone()],
 		};
 
-		let peerset = Peerset::from_config(config);
+		let (peerset, _handle) = Peerset::from_config(config);
 
 		let mut peerset = assert_messages(peerset, vec![
 			Message::Connect(reserved_peer.clone()),

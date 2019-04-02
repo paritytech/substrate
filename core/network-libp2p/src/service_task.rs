@@ -72,14 +72,13 @@ where TMessage: CustomMessage + Send + 'static {
 	}
 
 	// Build the peerset.
-	let peerset = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
+	let (peerset, peerset_handle) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
 		in_peers: config.in_peers as usize,
 		out_peers: config.out_peers as usize,
 		bootnodes,
 		reserved_only: config.non_reserved_mode == NonReservedPeerMode::Deny,
 		reserved_nodes,
 	});
-	let peerset_handle = peerset.handle();
 
 	// Private and public keys configuration.
 	let local_identity = config.node_key.clone().into_keypair()?;
