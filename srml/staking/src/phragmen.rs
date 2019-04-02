@@ -24,6 +24,7 @@ use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
 type Fraction = PerU128;
 type ExtendedBalance = u128;
+const SCALE_FACTOR_64: u128 = u64::max_value() as u128;
 
 /// Configure the behavior of the Phragmen election.
 /// Might be deprecated.
@@ -178,12 +179,13 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for e in &n.edges {
 					let c = &mut candidates[e.candidate_index];
 					if !c.elected && !c.approval_stake.is_zero() {
-						// THIS SATURATES!
-						// let temp = n.budget.saturating_mul(*n.load) / c.approval_stake;
+						
 						let temp =
-							// This will never saturate
-							((n.budget.saturating_mul(u64::max_value() as u128)) / c.approval_stake)
-							* (*n.load/u64::max_value() as u128);
+							// Basic fixed-point shifting by 64.
+							// This will never saturate since n.budget cannot exceed u64,
+							// despite being stored in u128.
+							(n.budget.saturating_mul(SCALE_FACTOR_64)) / c.approval_stake
+							* (*n.load / SCALE_FACTOR_64);
 						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
 					}
 				}

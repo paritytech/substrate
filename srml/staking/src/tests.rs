@@ -2052,7 +2052,7 @@ fn large_scale_test() {
 			- Session::validators()
 				.iter()
 				.map(|v| Staking::stakers(v-1))
-				.fold(0, |s, v| if v.others.len() > 0 { s + v.others[0].value } else { s }) 
+				.fold(0, |s, v| if v.others.len() > 0 { s + v.others[0].value } else { s })
 			< 100
 		);
 
