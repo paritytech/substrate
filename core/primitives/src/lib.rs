@@ -126,7 +126,7 @@ pub fn keyspace_prefixed_expected_len(ks: &KeySpace, prefix: &[u8]) -> usize {
 
 /// keyspace and prefix with allocation
 pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
-	let mut res = Vec::with_capacity(keyspace_prefixed_expected_len(ks, prefix));
+	let mut res = rstd::vec![0;keyspace_prefixed_expected_len(ks, prefix)];
 	keyspace_in_prefix(ks, prefix, res.as_mut());
 	res
 }
