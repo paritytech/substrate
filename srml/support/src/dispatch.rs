@@ -615,6 +615,132 @@ macro_rules! decl_module {
 		}
 	};
 
+	// Declare a `Call` variant parameter that should be encoded `compact`.
+	(@decl_call_variant_params
+		$( #[$attr:meta] )*
+		$call_type:ident;
+		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $generated_variants:tt )* }
+		{ $( $current_params:tt )* }
+		variant $fn_name:ident;
+		$( #[doc = $doc_attr:tt] )*
+		#[compact]
+		$type:ty;
+		$( $rest:tt )*
+	) => {
+		$crate::decl_module! {
+			@decl_call_variant_params
+			$( #[$attr] )*
+			$call_type;
+			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{ $( $generated_variants )* }
+			{
+				$( $current_params )*
+				#[codec(compact)]
+				$type,
+			}
+			variant $fn_name;
+			$( $rest )*
+		}
+	};
+
+	// Declare a `Call` variant parameter.
+	(@decl_call_variant_params
+		$( #[$attr:meta] )*
+		$call_type:ident;
+		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $generated_variants:tt )* }
+		{ $( $current_params:tt )* }
+		variant $fn_name:ident;
+		$(#[doc = $doc_attr:tt])*
+		$type:ty;
+		$( $rest:tt )*
+	) => {
+		$crate::decl_module! {
+			@decl_call_variant_params
+			$( #[$attr] )*
+			$call_type;
+			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{ $( $generated_variants )* }
+			{
+				$( $current_params )*
+				$type,
+			}
+			variant $fn_name;
+			$( $rest )*
+		}
+	};
+
+	(@decl_call_variant_params
+		$( #[$attr:meta] )*
+		$call_type:ident;
+		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $generated_variants:tt )* }
+		{ $( $current_params:tt )* }
+		variant $fn_name:ident;
+		$(#[doc = $doc_attr:tt])*
+		variant $next_fn_name:ident;
+		$( $rest:tt )*
+	) => {
+		$crate::decl_module! {
+			@decl_call_variant_params
+			$( #[$attr] )*
+			$call_type;
+			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{
+				$( $generated_variants )*
+				#[allow(non_camel_case_types)]
+				$(#[doc = $doc_attr])*
+				$fn_name (
+					$( $current_params )*
+				),
+			}
+			{}
+			variant $next_fn_name;
+			$( $rest )*
+		}
+	};
+
+	(@decl_call_variant_params
+		$( #[$attr:meta] )*
+		$call_type:ident;
+		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{ $( $generated_variants:tt )* }
+		{ $( $current_params:tt )* }
+		variant $fn_name:ident;
+		$( #[doc = $doc_attr:tt] )*
+	) => {
+		#[derive($crate::codec::Encode, $crate::codec::Decode)]
+		$( #[$attr] )*
+		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
+			#[doc(hidden)]
+			#[codec(skip)]
+			__PhantomItem($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
+			$( $generated_variants )*
+			#[allow(non_camel_case_types)]
+			$(#[doc = $doc_attr])*
+			$fn_name (
+				$( $current_params )*
+			),
+		}
+	};
+
+	(@decl_call_variant_params
+		$( #[$attr:meta] )*
+		$call_type:ident;
+		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		{}
+		{}
+	) => {
+		#[derive($crate::codec::Encode, $crate::codec::Decode)]
+		$( #[$attr] )*
+		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
+			#[doc(hidden)]
+			#[codec(skip)]
+			__PhantomItem($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
+		}
+	};
+
 	// The main macro expansion that actually renders the module code.
 
 	(@imp
@@ -637,17 +763,7 @@ macro_rules! decl_module {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
-		// FIXME: switching based on std feature is because of an issue in
-		// serde-derive for when we attempt to derive `Deserialize` on these types,
-		// in a situation where we've imported `srml_support` as another name.
-		#[cfg(feature = "std")]
-		pub struct $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable $( = $module_default_instance)?)?>(::std::marker::PhantomData<($trait_instance $(, $instance)?)>);
-
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		#[cfg(not(feature = "std"))]
-		pub struct $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable $( = $module_default_instance)?)?>(::core::marker::PhantomData<($trait_instance $(, $instance)?)>);
+		pub struct $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable $( = $module_default_instance)?)?>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>);
 
 		$crate::decl_module! {
 			@impl_on_initialize
@@ -692,28 +808,20 @@ macro_rules! decl_module {
 			)*
 		}
 
-		#[cfg(feature = "std")]
-		$(#[$attr])*
-		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
-			#[doc(hidden)]
-			__PhantomItem(::std::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
+		$crate::decl_module! {
+			@decl_call_variant_params
+			$( #[$attr] )*
+			$call_type;
+			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
+			{}
+			{}
 			$(
-				#[allow(non_camel_case_types)]
+				variant $fn_name;
 				$(#[doc = $doc_attr])*
-				$fn_name ( $( $param ),* ),
-			)*
-		}
-
-		#[cfg(not(feature = "std"))]
-		$(#[$attr])*
-		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
-			#[doc(hidden)]
-			#[codec(skip)]
-			__PhantomItem(::core::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
-			$(
-				#[allow(non_camel_case_types)]
-				$(#[doc = $doc_attr])*
-				$fn_name ( $( $param ),* ),
+				$(
+					$(#[$codec_attr])*
+					$param;
+				)*
 			)*
 		}
 
@@ -776,18 +884,6 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Decode for $call_type<$trait_instance $(, $instance)?> {
-			fn decode<Input: $crate::dispatch::Input>(input: &mut Input) -> Option<Self> {
-				let _input_id = input.read_byte()?;
-				$crate::__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*)
-			}
-		}
-
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Encode for $call_type<$trait_instance $(, $instance)?> {
-			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
-				$crate::__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
-			}
-		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance $(, $instance)?>
 		{
@@ -827,131 +923,6 @@ macro_rules! decl_module {
 	}
 }
 
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_decode {
-	(
-		$input:expr;
-		$input_id:expr;
-		$fn_id:expr;
-		$call_type:ident;
-		fn $fn_name:ident(
-			$( $(#[$codec_attr:ident on type $param:ty])* $param_name:ident ),*
-		);
-		$($rest:tt)*
-	) => {
-		{
-			if $input_id == ($fn_id) {
-				$(
-					$crate::__impl_decode!(@decode
-						$(#[$codec_attr on type $param])*
-						$param_name;
-						$input;
-					);
-				)*
-				return Some($call_type:: $fn_name( $( $param_name ),* ));
-			}
-
-			$crate::__impl_decode!($input; $input_id; $fn_id + 1; $call_type; $($rest)*)
-		}
-	};
-	(
-		$input:expr;
-		$input_id:expr;
-		$fn_id:expr;
-		$call_type:ident;
-	) => {
-		None
-	};
-	(@decode
-		#[compact on type $param:ty]
-		$param_name:ident;
-		$input:expr;
-	) => {
-		let $param_name = <<$param as $crate::dispatch::HasCompact>::Type as $crate::dispatch::Decode>::decode($input)?.into();
-	};
-	(@decode
-		$param_name:ident;
-		$input:expr;
-	) => {
-		let $param_name = $crate::dispatch::Decode::decode($input)?;
-	};
-	(@decode
-		$(#[$codec_attr:ident on type])*
-		$param_name:ident;
-		$input:expr;
-	) => {
-		compile_error!(concat!(
-			"Invalid attribute for parameter `",
-			stringify!($param_name),
-			"`, the following attributes are supported: `#[compact]`"
-		))
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_encode {
-	(
-		$dest:expr;
-		$self:expr;
-		$fn_id:expr;
-		$call_type:ident;
-		fn $fn_name:ident(
-			$( $(#[$codec_attr:ident on type $param:ty])* $param_name:ident ),*
-		);
-		$($rest:tt)*
-	) => {
-		{
-			if let $call_type::$fn_name(
-				$(
-					ref $param_name
-				),*
-			) = $self {
-				$dest.push_byte(($fn_id) as u8);
-				$(
-					$crate::__impl_encode!(@encode_as
-						$(#[$codec_attr on type $param])*
-						$param_name;
-						$dest;
-					);
-				)*
-			}
-
-			$crate::__impl_encode!($dest; $self; $fn_id + 1; $call_type; $($rest)*)
-		}
-	};
-	(
-		$dest:expr;
-		$self:expr;
-		$fn_id:expr;
-		$call_type:ident;
-	) => {{}};
-	(@encode_as
-		#[compact on type $param:ty]
-		$param_name:ident;
-		$dest:expr;
-	) => {
-		<<$param as $crate::dispatch::HasCompact>::Type as $crate::dispatch::EncodeAsRef<$param>>::RefType::from($param_name).encode_to($dest);
-	};
-	(@encode_as
-		$param_name:ident;
-		$dest:expr;
-	) => {
-		$param_name.encode_to($dest);
-	};
-	(@encode_as
-		$(#[$codec_attr:ident on type $param:ty])*
-		$param_name:ident;
-		$dest:expr;
-	) => {
-		compile_error!(concat!(
-			"Invalid attribute for parameter `", stringify!($param_name),
-			"`, the following attributes are supported: `#[compact]`"
-		))
-	};
-}
-
 pub trait IsSubType<T: Callable> {
 	fn is_aux_sub_type(&self) -> Option<&<T as Callable>::Call>;
 }
@@ -968,14 +939,13 @@ macro_rules! impl_outer_dispatch {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive(Clone, PartialEq, Eq)]
+		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
-		$crate::__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
@@ -998,28 +968,6 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
-	}
-}
-
-/// Implement a meta-dispatch module to dispatch to other dispatchers.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_outer_dispatch_common {
-	(
-		$call_type:ident, $( $camelcase:ident, )*
-	) => {
-		impl $crate::dispatch::Decode for $call_type {
-			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
-				let input_id = input.read_byte()?;
-				$crate::__impl_decode!(input; input_id; 0; $call_type; $( fn $camelcase ( outer_dispatch_param ); )*)
-			}
-		}
-
-		impl $crate::dispatch::Encode for $call_type {
-			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
-				$crate::__impl_encode!(dest; *self; 0; $call_type; $( fn $camelcase( outer_dispatch_param ); )*)
-			}
-		}
 	}
 }
 
