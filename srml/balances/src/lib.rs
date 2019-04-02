@@ -74,15 +74,6 @@
 //! - [`IsDeadAccount`](../srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
-//! Example of using the `Currency` trait from the treasury module:
-//!
-//! ```rust,ignore
-//! pub trait Trait: system::Trait {
-//! 	/// The staking balance.
-//! 	type Currency: Currency<Self::AccountId>;
-//! }
-//! ```
-//!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
