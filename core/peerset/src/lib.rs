@@ -23,14 +23,52 @@ use std::collections::{HashMap, VecDeque};
 use std::ops;
 use futures::{prelude::*, sync::mpsc};
 use libp2p::PeerId;
+use linked_hash_map::LinkedHashMap;
 use slots::{SlotType, SlotError, Slots};
 pub use serde_json::Value;
 
+/// FIFO-ordered list of nodes that we know exist, but we are not connected to.
+#[derive(Debug, Default)]
+struct Discovered {
+	/// Nodes we should connect to first.
+	reserved: LinkedHashMap<PeerId, ()>,
+	/// All remaining nodes.
+	common: LinkedHashMap<PeerId, ()>,
+}
+
+impl Discovered {
+	/// Returns true if we already know given node.
+	fn contains(&self, peer_id: &PeerId) -> bool {
+		self.reserved.contains_key(peer_id) || self.common.contains_key(peer_id)
+	}
+
+	/// Adds new peer of a given type.
+	fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) {
+		if !self.contains(&peer_id) {
+			match slot_type {
+				SlotType::Common => self.common.insert(peer_id, ()),
+				SlotType::Reserved => self.reserved.insert(peer_id, ()),
+			};
+		}
+	}
+
+	/// Pops the oldest peer from the list.
+	fn pop_peer(&mut self) -> Option<(PeerId, SlotType)> {
+		match self.reserved.pop_front() {
+			Some((peer_id, _)) => Some((peer_id, SlotType::Reserved)),
+			None => {
+				let (peer_id, _) = self.common.pop_front()?;
+				Some((peer_id, SlotType::Common))
+			}
+		}
+	}
+}
+
 #[derive(Debug)]
 struct PeersetData {
-	/// List of nodes that we know exist but we are not connected to.
+	/// List of nodes that we know exist, but we are not connected to.
 	/// Elements in this list must never be in `out_slots` or `in_slots`.
-	discovered: VecDeque<(PeerId, SlotType)>,
+	discovered: Discovered,
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
 	/// Node slots for outgoing connections.
@@ -180,11 +218,11 @@ impl Peerset {
 		};
 
 		for peer_id in config.reserved_nodes {
-			peerset.data.discovered.push_back((peer_id, SlotType::Reserved));
+			peerset.data.discovered.add_peer(peer_id, SlotType::Reserved);
 		}
 
 		for peer_id in config.bootnodes {
-			peerset.data.discovered.push_back((peer_id, SlotType::Common));
+			peerset.data.discovered.add_peer(peer_id, SlotType::Common);
 		}
 
 		peerset.alloc_slots();
@@ -211,15 +249,11 @@ impl Peerset {
 				return;
 			}
 			Err(SlotError::MaxConnections(_)) => {
-				if self.data.discovered.iter().all(|(p, _)| *p != peer_id) {
-					self.data.discovered.push_front((peer_id, SlotType::Reserved));
-				}
+				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
 			}
 			Err(SlotError::DemandReroute { disconnect, ..}) => {
 				self.message_queue.push_back(Message::Drop(disconnect));
-				if self.data.discovered.iter().all(|(p, _)| *p != peer_id) {
-					self.data.discovered.push_front((peer_id, SlotType::Reserved));
-				}
+				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
 			}
 		}
 	}
@@ -249,16 +283,18 @@ impl Peerset {
 
 		if *score < 0 {
 			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
-			self.message_queue.push_back(Message::Drop(peer_id));
+			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
+				self.message_queue.push_back(Message::Drop(peer_id));
+			}
 		}
 	}
 
 	fn alloc_slots(&mut self) {
-		while let Some((peer_id, slot_type)) = self.data.discovered.pop_front() {
+		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer() {
 			// reserved peers are always at the beginning of discovered vec
 			// if we get a common peer, that means it's a goot time to stop
 			if self.data.reserved_only && slot_type == SlotType::Common {
-				self.data.discovered.push_front((peer_id, slot_type));
+				self.data.discovered.add_peer(peer_id, slot_type);
 				break;
 			}
 			match self.data.out_slots.add_peer(peer_id.clone(), slot_type) {
@@ -267,12 +303,12 @@ impl Peerset {
 				},
 				Err(SlotError::AlreadyConnected(_)) => (),
 				Err(SlotError::MaxConnections(_)) => {
-					self.data.discovered.push_front((peer_id, slot_type));
+					self.data.discovered.add_peer(peer_id, slot_type);
 					break;
 				},
 				Err(SlotError::DemandReroute { disconnect, .. }) => {
 					self.message_queue.push_back(Message::Drop(disconnect));
-					self.data.discovered.push_front((peer_id, slot_type));
+					self.data.discovered.add_peer(peer_id, slot_type);
 					break;
 				}
 			}
@@ -290,6 +326,7 @@ impl Peerset {
 	/// peerset is already connected to, in which case it must not answer.
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
 		// check if we are already connected to this peer
+		// TODO: should we take into account `reserved_only`?
 		if self.data.out_slots.contains(&peer_id) {
 			self.message_queue.push_back(Message::Reject(index));
 		}
@@ -299,9 +336,7 @@ impl Peerset {
 				self.message_queue.push_back(Message::Accept(index));
 			},
 			Err(SlotError::MaxConnections(peer_id)) => {
-				if self.data.discovered.iter().all(|(p, _)| *p != peer_id) {
-					self.data.discovered.push_back((peer_id, SlotType::Common));
-				}
+				self.data.discovered.add_peer(peer_id, SlotType::Common);
 				self.message_queue.push_back(Message::Reject(index));
 			},
 			_ => {
@@ -327,10 +362,7 @@ impl Peerset {
 
 		// Note: in this dummy implementation we consider that peers never expire. As soon as we
 		// are disconnected from a peer, we try again.
-		if self.data.discovered.iter().all(|(p, _)| p != &peer_id) {
-			self.data.discovered.push_back((peer_id, SlotType::Common));
-		}
-
+		self.data.discovered.add_peer(peer_id, SlotType::Common);
 		self.alloc_slots();
 	}
 
@@ -343,9 +375,7 @@ impl Peerset {
 			return;
 		}
 
-		if self.data.discovered.iter().all(|(p, _)| *p != peer_id) {
-			self.data.discovered.push_back((peer_id, SlotType::Common));
-		}
+		self.data.discovered.add_peer(peer_id, SlotType::Common);
 		self.alloc_slots();
 	}
 
@@ -382,7 +412,7 @@ impl Stream for Peerset {
 mod tests {
 	use libp2p::PeerId;
 	use futures::prelude::*;
-	use super::{PeersetConfig, Peerset, Message};
+	use super::{PeersetConfig, Peerset, Message, IncomingIndex};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
 		for expected_message in messages {
@@ -490,14 +520,12 @@ mod tests {
 		let peerset = Peerset::from_config(config);
 		peerset.set_reserved_only(true);
 
-		let (message, peerset) = next_message(peerset).expect("Message::Connect to reserved_peer");
-		assert_eq!(message, Message::Connect(reserved_peer));
-		let (message, peerset) = next_message(peerset).expect("Message::Connect to reserved_peer2");
-		assert_eq!(message, Message::Connect(reserved_peer2));
-		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode");
-		assert_eq!(message, Message::Connect(bootnode.clone()));
-		let (message, peerset) = next_message(peerset).expect("Message::Connect to bootnode2");
-		assert_eq!(message, Message::Connect(bootnode2.clone()));
+		let peerset = assert_messages(peerset, vec![
+			Message::Connect(reserved_peer),
+			Message::Connect(reserved_peer2),
+			Message::Connect(bootnode.clone()),
+			Message::Connect(bootnode2.clone()),
+		]);
 
 		let (message, peerset) = next_message(peerset).expect("Message::Drop the bootnode");
 		let (message2, _peerset) = next_message(peerset).expect("Message::Drop the bootnode2");
@@ -509,12 +537,53 @@ mod tests {
 
 	#[test]
 	fn test_peerset_report_peer() {
-		//unimplemented!();
+		let bootnode = PeerId::random();
+		let bootnode2 = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 1,
+			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
+			reserved_only: false,
+			reserved_nodes: Vec::new(),
+		};
+
+		let peerset = Peerset::from_config(config);
+		peerset.report_peer(bootnode2, -1);
+		peerset.report_peer(bootnode.clone(), -1);
+
+		assert_messages(peerset, vec![
+			Message::Connect(bootnode.clone()),
+			Message::Drop(bootnode)
+		]);
 	}
 
 	#[test]
 	fn test_peerset_incoming() {
-		//unimplemented!();
+		let bootnode = PeerId::random();
+		let incoming = PeerId::random();
+		let incoming2 = PeerId::random();
+		let ii = IncomingIndex(1);
+		let ii2 = IncomingIndex(2);
+		let ii3 = IncomingIndex(3);
+		let config = PeersetConfig {
+			in_peers: 1,
+			out_peers: 1,
+			bootnodes: vec![bootnode.clone()],
+			reserved_only: false,
+			reserved_nodes: Vec::new(),
+		};
+
+		let mut peerset = Peerset::from_config(config);
+		peerset.incoming(incoming.clone(), ii);
+		peerset.incoming(incoming2.clone(), ii2);
+		peerset.incoming(incoming.clone(), ii3);
+
+		assert_messages(peerset, vec![
+			Message::Connect(bootnode.clone()),
+			Message::Accept(ii.clone()),
+			Message::Reject(ii2),
+			Message::Reject(ii3),
+		]);
 	}
 
 	#[test]
