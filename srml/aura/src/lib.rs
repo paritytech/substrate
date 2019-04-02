@@ -60,10 +60,6 @@
 //! See the `tests.rs` file in this module's directory for other simple code snippets that may make this module's
 //! functionalities clearer.
 //!
-//! ### Example from SRML
-//!
-//! This module is not used in other Substrate Runtime Module Libraries.
-//!
 //! ## Related Modules
 //!
 //! - [`staking`](../srml_staking/index.html): The staking module is called in aura to enforce slashing
