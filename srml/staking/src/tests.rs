@@ -1519,7 +1519,7 @@ fn phragmen_election_works_with_post_processing() {
 		assert_eq!(winner_10.exposure.others[1].value, 50);
 
 		assert_eq!(winner_30.exposure.total, 1000 + 525);
-		assert_eq!(winner_30.score, PerU128::from_max_value(253136882709478612983231990082956369));
+		assert_eq!(winner_30.score, PerU128::from_max_value(253136882709478612992230401826229321));
 		assert_eq!(winner_30.exposure.others[0].value, 525);
 	})
 }

@@ -24,7 +24,7 @@ use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
 type Fraction = PerU128;
 type ExtendedBalance = u128;
-const SCALE_FACTOR_64: u128 = u64::max_value() as u128;
+const SCALE_FACTOR_64: u128 = u64::max_value() as u128 + 1;
 
 /// Configure the behavior of the Phragmen election.
 /// Might be deprecated.
@@ -183,7 +183,8 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 							// Basic fixed-point shifting by 64.
 							// This will never saturate since n.budget cannot exceed u64,
 							// despite being stored in u128.
-							(n.budget.saturating_mul(SCALE_FACTOR_64)) / c.approval_stake
+							// Note that the order of operators is crucially important.
+							n.budget.saturating_mul(SCALE_FACTOR_64) / c.approval_stake
 							* (*n.load / SCALE_FACTOR_64);
 						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
 					}
@@ -220,7 +221,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who) {
 					e.elected = true;
-					e.backing_stake = n.budget.saturating_mul(*e.load) / (*n.load).max(1);
+					e.backing_stake = n.budget.saturating_mul(*e.load) / n.load.max(1);
 					c.backing_stake = c.backing_stake.saturating_add(e.backing_stake);
 					if c.who != n.who {
 						// Only update the exposure if this vote is from some other account.
