@@ -178,7 +178,12 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for e in &n.edges {
 					let c = &mut candidates[e.candidate_index];
 					if !c.elected && !c.approval_stake.is_zero() {
-						let temp = n.budget.saturating_mul(*n.load) / c.approval_stake;
+						// THIS SATURATES!
+						// let temp = n.budget.saturating_mul(*n.load) / c.approval_stake;
+						let temp =
+							// This will never saturate
+							((n.budget.saturating_mul(u64::max_value() as u128)) / c.approval_stake)
+							* (*n.load/u64::max_value() as u128);
 						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
 					}
 				}
@@ -214,8 +219,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				// if the target of this vote is among the winners, otherwise let go.
 				if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == e.who) {
 					e.elected = true;
-					// NOTE: for now, always divide last to avoid collapse to zero.
-					e.backing_stake = n.budget.saturating_mul(*e.load) / n.load.max(1);
+					e.backing_stake = n.budget.saturating_mul(*e.load) / (*n.load).max(1);
 					c.backing_stake = c.backing_stake.saturating_add(e.backing_stake);
 					if c.who != n.who {
 						// Only update the exposure if this vote is from some other account.
