@@ -17,8 +17,8 @@
 //! # Timestamp Module
 //!
 //! The timestamp module provides functionality to get and set the on-chain time.
-//! To use it in your module, you need to implement the timestamp [`Trait`].
-//! The supported dispatchable functions are documented as part of the [`Call`] enum.
+//! To use it in your module, you need to implement the timestamp [`Trait`](./trait.Trait.html).
+//! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
 //!
 //! ## Overview
 //!
@@ -76,7 +76,7 @@
 //! }
 //! ```
 //!
-//! ### Example from SRML
+//! ### Example from the SRML
 //!
 //! The [session module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses
 //! the timestamp module for session management.
