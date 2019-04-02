@@ -24,7 +24,7 @@ use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, CheckedAdd, Bounded};
+use runtime_primitives::traits::{As, CheckedMul, Bounded};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -129,10 +129,9 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			DepositEvent(byte_count) => metadata.
-				event_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))
-				.and_then(|e| e.checked_add(&metadata.event_data_base_cost)),
+			DepositEvent(byte_count) => metadata
+				.event_data_per_byte_cost
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
 			ComputedDispatchFee(gas) => Some(gas),
 		};
 
