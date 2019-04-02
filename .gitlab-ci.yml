@@ -13,18 +13,15 @@ stages:
   - publish
   - deploy
 
-image:                             parity/rust:nightly
+image:                             parity/rust-substrate-build:stretch
 
 variables:
+  GIT_STRATEGY:                    fetch
   CI_SERVER_NAME:                  "GitLab CI"
-  CARGO_HOME:                      "${CI_PROJECT_DIR}/.cargo"
-  # have OS based build containers in the future
-  DOCKER_OS:                       "ubuntu:xenial"
+  CARGO_HOME:                      "/ci-cache/substrate/cargo/${CI_JOB_NAME}"
+  DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
 
-
-
-cache:                             {}
 
 .collect-artifacts:                &collect-artifacts
   artifacts:
@@ -32,9 +29,7 @@ cache:                             {}
     when:                          on_success
     expire_in:                     7 days
     paths:
-    - artifacts/
-
-
+      - artifacts/
 
 .kubernetes-build:                 &kubernetes-build
   tags:
@@ -42,14 +37,11 @@ cache:                             {}
   environment:
     name: parity-build
 
-
-
 #### stage:                        merge-test
 
 check-merge-conflict:
   stage:                           merge-test
   image:                           parity/tools:latest
-  cache:                           {}
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -60,15 +52,11 @@ check-merge-conflict:
   script:
     - ./scripts/gitlab/check_merge_conflict.sh
 
-
-
-
 #### stage:                        test
 
 check-runtime:
   stage:                           test
   image:                           parity/tools:latest
-  cache:                           {}
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -78,16 +66,8 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
-
-
-
 test-linux-stable:                 &test
   stage:                           test
-  cache:
-    key:                           "${CI_JOB_NAME}"
-    paths:
-      - ${CARGO_HOME}
-      - ./target
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
@@ -106,16 +86,11 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   before_script:
-   - test -d ${CARGO_HOME} -a -d ./target &&
-     echo "build cache size:" &&
-     du -h --max-depth=2 ${CARGO_HOME} ./target
-   - ./scripts/build.sh
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - time cargo test --all --release --verbose --locked
-
-
-
-
+    - sccache -s
 
 .build-only:                      &build-only
   only:
@@ -123,16 +98,10 @@ test-linux-stable:                 &test
     - tags
     - web
 
-
 #### stage:                        build
 
 build-linux-release:               &build
   stage:                           build
-  cache:
-    key:                           "${CI_JOB_NAME}"
-    paths:
-      - ${CARGO_HOME}
-      - ./target
   <<:                              *collect-artifacts
   <<:                              *build-only
   except:
@@ -141,7 +110,8 @@ build-linux-release:               &build
   tags:
     - linux-docker
   before_script:
-   - ./scripts/build.sh
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
@@ -155,11 +125,10 @@ build-linux-release:               &build
         tee ./artifacts/VERSION;
       fi
     - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
-    - echo "\n# building node-template\n"
+    - printf '\n# building node-template\n\n'
     - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
     - cp -r scripts/docker/* ./artifacts
-
-
+    - sccache -s
 
 build-rust-doc-release:            &build
   stage:                           build
@@ -174,13 +143,12 @@ build-rust-doc-release:            &build
   tags:
     - linux-docker
   script:
+    - sccache -s
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
-
-
-
+    - sccache -s
 
 #### stage:                        publish
 
@@ -188,11 +156,8 @@ build-rust-doc-release:            &build
   stage:                           publish
   dependencies:
     - build-linux-release
-  cache: {}
   <<:                              *build-only
   <<:                              *kubernetes-build
-
-
 
 publish-docker-release:
   <<:                              *publish-build
@@ -225,9 +190,6 @@ publish-docker-release:
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -not -name artifacts -delete
 
-
-
-
 publish-s3-release:
   <<:                              *publish-build
   image:                           parity/awscli:latest
@@ -248,14 +210,12 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-
-
 publish-s3-doc:
   stage:                           publish
   allow_failure:                   true
   dependencies:
     - build-rust-doc-release
-  cache: {}
+  cache:                           {}
   <<:                              *build-only
   <<:                              *kubernetes-build
   variables:
@@ -273,14 +233,9 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-
-
-
-
 .deploy-template:                  &deploy
   stage:                           deploy
   when:                            manual
-  cache:                           {}
   retry:                           1
   image:                           parity/kubectl-helm:$HELM_VERSION
   <<:                              *build-only
@@ -311,10 +266,7 @@ publish-s3-doc:
     - echo "# wait for the rollout to complete"
     - kubectl -n ${KUBE_NAMESPACE} rollout status statefulset/substrate
 
-
-
 # have environment:url eventually point to the logs
-
 
 .deploy-cibuild:                   &deploy-cibuild
   <<:                              *deploy
@@ -327,9 +279,8 @@ publish-s3-doc:
     variables:
       - $DEPLOY_TAG
 
-
-
 # have environment:url eventually point to the logs
+
 deploy-ew3:
   <<:                              *deploy-cibuild
   environment:
@@ -349,7 +300,4 @@ deploy-ue1-tag:
   <<:                              *deploy-tag
   environment:
     name: parity-prod-ue1
-
-
-
 
