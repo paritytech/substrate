@@ -1204,9 +1204,9 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(gas_meter.gas_left(), 50_000
-			- 4      // Explicit
-			- 13 - 1 // Deposit event
-			- 13     // read memory
+			- 4  // Explicit
+			- 13 // Deposit event
+			- 13 // read memory
 		);
 		assert_eq!(mock_ext.events, vec![vec![0, 1, 42, 0, 0, 0, 0, 0, 0, 0, 229, 20, 0]]);
 	}
