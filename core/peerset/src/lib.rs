@@ -52,13 +52,23 @@ impl Discovered {
 	}
 
 	/// Pops the oldest peer from the list.
-	fn pop_peer(&mut self) -> Option<(PeerId, SlotType)> {
-		match self.reserved.pop_front() {
-			Some((peer_id, _)) => Some((peer_id, SlotType::Reserved)),
-			None => {
-				let (peer_id, _) = self.common.pop_front()?;
-				Some((peer_id, SlotType::Common))
-			}
+	fn pop_peer(&mut self, reserved_only: bool) -> Option<(PeerId, SlotType)> {
+		if let Some((peer_id, _)) = self.reserved.pop_front() {
+			return Some((peer_id, SlotType::Reserved));
+		}
+
+		if reserved_only {
+			return None;
+		}
+
+		self.common.pop_front()
+			.map(|(peer_id, _)| (peer_id, SlotType::Common))
+	}
+
+	/// Marks the peer as not reserved.
+	fn mark_not_reserved(&mut self, peer_id: &PeerId) {
+		if let Some(_) = self.reserved.remove(peer_id) {
+			self.common.insert(peer_id.clone(), ());
 		}
 	}
 }
@@ -153,10 +163,10 @@ impl From<u64> for IncomingIndex {
 #[derive(Debug)]
 pub struct PeersetConfig {
 	/// Maximum number of ingoing links to peers.
-	pub in_peers: usize,
+	pub in_peers: u32,
 
 	/// Maximum number of outgoing links to peers.
-	pub out_peers: usize,
+	pub out_peers: u32,
 
 	/// List of bootstrap nodes to initialize the peer with.
 	///
@@ -244,12 +254,15 @@ impl Peerset {
 		}
 	}
 
-	fn on_remove_reserved_peer(&mut self, peer_id: &PeerId) {
-		self.data.in_slots.mark_not_reserved(peer_id);
-		self.data.out_slots.mark_not_reserved(peer_id);
-		// TODO: should we disconnect from this peer?
-		// a) always?
-		// b) only if reserved_only is set
+	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
+		self.data.in_slots.mark_not_reserved(&peer_id);
+		self.data.out_slots.mark_not_reserved(&peer_id);
+		self.data.discovered.mark_not_reserved(&peer_id);
+		if self.data.reserved_only {
+			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
+				self.message_queue.push_back(Message::Drop(peer_id))
+			}
+		}
 	}
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
@@ -276,13 +289,7 @@ impl Peerset {
 	}
 
 	fn alloc_slots(&mut self) {
-		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer() {
-			// reserved peers are always at the beginning of discovered vec
-			// if we get a common peer, that means it's a goot time to stop
-			if self.data.reserved_only && slot_type == SlotType::Common {
-				self.data.discovered.add_peer(peer_id, slot_type);
-				break;
-			}
+		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer(self.data.reserved_only) {
 			match self.data.out_slots.add_peer(peer_id.clone(), slot_type) {
 				Ok(_) => {
 					self.message_queue.push_back(Message::Connect(peer_id));
@@ -384,7 +391,7 @@ impl Stream for Peerset {
 				None => return Ok(Async::Ready(None)),
 				Some(action) => match action {
 					Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
-					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(&peer_id),
+					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
 					Action::SetReservedOnly(reserved) => self.on_set_reserved_only(reserved),
 					Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
 				}
@@ -485,7 +492,31 @@ mod tests {
 
 	#[test]
 	fn test_peerset_remove_reserved_peer() {
-		//unimplemented!();
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 2,
+			bootnodes: vec![],
+			reserved_only: false,
+			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
+		};
+
+		let (peerset, handle) = Peerset::from_config(config);
+		handle.remove_reserved_peer(reserved_peer.clone());
+
+		let peerset = assert_messages(peerset, vec![
+			Message::Connect(reserved_peer.clone()),
+			Message::Connect(reserved_peer2.clone()),
+		]);
+
+		handle.set_reserved_only(true);
+		handle.remove_reserved_peer(reserved_peer2.clone());
+
+		assert_messages(peerset, vec![
+			Message::Drop(reserved_peer),
+			Message::Drop(reserved_peer2),
+		]);
 	}
 
 	#[test]

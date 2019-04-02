@@ -52,7 +52,8 @@ pub struct Slots {
 
 impl Slots {
 	/// Creates a group of slots with a limited size.
-	pub fn new(max_slots: usize) -> Self {
+	pub fn new(max_slots: u32) -> Self {
+		let max_slots = max_slots as usize;
 		Slots {
 			max_slots,
 			slots: HashMap::with_capacity(max_slots),
@@ -66,8 +67,8 @@ impl Slots {
 
 	/// Returns Ok if we successfully connected to a given peer.
 	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> Result<(), SlotError>  {
-		if let Some(slot_type) = self.slots.get_mut(&peer_id) {
-			*slot_type = SlotType::Reserved;
+		if let Some(st) = self.slots.get_mut(&peer_id) {
+			*st = slot_type;
 			return Err(SlotError::AlreadyConnected(peer_id));
 		}
 
