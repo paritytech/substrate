@@ -68,7 +68,9 @@ impl Slots {
 	/// Returns Ok if we successfully connected to a given peer.
 	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> Result<(), SlotError>  {
 		if let Some(st) = self.slots.get_mut(&peer_id) {
-			*st = slot_type;
+			if let SlotType::Reserved = slot_type {
+				*st = SlotType::Reserved;
+			}
 			return Err(SlotError::AlreadyConnected(peer_id));
 		}
 

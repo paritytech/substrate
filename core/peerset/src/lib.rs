@@ -41,6 +41,11 @@ impl Discovered {
 		self.reserved.contains_key(peer_id) || self.common.contains_key(peer_id)
 	}
 
+	/// Returns true if given node is reserved.
+	fn is_reserved(&self, peer_id: &PeerId) -> bool {
+		self.reserved.contains_key(peer_id)
+	}
+
 	/// Adds new peer of a given type.
 	fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) {
 		if !self.contains(&peer_id) {
@@ -65,11 +70,17 @@ impl Discovered {
 			.map(|(peer_id, _)| (peer_id, SlotType::Common))
 	}
 
-	/// Marks the peer as not reserved.
+	/// Marks the node as not reserved.
 	fn mark_not_reserved(&mut self, peer_id: &PeerId) {
 		if let Some(_) = self.reserved.remove(peer_id) {
 			self.common.insert(peer_id.clone(), ());
 		}
+	}
+
+	/// Removes the node from the list.
+	fn remove_peer(&mut self, peer_id: &PeerId) {
+		self.reserved.remove(peer_id);
+		self.common.remove(peer_id);
 	}
 }
 
@@ -239,6 +250,7 @@ impl Peerset {
 
 		match self.data.out_slots.add_peer(peer_id.clone(), SlotType::Reserved) {
 			Ok(_) => {
+				self.data.discovered.remove_peer(&peer_id);
 				self.message_queue.push_back(Message::Connect(peer_id));
 			},
 			Err(SlotError::AlreadyConnected(_)) => {
@@ -318,18 +330,33 @@ impl Peerset {
 	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
 	/// peerset is already connected to, in which case it must not answer.
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
-		// check if we are already connected to this peer
-		// TODO: should we take into account `reserved_only`?
-		if self.data.out_slots.contains(&peer_id) {
+		// if `reserved_only` is set, but this peer is not a part of our discovered list,
+		// a) it is not reserved, so we reject the connection
+		// b) we are already connected to it, so we reject the connection
+		if self.data.reserved_only && !self.data.discovered.is_reserved(&peer_id) {
 			self.message_queue.push_back(Message::Reject(index));
+			return;
 		}
 
-		match self.data.in_slots.add_peer(peer_id, SlotType::Common) {
+		// check if we are already connected to this peer
+		if self.data.out_slots.contains(&peer_id) {
+			self.message_queue.push_back(Message::Reject(index));
+			return;
+		}
+
+		let slot_type = if self.data.reserved_only {
+			SlotType::Reserved
+		} else {
+			SlotType::Common
+		};
+
+		match self.data.in_slots.add_peer(peer_id.clone(), slot_type) {
 			Ok(_) => {
+				self.data.discovered.remove_peer(&peer_id);
 				self.message_queue.push_back(Message::Accept(index));
 			},
 			Err(SlotError::MaxConnections(peer_id)) => {
-				self.data.discovered.add_peer(peer_id, SlotType::Common);
+				self.data.discovered.add_peer(peer_id, slot_type);
 				self.message_queue.push_back(Message::Reject(index));
 			},
 			_ => {
