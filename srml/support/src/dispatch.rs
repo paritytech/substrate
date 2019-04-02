@@ -708,6 +708,7 @@ macro_rules! decl_module {
 		$(#[$attr])*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
 			#[doc(hidden)]
+			#[codec(skip)]
 			__PhantomItem(::core::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
 			$(
 				#[allow(non_camel_case_types)]
@@ -1237,9 +1238,25 @@ mod tests {
 
 	#[test]
 	fn compact_attr() {
-		let call: Call<TraitImpl> = Call::aux_1(0);
+		let call: Call<TraitImpl> = Call::aux_1(1);
 		let encoded = call.encode();
-		assert_eq!(encoded.len(), 2);
+		assert_eq!(2, encoded.len());
+		assert_eq!(vec![1, 4], encoded);
+	}
+
+	#[test]
+	fn encode_is_correct_and_decode_works() {
+		let call: Call<TraitImpl> = Call::aux_0();
+		let encoded = call.encode();
+		assert_eq!(vec![0], encoded);
+		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(decoded, call);
+
+		let call: Call<TraitImpl> = Call::aux_2(32, "hello".into());
+		let encoded = call.encode();
+		assert_eq!(vec![2, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
+		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(decoded, call);
 	}
 
 	#[test]
