@@ -181,9 +181,8 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 					if !c.elected && !c.approval_stake.is_zero() {
 						let temp =
 							// Basic fixed-point shifting by 64.
-							// This will never saturate since n.budget cannot exceed u64,
-							// despite being stored in u128.
-							// Note that the order of operators is crucially important.
+							// This will never saturate since n.budget cannot exceed u64,despite being stored in u128.
+							// Note that left-associativity in operators precedence is crucially important here.
 							n.budget.saturating_mul(SCALE_FACTOR_64) / c.approval_stake
 							* (*n.load / SCALE_FACTOR_64);
 						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
