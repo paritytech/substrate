@@ -24,7 +24,7 @@ use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberF
 use consensus::import_queue::ImportQueue;
 use crate::message::{self, Message};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
-use crate::consensus_gossip::ConsensusGossip;
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::OnDemandService;
 use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
@@ -237,7 +237,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, bool),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	/// Tell protocol to abort sync (does not stop protocol).
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -377,8 +377,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, force) => {
-				self.gossip_consensus_message(topic, engine_id, message, force)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) => {
+				self.gossip_consensus_message(topic, engine_id, message, recipient)
 			}
 			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
 				self.sync.blocks_processed(hashes, has_error);
@@ -523,14 +523,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
 		message: Vec<u8>,
-		force: bool,
+		recipient: GossipMessageRecipient,
 	) {
-		self.consensus_gossip.multicast(
-			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
-			topic,
-			ConsensusMessage{ data: message, engine_id },
-			force,
-		);
+		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		let message = ConsensusMessage { data: message, engine_id };
+		match recipient {
+			GossipMessageRecipient::BroadcastToAll =>
+				self.consensus_gossip.multicast(&mut context, topic, message, true),
+			GossipMessageRecipient::BroadcastNew =>
+				self.consensus_gossip.multicast(&mut context, topic, message, false),
+			GossipMessageRecipient::Peer(who) =>
+				self.send_message(who, GenericMessage::Consensus(message)),
+		}
 	}
 
 	/// Called when a new peer is connected
@@ -669,7 +673,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	fn tick(&mut self) {
-		self.consensus_gossip.collect_garbage();
+		self.consensus_gossip.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand
