@@ -23,11 +23,12 @@ pub use inherents::{InherentData, CheckInherentsResult};
 
 decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait BlockBuilder {
 		/// Apply the given extrinsics.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.
+		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics. The inherent data will vary from chain to chain.
 		fn inherent_extrinsics(inherent: InherentData) -> Vec<<Block as BlockT>::Extrinsic>;

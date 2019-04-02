@@ -37,7 +37,7 @@ use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, Sh
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::blockchain::ProvideCache;
-use client::runtime_api::ApiExt;
+use client::runtime_api::{ApiExt, Core as CoreApi};
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
@@ -79,9 +79,7 @@ pub trait Network: Clone {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<AuthorityId<P>>
-	where P::Public: Clone,
-{
+fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
@@ -90,10 +88,9 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 
 	let current_author = authorities.get(idx as usize)
 		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed")
-		.clone();
+				this is a valid index; qed");
 
-	Some(current_author.clone())
+	Some(current_author)
 }
 
 fn duration_now() -> Option<Duration> {
@@ -235,13 +232,12 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<I::Error>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	P::Signature: Encode,
 	SO: SyncOracle + Send + Sync + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
+	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
@@ -283,10 +279,9 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 	P: Pair + Send + Sync + 'static,
 	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	P::Signature: Encode,
-	Error: From<I::Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
+	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
 
@@ -336,7 +331,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 		let maybe_author = slot_author::<P>(slot_num, &authorities);
 		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
-			Some(author) => if author == public_key {
+			Some(author) => if author == &public_key {
 				debug!(
 					target: "aura", "Starting authorship at slot {}; timestamp = {}",
 					slot_num,
@@ -437,7 +432,9 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 }
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
-/// if it's successful, returns the pre-header, the slot number, and the signat.
+/// if it's successful, returns the pre-header and the digest item containing the seal.
+///
+/// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(deprecated)]
@@ -447,9 +444,9 @@ fn check_header<B: Block, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	allow_old_seals: bool,
-) -> Result<CheckedHeader<B::Header, P::Signature>, String>
+) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Public: Clone + AsRef<P::Public>,
+		P::Public: AsRef<P::Public>,
 		P::Signature: Decode,
 {
 	let digest_item = match header.digest_mut().pop() {
@@ -475,7 +472,7 @@ fn check_header<B: Block, P: Pair>(
 		// chain state.
 		let expected_author = match slot_author::<P>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
-			Some(author) => author
+			Some(author) => author,
 		};
 
 		let pre_hash = header.hash();
@@ -483,7 +480,7 @@ fn check_header<B: Block, P: Pair>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			Ok(CheckedHeader::Checked(header, slot_num, sig))
+			Ok(CheckedHeader::Checked(header, digest_item))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -617,8 +614,9 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 			self.allow_old_seals,
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, slot_num, sig) => {
-				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
+			CheckedHeader::Checked(pre_header, seal) => {
+				let (slot_num, _) = seal.as_aura_seal()
+					.expect("check_header always returns a seal digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -653,7 +651,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
-					post_digests: vec![item],
+					post_digests: vec![seal],
 					body,
 					finalized: false,
 					justification,
@@ -687,6 +685,7 @@ impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
 	}
 }
 
+#[allow(deprecated)]
 fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
@@ -694,10 +693,15 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 {
 	client
 		.cache()
-		.and_then(|cache| cache.get_at(well_known_cache_keys::AUTHORITIES, at)
+		.and_then(|cache| cache.get_at(&well_known_cache_keys::AUTHORITIES, at)
 			.and_then(|v| Decode::decode(&mut &v[..])))
-		.or_else(|| client.runtime_api().authorities(at).ok())
-		.ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
+		.or_else(|| {
+			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
+				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
+			} else {
+				CoreApi::authorities(&*client.runtime_api(), at).ok()
+			}
+		}).ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.

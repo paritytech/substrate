@@ -70,8 +70,8 @@ pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
 }
 
 /// Generates a name for a method that needs to be implemented in the runtime for the client side.
-pub fn generate_method_runtime_api_impl_name(method: &Ident) -> Ident {
-	Ident::new(&format!("{}_runtime_api_impl", method.to_string()), Span::call_site())
+pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> Ident {
+	Ident::new(&format!("{}_{}_runtime_api_impl", trait_, method), Span::call_site())
 }
 
 /// Get the type of a `syn::ReturnType`.
@@ -157,4 +157,14 @@ pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
 /// Generates the name for the native call generator function.
 pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
 	Ident::new(&format!("{}_native_call_generator", fn_name.to_string()), Span::call_site())
+}
+
+/// Generates the name for the call api at function.
+pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
+	Ident::new(&format!("{}_call_api_at", fn_name.to_string()), Span::call_site())
+}
+
+/// Prefix the given function with the trait name.
+pub fn prefix_function_with_trait<F: ToString>(trait_: &Ident, function: &F) -> String {
+	format!("{}_{}", trait_.to_string(), function.to_string())
 }

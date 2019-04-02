@@ -21,6 +21,7 @@ use std::sync::Arc;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
+use consensus::well_known_cache_keys;
 
 use crate::error::{ErrorKind, Result};
 
@@ -100,7 +101,7 @@ pub trait ProvideCache<Block: BlockT> {
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns cached value by the given key.
-	fn get_at(&self, key: &[u8], block: &BlockId<Block>) -> Option<Vec<u8>>;
+	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<Vec<u8>>;
 }
 
 /// Blockchain info

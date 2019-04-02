@@ -23,6 +23,7 @@ use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, Childr
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
+use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
 
@@ -75,7 +76,7 @@ pub trait BlockImportOperation<Block, H> where
 	) -> error::Result<()>;
 
 	/// Update cached data.
-	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>);
+	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>);
 	/// Inject storage data into the database.
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.

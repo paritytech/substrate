@@ -55,6 +55,7 @@ use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
+use consensus_common::well_known_cache_keys;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -313,7 +314,7 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn update_cache(&mut self, _cache: HashMap<Vec<u8>, Vec<u8>>) {
+	fn update_cache(&mut self, _cache: HashMap<well_known_cache_keys::Id, Vec<u8>>) {
 		// Currently cache isn't implemented on full nodes.
 	}
 

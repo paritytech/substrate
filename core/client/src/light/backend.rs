@@ -34,6 +34,7 @@ use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
+use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
@@ -46,7 +47,7 @@ pub struct Backend<S, F, H> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F, H> {
 	header: Option<Block::Header>,
-	cache: HashMap<Vec<u8>, Vec<u8>>,
+	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
@@ -254,7 +255,7 @@ where
 		Ok(())
 	}
 
-	fn update_cache(&mut self, cache: HashMap<Vec<u8>, Vec<u8>>) {
+	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>) {
 		self.cache = cache;
 	}
 
