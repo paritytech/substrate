@@ -25,6 +25,10 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
 
+use primitives::Blake2Hasher;
+use trie_db::{TrieMut, Trie};
+use substrate_trie::{TrieDB, TrieDBMut, PrefixedMemoryDB};
+
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
 	impl_runtime_apis,
@@ -232,6 +236,8 @@ cfg_if! {
 				fn function_signature_changed() -> u64;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
+				/// trie no_std testing
+				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 			}
@@ -254,6 +260,8 @@ cfg_if! {
 				fn function_signature_changed() -> Vec<u64>;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
+				/// trie no_std testing
+				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 			}
@@ -280,6 +288,37 @@ fn benchmark_add_one(i: u64) -> u64 {
 /// The `benchmark_add_one` function as function pointer.
 #[cfg(not(feature = "std"))]
 static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction::new(benchmark_add_one);
+
+fn code_using_trie() -> u64 {
+	let pairs = [
+		(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
+		(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
+	].to_vec();
+
+	let mut mdb = PrefixedMemoryDB::default();
+	let mut root = rstd::default::Default::default();
+	let _ = {
+		let v = &pairs;
+		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+		for i in 0..v.len() {
+			let key: &[u8]= &v[i].0;
+			let val: &[u8] = &v[i].1;
+			t.insert(key, val).expect("static input");
+		}
+		t
+	};
+
+	let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).expect("on memory with static content");
+
+	let iter = trie.iter().expect("static input");
+	let mut iter_pairs = Vec::new();
+	for pair in iter {
+		let (key, value) = pair.expect("on memory with static content");
+		iter_pairs.push((key, value.to_vec()));
+	}
+	iter_pairs.len() as u64
+}
+
 
 cfg_if! {
 	if #[cfg(feature = "std")] {
@@ -367,6 +406,11 @@ cfg_if! {
 				fn fail_on_wasm() -> u64 {
 					1
 				}
+
+				fn use_trie() -> u64 {
+					code_using_trie()
+				}
+
 				fn benchmark_indirect_call() -> u64 {
 					let function = benchmark_add_one;
 					(0..1000).fold(0, |p, i| p + function(i))
@@ -483,6 +527,10 @@ cfg_if! {
 					panic!("Failing because we are on wasm")
 				}
 
+				fn use_trie() -> u64 {
+					code_using_trie()
+				}
+
 				fn benchmark_indirect_call() -> u64 {
 					(0..10000).fold(0, |p, i| p + BENCHMARK_ADD_ONE.get()(i))
 				}
@@ -491,6 +539,8 @@ cfg_if! {
 					(0..10000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
 			}
+
+
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
