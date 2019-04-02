@@ -17,7 +17,7 @@
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, RuntimeApiInfo};
 use state_machine::{
 	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy, NeverOffchainExt,
 };
@@ -28,6 +28,7 @@ use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, Offchain
 
 use crate::backend;
 use crate::error;
+use crate::runtime_api::Core as CoreApi;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -220,7 +221,15 @@ where
 		mut side_effects_handler: Option<&mut O>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
-		if method != "Core_initialize_block" && initialized_block.map(|id| id != *at).unwrap_or(true) {
+
+		let core_version = self.runtime_version(at)?.apis.iter().find(|a| a.0 == CoreApi::<Block>::ID).map(|a| a.1);
+		let init_block_function = if core_version < Some(2) {
+			"Core_initialise_block"
+		} else {
+			"Core_initialize_block"
+		};
+
+		if method != init_block_function && initialized_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
 			state_machine::new(
 				&state,
@@ -228,7 +237,7 @@ where
 				side_effects_handler.as_mut().map(|x| &mut **x),
 				changes,
 				&self.executor,
-				"Core_initialize_block",
+				init_block_function,
 				&header.encode(),
 			).execute_using_consensus_failure_handler::<_, R, fn() -> _>(
 				execution_manager.clone(),
@@ -253,7 +262,7 @@ where
 		).map(|(result, _, _)| result)?;
 
 		// If the method is `initialize_block` we need to set the `initialized_block`
-		if method == "Core_initialize_block" {
+		if method == init_block_function {
 			*initialized_block = Some(*at);
 		}
 
@@ -265,8 +274,7 @@ where
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
-		self.executor.runtime_version(&mut ext)
-			.ok_or(error::ErrorKind::VersionInvalid.into())
+		self.executor.runtime_version(&mut ext).ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<

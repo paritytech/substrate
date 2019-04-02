@@ -190,7 +190,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId) {
-		debug!(target: "sub-libp2p", "Disconnecting {:?} by request from the external API", peer_id);
+		debug!(target: "sub-libp2p", "External API => Disconnect {:?}", peer_id);
 		self.disconnect_peer_inner(peer_id, None);
 	}
 
@@ -302,6 +302,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			return;
 		}
 
+		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
