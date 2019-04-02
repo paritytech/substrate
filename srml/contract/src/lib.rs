@@ -506,8 +506,11 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte returned.
 	pub return_data_per_byte_cost: Gas,
 
-	/// Gas cost per one byte deposit in event.
+	/// Gas cost to deposit an event; the per-byte portion.
 	pub event_data_per_byte_cost: Gas,
+
+	/// Gas cost to deposit an event; the base.
+	pub event_data_base_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
@@ -535,6 +538,7 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),
 			event_data_per_byte_cost: Gas::sa(1),
+			event_data_base_cost: Gas::sa(1),
 			sandbox_data_read_cost: Gas::sa(1),
 			sandbox_data_write_cost: Gas::sa(1),
 			max_stack_height: 64 * 1024,
