@@ -222,13 +222,15 @@ define_env!(Env, <E: Ext>,
 	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
 		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
+		let mut key_buf = [0; 32];
+		key_buf.copy_from_slice(&key[..]);
 		let value =
 			if value_non_null != 0 {
 				Some(read_sandbox_memory(ctx, value_ptr, value_len)?)
 			} else {
 				None
 			};
-		ctx.ext.set_storage(&key, value);
+		ctx.ext.set_storage(key_buf, value);
 
 		Ok(())
 	},
@@ -241,7 +243,9 @@ define_env!(Env, <E: Ext>,
 	//   of the requested value is placed.
 	ext_get_storage(ctx, key_ptr: u32) -> u32 => {
 		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
-		if let Some(value) = ctx.ext.get_storage(&key) {
+		let mut key_buf = [0; 32];
+		key_buf.copy_from_slice(&key[..]);
+		if let Some(value) = ctx.ext.get_storage(&key_buf) {
 			ctx.scratch_buf = value;
 			Ok(0)
 		} else {
