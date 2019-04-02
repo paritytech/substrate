@@ -48,8 +48,9 @@
 //! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
 //! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
 //! deleted, then the account is said to be dead.
-//! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting in total
-//! issuance. Functions that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
+//! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
+//! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
+//! return an object of the `Imbalance` trait that must be handled.
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
