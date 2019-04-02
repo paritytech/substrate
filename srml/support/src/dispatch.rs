@@ -257,7 +257,7 @@ macro_rules! decl_module {
 		fn offchain_worker($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
+		$crate::decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system

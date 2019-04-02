@@ -758,8 +758,8 @@ dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -798,7 +798,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "fork-tree"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1072,7 +1072,7 @@ name = "impl-codec"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1872,7 +1872,7 @@ dependencies = [
  "node-executor 1.0.0",
  "node-primitives 1.0.0",
  "node-runtime 1.0.0",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
  "structopt 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1898,7 +1898,7 @@ version = "1.0.0"
 dependencies = [
  "node-primitives 1.0.0",
  "node-runtime 1.0.0",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
  "srml-balances 1.0.0",
@@ -1925,8 +1925,7 @@ dependencies = [
 name = "node-primitives"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1943,7 +1942,7 @@ dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 1.0.0",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1986,7 +1985,7 @@ dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-template-runtime 1.0.0",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "substrate-basic-authorship 1.0.0",
@@ -2008,7 +2007,7 @@ dependencies = [
 name = "node-template-runtime"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2146,17 +2145,17 @@ source = "git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7
 
 [[package]]
 name = "parity-codec"
-version = "3.2.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "arrayvec 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "parity-codec-derive"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro-crate 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2664,8 +2663,8 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3004,7 +3003,7 @@ dependencies = [
  "environmental 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libsecp256k1 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 1.0.0",
  "substrate-primitives 1.0.0",
@@ -3020,7 +3019,7 @@ dependencies = [
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3034,7 +3033,7 @@ name = "sr-sandbox"
 version = "1.0.0"
 dependencies = [
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 1.0.0",
  "substrate-primitives 1.0.0",
@@ -3054,7 +3053,7 @@ name = "sr-version"
 version = "1.0.0"
 dependencies = [
  "impl-serde 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
@@ -3066,7 +3065,7 @@ name = "srml-assets"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
@@ -3082,8 +3081,7 @@ version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3104,7 +3102,7 @@ name = "srml-balances"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3121,7 +3119,7 @@ name = "srml-consensus"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3139,7 +3137,7 @@ version = "1.0.0"
 dependencies = [
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3162,8 +3160,7 @@ name = "srml-council"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3181,7 +3178,7 @@ name = "srml-democracy"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3199,7 +3196,7 @@ name = "srml-example"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
@@ -3214,8 +3211,7 @@ name = "srml-executive"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
@@ -3233,7 +3229,7 @@ version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3250,7 +3246,7 @@ dependencies = [
 name = "srml-grandpa"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3270,8 +3266,7 @@ name = "srml-indices"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ref_thread_local 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3288,7 +3283,7 @@ dependencies = [
 name = "srml-metadata"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 1.0.0",
@@ -3301,8 +3296,7 @@ version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3320,7 +3314,7 @@ name = "srml-staking"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3341,8 +3335,7 @@ name = "srml-sudo"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
@@ -3360,7 +3353,7 @@ dependencies = [
  "bitmask 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3408,7 +3401,7 @@ dependencies = [
 name = "srml-support-test"
 version = "0.1.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3422,7 +3415,7 @@ name = "srml-system"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3438,7 +3431,7 @@ name = "srml-timestamp"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
@@ -3454,7 +3447,7 @@ name = "srml-treasury"
 version = "1.0.0"
 dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3609,7 +3602,7 @@ name = "substrate-basic-authorship"
 version = "1.0.0"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
  "substrate-consensus-aura-primitives 1.0.0",
@@ -3679,7 +3672,7 @@ dependencies = [
  "kvdb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
  "kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-api-macros 1.0.0",
  "sr-primitives 1.0.0",
@@ -3707,7 +3700,7 @@ dependencies = [
  "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru-cache 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
@@ -3729,7 +3722,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
@@ -3768,7 +3761,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
@@ -3783,7 +3776,7 @@ dependencies = [
 name = "substrate-consensus-authorities"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
@@ -3802,8 +3795,7 @@ dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-version 1.0.0",
  "substrate-inherents 1.0.0",
@@ -3820,7 +3812,7 @@ dependencies = [
  "exit-future 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rhododendron 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -3848,7 +3840,7 @@ dependencies = [
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libsecp256k1 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3873,7 +3865,7 @@ dependencies = [
  "fork-tree 1.0.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
@@ -3895,7 +3887,7 @@ dependencies = [
 name = "substrate-finality-grandpa-primitives"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
  "substrate-client 1.0.0",
@@ -3906,7 +3898,7 @@ dependencies = [
 name = "substrate-inherents"
 version = "1.0.0"
 dependencies = [
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
@@ -3953,7 +3945,7 @@ dependencies = [
  "linked_hash_set 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru-cache 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4002,7 +3994,7 @@ dependencies = [
  "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
  "substrate-consensus-common 1.0.0",
@@ -4054,7 +4046,7 @@ dependencies = [
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-serde 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4086,7 +4078,7 @@ dependencies = [
  "jsonrpc-derive 10.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-pubsub 10.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4137,7 +4129,7 @@ dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4186,7 +4178,7 @@ version = "1.0.0"
 dependencies = [
  "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 1.0.0",
 ]
@@ -4199,7 +4191,7 @@ dependencies = [
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-panic-handler 1.0.0",
  "substrate-primitives 1.0.0",
@@ -4230,7 +4222,7 @@ name = "substrate-test-client"
 version = "1.0.0"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
  "substrate-client-db 1.0.0",
@@ -4249,7 +4241,7 @@ dependencies = [
  "cfg-if 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
@@ -4278,7 +4270,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4294,7 +4286,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
@@ -4313,7 +4305,7 @@ dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hasher 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 1.0.0",
  "trie-bench 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-db 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4692,7 +4684,7 @@ dependencies = [
  "hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hasher 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-db 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-standardmap 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5288,8 +5280,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum owning_ref 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "cdf84f41639e037b484f93433aa3897863b561ed65c6e59c7073d7c561710f37"
 "checksum owning_ref 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "49a4b8ea2179e6a2e27411d3bca09ca6dd630821cf6894c6c7c8467a8ee7ef13"
 "checksum parity-bytes 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)" = "<none>"
-"checksum parity-codec 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "21c9c3a1623c71ed83964ff28cac6126e178920f7646d32c337eacb9152b2907"
-"checksum parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "864e9f66b58c0b38f0d6b511b6576afa2b678ae801b64220553bced57ac12df9"
+"checksum parity-codec 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0333b2a2973e75c3b4a9bc2a7b28dceacb56e3949907b4ce113ff3a53bcc6713"
+"checksum parity-codec-derive 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "be90eb3f1b4c02a478ccee3e0e64e5152692e7871c7258d2aa8e356359325aa7"
 "checksum parity-crypto 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "17b9db194dfbcfe3b398d63d765437a5c7232d59906e203055f0e993f6458ff1"
 "checksum parity-multiaddr 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "61ae6944d4435d41f4d0f12108c5cbb9207cbb14bc8f2b4984c6e930dc9c8e41"
 "checksum parity-multihash 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3e8eab0287ccde7821e337a124dc5a4f1d6e4c25d10cc91e3f9361615dd95076"

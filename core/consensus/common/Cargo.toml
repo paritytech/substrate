@@ -16,8 +16,7 @@ futures = "0.1"
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 tokio = "0.1.7"
-parity-codec = "3.2"
-parity-codec-derive = "3.1"
+parity-codec = { version = "3.3", features = ["derive"] }
 
 [dev-dependencies]
 test_client = { package = "substrate-test-client", path = "../../test-client" }
