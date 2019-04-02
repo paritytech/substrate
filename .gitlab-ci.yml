@@ -7,7 +7,6 @@
 
 
 stages:
-  - merge-test
   - test
   - build
   - publish
@@ -37,20 +36,6 @@ variables:
   environment:
     name: parity-build
 
-#### stage:                        merge-test
-
-check-merge-conflict:
-  stage:                           merge-test
-  image:                           parity/tools:latest
-  <<:                              *kubernetes-build
-  only:
-    - /^[0-9]+$/
-  variables:
-    GITHUB_API:                    "https://api.github.com"
-    GITLAB_API:                    "https://gitlab.parity.io/api/v4"
-    GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
-  script:
-    - ./scripts/gitlab/check_merge_conflict.sh
 
 #### stage:                        test
 
