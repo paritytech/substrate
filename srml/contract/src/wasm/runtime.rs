@@ -129,8 +129,8 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			DepositEvent(byte_count) => metadata.
-				event_data_per_byte_cost
+			DepositEvent(byte_count) => metadata
+				.event_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))
 				.and_then(|e| e.checked_add(&metadata.event_data_base_cost)),
 			ComputedDispatchFee(gas) => Some(gas),
