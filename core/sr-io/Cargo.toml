@@ -25,11 +25,10 @@ std = [
 	"primitives/std",
 	"parity-codec/std",
 	"rstd/std",
-
 	"hash-db/std",
+	"trie",
 	"environmental",
 	"substrate-state-machine",
-	"trie",
 	"libsecp256k1",
 	"tiny-keccak"
 ]
