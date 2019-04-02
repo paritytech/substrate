@@ -547,11 +547,13 @@ mod tests {
 		let bootnode = PeerId::random();
 		let incoming = PeerId::random();
 		let incoming2 = PeerId::random();
+		let incoming3 = PeerId::random();
 		let ii = IncomingIndex(1);
 		let ii2 = IncomingIndex(2);
 		let ii3 = IncomingIndex(3);
+		let ii4 = IncomingIndex(3);
 		let config = PeersetConfig {
-			in_peers: 1,
+			in_peers: 2,
 			out_peers: 1,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
@@ -560,13 +562,15 @@ mod tests {
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
 		peerset.incoming(incoming.clone(), ii);
+		peerset.incoming(incoming.clone(), ii4);
 		peerset.incoming(incoming2.clone(), ii2);
-		peerset.incoming(incoming.clone(), ii3);
+		peerset.incoming(incoming3.clone(), ii3);
 
 		assert_messages(peerset, vec![
 			Message::Connect(bootnode.clone()),
-			Message::Accept(ii.clone()),
-			Message::Reject(ii2),
+			Message::Accept(ii),
+			Message::Reject(ii4),
+			Message::Accept(ii2),
 			Message::Reject(ii3),
 		]);
 	}
@@ -602,6 +606,25 @@ mod tests {
 
 	#[test]
 	fn test_peerset_discovered() {
-		//unimplemented!();
+		let bootnode = PeerId::random();
+		let discovered = PeerId::random();
+		let discovered2 = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 0,
+			out_peers: 2,
+			bootnodes: vec![bootnode.clone()],
+			reserved_only: false,
+			reserved_nodes: vec![],
+		};
+
+		let (mut peerset, _handle) = Peerset::from_config(config);
+		peerset.discovered(discovered.clone());
+		peerset.discovered(discovered.clone());
+		peerset.discovered(discovered2);
+
+		assert_messages(peerset, vec![
+			Message::Connect(bootnode),
+			Message::Connect(discovered),
+		]);
 	}
 }
