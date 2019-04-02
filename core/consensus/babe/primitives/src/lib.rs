@@ -18,20 +18,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use substrate_client::decl_runtime_apis;
 use runtime_primitives::ConsensusEngineId;
+use substrate_client::decl_runtime_apis;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = [b'b', b'a', b'b', b'e'];
 
 decl_runtime_apis! {
-	/// API necessary for block authorship with BABE.
-	pub trait BabeApi {
-		/// Return the slot duration in seconds for BABE.
-		/// Currently, only the value provided by this type at genesis
-		/// will be used.
-		///
-		/// Dynamic slot duration may be supported in the future.
-		fn slot_duration() -> u64;
-	}
+    /// API necessary for block authorship with BABE.
+    pub trait BabeApi {
+        /// Return the slot duration in milliseconds for BABE.  Currently, only
+		/// the value provided by this type at genesis will be used.
+        ///
+        /// Dynamic slot duration may be supported in the future.
+        fn slot_duration() -> u64;
+
+        /// Return the expected block time in milliseconds for BABE.  Currently,
+		/// only the value provided by this type at genesis will be used.
+        ///
+        /// Dynamic expected block time may be supported in the future.
+		fn expected_block_time() -> u64;
+    }
 }
