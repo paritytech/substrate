@@ -39,13 +39,13 @@ use schnorrkel::{
 /// * The signature
 /// * The slot number
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BabeSealSignature {
+pub struct BabeSeal {
 	proof: VRFProof,
 	signature: LocalizedSignature,
 	slot_num: u64,
 }
 
-impl Encode for BabeSealSignature {
+impl Encode for BabeSeal {
 	fn encode(&self) -> Vec<u8> {
 		parity_codec::Encode::encode(&(
 			self.proof.to_bytes(),
@@ -56,7 +56,7 @@ impl Encode for BabeSealSignature {
 	}
 }
 
-impl Decode for BabeSealSignature {
+impl Decode for BabeSeal {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
 		let (public_key, proof, sig, slot_num): (
 			[u8; PUBLIC_KEY_LENGTH],
@@ -64,7 +64,7 @@ impl Decode for BabeSealSignature {
 			[u8; SIGNATURE_LENGTH],
 			u64,
 		) = Decode::decode(i)?;
-		Some(BabeSealSignature {
+		Some(BabeSeal {
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			signature: LocalizedSignature {
 				signature: Signature(sig),
@@ -79,21 +79,21 @@ impl Decode for BabeSealSignature {
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a slot number and a signature on the
 	/// hash.
-	fn babe_seal(signature: BabeSealSignature) -> Self;
+	fn babe_seal(signature: BabeSeal) -> Self;
 
 	/// If this item is an Babe seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabeSealSignature>;
+	fn as_babe_seal(&self) -> Option<BabeSeal>;
 }
 
 impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, Secret> {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn babe_seal(signature: BabeSealSignature) -> Self {
+	fn babe_seal(signature: BabeSeal) -> Self {
 		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
 	}
 
 	/// If this item is an BABE seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabeSealSignature> {
+	fn as_babe_seal(&self) -> Option<BabeSeal> {
 		match self {
 
 			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
