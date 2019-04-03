@@ -17,6 +17,7 @@
 //! Auxilliaries to help with managing partial changes to accounts state.
 
 use super::{CodeHash, CodeHashOf, Trait, TrieId, AccountInfoOf, BalanceOf, AccountInfo, TrieIdGenerator};
+use crate::exec::StorageKey;
 use system;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
@@ -29,7 +30,7 @@ pub struct ChangeEntry<T: Trait> {
 	balance: Option<BalanceOf<T>>,
 	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
 	code: Option<Option<CodeHash<T>>>,
-	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	storage: BTreeMap<StorageKey, Option<Vec<u8>>>,
 }
 
 // Cannot derive(Default) since it erroneously bounds T by Default.
@@ -51,7 +52,7 @@ pub trait AccountDb<T: Trait> {
 	///
 	/// Trie id can be None iff account doesn't have an associated trie id in <AccountInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>>;
+	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
 
@@ -60,7 +61,7 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
+	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, location))
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
@@ -154,7 +155,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 	pub fn set_storage(
 		&mut self,
 		account: &T::AccountId,
-		location: Vec<u8>,
+		location: StorageKey,
 		value: Option<Vec<u8>>,
 	) {
 		self.local.borrow_mut()
@@ -181,7 +182,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
+	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
 			.get(account)
