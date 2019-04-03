@@ -42,7 +42,7 @@ use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
@@ -435,22 +435,15 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 
 	/// Prune obsolete changes tries.
-	pub fn prune(&self, config: Option<ChangesTrieConfiguration>, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {
+	pub fn prune(&self, config: &ChangesTrieConfiguration, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => min_blocks_to_keep,
 			None => return,
 		};
 
-		// read configuration from the database. it is OK to do it here (without checking tx for
-		// modifications), since config can't change
-		let config = match config {
-			Some(config) => config,
-			None => return,
-		};
-
 		state_machine::prune_changes_tries(
-			&config,
+			config,
 			&*self,
 			min_blocks_to_keep,
 			&state_machine::ChangesTrieAnchorBlockId {
@@ -535,6 +528,9 @@ impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChange
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	changes_tries_storage: DbChangesTrieStorage<Block>,
+	/// None<*> means that the value hasn't been cached yet. Some(*) means that the value (either None or
+	/// Some(*)) has been cached and is valid.
+	changes_trie_config: Mutex<Option<Option<ChangesTrieConfiguration>>>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
@@ -583,6 +579,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			changes_tries_storage,
+			changes_trie_config: Mutex::new(None),
 			blockchain,
 			canonicalization_delay,
 			shared_cache: new_shared_cache(STATE_CACHE_SIZE_BYTES),
@@ -635,6 +632,26 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		inmem.finalize_block(BlockId::Hash(info.finalized_hash), None).unwrap();
 
 		inmem
+	}
+
+	/// Read (from storage or cache) changes trie config.
+	///
+	/// Currently changes tries configuration is set up once (at genesis) and could not
+	/// be changed. Thus, we'll actually read value once and then just use cached value.
+	fn changes_trie_config(&self, block: Block::Hash) -> Result<Option<ChangesTrieConfiguration>, client::error::Error> {
+		let mut cached_changes_trie_config = self.changes_trie_config.lock();
+		match cached_changes_trie_config.clone() {
+			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
+			None => {
+				use client::backend::Backend;
+				let changes_trie_config = self
+					.state_at(BlockId::Hash(block))?
+					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
+					.and_then(|v| Decode::decode(&mut &*v));
+				*cached_changes_trie_config = Some(changes_trie_config.clone());
+				Ok(changes_trie_config)
+			},
+		}
 	}
 
 	/// Handle setting head within a transaction. `route_to` should be the last
@@ -972,12 +989,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(transaction, commit);
 
-			// read config from genesis, since it is readonly atm
-			use client::backend::Backend;
-			let changes_trie_config: Option<ChangesTrieConfiguration> = self.state_at(BlockId::Hash(parent_hash))?
-				.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
-				.and_then(|v| Decode::decode(&mut &*v));
-			self.changes_tries_storage.prune(changes_trie_config, transaction, f_hash, f_num);
+			let changes_trie_config = self.changes_trie_config(parent_hash)?;
+			if let Some(changes_trie_config) = changes_trie_config {
+				self.changes_tries_storage.prune(&changes_trie_config, transaction, f_hash, f_num);
+			}
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
@@ -1682,7 +1697,7 @@ mod tests {
 
 		// now simulate finalization of block#12, causing prune of tries at #1..#4
 		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, Default::default(), 12);
+		backend.changes_tries_storage.prune(&config, &mut tx, Default::default(), 12);
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root1, &[]).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_none());
@@ -1695,7 +1710,7 @@ mod tests {
 
 		// now simulate finalization of block#16, causing prune of tries at #5..#8
 		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, Default::default(), 16);
+		backend.changes_tries_storage.prune(&config, &mut tx, Default::default(), 16);
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root5, &[]).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root6, &[]).unwrap().is_none());
@@ -1706,7 +1721,7 @@ mod tests {
 		// => no changes tries are pruned, because we never prune in archive mode
 		backend.changes_tries_storage.min_blocks_to_keep = None;
 		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(Some(config), &mut tx, Default::default(), 20);
+		backend.changes_tries_storage.prune(&config, &mut tx, Default::default(), 20);
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root9, &[]).unwrap().is_some());
 		assert!(backend.changes_tries_storage.get(&root10, &[]).unwrap().is_some());
@@ -1748,14 +1763,14 @@ mod tests {
 
 		// now simulate finalization of block#5, causing prune of trie at #1
 		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, block5, 5);
+		backend.changes_tries_storage.prune(&config, &mut tx, block5, 5);
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root1, &[]).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_some());
 
 		// now simulate finalization of block#6, causing prune of tries at #2
 		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, block6, 6);
+		backend.changes_tries_storage.prune(&config, &mut tx, block6, 6);
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root3, &[]).unwrap().is_some());
