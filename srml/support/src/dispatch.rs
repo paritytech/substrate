@@ -616,7 +616,7 @@ macro_rules! decl_module {
 	};
 
 	// Declare a `Call` variant parameter that should be encoded `compact`.
-	(@decl_call_variant_params
+	(@create_call_enum
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -629,7 +629,7 @@ macro_rules! decl_module {
 		$( $rest:tt )*
 	) => {
 		$crate::decl_module! {
-			@decl_call_variant_params
+			@create_call_enum
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
@@ -645,7 +645,7 @@ macro_rules! decl_module {
 	};
 
 	// Declare a `Call` variant parameter.
-	(@decl_call_variant_params
+	(@create_call_enum
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -657,7 +657,7 @@ macro_rules! decl_module {
 		$( $rest:tt )*
 	) => {
 		$crate::decl_module! {
-			@decl_call_variant_params
+			@create_call_enum
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
@@ -671,7 +671,7 @@ macro_rules! decl_module {
 		}
 	};
 
-	(@decl_call_variant_params
+	(@create_call_enum
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -679,11 +679,13 @@ macro_rules! decl_module {
 		{ $( $current_params:tt )* }
 		variant $fn_name:ident;
 		$(#[doc = $doc_attr:tt])*
-		variant $next_fn_name:ident;
-		$( $rest:tt )*
+		$(
+			variant $next_fn_name:ident;
+			$( $rest:tt )*
+		)?
 	) => {
 		$crate::decl_module! {
-			@decl_call_variant_params
+			@create_call_enum
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
@@ -696,19 +698,19 @@ macro_rules! decl_module {
 				),
 			}
 			{}
-			variant $next_fn_name;
-			$( $rest )*
+			$(
+				variant $next_fn_name;
+				$( $rest )*
+			)?
 		}
 	};
 
-	(@decl_call_variant_params
+	(@create_call_enum
 		$( #[$attr:meta] )*
 		$call_type:ident;
 		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
 		{ $( $generated_variants:tt )* }
-		{ $( $current_params:tt )* }
-		variant $fn_name:ident;
-		$( #[doc = $doc_attr:tt] )*
+		{}
 	) => {
 		#[derive($crate::codec::Encode, $crate::codec::Decode)]
 		$( #[$attr] )*
@@ -717,27 +719,6 @@ macro_rules! decl_module {
 			#[codec(skip)]
 			__PhantomItem($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
 			$( $generated_variants )*
-			#[allow(non_camel_case_types)]
-			$(#[doc = $doc_attr])*
-			$fn_name (
-				$( $current_params )*
-			),
-		}
-	};
-
-	(@decl_call_variant_params
-		$( #[$attr:meta] )*
-		$call_type:ident;
-		<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
-		{}
-		{}
-	) => {
-		#[derive($crate::codec::Encode, $crate::codec::Decode)]
-		$( #[$attr] )*
-		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
-			#[doc(hidden)]
-			#[codec(skip)]
-			__PhantomItem($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>, $crate::dispatch::Never),
 		}
 	};
 
@@ -809,7 +790,7 @@ macro_rules! decl_module {
 		}
 
 		$crate::decl_module! {
-			@decl_call_variant_params
+			@create_call_enum
 			$( #[$attr] )*
 			$call_type;
 			<$trait_instance: $trait_name $(<I>, $instance: $instantiable $(= $module_default_instance)? )?>
