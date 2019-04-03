@@ -649,7 +649,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
 					.and_then(|v| Decode::decode(&mut &*v));
 				*cached_changes_trie_config = Some(changes_trie_config.clone());
-				return Ok(changes_trie_config);
+				Ok(changes_trie_config)
 			},
 		}
 	}
