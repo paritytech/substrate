@@ -641,7 +641,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	fn changes_trie_config(&self, block: Block::Hash) -> Result<Option<ChangesTrieConfiguration>, client::error::Error> {
 		let mut cached_changes_trie_config = self.changes_trie_config.lock();
 		match cached_changes_trie_config.clone() {
-			Some(cached_changes_trie_config) => return Ok(cached_changes_trie_config),
+			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
 			None => {
 				use client::backend::Backend;
 				let changes_trie_config = self
