@@ -741,7 +741,7 @@ pub fn import_queue<B, C, E, P>(
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode,
 {
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.0.get())?;
+	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
 	let verifier = Arc::new(
 		AuraVerifier {
@@ -776,7 +776,7 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode,
 {
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.0.get())?;
+	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
 	let verifier = Arc::new(
 		AuraVerifier {
@@ -805,9 +805,9 @@ mod tests {
 	use client::BlockchainEvents;
 	use test_client;
 
-	type Error = ::client::error::Error;
+	type Error = client::error::Error;
 
-	type TestClient = ::client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);

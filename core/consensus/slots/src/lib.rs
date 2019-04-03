@@ -48,6 +48,10 @@ macro_rules! impl_slot {
 			{
 				$crate::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
 			}
+
+			pub fn get(&self) -> u64 {
+				self.0.get()
+			}
 		}
 	};
 }
