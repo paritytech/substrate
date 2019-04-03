@@ -34,6 +34,7 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 };
 use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
+use slots::{impl_slot, runtime_primitives, client};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::blockchain::ProvideCache;
@@ -59,7 +60,6 @@ use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS
 
 use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 
-use slots::SlotDuration as SDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
@@ -78,19 +78,7 @@ pub trait Network: Clone {
 	fn send_message(&self, slot: u64, message: Vec<u8>);
 }
 
-pub struct SlotDuration(SDuration);
-
-impl SlotDuration {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
-	pub fn get_or_compute<B: Block, C>(client: &C) -> ::client::error::Result<Self> where
-		C: client::backend::AuxStore,
-		C: ProvideRuntimeApi,
-		C::Api: AuraApi<B>,
-	{
-		SDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
-	}
-}
+impl_slot!(SlotDuration, AuraApi);
 
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {

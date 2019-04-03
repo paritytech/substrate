@@ -23,12 +23,34 @@ use std::thread;
 use futures::prelude::*;
 use futures::{Future, IntoFuture, future::{self, Either}};
 use log::{warn, debug, info};
+pub use runtime_primitives;
+pub use client;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ProvideRuntimeApi, Block, ApiRef};
 use consensus_common::SyncOracle;
 use inherents::{InherentData, InherentDataProviders};
 use client::ChainHead;
 use codec::Encode;
+
+#[macro_export]
+macro_rules! impl_slot {
+	($name:ident, $trait:ident) => {
+		pub struct $name($crate::SlotDuration);
+
+		impl $name {
+			/// Either fetch the slot duration from disk or compute it from the genesis
+			/// state.
+			pub fn get_or_compute<B: $crate::runtime_primitives::traits::Block, C>(client: &C) -> $crate::client::error::Result<Self>
+			where
+				C: $crate::client::backend::AuxStore,
+				C: $crate::runtime_primitives::traits::ProvideRuntimeApi,
+				C::Api: $trait<B>,
+			{
+				$crate::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
+			}
+		}
+	};
+}
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {

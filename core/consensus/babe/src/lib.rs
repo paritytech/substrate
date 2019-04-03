@@ -16,8 +16,9 @@
 
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
 #![forbid(warnings, unsafe_code)]
-extern crate parity_codec_derive;
-use babe_primitives::BABE_ENGINE_ID;
+
+use slots::{impl_slot, runtime_primitives};
+pub use babe_primitives::*;
 use parity_codec::{Decode, Encode, Input};
 use runtime_primitives::generic;
 use primitives::sr25519::{
@@ -31,6 +32,8 @@ use schnorrkel::{
 	vrf::{VRFProof, VRF_PROOF_LENGTH},
 	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
+
+impl_slot!(SlotDuration, BabeApi);
 
 /// A BABE seal.  It includes:
 /// 
@@ -86,7 +89,7 @@ pub trait CompatibleDigestItem: Sized {
 }
 
 impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, Secret> {
-	/// Construct a digest item which is a slot number and a signature on the
+	/// Construct a digest item which is aaAASSAAAAAASDC   a slot number and a signature on the
 	/// hash.
 	fn babe_seal(signature: BabeSeal) -> Self {
 		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
@@ -95,7 +98,6 @@ impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, Secret> {
 	/// If this item is an BABE seal, return the slot number and signature.
 	fn as_babe_seal(&self) -> Option<BabeSeal> {
 		match self {
-
 			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
 			_ => None,
 		}

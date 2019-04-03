@@ -7,10 +7,8 @@ edition = "2018"
 
 [dependencies]
 parity-codec = "3.3"
-client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
 slots = { package = "substrate-consensus-slots", path = "../slots" }

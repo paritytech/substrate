@@ -8,11 +8,9 @@ edition = "2018"
 [dependencies]
 parity-codec = "3.2"
 parity-codec-derive = "3.2"
-client = { package = "substrate-client", path = "../../client" }
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }

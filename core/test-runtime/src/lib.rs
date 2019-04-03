@@ -36,7 +36,6 @@ use substrate_client::{
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity,
 	create_runtime_str,
-	generic::BlockId,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
