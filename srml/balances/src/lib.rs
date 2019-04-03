@@ -16,13 +16,13 @@
 
 //! # Balances Module
 //!
-//! The balances module provides functionality for handling accounts and balances.
-//! To use it in your module, you need to implement the balances [`Trait`](./trait.Trait.html).
+//! The Balances module provides functionality for handling accounts and balances.
+//! To use it in your runtime, you need to implement the [`balances::Trait`](./trait.Trait.html).
 //! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
 //!
 //! ## Overview
 //!
-//! The balances module provides functions for:
+//! The Balances module provides functions for:
 //!
 //! - Getting and setting free balances.
 //! - Retrieving total, reserved and unreserved balances.
@@ -30,7 +30,6 @@
 //! - Transferring a balance between accounts (when not reserved).
 //! - Slashing an account balance.
 //! - Account creation and removal.
-//! - Looking up an index to reclaim an account.
 //! - Managing total issuance.
 //! - Setting and managing locks.
 //!
@@ -58,8 +57,8 @@
 //!
 //! ### Implementations
 //!
-//! The balances module provides implementations for the following traits. If these traits provide the functionality
-//! that you need, then you can avoid coupling with the balances module.
+//! The Balances module provides implementations for the following traits. If these traits provide the functionality
+//! that you need, then you can avoid coupling with the Balances module.
 //!
 //! - [`Currency`](../srml_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
@@ -92,11 +91,11 @@
 //!
 //! ## Usage
 //!
-//! The following examples show how to use the balances module in your custom module.
+//! The following examples show how to use the Balances module in your custom module.
 //!
 //! ### Example from the SRML
 //!
-//! The contract module uses the `Currency` trait to handle gas.
+//! The Contract module uses the `Currency` trait to handle gas.
 //!
 //! [(lib.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/lib.rs):
 //!
@@ -123,7 +122,7 @@
 //! 	// Increase total spent gas.
 //! 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 //!
-//! 	// Refund gas left by the price it was bought.
+//! 	// Refund gas left by the price it was bought at.
 //! 	let refund = <T::Gas as As<BalanceOf<T>>>::as_(gas_left) * gas_meter.gas_price;
 //! 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 //! 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
@@ -134,7 +133,7 @@
 //!
 //! ## Genesis config
 //!
-//! The balances module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
+//! The Balances module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
 //! struct for a list of attributes that can be provided.
 //!
 //! ## Related Modules

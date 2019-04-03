@@ -16,14 +16,14 @@
 
 //! # Contract Module
 //!
-//! The contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
-//! To use it in your module, you need to implement the contracts [`Trait`](./trait.Trait.html).
+//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+//! To use it in your runtime, you need to implement the [`contracts::Trait`](./trait.Trait.html).
 //!
 //! ## Overview
 //!
-//! This module extends accounts (see the balances module) to have smart-contract functionality.
-//! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract
-//! and non-contract accounts.
+//! This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
+//! be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
+//! have the ability to create smart-contracts and make calls to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
 //! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
@@ -33,9 +33,8 @@
 //! This call can alter the storage entries of the smart-contract account, create new smart-contracts,
 //! or call other smart-contracts.
 //!
-//! Finally, when the balances module determines an account is dead (i.e. account balance fell below the
-//! existential deposit), it reaps the account. This will delete the associated code and storage of the
-//! smart-contract account.
+//! Finally, when an account is reaped, its associated code and storage of the smart-contract account
+//! will also be deleted.
 //!
 //! ### Gas
 //!
@@ -70,7 +69,7 @@
 //!
 //! ## Usage
 //!
-//! The contract module is a work in progress. The following examples show how this contract module can be
+//! The Contract module is a work in progress. The following examples show how this Contract module can be
 //! used to create and call contracts.
 //!
 //! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language that enables writing
@@ -133,7 +132,7 @@ pub struct AccountInfo {
 
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context).
 /// Note that it is different than encode because trie id should be collision resistant
-/// (being a proper uniqueid).
+/// (being a proper unique identifier).
 pub trait TrieIdGenerator<AccountId> {
 	/// Get a trie id for an account, using reference to parent account trie id to ensure
 	/// uniqueness of trie id.
@@ -184,7 +183,7 @@ pub trait Trait: timestamp::Trait {
 	/// A function type that computes the fee for dispatching the given `Call`.
 	///
 	/// It is recommended (though not required) for this function to return a fee that would be taken
-	/// by the executive module for regular dispatch.
+	/// by the Executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
 
 	/// trieid id generator
@@ -218,7 +217,7 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `MakePayment` for the balances module does.
+/// the implementation of `MakePayment` for the Balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {

@@ -17,12 +17,12 @@
 //! # Staking Module
 //! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! The staking module is the means by which a set of network maintainers (known as _authorities_ in some contexts
+//! The Staking module is the means by which a set of network maintainers (known as _authorities_ in some contexts
 //! and _validators_ in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit,
 //! those funds are rewarded under normal operation but are held at pain of _slash_ (expropriation) should the
 //! staked maintainer be found not to be discharging its duties properly.
 //!
-//! You can start using the staking module by implementing the staking [`Trait`](./trait.Trait.html).
+//! To use the Staking module in your runtime, you need to implement the [`staking::Trait`](./trait.Trait.html).
 //!
 //! ## Overview
 //!
@@ -54,7 +54,7 @@
 //!
 //! #### Staking
 //!
-//! Almost any interaction with the staking module requires a process of _**bonding**_ (also known as
+//! Almost any interaction with the Staking module requires a process of _**bonding**_ (also known as
 //! being a _staker_). To become *bonded*, a fund-holding account known as the _stash account_, which holds
 //! some or all of the funds that become frozen in place as part of the staking process, is paired with an
 //! active **controller** account, which issues instructions on how they shall be used.
@@ -92,7 +92,7 @@
 //!
 //! #### Rewards and Slash
 //!
-//! The **reward and slashing** procedure is the core of the staking module, attempting to _embrace valid behavior_
+//! The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace valid behavior_
 //! while _punishing any misbehavior or lack of availability_.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is determined, a value is
@@ -115,14 +115,14 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! The dispatchable functions of the staking module enable the steps needed for entities to accept and change their
-//! role, along with some helper functions to get/set the metadata of the module.
+//! The dispatchable functions of the Staking module enable the steps needed for entities to accept and change their
+//! role, alongside some helper functions to get/set the metadata of the module.
 //!
 //! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
 //!
 //! ### Public Functions
 //!
-//! The staking module contains many public storage items and (im)mutable functions. Please refer to the
+//! The Staking module contains many public storage items and (im)mutable functions. Please refer to the
 //! [struct list](#structs) below and the [`Module`](./struct.Module.html) struct definition for more details.
 //!
 //! ## Usage
@@ -224,7 +224,7 @@
 //! can be _reported_ before it actually gets slashed via its
 //! [`unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold).
 //!
-//! On top of this, the staking module also introduces an
+//! On top of this, the Staking module also introduces an
 //! [`OfflineSlashGrace`](./struct.Module.html#method.offline_slash_grace), which applies
 //! to all validators and prevents them from getting immediately slashed.
 //!
@@ -260,14 +260,14 @@
 //!
 //! ## GenesisConfig
 //!
-//! The staking module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
+//! The Staking module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
 //! struct for a list of attributes that can be provided.
 //!
 //! ## Related Modules
 //!
 //! - [**Balances**](../srml_balances/index.html): Used to manage values at stake.
 //! - [**Session**](../srml_session/index.html): Used to manage sessions. Also, a list of new validators is
-//! stored in the session module's `Validators` at the end of each era.
+//! stored in the Session module's `Validators` at the end of each era.
 //! - [**System**](../srml_system/index.html): Used to obtain block number and time, among other details.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -493,7 +493,7 @@ decl_storage! {
 		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
-		/// but you can find them in the `sessions` module.
+		/// but you can find them in the Session module.
 		///
 		/// This is keyed by the stash account.
 		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;

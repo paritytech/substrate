@@ -16,13 +16,13 @@
 
 //! # System Module
 //!
-//! The system module provides low-level access to core types and cross-cutting utilities.
+//! The System module provides low-level access to core types and cross-cutting utilities.
 //! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
-//! To use it in your module, you need to implement the system [`Trait`](./trait.Trait.html).
+//! To use it in your module, you need to implement the [`system::Trait`](./trait.Trait.html).
 //!
 //! ## Overview
 //!
-//! The system module defines the core data types used in a Substrate runtime.
+//! The System module defines the core data types used in a Substrate runtime.
 //! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other runtime modules.
 //!
 //! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
@@ -35,7 +35,7 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! The system module does not implement any dispatchable functions.
+//! The System module does not implement any dispatchable functions.
 //!
 //! ### Public Functions
 //!
@@ -45,7 +45,7 @@
 //!
 //! ### Prerequisites
 //!
-//! Import the system module and derive your module's configuration trait from the system trait.
+//! Import the System module and derive your module's configuration trait from the system trait.
 //!
 //! ### Example - Get random seed and extrinsic count for the current block
 //!
@@ -168,7 +168,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
 
-	/// A piece of information thqt can be part of the digest (as a digest item).
+	/// A piece of information that can be part of the digest (as a digest item).
 	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
@@ -208,7 +208,7 @@ pub struct EventRecord<E: Parameter + Member> {
 }
 
 decl_event!(
-	/// Event for the system module.
+	/// Event for the System module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
@@ -217,7 +217,7 @@ decl_event!(
 	}
 );
 
-/// Origin for the system module.
+/// Origin for the System module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum RawOrigin<AccountId> {
@@ -404,7 +404,7 @@ impl<T: Trait> Module<T> {
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash, number.as_() - 1);
 
-		// We can't compute changes trie root earlier && put it to the Digest
+		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {
 			let item = RawLog::ChangesTrieRoot(storage_changes_root);

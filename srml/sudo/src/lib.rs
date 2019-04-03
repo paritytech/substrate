@@ -18,18 +18,18 @@
 //!
 //! ## Overview
 //!
-//! The sudo module allows for a single account (called the "sudo key")
+//! The Sudo module allows for a single account (called the "sudo key")
 //! to execute dispatchable functions that require a `Root` call
 //! or designate a new account to replace them as the sudo key.
 //! Only one account can be the sudo key at a time.
 //!
-//! You can start using the sudo module by implementing the sudo [`Trait`].
+//! You can start using the Sudo module by implementing the [`sudo::Trait`](./trait.Trait.html).
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! Only the sudo key can call the dispatchable functions from the sudo module.
+//! Only the sudo key can call the dispatchable functions from the Sudo module.
 //!
 //! * `sudo` - Make a `Root` call to a dispatchable function.
 //! * `set_key` - Assign a new account to be the sudo key.
@@ -40,7 +40,7 @@
 //!
 //! ### Prerequisites
 //!
-//! To use the sudo module in your runtime, you must implement the following trait in your runtime:
+//! To use the Sudo module in your runtime, you must implement the following trait in your runtime:
 //!
 //! ```ignore
 //! impl sudo::Trait for Runtime {
@@ -57,7 +57,7 @@
 //!
 //! ### Executing Privileged Functions
 //!
-//! The sudo module itself is not intended to be used within other modules.
+//! The Sudo module itself is not intended to be used within other modules.
 //! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other modules.
 //! You can execute these privileged functions by calling `sudo` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
@@ -89,7 +89,7 @@
 //!
 //! ### Example from SRML
 //!
-//! The consensus module exposes a `set_code` privileged function
+//! The Consensus module exposes a `set_code` privileged function
 //! that allows you to set the on-chain Wasm runtime code:
 //!
 //! ```ignore
@@ -101,7 +101,7 @@
 //!
 //! ## Genesis Config
 //!
-//! The balances module depends on the [genesis configuration](./struct.GenesisConfig.html).
+//! The Balances module depends on the [genesis configuration](./struct.GenesisConfig.html).
 //! You need to set an initial superuser account as the sudo `key`.
 //!
 //! ```ignore
