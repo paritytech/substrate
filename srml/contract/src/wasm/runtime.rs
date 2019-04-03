@@ -24,7 +24,7 @@ use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, Bounded};
+use runtime_primitives::traits::{As, CheckedMul, CheckedAdd, Bounded};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -108,6 +108,9 @@ pub enum RuntimeToken<Gas> {
 	ReturnData(u32),
 	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
 	ComputedDispatchFee(Gas),
+	/// The given number of bytes is read from the sandbox memory and
+	/// deposit in as an event.
+	DepositEvent(u32),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
@@ -126,6 +129,10 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+			DepositEvent(byte_count) => metadata
+				.event_data_per_byte_cost
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))
+				.and_then(|e| e.checked_add(&metadata.event_data_base_cost)),
 			ComputedDispatchFee(gas) => Some(gas),
 		};
 
@@ -579,6 +586,25 @@ define_env!(Env, <E: Ext>,
 			dest_ptr,
 			src,
 		)?;
+
+		Ok(())
+	},
+
+	// Deposit a contract event with the data buffer.
+	ext_deposit_event(ctx, data_ptr: u32, data_len: u32) => {
+		match ctx
+			.gas_meter
+			.charge(
+				ctx.schedule,
+				RuntimeToken::DepositEvent(data_len)
+			)
+		{
+			GasMeterResult::Proceed => (),
+			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
+		}
+
+		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
+		ctx.ext.deposit_event(event_data);
 
 		Ok(())
 	},
