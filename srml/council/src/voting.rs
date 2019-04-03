@@ -30,6 +30,31 @@ pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+decl_storage! {
+	trait Store for Module<T: Trait> as CouncilVoting {
+		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
+		/// Number of blocks by which to delay enactment of successful, non-unanimous-council-instigated referendum proposals.
+		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
+		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
+		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
+		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
+		pub VetoedProposal get(veto_of): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+	}
+}
+
+decl_event!(
+	pub enum Event<T> where <T as system::Trait>::Hash {
+		/// A voting tally has happened for a referendum cancellation vote.
+		/// Last three are yes, no, abstain counts.
+		TallyCancelation(Hash, u32, u32, u32),
+		/// A voting tally has happened for a referendum vote.
+		/// Last three are yes, no, abstain counts.
+		TallyReferendum(Hash, u32, u32, u32),
+	}
+);
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
@@ -110,31 +135,6 @@ decl_module! {
 		}
 	}
 }
-
-decl_storage! {
-	trait Store for Module<T: Trait> as CouncilVoting {
-		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
-		/// Number of blocks by which to delay enactment of successful, non-unanimous-council-instigated referendum proposals.
-		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
-		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
-		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
-		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
-		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
-		pub VetoedProposal get(veto_of): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where <T as system::Trait>::Hash {
-		/// A voting tally has happened for a referendum cancellation vote.
-		/// Last three are yes, no, abstain counts.
-		TallyCancelation(Hash, u32, u32, u32),
-		/// A voting tally has happened for a referendum vote.
-		/// Last three are yes, no, abstain counts.
-		TallyReferendum(Hash, u32, u32, u32),
-	}
-);
 
 impl<T: Trait> Module<T> {
 	pub fn is_vetoed<B: Borrow<T::Hash>>(proposal: B) -> bool {
