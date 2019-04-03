@@ -360,7 +360,7 @@ fn global_communication<Block: BlockT<Hash=H256>, I, O>(
 	>,
 {
 	let global_in = commits_in.map(|(round, commit)| {
-		voter::CommunicationIn::Commit(round, commit)
+		voter::CommunicationIn::Commit(round, commit, voter::Callback::Blank)
 	});
 
 	// NOTE: eventually this will also handle catch-up requests

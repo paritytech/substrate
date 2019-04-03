@@ -121,7 +121,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			voters,
 			&ancestry_chain,
 		) {
-			Ok(Some(_)) => {},
+			Ok(ref result) if result.ghost().is_some() => {},
 			_ => {
 				let msg = "invalid commit in grandpa justification".to_string();
 				return Err(ClientErrorKind::BadJustification(msg).into());
