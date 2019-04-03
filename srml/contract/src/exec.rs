@@ -89,7 +89,6 @@ pub trait Ext {
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
-
 	/// Returns the balance of the current contract.
 	///
 	/// The `value_transferred` is already added.
@@ -103,6 +102,9 @@ pub trait Ext {
 
 	/// Returns a reference to the random seed for the current block
 	fn random_seed(&self) -> &SeedOf<Self::T>;
+
+	/// Deposit an event.
+	fn deposit_event(&mut self, data: Vec<u8>);
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -616,6 +618,10 @@ where
 
 	fn now(&self) -> &T::Moment {
 		&self.timestamp
+	}
+
+	fn deposit_event(&mut self, data: Vec<u8>) {
+		self.ctx.events.push(RawEvent::Contract(self.ctx.self_account.clone(), data));
 	}
 }
 
