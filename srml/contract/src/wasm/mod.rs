@@ -203,6 +203,7 @@ mod tests {
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
+		events: Vec<Vec<u8>>,
 		next_account_id: u64,
 		random_seed: H256,
 	}
@@ -275,6 +276,10 @@ mod tests {
 
 		fn random_seed(&self) -> &H256{
 			&self.random_seed
+		}
+
+		fn deposit_event(&mut self, data: Vec<u8>) {
+			self.events.push(data)
 		}
 	}
 
@@ -1166,4 +1171,43 @@ mod tests {
 		.unwrap();
 	}
 
+	const CODE_DEPOSIT_EVENT: &str = r#"
+(module
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_deposit_event
+			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+)
+"#;
+
+	#[test]
+	fn deposit_event() {
+		// This test can fail due to the encoding changes. In case it becomes too annoying
+		// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+
+		let mut mock_ext = MockExt::default();
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		execute(
+			CODE_DEPOSIT_EVENT,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut gas_meter
+		)
+		.unwrap();
+		assert_eq!(gas_meter.gas_left(), 50_000
+			- 4      // Explicit
+			- 13 - 1 // Deposit event
+			- 13     // read memory
+		);
+		assert_eq!(mock_ext.events, vec![vec![0, 1, 42, 0, 0, 0, 0, 0, 0, 0, 229, 20, 0]]);
+	}
 }
