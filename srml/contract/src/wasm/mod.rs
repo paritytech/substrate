@@ -174,7 +174,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use substrate_primitives::H256;
-	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
+	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf, StorageKey};
 	use crate::gas::GasMeter;
 	use crate::tests::{Test, Call};
 	use wabt;
@@ -199,7 +199,7 @@ mod tests {
 	}
 	#[derive(Default)]
 	pub struct MockExt {
-		storage: HashMap<Vec<u8>, Vec<u8>>,
+		storage: HashMap<StorageKey, Vec<u8>>,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
@@ -210,11 +210,11 @@ mod tests {
 	impl Ext for MockExt {
 		type T = Test;
 
-		fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
 		fn instantiate(
 			&mut self,
@@ -568,7 +568,7 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		mock_ext
 			.storage
-			.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
+			.insert([0x11; 32], [0x22; 32].to_vec());
 
 		let mut return_buf = Vec::new();
 		execute(
