@@ -17,7 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
+use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey};
 use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
@@ -192,9 +192,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 ) -> Result<(), sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(buf.len() as u32))?;
 
-	ctx.memory().get(ptr, buf)?;
-
-	Ok(())
+	ctx.memory().get(ptr, buf).map_err(Into::into)
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -248,7 +246,7 @@ define_env!(Env, <E: Ext>,
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
 	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
-		let mut key = [0; 32];
+		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value =
 			if value_non_null != 0 {
@@ -268,7 +266,7 @@ define_env!(Env, <E: Ext>,
 	// - key_ptr: pointer into the linear memory where the key
 	//   of the requested value is placed.
 	ext_get_storage(ctx, key_ptr: u32) -> u32 => {
-		let mut key = [0; 32];
+		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
 			ctx.scratch_buf = value;
