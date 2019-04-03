@@ -190,7 +190,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
-		self.validator.note_round(round, set_id, &self.service);
+		self.validator.note_round(
+			round,
+			set_id,
+			|to, neighbor| self.service.send_message(
+				to,
+				GossipMessage::<B>::from(neighbor).encode()
+			),
+		);
 
 		let locals = local_key.and_then(|pair| {
 			let public = pair.public();
@@ -283,7 +290,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item = (u64, CompactCommit<B>), Error = Error>,
 		impl Sink<SinkItem = (u64, Commit<B>), SinkError = Error>,
 	) {
-		self.validator.note_set(set_id, &self.service);
+		self.validator.note_set(
+			set_id,
+			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
+		);
 
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = self.service.messages_for(topic)
@@ -328,7 +338,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	}
 
 	pub(crate) fn note_commit_finalized(&self, number: NumberFor<B>) {
-		self.validator.note_commit_finalized(number, &self.service);
+		self.validator.note_commit_finalized(
+			number,
+			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
+		);
 	}
 }
 

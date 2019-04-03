@@ -76,7 +76,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
 
 use crate::{CompactCommit, SignedMessage};
-use super::{Round, SetId, Network};
+use super::{Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -225,6 +225,12 @@ pub(super) enum GossipMessage<Block: BlockT> {
 	Commit(FullCommitMessage<Block>),
 	/// A neighbor packet. Not repropagated.
 	Neighbor(VersionedNeighborPacket<NumberFor<Block>>),
+}
+
+impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Block> {
+	fn from(neighbor: NeighborPacket<NumberFor<Block>>) -> Self {
+		GossipMessage::Neighbor(VersionedNeighborPacket::V1(neighbor))
+	}
 }
 
 /// Network level message with topic information.
@@ -445,7 +451,9 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	/// Note a round in a set has started.
-	fn note_round<N: Network<Block>>(&mut self, round: Round, set_id: SetId, net: &N) {
+	fn note_round<F>(&mut self, round: Round, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		if self.local_view.round == round && self.local_view.set_id == set_id {
 			return
 		}
@@ -457,24 +465,28 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.set_id = set_id;
 
 		self.live_topics.push(round, set_id);
-		self.multicast_neighbor_packet(net);
+		self.multicast_neighbor_packet(send_neighbor);
 	}
 
 	/// Note that a voter set with given ID has started. Does nothing if the last
 	/// call to the function was with the same `set_id`.
-	fn note_set<N: Network<Block>>(&mut self, set_id: SetId, net: &N) {
+	fn note_set<F>(&mut self, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		if self.local_view.set_id == set_id { return }
 
 		self.local_view.update_set(set_id);
 		self.live_topics.push(Round(0), set_id);
-		self.multicast_neighbor_packet(net);
+		self.multicast_neighbor_packet(send_neighbor);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	fn note_commit_finalized<N: Network<Block>>(&mut self, finalized: NumberFor<Block>, net: &N) {
+	fn note_commit_finalized<F>(&mut self, finalized: NumberFor<Block>, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		if self.local_view.last_commit.as_ref() < Some(&finalized) {
 			self.local_view.last_commit = Some(finalized);
-			self.multicast_neighbor_packet(net)
+			self.multicast_neighbor_packet(send_neighbor)
 		}
 	}
 
@@ -585,20 +597,17 @@ impl<Block: BlockT> Inner<Block> {
 		(neighbor_topics, Action::Discard(cb))
 	}
 
-	fn construct_neighbor_packet(&self) -> GossipMessage<Block> {
+	fn multicast_neighbor_packet<F>(&self, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		let packet = NeighborPacket {
 			round: self.local_view.round,
 			set_id: self.local_view.set_id,
 			commit_finalized_height: self.local_view.last_commit.unwrap_or(Zero::zero()),
 		};
 
-		GossipMessage::Neighbor(VersionedNeighborPacket::V1(packet))
-	}
-
-	fn multicast_neighbor_packet<N: Network<Block>>(&self, net: &N) {
-		let packet = self.construct_neighbor_packet();
 		let peers = self.peers.inner.keys().cloned().collect();
-		net.send_message(peers, packet.encode());
+		send_neighbor(peers, packet);
 	}
 }
 
@@ -614,18 +623,24 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note a round in a set has started.
-	pub(super) fn note_round<N: Network<Block>>(&self, round: Round, set_id: SetId, net: &N) {
-		self.inner.write().note_round(round, set_id, net);
+	pub(super) fn note_round<F>(&self, round: Round, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
+		self.inner.write().note_round(round, set_id, send_neighbor);
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(super) fn note_set<N: Network<Block>>(&self, set_id: SetId, net: &N) {
-		self.inner.write().note_set(set_id, net);
+	pub(super) fn note_set<F>(&self, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
+		self.inner.write().note_set(set_id, send_neighbor);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(super) fn note_commit_finalized<N: Network<Block>>(&self, finalized: NumberFor<Block>, net: &N) {
-		self.inner.write().note_commit_finalized(finalized, net);
+	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
+		self.inner.write().note_commit_finalized(finalized, send_neighbor);
 	}
 
 	fn report(&self, _who: &PeerId, _cost_benefit: i32) {
@@ -670,7 +685,14 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		let packet_data = {
 			let mut inner = self.inner.write();
 			inner.peers.new_peer(who.clone());
-			inner.construct_neighbor_packet().encode()
+
+			let packet = NeighborPacket {
+				round: inner.local_view.round,
+				set_id: inner.local_view.set_id,
+				commit_finalized_height: inner.local_view.last_commit.unwrap_or(Zero::zero()),
+			};
+
+			GossipMessage::<Block>::from(packet).encode()
 		};
 		context.send_message(who, packet_data);
 	}
@@ -801,36 +823,6 @@ mod tests {
 			justification_period: 256,
 			local_key: None,
 			name: None,
-		}
-	}
-
-	#[derive(Clone)]
-	struct StubNetwork;
-
-	impl<Block: BlockT> super::Network<Block> for StubNetwork {
-		type In = futures::stream::Empty<network_gossip::TopicNotification, ()>;
-
-		fn messages_for(&self, _topic: Block::Hash) -> Self::In {
-			futures::stream::empty()
-		}
-
-		fn register_validator(
-			&self,
-			_validator: std::sync::Arc<dyn network_gossip::Validator<Block>>,
-		) {
-
-		}
-
-		fn gossip_message(&self, _topic: Block::Hash, _data: Vec<u8>, _force: bool) {
-
-		}
-
-		fn send_message(&self, _who: Vec<network::PeerId>, _data: Vec<u8>) {
-
-		}
-
-		fn announce(&self, _block: Block::Hash) {
-
 		}
 	}
 
@@ -980,7 +972,7 @@ mod tests {
 		let set_id = 1;
 
 		for round_num in 1u64..10 {
-			val.note_round(Round(round_num), SetId(set_id), &StubNetwork);
+			val.note_round(Round(round_num), SetId(set_id), |_, _| {});
 		}
 
 		{
