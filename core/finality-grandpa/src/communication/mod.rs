@@ -295,7 +295,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							msg.message.auth_data.iter().map(move |(_, a)| {
 								format!("{}", a)
 							}).collect();
-						telemetry!(CONSENSUS_INFO; "afg.received_commit";
+						telemetry!(CONSENSUS_DEBUG; "afg.received_commit";
 							"contains_precommits_signed_by" => ?precommits_signed_by,
 							"target_number" => ?msg.message.target_number,
 							"target_hash" => ?msg.message.target_hash,
@@ -530,7 +530,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		let (round, commit) = input;
 		let round = Round(round);
 
-		telemetry!(CONSENSUS_INFO; "afg.commit_issued";
+		telemetry!(CONSENSUS_DEBUG; "afg.commit_issued";
 			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
 		);
 		let (precommits, auth_data) = commit.precommits.into_iter()
