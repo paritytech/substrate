@@ -1,0 +1,7 @@
+[package]
+name = "fees"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
