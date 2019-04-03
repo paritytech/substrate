@@ -24,10 +24,9 @@ use futures::prelude::*;
 use futures::{Future, IntoFuture, future::{self, Either}};
 use log::{warn, debug, info};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{ProvideRuntimeApi, Block};
+use runtime_primitives::traits::{ProvideRuntimeApi, Block, ApiRef};
 use consensus_common::SyncOracle;
 use inherents::{InherentData, InherentDataProviders};
-use aura_primitives::AuraApi;
 use client::ChainHead;
 use codec::Encode;
 
@@ -212,13 +211,17 @@ pub enum CheckedHeader<H, S> {
 #[derive(Clone, Copy, Debug)]
 pub struct SlotDuration(u64);
 
+pub trait SlotApi<T: Block> {
+	fn slot_duration(&self, _block: &BlockId<T>) -> ::client::error::Result<u64>;
+}
+
 impl SlotDuration {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	pub fn get_or_compute<B: Block, C>(client: &C) -> ::client::error::Result<Self> where
+	pub fn get_or_compute<B: Block, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
 		C: client::backend::AuxStore,
 		C: ProvideRuntimeApi,
-		C::Api: AuraApi<B>,
+		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> ::client::error::Result<u64>,
 	{
 		use codec::Decode;
 		const SLOT_KEY: &[u8] = b"aura_slot_duration";
@@ -231,8 +234,9 @@ impl SlotDuration {
 				).into()),
 			None => {
 				use runtime_primitives::traits::Zero;
-				let genesis_slot_duration = client.runtime_api()
-					.slot_duration(&BlockId::number(Zero::zero()))?;
+				let genesis_slot_duration = cb(
+					client.runtime_api(),
+					&BlockId::number(Zero::zero()))?;
 
 				info!(
 					"Loaded block-time = {:?} seconds from genesis on first-launch",

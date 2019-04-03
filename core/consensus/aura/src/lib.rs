@@ -57,9 +57,9 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use aura_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 
-pub use aura_slots::SlotDuration;
+use slots::SlotDuration as SDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
@@ -76,6 +76,20 @@ pub trait Network: Clone {
 
 	/// Send a message at a specific round out.
 	fn send_message(&self, slot: u64, message: Vec<u8>);
+}
+
+pub struct SlotDuration(SDuration);
+
+impl SlotDuration {
+	/// Either fetch the slot duration from disk or compute it from the genesis
+	/// state.
+	pub fn get_or_compute<B: Block, C>(client: &C) -> ::client::error::Result<Self> where
+		C: client::backend::AuxStore,
+		C: ProvideRuntimeApi,
+		C::Api: AuraApi<B>,
+	{
+		SDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
+	}
 }
 
 /// Get slot author for given block along with authorities.
@@ -203,8 +217,8 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 		force_authoring,
 	};
 
-	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
-		slot_duration,
+	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
+		slot_duration.0,
 		client,
 		Arc::new(worker),
 		sync_oracle,
@@ -249,8 +263,8 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
-	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
-		slot_duration,
+	slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
+		slot_duration.0,
 		client,
 		Arc::new(worker),
 		sync_oracle,
@@ -739,7 +753,7 @@ pub fn import_queue<B, C, E, P>(
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode,
 {
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.0.get())?;
 
 	let verifier = Arc::new(
 		AuraVerifier {
@@ -774,7 +788,7 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode,
 {
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.0.get())?;
 
 	let verifier = Arc::new(
 		AuraVerifier {

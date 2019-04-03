@@ -26,6 +26,7 @@ serde = "^1.0.89"
 log = "^0.4"
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
+slots = { package = "substrate-consensus-slots", path = "../slots"  }
 
 [dependencies.schnorrkel]
 git = "https://github.com/paritytech/schnorrkel"

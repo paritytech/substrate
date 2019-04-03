@@ -36,6 +36,7 @@ use substrate_client::{
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity,
 	create_runtime_str,
+	generic::BlockId,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
@@ -318,7 +319,6 @@ fn code_using_trie() -> u64 {
 	}
 	iter_pairs.len() as u64
 }
-
 
 cfg_if! {
 	if #[cfg(feature = "std")] {
