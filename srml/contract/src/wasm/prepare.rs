@@ -108,6 +108,8 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 	///
 	/// - 'call'
 	/// - 'deploy'
+	///
+	/// Any other exports are not allowed.
 	fn scan_exports(&self) -> Result<(), &'static str> {
 		let mut deploy_found = false;
 		let mut call_found = false;
@@ -147,7 +149,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 			match export.field() {
 				"call" => call_found = true,
 				"deploy" => deploy_found = true,
-				_ => continue,
+				_ => return Err("unknown export: expecting only deploy and call functions"),
 			}
 
 			// Then check the export kind. "call" and "deploy" are
@@ -581,6 +583,17 @@ mod tests {
 			)
 			"#,
 			Err("entry point has wrong signature")
+		);
+
+		prepare_test!(unknown_exports,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func (export "whatevs"))
+			)
+			"#,
+			Err("unknown export: expecting only deploy and call functions")
 		);
 	}
 }
