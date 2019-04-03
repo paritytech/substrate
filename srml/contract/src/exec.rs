@@ -39,6 +39,8 @@ pub struct CallReceipt {
 	pub output_data: Vec<u8>,
 }
 
+pub type StorageKey = [u8; 32];
+
 /// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
 ///
@@ -51,12 +53,12 @@ pub trait Ext {
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>>;
 
 	/// Sets the storage entry by the given key to the specified value.
 	///
 	/// If `value` is `None` then the storage entry is deleted.
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
 
 	/// Instantiate a contract from the given code.
 	///
@@ -557,14 +559,14 @@ where
 {
 	type T = T;
 
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
 	}
 
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
 		self.ctx
 			.overlay
-			.set_storage(&self.ctx.self_account, key.to_vec(), value)
+			.set_storage(&self.ctx.self_account, key, value)
 	}
 
 	fn instantiate(
