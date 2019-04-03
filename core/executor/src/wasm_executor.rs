@@ -67,10 +67,10 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 		})
 	}
 
-  // TODO EMCH this function is a huge design issue: namely not calling child fn with subtrie
-  // (yet), so when wasm call a child function it got its runtime subtrie mem then call with
-  // its storage_key and native will fetch through this function: need either to ref native subtrie
-  // or pass by value the Subtrie.
+	// TODO EMCH this function is a huge design issue: namely not calling child fn with subtrie
+	// (yet), so when wasm call a child function it got its runtime subtrie mem then call with
+	// its storage_key and native will fetch through this function: need either to ref native subtrie
+	// or pass by value the Subtrie.
 	fn with_subtrie<R>(&mut self, storage_key: &[u8], f: impl Fn(&mut Self, SubTrie) -> R) -> Option<R> {
 		self.ext.get_child_trie(storage_key).map(|s|f(self,s))
 	}
@@ -203,7 +203,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.with_subtrie(&storage_key[..], |this, subtrie|
 			this.ext.clear_child_storage(&subtrie, &key)
 		).expect("Called from a valid SubTrie instance");
-	
+
 		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {

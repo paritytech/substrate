@@ -102,8 +102,8 @@ pub trait Externalities<H: Hasher> {
 	fn get_child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
 		self.storage(&SubTrie::prefix_parent_key(storage_key))
 			.and_then(|v|{
-        SubTrie::decode_node(&v, storage_key)
-      })
+				SubTrie::decode_node(&v, storage_key)
+			})
 	}
 
 	/// put or delete child trie in top trie at a location
@@ -971,4 +971,74 @@ mod tests {
 			ExecutionStrategy::NativeElseWasm
 		).is_err());
 	}
+
+#[test]
+fn child_storage_keyspace() {
+		use crate::trie_backend::tests::test_trie;
+		//let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
+		let backend = test_trie().try_into_trie_backend().unwrap();
+		let changes_trie_storage = InMemoryChangesTrieStorage::new();
+		let mut overlay = OverlayedChanges::default();
+		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+	
+		let subtrie1 = SubTrie::new(b"atestchild".to_vec(), &b"unique1"[..]);
+		let subtrie2 = SubTrie::new(b"btestchild".to_vec(), &b"unique2"[..]);
+		let mut tr1 = {
+			let backend = test_trie().try_into_trie_backend().unwrap();
+			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let mut overlay = OverlayedChanges::default();
+			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			ext.set_child_trie(&subtrie1);
+			ext.set_child_storage(&subtrie1, b"abc".to_vec(), b"def".to_vec());
+			ext.storage_root();
+			ext.transaction().0
+		};
+		let mut tr2 = {
+			let backend = test_trie().try_into_trie_backend().unwrap();
+			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let mut overlay = OverlayedChanges::default();
+			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			ext.set_child_trie(&subtrie2);
+			ext.set_child_storage(&subtrie2, b"abc".to_vec(), b"def".to_vec());
+			ext.storage_root();
+			ext.transaction().0
+		};
+		//panic!("\n{:?}\n{:?}", tr1.drain(), tr2.drain());
+		// assert no duplicate new key (removal is fine)
+		assert!(tr1.drain().iter()
+			.zip(tr2.drain().iter())
+			.find(|((k1,(_,kind)),(k2,_))|k1 == k2 && *kind == 1).is_none());
+	}
+
+	#[test]
+	fn storage_same_branch_keyspace() {
+		use crate::trie_backend::tests::test_trie;
+		let mut tr1 = {
+			let backend = test_trie().try_into_trie_backend().unwrap();
+			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let mut overlay = OverlayedChanges::default();
+			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			ext.set_storage(b"branch".to_vec(), [40;42].to_vec());
+			ext.set_storage(b"branch1".to_vec(), [42;42].to_vec());
+			ext.storage_root();
+			ext.transaction().0
+		};
+		let mut tr2 = {
+			let backend = test_trie().try_into_trie_backend().unwrap();
+			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let mut overlay = OverlayedChanges::default();
+			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			ext.set_storage(b"Branch".to_vec(), [40;42].to_vec());
+			ext.set_storage(b"Branch1".to_vec(), [42;42].to_vec());
+			ext.storage_root();
+			ext.transaction().0
+		};
+
+		// assert no duplicate new key (removal is fine)
+		assert!( tr1.drain().iter()
+			.zip(tr2.drain().iter())
+			.find(|((k1,(_,kind)),(k2,_))|k1 == k2 && *kind == 1).is_none());
+	}
+
+
 }

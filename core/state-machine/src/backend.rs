@@ -28,6 +28,8 @@ use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_chi
 use heapsize::HeapSizeOf;
 use primitives::{KeySpace, SubTrie};
 
+// TODO EMCH would switch to BTreeMap make sense, also if keeping option<keyspace>, a top
+// field/childs would be more appropriate
 /// type alias over a in memory transaction storring struct 
 pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<SubTrie>)>;
 /// type alias over a list of in memory changes
@@ -150,9 +152,6 @@ impl error::Error for Void {
 /// tests.
 #[derive(Eq)]
 pub struct InMemory<H> {
-	// TODO EMCH would switch to BTreeMap make sense, also if keeping option<keyspace>, a top
-	// field/childs
-	// would be more appropriate -> see type of MapT
 	inner: MapTransaction,
 	_hasher: PhantomData<H>,
 }
