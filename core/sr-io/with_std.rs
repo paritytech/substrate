@@ -19,7 +19,7 @@ pub use parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{
 	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519,
-	Pair, SubTrie, KeySpace,
+	Pair, subtrie::{SubTrie, KeySpace},
 };
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3

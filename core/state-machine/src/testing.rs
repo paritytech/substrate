@@ -24,7 +24,7 @@ use trie::trie_root;
 use crate::backend::InMemory;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use primitives::SubTrie;
+use primitives::subtrie::SubTrie;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 

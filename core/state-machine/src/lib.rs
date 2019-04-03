@@ -23,7 +23,8 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt, SubTrie};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
+use primitives::subtrie::SubTrie;
 
 pub mod backend;
 mod changes_trie;
@@ -975,11 +976,6 @@ mod tests {
 #[test]
 fn child_storage_keyspace() {
 		use crate::trie_backend::tests::test_trie;
-		//let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
-		let backend = test_trie().try_into_trie_backend().unwrap();
-		let changes_trie_storage = InMemoryChangesTrieStorage::new();
-		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 	
 		let subtrie1 = SubTrie::new(b"atestchild".to_vec(), &b"unique1"[..]);
 		let subtrie2 = SubTrie::new(b"btestchild".to_vec(), &b"unique2"[..]);

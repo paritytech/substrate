@@ -23,7 +23,7 @@ use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, ch
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
 use std::collections::BTreeMap;
-use primitives::{KeySpace, SubTrie};
+use primitives::subtrie::{KeySpace, SubTrie};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {

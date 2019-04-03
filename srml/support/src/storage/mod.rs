@@ -20,7 +20,7 @@ use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
 use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
-use substrate_primitives::SubTrie;
+use substrate_primitives::subtrie::SubTrie;
 
 #[macro_use]
 pub mod generator;
@@ -573,7 +573,6 @@ pub mod child {
   pub fn set_child_trie(subtrie: &SubTrie) {
 		runtime_io::set_child_trie(subtrie)
 	}
-
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Codec + Sized>(subtrie: &SubTrie, key: &[u8]) -> Option<T> {

@@ -25,7 +25,7 @@ use trie::{Recorder, MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_r
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use primitives::{KeySpace, SubTrie};
+use primitives::subtrie::{KeySpace, SubTrie};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.

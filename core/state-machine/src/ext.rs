@@ -23,7 +23,7 @@ use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_
 use crate::{Externalities, OverlayedChanges, OffchainExt};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use primitives::SubTrie;
+use primitives::subtrie::SubTrie;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
 use heapsize::HeapSizeOf;
 

@@ -12,12 +12,13 @@ name = "bench"
 harness = false
 
 [dependencies]
-codec = { package = "parity-codec", version = "3.2" }
-hash-db = { version = "0.12", default-features = false }
-trie-db = { version = "0.12", optional = true }
-trie-root = { version = "0.12", default-features = false }
-memory-db = { version = "0.12", optional = true }
-substrate-primitives = { path = "../primitives" }
+codec = { package = "parity-codec", version = "3.2", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+hash-db = { version = "0.12.2", default-features = false }
+trie-db = { version = "0.12.2", default-features = false }
+trie-root = { version = "0.12.2", default-features = false }
+memory-db = { version = "0.12.2", default-features = false }
+substrate-primitives = { path = "../primitives", default-features = false }
 
 [dev-dependencies]
 trie-bench = { version = "0.12" }
@@ -29,8 +30,11 @@ hex-literal = "0.1.0"
 [features]
 default = ["std"]
 std = [
+	"rstd/std",
+	"codec/std",
 	"hash-db/std",
-	"memory-db",
-	"trie-db",
-	"trie-root/std"
+	"memory-db/std",
+	"trie-db/std",
+	"trie-root/std",
+	"substrate-primitives/std"
 ]

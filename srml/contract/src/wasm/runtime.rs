@@ -17,14 +17,14 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
+use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey};
 use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, Bounded};
+use runtime_primitives::traits::{As, CheckedMul, CheckedAdd, Bounded};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -108,6 +108,9 @@ pub enum RuntimeToken<Gas> {
 	ReturnData(u32),
 	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
 	ComputedDispatchFee(Gas),
+	/// The given number of bytes is read from the sandbox memory and
+	/// deposit in as an event.
+	DepositEvent(u32),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
@@ -126,6 +129,10 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+			DepositEvent(byte_count) => metadata
+				.event_data_per_byte_cost
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))
+				.and_then(|e| e.checked_add(&metadata.event_data_base_cost)),
 			ComputedDispatchFee(gas) => Some(gas),
 		};
 
@@ -168,6 +175,24 @@ fn read_sandbox_memory<E: Ext>(
 	ctx.memory().get(ptr, &mut buf)?;
 
 	Ok(buf)
+}
+
+/// Read designated chunk from the sandbox memory into the supplied buffer, consuming
+/// an appropriate amount of gas.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - requested buffer is not within the bounds of the sandbox memory.
+fn read_sandbox_memory_into_buf<E: Ext>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	buf: &mut [u8],
+) -> Result<(), sandbox::HostError> {
+	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(buf.len() as u32))?;
+
+	ctx.memory().get(ptr, buf).map_err(Into::into)
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -221,14 +246,15 @@ define_env!(Env, <E: Ext>,
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
 	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
-		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
+		let mut key: StorageKey = [0; 32];
+		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value =
 			if value_non_null != 0 {
 				Some(read_sandbox_memory(ctx, value_ptr, value_len)?)
 			} else {
 				None
 			};
-		ctx.ext.set_storage(&key, value);
+		ctx.ext.set_storage(key, value);
 
 		Ok(())
 	},
@@ -240,7 +266,8 @@ define_env!(Env, <E: Ext>,
 	// - key_ptr: pointer into the linear memory where the key
 	//   of the requested value is placed.
 	ext_get_storage(ctx, key_ptr: u32) -> u32 => {
-		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
+		let mut key: StorageKey = [0; 32];
+		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
 			ctx.scratch_buf = value;
 			Ok(0)
@@ -579,6 +606,25 @@ define_env!(Env, <E: Ext>,
 			dest_ptr,
 			src,
 		)?;
+
+		Ok(())
+	},
+
+	// Deposit a contract event with the data buffer.
+	ext_deposit_event(ctx, data_ptr: u32, data_len: u32) => {
+		match ctx
+			.gas_meter
+			.charge(
+				ctx.schedule,
+				RuntimeToken::DepositEvent(data_len)
+			)
+		{
+			GasMeterResult::Proceed => (),
+			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
+		}
+
+		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
+		ctx.ext.deposit_event(event_data);
 
 		Ok(())
 	},

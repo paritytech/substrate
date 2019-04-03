@@ -23,7 +23,7 @@ pub use rstd::{mem, slice};
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
 use hash_db::Hasher;
-use primitives::{Blake2Hasher, SubTrie};
+use primitives::{Blake2Hasher, subtrie::SubTrie};
 
 #[panic_handler]
 #[no_mangle]

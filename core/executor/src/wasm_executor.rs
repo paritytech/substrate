@@ -31,7 +31,7 @@ use crate::wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher, SubTrie};
+use primitives::{H256, Blake2Hasher, subtrie::SubTrie};
 use trie::ordered_trie_root;
 use crate::sandbox;
 use crate::allocator;

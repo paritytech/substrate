@@ -23,7 +23,7 @@ use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use primitives::SubTrie;
+use primitives::subtrie::SubTrie;
 use state_machine::{Backend as StateBackend, TrieBackend};
 use state_machine::backend::{InMemory as InMemoryState, MapTransaction};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};

@@ -18,7 +18,7 @@ use crate::utils::{
 	unwrap_or_error, generate_crate_access, generate_hidden_includes,
 	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
 	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
-	return_type_extract_type
+	return_type_extract_type, generate_call_api_at_fn_name, prefix_function_with_trait,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -84,7 +84,7 @@ fn generate_impl_call(
 
 			let output = <#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*);
 			#c::runtime_api::Encode::encode(&output)
-		).into()
+		)
 	)
 }
 
@@ -153,29 +153,22 @@ fn generate_impl_calls(
 			.ident;
 
 		for item in &impl_.items {
-			match item {
-				ImplItem::Method(method) => {
-					let impl_call = generate_impl_call(
-						&method.sig,
-						&impl_.self_ty,
-						input,
-						&impl_trait
-					)?;
+			if let ImplItem::Method(method) = item {
+				let impl_call = generate_impl_call(
+					&method.sig,
+					&impl_.self_ty,
+					input,
+					&impl_trait
+				)?;
 
-					impl_calls.push(
-						(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
-					);
-				},
-				_ => {},
+				impl_calls.push(
+					(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
+				);
 			}
 		}
 	}
 
 	Ok(impl_calls)
-}
-
-fn prefix_function_with_trait(trait_: &Ident, function: &Ident) -> String {
-	format!("{}_{}", trait_.to_string(), function.to_string())
 }
 
 /// Generate the dispatch function that is used in native to call into the runtime.
@@ -196,7 +189,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 				_ => None,
 			}
 		}
-	).into())
+	))
 }
 
 /// Generate the interface functions that are used to call into the runtime in wasm.
@@ -330,24 +323,20 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		impl<C: #crate_::runtime_api::CallRuntimeAt<#block>> RuntimeApiImpl<C> {
 			fn call_api_at<
 				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
-				NC: FnOnce() -> ::std::result::Result<R, &'static str> + ::std::panic::UnwindSafe,
+				F: FnOnce(
+					&C,
+					&mut #crate_::runtime_api::OverlayedChanges,
+					&mut Option<#crate_::runtime_api::BlockId<#block>>,
+				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>>
 			>(
 				&self,
-				at: &#block_id,
-				function: &'static str,
-				args: Vec<u8>,
-				native_call: Option<NC>,
-				context: #crate_::runtime_api::ExecutionContext
+				call_api_at: F,
 			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
 				let res = unsafe {
-					self.call.call_api_at(
-						at,
-						function,
-						args,
+					call_api_at(
+						&self.call,
 						&mut *self.changes.borrow_mut(),
-						&mut *self.initialized_block.borrow_mut(),
-						native_call,
-						context
+						&mut *self.initialized_block.borrow_mut()
 					)
 				};
 
@@ -416,10 +405,10 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	node_block: &'a TokenStream,
 	runtime_block: &'a TypePath,
 	node_block_id: &'a TokenStream,
-	impl_trait_ident: &'a Ident,
 	runtime_mod_path: &'a Path,
 	runtime_type: &'a Type,
-	trait_generic_arguments: &'a [GenericArgument]
+	trait_generic_arguments: &'a [GenericArgument],
+	impl_trait: &'a Ident,
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -438,9 +427,9 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		let block = {
 			let runtime_mod_path = self.runtime_mod_path;
 			let runtime = self.runtime_type;
-			let fn_name = prefix_function_with_trait(self.impl_trait_ident, &input.sig.ident);
 			let native_call_generator_ident =
 				generate_native_call_generator_fn_name(&input.sig.ident);
+			let call_api_at_call = generate_call_api_at_fn_name(&input.sig.ident);
 			let trait_generic_arguments = self.trait_generic_arguments;
 			let node_block = self.node_block;
 			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
@@ -475,7 +464,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(&input.sig.ident);
+			input.sig.ident = generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.decl.output);
 
 			// Generate the correct return type.
@@ -490,16 +479,22 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					#( #error )*
 
 					self.call_api_at(
-						at,
-						#fn_name,
-						params_encoded,
-						params.map(|p| {
-							#runtime_mod_path #native_call_generator_ident ::
-								<#runtime, #node_block #(, #trait_generic_arguments )*> (
-								#( #param_tuple_access ),*
+						|call_runtime_at, changes, initialized_block| {
+							#runtime_mod_path #call_api_at_call(
+								call_runtime_at,
+								at,
+								params_encoded,
+								changes,
+								initialized_block,
+								params.map(|p| {
+									#runtime_mod_path #native_call_generator_ident ::
+										<#runtime, #node_block #(, #trait_generic_arguments )*> (
+										#( #param_tuple_access ),*
+									)
+								}),
+								context,
 							)
-						}),
-						context,
+						}
 					)
 				}
 			)
@@ -541,7 +536,6 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			.last()
 			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
 			.into_value();
-		let impl_trait_ident = &impl_trait.ident;
 		let runtime_block = extract_runtime_block_ident(impl_trait_path)?;
 		let (node_block, node_block_id) = generate_node_block_and_block_id_ty(&impl_.self_ty);
 		let runtime_type = &impl_.self_ty;
@@ -558,10 +552,10 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			runtime_block,
 			node_block: &node_block,
 			node_block_id: &node_block_id,
-			impl_trait_ident: &impl_trait_ident,
 			runtime_mod_path: &runtime_mod_path,
 			runtime_type: &*runtime_type,
 			trait_generic_arguments: &trait_generic_arguments,
+			impl_trait: &impl_trait.ident,
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));

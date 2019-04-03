@@ -16,14 +16,17 @@
 
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
-// FIXME: no_std - https://github.com/paritytech/substrate/issues/1574
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 mod error;
 mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use substrate_primitives::SubTrie;
+use substrate_primitives::subtrie::{SubTrie, KeySpace, keyspace_as_prefix_alloc};
+use rstd::boxed::Box;
+use rstd::vec::Vec;
 use hash_db::Hasher;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -271,7 +274,7 @@ const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
 
 fn subtrie_root_as_hash<H: Hasher> (subtrie: &SubTrie) -> H::Out {
 	let mut root = H::Out::default();
-	let max = std::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
+	let max = rstd::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
 	root.as_mut()[..max].copy_from_slice(&subtrie.root_initial_value()[..max]);
 	root
 }
@@ -288,7 +291,7 @@ fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
 fn partial_to_key(partial: &[u8], offset: u8, big: u8) -> Vec<u8> {
 	let nibble_count = (partial.len() - 1) * 2 + if partial[0] & 16 == 16 { 1 } else { 0 };
 	let (first_byte_small, big_threshold) = (offset, (big - offset) as usize);
-	let mut output = vec![first_byte_small + nibble_count.min(big_threshold) as u8];
+	let mut output = [first_byte_small + nibble_count.min(big_threshold) as u8].to_vec();
 	if nibble_count >= big_threshold { output.push((nibble_count - big_threshold) as u8) }
 	if nibble_count % 2 == 1 {
 		output.push(partial[0] & 0x0f);
@@ -316,15 +319,15 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 // returning &'a or &'static is tricky in this one (maybe the compiler can accept both).
 // Maybe a const in Hasher trait is right (there is already a const).
 // Otherwhise store it in keyspacedb
-pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a substrate_primitives::KeySpace, H::Out);
-pub struct KeySpacedDBMut<'a, DB, H: Hasher>(&'a mut DB, &'a substrate_primitives::KeySpace, H::Out);
+pub struct KeySpacedDB<'a, DB, H: Hasher>(&'a DB, &'a KeySpace, H::Out);
+pub struct KeySpacedDBMut<'a, DB, H: Hasher>(&'a mut DB, &'a KeySpace, H::Out);
 // TODO rem in favor of using underlying Memorydb values
 const NULL_NODE: &[u8] = &[0];
 impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	H: Hasher,
 {
 	/// instantiate new keyspaced db
-	pub fn new(db: &'a DB, ks: &'a substrate_primitives::KeySpace) -> Self {
+	pub fn new(db: &'a DB, ks: &'a KeySpace) -> Self {
 		// TODO remove that it is already defined and probably stored in underlying db
 		let null_node_data = H::hash(NULL_NODE);
 		KeySpacedDB(db, ks, null_node_data) 
@@ -334,7 +337,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 	H: Hasher,
 {
 	/// instantiate new keyspaced db
-	pub fn new(db: &'a mut DB, ks: &'a substrate_primitives::KeySpace) -> Self {
+	pub fn new(db: &'a mut DB, ks: &'a KeySpace) -> Self {
 		// TODO remove that it is already defined and probably stored in underlying db
 		let null_node_data = H::hash(&[0]);
 		KeySpacedDBMut(db, ks, null_node_data) 
@@ -351,7 +354,7 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 			return Some(NULL_NODE.into());
 		}
 		// TODO use interal buffer for derive key to avoid alloc?
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
 
@@ -360,7 +363,7 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 			return true;
 		}
 	
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, &derived_prefix)
 	}
 }
@@ -370,13 +373,13 @@ impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB, K> where
 	DB: hash_db::PlainDBRef<K, V>,
 	K: AsMut<[u8]> + AsRef<[u8]> + Clone + Hasher
 {
-	fn get(&self, key: &K) -> Option<V> {
+	fn get(&self, _key: &K) -> Option<V> {
 		//self.0.get(key)
-    unimplemented!("does not avoid key collision");
+		unimplemented!("does not avoid key collision");
 	}
-	fn contains(&self, key: &K) -> bool {
+	fn contains(&self, _key: &K) -> bool {
 		//self.0.contains(&key)
-    unimplemented!("does not avoid key collision");
+		unimplemented!("does not avoid key collision");
 	}
 }
 
@@ -390,7 +393,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 			return Some(NULL_NODE.into());
 		}
 		// TODO use interal buffer for derive key to avoid alloc
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
 
@@ -399,7 +402,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 			return true;
 		}
 
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, &derived_prefix)
 	}
 
@@ -410,24 +413,24 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 
 		// TODO avoid buff for every keyspace db (using internal vec as buf)
 		let key = H::hash(value);
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		Self::emplace(self, key, &derived_prefix, value.into());
 		key
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: &[u8], value: T) {
 		if key == self.2 {
-      return;
-    }
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+			return;
+		}
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.emplace(key, &derived_prefix, value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: &[u8]) {
 		if key == &self.2 {
-      return;
-    }
-		let derived_prefix = substrate_primitives::keyspace_as_prefix_alloc(self.1, prefix);
+			return;
+		}
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.remove(key, &derived_prefix)
 	}
 }

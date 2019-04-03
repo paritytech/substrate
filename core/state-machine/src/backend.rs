@@ -26,7 +26,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root, KeySpacedDBMut};
 use heapsize::HeapSizeOf;
-use primitives::{KeySpace, SubTrie};
+use primitives::subtrie::{KeySpace, SubTrie};
 
 // TODO EMCH would switch to BTreeMap make sense, also if keeping option<keyspace>, a top
 // field/childs would be more appropriate

@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use primitives::{KeySpace, SubTrie};
+use primitives::subtrie::{KeySpace, SubTrie};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///

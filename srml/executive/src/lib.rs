@@ -52,8 +52,6 @@ mod internal {
 pub trait ExecuteBlock<Block: BlockT> {
 	/// Actually execute all transitioning for `block`.
 	fn execute_block(block: Block);
-	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
-	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>);
 }
 
 pub struct Executive<System, Block, Context, Payment, AllModules>(
@@ -74,10 +72,6 @@ impl<
 {
 	fn execute_block(block: Block) {
 		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block);
-	}
-
-	fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>) {
-		Executive::<System, Block, Context, Payment, AllModules>::execute_extrinsics_without_checks(block_number, extrinsics);
 	}
 }
 
@@ -132,18 +126,6 @@ impl<
 
 		// any final checks
 		Self::final_checks(&header);
-	}
-
-	/// Execute all extrinsics like when executing a `block`, but with dropping intial and final checks.
-	pub fn execute_extrinsics_without_checks(block_number: NumberFor<Block>, extrinsics: Vec<Block::Extrinsic>) {
-		// Make the api happy, but maybe we should not set them at all.
-		let parent_hash = <Block::Header as Header>::Hashing::hash(b"parent_hash");
-		let extrinsics_root = <Block::Header as Header>::Hashing::hash(b"extrinsics_root");
-
-		Self::initialize_block_impl(&block_number, &parent_hash, &extrinsics_root);
-
-		// execute extrinsics
-		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number);
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping

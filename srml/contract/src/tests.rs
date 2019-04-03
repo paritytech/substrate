@@ -40,7 +40,7 @@ use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
 use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(test)]
-use substrate_primitives::SubTrie;
+use substrate_primitives::subtrie::SubTrie;
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -255,7 +255,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&1, 110);
 				AccountInfoOf::<Test>::insert(1, &AccountInfo {
 					trie_id: unique_id1.to_vec(),
-					current_mem_stored: 0,
+					storage_size: 0,
 				});
 
 				child::put(&subtrie1, &b"foo".to_vec(), &b"1".to_vec());
@@ -265,7 +265,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&2, 110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
 					trie_id: unique_id2.to_vec(),
-					current_mem_stored: 0,
+					storage_size: 0,
 				});
 				child::put(&subtrie2, &b"hello".to_vec(), &b"3".to_vec());
 				child::put(&subtrie2, &b"world".to_vec(), &b"4".to_vec());
@@ -299,10 +299,15 @@ fn account_removal_removes_storage() {
 const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
+		(call $ext_deposit_event
+			(i32.const 8)
+			(i32.const 4)
+		)
 		(call $ext_return
 			(i32.const 8)
 			(i32.const 4)
@@ -318,10 +323,10 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
-const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("e6411d12daa2a19e4e9c7d8306c31c7d53a352cb8ed84385c8a1d48fc232e708");
+const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("abb4194bdea47b2904fe90b4fd674bd40d96f423956627df8c39d2b1a791ab9d");
 
 #[test]
-fn instantiate_and_call() {
+fn instantiate_and_call_and_deposit_event() {
 	let wasm = wabt::wat2wasm(CODE_RETURN_FROM_START_FN).unwrap();
 
 	with_externalities(
@@ -335,13 +340,14 @@ fn instantiate_and_call() {
 				wasm,
 			));
 
-			assert_ok!(Contract::create(
+			// Check at the end to get hash on error easily
+			let creation = Contract::create(
 				Origin::signed(ALICE),
 				100,
 				100_000,
 				HASH_RETURN_FROM_START_FN.into(),
 				vec![],
-			));
+			);
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -364,9 +370,16 @@ fn instantiate_and_call() {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4]))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
 				}
 			]);
+
+			assert_ok!(creation);
+			assert!(AccountInfoOf::<Test>::exists(BOB));
 		},
 	);
 }
