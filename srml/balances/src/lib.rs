@@ -190,6 +190,8 @@ use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 mod mock;
 mod tests;
 
+pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
@@ -480,7 +482,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		// underflow should never happen, but if it does, there's not much we can do about it.
 		if !dust.is_zero() {
-			T::DustRemoval::on_unbalanced(NegativeImbalance(dust));
+			T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
 		}
 
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
@@ -499,7 +501,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		// underflow should never happen, but it if does, there's nothing to be done here.
 		if !dust.is_zero() {
-			T::DustRemoval::on_unbalanced(NegativeImbalance(dust));
+			T::DustRemoval::on_unbalanced(NegativeImbalance::new(dust));
 		}
 
 		if Self::free_balance(who).is_zero() {
@@ -508,85 +510,145 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-/// Opaque, move-only struct with private fields that serves as a token denoting that
-/// funds have been created without any equal and opposite accounting.
-#[must_use]
-pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
+// wrapping these imbalanes in a private module is necessary to ensure absolute privacy
+// of the inner member.
+mod imbalances {
+	use super::{
+		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
+		StorageValue,
+	};
+	use rstd::mem;
 
-/// Opaque, move-only struct with private fields that serves as a token denoting that
-/// funds have been destroyed without any equal and opposite accounting.
-#[must_use]
-pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
+	/// Opaque, move-only struct with private fields that serves as a token denoting that
+	/// funds have been created without any equal and opposite accounting.
+	#[must_use]
+	pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
-impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
-	type Opposite = NegativeImbalance<T, I>;
-
-	fn zero() -> Self {
-		Self(Zero::zero())
-	}
-	fn drop_zero(self) -> result::Result<(), Self> {
-		if self.0.is_zero() {
-			Ok(())
-		} else {
-			Err(self)
+	impl<T: Subtrait<I>, I: Instance> PositiveImbalance<T, I> {
+		/// Create a new positive imbalance from a balance.
+		pub fn new(amount: T::Balance) -> Self {
+			PositiveImbalance(amount)
 		}
 	}
-	fn split(self, amount: T::Balance) -> (Self, Self) {
-		let first = self.0.min(amount);
-		let second = self.0 - first;
-		(Self(first), Self(second))
-	}
-	fn merge(self, other: Self) -> Self {
-		Self(self.0.saturating_add(other.0))
-	}
-	fn subsume(&mut self, other: Self) {
-		self.0 = self.0.saturating_add(other.0)
-	}
-	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
-		if self.0 >= other.0 {
-			Ok(Self(self.0 - other.0))
-		} else {
-			Err(NegativeImbalance(other.0 - self.0))
-		}
-	}
-	fn peek(&self) -> T::Balance {
-		self.0.clone()
-	}
-}
 
-impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
-	type Opposite = PositiveImbalance<T, I>;
+	/// Opaque, move-only struct with private fields that serves as a token denoting that
+	/// funds have been destroyed without any equal and opposite accounting.
+	#[must_use]
+	pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
-	fn zero() -> Self {
-		Self(Zero::zero())
-	}
-	fn drop_zero(self) -> result::Result<(), Self> {
-		if self.0.is_zero() {
-			Ok(())
-		} else {
-			Err(self)
+	impl<T: Subtrait<I>, I: Instance> NegativeImbalance<T, I> {
+		/// Create a new negative imbalance from a balance.
+		pub fn new(amount: T::Balance) -> Self {
+			NegativeImbalance(amount)
 		}
 	}
-	fn split(self, amount: T::Balance) -> (Self, Self) {
-		let first = self.0.min(amount);
-		let second = self.0 - first;
-		(Self(first), Self(second))
-	}
-	fn merge(self, other: Self) -> Self {
-		Self(self.0.saturating_add(other.0))
-	}
-	fn subsume(&mut self, other: Self) {
-		self.0 = self.0.saturating_add(other.0)
-	}
-	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
-		if self.0 >= other.0 {
-			Ok(Self(self.0 - other.0))
-		} else {
-			Err(PositiveImbalance(other.0 - self.0))
+
+	impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
+		type Opposite = NegativeImbalance<T, I>;
+
+		fn zero() -> Self {
+			Self(Zero::zero())
+		}
+		fn drop_zero(self) -> result::Result<(), Self> {
+			if self.0.is_zero() {
+				Ok(())
+			} else {
+				Err(self)
+			}
+		}
+		fn split(self, amount: T::Balance) -> (Self, Self) {
+			let first = self.0.min(amount);
+			let second = self.0 - first;
+
+			mem::forget(self);
+			(Self(first), Self(second))
+		}
+		fn merge(mut self, other: Self) -> Self {
+			self.0 = self.0.saturating_add(other.0);
+			mem::forget(other);
+
+			self
+		}
+		fn subsume(&mut self, other: Self) {
+			self.0 = self.0.saturating_add(other.0);
+			mem::forget(other);
+		}
+		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+			let (a, b) = (self.0, other.0);
+			mem::forget((self, other));
+
+			if a >= b {
+				Ok(Self(a - b))
+			} else {
+				Err(NegativeImbalance::new(b - a))
+			}
+		}
+		fn peek(&self) -> T::Balance {
+			self.0.clone()
 		}
 	}
-	fn peek(&self) -> T::Balance {
-		self.0.clone()
+
+	impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
+		type Opposite = PositiveImbalance<T, I>;
+
+		fn zero() -> Self {
+			Self(Zero::zero())
+		}
+		fn drop_zero(self) -> result::Result<(), Self> {
+			if self.0.is_zero() {
+				Ok(())
+			} else {
+				Err(self)
+			}
+		}
+		fn split(self, amount: T::Balance) -> (Self, Self) {
+			let first = self.0.min(amount);
+			let second = self.0 - first;
+
+			mem::forget(self);
+			(Self(first), Self(second))
+		}
+		fn merge(mut self, other: Self) -> Self {
+			self.0 = self.0.saturating_add(other.0);
+			mem::forget(other);
+
+			self
+		}
+		fn subsume(&mut self, other: Self) {
+			self.0 = self.0.saturating_add(other.0);
+			mem::forget(other);
+		}
+		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+			let (a, b) = (self.0, other.0);
+			mem::forget((self, other));
+
+			if a >= b {
+				Ok(Self(a - b))
+			} else {
+				Err(PositiveImbalance::new(b - a))
+			}
+		}
+		fn peek(&self) -> T::Balance {
+			self.0.clone()
+		}
+	}
+
+	impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
+		/// Basic drop handler will just square up the total issuance.
+		fn drop(&mut self) {
+			<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
+				|v| *v = v.saturating_add(self.0)
+			);
+		}
+	}
+
+	impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
+		/// Basic drop handler will just square up the total issuance.
+		fn drop(&mut self) {
+			<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
+				|v| *v = v.saturating_sub(self.0)
+			);
+		}
 	}
 }
 
@@ -631,20 +693,6 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
-}
-
-impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
-	/// Basic drop handler will just square up the total issuance.
-	fn drop(&mut self) {
-		<TotalIssuance<ElevatedTrait<T, I>, I>>::mutate(|v| *v = v.saturating_add(self.0));
-	}
-}
-
-impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
-	/// Basic drop handler will just square up the total issuance.
-	fn drop(&mut self) {
-		<TotalIssuance<ElevatedTrait<T, I>, I>>::mutate(|v| *v = v.saturating_sub(self.0));
-	}
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -732,7 +780,7 @@ where
 				Self::new_account(dest, new_to_balance);
 			}
 			Self::set_free_balance(dest, new_to_balance);
-			T::TransferPayment::on_unbalanced(NegativeImbalance(fee));
+			T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
 
@@ -751,7 +799,7 @@ where
 			}
 			Self::ensure_can_withdraw(who, value, reason, new_balance)?;
 			Self::set_free_balance(who, new_balance);
-			Ok(NegativeImbalance(value))
+			Ok(NegativeImbalance::new(value))
 		} else {
 			Err("too few free funds in account")
 		}
@@ -773,9 +821,9 @@ where
 			let reserved_balance = Self::reserved_balance(who);
 			let reserved_slash = cmp::min(reserved_balance, remaining_slash);
 			Self::set_reserved_balance(who, reserved_balance - reserved_slash);
-			(NegativeImbalance(free_slash + reserved_slash), remaining_slash - reserved_slash)
+			(NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash)
 		} else {
-			(NegativeImbalance(value), Zero::zero())
+			(NegativeImbalance::new(value), Zero::zero())
 		}
 	}
 
@@ -787,7 +835,7 @@ where
 			return Err("beneficiary account must pre-exist");
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
-		Ok(PositiveImbalance(value))
+		Ok(PositiveImbalance::new(value))
 	}
 
 	fn deposit_creating(
@@ -822,9 +870,9 @@ where
 			)
 		}
 		let imbalance = if original <= balance {
-			SignedImbalance::Positive(PositiveImbalance(balance - original))
+			SignedImbalance::Positive(PositiveImbalance::new(balance - original))
 		} else {
-			SignedImbalance::Negative(NegativeImbalance(original - balance))
+			SignedImbalance::Negative(NegativeImbalance::new(original - balance))
 		};
 		// If the balance is too low, then the account is reaped.
 		// NOTE: There are two balances for every account: `reserved_balance` and
@@ -892,7 +940,7 @@ where
 		let slash = cmp::min(b, value);
 		// underflow should never happen, but it if does, there's nothing to be done here.
 		Self::set_reserved_balance(who, b - slash);
-		(NegativeImbalance(slash), value - slash)
+		(NegativeImbalance::new(slash), value - slash)
 	}
 
 	fn repatriate_reserved(
