@@ -28,7 +28,7 @@ use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256, DeriveJunction};
-use parity_codec::Encode;
+use parity_codec::{Encode, Compact};
 use sr_primitives::generic::Era;
 use schnorrkel::keys::MiniSecretKey;
 use node_primitives::{Balance, Index, Hash};
@@ -227,26 +227,28 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-			let extrinsic = sign(CheckedExtrinsic {
+/*			let extrinsic = sign(CheckedExtrinsic {
 				signed: Some((signer.public(), index)),
 				function
-			}, &signer);
+			}, &signer);*/
 
-			/*let era = Era::immortal();
-			let genesis_hash: Hash = hex!["58afaad82f5a80ecdc8e974f5d88c4298947260fb05e34f84a9eed18ec5a78f9"].into();
-			let raw_payload = (index, function, era, genesis_hash);
+			let era = Era::immortal();
+			let genesis_hash: Hash = hex!["61b81c075e1e54b17a2f2d685a3075d3e5f5c7934456dd95332e68dd751a4b40"].into();
+//			let genesis_hash: Hash = hex!["58afaad82f5a80ecdc8e974f5d88c4298947260fb05e34f84a9eed18ec5a78f9"].into();
+			let raw_payload = (Compact(index), function, era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
+				println!("signing {}", HexDisplay::from(&payload));
 				signer.sign(payload)
 			});
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				raw_payload.0,
+				index,
 				raw_payload.1,
 				signer.public().into(),
 				signature.into(),
 				era,
-			);*/
+			);
 			println!("{}", hex::encode(&Encode::encode(&extrinsic.encode())));
 		}
 		("verify", Some(matches)) => {
