@@ -220,12 +220,19 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 			}
 
 			let type_idx = match import.external() {
+				&External::Table(_) => return Err("Cannot import tables"),
+				&External::Global(_) => return Err("Cannot import globals"),
 				&External::Function(ref type_idx) => type_idx,
 				&External::Memory(ref memory_type) => {
+					if import.field() != "memory" {
+						return Err("Memory import must have the field name 'memory'")
+					}
+					if imported_mem_type.is_some() {
+						return Err("Multiple memory imports defined")
+					}
 					imported_mem_type = Some(memory_type);
 					continue;
 				}
-				_ => continue,
 			};
 
 			let Type::Function(ref func_ty) = types
@@ -448,6 +455,54 @@ mod tests {
 			)
 			"#,
 			Err("Maximum number of pages should not exceed the configured maximum.")
+		);
+
+		prepare_test!(field_name_not_memory,
+			r#"
+			(module
+				(import "env" "forgetit" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Memory import must have the field name 'memory'")
+		);
+
+		prepare_test!(multiple_memory_imports,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+				(import "env" "memory" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Multiple memory imports defined")
+		);
+
+		prepare_test!(table_import,
+			r#"
+			(module
+				(import "env" "table" (table 1 anyfunc))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Cannot import tables")
+		);
+
+		prepare_test!(global_import,
+			r#"
+			(module
+				(global $g (import "env" "global") (mut i32))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("Cannot import globals")
 		);
 	}
 
