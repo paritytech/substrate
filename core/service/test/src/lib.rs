@@ -20,6 +20,7 @@ use std::iter;
 use std::sync::Arc;
 use std::net::Ipv4Addr;
 use std::time::Duration;
+use std::collections::HashMap;
 use log::info;
 use futures::{Future, Stream};
 use tempdir::TempDir;
@@ -98,6 +99,7 @@ fn node_config<F: ServiceFactory> (
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
+		enable_mdns: false,
 	};
 
 	Configuration {
@@ -120,7 +122,9 @@ fn node_config<F: ServiceFactory> (
 		rpc_ws: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
+		offchain_worker: false,
 		force_authoring: false,
+		disable_grandpa: false,
 	}
 }
 
@@ -225,7 +229,7 @@ where
 				info!("Generating #{}", i);
 			}
 			let import_data = block_factory(&first_service);
-			first_service.client().import_block(import_data, None).expect("Error importing test block");
+			first_service.client().import_block(import_data, HashMap::new()).expect("Error importing test block");
 		}
 		first_service.network().node_id().unwrap()
 	};

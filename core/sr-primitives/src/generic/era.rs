@@ -166,7 +166,7 @@ mod tests {
 	}
 
 	#[test]
-	fn era_initialisation_works() {
+	fn era_initialization_works() {
 		assert_eq!(Era::mortal(64, 42), Era::Mortal(64, 42));
 		assert_eq!(Era::mortal(32768, 20000), Era::Mortal(32768, 20000));
 		assert_eq!(Era::mortal(200, 513), Era::Mortal(256, 1));
@@ -175,8 +175,8 @@ mod tests {
 	}
 
 	#[test]
-	fn quantised_clamped_era_initialisation_works() {
-		// clamp 1000000 to 65536, quantise 1000001 % 65536 to the nearest 4
+	fn quantized_clamped_era_initialization_works() {
+		// clamp 1000000 to 65536, quantize 1000001 % 65536 to the nearest 4
 		assert_eq!(Era::mortal(1000000, 1000001), Era::Mortal(65536, 1000001 % 65536 / 4 * 4));
 	}
 

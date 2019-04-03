@@ -88,7 +88,7 @@ where TMessage: CustomMessage + Send + 'static {
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset_receiver);
+		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset_receiver, config.enable_mdns);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
@@ -220,10 +220,12 @@ where TMessage: CustomMessage + Send + 'static {
 		NetworkState {
 			peer_id: Swarm::local_peer_id(&self.swarm).to_base58(),
 			listened_addresses: Swarm::listeners(&self.swarm).cloned().collect(),
+			external_addresses: Swarm::external_addresses(&self.swarm).cloned().collect(),
 			average_download_per_sec: self.bandwidth.average_download_per_sec(),
 			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
 			connected_peers,
 			not_connected_peers,
+			peerset: self.swarm.peerset_debug_info(),
 		}
 	}
 
@@ -311,7 +313,12 @@ where TMessage: CustomMessage + Send + 'static {
 	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { peer_id, version, .. }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { peer_id, version, endpoint }))) => {
+					self.nodes_info.insert(peer_id.clone(), NodeInfo {
+						endpoint,
+						client_version: None,
+						latest_ping: None,
+					});
 					let debug_info = self.peer_debug_info(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::OpenedCustomProtocol {
 						peer_id,
@@ -321,6 +328,7 @@ where TMessage: CustomMessage + Send + 'static {
 				}
 				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { peer_id, .. }))) => {
 					let debug_info = self.peer_debug_info(&peer_id);
+					self.nodes_info.remove(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
 						peer_id,
 						debug_info,

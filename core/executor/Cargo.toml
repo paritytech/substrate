@@ -1,12 +1,12 @@
 [package]
 name = "substrate-executor"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
-parity-codec = "3.2"
+parity-codec = "3.3"
 runtime_io = { package = "sr-io", path = "../sr-io" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 trie = { package = "substrate-trie", path = "../trie" }

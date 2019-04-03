@@ -190,7 +190,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId) {
-		debug!(target: "sub-libp2p", "Disconnecting {:?} by request from the external API", peer_id);
+		debug!(target: "sub-libp2p", "External API => Disconnect {:?}", peer_id);
 		self.disconnect_peer_inner(peer_id, None);
 	}
 
@@ -302,6 +302,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			return;
 		}
 
+		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
@@ -315,6 +316,11 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	pub fn add_discovered_node(&mut self, peer_id: &PeerId) {
 		debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
 		self.peerset.discovered(peer_id.clone())
+	}
+
+	/// Returns the state of the peerset manager, for debugging purposes.
+	pub fn peerset_debug_info(&self) -> serde_json::Value {
+		self.peerset.debug_info()
 	}
 
 	/// Function that is called when the peerset wants us to connect to a node.

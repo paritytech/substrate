@@ -17,17 +17,18 @@
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, RuntimeApiInfo};
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
+use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt};
 
 use crate::backend;
 use crate::error;
+use crate::runtime_api::Core as CoreApi;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -42,12 +43,15 @@ where
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(
+	fn call<
+		O: OffchainExt,
+	>(
 		&self,
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
+		side_effects_handler: Option<&mut O>,
 	) -> Result<Vec<u8>, error::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -56,6 +60,7 @@ where
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
 	fn contextual_call<
+		O: OffchainExt,
 		PB: Fn() -> error::Result<B::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -69,10 +74,11 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<B>>,
+		initialized_block: &mut Option<BlockId<B>>,
 		prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -84,6 +90,7 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
+		O: OffchainExt,
 		S: state_machine::Backend<H>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -98,6 +105,7 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
@@ -140,7 +148,10 @@ pub struct LocalCallExecutor<B, E> {
 impl<B, E> LocalCallExecutor<B, E> {
 	/// Creates new instance of local call executor.
 	pub fn new(backend: Arc<B>, executor: E) -> Self {
-		LocalCallExecutor { backend, executor }
+		LocalCallExecutor {
+			backend,
+			executor,
+		}
 	}
 }
 
@@ -161,17 +172,19 @@ where
 {
 	type Error = E::Error;
 
-	fn call(&self,
+	fn call<O: OffchainExt>(&self,
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy
+		strategy: ExecutionStrategy,
+		side_effects_handler: Option<&mut O>,
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
+			side_effects_handler,
 			&mut changes,
 			&self.executor,
 			method,
@@ -187,6 +200,7 @@ where
 	}
 
 	fn contextual_call<
+		O: OffchainExt,
 		PB: Fn() -> error::Result<Block::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -200,32 +214,43 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
+		initialized_block: &mut Option<BlockId<Block>>,
 		prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
+		mut side_effects_handler: Option<&mut O>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
-		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+
+		let core_version = self.runtime_version(at)?.apis.iter().find(|a| a.0 == CoreApi::<Block>::ID).map(|a| a.1);
+		let init_block_function = if core_version < Some(2) {
+			"Core_initialise_block"
+		} else {
+			"Core_initialize_block"
+		};
+
+		if method != init_block_function && initialized_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
 			state_machine::new(
 				&state,
 				self.backend.changes_trie_storage(),
+				side_effects_handler.as_mut().map(|x| &mut **x),
 				changes,
 				&self.executor,
-				"Core_initialise_block",
+				init_block_function,
 				&header.encode(),
 			).execute_using_consensus_failure_handler::<_, R, fn() -> _>(
 				execution_manager.clone(),
 				false,
 				None,
 			)?;
-			*initialised_block = Some(*at);
+			*initialized_block = Some(*at);
 		}
 
 		let result = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
+			side_effects_handler,
 			changes,
 			&self.executor,
 			method,
@@ -236,9 +261,9 @@ where
 			native_call,
 		).map(|(result, _, _)| result)?;
 
-		// If the method is `initialise_block` we need to set the `initialised_block`
-		if method == "Core_initialise_block" {
-			*initialised_block = Some(*at);
+		// If the method is `initialize_block` we need to set the `initialized_block`
+		if method == init_block_function {
+			*initialized_block = Some(*at);
 		}
 
 		self.backend.destroy_state(state)?;
@@ -248,12 +273,12 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
-		self.executor.runtime_version(&mut ext)
-			.ok_or(error::ErrorKind::VersionInvalid.into())
+		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
+		self.executor.runtime_version(&mut ext).ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
+		O: OffchainExt,
 		S: state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -268,10 +293,12 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		state_machine::new(
 			state,
 			self.backend.changes_trie_storage(),
+			side_effects_handler,
 			changes,
 			&self.executor,
 			method,

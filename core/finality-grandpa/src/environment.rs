@@ -82,7 +82,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) network: N,
+	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
 }
@@ -125,7 +125,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
 		// NOTE: when we finalize an authority set change through the sync protocol the voter is
-		//       signalled asynchronously. therefore the voter could still vote in the next round
+		//       signaled asynchronously. therefore the voter could still vote in the next round
 		//       before activating the new set. the `authority_set` is updated immediately thus we
 		//       restrict the voter based on that.
 		if self.set_id != self.authority_set.inner().read().current().0 {
@@ -231,32 +231,24 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let incoming = crate::communication::checked_message_stream::<Block, _>(
-			self.network.messages_for(round, self.set_id),
-			self.voters.clone(),
-		);
-
 		let local_key = self.config.local_key.as_ref()
 			.filter(|pair| self.voters.contains_key(&pair.public().into()));
 
-		let (out_rx, outgoing) = crate::communication::outgoing_messages::<Block, _>(
-			round,
-			self.set_id,
-			local_key.cloned(),
+		let (incoming, outgoing) = self.network.round_communication(
+			crate::communication::Round(round),
+			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-			self.network.clone(),
+			local_key.cloned(),
+			crate::communication::HasVoted::No,
 		);
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
-		let incoming = UntilVoteTargetImported::new(
+		let incoming = Box::new(UntilVoteTargetImported::new(
 			self.inner.import_notification_stream(),
 			self.inner.clone(),
 			incoming,
-		);
-
-		// join incoming network messages with locally originating ones.
-		let incoming = Box::new(out_rx.select(incoming).map_err(Into::into));
+		).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
@@ -305,7 +297,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
-		finalize_block(
+		let res = finalize_block(
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
@@ -313,7 +305,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			hash,
 			number,
 			(round, commit).into(),
-		)
+		);
+
+		if let Ok(_) = res {
+			self.network.note_commit_finalized(number);
+		}
+
+		res
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {

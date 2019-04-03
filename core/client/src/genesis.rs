@@ -90,9 +90,10 @@ mod tests {
 		state_machine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::new()),
+			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&header.encode(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
@@ -102,6 +103,7 @@ mod tests {
 			state_machine::new(
 				backend,
 				Some(&InMemoryChangesTrieStorage::new()),
+				state_machine::NeverOffchainExt::new(),
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
@@ -114,9 +116,10 @@ mod tests {
 		let (ret_data, _, _) = state_machine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::new()),
+			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
-			"BlockBuilder_finalise_block",
+			"BlockBuilder_finalize_block",
 			&[],
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
@@ -160,6 +163,7 @@ mod tests {
 		let _ = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
+			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -188,6 +192,7 @@ mod tests {
 		let _ = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
+			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -216,6 +221,7 @@ mod tests {
 		let r = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
+			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&Executor::new(None),
 			"Core_execute_block",

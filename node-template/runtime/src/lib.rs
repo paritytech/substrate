@@ -11,10 +11,10 @@ use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
-use primitives::{ed25519, OpaqueMetadata};
+use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -44,7 +44,7 @@ pub type AuthoritySignature = ed25519::Signature;
 pub type AccountId = <AccountSignature as Verify>::Signer;
 
 /// The type used by authorities to prove their ID.
-pub type AccountSignature = ed25519::Signature;
+pub type AccountSignature = sr25519::Signature;
 
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
@@ -67,8 +67,14 @@ pub mod opaque {
 
 	/// Opaque, encoded, unchecked extrinsic.
 	#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+	#[cfg(feature = "std")]
+	impl std::fmt::Debug for UncheckedExtrinsic {
+		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+			write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
+		}
+	}
 	impl traits::Extrinsic for UncheckedExtrinsic {
 		fn is_signed(&self) -> Option<bool> {
 			None
@@ -182,7 +188,7 @@ impl sudo::Trait for Runtime {
 }
 
 /// Used for the module template in `./template.rs`
-impl template::Trait for Runtime { 
+impl template::Trait for Runtime {
 	type Event = Event;
 }
 
@@ -228,16 +234,16 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn authorities() -> Vec<AuthorityId> {
-			Consensus::authorities()
-		}
-
 		fn execute_block(block: Block) {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: &<Block as BlockT>::Header) {
-			Executive::initialise_block(header)
+		fn initialize_block(header: &<Block as BlockT>::Header) {
+			Executive::initialize_block(header)
+		}
+
+		fn authorities() -> Vec<AuthorityId> {
+			panic!("Deprecated, please use `AuthoritiesApi`.")
 		}
 	}
 
@@ -252,8 +258,8 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalise_block() -> <Block as BlockT>::Header {
-			Executive::finalise_block()
+		fn finalize_block() -> <Block as BlockT>::Header {
+			Executive::finalize_block()
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
@@ -278,6 +284,18 @@ impl_runtime_apis! {
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+	}
+
+	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+		fn offchain_worker(n: NumberFor<Block>) {
+			Executive::offchain_worker(n)
+		}
+	}
+
+	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
+		fn authorities() -> Vec<AuthorityId> {
+			Consensus::authorities()
 		}
 	}
 }

@@ -34,7 +34,8 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
+	AuthorityIdFor,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -58,8 +59,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 41,
-	impl_version: 41,
+	spec_version: 57,
+	impl_version: 58,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -129,6 +130,7 @@ impl session::Trait for Runtime {
 
 impl staking::Trait for Runtime {
 	type Currency = balances::Module<Self>;
+	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
 	type Slash = ();
@@ -167,6 +169,7 @@ impl treasury::Trait for Runtime {
 }
 
 impl contract::Trait for Runtime {
+	type Currency = balances::Module<Runtime>;
 	type Call = Call;
 	type Event = Event;
 	type Gas = u64;
@@ -241,16 +244,16 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn authorities() -> Vec<AuthorityId> {
-			Consensus::authorities()
-		}
-
 		fn execute_block(block: Block) {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: &<Block as BlockT>::Header) {
-			Executive::initialise_block(header)
+		fn initialize_block(header: &<Block as BlockT>::Header) {
+			Executive::initialize_block(header)
+		}
+
+		fn authorities() -> Vec<AuthorityIdFor<Block>> {
+			panic!("Deprecated, please use `AuthoritiesApi`.")
 		}
 	}
 
@@ -265,8 +268,8 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalise_block() -> <Block as BlockT>::Header {
-			Executive::finalise_block()
+		fn finalize_block() -> <Block as BlockT>::Header {
+			Executive::finalize_block()
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
@@ -285,6 +288,12 @@ impl_runtime_apis! {
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+		fn offchain_worker(number: NumberFor<Block>) {
+			Executive::offchain_worker(number)
 		}
 	}
 
@@ -325,6 +334,12 @@ impl_runtime_apis! {
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+	}
+
+	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
+		fn authorities() -> Vec<AuthorityIdFor<Block>> {
+			Consensus::authorities()
 		}
 	}
 }

@@ -21,7 +21,7 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT, NumberFor, Block as BlockT};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
@@ -63,20 +63,11 @@ pub fn authorities() -> Vec<AuthorityId> {
 		.collect()
 }
 
-pub fn initialise_block(header: &Header) {
+pub fn initialize_block(header: &Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
-}
-
-fn execute_extrinsics_without_checks(extrinsics: Vec<<Block as BlockT>::Extrinsic>) {
-	// execute transactions
-	extrinsics.into_iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(&e).unwrap_or_else(|_| panic!("Invalid transaction"));
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
-	});
 }
 
 /// Actually execute all transitioning for `block`.
@@ -120,7 +111,12 @@ pub fn execute_block(block: Block) {
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
-	execute_extrinsics_without_checks(block.extrinsics);
+	// execute transactions
+	block.extrinsics.into_iter().enumerate().for_each(|(i, e)| {
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
+		execute_transaction_backend(&e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	});
 
 	// check storage root.
 	let storage_root = storage_root().into();
@@ -144,10 +140,6 @@ pub struct BlockExecutor;
 impl executive::ExecuteBlock<Block> for BlockExecutor {
 	fn execute_block(block: Block) {
 		execute_block(block);
-	}
-
-	fn execute_extrinsics_without_checks(_: NumberFor<Block>, extrinsics: Vec<<Block as BlockT>::Extrinsic>) {
-		execute_extrinsics_without_checks(extrinsics);
 	}
 }
 
@@ -201,8 +193,8 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
 	result
 }
 
-/// Finalise the block.
-pub fn finalise_block() -> Header {
+/// Finalize the block.
+pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
@@ -242,6 +234,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
+		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
 	}
 }
 

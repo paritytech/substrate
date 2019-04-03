@@ -1,6 +1,6 @@
 [package]
 name = "substrate-transaction-graph"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
@@ -11,9 +11,11 @@ log = "0.4"
 parking_lot = "0.7.1"
 serde = "1.0"
 serde_derive = "1.0"
+substrate-primitives = { path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
 
 [dev-dependencies]
 assert_matches = "1.1"
-parity-codec = "3.2"
+env_logger = "0.6"
+parity-codec = "3.3"
 test_runtime = { package = "substrate-test-runtime", path = "../../test-runtime" }

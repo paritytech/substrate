@@ -1,12 +1,12 @@
 [package]
 name = "substrate-primitives"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-parity-codec = { version = "3.2", default-features = false, features = ["derive"] }
+parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 rustc-hex = { version = "2.0", default-features = false }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
@@ -15,8 +15,8 @@ byteorder = { version = "1.1", default-features = false }
 primitive-types = { version = "0.2", default-features = false, features = ["codec"] }
 impl-serde = { version = "0.1", optional = true }
 wasmi = { version = "0.4.3", optional = true }
-hash-db = { version = "0.11", default-features = false }
-hash256-std-hasher = { version = "0.11", default-features = false }
+hash-db = { version = "0.12", default-features = false }
+hash256-std-hasher = { version = "0.12", default-features = false }
 ring = { version = "0.14", optional = true }
 untrusted = { version = "0.6", optional = true }
 hex-literal = { version = "0.1", optional = true }

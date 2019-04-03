@@ -68,7 +68,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
-		period: 1,
+		minimum_period: 1,
 	}.build_storage().unwrap().0);
 	t.into()
 }
