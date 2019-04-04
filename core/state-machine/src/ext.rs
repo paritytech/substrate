@@ -277,7 +277,6 @@ where
 		}
 
 		let mut transaction = B::Transaction::default();
-		// TODO avoid this clone somehow?
 		let child_storage_subtries: Vec<_> = self.overlay.prospective.children.values().map(|v|v.2.clone()).collect();
 
 		for subtrie in child_storage_subtries {

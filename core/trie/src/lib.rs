@@ -392,7 +392,6 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 		if key == &self.2 {
 			return Some(NULL_NODE.into());
 		}
-		// TODO use interal buffer for derive key to avoid alloc
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
@@ -411,7 +410,6 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 			return self.2.clone();
 		}
 
-		// TODO avoid buff for every keyspace db (using internal vec as buf)
 		let key = H::hash(value);
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		Self::emplace(self, key, &derived_prefix, value.into());
