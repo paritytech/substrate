@@ -546,8 +546,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		justification: Justification,
 		enacts_change: bool,
 	) -> Result<(), ConsensusError> {
-		let justification = GrandpaJustification::decode_and_verify(
+		let justification = GrandpaJustification::decode_and_verify_finalizes(
 			justification,
+			(hash, number),
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),
 		);
