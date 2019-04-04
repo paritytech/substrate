@@ -55,7 +55,7 @@ decl_event!(
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Fees {
 
 		/// The cumulative fees for a block.
 		///
@@ -115,7 +115,7 @@ impl<T::Trait> ToBlockAuthor<T> {
 impl<T::Trait> ToTreasury<T> {
 
 	fn transfer_to_treasury(amount: T::BalanceOf) {
-		
+
 	}
 
 }
