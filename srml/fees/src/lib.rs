@@ -24,7 +24,7 @@
 use runtime_io::with_storage;
 use rstd::{prelude::*, result};
 use parity_codec::{HasCompact, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
+//use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
 	Currency, OnFreeBalanceZero, OnUnbalanced, Imbalance,
@@ -32,14 +32,17 @@ use srml_support::traits::{
 use primitives::Permill;
 
 // we will need the `BalanceOf` type for account balances
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-pub trait Trait: 'static {
+pub trait Trait: 'static + system::Trait {
+	/// Currency
+	pub type Currency: Currency<Self::AccountId>;
+
 	/// Type that determines how many funds go to the block author.
-	pub type ToBlockAuthor = Fn() -> Permill;
+	pub type ToBlockAuthor: Fn() -> Permill;
 
 	/// Type that determines how many funds go to the treasury.
-	pub type ToTreasury = Fn() -> Permill;
+	pub type ToTreasury: Fn() -> Permill;
 }
 
 decl_event!(
@@ -74,11 +77,45 @@ decl_module! {
 impl<T::Trait> Module<T> {
 
 	/// Should be called when a block has been finalized. This function cannot fail.
+	///
+	/// Needs to:
+	/// - Ensure that (% to author) + (% to treasury) <= 100
+	/// - Transfer funds to author
+	/// - Transfer funds to treasury
+	/// - Burn remainder and update `TotalIssuance`
+	/// - Emit an event
 	pub fn distribute_fees_on_finalize(origin) {
+
+		match get_total_fees(n) {
+			Some(f) => let total_fees = f,
+			_ => let total_fees = Zero::zero(),
+		}
+
+		if let Some(get_total_fees(n)) {
+			total_fees = get_total_fees(n);
+		}
+
 		Self::deposit_event(RawEvent::Distribution(&1,1,2,3));
+	}
+
+	// Go through all transactions in a block and get cumulative fees.
+	//
+	// Is it possible to do this without a loop?
+	fn get_total_fees(n: T::BlockNumber) -> Option<T::BalanceOf> {
 	}
 }
 
 impl<T::Trait> ToBlockAuthor<T> {
+
+	fn transfer_to_author(author: T::AccountId, amount: T::BalanceOf) {
+
+	}
+}
+
+impl<T::Trait> ToTreasury<T> {
+
+	fn transfer_to_treasury(amount: T::BalanceOf) {
+		
+	}
 
 }
