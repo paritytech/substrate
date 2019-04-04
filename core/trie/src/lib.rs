@@ -368,21 +368,6 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 	}
 }
 
-// TODO makes plainDB use prefix
-impl<'a, DB, K, V> hash_db::PlainDBRef<K, V> for KeySpacedDB<'a, DB, K> where
-	DB: hash_db::PlainDBRef<K, V>,
-	K: AsMut<[u8]> + AsRef<[u8]> + Clone + Hasher
-{
-	fn get(&self, _key: &K) -> Option<V> {
-		//self.0.get(key)
-		unimplemented!("does not avoid key collision");
-	}
-	fn contains(&self, _key: &K) -> bool {
-		//self.0.contains(&key)
-		unimplemented!("does not avoid key collision");
-	}
-}
-
 impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 	DB: hash_db::HashDB<H, T>,
 	H: Hasher,
