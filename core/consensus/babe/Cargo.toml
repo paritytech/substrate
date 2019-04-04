@@ -6,8 +6,8 @@ description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.2"
-parity-codec-derive = "3.2"
+parity-codec = "3.4"
+parity-codec-derive = "3.3"
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
@@ -25,6 +25,7 @@ log = "^0.4"
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 
 [dependencies.schnorrkel]
 git = "https://github.com/paritytech/schnorrkel"

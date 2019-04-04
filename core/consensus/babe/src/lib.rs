@@ -17,7 +17,7 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
 #![forbid(warnings, unsafe_code)]
 
-use slots::{impl_slot, runtime_primitives};
+use slots::impl_slot;
 pub use babe_primitives::*;
 use parity_codec::{Decode, Encode, Input};
 use runtime_primitives::generic;

@@ -1904,7 +1904,7 @@ dependencies = [
  "substrate-basic-authorship 1.0.0",
  "substrate-cli 1.0.0",
  "substrate-client 1.0.0",
- "substrate-consensus-aura 1.0.0",
+ "substrate-consensus-aura 1.0.1",
  "substrate-finality-grandpa 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keystore 1.0.0",
@@ -2016,7 +2016,7 @@ dependencies = [
  "substrate-basic-authorship 1.0.0",
  "substrate-cli 1.0.0",
  "substrate-client 1.0.0",
- "substrate-consensus-aura 1.0.0",
+ "substrate-consensus-aura 1.0.1",
  "substrate-executor 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-network 0.1.0",
@@ -3741,7 +3741,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-consensus-aura"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3750,10 +3750,12 @@ dependencies = [
  "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
+ "sr-primitives 1.0.0",
  "sr-version 1.0.0",
  "srml-aura 1.0.0",
  "srml-consensus 1.0.0",
  "srml-support 1.0.0",
+ "substrate-client 1.0.0",
  "substrate-consensus-aura-primitives 1.0.0",
  "substrate-consensus-authorities 1.0.0",
  "substrate-consensus-common 1.0.0",
@@ -3805,6 +3807,7 @@ dependencies = [
  "schnorrkel 0.1.0 (git+https://github.com/paritytech/schnorrkel)",
  "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
+ "sr-primitives 1.0.0",
  "sr-version 1.0.0",
  "srml-consensus 1.0.0",
  "srml-support 1.0.0",

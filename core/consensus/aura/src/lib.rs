@@ -34,7 +34,7 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 };
 use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
-use slots::{impl_slot, runtime_primitives, client};
+use slots::impl_slot;
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::blockchain::ProvideCache;

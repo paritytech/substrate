@@ -23,10 +23,17 @@ use std::thread;
 use futures::prelude::*;
 use futures::{Future, IntoFuture, future::{self, Either}};
 use log::{warn, debug, info};
-pub use runtime_primitives;
-pub use client;
+#[doc(hidden)]
+pub use runtime_primitives::traits::Block as __Block__;
+#[doc(hidden)]
+pub use client::{
+	error::Result as __Result__,
+	backend::AuxStore as __AuxStore__,
+};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ProvideRuntimeApi, Block, ApiRef};
+#[doc(hidden)]
+pub use runtime_primitives::traits::ProvideRuntimeApi as __ProvideRuntimeApi__;
 use consensus_common::SyncOracle;
 use inherents::{InherentData, InherentDataProviders};
 use client::ChainHead;
@@ -40,10 +47,10 @@ macro_rules! impl_slot {
 		impl $name {
 			/// Either fetch the slot duration from disk or compute it from the genesis
 			/// state.
-			pub fn get_or_compute<B: $crate::runtime_primitives::traits::Block, C>(client: &C) -> $crate::client::error::Result<Self>
+			pub fn get_or_compute<B: $crate::__Block__, C>(client: &C) -> $crate::__Result__<Self>
 			where
-				C: $crate::client::backend::AuxStore,
-				C: $crate::runtime_primitives::traits::ProvideRuntimeApi,
+				C: $crate::__AuxStore__,
+				C: $crate::__ProvideRuntimeApi__,
 				C::Api: $trait<B>,
 			{
 				$crate::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
