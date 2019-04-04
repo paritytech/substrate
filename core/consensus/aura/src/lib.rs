@@ -66,18 +66,6 @@ pub use consensus_common::SyncOracle;
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
 
-/// A handle to the network. This is generally implemented by providing some
-/// handle to a gossip service or similar.
-///
-/// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network: Clone {
-	/// A stream of input messages for a topic.
-	type In: Stream<Item=Vec<u8>,Error=()>;
-
-	/// Send a message at a specific round out.
-	fn send_message(&self, slot: u64, message: Vec<u8>);
-}
-
 impl_slot!(SlotDuration, AuraApi);
 
 /// Get slot author for given block along with authorities.
