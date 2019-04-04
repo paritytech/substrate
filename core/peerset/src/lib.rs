@@ -296,8 +296,11 @@ impl Peerset {
 			for peer_id in self.data.in_slots.clear_common_slots().into_iter().chain(self.data.out_slots.clear_common_slots().into_iter()) {
 				// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
 				self.data.in_slots.clear_slot(&peer_id);
-				self.message_queue.push_back(Message::Drop(peer_id));
+				self.message_queue.push_back(Message::Drop(peer_id.clone()));
+				self.data.discovered.add_peer(peer_id, SlotType::Common);
 			}
+		} else {
+			self.alloc_slots();
 		}
 	}
 
@@ -592,20 +595,18 @@ mod tests {
 
 		let (peerset, handle) = Peerset::from_config(config);
 		handle.set_reserved_only(true);
+		handle.set_reserved_only(false);
 
-		let peerset = assert_messages(peerset, vec![
+		assert_messages(peerset, vec![
 			Message::Connect(reserved_peer),
 			Message::Connect(reserved_peer2),
 			Message::Connect(bootnode.clone()),
 			Message::Connect(bootnode2.clone()),
+			Message::Drop(bootnode.clone()),
+			Message::Drop(bootnode2.clone()),
+			Message::Connect(bootnode),
+			Message::Connect(bootnode2),
 		]);
-
-		let (message, peerset) = next_message(peerset).expect("Message::Drop the bootnode");
-		let (message2, _peerset) = next_message(peerset).expect("Message::Drop the bootnode2");
-		assert!(
-			(message == Message::Drop(bootnode.clone()) && message2 == Message::Drop(bootnode2.clone())) ||
-			(message2 == Message::Drop(bootnode) && message == Message::Drop(bootnode2))
-		);
 	}
 
 	#[test]

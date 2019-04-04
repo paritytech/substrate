@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
 use std::mem;
 use libp2p::PeerId;
+use linked_hash_map::LinkedHashMap;
 
 /// Describes the nature of connection with a given peer.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -48,7 +48,8 @@ pub enum SlotError {
 #[derive(Debug)]
 pub struct Slots {
 	max_slots: usize,
-	slots: HashMap<PeerId, SlotType>,
+	/// Nodes and their type. We use `LinkedHashMap` to make this data structure more predictable
+	slots: LinkedHashMap<PeerId, SlotType>,
 }
 
 impl Slots {
@@ -57,7 +58,7 @@ impl Slots {
 		let max_slots = max_slots as usize;
 		Slots {
 			max_slots,
-			slots: HashMap::with_capacity(max_slots),
+			slots: LinkedHashMap::with_capacity(max_slots),
 		}
 	}
 
@@ -92,7 +93,7 @@ impl Slots {
 	}
 
 	pub fn clear_common_slots(&mut self) -> Vec<PeerId> {
-		let slots = mem::replace(&mut self.slots, HashMap::with_capacity(self.max_slots));
+		let slots = mem::replace(&mut self.slots, LinkedHashMap::with_capacity(self.max_slots));
 		let mut common_peers = Vec::new();
 		for (peer_id, slot_type) in slots {
 			match slot_type {
