@@ -255,7 +255,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 				for addr in &info.listen_addrs {
 					self.discovery.kademlia.add_connected_address(&peer_id, addr.clone());
 				}
-				self.custom_protocols.add_discovered_node(&peer_id);
+				self.custom_protocols.add_discovered_nodes(Some(peer_id.clone()));
 				self.events.push(BehaviourOut::Identified { peer_id, info });
 			}
 			IdentifyEvent::Error { .. } => {}
@@ -272,7 +272,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behavio
 		match out {
 			KademliaOut::Discovered { .. } => {}
 			KademliaOut::KBucketAdded { peer_id, .. } => {
-				self.custom_protocols.add_discovered_node(&peer_id);
+				self.custom_protocols.add_discovered_nodes(Some(peer_id));
 			}
 			KademliaOut::FindNodeResult { key, closer_peers } => {
 				trace!(target: "sub-libp2p", "Libp2p => Query for {:?} yielded {:?} results",
@@ -303,9 +303,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour
 	fn inject_event(&mut self, event: MdnsEvent) {
 		match event {
 			MdnsEvent::Discovered(list) => {
-				for (peer_id, _) in list {
-					self.custom_protocols.add_discovered_node(&peer_id);
-				}
+				self.custom_protocols.add_discovered_nodes(list.into_iter().map(|(peer_id, _)| peer_id));
 			},
 			MdnsEvent::Expired(_) => {}
 		}

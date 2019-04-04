@@ -313,9 +313,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 
 	/// Indicates to the peerset that we have discovered new addresses for a given node.
-	pub fn add_discovered_node(&mut self, peer_id: &PeerId) {
-		debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-		self.peerset.discovered(peer_id.clone())
+	pub fn add_discovered_nodes<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
+		self.peerset.discovered(peer_ids);
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.

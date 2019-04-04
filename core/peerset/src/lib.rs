@@ -434,16 +434,17 @@ impl Peerset {
 		self.alloc_slots();
 	}
 
-	/// Adds a discovered peer id to the PSM.
+	/// Adds discovered peer ids to the PSM.
 	///
 	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
 	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
-	pub fn discovered(&mut self, peer_id: PeerId) {
-		if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
-			return;
+	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
+		for peer_id in peer_ids {
+			if !self.data.in_slots.contains(&peer_id) && !self.data.out_slots.contains(&peer_id) {
+				self.data.discovered.add_peer(peer_id, SlotType::Common);
+			}
 		}
 
-		self.data.discovered.add_peer(peer_id, SlotType::Common);
 		self.alloc_slots();
 	}
 
@@ -721,9 +722,9 @@ mod tests {
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.discovered(discovered.clone());
-		peerset.discovered(discovered.clone());
-		peerset.discovered(discovered2);
+		peerset.discovered(Some(discovered.clone()));
+		peerset.discovered(Some(discovered.clone()));
+		peerset.discovered(Some(discovered2));
 
 		assert_messages(peerset, vec![
 			Message::Connect(bootnode),
