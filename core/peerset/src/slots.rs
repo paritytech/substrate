@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
+use std::mem;
 use libp2p::PeerId;
 
 /// Describes the nature of connection with a given peer.
@@ -90,10 +91,20 @@ impl Slots {
 		Ok(())
 	}
 
-	pub fn common_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.slots.iter()
-			.filter(|&(_, slot_type)| *slot_type == SlotType::Common)
-			.map(|(peer_id, _)| peer_id)
+	pub fn clear_common_slots(&mut self) -> Vec<PeerId> {
+		let slots = mem::replace(&mut self.slots, HashMap::with_capacity(self.max_slots));
+		let mut common_peers = Vec::new();
+		for (peer_id, slot_type) in slots {
+			match slot_type {
+				SlotType::Common => {
+					common_peers.push(peer_id);
+				},
+				SlotType::Reserved => {
+					self.slots.insert(peer_id, slot_type);
+				},
+			}
+		}
+		common_peers
 	}
 
 	pub fn mark_reserved(&mut self, peer_id: &PeerId) {

@@ -282,6 +282,8 @@ impl Peerset {
 		self.data.discovered.mark_not_reserved(&peer_id);
 		if self.data.reserved_only {
 			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
+				self.data.in_slots.clear_slot(&peer_id);
+				self.data.out_slots.clear_slot(&peer_id);
 				self.message_queue.push_back(Message::Drop(peer_id))
 			}
 		}
@@ -291,9 +293,10 @@ impl Peerset {
 		// Disconnect non-reserved nodes.
 		self.data.reserved_only = reserved_only;
 		if self.data.reserved_only {
-			for peer in self.data.in_slots.common_peers().chain(self.data.out_slots.common_peers()) {
+			for peer_id in self.data.in_slots.clear_common_slots().into_iter().chain(self.data.out_slots.clear_common_slots().into_iter()) {
 				// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
-				self.message_queue.push_back(Message::Drop(peer.clone()))
+				self.data.in_slots.clear_slot(&peer_id);
+				self.message_queue.push_back(Message::Drop(peer_id));
 			}
 		}
 	}
@@ -305,6 +308,8 @@ impl Peerset {
 		if *score < 0 {
 			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
 			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
+				self.data.in_slots.clear_slot(&peer_id);
+				self.data.out_slots.clear_slot(&peer_id);
 				self.message_queue.push_back(Message::Drop(peer_id));
 			}
 		}
