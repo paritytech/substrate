@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
+use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -49,6 +51,11 @@ use crate::until_imported::UntilVoteTargetImported;
 
 use ed25519::Public as AuthorityId;
 
+// NOTE: the current strategy for persisting completed rounds is very naive
+// (update everything) and we also rely on cloning to do atomic updates,
+// therefore this value should be kept small for now.
+const NUM_LAST_COMPLETED_ROUNDS: usize = 2;
+
 /// Data about a completed round.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub struct CompletedRound<Block: BlockT> {
@@ -58,15 +65,73 @@ pub struct CompletedRound<Block: BlockT> {
 	pub votes: Vec<SignedMessage<Block>>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletedRounds<Block: BlockT> {
+	inner: VecDeque<CompletedRound<Block>>,
+}
+
+impl<Block: BlockT> Encode for CompletedRounds<Block> {
+	fn encode(&self) -> Vec<u8> {
+		Vec::from_iter(&self.inner).encode()
+	}
+}
+
+impl<Block: BlockT> Decode for CompletedRounds<Block> {
+	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+		Vec::<CompletedRound<Block>>::decode(value)
+			.map(|completed_rounds| CompletedRounds {
+				inner: completed_rounds.into(),
+			})
+	}
+}
+
+impl<Block: BlockT> CompletedRounds<Block> {
+	pub fn new(genesis: CompletedRound<Block>) -> CompletedRounds<Block> {
+		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
+		inner.push_back(genesis);
+		CompletedRounds { inner }
+	}
+
+	pub fn last(&self) -> &CompletedRound<Block> {
+		self.inner.back()
+			.expect("inner is never empty; always contains at least genesis; qed")
+	}
+
+	pub fn push(&mut self, completed_round: CompletedRound<Block>) -> bool {
+		if self.last().number >= completed_round.number {
+			return false;
+		}
+
+		if self.inner.len() == NUM_LAST_COMPLETED_ROUNDS {
+			self.inner.pop_front();
+		}
+
+		self.inner.push_back(completed_round);
+
+		true
+	}
+}
+
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub enum VoterSetState<Block: BlockT> {
 	Live {
-		last_completed_round: CompletedRound<Block>,
+		completed_rounds: CompletedRounds<Block>,
 		current_round: HasVoted<Block>,
 	},
 	Paused {
-		last_completed_round: CompletedRound<Block>,
+		completed_rounds: CompletedRounds<Block>,
 	},
+}
+
+impl<Block: BlockT> VoterSetState<Block> {
+	pub(crate) fn completed_rounds(&self) -> CompletedRounds<Block> {
+		match self {
+			VoterSetState::Live { completed_rounds, .. } =>
+				completed_rounds.clone(),
+			VoterSetState::Paused { completed_rounds } =>
+				completed_rounds.clone(),
+		}
+	}
 }
 
 /// Whether we've voted already during a prior run of the program.
@@ -141,13 +206,8 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Read the last completed round.
-	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
-		match &*self.inner.read() {
-			VoterSetState::Live { last_completed_round, .. } =>
-				last_completed_round.clone(),
-			VoterSetState::Paused { last_completed_round } =>
-				last_completed_round.clone(),
-		}
+	pub(crate) fn completed_rounds(&self) -> CompletedRounds<Block> {
+		self.inner.read().completed_rounds()
 	}
 
 	// NOTE: not exposed outside of this module intentionally.
@@ -356,13 +416,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		};
 
 		self.voter_set_state.with(|voter_set_state| {
-			let last_completed_round = match voter_set_state {
-				VoterSetState::Live { last_completed_round, current_round: HasVoted::No } => last_completed_round,
+			let completed_rounds = match voter_set_state {
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } => completed_rounds,
 				_ => unreachable!("paused voters should not be voting; qed"),
 			};
 
 			let set_state = VoterSetState::<Block>::Live {
-				last_completed_round: last_completed_round.clone(),
+				completed_rounds: completed_rounds.clone(),
 				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
 			};
 
@@ -384,16 +444,16 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		};
 
 		self.voter_set_state.with(|voter_set_state| {
-			let (last_completed_round, propose) = match voter_set_state {
-				VoterSetState::Live { last_completed_round, current_round: HasVoted::No } =>
-					(last_completed_round, None),
-				VoterSetState::Live { last_completed_round, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
-					(last_completed_round, Some(propose)),
+			let (completed_rounds, propose) = match voter_set_state {
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } =>
+					(completed_rounds, None),
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
+					(completed_rounds, Some(propose)),
 				_ => unreachable!("paused voters should not be voting; qed"),
 			};
 
 			let set_state = VoterSetState::<Block>::Live {
-				last_completed_round: last_completed_round.clone(),
+				completed_rounds: completed_rounds.clone(),
 				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
 			};
 
@@ -415,14 +475,14 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		};
 
 		self.voter_set_state.with(|voter_set_state| {
-			let (last_completed_round, propose, prevote) = match voter_set_state {
-				VoterSetState::Live { last_completed_round, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
-					(last_completed_round, propose, prevote),
+			let (completed_rounds, propose, prevote) = match voter_set_state {
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
+					(completed_rounds, propose, prevote),
 				_ => unreachable!("paused voters should not be voting; qed"),
 			};
 
 			let set_state = VoterSetState::<Block>::Live {
-				last_completed_round: last_completed_round.clone(),
+				completed_rounds: completed_rounds.clone(),
 				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
 			};
 
@@ -450,13 +510,17 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		);
 
 		self.voter_set_state.with(|voter_set_state| {
+			let mut completed_rounds = voter_set_state.completed_rounds();
+
+			completed_rounds.push(CompletedRound {
+				number: round,
+				state: state.clone(),
+				base,
+				votes,
+			});
+
 			let set_state = VoterSetState::<Block>::Live {
-				last_completed_round: CompletedRound {
-					number: round,
-					state: state.clone(),
-					base,
-					votes,
-				},
+				completed_rounds,
 				current_round: HasVoted::No,
 			};
 

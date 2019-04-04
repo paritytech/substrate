@@ -28,7 +28,7 @@ use log::{info, warn};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
-use crate::environment::{CompletedRound, HasVoted, VoterSetState};
+use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
 use crate::NewAuthoritySet;
 
 use substrate_primitives::ed25519::Public as AuthorityId;
@@ -154,12 +154,12 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 		let set_state = VoterSetState::Live {
-			last_completed_round: CompletedRound {
+			completed_rounds: CompletedRounds::new(CompletedRound {
 				number: last_round_number,
 				state: last_round_state,
 				votes: Vec::new(),
 				base,
-			},
+			}),
 			current_round: HasVoted::No,
 		};
 
@@ -197,12 +197,12 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 				VoterSetState::Paused {
-					last_completed_round: CompletedRound {
+					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: last_round_number,
 						state: set_state,
 						votes: Vec::new(),
 						base,
-					}
+					}),
 				}
 			},
 			Some(V1VoterSetState::Live(last_round_number, set_state)) => {
@@ -210,12 +210,12 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 				VoterSetState::Live {
-					last_completed_round: CompletedRound {
+					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: last_round_number,
 						state: set_state,
 						votes: Vec::new(),
 						base,
-					},
+					}),
 					current_round: HasVoted::No,
 				}
 			},
@@ -225,12 +225,12 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 				VoterSetState::Live {
-					last_completed_round: CompletedRound {
+					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: 0,
 						state: set_state,
 						votes: Vec::new(),
 						base,
-					},
+					}),
 					current_round: HasVoted::No,
 				}
 			},
@@ -297,12 +297,12 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 							.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 						VoterSetState::Live {
-							last_completed_round: CompletedRound {
+							completed_rounds: CompletedRounds::new(CompletedRound {
 								number: 0,
 								votes: Vec::new(),
 								base,
 								state,
-							},
+							}),
 							current_round: HasVoted::No,
 						}
 					}
@@ -330,12 +330,12 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 	let genesis_state = VoterSetState::Live {
-		last_completed_round: CompletedRound {
+		completed_rounds: CompletedRounds::new(CompletedRound {
 			number: 0,
 			votes: Vec::new(),
 			state,
 			base,
-		},
+		}),
 		current_round: HasVoted::No,
 	};
 	backend.insert_aux(
@@ -373,12 +373,12 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 			new_set.canon_number.clone(),
 		));
 		let set_state = VoterSetState::<Block>::Live {
-			last_completed_round: CompletedRound {
+			completed_rounds: CompletedRounds::new(CompletedRound {
 				number: 0,
 				state: round_state,
 				votes: Vec::new(),
 				base: (new_set.canon_hash, new_set.canon_number),
-			},
+			}),
 			current_round: HasVoted::No,
 		};
 		let encoded = set_state.encode();

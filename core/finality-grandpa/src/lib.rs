@@ -99,7 +99,7 @@ pub use communication::Network;
 pub use finality_proof::{prove_finality, check_finality_proof};
 
 use aux_schema::PersistentData;
-use environment::{CompletedRound, Environment, HasVoted, SharedVoterSetState, VoterSetState};
+use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
@@ -502,7 +502,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		);
 
 		let mut maybe_voter = match set_state.clone() {
-			VoterSetState::Live { last_completed_round, .. } => {
+			VoterSetState::Live { completed_rounds, .. } => {
 				let chain_info = match client.info() {
 					Ok(i) => i,
 					Err(e) => return future::Either::B(future::err(Error::Client(e))),
@@ -528,12 +528,14 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 				let voters = (*env.voters).clone();
 
+				let last_completed_round = completed_rounds.last();
+
 				Some(voter::Voter::new(
 					env.clone(),
 					voters,
 					global_comms,
 					last_completed_round.number,
-					last_completed_round.state,
+					last_completed_round.state.clone(),
 					last_finalized,
 				))
 			},
@@ -571,12 +573,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 					let set_state = VoterSetState::Live {
 						// always start at round 0 when changing sets.
-						last_completed_round: CompletedRound {
+						completed_rounds: CompletedRounds::new(CompletedRound {
 							number: 0,
 							state: genesis_state,
 							base: (new.canon_hash, new.canon_number),
 							votes: Vec::new(),
-						},
+						}),
 						current_round: HasVoted::No,
 					};
 
@@ -597,8 +599,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					info!(target: "afg", "Pausing old validator set: {}", reason);
 
 					// not racing because old voter is shut down.
-					let last_completed_round = env.voter_set_state.last_completed_round();
-					let set_state = VoterSetState::Paused { last_completed_round };
+					let completed_rounds = env.voter_set_state.completed_rounds();
+					let set_state = VoterSetState::Paused { completed_rounds };
 
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
