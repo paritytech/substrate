@@ -136,8 +136,8 @@ impl Slots {
 		}
 	}
 
-	pub fn clear_slot(&mut self, peer_id: &PeerId) {
-		self.slots.remove(peer_id);
+	pub fn clear_slot(&mut self, peer_id: &PeerId) -> bool {
+		self.slots.remove(peer_id).is_some()
 	}
 
 	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {

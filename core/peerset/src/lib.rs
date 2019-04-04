@@ -284,10 +284,13 @@ impl Peerset {
 		self.data.out_slots.mark_not_reserved(&peer_id);
 		self.data.discovered.mark_not_reserved(&peer_id);
 		if self.data.reserved_only {
-			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
-				self.data.in_slots.clear_slot(&peer_id);
-				self.data.out_slots.clear_slot(&peer_id);
-				self.message_queue.push_back(Message::Drop(peer_id))
+			if self.data.in_slots.clear_slot(&peer_id) || self.data.out_slots.clear_slot(&peer_id) {
+				// insert peer back into discovered list
+				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
+				self.message_queue.push_back(Message::Drop(peer_id));
+				// call alloc_slots again, cause we may have some reserved peers in discovered list
+				// waiting for the slot that was just cleared
+				self.alloc_slots();
 			}
 		}
 	}
@@ -297,8 +300,9 @@ impl Peerset {
 		self.data.reserved_only = reserved_only;
 		if self.data.reserved_only {
 			for peer_id in self.data.in_slots.clear_common_slots().into_iter().chain(self.data.out_slots.clear_common_slots().into_iter()) {
-				self.message_queue.push_back(Message::Drop(peer_id.clone()));
-				self.data.discovered.add_peer(peer_id, SlotType::Common);
+				// insert peer back into discovered list
+				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
+				self.message_queue.push_back(Message::Drop(peer_id));
 			}
 		} else {
 			self.alloc_slots();
@@ -334,6 +338,8 @@ impl Peerset {
 					self.message_queue.push_back(Message::Connect(peer_id));
 				},
 				SlotState::Swaped { removed, added } => {
+					// insert peer back into discovered list
+					self.data.discovered.add_peer(removed.clone(), SlotType::Common);
 					self.message_queue.push_back(Message::Drop(removed));
 					self.message_queue.push_back(Message::Connect(added));
 				}
