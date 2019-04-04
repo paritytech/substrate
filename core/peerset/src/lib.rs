@@ -23,6 +23,7 @@ use std::collections::VecDeque;
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
+use log::trace;
 use lru_cache::LruCache;
 use slots::{SlotType, SlotState, Slots};
 pub use serde_json::Value;
@@ -364,6 +365,7 @@ impl Peerset {
 	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
 	/// peerset is already connected to, in which case it must not answer.
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
+		trace!("Incoming {}\nin_slots={:?}\nout_slots={:?}", peer_id, self.data.in_slots, self.data.out_slots);
 		// if `reserved_only` is set, but this peer is not a part of our discovered list,
 		// a) it is not reserved, so we reject the connection
 		// b) we are already connected to it, so we reject the connection
@@ -415,6 +417,7 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, peer_id: PeerId) {
+		trace!("Dropping {}\nin_slots={:?}\nout_slots={:?}", peer_id, self.data.in_slots, self.data.out_slots);
 		// Automatically connect back if reserved.
 		if self.data.in_slots.is_connected_and_reserved(&peer_id) || self.data.out_slots.is_connected_and_reserved(&peer_id) {
 			self.message_queue.push_back(Message::Connect(peer_id));

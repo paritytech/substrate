@@ -95,6 +95,15 @@ pub trait Externalities<H: Hasher> {
 		self.storage(key).map(|v| H::hash(&v))
 	}
 
+	/// Read original runtime storage, ignoring any overlayed changes.
+	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Get original storage value hash, ignoring any overlayed changes.
+	/// This may be optimized for large values.
+	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+		self.original_storage(key).map(|v| H::hash(&v))
+	}
+
 	/// Read child runtime storage.
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
