@@ -91,10 +91,6 @@ impl<T::Trait> Module<T> {
 			_ => let total_fees = Zero::zero(),
 		}
 
-		if let Some(get_total_fees(n)) {
-			total_fees = get_total_fees(n);
-		}
-
 		Self::deposit_event(RawEvent::Distribution(&1,1,2,3));
 	}
 
