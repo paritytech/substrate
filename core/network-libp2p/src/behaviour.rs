@@ -58,7 +58,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		local_public_key: PublicKey,
 		protocol: RegisteredProtocol<TMessage>,
 		known_addresses: Vec<(PeerId, Multiaddr)>,
-		peerset: substrate_peerset::PeersetMut,
+		peerset: substrate_peerset::Peerset,
 		enable_mdns: bool,
 	) -> Self {
 		let identify = {
