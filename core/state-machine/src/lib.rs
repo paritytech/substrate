@@ -160,6 +160,11 @@ pub trait Externalities<H: Hasher> {
 	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
 
+	/// Get the trie root of a child storage map. This will also update the value of the child storage keys in the top-level storage map. If the storage root equals default hash as defined by trie, the key in top-level storage map will be removed.
+	///
+	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
+	fn child_storage_root(&mut self, subtrie: &SubTrie) -> Option<Vec<u8>>;
+
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 
@@ -976,7 +981,7 @@ mod tests {
 #[test]
 fn child_storage_keyspace() {
 		use crate::trie_backend::tests::test_trie;
-	
+
 		let subtrie1 = SubTrie::new(b"atestchild".to_vec(), &b"unique1"[..]);
 		let subtrie2 = SubTrie::new(b"btestchild".to_vec(), &b"unique2"[..]);
 		let mut tr1 = {

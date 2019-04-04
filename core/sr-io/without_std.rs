@@ -259,6 +259,14 @@ extern_functions! {
 		value_len: u32,
 		value_offset: u32
 	) -> u32;
+	/// Commits all changes and calculates the child-storage root.
+	///
+	/// A child storage is used e.g. by a contract.
+	///
+	/// # Returns
+	///
+	/// - The pointer to the result vector and `written_out` contains its length.
+	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 
 	/// The current relay chain identifier.
 	fn ext_chain_id() -> u64;
@@ -464,7 +472,7 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 /// Get `key` from child storage, placing the value into `value_out` (as much as possible) and return
 /// the number of bytes that the key in storage was beyond the offset.
 pub fn read_child_storage(subtrie: &SubTrie, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-  let storage_key = subtrie.parent_key(); // no prefix
+	let storage_key = subtrie.parent_key(); // no prefix
 	unsafe {
 		match ext_get_child_storage_into.get()(
 			storage_key.as_ptr(), storage_key.len() as u32,
@@ -485,6 +493,22 @@ pub fn storage_root() -> [u8; 32] {
 		ext_storage_root.get()(result.as_mut_ptr());
 	}
 	result
+}
+
+/// "Commit" all existing operations and compute the resultant child storage root.
+pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+	let mut length: u32 = 0;
+	unsafe {
+		let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
+		if length == u32::max_value() {
+			None
+		} else {
+			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+			// See #300 for more details.
+			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
+		}
+	}
 }
 
 /// The current storage' changes root.

@@ -148,6 +148,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
+	fn child_storage_root(&mut self, _subtrie: &SubTrie) -> Option<Vec<u8>> {
+		unreachable!("basic not used for child trie");
+	}
+
 	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
 		None
 	}

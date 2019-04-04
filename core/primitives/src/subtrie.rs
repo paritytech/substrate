@@ -79,19 +79,19 @@ pub struct SubTrie {
 	/// subtrie last node info
 	node: SubTrieNode,
 	/// subtrie path: at this point it is only address of subtrie in root
-  /// (only one level of subtrie)
+	/// (only one level of subtrie)
 	parent: ParentTrie,
 }
 impl SubTrie {
-  /// map parent key to some isolated space
-  pub fn prefix_parent_key(parent: &[u8]) -> Vec<u8> {
+	/// map parent key to some isolated space
+	pub fn prefix_parent_key(parent: &[u8]) -> Vec<u8> {
 		let mut key_full = crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 		parity_codec::Encode::encode_to(parent, &mut key_full);
-    key_full
-  }
+		key_full
+	}
 	/// instantiate new subtrie without root value
 	pub fn new(keyspace: KeySpace, parent: &[u8]) -> Self {
-    let parent = Self::prefix_parent_key(parent);
+		let parent = Self::prefix_parent_key(parent);
 		SubTrie {
 			node: SubTrieNode {
 				keyspace,
@@ -103,7 +103,7 @@ impl SubTrie {
 	/// instantiate subtrie from a read node value
 	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
 		parity_codec::Decode::decode(&mut &encoded_node[..]).map(|node| {
-      let parent = Self::prefix_parent_key(parent);
+			let parent = Self::prefix_parent_key(parent);
 			SubTrie {
 				node,
 				parent,

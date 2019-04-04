@@ -330,7 +330,7 @@ impl<'a, DB, H> KeySpacedDB<'a, DB, H> where
 	pub fn new(db: &'a DB, ks: &'a KeySpace) -> Self {
 		// TODO remove that it is already defined and probably stored in underlying db
 		let null_node_data = H::hash(NULL_NODE);
-		KeySpacedDB(db, ks, null_node_data) 
+		KeySpacedDB(db, ks, null_node_data)
 	}
 }
 impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
@@ -340,7 +340,7 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 	pub fn new(db: &'a mut DB, ks: &'a KeySpace) -> Self {
 		// TODO remove that it is already defined and probably stored in underlying db
 		let null_node_data = H::hash(&[0]);
-		KeySpacedDBMut(db, ks, null_node_data) 
+		KeySpacedDBMut(db, ks, null_node_data)
 	}
 }
 
@@ -362,7 +362,7 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 		if key == &self.2 {
 			return true;
 		}
-	
+
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.contains(key, &derived_prefix)
 	}

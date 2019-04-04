@@ -295,6 +295,18 @@ where
 		root
 	}
 
+	fn child_storage_root(&mut self, subtrie: &SubTrie) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::new(true);
+
+		if self.storage_transaction.is_some() {
+			return Some(self.get_child_trie(subtrie.parent_prefixed_key())
+        .map(|subtrie|subtrie.root_initial_value().to_vec())
+        .unwrap_or(default_child_trie_root::<H>()));
+		}
+
+		Some(self.child_storage_root_transaction(subtrie).0)
+	}
+
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		let root_and_tx = compute_changes_trie_root::<_, T, H>(

@@ -30,7 +30,7 @@ use primitives::subtrie::{KeySpace, SubTrie};
 
 // TODO EMCH would switch to BTreeMap make sense, also if keeping option<keyspace>, a top
 // field/childs would be more appropriate
-/// type alias over a in memory transaction storring struct 
+/// type alias over a in memory transaction storring struct
 pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<SubTrie>)>;
 /// type alias over a list of in memory changes
 pub type VecTransaction = Vec<(Option<SubTrie>, Vec<u8>, Option<Vec<u8>>)>;
@@ -59,7 +59,7 @@ pub trait Backend<H: Hasher> {
 
 	/// get SubTrie information
 	fn child_trie(&self, storage_key: &[u8]) -> Result<Option<SubTrie>, Self::Error> {
-		let prefixed_key = SubTrie::prefix_parent_key(storage_key); 
+		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
 		Ok(self.storage(&prefixed_key)?
 			.and_then(|n|SubTrie::decode_node_prefixed_parent(&n[..], prefixed_key)))
 	}
@@ -86,10 +86,20 @@ pub trait Backend<H: Hasher> {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
+	/// Does not include child storage updates.
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
+
+	/// Calculate the storage root, with given delta over what is already stored in
+	/// the backend, and produce a "transaction" that can be used to commit.
+	/// Does include child storage updates.
+	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord;
+
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
@@ -187,7 +197,7 @@ impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
 		let mut inner: HashMap<_, _> = self.inner.clone();
 		for (subtrie, key, val) in changes {
 			match val {
-				Some(v) => { 
+				Some(v) => {
 					let mut entry = inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
 						.or_insert_with(||(Default::default(), subtrie.clone()));
 					entry.0.insert(key, v);
@@ -269,7 +279,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.get(&Some(subtrie.keyspace().clone())).map(|map| map.0.keys().for_each(|k| f(&k)));
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
@@ -300,12 +310,34 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		(root, full_transaction)
 	}
 
+
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		<H as Hasher>::Out: Ord,
+	{
+		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let transaction: Vec<_> = delta.into_iter().collect();
+		let map_input = existing_pairs.chain(transaction.iter().cloned())
+			.collect::<HashMap<_, _>>();
+
+		let root = trie_root::<H, _, _, _>(map_input
+			.into_iter()
+			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		);
+
+		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+
+		(root, full_transaction)
+	}
+
+
 	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		// TODO EMCH useless call (option as key is no really good
+		// TODO EMCH useless clone (option as key is not really good)
 		let existing_pairs = self.inner.get(&Some(subtrie.keyspace().clone())).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();

@@ -156,6 +156,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.storage_root(delta)
 	}
 
+	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.backend.full_storage_root(delta)
+	}
+
 	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -278,7 +284,7 @@ mod tests {
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let in_memory = in_memory.update(contents);
-		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
+		let in_memory_root = in_memory.full_storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 		(28..65).for_each(|i| assert_eq!(in_memory.child_storage(&subtrie1, &[i]).unwrap().unwrap(), vec![i]));
 		(10..15).for_each(|i| assert_eq!(in_memory.child_storage(&subtrie2, &[i]).unwrap().unwrap(), vec![i]));
@@ -294,7 +300,20 @@ mod tests {
 		let proof = proving.extract_proof();
 
 		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+		assert!(proof_check.storage(&[0]).is_err());
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
+		// note that it is include in root because close (same with value 64 missing)
+		assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
+		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
+
+		let proving = ProvingBackend::new(&trie);
+		let subtrie1 = proving.child_trie(b"sub1").unwrap().unwrap();
+		assert_eq!(proving.child_storage(&subtrie1, &[64]).unwrap().unwrap(), vec![64]);
+
+		let proof = proving.extract_proof();
+		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+		let subtrie1 = proof_check.child_trie(b"sub1").unwrap().unwrap();
+		assert_eq!(proof_check.child_storage(&subtrie1, &[64]).unwrap().unwrap(), vec![64]);
 	}
 
 }

@@ -570,7 +570,7 @@ pub mod child {
 		runtime_io::get_child_trie(storage_key)
 	}
 
-  pub fn set_child_trie(subtrie: &SubTrie) {
+	pub fn set_child_trie(subtrie: &SubTrie) {
 		runtime_io::set_child_trie(subtrie)
 	}
 
@@ -641,7 +641,7 @@ pub mod child {
 		runtime_io::read_child_storage(subtrie, key, &mut [0;0][..], 0).is_some()
 	}
 
-	/// Remove all `subtrie` key/values 
+	/// Remove all `subtrie` key/values
 	pub fn kill_storage(subtrie: &SubTrie) {
 		runtime_io::kill_child_storage(subtrie)
 	}

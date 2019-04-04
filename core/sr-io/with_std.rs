@@ -161,6 +161,13 @@ pub fn storage_root() -> H256 {
 	).unwrap_or(H256::zero())
 }
 
+/// "Commit" all existing operations and compute the resultant child storage root.
+pub fn child_storage_root(subtrie: &SubTrie) -> Option<Vec<u8>> {
+	ext::with(|ext|
+		ext.child_storage_root(subtrie)
+	).unwrap_or(None)
+}
+
 /// "Commit" all existing operations and get the resultant storage change root.
 pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<H256> {
 	ext::with(|ext|
