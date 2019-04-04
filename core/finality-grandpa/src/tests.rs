@@ -20,6 +20,7 @@ use super::*;
 use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
+use network::consensus_gossip as network_gossip;
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::AuthorityKeyring;
@@ -33,11 +34,12 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 
 use authorities::AuthoritySet;
+use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -137,102 +139,72 @@ impl TestNetFactory for GrandpaTestNet {
 struct MessageRouting {
 	inner: Arc<Mutex<GrandpaTestNet>>,
 	peer_id: usize,
-	validator: Arc<GossipValidator<Block>>,
 }
 
 impl MessageRouting {
 	fn new(inner: Arc<Mutex<GrandpaTestNet>>, peer_id: usize,) -> Self {
-		let validator = Arc::new(GossipValidator::new());
-		let v = validator.clone();
-		{
-			let inner = inner.lock();
-			let peer = inner.peer(peer_id);
-			peer.with_gossip(move |gossip, _| {
-				gossip.register_validator(GRANDPA_ENGINE_ID, v);
-			});
-		}
 		MessageRouting {
 			inner,
 			peer_id,
-			validator,
 		}
 	}
-
-	fn drop_messages(&self, topic: Hash) {
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-		peer.consensus_gossip_collect_garbage_for_topic(topic);
-	}
-}
-
-fn make_topic(round: u64, set_id: u64) -> Hash {
-	message_topic::<Block>(round, set_id)
-}
-
-fn make_commit_topic(set_id: u64) -> Hash {
-	commit_topic::<Block>(set_id)
 }
 
 impl Network<Block> for MessageRouting {
-	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
+	type In = Box<Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
 
-	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.validator.note_round(round, set_id);
+	/// Get a stream of messages for a specific gossip topic.
+	fn messages_for(&self, topic: Hash) -> Self::In {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
+
 		let messages = peer.consensus_gossip_messages_for(
 			GRANDPA_ENGINE_ID,
-			make_topic(round, set_id),
+			topic,
 		);
 
 		let messages = messages.map_err(
-			move |_| panic!("Messages for round {} dropped too early", round)
+			move |_| panic!("Messages for topic {} dropped too early", topic)
 		);
 
 		Box::new(messages)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
-		let inner = self.inner.lock();
-		inner.peer(self.peer_id)
-			.gossip_message(make_topic(round, set_id), GRANDPA_ENGINE_ID, message, force);
-	}
-
-	fn drop_round_messages(&self, round: u64, set_id: u64) {
-		self.validator.drop_round(round, set_id);
-		let topic = make_topic(round, set_id);
-		self.drop_messages(topic);
-	}
-
-	fn drop_set_messages(&self, set_id: u64) {
-		self.validator.drop_set(set_id);
-		let topic = make_commit_topic(set_id);
-		self.drop_messages(topic);
-	}
-
-	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.validator.note_set(set_id);
+	fn register_validator(&self, v: Arc<dyn network_gossip::Validator<Block>>) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		let messages = peer.consensus_gossip_messages_for(
-			GRANDPA_ENGINE_ID,
-			make_commit_topic(set_id),
-		);
-
-		let messages = messages.map_err(
-			move |_| panic!("Commit messages for set {} dropped too early", set_id)
-		);
-
-		Box::new(messages)
+		peer.with_gossip(move |gossip, context| {
+			gossip.register_validator(context, GRANDPA_ENGINE_ID, v);
+		});
 	}
 
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
+	fn gossip_message(&self, topic: Hash, data: Vec<u8>, force: bool) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id)
-			.gossip_message(make_commit_topic(set_id), GRANDPA_ENGINE_ID, message, force);
+		inner.peer(self.peer_id).gossip_message(
+			topic,
+			GRANDPA_ENGINE_ID,
+			data,
+			force,
+		);
 	}
 
-	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+
+		peer.with_gossip(move |gossip, ctx| for who in &who {
+			gossip.send_message(
+				ctx,
+				who,
+				network_gossip::ConsensusMessage {
+					engine_id: GRANDPA_ENGINE_ID,
+					data: data.clone(),
+				}
+			)
+		})
+	}
+
+	fn announce(&self, _block: Hash) {
 
 	}
 }

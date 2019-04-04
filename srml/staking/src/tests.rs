@@ -1519,7 +1519,7 @@ fn phragmen_election_works_with_post_processing() {
 		assert_eq!(winner_10.exposure.others[1].value, 50);
 
 		assert_eq!(winner_30.exposure.total, 1000 + 525);
-		assert_eq!(winner_30.score, PerU128::from_max_value(253136882709478613064217695772412937));
+		assert_eq!(winner_30.score, PerU128::from_max_value(253136882709478612992230401826229321));
 		assert_eq!(winner_30.exposure.others[0].value, 525);
 	})
 }
@@ -1957,5 +1957,107 @@ fn phragmen_should_not_overflow_ultimate() {
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 		check_exposure(4);
 		check_exposure(2);
+	})
+}
+
+
+#[test]
+fn large_scale_test() {
+	with_externalities(&mut ExtBuilder::default()
+	.nominate(false)
+	.minimum_validator_count(1)
+	.validator_count(20)
+	.build()
+	, || {
+		let _ = Staking::chill(Origin::signed(10));
+		let _ = Staking::chill(Origin::signed(20));
+
+		let bond_validator = |a, b| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::validate(Origin::signed(a), ValidatorPrefs::default()));
+		};
+		let bond_nominator = |a, b, v| {
+			assert_ok!(Staking::bond(Origin::signed(a-1), a, b, RewardDestination::Controller));
+			assert_ok!(Staking::nominate(Origin::signed(a), v));
+		};
+		let check_expo = |e: Exposure<u64, u64>| {
+			assert_eq!(e.total, e.own + e.others.iter().fold(0, |s, v| s + v.value));
+		};
+
+		let prefix = 200;
+		for i in prefix..=(prefix+50) {
+			let _ = Balances::make_free_balance_be(&i, u64::max_value());
+		}
+
+		bond_validator(prefix + 2,  1);
+		bond_validator(prefix + 4,  105);
+		bond_validator(prefix + 6,  3879248198);
+		bond_validator(prefix + 8,  100000000001000);
+		bond_validator(prefix + 10, 100000000002000);
+		bond_validator(prefix + 12, 150000000000000);
+		bond_validator(prefix + 14, 400000000000000);
+		bond_validator(prefix + 16, 524611669156413);
+		bond_validator(prefix + 18, 700000000000000);
+		bond_validator(prefix + 20, 797663650978304);
+		bond_validator(prefix + 22, 900003879248198);
+		bond_validator(prefix + 24, 997530000000000);
+		bond_validator(prefix + 26, 1000000000010000);
+		bond_validator(prefix + 28, 1000000000020000);
+		bond_validator(prefix + 30, 1000003879248198);
+		bond_validator(prefix + 32, 1200000000000000);
+		bond_validator(prefix + 34, 7997659802817256);
+		bond_validator(prefix + 36, 18000000000000000);
+		bond_validator(prefix + 38, 20000033025753738);
+		bond_validator(prefix + 40, 500000000000100000);
+		bond_validator(prefix + 42, 500000000000200000);
+
+		Balances::make_free_balance_be(&50, u64::max_value());
+		Balances::make_free_balance_be(&49, u64::max_value());
+		bond_nominator(50, 990000068998617227, vec![
+			prefix + 1,
+			prefix + 3,
+			prefix + 5,
+			prefix + 7,
+			prefix + 9,
+			prefix + 11,
+			prefix + 13,
+			prefix + 15,
+			prefix + 17,
+			prefix + 19,
+			prefix + 21,
+			prefix + 23,
+			prefix + 25,
+			prefix + 27,
+			prefix + 29,
+			prefix + 31,
+			prefix + 33,
+			prefix + 35,
+			prefix + 37,
+			prefix + 39,
+			prefix + 41,
+			prefix + 43,
+			prefix + 45]
+		);
+
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+
+		// Each exposure => total == own + sum(others)
+		Session::validators().iter().for_each(|acc| check_expo(Staking::stakers(acc-1)));
+
+		// aside from some error, stake must be divided correctly
+		assert!(
+			990000068998617227
+			- Session::validators()
+				.iter()
+				.map(|v| Staking::stakers(v-1))
+				.fold(0, |s, v| if v.others.len() > 0 { s + v.others[0].value } else { s })
+			< 100
+		);
+
+		// For manual inspection
+		println!("Validators are {:?}", Session::validators());
+		println!("Validators are {:#?}",
+			Session::validators().iter().map(|v| (v.clone(), Staking::stakers(v-1)) ).collect::<Vec<(u64, Exposure<u64, u64>)>>());
 	})
 }
