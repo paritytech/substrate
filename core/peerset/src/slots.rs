@@ -28,20 +28,24 @@ pub enum SlotType {
 	Common,
 }
 
-/// Descibes why the reason of not being able to add given peer.
-pub enum SlotError {
+/// Descibes the result of `add_peer` action.
+pub enum SlotState {
+	/// Returned when `add_peer` successfully adds a peer to the slot.
+	Added(PeerId),
+	/// Returned we already have a connection to a given peer, but it is upgraded from
+	/// `Common` to `Reserved`.
+	Upgraded(PeerId),
+	/// Returned when we should removed a common peer to make space for a reserved peer.
+	Swaped {
+		/// Peer we should disconnect from.
+		removed: PeerId,
+		/// Peer we should connect to.
+		added: PeerId,
+	},
 	/// Error returned when we are already connected to this peer.
 	AlreadyConnected(PeerId),
 	/// Error returned when max number of connections has been already established.
 	MaxConnections(PeerId),
-	/// Error returned when we should disconnect from a given common peer to make space
-	/// for a reserved peer.
-	DemandReroute {
-		/// Peer we should disconnect from.
-		disconnect: PeerId,
-		/// Peer we should connect to.
-		connect: PeerId,
-	}
 }
 
 /// Contains all information about group of slots.
@@ -67,29 +71,41 @@ impl Slots {
 		self.slots.contains_key(peer_id)
 	}
 
-	/// Returns Ok if we successfully connected to a given peer.
-	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> Result<(), SlotError>  {
+	/// Tries to find a slot for a given peer and returns `SlotState`.
+	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> SlotState {
 		if let Some(st) = self.slots.get_mut(&peer_id) {
-			if let SlotType::Reserved = slot_type {
+			if *st == SlotType::Common && slot_type == SlotType::Reserved {
 				*st = SlotType::Reserved;
+				return SlotState::Upgraded(peer_id);
+			} else {
+				return SlotState::AlreadyConnected(peer_id);
 			}
-			return Err(SlotError::AlreadyConnected(peer_id));
 		}
 
 		if self.slots.len() == self.max_slots {
 			if let SlotType::Reserved = slot_type {
-				if let Some((to_disconnect, _)) = self.slots.iter().find(|(_, &slot_type)| slot_type == SlotType::Common) {
-					return Err(SlotError::DemandReroute {
-						disconnect: to_disconnect.clone(),
-						connect: peer_id,
-					});
+				// if we are trying to insert a reserved peer, but we all of our slots are full,
+				// we need to remove one of the existing common connections
+				let to_remove = self.slots.iter()
+					.find(|(_, &slot_type)| slot_type == SlotType::Common)
+					.map(|(to_remove, _)| to_remove)
+					.cloned();
+
+				if let Some(to_remove) = to_remove {
+					self.slots.remove(&to_remove);
+					self.slots.insert(peer_id.clone(), slot_type);
+
+					return SlotState::Swaped {
+						removed: to_remove,
+						added: peer_id,
+					};
 				}
 			}
-			return Err(SlotError::MaxConnections(peer_id));
+			return SlotState::MaxConnections(peer_id);
 		}
 
-		self.slots.insert(peer_id, slot_type);
-		Ok(())
+		self.slots.insert(peer_id.clone(), slot_type);
+		SlotState::Added(peer_id)
 	}
 
 	pub fn clear_common_slots(&mut self) -> Vec<PeerId> {

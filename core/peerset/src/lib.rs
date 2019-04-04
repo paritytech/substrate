@@ -19,12 +19,12 @@
 
 mod slots;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
 use lru_cache::LruCache;
-use slots::{SlotType, SlotError, Slots};
+use slots::{SlotType, SlotState, Slots};
 pub use serde_json::Value;
 
 const PEERSET_SCORES_CACHE_SIZE: usize = 1000;
@@ -251,30 +251,30 @@ impl Peerset {
 			return;
 		}
 
-		loop {
-			match self.data.out_slots.add_peer(peer_id.clone(), SlotType::Reserved) {
-				Ok(_) => {
-					// reserved node may have been previously stored as normal node in discovered list
-					// let's remove it
-					self.data.discovered.remove_peer(&peer_id);
+		match self.data.out_slots.add_peer(peer_id, SlotType::Reserved) {
+			SlotState::Added(peer_id) => {
+				// reserved node may have been previously stored as normal node in discovered list
+				self.data.discovered.remove_peer(&peer_id);
 
-					// notify that connection has been made
-					self.message_queue.push_back(Message::Connect(peer_id));
-					return;
-				},
-				Err(SlotError::AlreadyConnected(_)) => {
-					return;
-				}
-				Err(SlotError::MaxConnections(_)) => {
-					self.data.discovered.add_peer(peer_id, SlotType::Reserved);
-					return;
-				}
-				Err(SlotError::DemandReroute { disconnect, ..}) => {
-					// disconnect not reserved node
-					self.data.out_slots.clear_slot(&disconnect);
-					self.message_queue.push_back(Message::Drop(disconnect));
-					// on the next loop iteration we should connect to the peer
-				}
+				// notify that connection has been made
+				self.message_queue.push_back(Message::Connect(peer_id));
+				return;
+			},
+			SlotState::Swaped { removed, added } => {
+				// reserved node may have been previously stored as normal node in discovered list
+				self.data.discovered.remove_peer(&added);
+				// let's add the peer we disconnected from to the discovered list again
+				self.data.discovered.add_peer(removed.clone(), SlotType::Common);
+				// swap connections
+				self.message_queue.push_back(Message::Drop(removed));
+				self.message_queue.push_back(Message::Connect(added));
+			}
+			SlotState::AlreadyConnected(_) | SlotState::Upgraded(_) => {
+				return;
+			}
+			SlotState::MaxConnections(peer_id) => {
+				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
+				return;
 			}
 		}
 	}
@@ -329,24 +329,21 @@ impl Peerset {
 
 	fn alloc_slots(&mut self) {
 		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer(self.data.reserved_only) {
-			match self.data.out_slots.add_peer(peer_id.clone(), slot_type) {
-				Ok(_) => {
+			match self.data.out_slots.add_peer(peer_id, slot_type) {
+				SlotState::Added(peer_id) => {
 					self.message_queue.push_back(Message::Connect(peer_id));
 				},
-				Err(SlotError::AlreadyConnected(_)) => (),
-				Err(SlotError::MaxConnections(_)) => {
+				SlotState::Swaped { removed, added } => {
+					self.message_queue.push_back(Message::Drop(removed));
+					self.message_queue.push_back(Message::Connect(added));
+				}
+				SlotState::Upgraded(_) | SlotState::AlreadyConnected(_) => {
+					// TODO: we should never reach this point
+				},
+				SlotState::MaxConnections(peer_id) => {
 					self.data.discovered.add_peer(peer_id, slot_type);
 					break;
 				},
-				Err(SlotError::DemandReroute { disconnect, .. }) => {
-					// disconnect not reserved node
-					self.data.out_slots.clear_slot(&disconnect);
-					self.message_queue.push_back(Message::Drop(disconnect));
-
-					// add reserved node back to the discovered list, so it is
-					// processed again in the future
-					self.data.discovered.add_peer(peer_id, slot_type);
-				}
 			}
 		}
 	}
@@ -371,7 +368,7 @@ impl Peerset {
 
 		// check if we are already connected to this peer
 		if self.data.out_slots.contains(&peer_id) {
-			self.message_queue.push_back(Message::Reject(index));
+			// we are already connected. in this case we do not answer
 			return;
 		}
 
@@ -381,29 +378,29 @@ impl Peerset {
 			SlotType::Common
 		};
 
-		loop {
-			match self.data.in_slots.add_peer(peer_id.clone(), slot_type) {
-				Ok(_) => {
-					self.data.discovered.remove_peer(&peer_id);
-					self.message_queue.push_back(Message::Accept(index));
-					return;
-				},
-				Err(SlotError::MaxConnections(peer_id)) => {
-					self.data.discovered.add_peer(peer_id, slot_type);
-					self.message_queue.push_back(Message::Reject(index));
-					return;
-				},
-				Err(SlotError::AlreadyConnected(_)) => {
-					self.message_queue.push_back(Message::Reject(index));
-					return;
-				},
-				Err(SlotError::DemandReroute { disconnect, .. }) => {
-					// disconnect not reserved node
-					self.data.in_slots.clear_slot(&disconnect);
-					self.message_queue.push_back(Message::Drop(disconnect));
-					// on the next loop iteration we should accept the connection
-				},
-			}
+		match self.data.in_slots.add_peer(peer_id, slot_type) {
+			SlotState::Added(peer_id) => {
+				// reserved node may have been previously stored as normal node in discovered list
+				self.data.discovered.remove_peer(&peer_id);
+				self.message_queue.push_back(Message::Accept(index));
+				return;
+			},
+			SlotState::Swaped { removed, added } => {
+				// reserved node may have been previously stored as normal node in discovered list
+				self.data.discovered.remove_peer(&added);
+				// swap connections.
+				self.message_queue.push_back(Message::Drop(removed));
+				self.message_queue.push_back(Message::Accept(index));
+			},
+			SlotState::AlreadyConnected(_) | SlotState::Upgraded(_) => {
+				// we are already connected. in this case we do not answer
+				return;
+			},
+			SlotState::MaxConnections(peer_id) => {
+				self.data.discovered.add_peer(peer_id, slot_type);
+				self.message_queue.push_back(Message::Reject(index));
+				return;
+			},
 		}
 	}
 
@@ -667,7 +664,6 @@ mod tests {
 		assert_messages(peerset, vec![
 			Message::Connect(bootnode.clone()),
 			Message::Accept(ii),
-			Message::Reject(ii4),
 			Message::Accept(ii2),
 			Message::Reject(ii3),
 		]);
