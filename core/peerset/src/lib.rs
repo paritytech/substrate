@@ -248,20 +248,30 @@ impl Peerset {
 			return;
 		}
 
-		match self.data.out_slots.add_peer(peer_id.clone(), SlotType::Reserved) {
-			Ok(_) => {
-				self.data.discovered.remove_peer(&peer_id);
-				self.message_queue.push_back(Message::Connect(peer_id));
-			},
-			Err(SlotError::AlreadyConnected(_)) => {
-				return;
-			}
-			Err(SlotError::MaxConnections(_)) => {
-				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
-			}
-			Err(SlotError::DemandReroute { disconnect, ..}) => {
-				self.message_queue.push_back(Message::Drop(disconnect));
-				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
+		loop {
+			match self.data.out_slots.add_peer(peer_id.clone(), SlotType::Reserved) {
+				Ok(_) => {
+					// reserved node may have been previously stored as normal node in discovered list
+					// let's remove it
+					self.data.discovered.remove_peer(&peer_id);
+
+					// notify that connection has been made
+					self.message_queue.push_back(Message::Connect(peer_id));
+					return;
+				},
+				Err(SlotError::AlreadyConnected(_)) => {
+					return;
+				}
+				Err(SlotError::MaxConnections(_)) => {
+					self.data.discovered.add_peer(peer_id, SlotType::Reserved);
+					return;
+				}
+				Err(SlotError::DemandReroute { disconnect, ..}) => {
+					// disconnect not reserved node
+					self.data.out_slots.clear_slot(&disconnect);
+					self.message_queue.push_back(Message::Drop(disconnect));
+					// on the next loop iteration we should connect to the peer
+				}
 			}
 		}
 	}
@@ -312,9 +322,13 @@ impl Peerset {
 					break;
 				},
 				Err(SlotError::DemandReroute { disconnect, .. }) => {
+					// disconnect not reserved node
+					self.data.out_slots.clear_slot(&disconnect);
 					self.message_queue.push_back(Message::Drop(disconnect));
+
+					// add reserved node back to the discovered list, so it is
+					// processed again in the future
 					self.data.discovered.add_peer(peer_id, slot_type);
-					break;
 				}
 			}
 		}
@@ -350,17 +364,28 @@ impl Peerset {
 			SlotType::Common
 		};
 
-		match self.data.in_slots.add_peer(peer_id.clone(), slot_type) {
-			Ok(_) => {
-				self.data.discovered.remove_peer(&peer_id);
-				self.message_queue.push_back(Message::Accept(index));
-			},
-			Err(SlotError::MaxConnections(peer_id)) => {
-				self.data.discovered.add_peer(peer_id, slot_type);
-				self.message_queue.push_back(Message::Reject(index));
-			},
-			_ => {
-				self.message_queue.push_back(Message::Reject(index));
+		loop {
+			match self.data.in_slots.add_peer(peer_id.clone(), slot_type) {
+				Ok(_) => {
+					self.data.discovered.remove_peer(&peer_id);
+					self.message_queue.push_back(Message::Accept(index));
+					return;
+				},
+				Err(SlotError::MaxConnections(peer_id)) => {
+					self.data.discovered.add_peer(peer_id, slot_type);
+					self.message_queue.push_back(Message::Reject(index));
+					return;
+				},
+				Err(SlotError::AlreadyConnected(_)) => {
+					self.message_queue.push_back(Message::Reject(index));
+					return;
+				},
+				Err(SlotError::DemandReroute { disconnect, .. }) => {
+					// disconnect not reserved node
+					self.data.in_slots.clear_slot(&disconnect);
+					self.message_queue.push_back(Message::Drop(disconnect));
+					// on the next loop iteration we should accept the connection
+				},
 			}
 		}
 	}
