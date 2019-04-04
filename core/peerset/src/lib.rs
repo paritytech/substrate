@@ -23,8 +23,11 @@ use std::collections::{HashMap, VecDeque};
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
+use lru_cache::LruCache;
 use slots::{SlotType, SlotError, Slots};
 pub use serde_json::Value;
+
+const PEERSET_SCORES_CACHE_SIZE: usize = 1000;
 
 /// FIFO-ordered list of nodes that we know exist, but we are not connected to.
 #[derive(Debug, Default)]
@@ -96,7 +99,7 @@ struct PeersetData {
 	/// Node slots for incoming connections.
 	in_slots: Slots,
 	/// List of node scores.
-	scores: HashMap<PeerId, i32>,
+	scores: LruCache<PeerId, i32>,
 }
 
 #[derive(Debug)]
@@ -216,7 +219,7 @@ impl Peerset {
 			reserved_only: config.reserved_only,
 			out_slots: Slots::new(config.out_peers),
 			in_slots: Slots::new(config.in_peers),
-			scores: Default::default(),
+			scores: LruCache::new(PEERSET_SCORES_CACHE_SIZE),
 		};
 
 		let handle = PeersetHandle {
@@ -305,10 +308,18 @@ impl Peerset {
 	}
 
 	fn on_report_peer(&mut self, peer_id: PeerId, score_diff: i32) {
-		let score = self.data.scores.entry(peer_id.clone()).or_default();
-		*score = score.saturating_add(score_diff);
+		let score = match self.data.scores.get_mut(&peer_id) {
+			Some(score) => {
+				*score = score.saturating_add(score_diff);
+				*score
+			},
+			None => {
+				self.data.scores.insert(peer_id.clone(), score_diff);
+				score_diff
+			}
+		};
 
-		if *score < 0 {
+		if score < 0 {
 			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
 			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
 				self.data.in_slots.clear_slot(&peer_id);
