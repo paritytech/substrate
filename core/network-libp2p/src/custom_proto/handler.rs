@@ -506,7 +506,7 @@ where
 					Ok(Async::Ready(())) => {
 						deadline.reset(Instant::now() + Duration::from_secs(60));
 						let event = CustomProtoHandlerOut::ProtocolError {
-							is_severe: false,
+							is_severe: true,
 							error: "Timeout when opening protocol".to_string().into(),
 						};
 						return_value = Some(ProtocolsHandlerEvent::Custom(event));

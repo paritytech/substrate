@@ -22,6 +22,7 @@ use futures::{prelude::*, sync::mpsc};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use log::trace;
 
 pub use serde_json::Value;
 
@@ -238,6 +239,7 @@ impl PeersetMut {
 	/// peerset is already connected to, in which case it must not answer.
 	pub fn incoming(&self, peer_id: PeerId, index: IncomingIndex) {
 		let mut inner = self.parent.inner.lock();
+		trace!("Incoming {}\nin_slots={:?}\nout_slots={:?}", peer_id, inner.in_slots, inner.out_slots);
 		if inner.out_slots.iter().chain(inner.in_slots.iter()).any(|s| s.as_ref() == Some(&peer_id)) {
 			return
 		}
@@ -260,6 +262,7 @@ impl PeersetMut {
 	pub fn dropped(&self, peer_id: &PeerId) {
 		let mut inner = self.parent.inner.lock();
 		let inner = &mut *inner;	// Fixes a borrowing issue.
+		trace!("Dropping {}\nin_slots={:?}\nout_slots={:?}", peer_id, inner.in_slots, inner.out_slots);
 
 		// Automatically connect back if reserved.
 		if inner.reserved.contains(peer_id) {
