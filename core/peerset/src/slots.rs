@@ -140,7 +140,7 @@ impl Slots {
 		self.slots.remove(peer_id).is_some()
 	}
 
-	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
+	pub fn is_connected_and_reserved(&self, peer_id: &PeerId) -> bool {
 		self.slots.get(peer_id)
 			.map(|slot_type| *slot_type == SlotType::Reserved)
 			.unwrap_or_else(|| false)

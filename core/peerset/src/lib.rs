@@ -416,7 +416,7 @@ impl Peerset {
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, peer_id: PeerId) {
 		// Automatically connect back if reserved.
-		if self.data.in_slots.is_reserved(&peer_id) || self.data.out_slots.is_reserved(&peer_id) {
+		if self.data.in_slots.is_connected_and_reserved(&peer_id) || self.data.out_slots.is_connected_and_reserved(&peer_id) {
 			self.message_queue.push_back(Message::Connect(peer_id));
 			return;
 		}
