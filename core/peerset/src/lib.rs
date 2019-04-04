@@ -297,8 +297,6 @@ impl Peerset {
 		self.data.reserved_only = reserved_only;
 		if self.data.reserved_only {
 			for peer_id in self.data.in_slots.clear_common_slots().into_iter().chain(self.data.out_slots.clear_common_slots().into_iter()) {
-				// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
-				self.data.in_slots.clear_slot(&peer_id);
 				self.message_queue.push_back(Message::Drop(peer_id.clone()));
 				self.data.discovered.add_peer(peer_id, SlotType::Common);
 			}
