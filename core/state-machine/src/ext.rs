@@ -300,8 +300,8 @@ where
 
 		if self.storage_transaction.is_some() {
 			return Some(self.get_child_trie(subtrie.parent_prefixed_key())
-        .map(|subtrie|subtrie.root_initial_value().to_vec())
-        .unwrap_or(default_child_trie_root::<H>()));
+				.map(|subtrie|subtrie.root_initial_value().to_vec())
+				.unwrap_or(default_child_trie_root::<H>()));
 		}
 
 		Some(self.child_storage_root_transaction(subtrie).0)

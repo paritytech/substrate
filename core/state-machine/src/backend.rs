@@ -32,6 +32,7 @@ use primitives::subtrie::{KeySpace, SubTrie};
 // field/childs would be more appropriate
 /// type alias over a in memory transaction storring struct
 pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<SubTrie>)>;
+// TODO EMCH repeated Subtrie as field take to much memory : TODO switch to rc or cow
 /// type alias over a list of in memory changes
 pub type VecTransaction = Vec<(Option<SubTrie>, Vec<u8>, Option<Vec<u8>>)>;
 
@@ -193,7 +194,7 @@ impl<H> PartialEq for InMemory<H> {
 impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
-		// TODO remove this clone EMCH
+		// costy clone
 		let mut inner: HashMap<_, _> = self.inner.clone();
 		for (subtrie, key, val) in changes {
 			match val {
@@ -201,7 +202,8 @@ impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
 					let mut entry = inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
 						.or_insert_with(||(Default::default(), subtrie.clone()));
 					entry.0.insert(key, v);
-					entry.1 = subtrie.as_ref().cloned(); // TODO EMCH transaction multiple update here is terrible
+					// very costy clone
+					entry.1 = subtrie.as_ref().cloned();
 				},
 				None => {
 					inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
@@ -254,8 +256,6 @@ impl super::Error for Void {}
 
 impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	type Error = Void;
-	// TODO EMCH SubTrie as field takes to much mem: change transaction (keep it that way to keep PR
-	// small)
 	type Transaction = VecTransaction;
 	type TrieBackendStorage = MemoryDB<H>;
 
@@ -286,18 +286,18 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	{
 		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 		let transaction: Vec<_> = delta.into_iter().collect();
-    let mut map_input = existing_pairs.chain(transaction.iter().cloned())
+		let mut map_input = existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>();
 
-    // first add child root to delta
+		// first add child root to delta
 		for (keyspace, (_existing_pairs, subtrie)) in self.inner.iter() {
 			if keyspace != &None {
-        subtrie.as_ref().map(|s|{
-          let child_root = self.child_storage_root(s, ::std::iter::empty()).0;
-          map_input.insert(s.parent_prefixed_key().clone(), Some(s.encoded_with_root(child_root.as_ref())));
-        });
-      }
-    }
+				subtrie.as_ref().map(|s|{
+					let child_root = self.child_storage_root(s, ::std::iter::empty()).0;
+					map_input.insert(s.parent_prefixed_key().clone(), Some(s.encoded_with_root(child_root.as_ref())));
+				});
+			}
+		}
 
 
 		let root = trie_root::<H, _, _, _>(map_input
@@ -337,7 +337,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		// TODO EMCH useless clone (option as key is not really good)
+		// costy clone
 		let existing_pairs = self.inner.get(&Some(subtrie.keyspace().clone())).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();

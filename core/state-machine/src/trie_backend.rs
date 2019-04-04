@@ -149,10 +149,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn full_storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		unimplemented!("need iterate over child define in trie: should full_storage_root be in this trait?");
+		// trie backend got no child trie TODO EMCH we could imagine getting child from trie specific
+		// prefix but this storage of child at prefix location does not seems super safe.
+		self.storage_root()
 	}
 
 	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
@@ -176,8 +178,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
 		}
-		//TODO EMCH could we remove this is_default mechanism? : means error or no change : not sure
-		//about correct semantic
 		let is_default = root == default_root;
 
 		(root, is_default, write_overlay)
