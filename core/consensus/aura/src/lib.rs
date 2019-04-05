@@ -51,7 +51,7 @@ use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use authorities::AuthoritiesApi;
 
-use futures::{Future, IntoFuture, future};
+use futures::{Future, IntoFuture, future, stream::Stream};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
 
@@ -68,6 +68,22 @@ pub use consensus_common::SyncOracle;
 
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
+
+/// A handle to the network. This is generally implemented by providing some
+/// handle to a gossip service or similar.
+///
+/// Intended to be a lightweight handle such as an `Arc`.
+#[deprecated(
+	since = "1.1",
+	note = "This is dead code and will be removed in a future release",
+)]
+pub trait Network: Clone {
+	/// A stream of input messages for a topic.
+	type In: Stream<Item=Vec<u8>,Error=()>;
+
+	/// Send a message at a specific round out.
+	fn send_message(&self, slot: u64, message: Vec<u8>);
+}
 
 pub struct SlotDuration(slots::SlotDuration<u64>);
 
@@ -800,7 +816,6 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::stream::Stream;
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};

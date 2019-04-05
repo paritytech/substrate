@@ -232,7 +232,7 @@ pub struct SlotDuration<T: Clone>(T);
 impl<T: Clone> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
-	/// 
+	///
 	/// `slot_key` is marked as `'static`, as it should really be an 
 	pub fn get_or_compute<B: Block, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
 		C: client::backend::AuxStore,
