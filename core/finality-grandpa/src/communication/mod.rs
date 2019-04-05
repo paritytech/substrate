@@ -50,6 +50,7 @@ use gossip::{
 use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 pub mod gossip;
+mod periodic;
 
 /// The consensus engine ID of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
@@ -58,7 +59,7 @@ pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network<Block: BlockT>: Clone {
+pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=network_gossip::TopicNotification,Error=()>;
 
@@ -168,14 +169,29 @@ impl Stream for NetworkStream {
 pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
 	validator: Arc<GossipValidator<B>>,
+	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
-	/// Create a new NetworkBridge to the given NetworkService
-	pub(crate) fn new(service: N, config: crate::Config) -> Self {
+	/// Create a new NetworkBridge to the given NetworkService. Returns the service
+	/// handle and a future that must be polled to completion to finish startup.
+	pub(crate) fn new(service: N, config: crate::Config) -> (
+		Self,
+		impl futures::Future<Item = (), Error = ()> + Send + 'static,
+	) {
 		let validator = Arc::new(GossipValidator::new(config));
 		service.register_validator(validator.clone());
-		NetworkBridge { service, validator: validator }
+
+		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
+		let bridge = NetworkBridge { service, validator: validator, neighbor_sender };
+
+		let startup_work = futures::future::lazy(move || {
+			// lazily spawn the rebroadcast job onto a separate task.
+			tokio::spawn(rebroadcast_job);
+			Ok(())
+		});
+
+		(bridge, startup_work)
 	}
 
 	/// Get the round messages for a round in a given set ID. These are signature-checked.
@@ -350,6 +366,7 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 		NetworkBridge {
 			service: self.service.clone(),
 			validator: Arc::clone(&self.validator),
+			neighbor_sender: self.neighbor_sender.clone(),
 		}
 	}
 }

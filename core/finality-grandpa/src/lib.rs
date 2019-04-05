@@ -470,7 +470,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 {
 	use futures::future::{self, Loop as FutureLoop};
 
-	let network = NetworkBridge::new(network, config.clone());
+	let (network, network_startup) = NetworkBridge::new(network, config.clone());
 
 	let LinkHalf {
 		client,
@@ -672,6 +672,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			warn!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
+
+	let voter_work = network_startup.and_then(move |()| voter_work);
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }
