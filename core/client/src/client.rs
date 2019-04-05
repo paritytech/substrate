@@ -28,6 +28,7 @@ use runtime_primitives::{
 use consensus::{
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
 	BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId,
+	SelectChain, self,
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
@@ -61,7 +62,6 @@ use crate::error::{self, ErrorKind};
 use crate::in_mem;
 use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
-use consensus;
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
@@ -138,15 +138,6 @@ pub trait BlockchainEvents<Block: BlockT> {
 	///
 	/// Passing `None` as `filter_keys` subscribes to all storage changes.
 	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
-}
-
-/// Chain head information.
-pub trait ChainHead<Block: BlockT> {
-	/// Get best block header.
-	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
-	/// Get all leaves of the chain: block hashes that have no children currently.
-	/// Leaves that can never be finalized will not be returned.
-	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error>;
 }
 
 /// Fetch block body by ID.
@@ -1477,12 +1468,13 @@ where
 	}
 }
 
-impl<B, E, Block, RA> ChainHead<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> SelectChain<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
+	type Error = Error;
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
 	}

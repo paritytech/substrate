@@ -22,7 +22,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-use client::{BlockchainEvents, ChainHead, BlockBody};
+use client::{BlockchainEvents, SelectChain, BlockBody};
 use futures::prelude::*;
 use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
@@ -87,7 +87,7 @@ impl Service {
 			A: AuthoringApi + BlockNumberToHash + 'static,
 			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
-				+ ChainHead<<A as AuthoringApi>::Block>
+				+ consensus::SelectChain<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,
 			C: consensus::BlockImport<<A as AuthoringApi>::Block>
 				+ consensus::Authorities<<A as AuthoringApi>::Block> + Send + Sync + 'static,

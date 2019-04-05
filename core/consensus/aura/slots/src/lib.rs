@@ -25,10 +25,9 @@ use futures::{Future, IntoFuture, future::{self, Either}};
 use log::{warn, debug, info};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ProvideRuntimeApi, Block};
-use consensus_common::SyncOracle;
+use consensus_common::{SyncOracle, SelectChain};
 use inherents::{InherentData, InherentDataProviders};
 use aura_primitives::AuraApi;
-use client::ChainHead;
 use codec::Encode;
 
 /// A worker that should be invoked at every new slot.
@@ -70,7 +69,7 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: ChainHead<B> + Send + Sync + 'static,
+	C: SelectChain<B> + Send + Sync + 'static,
 	W: SlotWorker<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
 	SC: SlotCompatible + 'static,
@@ -127,7 +126,7 @@ pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: ChainHead<B>,
+	C: SelectChain<B>,
 	W: SlotWorker<B>,
 	SO: SyncOracle + Send + Clone,
 	SC: SlotCompatible,
