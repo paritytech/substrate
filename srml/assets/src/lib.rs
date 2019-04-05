@@ -21,14 +21,14 @@
 //!
 //! ## Overview
 //!
-//! The assets module provides functionality for asset management of fungible asset classes
+//! The Assets module provides functionality for asset management of fungible asset classes
 //! with a fixed supply, including:
 //!
 //! * Asset Issuance
 //! * Asset Transfer
 //! * Asset Destruction
 //!
-//! To use it in your module, you need to implement the assets [`Trait`](./trait.Trait.html).
+//! To use it in your runtime, you need to implement the assets [`Trait`](./trait.Trait.html).
 //!
 //! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
 //!
@@ -41,7 +41,7 @@
 //! * **Non-fungible asset:** An asset for which each unit has unique characteristics.
 //!
 //! ### Goals
-//! <!-- Original inspiration of paragraph: @gavofyork / staking module documentation -->
+//! <!-- Original inspiration of paragraph: @gavofyork / Staking module documentation -->
 //! <!-- FIXME - assumptions only. require an expert to peer review (or re-write) -->
 //!
 //! The assets system in Substrate is designed to make the following possible:
@@ -63,7 +63,7 @@
 //!
 //! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
 //!
-//! ### Public Functions ([`Module`])
+//! ### Public Functions
 //! <!-- Original author of descriptions: @gavofyork -->
 //!
 //! * `balance` - Get the asset `id` balance of `who`.
@@ -73,7 +73,7 @@
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the assets module in your custom module by exposing public functions to:
+//! The following example shows how to use the Assets module in your runtime by exposing public functions to:
 //!
 //! * Issue a new fungible asset for a token distribution event (airdrop).
 //! * Query the fungible asset holding balance of an account.
@@ -81,7 +81,7 @@
 //!
 //! ### Prerequisites
 //!
-//! Import the assets module and types and derive your custom module configuration traits from the assets module trait.
+//! Import the Assets module and types and derive your runtime's configuration traits from the Assets module trait.
 //!
 //! ### Simple Code Snippet
 //! <!-- Original author of example approach: @gautamdhameja, @shawntabrizi. See documentation for other SRML modules -->
