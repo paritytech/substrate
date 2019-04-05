@@ -601,8 +601,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					info!(target: "afg", "Pausing old validator set: {}", reason);
 
 					// not racing because old voter is shut down.
-					let completed_rounds = env.voter_set_state.completed_rounds();
-					env.update_voter_set_state(|| {
+					env.update_voter_set_state(|voter_set_state| {
+						let completed_rounds = voter_set_state.completed_rounds();
 						let set_state = VoterSetState::Paused { completed_rounds };
 						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 						Ok(set_state)

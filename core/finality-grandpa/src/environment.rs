@@ -216,11 +216,6 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 		}
 	}
 
-	/// Read the last completed round.
-	pub(crate) fn completed_rounds(&self) -> CompletedRounds<Block> {
-		self.inner.read().completed_rounds()
-	}
-
 	// NOTE: not exposed outside of this module intentionally.
 	fn with<F, R>(&self, f: F) -> R
 		where F: FnOnce(&mut VoterSetState<Block>) -> R
@@ -243,10 +238,10 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 
 impl<B, E, Block: BlockT, N: Network<Block>, RA> Environment<B, E, Block, N, RA> {
 	pub(crate) fn update_voter_set_state<F>(&self, f: F) -> Result<(), Error> where
-		F: FnOnce() -> Result<VoterSetState<Block>, Error>
+		F: FnOnce(&VoterSetState<Block>) -> Result<VoterSetState<Block>, Error>
 	{
 		self.voter_set_state.with(|voter_set_state| {
-			let set_state = f()?;
+			let set_state = f(&voter_set_state)?;
 			*voter_set_state = set_state;
 			Ok(())
 		})
@@ -438,7 +433,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			None => return Ok(()),
 		};
 
-		self.voter_set_state.with(|voter_set_state| {
+		self.update_voter_set_state(|voter_set_state| {
 			let completed_rounds = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } => completed_rounds,
 				_ => unreachable!("paused voters should not be voting; qed"),
@@ -450,10 +445,11 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			*voter_set_state = set_state; // after writing to DB successfully.
 
-			Ok(())
-		})
+			Ok(set_state)
+		})?;
+
+		Ok(())
 	}
 
 	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
@@ -466,7 +462,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			None => return Ok(()),
 		};
 
-		self.voter_set_state.with(|voter_set_state| {
+		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, propose) = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } =>
 					(completed_rounds, None),
@@ -481,10 +477,11 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			*voter_set_state = set_state; // after writing to DB successfully.
 
-			Ok(())
-		})
+			Ok(set_state)
+		})?;
+
+		Ok(())
 	}
 
 	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
@@ -497,7 +494,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			None => return Ok(()),
 		};
 
-		self.voter_set_state.with(|voter_set_state| {
+		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, propose, prevote) = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
 					(completed_rounds, propose, prevote),
@@ -510,10 +507,11 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			*voter_set_state = set_state; // after writing to DB successfully.
 
-			Ok(())
-		})
+			Ok(set_state)
+		})?;
+
+		Ok(())
 	}
 
 	fn completed(
@@ -532,7 +530,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.finalized.as_ref().map(|e| e.1),
 		);
 
-		self.voter_set_state.with(|voter_set_state| {
+		self.update_voter_set_state(|voter_set_state| {
 			let mut completed_rounds = voter_set_state.completed_rounds();
 
 			completed_rounds.push(CompletedRound {
@@ -548,10 +546,11 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			*voter_set_state = set_state; // after writing to DB successfully.
 
-			Ok(())
-		})
+			Ok(set_state)
+		})?;
+
+		Ok(())
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
