@@ -36,10 +36,35 @@ use void::Void;
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
 /// it is turned into a `CustomProtoHandler`. It then handles all communications that are specific
-/// to Substrate on that connection.
+/// to Substrate on that single connection.
 ///
 /// Note that there can be multiple instance of this struct simultaneously for same peer. However
-/// if that happens, only one main instance can communicate with the outer layers of the code.
+/// if that happens, only one main instance can communicate with the outer layers of the code. In
+/// other words, the outer layers of the code only ever see one handler.
+///
+/// ## State of the handler
+///
+/// There are six possible states for the handler:
+///
+/// - Enabled and open, which is a normal operation.
+/// - Enabled and closed, in which case it will try to open substreams.
+/// - Disabled and open, in which case it will try to close substreams.
+/// - Disabled and closed, in which case the handler is idle. The connection will be
+///   garbage-collected after a few seconds if nothing more happens.
+/// - Initializing and open.
+/// - Initializing and closed, which is the state the handler starts in.
+///
+/// The Init/Enabled/Disabled state is entirely controlled by the user by sending `Enable` or
+/// `Disable` messages to the handler. The handler itself never transitions automatically between
+/// these states. For example, if the handler reports a network misbehaviour, it will close the
+/// substreams but it is the role of the user to send a `Disabled` event if it wants the connection
+/// to close. Otherwise, the handler will try to reopen substreams.
+/// The handler starts in the "Initializing" state and must be transitionned to Enabled or Disabled
+/// as soon as possible.
+///
+/// The Open/Closed state is decided by the handler and is reported with the `CustomProtocolOpen`
+/// and `CustomProtocolClosed` events. The `CustomMessage` event can only be generated if the
+/// handler is open.
 ///
 /// ## How it works
 ///
@@ -552,7 +577,7 @@ where
 						return_value = Some(ProtocolsHandlerEvent::Custom(event));
 						ProtocolState::Disabled {
 							shutdown: shutdown.into_iter().collect(),
-							reenable: false
+							reenable: true
 						}
 					}
 					Err(err) => {
@@ -562,7 +587,7 @@ where
 						return_value = Some(ProtocolsHandlerEvent::Custom(event));
 						ProtocolState::Disabled {
 							shutdown: shutdown.into_iter().collect(),
-							reenable: false
+							reenable: true
 						}
 					}
 				}
