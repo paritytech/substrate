@@ -800,6 +800,7 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::stream::Stream;
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};

@@ -115,7 +115,7 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
 		let _ = runtime.block_on(slot_worker_future);
 	});
 
-	result_recv.recv().expect("Aura start thread result sender dropped")
+	result_recv.recv().expect("Slots start thread result sender dropped")
 }
 
 /// Start a new slot worker.
@@ -170,7 +170,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 
 				Either::A(
 					worker.on_slot(chain_head, slot_info).into_future()
-						.map_err(|e| debug!(target: "aura", "Encountered aura error: {:?}", e))
+						.map_err(|e| debug!(target: "slots", "Encountered consensus error: {:?}", e))
 				)
 			})
 	};
@@ -180,13 +180,13 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 		authorship_task.catch_unwind().then(|res| {
 			match res {
 				Ok(Ok(())) => (),
-				Ok(Err(())) => warn!("Aura authorship task terminated unexpectedly. Restarting"),
+				Ok(Err(())) => warn!(target: "slots", "Authorship task terminated unexpectedly. Restarting"),
 				Err(e) => {
 					if let Some(s) = e.downcast_ref::<&'static str>() {
-						warn!("Aura authorship task panicked at {:?}", s);
+						warn!(target: "slots", "Authorship task panicked at {:?}", s);
 					}
 
-					warn!("Restarting Aura authorship task");
+					warn!(target: "slots", "Restarting authorship task");
 				}
 			}
 
@@ -213,10 +213,15 @@ pub enum CheckedHeader<H, S> {
 pub trait SlotData {
 	/// Gets the slot duration.
 	fn slot_duration(&self) -> u64;
+
+	/// The static slot key
+	const SLOT_KEY: &'static [u8];
 }
 
 impl SlotData for u64 {
 	fn slot_duration(&self) -> u64 { *self }
+
+	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
 }
 
 /// A slot duration. Create with `get_or_compute`.
@@ -227,15 +232,15 @@ pub struct SlotDuration<T: Clone>(T);
 impl<T: Clone> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
+	/// 
+	/// `slot_key` is marked as `'static`, as it should really be an 
 	pub fn get_or_compute<B: Block, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
 		C: client::backend::AuxStore,
 		C: ProvideRuntimeApi,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> ::client::error::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{
-		const SLOT_KEY: &[u8] = b"aura_slot_duration";
-
-		match client.get_aux(SLOT_KEY)? {
+		match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.ok_or_else(|| ::client::error::ErrorKind::Backend(
@@ -253,7 +258,7 @@ impl<T: Clone> SlotDuration<T> {
 				);
 
 				genesis_slot_duration.using_encoded(|s| {
-					client.insert_aux(&[(SLOT_KEY, &s[..])], &[])
+					client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[])
 				})?;
 
 				Ok(SlotDuration(genesis_slot_duration))
