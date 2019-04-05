@@ -18,7 +18,7 @@
 //!
 //! ## Overview
 //!
-//! The aura module extends Aura consensus by managing offline reporting.
+//! The Aura module extends Aura consensus by managing offline reporting.
 //!
 //! ## Interface
 //!
@@ -62,12 +62,12 @@
 //!
 //! ## Related Modules
 //!
-//! - [`staking`](../srml_staking/index.html): The staking module is called in aura to enforce slashing
+//! - [`staking`](../srml_staking/index.html): The Staking module is called in aura to enforce slashing
 //!  if validators miss a certain number of slots (see the [`StakingSlasher`](./struct.StakingSlasher.html)
 //!  struct and associated method).
-//! - [`timestamp`](../srml_timestamp/index.html): The timestamp module is used in aura to track
+//! - [`timestamp`](../srml_timestamp/index.html): The Timestamp module is used in aura to track
 //! consensus rounds (via `slots`).
-//! - [`consensus`](../srml_consensus/index.html): The consensus module does not relate directly to aura,
+//! - [`consensus`](../srml_consensus/index.html): The Consensus module does not relate directly to aura,
 //!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References
@@ -222,7 +222,7 @@ impl AuraReport {
 }
 
 impl<T: Trait> Module<T> {
-	/// Determine the Aura slot-duration based on the timestamp module configuration.
+	/// Determine the Aura slot-duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> u64 {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
