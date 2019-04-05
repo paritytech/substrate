@@ -51,7 +51,7 @@ use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use authorities::AuthoritiesApi;
 
-use futures::{Stream, Future, IntoFuture, future};
+use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
 
@@ -69,7 +69,7 @@ pub use consensus_common::SyncOracle;
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
 
-pub struct SlotDuration(slots::SlotDuration);
+pub struct SlotDuration(slots::SlotDuration<u64>);
 
 impl SlotDuration {
 	/// Either fetch the slot duration from disk or compute it from the genesis
@@ -161,6 +161,7 @@ impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P
 	}
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct AuraSlotCompatible;
 
 impl SlotCompatible for AuraSlotCompatible {
@@ -211,7 +212,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 		force_authoring,
 	};
 
-	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
+	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, u64, _>(
 		slot_duration.0,
 		client,
 		Arc::new(worker),
@@ -257,7 +258,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
-	slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
+	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
 		client,
 		Arc::new(worker),

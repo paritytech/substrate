@@ -31,37 +31,39 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Specialized `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 
-/// Dried Danta testnet generator
-pub fn dried_danta_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_embedded(include_bytes!("../res/dried-danta.json"))
+/// Emberic Elm testnet generator
+pub fn emberic_elm_config() -> Result<ChainSpec, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/emberic-elm.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
 	// stash, controller, session-key
 	// generated with secret:
-	// for i in 1 2 3 4 ; do for j in stash controller; do subkey -p danta-$i-$j restore $secret; done; done
+	// for i in 1 2 3 4 ; do for j in stash controller; do subkey inspect "$secret"/elm/$j/$i; done; done
 	// and
-	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 -p danta-$i-$j restore $secret; done; done
+	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//elm//$j//$i; done; done
+
+
 	let initial_authorities: Vec<(AccountId, AccountId, AuthorityId)> = vec![(
-		hex!["d807f8bd6b4b02b3db716dd5372960b094ed0e62b5704a07bc990130a642992b"].unchecked_into(), // 5GwxZv7LxSUQn89TLUaLi3oEWhFcabqW3nHcEg2J88gZNhrb
-		hex!["1a934af462454e512e22b5d9455c0c3c2df479b1c61406b3d990f6bc2eb25e09"].unchecked_into(), // 5CfYrg5cW8UebBdfJpJbKFhZLyk7yHWXUgdxZnSGb2dWKgpt
-		hex!["831fcce3a9565baf093b52568a8cb9875cb54974d80da8fc4f0cc767128a23e9"].unchecked_into(), // 5F2daQPHK7yv4Yuwyz3cggvvn1R5u1ofGMQ5LK5XvnfebMcX
+		hex!["72b52eb36f57b4bae756e4f064cf2e97df80d5f9c2f06ff31206a9be8c7b371c"].unchecked_into(), // 5Ef78yxqfaxVzrFCemYcSgwVtMV85ywykhLNm5WKTsZV22HZ
+		hex!["f0fae46aeb1a7ce8ca65f2bf885d09cd7f525bc00e9f6e73b5ea74402a2c4c19"].unchecked_into(), // 5HWfszmRMbzcjGmumYkkHtNJbi9y428JHgPeftVenvDgVUjh
+		hex!["e29624233b2cba342750217aa1883f6ec624134dd306efd230a988e5cb37d9ed"].unchecked_into(), // 5HBoHDLMR4jPwB6BCLyd2qfYBHytFhGs8fsa1h5PzhYd3WBq
 	),(
-		hex!["12652f26e427c56268095bb0ec5824471e37722b073a9fa5de61c61c1de94656"].unchecked_into(), // 5CUpn2JmpsWkHQjZgWjN3rqPEUnjjUQZYcMk14nbUgR2Gpab
-		hex!["5279e73e22971d729276ebad4eb6804d1b9c0c35bd32e8aba4513c674760a461"].unchecked_into(), // 5Dvqzke7Mdp3fP6Ysut7UXPSepPr3Qguys6LNkZGPSwXwAkR
-		hex!["dbe61640d854bb7bf83cbfaf638a8a4c76c49a919ec3bbdd86799061fc1903e4"].unchecked_into(), // 5H32hCtKf6nXSckviVhUvWb7N14wDCRunRkCM29mxEXwjcUZ
+		hex!["2254035a15597c1c19968be71593d2d0131e18ae90049e49178970f583ac3e17"].unchecked_into(), // 5CqiScHtxUatcQpck1tUks51o3pSjKsdCi2CLEHvMM7tc4Qi
+		hex!["eacb8edf6b05cb909a3d2bd8c6bffb13be3069ec6a69f1fa25e46103c5190267"].unchecked_into(), // 5HNZXnSgw21idbuegTC1J8Txkja97RPnnWkX68ewnrJDec2Z
+		hex!["e19b6b89729a41638e57dead9c993425287d386fa4963306b63f018732843495"].unchecked_into(), // 5HAWoPYfyYFHjacy8H2MDmHra7jVrPtBfFMPgd8CadpSqotL
 	),(
-		hex!["a81d738fdeeaed440cfce5635e0820d0d23e89207cf66a62b8c0d2a968e37d32"].unchecked_into(), // 5Fs8ehAjDEnenDwULCPnEr3HVXgepAVfyk9ABW84NfxCYtWD
-		hex!["443a2c779a5f5dada8ee6921efec9673f67e5ce1bd6012899ff6c1adc437696c"].unchecked_into(), // 5DcAPqR269myKXhZmwbU1x2xLbuTojr85jHNRuDhrFdZ3vwi
-		hex!["5bc01f56225e8602372fb343dba65a73e20c55bdbb3b8343a8f34df298a616fb"].unchecked_into(), // 5E91HbY2xo2qDJzi3KY8nRXjDNAQE9WtmMaji6YRwT8DAuK1
+		hex!["fe6211db8bd436e0d1cf37398eac655833fb47497e0f72ec00ab160c88966b7e"].unchecked_into(), // 5HpF9orzkmJ9ga3yrzNS9ckifxF3tbQjadEmCEiZJQ2fPgun
+		hex!["f06dd616c75cc4b2b01f325accf79b4f66a525ede0a59f48dcce2322b8798f5c"].unchecked_into(), // 5HVwyfB3LRsFXm7frEHDYyhwdpTYDRWxEqDKBYVyLi6DsPXq
+		hex!["1be80f2d4513a1fbe0e5163874f729baa5498486ac3914ac3fe2e1817d7b3f44"].unchecked_into(), // 5ChJ5wjqy2HY1LZw1EuQPGQEHgaS9sFu9yDD6KRX7CzwidTN
 	),(
-		hex!["e269e835e0bc07c497d55bc17c7bb29c85c5615f9e61582ffdeca7e5f5c66578"].unchecked_into(), // 5HBa95U5HDFCV1N5Xyrjti65F71tHRQcPbZBmkxRJ39SpqzM
-		hex!["3e9829e6fd4fc7501b504fc16f12177c6c7f38aeb3b8344efb9b15ee85118b2c"].unchecked_into(), // 5DUn2afs2QevZ6PrGu8snrt76157oacH6JXUD8JNM18VKMwK
-		hex!["0fd673ee5e95ed124bcd71463ff924c810573dad91527ab9d2b5af36f66ff84b"].unchecked_into(), // 5CRUHGLA1JYe2v4p479VCHybqjB9uBXjGkJ2npdduVdrTuUM
+		hex!["60779817899466dbd476a0bc3a38cc64b7774d5fb646c3d291684171e67a0743"].unchecked_into(), // 5EFByrDMMa2m9hv4jrpykXaUyqjJ9XZH81kJE4JBa1Sz2psT
+		hex!["2a32622a5da54a80dc704a05f2d761c96d4748beedd83f61ca20a90f4a257678"].unchecked_into(), // 5D22qQJsLm2JUh8pEfrKahbkW21QQrHTkm4vUteei67fadLd
+		hex!["f54d9f5ed217ce07c0c5faa5277a0356f8bfd884d201f9d2c9e171568e1bf077"].unchecked_into(), // 5HcLeWrsfL9RuGp94pn1PeFxP7D1587TTEZzFYgFhKCPZLYh
 	)];
-	// generated with secret: subkey -p danta-root restore $secret
+	// generated with secret: subkey inspect "$secret"/elm
 	let endowed_accounts: Vec<AccountId> = vec![
-		hex!["343df6f04ffae0840f214f6cb0da00b612c7e9347f980e7afafc520582f79136"].unchecked_into(), // 5DFCkiP9vky31C1ZP3LpuQYinLAFwQqq6vda7NXa8ALCpq5D
+		hex!["c224ccba63292331623bbf06a55f46607824c2580071a80a17c53cab2f999e2f"].unchecked_into(), //5GTG5We6twtoF6S4kUXJ77rWBsHBoHLS3JVf5KvvnxKdGQZr
 	];
 	const MILLICENTS: u128 = 1_000_000_000;
 	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.

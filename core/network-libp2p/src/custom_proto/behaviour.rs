@@ -31,7 +31,7 @@ pub struct CustomProto<TMessage, TSubstream> {
 	protocol: RegisteredProtocol<TMessage>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
-	peerset: substrate_peerset::PeersetMut,
+	peerset: substrate_peerset::Peerset,
 
 	/// List of peers in our state.
 	peers: FnvHashMap<PeerId, PeerState>,
@@ -175,7 +175,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: RegisteredProtocol<TMessage>,
-		peerset: substrate_peerset::PeersetMut,
+		peerset: substrate_peerset::Peerset,
 	) -> Self {
 		CustomProto {
 			protocol,
@@ -213,7 +213,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			// DisabledPendingEnable => Disabled.
 			PeerState::DisabledPendingEnable { open, connected_point, timer } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 				let banned_until = Some(if let Some(ban) = ban {
 					cmp::max(timer.deadline(), Instant::now() + ban)
 				} else {
@@ -225,7 +225,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			// Enabled => Disabled.
 			PeerState::Enabled { open, connected_point } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
@@ -313,9 +313,11 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 
 	/// Indicates to the peerset that we have discovered new addresses for a given node.
-	pub fn add_discovered_node(&mut self, peer_id: &PeerId) {
-		debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-		self.peerset.discovered(peer_id.clone())
+	pub fn add_discovered_nodes<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
@@ -484,7 +486,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming,
 				sending back dropped", index, incoming.peer_id);
 			debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
-			self.peerset.dropped(&incoming.peer_id);
+			self.peerset.dropped(incoming.peer_id.clone());
 			return
 		}
 
@@ -662,7 +664,7 @@ where
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was disabled \
 					(through {:?}) but pending enable", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer.deadline() });
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
@@ -679,7 +681,7 @@ where
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was enabled \
 					(through {:?})", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
@@ -730,7 +732,7 @@ where
 						until: Instant::now() + Duration::from_secs(5)
 					};
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-					self.peerset.dropped(peer_id)
+					self.peerset.dropped(peer_id.clone())
 				},
 
 				// We can still get dial failures even if we are already connected to the node,

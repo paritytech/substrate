@@ -19,8 +19,7 @@
 
 pub use babe_primitives::*;
 use parity_codec::{Decode, Encode, Input};
-use runtime_primitives::{generic, traits::{Block, ProvideRuntimeApi}};
-use client::{error::Result as CResult, backend::AuxStore};
+use runtime_primitives::generic;
 use primitives::sr25519::{
 	Public,
 	Signature,
@@ -32,24 +31,6 @@ use schnorrkel::{
 	vrf::{VRFProof, VRF_PROOF_LENGTH},
 	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
-
-
-pub struct SlotDuration(slots::SlotDuration);
-
-impl SlotDuration {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
-	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
-	where
-		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B>,
-	{
-		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
-	}
-
-	pub fn get(&self) -> u64 {
-		self.0.get()
-	}
-}
 
 /// A BABE seal.  It includes:
 /// 
