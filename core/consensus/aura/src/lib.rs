@@ -34,11 +34,14 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 };
 use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
-use slots::impl_slot;
-use client::ChainHead;
-use client::block_builder::api::BlockBuilder as BlockBuilderApi;
-use client::blockchain::ProvideCache;
-use client::runtime_api::{ApiExt, Core as CoreApi};
+use client::{
+	ChainHead,
+	block_builder::api::BlockBuilder as BlockBuilderApi,
+	blockchain::ProvideCache,
+	runtime_api::{ApiExt, Core as CoreApi},
+	error::Result as CResult,
+	backend::AuxStore,
+};
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
@@ -66,7 +69,22 @@ pub use consensus_common::SyncOracle;
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
 
-impl_slot!(SlotDuration, AuraApi);
+pub struct SlotDuration(slots::SlotDuration);
+
+impl SlotDuration {
+	/// Either fetch the slot duration from disk or compute it from the genesis
+	/// state.
+	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
+	where
+		C: AuxStore, C: ProvideRuntimeApi, C::Api: AuraApi<B>,
+	{
+		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
+	}
+
+	pub fn get(&self) -> u64 {
+		self.0.get()
+	}
+}
 
 /// Get slot author for given block along with authorities.
 fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
