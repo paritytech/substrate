@@ -230,10 +230,11 @@ impl SlotData for u64 {
 pub struct SlotDuration<T: Clone>(T);
 
 impl<T: Clone> SlotDuration<T> {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
+	/// Either fetch the slot duration from disk or compute it from the
+	/// genesis state.
 	///
-	/// `slot_key` is marked as `'static`, as it should really be an 
+	/// `slot_key` is marked as `'static`, as it should really be a
+	/// compile-time constant.
 	pub fn get_or_compute<B: Block, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
 		C: client::backend::AuxStore,
 		C: ProvideRuntimeApi,
@@ -271,6 +272,7 @@ impl<T: Clone> SlotDuration<T> {
 		self.0.clone()
 	}
 
+	/// Get the slot duration in milliseconds
 	pub fn slot_duration(&self) -> u64
 		where T: SlotData
 	{

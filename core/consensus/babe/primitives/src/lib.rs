@@ -41,8 +41,16 @@ impl BabeConfiguration {
 	/// only the value provided by this type at genesis will be used.
 	///
 	/// Dynamic expected block time may be supported in the future.
-	fn expected_block_time(&self) -> u64 {
+	pub fn expected_block_time(&self) -> u64 {
 		self.expected_block_time
+	}
+
+	/// Return the slot duration in milliseconds for BABE.  Currently, only
+	/// the value provided by this type at genesis will be used.
+	///
+	/// Dynamic slot duration may be supported in the future.
+	pub fn slot_duration(&self) -> u64 {
+		self.slot_duration
 	}
 }
 
