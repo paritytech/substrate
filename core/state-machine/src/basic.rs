@@ -112,6 +112,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		}
 	}
 
+	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		Externalities::<H>::storage(self, key)
+	}
+
 	fn child_storage(&self, _subtrie: &SubTrie, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!("basic not used for child trie");
 	}
