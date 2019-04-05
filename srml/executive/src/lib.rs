@@ -23,7 +23,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, Hash, As, Digest, NumberFor, Block as BlockT, OffchainWorker
+	OnInitialize, As, Digest, NumberFor, Block as BlockT, OffchainWorker
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -238,9 +238,9 @@ impl<
 		}
 
 		// check storage root.
-		let storage_root = System::Hashing::storage_root();
+		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
-		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
+		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
 	/// Check a given transaction for validity. This doesn't execute any
