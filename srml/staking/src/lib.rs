@@ -413,9 +413,7 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
-	type Currency:
-		Currency<Self::AccountId> +
-		LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
