@@ -28,7 +28,7 @@ use log::{info, warn};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
-use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
+use crate::environment::{CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState};
 use crate::NewAuthoritySet;
 
 use substrate_primitives::ed25519::Public as AuthorityId;
@@ -119,7 +119,7 @@ fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<
 pub(crate) struct PersistentData<Block: BlockT> {
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) set_state: VoterSetState<Block>,
+	pub(crate) set_state: SharedVoterSetState<Block>,
 }
 
 fn migrate_from_version0<Block: BlockT, B, G>(
@@ -268,7 +268,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					consensus_changes: Arc::new(consensus_changes.into()),
-					set_state,
+					set_state: set_state.into(),
 				});
 			}
 		},
@@ -277,7 +277,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					consensus_changes: Arc::new(consensus_changes.into()),
-					set_state,
+					set_state: set_state.into(),
 				});
 			}
 		},
@@ -311,7 +311,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 				return Ok(PersistentData {
 					authority_set: set.into(),
 					consensus_changes: Arc::new(consensus_changes.into()),
-					set_state,
+					set_state: set_state.into(),
 				});
 			}
 		},
@@ -348,7 +348,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 
 	Ok(PersistentData {
 		authority_set: genesis_set.into(),
-		set_state: genesis_state,
+		set_state: genesis_state.into(),
 		consensus_changes: Arc::new(consensus_changes.into()),
 	})
 }

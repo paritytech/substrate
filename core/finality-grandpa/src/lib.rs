@@ -490,18 +490,18 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		set_id: authority_set.set_id(),
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
-		voter_set_state: SharedVoterSetState::new(set_state.clone()),
+		voter_set_state: set_state.clone(),
 	});
 
-	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
+	let initial_state = (initial_environment, voter_commands_rx.into_future());
 	let voter_work = future::loop_fn(initial_state, move |params| {
-		let (env, set_state, voter_commands_rx) = params;
+		let (env, voter_commands_rx) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?config.name(), "set_id" => ?env.set_id
 		);
 
-		let mut maybe_voter = match set_state.clone() {
+		let mut maybe_voter = match &*env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
 				let chain_info = match client.info() {
 					Ok(i) => i,
@@ -582,6 +582,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						current_round: HasVoted::No,
 					};
 
+					let set_state: SharedVoterSetState<_> = set_state.into();
+
 					let env = Arc::new(Environment {
 						inner: client,
 						config,
@@ -590,21 +592,23 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						network,
 						authority_set,
 						consensus_changes,
-						voter_set_state: SharedVoterSetState::new(set_state.clone()),
+						voter_set_state: set_state,
 					});
 
-					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
+					Ok(FutureLoop::Continue((env, voter_commands_rx)))
 				}
 				VoterCommand::Pause(reason) => {
 					info!(target: "afg", "Pausing old validator set: {}", reason);
 
 					// not racing because old voter is shut down.
 					let completed_rounds = env.voter_set_state.completed_rounds();
-					let set_state = VoterSetState::Paused { completed_rounds };
+					env.update_voter_set_state(|| {
+						let set_state = VoterSetState::Paused { completed_rounds };
+						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+						Ok(set_state)
+					})?;
 
-					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
-
-					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
+					Ok(FutureLoop::Continue((env, voter_commands_rx)))
 				},
 			}
 		};

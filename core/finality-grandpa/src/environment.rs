@@ -112,7 +112,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	}
 }
 
-#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub enum VoterSetState<Block: BlockT> {
 	Live {
 		completed_rounds: CompletedRounds<Block>,
@@ -135,7 +135,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 }
 
 /// Whether we've voted already during a prior run of the program.
-#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub enum HasVoted<Block: BlockT> {
 	/// Has not voted already in this round.
 	No,
@@ -182,14 +182,25 @@ impl<Block: BlockT> HasVoted<Block> {
 	}
 }
 
+#[derive(Clone)]
 pub struct SharedVoterSetState<Block: BlockT> {
-	inner: RwLock<VoterSetState<Block>>,
+	inner: Arc<RwLock<VoterSetState<Block>>>,
+}
+
+impl<Block: BlockT> From<VoterSetState<Block>> for SharedVoterSetState<Block> {
+	fn from(set_state: VoterSetState<Block>) -> Self {
+		SharedVoterSetState::new(set_state)
+	}
 }
 
 impl<Block: BlockT> SharedVoterSetState<Block> {
 	/// Create a new tracker based on some starting last-completed round.
 	pub(crate) fn new(state: VoterSetState<Block>) -> Self {
-		SharedVoterSetState { inner: RwLock::new(state) }
+		SharedVoterSetState { inner: Arc::new(RwLock::new(state)) }
+	}
+
+	pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
+		self.inner.read()
 	}
 
 	pub(crate) fn has_voted(&self, current_id: Option<&AuthorityId>) -> HasVoted<Block> {
@@ -228,6 +239,18 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
+}
+
+impl<B, E, Block: BlockT, N: Network<Block>, RA> Environment<B, E, Block, N, RA> {
+	pub(crate) fn update_voter_set_state<F>(&self, f: F) -> Result<(), Error> where
+		F: FnOnce() -> Result<VoterSetState<Block>, Error>
+	{
+		self.voter_set_state.with(|voter_set_state| {
+			let set_state = f()?;
+			*voter_set_state = set_state;
+			Ok(())
+		})
+	}
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
