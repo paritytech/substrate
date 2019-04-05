@@ -44,11 +44,13 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
+		#[cfg(feature = "include-wasm-blob")]
 		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm").to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
+				#[cfg(feature = "include-wasm-blob")]
 				(well_known_keys::CODE.into(), wasm_runtime),
 				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
 				(well_known_keys::AUTHORITY_COUNT.into(), vec![].and(&(self.authorities.len() as u32))),
