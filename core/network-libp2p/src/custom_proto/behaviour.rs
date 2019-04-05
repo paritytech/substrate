@@ -792,9 +792,9 @@ where
 				debug!(target: "sub-libp2p", "Handler({:?}) => Closed({:?})", source, result);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
-					error!(target: "sub-libp2p", "State mismatch in the custom protos handler");
 					entry
 				} else {
+					error!(target: "sub-libp2p", "State mismatch in the custom protos handler");
 					return
 				};
 
