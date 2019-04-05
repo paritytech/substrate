@@ -559,6 +559,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		self.update_voter_set_state(|voter_set_state| {
 			let mut completed_rounds = voter_set_state.completed_rounds();
 
+			// NOTE: the Environment assumes that rounds are *always* completed in-order.
 			if !completed_rounds.push(CompletedRound {
 				number: round,
 				state: state.clone(),
