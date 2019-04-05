@@ -149,6 +149,12 @@ pub fn storage_root() -> H256 {
 	).unwrap_or(H256::zero())
 }
 
+pub fn storage_hash(key: &[u8]) -> H256 {
+	ext::with(|ext|
+		ext.storage_hash(key)
+	).unwrap().unwrap_or(H256::zero())
+}
+
 /// "Commit" all existing operations and compute the resultant child storage root.
 pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 	ext::with(|ext|
@@ -331,5 +337,21 @@ mod std_tests {
 			assert!(storage(b":abcd").is_none());
 			assert!(storage(b":abc").is_none());
 		});
+	}
+
+	#[test]
+	fn get_storage_hash() {
+		let mut t = BasicExternalities::default();
+		with_externalities(&mut t, || {
+			assert_eq!(storage(b"hello"), None);
+			set_storage(b"hello", b"world");
+			assert_eq!(storage(b"hello"), Some(b"world".to_vec()));
+			assert_eq!(storage(b"foo"), None);
+			set_storage(b"foo", b"world");
+
+			let hello_hash = storage_hash(b"hello");
+			let foo_hash = storage_hash(b"foo");
+			assert_eq!(hello_hash, foo_hash);
+		})
 	}
 }
