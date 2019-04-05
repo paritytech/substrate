@@ -16,16 +16,16 @@
 
 //! # Executive Module
 //!
-//! The executive module acts as the orchestration layer for the runtime. It dispatches incoming
+//! The Executive module acts as the orchestration layer for the runtime. It dispatches incoming
 //! extrinsic calls to the respective modules in the runtime.
 //!
 //! ## Overview
 //!
 //! The executive module is not a typical SRML module providing functionality around a specific feature.
 //! It is cross-cutting framework component for the SRML. It works in conjunction with the
-//! [SRML system module](../srml_system/index.html) to perform these cross-cutting functions.
+//! [SRML System module](../srml_system/index.html) to perform these cross-cutting functions.
 //!
-//! The executive module provides functions to:
+//! The Executive module provides functions to:
 //!
 //! - Check transaction validity.
 //! - Initialize a block.
@@ -36,7 +36,7 @@
 //!
 //! ### Implementations
 //!
-//! The executive module provides the following implementations:
+//! The Executive module provides the following implementations:
 //!
 //! - `ExecuteBlock`: Trait that can be used to execute a block.
 //! - `Executive`: Type that can be used to make the SRML available from the runtime.
