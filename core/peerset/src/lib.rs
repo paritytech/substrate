@@ -365,7 +365,11 @@ impl Peerset {
 	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
 	/// peerset is already connected to, in which case it must not answer.
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
-		trace!("Incoming {}\nin_slots={:?}\nout_slots={:?}", peer_id, self.data.in_slots, self.data.out_slots);
+		trace!(
+			target: "peerset",
+			"Incoming {:?}\nin_slots={:?}\nout_slots={:?}",
+			peer_id, self.data.in_slots, self.data.out_slots
+		);
 		// if `reserved_only` is set, but this peer is not a part of our discovered list,
 		// a) it is not reserved, so we reject the connection
 		// b) we are already connected to it, so we reject the connection
@@ -417,7 +421,11 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, peer_id: PeerId) {
-		trace!("Dropping {}\nin_slots={:?}\nout_slots={:?}", peer_id, self.data.in_slots, self.data.out_slots);
+		trace!(
+			target: "peerset",
+			"Dropping {:?}\nin_slots={:?}\nout_slots={:?}",
+			peer_id, self.data.in_slots, self.data.out_slots
+		);
 		// Automatically connect back if reserved.
 		if self.data.in_slots.is_connected_and_reserved(&peer_id) || self.data.out_slots.is_connected_and_reserved(&peer_id) {
 			self.message_queue.push_back(Message::Connect(peer_id));
@@ -434,16 +442,20 @@ impl Peerset {
 		self.alloc_slots();
 	}
 
-	/// Adds a discovered peer id to the PSM.
+	/// Adds discovered peer ids to the PSM.
 	///
 	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
 	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
-	pub fn discovered(&mut self, peer_id: PeerId) {
-		if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
-			return;
+	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
+		for peer_id in peer_ids {
+			if !self.data.in_slots.contains(&peer_id) && !self.data.out_slots.contains(&peer_id) && !self.data.discovered.contains(&peer_id) {
+				trace!(target: "peerset", "Discovered new peer: {:?}", peer_id);
+				self.data.discovered.add_peer(peer_id, SlotType::Common);
+			} else {
+				trace!(target: "peerset", "Discovered known peer: {:?}", peer_id);
+			}
 		}
 
-		self.data.discovered.add_peer(peer_id, SlotType::Common);
 		self.alloc_slots();
 	}
 
@@ -721,9 +733,9 @@ mod tests {
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.discovered(discovered.clone());
-		peerset.discovered(discovered.clone());
-		peerset.discovered(discovered2);
+		peerset.discovered(Some(discovered.clone()));
+		peerset.discovered(Some(discovered.clone()));
+		peerset.discovered(Some(discovered2));
 
 		assert_messages(peerset, vec![
 			Message::Connect(bootnode),
