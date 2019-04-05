@@ -371,7 +371,8 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	}
 }
 
-/// A sink for outgoing messages to the network.
+/// A sink for outgoing messages to the network. Any messages that are sent will
+/// be replaced, as appropriate, according to the given `HasVoted`.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,

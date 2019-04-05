@@ -493,6 +493,32 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		voter_set_state: set_state.clone(),
 	});
 
+	initial_environment.update_voter_set_state(|voter_set_state| {
+		match voter_set_state {
+			VoterSetState::Live { current_round: HasVoted::Yes(id, _), completed_rounds } => {
+				let local_id = config.local_key.clone().map(|pair| pair.public());
+				let has_voted = match local_id {
+					Some(local_id) => if *id == local_id {
+						// keep the previous votes
+						return Ok(None);
+					} else {
+						HasVoted::No
+					},
+					_ => HasVoted::No,
+				};
+
+
+				// NOTE: only updated on disk when the voter first
+				// proposes/prevotes/precommits or completes a round.
+				Ok(Some(VoterSetState::Live {
+					current_round: has_voted,
+					completed_rounds: completed_rounds.clone(),
+				}))
+			},
+			_ => Ok(None),
+		}
+	}).expect("operation inside closure cannot fail; qed");
+
 	let initial_state = (initial_environment, voter_commands_rx.into_future());
 	let voter_work = future::loop_fn(initial_state, move |params| {
 		let (env, voter_commands_rx) = params;
@@ -605,7 +631,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						let completed_rounds = voter_set_state.completed_rounds();
 						let set_state = VoterSetState::Paused { completed_rounds };
 						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
-						Ok(set_state)
+						Ok(Some(set_state))
 					})?;
 
 					Ok(FutureLoop::Continue((env, voter_commands_rx)))

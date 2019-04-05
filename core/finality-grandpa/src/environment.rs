@@ -225,15 +225,10 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 		self.inner.read()
 	}
 
-	/// Return vote status information taking into account the given local key.
-	pub(crate) fn has_voted(&self, current_id: Option<&AuthorityId>) -> HasVoted<Block> {
-		let current_id = match current_id {
-			Some(current_id) => current_id,
-			_ => return HasVoted::No,
-		};
-
+	/// Return vote status information for the current round.
+	pub(crate) fn has_voted(&self) -> HasVoted<Block> {
 		match &*self.inner.read() {
-			VoterSetState::Live { current_round: HasVoted::Yes(id, vote), .. } if id == current_id =>
+			VoterSetState::Live { current_round: HasVoted::Yes(id, vote), .. } =>
 				HasVoted::Yes(id.clone(), vote.clone()),
 			_ => HasVoted::No,
 		}
@@ -264,11 +259,12 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA> Environment<B, E, Block, N, RA>
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
 	pub(crate) fn update_voter_set_state<F>(&self, f: F) -> Result<(), Error> where
-		F: FnOnce(&VoterSetState<Block>) -> Result<VoterSetState<Block>, Error>
+		F: FnOnce(&VoterSetState<Block>) -> Result<Option<VoterSetState<Block>>, Error>
 	{
 		self.voter_set_state.with(|voter_set_state| {
-			let set_state = f(&voter_set_state)?;
-			*voter_set_state = set_state;
+			if let Some(set_state) = f(&voter_set_state)? {
+				*voter_set_state = set_state;
+			}
 			Ok(())
 		})
 	}
@@ -426,7 +422,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
 			local_key.cloned(),
-			self.voter_set_state.has_voted(local_key.map(|pair| pair.public()).as_ref()),
+			self.voter_set_state.has_voted(),
 		);
 
 		// schedule incoming messages from the network to be held until
@@ -462,7 +458,16 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		self.update_voter_set_state(|voter_set_state| {
 			let completed_rounds = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } => completed_rounds,
-				_ => unreachable!("paused voters should not be voting; qed"),
+				VoterSetState::Live { current_round, .. } if current_round.propose().is_some() => {
+					// we've already proposed in this round (in a previous run),
+					// ignore the given vote and don't update the voter set
+					// state
+					return Ok(None);
+				},
+				_ => {
+					let msg = "Voter proposing after prevote/precommit or while paused.";
+					return Err(Error::Safety(msg.to_string()));
+				},
 			};
 
 			let set_state = VoterSetState::<Block>::Live {
@@ -472,7 +477,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
-			Ok(set_state)
+			Ok(Some(set_state))
 		})?;
 
 		Ok(())
@@ -494,7 +499,16 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 					(completed_rounds, None),
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
 					(completed_rounds, Some(propose)),
-				_ => unreachable!("paused voters should not be voting; qed"),
+				VoterSetState::Live { current_round, .. } if current_round.prevote().is_some() => {
+					// we've already prevoted in this round (in a previous run),
+					// ignore the given vote and don't update the voter set
+					// state
+					return Ok(None);
+				},
+				_ => {
+					let msg = "Voter prevoting after precommit or while paused.";
+					return Err(Error::Safety(msg.to_string()));
+				},
 			};
 
 			let set_state = VoterSetState::<Block>::Live {
@@ -504,7 +518,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
-			Ok(set_state)
+			Ok(Some(set_state))
 		})?;
 
 		Ok(())
@@ -524,7 +538,16 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			let (completed_rounds, propose, prevote) = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
 					(completed_rounds, propose, prevote),
-				_ => unreachable!("paused voters should not be voting; qed"),
+				VoterSetState::Live { current_round: HasVoted::Yes(_, Vote::Precommit(..)), .. } => {
+					// we've already precommitted in this round (in a previous run),
+					// ignore the given vote and don't update the voter set
+					// state
+					return Ok(None);
+				},
+				_ => {
+					let msg = "Voter precommitting while paused.";
+					return Err(Error::Safety(msg.to_string()));
+				}
 			};
 
 			let set_state = VoterSetState::<Block>::Live {
@@ -534,7 +557,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
-			Ok(set_state)
+			Ok(Some(set_state))
 		})?;
 
 		Ok(())
@@ -566,7 +589,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 				base,
 				votes,
 			}) {
-				let msg = "Completed round is older than the last completed round.";
+				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));
 			};
 
@@ -577,7 +600,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
-			Ok(set_state)
+			Ok(Some(set_state))
 		})?;
 
 		Ok(())
