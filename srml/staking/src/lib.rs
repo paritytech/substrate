@@ -659,6 +659,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let stash = &ledger.stash;
+			ensure!(<staking::Module<T>>::next_key_for(stash).is_some(), "session key required to validate");
 			ensure!(prefs.unstake_threshold <= MAX_UNSTAKE_THRESHOLD, "unstake threshold too large");
 			<Nominators<T>>::remove(stash);
 			<Validators<T>>::insert(stash, prefs);
