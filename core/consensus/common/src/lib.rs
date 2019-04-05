@@ -51,7 +51,7 @@ pub use self::error::{Error, ErrorKind};
 pub use block_import::{
 	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, JustificationImport,
 };
-pub use select_chain::{SelectChain};
+pub use select_chain::SelectChain;
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {

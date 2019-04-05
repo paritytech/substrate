@@ -40,6 +40,7 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use substrate_executor::NativeExecutor;
+use consensus_common::SelectChain;
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};

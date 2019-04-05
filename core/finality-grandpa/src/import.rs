@@ -28,6 +28,7 @@ use client::runtime_api::ApiExt;
 use consensus_common::{
 	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
 	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
+	SelectChain,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::Justification;

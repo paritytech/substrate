@@ -1101,132 +1101,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		})
 	}
 
-	/// Get best block header.
-	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
-		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
-	}
-
-	/// Get the most recent block hash of the best (longest) chains
-	/// that contain block with the given `target_hash`.
-	///
-	/// The search space is always limited to blocks which are in the finalized
-	/// chain or descendents of it.
-	///
-	/// If `maybe_max_block_number` is `Some(max_block_number)`
-	/// the search is limited to block `numbers <= max_block_number`.
-	/// in other words as if there were no blocks greater `max_block_number`.
-	/// TODO : we want to move this implement to `blockchain::Backend`, see [#1443](https://github.com/paritytech/substrate/issues/1443)
-	/// Returns `Ok(None)` if `target_hash` is not found in search space.
-	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
-	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
-		-> error::Result<Option<Block::Hash>>
-	{
-		let target_header = {
-			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
-				Some(x) => x,
-				// target not in blockchain
-				None => { return Ok(None); },
-			}
-		};
-
-		if let Some(max_number) = maybe_max_number {
-			// target outside search range
-			if target_header.number() > &max_number {
-				return Ok(None);
-			}
-		}
-
-		let (leaves, best_already_checked) = {
-			// ensure no blocks are imported during this code block.
-			// an import could trigger a reorg which could change the canonical chain.
-			// we depend on the canonical chain staying the same during this code block.
-			let _import_lock = self.import_lock.lock();
-
-			let info = self.backend.blockchain().info()?;
-
-			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
-				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
-
-			if canon_hash == target_hash {
-				// if no block at the given max depth exists fallback to the best block
-				if let Some(max_number) = maybe_max_number {
-					if let Some(header) = self.backend.blockchain().hash(max_number)? {
-						return Ok(Some(header));
-					}
-				}
-
-				return Ok(Some(info.best_hash));
-			} else if info.finalized_number >= *target_header.number() {
-				// header is on a dead fork.
-				return Ok(None);
-			}
-
-			(self.backend.blockchain().leaves()?, info.best_hash)
-		};
-
-		// for each chain. longest chain first. shortest last
-		for leaf_hash in leaves {
-			// ignore canonical chain which we already checked above
-			if leaf_hash == best_already_checked {
-				continue;
-			}
-
-			// start at the leaf
-			let mut current_hash = leaf_hash;
-
-			// if search is not restricted then the leaf is the best
-			let mut best_hash = leaf_hash;
-
-			// go backwards entering the search space
-			// waiting until we are <= max_number
-			if let Some(max_number) = maybe_max_number {
-				loop {
-					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
-						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
-
-					if current_header.number() <= &max_number {
-						best_hash = current_header.hash();
-						break;
-					}
-
-					current_hash = *current_header.parent_hash();
-				}
-			}
-
-			// go backwards through the chain (via parent links)
-			loop {
-				// until we find target
-				if current_hash == target_hash {
-					return Ok(Some(best_hash));
-				}
-
-				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
-					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
-
-				// stop search in this chain once we go below the target's block number
-				if current_header.number() < target_header.number() {
-					break;
-				}
-
-				current_hash = *current_header.parent_hash();
-			}
-		}
-
-		// header may be on a dead fork -- the only leaves that are considered are
-		// those which can still be finalized.
-		//
-		// FIXME #1558 only issue this warning when not on a dead fork
-		warn!(
-			"Block {:?} exists in chain but not found when following all \
-			leaves backwards. Number limit = {:?}",
-			target_hash,
-			maybe_max_number,
-		);
-
-		Ok(None)
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
@@ -1475,8 +1349,134 @@ where
 	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
+
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		Client::best_block_header(self)
+		let info = self.backend.blockchain().info()
+			.map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
+		Ok(self.header(&BlockId::Hash(info.best_hash))?
+			.expect("Best block header must always exist"))
+	}
+
+	/// Get the most recent block hash of the best (longest) chains
+	/// that contain block with the given `target_hash`.
+	///
+	/// The search space is always limited to blocks which are in the finalized
+	/// chain or descendents of it.
+	///
+	/// If `maybe_max_block_number` is `Some(max_block_number)`
+	/// the search is limited to block `numbers <= max_block_number`.
+	/// in other words as if there were no blocks greater `max_block_number`.
+	/// TODO : we want to move this implement to `blockchain::Backend`, see [#1443](https://github.com/paritytech/substrate/issues/1443)
+	/// Returns `Ok(None)` if `target_hash` is not found in search space.
+	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
+	fn best_containing(
+		&self,
+		target_hash: Block::Hash,
+		maybe_max_number: Option<NumberFor<Block>>
+	) -> error::Result<Option<Block::Hash>> {
+		let target_header = {
+			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
+				Some(x) => x,
+				// target not in blockchain
+				None => { return Ok(None); },
+			}
+		};
+
+		if let Some(max_number) = maybe_max_number {
+			// target outside search range
+			if target_header.number() > &max_number {
+				return Ok(None);
+			}
+		}
+
+		let (leaves, best_already_checked) = {
+			// ensure no blocks are imported during this code block.
+			// an import could trigger a reorg which could change the canonical chain.
+			// we depend on the canonical chain staying the same during this code block.
+			let _import_lock = self.import_lock.lock();
+
+			let info = self.backend.blockchain().info()?;
+
+			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
+				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
+
+			if canon_hash == target_hash {
+				// if no block at the given max depth exists fallback to the best block
+				if let Some(max_number) = maybe_max_number {
+					if let Some(header) = self.backend.blockchain().hash(max_number)? {
+						return Ok(Some(header));
+					}
+				}
+
+				return Ok(Some(info.best_hash));
+			} else if info.finalized_number >= *target_header.number() {
+				// header is on a dead fork.
+				return Ok(None);
+			}
+
+			(self.backend.blockchain().leaves()?, info.best_hash)
+		};
+
+		// for each chain. longest chain first. shortest last
+		for leaf_hash in leaves {
+			// ignore canonical chain which we already checked above
+			if leaf_hash == best_already_checked {
+				continue;
+			}
+
+			// start at the leaf
+			let mut current_hash = leaf_hash;
+
+			// if search is not restricted then the leaf is the best
+			let mut best_hash = leaf_hash;
+
+			// go backwards entering the search space
+			// waiting until we are <= max_number
+			if let Some(max_number) = maybe_max_number {
+				loop {
+					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
+						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+
+					if current_header.number() <= &max_number {
+						best_hash = current_header.hash();
+						break;
+					}
+
+					current_hash = *current_header.parent_hash();
+				}
+			}
+
+			// go backwards through the chain (via parent links)
+			loop {
+				// until we find target
+				if current_hash == target_hash {
+					return Ok(Some(best_hash));
+				}
+
+				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
+					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+
+				// stop search in this chain once we go below the target's block number
+				if current_header.number() < target_header.number() {
+					break;
+				}
+
+				current_hash = *current_header.parent_hash();
+			}
+		}
+
+		// header may be on a dead fork -- the only leaves that are considered are
+		// those which can still be finalized.
+		//
+		// FIXME #1558 only issue this warning when not on a dead fork
+		warn!(
+			"Block {:?} exists in chain but not found when following all \
+			leaves backwards. Number limit = {:?}",
+			target_hash,
+			maybe_max_number,
+		);
+
+		Ok(None)
 	}
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error> {

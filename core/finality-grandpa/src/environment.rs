@@ -41,6 +41,8 @@ use crate::{
 	CommandOrError, NewAuthoritySet, VoterCommand,
 };
 
+use consensus_common::SelectChain;
+
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
