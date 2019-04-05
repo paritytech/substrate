@@ -429,7 +429,7 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn load_decode_migrates_data_format() {
+	fn load_decode_from_v0_migrates_data_format() {
 		let client = test_client::new();
 
 		let authorities = vec![(AuthorityId::default(), 100)];
@@ -463,6 +463,89 @@ mod test {
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
 			None,
+		);
+
+		// should perform the migration
+		load_persistent::<test_client::runtime::Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(2),
+		);
+
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			*authority_set.inner().read(),
+			AuthoritySet {
+				current_authorities: authorities,
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			},
+		);
+
+		assert_eq!(
+			&*set_state.read(),
+			&VoterSetState::Live {
+				completed_rounds: CompletedRounds::new(CompletedRound {
+					number: round_number,
+					state: round_state.clone(),
+					base: round_state.prevote_ghost.unwrap(),
+					votes: vec![],
+				}),
+				current_round: HasVoted::No,
+			},
+		);
+	}
+
+	#[test]
+	fn load_decode_from_v1_migrates_data_format() {
+		let client = test_client::new();
+
+		let authorities = vec![(AuthorityId::default(), 100)];
+		let set_id = 3;
+		let round_number: u64 = 42;
+		let round_state = RoundState::<H256, u64> {
+			prevote_ghost: Some((H256::random(), 32)),
+			finalized: None,
+			estimate: None,
+			completable: false,
+		};
+
+		{
+			let authority_set = AuthoritySet::<H256, u64> {
+				current_authorities: authorities.clone(),
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			};
+
+			let voter_set_state = V1VoterSetState::Live(round_number, round_state.clone());
+
+			client.insert_aux(
+				&[
+					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+					(VERSION_KEY, 1u32.encode().as_slice()),
+				],
+				&[],
+			).unwrap();
+		}
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(1),
 		);
 
 		// should perform the migration

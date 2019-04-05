@@ -507,7 +507,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					_ => HasVoted::No,
 				};
 
-
 				// NOTE: only updated on disk when the voter first
 				// proposes/prevotes/precommits or completes a round.
 				Ok(Some(VoterSetState::Live {
