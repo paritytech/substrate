@@ -434,7 +434,7 @@ mod test {
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
-		let round_number = 42;
+		let round_number: u64 = 42;
 		let round_state = RoundState::<H256, u64> {
 			prevote_ghost: Some((H256::random(), 32)),
 			finalized: None,
@@ -496,14 +496,14 @@ mod test {
 		);
 
 		assert_eq!(
-			set_state,
-			VoterSetState::Live {
-				last_completed_round: CompletedRound {
+			&*set_state.read(),
+			&VoterSetState::Live {
+				completed_rounds: CompletedRounds::new(CompletedRound {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.unwrap(),
 					votes: vec![],
-				},
+				}),
 				current_round: HasVoted::No,
 			},
 		);
