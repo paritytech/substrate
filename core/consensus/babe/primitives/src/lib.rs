@@ -15,14 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-
+#![forbid(warnings, unsafe_code, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use runtime_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;
-
-#[cfg(feature = "std")]
-use slots::SlotData;
 
 use parity_codec::{Encode, Decode};
 

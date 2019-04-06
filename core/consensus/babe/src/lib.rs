@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
-#![forbid(warnings, unsafe_code)]
+#![forbid(warnings, unsafe_code, missing_docs)]
 
 pub use babe_primitives::*;
 use parity_codec::{Decode, Encode, Input};

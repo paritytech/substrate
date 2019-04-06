@@ -14,6 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Slots functionality for Substrate.
+//!
+//! Some consensus algorithms have a concept of *slots*, which are intervals in
+//! time during which certain events can and/or must occur.  This crate
+//! provides generic functionality for slots.
+
+#![forbid(warnings, unsafe_code)]
+
 mod slots;
 
 pub use slots::{Slots, SlotInfo};
@@ -33,6 +41,8 @@ use codec::{Encode, Decode};
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {
+	/// The type fo the future that will be returned when a new slot is
+	/// triggered.
 	type OnSlot: IntoFuture<Item=(), Error=consensus_common::Error>;
 
 	/// Called when the proposer starts.

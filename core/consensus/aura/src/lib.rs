@@ -25,7 +25,8 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-#![deny(deprecated)]
+#![deny(warnings)]
+#![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
@@ -98,6 +99,7 @@ impl SlotDuration {
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
 	}
 
+	/// Get the slot duration in milliseconds.
 	pub fn get(&self) -> u64 {
 		self.0.get()
 	}
