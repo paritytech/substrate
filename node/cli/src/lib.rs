@@ -37,8 +37,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The Dried Danta testnet.
-	DriedDanta,
+	/// The Emberic Elm testnet.
+	EmbericElm,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 }
@@ -47,7 +47,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::DriedDanta => chain_spec::dried_danta_config()?,
+			ChainSpec::EmbericElm => chain_spec::emberic_elm_config()?,
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
@@ -58,7 +58,7 @@ impl ChainSpec {
 		match s {
 			"dev" => Some(ChainSpec::Development),
 			"local" => Some(ChainSpec::LocalTestnet),
-			"" | "danta" | "dried-danta" => Some(ChainSpec::DriedDanta),
+			"" | "elm" | "emberic-elm" => Some(ChainSpec::EmbericElm),
 			"staging" => Some(ChainSpec::StagingTestnet),
 			_ => None,
 		}
