@@ -1069,6 +1069,9 @@ fn voter_persists_its_votes() {
 			).expect("all in order with client and network");
 
 			let voter = future::poll_fn(move || {
+				// we need to keep the block_import alive since it owns the
+				// sender for the voter commands channel, if that gets dropped
+				// then the voter will stop
 				let _block_import = _block_import.clone();
 				voter.poll()
 			});
