@@ -27,12 +27,12 @@ use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256, DeriveJunction};
-use parity_codec::{Encode, Compact};
+use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec, blake2_256};
+use parity_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
 use schnorrkel::keys::MiniSecretKey;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall};
+use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
 
 mod vanity;
 
@@ -144,32 +144,6 @@ impl Crypto for Sr25519 {
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
 }
 
-fn sign(xt: CheckedExtrinsic, key: &sr25519::Pair) -> UncheckedExtrinsic {
-	let genesis_hash: Hash = hex!["65b828b5b8dd7941f06240273620d4e3ac9c195aed1482d0022a44752af0be4d"].into();
-	match xt.signed {
-		Some((signed, index)) => {
-			let era = Era::immortal();
-			let payload = (index.into(), xt.function, era, genesis_hash);
-			assert_eq!(key.public(), signed);
-			let signature = payload.using_encoded(|b| {
-				if b.len() > 256 {
-					key.sign(&blake2_256(b))
-				} else {
-					key.sign(b)
-				}
-			}).into();
-			UncheckedExtrinsic {
-				signature: Some((signed.into(), signature, payload.0, era)),
-				function: payload.1,
-			}
-		}
-		None => UncheckedExtrinsic {
-			signature: None,
-			function: xt.function,
-		},
-	}
-}
-
 fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
@@ -227,13 +201,13 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-/*			let extrinsic = sign(CheckedExtrinsic {
-				signed: Some((signer.public(), index)),
-				function
-			}, &signer);*/
+			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
+				"elm" => hex!["65b828b5b8dd7941f06240273620d4e3ac9c195aed1482d0022a44752af0be4d"].into(),
+				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..])).expect("Invalid genesis hash or unrecognised chain identifier"),
+			};
 
 			let era = Era::immortal();
-			let genesis_hash: Hash = hex!["65b828b5b8dd7941f06240273620d4e3ac9c195aed1482d0022a44752af0be4d"].into();
 			let raw_payload = (Compact(index), function, era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])

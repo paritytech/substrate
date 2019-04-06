@@ -59,6 +59,11 @@ subcommands:
             index: 4
             required: true
             help: The signing account's transaction index.
+        - genesis:
+            short: g
+            long: genesis
+            help: The genesis hash or a recognised chain identifier (dev, elm, alex).
+            takes_value: true
   - verify:
       about: Verify a signature for a message, provided on STDIN, with a given (public or secret) key
       args:
