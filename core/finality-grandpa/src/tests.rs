@@ -1023,7 +1023,7 @@ fn voter_persists_its_votes() {
 	use futures::future;
 	use futures::sync::mpsc;
 
-	env_logger::init();
+	let _ = env_logger::try_init();
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
