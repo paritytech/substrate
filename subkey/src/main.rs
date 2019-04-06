@@ -145,7 +145,7 @@ impl Crypto for Sr25519 {
 }
 
 fn sign(xt: CheckedExtrinsic, key: &sr25519::Pair) -> UncheckedExtrinsic {
-	let genesis_hash: Hash = hex!["58afaad82f5a80ecdc8e974f5d88c4298947260fb05e34f84a9eed18ec5a78f9"].into();
+	let genesis_hash: Hash = hex!["65b828b5b8dd7941f06240273620d4e3ac9c195aed1482d0022a44752af0be4d"].into();
 	match xt.signed {
 		Some((signed, index)) => {
 			let era = Era::immortal();
@@ -233,8 +233,7 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 			}, &signer);*/
 
 			let era = Era::immortal();
-			let genesis_hash: Hash = hex!["61b81c075e1e54b17a2f2d685a3075d3e5f5c7934456dd95332e68dd751a4b40"].into();
-//			let genesis_hash: Hash = hex!["58afaad82f5a80ecdc8e974f5d88c4298947260fb05e34f84a9eed18ec5a78f9"].into();
+			let genesis_hash: Hash = hex!["65b828b5b8dd7941f06240273620d4e3ac9c195aed1482d0022a44752af0be4d"].into();
 			let raw_payload = (Compact(index), function, era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
@@ -249,7 +248,7 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 				signature.into(),
 				era,
 			);
-			println!("{}", hex::encode(&Encode::encode(&extrinsic.encode())));
+			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
 		("verify", Some(matches)) => {
 			let sig_data = matches.value_of("sig")
