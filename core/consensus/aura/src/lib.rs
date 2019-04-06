@@ -85,6 +85,7 @@ pub trait Network: Clone {
 	fn send_message(&self, slot: u64, message: Vec<u8>);
 }
 
+/// A slot duration. Create with `get_or_compute`.
 pub struct SlotDuration(slots::SlotDuration<u64>);
 
 impl SlotDuration {
