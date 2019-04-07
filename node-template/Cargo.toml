@@ -1,5 +1,5 @@
 [package]
-name = "template-node"
+name = "node-template"
 version = "1.0.0"
 authors = ["Anonymous"]
 build = "build.rs"
