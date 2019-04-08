@@ -104,7 +104,8 @@ use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup, Saturating, CheckedDiv, Zero};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
-use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, WithdrawReason, ExistenceRequirement};
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency,
+	WithdrawReason, ExistenceRequirement, Imbalance};
 use system::{ensure_signed, RawOrigin};
 use timestamp;
 
@@ -139,6 +140,13 @@ impl<T: Trait> ContractInfo<T> {
 	}
 	fn get_alive(self) -> Option<AliveContractInfo<T>> {
 		if let ContractInfo::Alive(alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+	fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
+		if let ContractInfo::Alive(ref mut alive) = self {
 			Some(alive)
 		} else {
 			None
@@ -699,7 +707,15 @@ impl<T: Trait> Module<T> {
 		match Self::check_rent(account, <system::Module<T>>::block_number()) {
 			RentDecision::FreeFromRent => (),
 			RentDecision::CollectDues(rent) => {
-				T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::KeepAlive).expect("Assumption of check_rent");
+				let imbalance = T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::KeepAlive)
+					.expect("Assumption of check_rent");
+				<ContractInfoOf<T>>::mutate(account, |contract| {
+					// rent_allowance isn't reached is guaranted by check_rent
+					contract.as_mut()
+						.and_then(|c| c.as_alive_mut())
+						.expect("Only existing alive contracts pay rent")
+						.rent_allowance -= imbalance.peek();
+				})
 			},
 			RentDecision::CantWithdrawRentWithoutDying(rent)
 			| RentDecision::AllowanceExceeded(rent) => {
