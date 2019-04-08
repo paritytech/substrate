@@ -23,6 +23,8 @@ use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
 
+use fg_primitives::GrandpaApi;
+
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
 };
@@ -31,7 +33,7 @@ use grandpa::{
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -206,6 +208,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
+	Client<B, E, Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -331,6 +335,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.
+		let runtime_api = self.inner.runtime_api();
+		runtime_api.do_report_misbehaviour(&BlockId::number(Zero::zero()));
 	}
 
 	fn precommit_equivocation(

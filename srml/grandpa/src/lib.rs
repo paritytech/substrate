@@ -256,6 +256,8 @@ impl<T: Trait> Module<T> {
 		<AuthorityStorageVec<T::SessionKey>>::items()
 	}
 
+	pub fn do_report_misbehaviour() {}
+
 	/// Schedule a change in the authorities.
 	///
 	/// The change will be applied at the end of execution of the block

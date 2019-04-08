@@ -329,6 +329,10 @@ impl_runtime_apis! {
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 			Grandpa::grandpa_authorities()
 		}
+
+		fn do_report_misbehaviour() {
+			Grandpa::do_report_misbehaviour()
+		}
 	}
 
 	impl consensus_aura::AuraApi<Block> for Runtime {

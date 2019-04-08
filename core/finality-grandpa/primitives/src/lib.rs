@@ -109,5 +109,6 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		fn do_report_misbehaviour();
 	}
 }

@@ -60,6 +60,7 @@ use client::{
 	error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
+use client::runtime_api::ConstructRuntimeApi;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, DigestItemFor, DigestItem,
@@ -423,13 +424,14 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
-	RA: Send + Sync + 'static,
+	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>,
+	<RA as ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>>::RuntimeApi: fg_primitives::GrandpaApi<Block>
 {
 	use futures::future::{self, Loop as FutureLoop};
 

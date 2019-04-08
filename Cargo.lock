@@ -3876,6 +3876,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "srml-finality-tracker 1.0.0",
+ "srml-grandpa 1.0.0",
  "substrate-client 1.0.0",
  "substrate-consensus-common 1.0.0",
  "substrate-finality-grandpa-primitives 1.0.0",
