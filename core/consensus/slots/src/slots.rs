@@ -26,7 +26,7 @@ use futures::try_ready;
 use log::warn;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{Error, ErrorKind};
-use crate::SlotCompatible;
+use super::SlotCompatible;
 
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Option<Duration> {
@@ -36,6 +36,11 @@ pub fn duration_now() -> Option<Duration> {
 	now.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
 		warn!("Current time {:?} is before unix epoch. Something is wrong: {:?}", now, e);
 	}).ok()
+}
+
+/// Get the slot for now.
+pub fn slot_now(slot_duration: u64) -> Option<u64> {
+	duration_now().map(|s| s.as_secs() / slot_duration)
 }
 
 /// Returns the duration until the next slot, based on current duration since

@@ -24,7 +24,7 @@
 
 mod slots;
 
-pub use slots::{Slots, SlotInfo};
+pub use slots::{Slots, SlotInfo, slot_now};
 
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -239,6 +239,17 @@ impl SlotData for u64 {
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration<T: Clone>(T);
 
+impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
+	/// Get the slot duration in milliseconds
+	fn slot_duration(&self) -> u64
+		where T: SlotData
+	{
+		self.0.slot_duration()
+	}
+
+	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
+}
+
 impl<T: Clone> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the
 	/// genesis state.
@@ -280,12 +291,5 @@ impl<T: Clone> SlotDuration<T> {
 	/// Returns slot data value.
 	pub fn get(&self) -> T {
 		self.0.clone()
-	}
-
-	/// Get the slot duration in milliseconds
-	pub fn slot_duration(&self) -> u64
-		where T: SlotData
-	{
-		self.0.slot_duration()
 	}
 }

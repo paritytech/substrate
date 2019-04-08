@@ -62,7 +62,7 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
@@ -118,20 +118,6 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 				this is a valid index; qed");
 
 	Some(current_author)
-}
-
-fn duration_now() -> Option<Duration> {
-	use std::time::SystemTime;
-
-	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
-			warn!("Current time {:?} is before unix epoch. Something is wrong: {:?}", now, e);
-	}).ok()
-}
-
-/// Get the slot for now.
-fn slot_now(slot_duration: u64) -> Option<u64> {
-	duration_now().map(|s| s.as_secs() / slot_duration)
 }
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
@@ -465,7 +451,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
-#[forbid(deprecated)]
+#[forbid(warnings)]
 fn check_header<B: Block, P: Pair>(
 	slot_now: u64,
 	mut header: B::Header,
