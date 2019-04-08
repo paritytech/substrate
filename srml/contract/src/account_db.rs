@@ -29,8 +29,6 @@ use runtime_primitives::traits::Zero;
 use srml_support::{StorageMap, traits::{UpdateBalanceOutcome,
 	SignedImbalance, Currency, Imbalance}, storage::child};
 
-// TODO TODO: be careful update current doc !!
-
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<BalanceOf<T>>,
 	/// If None, the code_hash remains untouched.
