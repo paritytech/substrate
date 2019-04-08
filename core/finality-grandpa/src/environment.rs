@@ -173,33 +173,49 @@ pub enum Vote<Block: BlockT> {
 
 impl<Block: BlockT> HasVoted<Block> {
 	/// Returns the proposal we should vote with (if any.)
-	pub fn propose(&self) -> Option<PrimaryPropose<Block>> {
+	pub fn propose(&self) -> Option<&PrimaryPropose<Block>> {
 		match self {
 			HasVoted::Yes(_, Vote::Propose(propose)) =>
-				Some(propose.clone()),
+				Some(propose),
 			HasVoted::Yes(_, Vote::Prevote(propose, _)) | HasVoted::Yes(_, Vote::Precommit(propose, _, _)) =>
-				propose.clone(),
+				propose.as_ref(),
 			_ => None,
 		}
 	}
 
 	/// Returns the prevote we should vote with (if any.)
-	pub fn prevote(&self) -> Option<Prevote<Block>> {
+	pub fn prevote(&self) -> Option<&Prevote<Block>> {
 		match self {
 			HasVoted::Yes(_, Vote::Prevote(_, prevote)) | HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) =>
-				Some(prevote.clone()),
+				Some(prevote),
 			_ => None,
 		}
 	}
 
 	/// Returns the precommit we should vote with (if any.)
-	pub fn precommit(&self) -> Option<Precommit<Block>> {
+	pub fn precommit(&self) -> Option<&Precommit<Block>> {
 		match self {
 			HasVoted::Yes(_, Vote::Precommit(_, _, precommit)) =>
-				Some(precommit.clone()),
+				Some(precommit),
 			_ => None,
 		}
 	}
+
+	/// Returns true if the voter can still propose, false otherwise.
+	pub fn can_propose(&self) -> bool {
+		self.propose().map(|_| false).unwrap_or(true)
+	}
+
+	/// Returns true if the voter can still prevote, false otherwise.
+	pub fn can_prevote(&self) -> bool {
+		self.prevote().map(|_| false).unwrap_or(true)
+	}
+
+	/// Returns true if the voter can still precommit, false otherwise.
+	pub fn can_precommit(&self) -> bool {
+		self.precommit().map(|_| false).unwrap_or(true)
+	}
+
 }
 
 /// A voter set state meant to be shared safely across multiple owners.
@@ -458,7 +474,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		self.update_voter_set_state(|voter_set_state| {
 			let completed_rounds = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } => completed_rounds,
-				VoterSetState::Live { current_round, .. } if current_round.propose().is_some() => {
+				VoterSetState::Live { current_round, .. } if !current_round.can_propose() => {
 					// we've already proposed in this round (in a previous run),
 					// ignore the given vote and don't update the voter set
 					// state
@@ -499,7 +515,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 					(completed_rounds, None),
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
 					(completed_rounds, Some(propose)),
-				VoterSetState::Live { current_round, .. } if current_round.prevote().is_some() => {
+				VoterSetState::Live { current_round, .. } if !current_round.can_prevote() => {
 					// we've already prevoted in this round (in a previous run),
 					// ignore the given vote and don't update the voter set
 					// state
@@ -538,7 +554,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			let (completed_rounds, propose, prevote) = match voter_set_state {
 				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
 					(completed_rounds, propose, prevote),
-				VoterSetState::Live { current_round: HasVoted::Yes(_, Vote::Precommit(..)), .. } => {
+				VoterSetState::Live { current_round, .. } if !current_round.can_precommit() => {
 					// we've already precommitted in this round (in a previous run),
 					// ignore the given vote and don't update the voter set
 					// state

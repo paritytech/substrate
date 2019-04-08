@@ -392,15 +392,15 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 		match &mut msg {
 			grandpa::Message::PrimaryPropose(ref mut vote) =>
 				if let Some(propose) = self.has_voted.propose() {
-					*vote = propose;
+					*vote = propose.clone();
 				},
 			grandpa::Message::Prevote(ref mut vote) =>
 				if let Some(prevote) = self.has_voted.prevote() {
-					*vote = prevote;
+					*vote = prevote.clone();
 				},
 			grandpa::Message::Precommit(ref mut vote) =>
 				if let Some(precommit) = self.has_voted.precommit() {
-					*vote = precommit;
+					*vote = precommit.clone();
 				},
 		}
 
