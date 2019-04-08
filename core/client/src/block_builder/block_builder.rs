@@ -64,7 +64,7 @@ where
 			Default::default()
 		);
 		let api = api.runtime_api();
-		api.initialise_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
+		api.initialize_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
@@ -97,7 +97,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.finalise_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+		self.header = self.api.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

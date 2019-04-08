@@ -259,7 +259,7 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteHeader(request, sender)),
 			},
-			data @ _ => Accept::Unexpected(data),
+			data => Accept::Unexpected(data),
 		})
 	}
 
@@ -273,7 +273,7 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteRead(request, sender)),
 			},
-			data @ _ => Accept::Unexpected(data),
+			data => Accept::Unexpected(data),
 		})
 	}
 
@@ -287,7 +287,7 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteCall(request, sender)),
 			},
-			data @ _ => Accept::Unexpected(data),
+			data => Accept::Unexpected(data),
 		})
 	}
 
@@ -307,7 +307,7 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteChanges(request, sender)),
 			},
-			data @ _ => Accept::Unexpected(data),
+			data => Accept::Unexpected(data),
 		})
 	}
 }

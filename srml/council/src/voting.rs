@@ -102,7 +102,7 @@ decl_module! {
 			<VotingPeriod<T>>::put(blocks);
 		}
 
-		fn on_finalise(n: T::BlockNumber) {
+		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
@@ -125,7 +125,6 @@ decl_storage! {
 	}
 }
 
-/// An event in this module.
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::Hash {
 		/// A voting tally has happened for a referendum cancellation vote.

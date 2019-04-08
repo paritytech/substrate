@@ -18,23 +18,25 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
+
 use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
-use peerset::Peerset;
+use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link};
-use crate::consensus_gossip::ConsensusGossip;
-use crate::message::{Message, ConsensusEngineId};
+use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::message::Message;
 use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
-use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::specialization::NetworkSpecialization;
 
+use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use tokio::prelude::task::AtomicTask;
 use tokio::runtime::Builder as RuntimeBuilder;
 
@@ -141,7 +143,7 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
-	peerset: Arc<Peerset>,
+	peerset: PeersetHandle,
 	/// Protocol sender
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -257,12 +259,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
 		message: Vec<u8>,
-		force: bool,
+		recipient: GossipMessageRecipient,
 	) {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::GossipConsensusMessage(
-				topic, engine_id, message, force,
+				topic, engine_id, message, recipient,
 			));
 	}
 
@@ -295,6 +297,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle f
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
+
 	fn is_offline(&self) -> bool {
 		self.is_offline.load(Ordering::Relaxed)
 	}
@@ -315,6 +318,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
+
 	/// Get sync status
 	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
 		let (sink, stream) = mpsc::unbounded();
@@ -356,7 +360,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 	}
 
 	fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(&peer);
+		self.peerset.remove_reserved_peer(peer);
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
@@ -470,7 +474,7 @@ fn start_thread<B: BlockT + 'static>(
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
-) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, Arc<Peerset>), Error> {
+) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, PeersetHandle), Error> {
 	// Start the main service.
 	let (service, peerset) = match start_service(config, registered) {
 		Ok((service, peerset)) => (Arc::new(Mutex::new(service)), peerset),
@@ -533,11 +537,11 @@ fn run_thread<B: BlockT + 'static>(
 						network_service_2.lock().drop_node(&who)
 					},
 					Severity::Useless(message) => {
-						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						debug!(target: "sync", "Dropping {:?} because {:?}", who, message);
 						network_service_2.lock().drop_node(&who)
 					},
 					Severity::Timeout => {
-						info!(target: "sync", "Dropping {:?} because it timed out", who);
+						debug!(target: "sync", "Dropping {:?} because it timed out", who);
 						network_service_2.lock().drop_node(&who)
 					},
 				}

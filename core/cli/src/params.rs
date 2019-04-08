@@ -39,6 +39,7 @@ arg_enum! {
 		Wasm,
 		Both,
 		NativeElseWasm,
+		NativeWhenPossible,
 	}
 }
 
@@ -49,6 +50,7 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::NativeWhenPossible => client::ExecutionStrategy::NativeWhenPossible,
 		}
 	}
 }
@@ -115,6 +117,11 @@ pub struct NetworkConfigurationParams {
 	/// Specify the maximum number of incoming connections we're accepting
 	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
 	pub in_peers: u32,
+
+	/// By default, the network will use mDNS to discover other nodes on the local network. This
+	/// disables it.
+	#[structopt(long = "no-mdns")]
+	pub no_mdns: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -261,7 +268,7 @@ pub struct ExecutionStrategies {
 		raw(
 			possible_values = "&ExecutionStrategy::variants()",
 			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
+			default_value = r#""NativeWhenPossible""#
 		)
 	)]
 	pub offchain_worker_execution: ExecutionStrategy,

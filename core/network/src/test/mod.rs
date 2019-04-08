@@ -35,11 +35,11 @@ use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use crate::consensus_gossip::ConsensusGossip;
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
-use crate::message::{Message, ConsensusEngineId};
+use crate::message::Message;
 use network_libp2p::PeerId;
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
@@ -47,7 +47,7 @@ use primitives::{H256, ed25519::Public as AuthorityId};
 use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
-use runtime_primitives::Justification;
+use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
@@ -260,12 +260,12 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	}
 
 	// SyncOracle: are we connected to any peer?
-	fn is_offline(&self) -> bool {
+	pub fn is_offline(&self) -> bool {
 		self.is_offline.load(Ordering::Relaxed)
 	}
 
 	// SyncOracle: are we in the process of catching-up with the chain?
-	fn is_major_syncing(&self) -> bool {
+	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 
@@ -364,9 +364,10 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		data: Vec<u8>,
 		force: bool,
 	) {
+		let recipient = if force { GossipMessageRecipient::BroadcastToAll } else { GossipMessageRecipient::BroadcastNew };
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, force));
+			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, recipient));
 	}
 
 	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
@@ -378,7 +379,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		&self,
 		engine_id: ConsensusEngineId,
 		topic: <Block as BlockT>::Hash,
-	) -> mpsc::UnboundedReceiver<Vec<u8>> {
+	) -> mpsc::UnboundedReceiver<TopicNotification> {
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(engine_id, topic);
@@ -644,7 +645,6 @@ pub trait TestNetFactory: Sized {
 					Some(NetworkMsg::ReportPeer(who, _)) => {
 						to_disconnect.insert(who);
 					}
-					Some(_msg) => continue,
 				}
 			}
 			for d in to_disconnect {

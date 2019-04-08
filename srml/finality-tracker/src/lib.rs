@@ -126,7 +126,7 @@ decl_module! {
 			<Self as Store>::Update::put(hint);
 		}
 
-		fn on_finalise() {
+		fn on_finalize() {
 			Self::update_hint(<Self as Store>::Update::take())
 		}
 	}
@@ -262,7 +262,7 @@ mod tests {
 	use sr_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalise, Header as HeaderT};
+	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use primitives::testing::{Digest, DigestItem, Header};
 	use srml_support::impl_outer_origin;
 	use srml_system as system;
@@ -344,9 +344,9 @@ mod tests {
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
-				System::initialise(&i, &parent_hash, &Default::default());
-				FinalityTracker::on_finalise(i);
-				let hdr = System::finalise();
+				System::initialize(&i, &parent_hash, &Default::default());
+				FinalityTracker::on_finalize(i);
+				let hdr = System::finalize();
 				parent_hash = hdr.hash();
 			}
 
@@ -369,13 +369,13 @@ mod tests {
 		with_externalities(&mut TestExternalities::new(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
-				System::initialise(&i, &parent_hash, &Default::default());
+				System::initialize(&i, &parent_hash, &Default::default());
 				assert_ok!(FinalityTracker::dispatch(
 					Call::final_hint(i-1),
 					Origin::INHERENT,
 				));
-				FinalityTracker::on_finalise(i);
-				let hdr = System::finalise();
+				FinalityTracker::on_finalize(i);
+				let hdr = System::finalize();
 				parent_hash = hdr.hash();
 			}
 

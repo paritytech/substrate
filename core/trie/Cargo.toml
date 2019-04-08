@@ -1,6 +1,6 @@
 [package]
 name = "substrate-trie"
-version = "0.4.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-codec node format"
 repository = "https://github.com/paritytech/parity-common"
@@ -12,25 +12,28 @@ name = "bench"
 harness = false
 
 [dependencies]
-codec = { package = "parity-codec", version = "3.2" }
-hash-db = { version = "0.11", default-features = false }
-trie-db = { version = "0.11", optional = true }
-trie-root = { version = "0.11", default-features = false }
-memory-db = { version = "0.11", optional = true }
+codec = { package = "parity-codec", version = "3.2", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+hash-db = { version = "0.12.2", default-features = false }
+trie-db = { version = "0.12.2", default-features = false }
+trie-root = { version = "0.12.2", default-features = false }
+memory-db = { version = "0.12.2", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../primitives" }
-trie-bench = { version = "0.11" }
-trie-standardmap = { version = "0.11" }
-keccak-hasher = { version = "0.11" }
+trie-bench = { version = "0.12" }
+trie-standardmap = { version = "0.12" }
+keccak-hasher = { version = "0.12" }
 criterion = "0.2"
 hex-literal = "0.1.0"
 
 [features]
 default = ["std"]
 std = [
+	"rstd/std",
+  "codec/std",
 	"hash-db/std",
-	"memory-db",
-	"trie-db",
+	"memory-db/std",
+	"trie-db/std",
 	"trie-root/std"
 ]

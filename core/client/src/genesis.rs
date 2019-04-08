@@ -93,7 +93,7 @@ mod tests {
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
-			"Core_initialise_block",
+			"Core_initialize_block",
 			&header.encode(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
@@ -119,7 +119,7 @@ mod tests {
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
-			"BlockBuilder_finalise_block",
+			"BlockBuilder_finalize_block",
 			&[],
 		).execute(
 			ExecutionStrategy::NativeElseWasm,

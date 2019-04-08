@@ -115,7 +115,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H>, H: Hasher>(
 
 	let mut proof_db = MemoryDB::<H>::default();
 	for item in proof {
-		proof_db.insert(&item);
+		proof_db.insert(&[], &item);
 	}
 
 	let proof_db = InMemoryStorage::with_db(proof_db);
