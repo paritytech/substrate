@@ -72,6 +72,7 @@ impl<H> EquivocationProof<H> {
 }
 
 /// Check if the header is an equivocation and returns the proof in that case.
+/// Assumes all the headers in the same slot are signed by the same Signer.
 pub fn check_equivocation<C, H>(
 	backend: &Arc<C>,
 	slot: u64,
