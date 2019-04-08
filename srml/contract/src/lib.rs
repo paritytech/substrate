@@ -121,18 +121,15 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-#[derive(Encode,Decode,Clone,Debug)]
+#[derive(Encode, Decode)]
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
-	Tombstone(TombstoneContractInfo),
+	Tombstone(TombstoneContractInfo<T>),
 }
 
 impl<T: Trait> ContractInfo<T> {
-	// fn is_alive(&self) -> bool {
-	// 	self.as_alive().is_some()
-	// }
 	fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
 		if let ContractInfo::Alive(ref alive) = self {
 			Some(alive)
@@ -147,48 +144,55 @@ impl<T: Trait> ContractInfo<T> {
 			None
 		}
 	}
-	fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
-		if let ContractInfo::Alive(ref mut alive) = self {
-			Some(alive)
-		} else {
-			None
-		}
-	}
-	// fn is_tombstone(&self) -> bool {
-	// 	self.as_tombstone().is_some()
-	// }
-	// fn as_tombstone(&self) -> Option<&TombstoneContractInfo> {
-	// 	if let ContractInfo::Tombstone(ref tombstone) = self {
-	// 		Some(tombstone)
-	// 	} else {
-	// 		None
-	// 	}
-	// }
-	// fn as_tombstone_mut(&mut self) -> Option<&mut TombstoneContractInfo> {
-	// 	if let ContractInfo::Tombstone(ref mut tombstone) = self {
-	// 		Some(tombstone)
-	// 	} else {
-	// 		None
-	// 	}
-	// }
 }
 
-#[derive(Encode, Decode, Clone, Debug, PartialEq, Eq)]
+#[derive(Encode, Decode)]
 pub struct AliveContractInfo<T: Trait> {
 	/// Unique ID for the subtree encoded as a byte
 	pub trie_id: TrieId,
 	/// The size of stored value in octet
 	pub storage_size: u64,
-	// pub rent_allowance: u64,
-	// pub deduct_block: u64,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash<T>,
 	pub rent_allowance: BalanceOf<T>,
 	pub deduct_block: T::BlockNumber,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
-pub struct TombstoneContractInfo(Vec<u8>);
+impl<T: Trait> Clone for AliveContractInfo<T> {
+	fn clone(&self) -> Self {
+		AliveContractInfo {
+			trie_id: self.trie_id.clone(),
+			storage_size: self.storage_size.clone(),
+			code_hash: self.code_hash.clone(),
+			rent_allowance: self.rent_allowance.clone(),
+			deduct_block: self.deduct_block.clone(),
+		}
+	}
+}
+
+impl<T: Trait> Eq for AliveContractInfo<T> {}
+
+impl<T: Trait> PartialEq for AliveContractInfo<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.trie_id == other.trie_id
+			&& self.storage_size == other.storage_size
+			&& self.rent_allowance == other.rent_allowance
+			&& self.code_hash == other.code_hash
+			&& self.deduct_block == other.deduct_block
+	}
+}
+
+#[derive(Encode, Decode)]
+pub struct TombstoneContractInfo<T: Trait>(T::Hash);
+
+impl<T: Trait> TombstoneContractInfo<T> {
+	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
+		let mut buf = storage_root;
+		buf.extend_from_slice(&storage_size.to_be_bytes());
+		buf.extend_from_slice(code_hash.as_ref());
+		TombstoneContractInfo(T::Hashing::hash(&buf[..]))
+	}
+}
 
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context)
 /// Note that it is different than encode because trie id should have collision resistance
@@ -437,7 +441,22 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		// TODO TODO: claim surchage using check_rent
+		fn claim_surchage(origin, dest: T::AccountId) {
+			let mut check_block = <system::Module<T>>::block_number();
+
+			if let Some(system::RawOrigin::Signed(_)) = origin.into() {
+				check_block -= T::BlockNumber::sa(2u64);
+			}
+
+			match Self::check_rent(&dest, check_block) {
+				RentDecision::CantWithdrawRentWithoutDying(rent)
+				| RentDecision::AllowanceExceeded(rent) => {
+					// TODO TODO: reward caller
+					Self::evict(&dest, rent);
+				}
+				RentDecision::FreeFromRent | RentDecision::CollectDues(_) => (),
+			}
+		}
 
 		fn on_finalize() {
 			<GasSpent<T>>::kill();
@@ -467,6 +486,9 @@ decl_event! {
 		/// A call was dispatched from the given account. The bool signals whether it was
 		/// successful execution or not.
 		Dispatched(AccountId, bool),
+
+		/// An event from contract of account.
+		Contract(AccountId, Vec<u8>),
 	}
 }
 
@@ -474,12 +496,17 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// The minimum amount required to generate a tombstone.
 		TombstoneDeposit get(tombstone_deposit) config(): BalanceOf<T>;
-		/// The fee to be paid for contract storage; the per-byte portion.
-		RentBaseFee get(rent_byte_fee) config(): BalanceOf<T>;
-		/// The fee to be paid for contract storage; the base.
-		RentByteFee get(rent_base_fee) config(): BalanceOf<T>;
-		/// TODO TODO
+		/// Size of a contract at the time of creation. This is a simple way to ensure
+		/// that empty contracts eventually gets deleted.
+		StorageSizeOffset get(storage_size_offset) config(): u64;
+		/// Price of a byte of storage per one block interval. Should be greater than 0.
+		RentByteFee get(rent_byte_price) config(): BalanceOf<T>;
+		/// The amount of funds a contract should deposit in order to offset
+		/// the cost of one byte.
 		RentDepositOffset get(rent_deposit_offset) config(): BalanceOf<T>;
+		/// Reward that is received by the party whose touch has led
+		/// to removal of a contract.
+		SurchargeAmount get(surcharge_amount) config(): BalanceOf<T>;
 		/// The fee required to make a transfer.
 		TransferFee get(transfer_fee) config(): BalanceOf<T>;
 		/// The fee required to create an account.
@@ -573,6 +600,12 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte returned.
 	pub return_data_per_byte_cost: Gas,
 
+	/// Gas cost to deposit an event; the per-byte portion.
+	pub event_data_per_byte_cost: Gas,
+
+	/// Gas cost to deposit an event; the base.
+	pub event_data_base_cost: Gas,
+
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
 
@@ -598,6 +631,8 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			grow_mem_cost: Gas::sa(1),
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),
+			event_data_per_byte_cost: Gas::sa(1),
+			event_data_base_cost: Gas::sa(1),
 			sandbox_data_read_cost: Gas::sa(1),
 			sandbox_data_write_cost: Gas::sa(1),
 			max_stack_height: 64 * 1024,
@@ -606,7 +641,6 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 	}
 }
 
-#[derive(Debug)]
 enum RentDecision<T: Trait> {
 	/// Happens when the rent is offset completely by the `rent_deposit_offset`.
 	/// Or Rent has already been payed
@@ -619,70 +653,81 @@ enum RentDecision<T: Trait> {
 	AllowanceExceeded(BalanceOf<T>),
 }
 
-fn check_rent<T: Trait>(account: &T::AccountId, block_number: T::BlockNumber) -> RentDecision<T> {
-	let contract = match <ContractInfoOf<T>>::get(account) {
-		None | Some(ContractInfo::Tombstone(_)) => return RentDecision::FreeFromRent,
-		Some(ContractInfo::Alive(contract)) => contract,
-	};
+impl<T: Trait> Module<T> {
+	fn check_rent(account: &T::AccountId, block_number: T::BlockNumber) -> RentDecision<T> {
+		let contract = match <ContractInfoOf<T>>::get(account) {
+			None | Some(ContractInfo::Tombstone(_)) => return RentDecision::FreeFromRent,
+			Some(ContractInfo::Alive(contract)) => contract,
+		};
 
-	// Rent has already been payed
-	if contract.deduct_block == block_number {
-		return RentDecision::FreeFromRent
-	}
-
-	let balance = T::Currency::free_balance(account);
-
-	let effective_storage_size = <BalanceOf<T>>::sa(contract.storage_size) + <Module<T>>::rent_byte_fee()
-		.saturating_sub(balance.checked_div(&<Module<T>>::rent_deposit_offset()).unwrap_or(<BalanceOf<T>>::sa(0)));
-
-	let fee_per_block: BalanceOf<T> = effective_storage_size * <Module<T>>::rent_byte_fee();
-
-	if fee_per_block.is_zero() {
-		// The rent deposit offset reduced the fee to 0. This means that the contract
-		// gets the rent for free.
-		return RentDecision::FreeFromRent
-	}
-
-	let rent = fee_per_block * <BalanceOf<T>>::sa((block_number.saturating_sub(contract.deduct_block)).as_());
-
-	// Pay rent up to rent_allowance
-	if rent <= contract.rent_allowance {
-		// TODO TODO: this could be one call if ensure_can_withdraw took exitence requirement
-		if balance.saturating_sub(rent) > T::Currency::minimum_balance()
-			&& T::Currency::ensure_can_withdraw(account, rent, WithdrawReason::Fee, balance.saturating_sub(rent)).is_ok()
-		{
-			RentDecision::CollectDues(rent)
-		} else {
-			RentDecision::CantWithdrawRentWithoutDying(rent)
+		// Rent has already been payed
+		if contract.deduct_block == block_number {
+			return RentDecision::FreeFromRent
 		}
-	} else {
-		RentDecision::AllowanceExceeded(contract.rent_allowance)
-	}
-}
 
-fn pay_rent<T: Trait>(account: &T::AccountId) {
-	match check_rent::<T>(account, <system::Module<T>>::block_number()) {
-		RentDecision::FreeFromRent => (),
-		RentDecision::CollectDues(rent) => {
-			T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::KeepAlive).expect("Assumption of check_rent");
-		},
-		RentDecision::CantWithdrawRentWithoutDying(rent)
-		| RentDecision::AllowanceExceeded(rent) => {
-			match T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::AllowDeath) {
-				Ok(imbalance) => drop(imbalance),
-				Err(_) => { T::Currency::slash(account, rent); },
-			}
+		let balance = T::Currency::free_balance(account);
 
-			if T::Currency::free_balance(account) >= <Module<T>>::tombstone_deposit() + T::Currency::minimum_balance() {
-				// TODO TODO TODO TODO: generate tombstone
-				// let mut contract = match <ContractInfoOf<T>>::get(account) {
-				// 	None | Some(ContractInfo::Tombstone(_)) => return RentDecision::FreeFromRent,
-				// 	Some(ContractInfo::Alive(contract)) => contract,
-				// };
+		let effective_storage_size = <BalanceOf<T>>::sa(contract.storage_size)
+			.saturating_sub(balance.checked_div(&<Module<T>>::rent_deposit_offset()).unwrap_or(<BalanceOf<T>>::sa(0)));
+
+		let fee_per_block: BalanceOf<T> = effective_storage_size * <Module<T>>::rent_byte_price();
+
+		if fee_per_block.is_zero() {
+			// The rent deposit offset reduced the fee to 0. This means that the contract
+			// gets the rent for free.
+			return RentDecision::FreeFromRent
+		}
+
+		let rent = fee_per_block * <BalanceOf<T>>::sa((block_number.saturating_sub(contract.deduct_block)).as_());
+
+		// Pay rent up to rent_allowance
+		if rent <= contract.rent_allowance {
+			// TODO TODO: this could be one call if ensure_can_withdraw took exitence requirement
+			if balance.saturating_sub(rent) > T::Currency::minimum_balance()
+				&& T::Currency::ensure_can_withdraw(account, rent, WithdrawReason::Fee, balance.saturating_sub(rent)).is_ok()
+			{
+				RentDecision::CollectDues(rent)
 			} else {
-				// remove if less than substrantial deposit
-				T::Currency::make_free_balance_be(account, <BalanceOf<T>>::zero());
+				RentDecision::CantWithdrawRentWithoutDying(rent)
 			}
+		} else {
+			RentDecision::AllowanceExceeded(contract.rent_allowance)
+		}
+	}
+
+	fn pay_rent(account: &T::AccountId) {
+		match Self::check_rent(account, <system::Module<T>>::block_number()) {
+			RentDecision::FreeFromRent => (),
+			RentDecision::CollectDues(rent) => {
+				T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::KeepAlive).expect("Assumption of check_rent");
+			},
+			RentDecision::CantWithdrawRentWithoutDying(rent)
+			| RentDecision::AllowanceExceeded(rent) => {
+				Self::evict(account, rent);
+			}
+		}
+	}
+
+	fn evict(account: &T::AccountId, rent: BalanceOf<T>) {
+		match T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::AllowDeath) {
+			Ok(imbalance) => drop(imbalance),
+			Err(_) => { T::Currency::slash(account, rent); },
+		}
+
+		if T::Currency::free_balance(account) >= <Module<T>>::tombstone_deposit() + T::Currency::minimum_balance() {
+			let contract = <ContractInfoOf<T>>::get(account)
+				.and_then(|c| c.get_alive())
+				.expect("Rent is only payed by alive contracts");
+
+			let tombstone = TombstoneContractInfo::new(
+				runtime_io::child_storage_root(&contract.trie_id).unwrap(),
+				contract.storage_size,
+				contract.code_hash,
+			);
+			<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));
+		} else {
+			// remove if less than substantial deposit
+			T::Currency::make_free_balance_be(account, <BalanceOf<T>>::zero());
 		}
 	}
 }

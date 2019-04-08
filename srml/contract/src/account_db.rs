@@ -17,7 +17,8 @@
 //! Auxilliaries to help with managing partial changes to accounts state.
 
 use super::{CodeHash, Trait, TrieId, ContractInfoOf, BalanceOf, ContractInfo,
-	AliveContractInfo, TrieIdGenerator};
+	AliveContractInfo, TrieIdGenerator, Module};
+use crate::exec::StorageKey;
 use system;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
@@ -32,7 +33,7 @@ pub struct ChangeEntry<T: Trait> {
 	balance: Option<BalanceOf<T>>,
 	/// If None, the code_hash remains untouched.
 	contract: Option<NewContract<T>>,
-	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	storage: BTreeMap<StorageKey, Option<Vec<u8>>>,
 }
 
 // Cannot derive(Default) since it erroneously bounds T by Default.
@@ -59,7 +60,7 @@ pub trait AccountDb<T: Trait> {
 	///
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>>;
+	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
 	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn contract_exists(&self, account: &T::AccountId) -> bool;
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
@@ -69,7 +70,7 @@ pub trait AccountDb<T: Trait> {
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
+	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, location))
 	}
 	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
@@ -103,7 +104,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					assert!(!<ContractInfoOf<T>>::exists(&address), "Cannot overlap already existing contract with a new one");
 					AliveContractInfo {
 						code_hash: contract.code_hash,
-						storage_size: 0,
+						storage_size: <Module<T>>::storage_size_offset(),
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 						deduct_block: <system::Module<T>>::block_number(),
 						rent_allowance: contract.rent_allowance,
@@ -162,7 +163,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 	pub fn set_storage(
 		&mut self,
 		account: &T::AccountId,
-		location: Vec<u8>,
+		location: StorageKey,
 		value: Option<Vec<u8>>,
 	) {
 		self.local.borrow_mut()
@@ -198,7 +199,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &[u8]) -> Option<Vec<u8>> {
+	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
 			.get(account)

@@ -35,7 +35,7 @@ use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use crate::consensus_gossip::ConsensusGossip;
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
@@ -117,25 +117,41 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 
 pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
-#[derive(Clone)]
 /// A Link that can wait for a block to have been imported.
-pub struct TestLink<S: NetworkSpecialization<Block> + Clone> {
+pub struct TestLink<S: NetworkSpecialization<Block>> {
 	import_done: Arc<AtomicBool>,
 	hash: Arc<Mutex<Hash>>,
 	link: NetworkLink<Block, S>,
+	protocol_sender: Sender<ProtocolMsg<Block, S>>,
+	network_sender: NetworkChan<Block>,
 }
 
-impl<S: NetworkSpecialization<Block> + Clone> TestLink<S> {
+impl<S: NetworkSpecialization<Block>> TestLink<S> {
 	fn new(
 		protocol_sender: Sender<ProtocolMsg<Block, S>>,
 		network_sender: NetworkChan<Block>
 	) -> TestLink<S> {
 		TestLink {
+			protocol_sender: protocol_sender.clone(),
+			network_sender: network_sender.clone(),
 			import_done: Arc::new(AtomicBool::new(false)),
 			hash: Arc::new(Mutex::new(Default::default())),
 			link: NetworkLink {
 				protocol_sender,
 				network_sender,
+			}
+		}
+	}
+
+	fn clone_link(&self) -> Self {
+		TestLink {
+			protocol_sender: self.protocol_sender.clone(),
+			network_sender: self.network_sender.clone(),
+			import_done: self.import_done.clone(),
+			hash: self.hash.clone(),
+			link: NetworkLink {
+				protocol_sender: self.protocol_sender.clone(),
+				network_sender: self.network_sender.clone(),
 			}
 		}
 	}
@@ -154,7 +170,7 @@ impl<S: NetworkSpecialization<Block> + Clone> TestLink<S> {
 	}
 }
 
-impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
+impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 	fn block_imported(&self, hash: &Hash, number: NumberFor<Block>) {
 		if hash == &*self.hash.lock() {
 			self.import_done.store(true, Ordering::SeqCst);
@@ -187,7 +203,7 @@ impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
 	}
 }
 
-pub struct Peer<D, S: NetworkSpecialization<Block> + Clone> {
+pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	pub is_offline: Arc<AtomicBool>,
 	pub is_major_syncing: Arc<AtomicBool>,
 	pub peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
@@ -203,7 +219,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block> + Clone> {
 	finalized_hash: Mutex<Option<H256>>,
 }
 
-impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
+impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	fn new(
 		is_offline: Arc<AtomicBool>,
 		is_major_syncing: Arc<AtomicBool>,
@@ -218,7 +234,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	) -> Self {
 		let network_port = Arc::new(Mutex::new(network_port));
 		let network_link = TestLink::new(protocol_sender.clone(), network_sender.clone());
-		import_queue.start(Box::new(network_link.clone())).expect("Test ImportQueue always starts");
+		import_queue.start(Box::new(network_link.clone_link())).expect("Test ImportQueue always starts");
 		Peer {
 			is_offline,
 			is_major_syncing,
@@ -260,14 +276,12 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	}
 
 	// SyncOracle: are we connected to any peer?
-	#[cfg(test)]
-	fn is_offline(&self) -> bool {
+	pub fn is_offline(&self) -> bool {
 		self.is_offline.load(Ordering::Relaxed)
 	}
 
 	// SyncOracle: are we in the process of catching-up with the chain?
-	#[cfg(test)]
-	fn is_major_syncing(&self) -> bool {
+	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 
@@ -366,9 +380,10 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		data: Vec<u8>,
 		force: bool,
 	) {
+		let recipient = if force { GossipMessageRecipient::BroadcastToAll } else { GossipMessageRecipient::BroadcastNew };
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, force));
+			.send(ProtocolMsg::GossipConsensusMessage(topic, engine_id, data, recipient));
 	}
 
 	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
@@ -380,7 +395,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		&self,
 		engine_id: ConsensusEngineId,
 		topic: <Block as BlockT>::Hash,
-	) -> mpsc::UnboundedReceiver<Vec<u8>> {
+	) -> mpsc::UnboundedReceiver<TopicNotification> {
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(engine_id, topic);
@@ -520,7 +535,7 @@ impl SpecializationFactory for DummySpecialization {
 }
 
 pub trait TestNetFactory: Sized {
-	type Specialization: NetworkSpecialization<Block> + Clone + SpecializationFactory;
+	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
 

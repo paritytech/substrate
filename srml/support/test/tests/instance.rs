@@ -435,8 +435,6 @@ fn storage_instance_independance() {
 	});
 }
 
-// TODO TODO: check configuration doublemapstorage in instances
-
 #[test]
 fn storage_with_instance_basic_operation() {
 	with_externalities(&mut new_test_ext(), || {
