@@ -242,6 +242,8 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
+				/// Takes and returns the initialized block number.
+				fn take_block_number() -> Option<u64>;
 				/// Returns if no block was initialized.
 				#[skip_initialize_block]
 				fn without_initialize_block() -> bool;
@@ -271,6 +273,8 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
+				/// Takes and returns the initialized block number.
+				fn take_block_number() -> Option<u64>;
 				/// Returns if no block was initialized.
 				#[skip_initialize_block]
 				fn without_initialize_block() -> bool;
@@ -436,6 +440,10 @@ cfg_if! {
 				fn without_initialize_block() -> bool {
 					system::get_block_number().is_none()
 				}
+
+				fn take_block_number() -> Option<u64> {
+					system::take_block_number()
+				}
 			}
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
@@ -564,9 +572,11 @@ cfg_if! {
 				fn without_initialize_block() -> bool {
 					system::get_block_number().is_none()
 				}
+
+				fn take_block_number() -> Option<u64> {
+					system::take_block_number()
+				}
 			}
-
-
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }

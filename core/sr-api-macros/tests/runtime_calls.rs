@@ -124,6 +124,15 @@ fn initialize_block_works() {
 }
 
 #[test]
+fn initialize_block_is_called_only_once() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), Some(1));
+	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), None);
+}
+
+#[test]
 fn initialize_block_is_skipped() {
 	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
 	let runtime_api = client.runtime_api();

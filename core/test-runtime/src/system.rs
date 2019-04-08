@@ -74,6 +74,10 @@ pub fn get_block_number() -> Option<BlockNumber> {
 	Number::get()
 }
 
+pub fn take_block_number() -> Option<BlockNumber> {
+	Number::take()
+}
+
 /// Actually execute all transitioning for `block`.
 pub fn polish_block(block: &mut Block) {
 	let header = &mut block.header;
