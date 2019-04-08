@@ -207,17 +207,17 @@ impl<Block: BlockT> HasVoted<Block> {
 
 	/// Returns true if the voter can still propose, false otherwise.
 	pub fn can_propose(&self) -> bool {
-		self.propose().map(|_| false).unwrap_or(true)
+		self.propose().is_none()
 	}
 
 	/// Returns true if the voter can still prevote, false otherwise.
 	pub fn can_prevote(&self) -> bool {
-		self.prevote().map(|_| false).unwrap_or(true)
+		self.prevote().is_none()
 	}
 
 	/// Returns true if the voter can still precommit, false otherwise.
 	pub fn can_precommit(&self) -> bool {
-		self.precommit().map(|_| false).unwrap_or(true)
+		self.precommit().is_none()
 	}
 }
 
