@@ -34,3 +34,5 @@ network = { package = "substrate-network", path = "../../network", features = ["
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
 env_logger = "0.6"
+hex-literal = "0.1.0"
+

@@ -15,8 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 mod slots;
+mod aux_schema;
 
 pub use slots::{Slots, SlotInfo};
+pub use aux_schema::check_equivocation;
 
 use std::sync::{mpsc, Arc};
 use std::thread;
