@@ -1015,3 +1015,196 @@ fn test_bad_justification() {
 		ImportResult::AlreadyInChain
 	);
 }
+
+#[test]
+fn voter_persists_its_votes() {
+	use std::iter::FromIterator;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use futures::future;
+	use futures::sync::mpsc;
+
+	let _ = env_logger::try_init();
+
+	// we have two authorities but we'll only be running the voter for alice
+	// we are going to be listening for the prevotes it casts
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let voters = make_ids(peers);
+
+	// alice has a chain with 20 blocks
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 20,
+			   "Peer #{} failed to sync", 0);
+
+	let mut runtime = current_thread::Runtime::new().unwrap();
+
+	let client = net.peer(0).client().clone();
+	let net = Arc::new(Mutex::new(net));
+
+	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+
+	// startup a grandpa voter for alice but also listen for messages on a
+	// channel. whenever a message is received the voter is restarted. when the
+	// sender is dropped the voter is stopped.
+	{
+		let net = net.clone();
+
+		let voter = future::loop_fn(voter_rx, move |rx| {
+			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
+			let link = link.lock().take().unwrap();
+
+			let mut voter = run_grandpa(
+				Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					justification_period: 32,
+					local_key: Some(Arc::new(peers[0].clone().into())),
+					name: Some(format!("peer#{}", 0)),
+				},
+				link,
+				MessageRouting::new(net.clone(), 0),
+				InherentDataProviders::new(),
+				futures::empty(),
+			).expect("all in order with client and network");
+
+			let voter = future::poll_fn(move || {
+				// we need to keep the block_import alive since it owns the
+				// sender for the voter commands channel, if that gets dropped
+				// then the voter will stop
+				let _block_import = _block_import.clone();
+				voter.poll()
+			});
+
+			voter.select2(rx.into_future()).then(|res| match res {
+				Ok(future::Either::A(x)) => {
+					panic!("voter stopped unexpectedly: {:?}", x);
+				},
+				Ok(future::Either::B(((Some(()), rx), _))) => {
+					Ok(future::Loop::Continue(rx))
+				},
+				Ok(future::Either::B(((None, _), _))) => {
+					Ok(future::Loop::Break(()))
+				},
+				Err(future::Either::A(err)) => {
+					panic!("unexpected error: {:?}", err);
+				},
+				Err(future::Either::B(..)) => {
+					// voter_rx dropped, stop the voter.
+					Ok(future::Loop::Break(()))
+				},
+			})
+		});
+
+		runtime.spawn(voter);
+	}
+
+	let (exit_tx, exit_rx) = futures::sync::oneshot::channel::<()>();
+
+	// create the communication layer for bob, but don't start any
+	// voter. instead we'll listen for the prevote that alice casts
+	// and cast our own manually
+	{
+		let config = Config {
+			gossip_duration: TEST_GOSSIP_DURATION,
+			justification_period: 32,
+			local_key: Some(Arc::new(peers[1].clone().into())),
+			name: Some(format!("peer#{}", 1)),
+		};
+		let routing = MessageRouting::new(net.clone(), 1);
+		let network = communication::NetworkBridge::new(routing, config.clone());
+
+		let (round_rx, round_tx) = network.round_communication(
+			communication::Round(1),
+			communication::SetId(0),
+			Arc::new(VoterSet::from_iter(voters)),
+			Some(config.local_key.unwrap()),
+			HasVoted::No,
+		);
+
+		let round_tx = Arc::new(Mutex::new(round_tx));
+		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
+
+		let net = net.clone();
+		let state = AtomicUsize::new(0);
+
+		runtime.spawn(round_rx.for_each(move |signed| {
+			if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+				// the first message we receive should be a prevote from alice.
+				let prevote = match signed.message {
+					grandpa::Message::Prevote(prevote) => prevote,
+					_ => panic!("voter should prevote."),
+				};
+
+				// its chain has 20 blocks and the voter targets 3/4 of the
+				// unfinalized chain, so the vote should be for block 15
+				assert!(prevote.target_number == 15);
+
+				// we push 20 more blocks to alice's chain
+				net.lock().peer(0).push_blocks(20, false);
+				net.lock().sync();
+
+				assert_eq!(net.lock().peer(0).client().info().unwrap().chain.best_number, 40,
+						   "Peer #{} failed to sync", 0);
+
+				let block_30_hash =
+					net.lock().peer(0).client().backend().blockchain().hash(30).unwrap().unwrap();
+
+				// we restart alice's voter
+				voter_tx.unbounded_send(()).unwrap();
+
+				// and we push our own prevote for block 30
+				let prevote = grandpa::Prevote {
+					target_number: 30,
+					target_hash: block_30_hash,
+				};
+
+				round_tx.lock().start_send(grandpa::Message::Prevote(prevote)).unwrap();
+
+			} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+				// the next message we receive should be our own prevote
+				let prevote = match signed.message {
+					grandpa::Message::Prevote(prevote) => prevote,
+					_ => panic!("We should receive our own prevote."),
+				};
+
+				// targeting block 30
+				assert!(prevote.target_number == 30);
+
+				// after alice restarts it should send its previous prevote
+				// therefore we won't ever receive it again since it will be a
+				// known message on the gossip layer
+
+			} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+				// we then receive a precommit from alice for block 15
+				// even though we casted a prevote for block 30
+				let precommit = match signed.message {
+					grandpa::Message::Precommit(precommit) => precommit,
+					_ => panic!("voter should precommit."),
+				};
+
+				assert!(precommit.target_number == 15);
+
+				// signal exit
+				exit_tx.clone().lock().take().unwrap().send(()).unwrap();
+			}
+
+			Ok(())
+		}).map_err(|_| ()));
+	}
+
+	let net = net.clone();
+	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		.for_each(move |_| {
+			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
+			net.lock().route_fast();
+			Ok(())
+		})
+		.map(|_| ())
+		.map_err(|_| ());
+
+	let exit = exit_rx.into_future().map(|_| ()).map_err(|_| ());
+
+	runtime.block_on(drive_to_completion.select(exit).map(|_| ()).map_err(|_| ())).unwrap();
+}
