@@ -240,6 +240,11 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
+				/// Returns the initialized block number.
+				fn get_block_number() -> u64;
+				/// Returns if no block was initialized.
+				#[skip_initialize_block]
+				fn without_initialize_block() -> bool;
 			}
 		}
 	} else {
@@ -264,6 +269,11 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
+				/// Returns the initialized block number.
+				fn get_block_number() -> u64;
+				/// Returns if no block was initialized.
+				#[skip_initialize_block]
+				fn without_initialize_block() -> bool;
 			}
 		}
 	}
@@ -418,6 +428,14 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64 {
 					(0..1000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
+
+				fn get_block_number() -> u64 {
+					system::get_block_number().expect("Block number is initialized")
+				}
+
+				fn without_initialize_block() -> bool {
+					system::get_block_number().is_none()
+				}
 			}
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
@@ -537,6 +555,14 @@ cfg_if! {
 
 				fn benchmark_direct_call() -> u64 {
 					(0..10000).fold(0, |p, i| p + benchmark_add_one(i))
+				}
+
+				fn get_block_number() -> u64 {
+					system::get_block_number().expect("Block number is initialized")
+				}
+
+				fn without_initialize_block() -> bool {
+					system::get_block_number().is_none()
 				}
 			}
 

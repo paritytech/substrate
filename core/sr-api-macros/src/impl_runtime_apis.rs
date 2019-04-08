@@ -325,9 +325,10 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
 				F: FnOnce(
 					&C,
-					&mut #crate_::runtime_api::OverlayedChanges,
-					&mut Option<#crate_::runtime_api::BlockId<#block>>,
-				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>>
+					&Self,
+					&std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
+					&std::cell::RefCell<Option<#crate_::runtime_api::BlockId<#block>>>,
+				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>>,
 			>(
 				&self,
 				call_api_at: F,
@@ -335,8 +336,9 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				let res = unsafe {
 					call_api_at(
 						&self.call,
-						&mut *self.changes.borrow_mut(),
-						&mut *self.initialized_block.borrow_mut()
+						self,
+						&self.changes,
+						&self.initialized_block,
 					)
 				};
 
@@ -479,9 +481,10 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					#( #error )*
 
 					self.call_api_at(
-						|call_runtime_at, changes, initialized_block| {
+						|call_runtime_at, core_api, changes, initialized_block| {
 							#runtime_mod_path #call_api_at_call(
 								call_runtime_at,
+								core_api,
 								at,
 								params_encoded,
 								changes,

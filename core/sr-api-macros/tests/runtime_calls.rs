@@ -114,3 +114,19 @@ fn use_trie_function() {
 	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
 	assert_eq!(runtime_api.use_trie(&block_id).unwrap(), 2);
 }
+
+#[test]
+fn initialize_block_works() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert_eq!(runtime_api.get_block_number(&block_id).unwrap(), 1);
+}
+
+#[test]
+fn initialize_block_is_skipped() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert!(runtime_api.without_initialize_block(&block_id).unwrap());
+}

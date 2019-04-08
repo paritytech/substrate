@@ -16,7 +16,10 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc, panic::UnwindSafe, result};
+use std::{
+	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
+	panic::UnwindSafe, result, cell::RefCell,
+};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -26,16 +29,20 @@ use runtime_primitives::{
 	generic::{BlockId, SignedBlock},
 };
 use consensus::{
-	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
-	BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId,
+	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock,
+	ImportResult, BlockOrigin, ForkChoiceStrategy,
+	well_known_cache_keys::Id as CacheKeyId,
 };
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
-	ApiRef, ProvideRuntimeApi, Digest, DigestItem
+	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight,
+	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem
 };
 use runtime_primitives::BuildStorage;
-use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext};
+use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi};
+use primitives::{
+	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
+	NeverNativeValue, ExecutionContext
+};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode};
@@ -49,8 +56,8 @@ use hash_db::Hasher;
 
 use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
 use crate::blockchain::{
-	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend,
-	ProvideCache, Cache,
+	self, Info as ChainInfo, Backend as ChainBackend,
+	HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
 };
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -1338,27 +1345,35 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
-	Block: BlockT<Hash=H256>
+	Block: BlockT<Hash=H256>,
 {
 	fn call_api_at<
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		C: CoreApi<Block>,
 	>(
 		&self,
+		core_api: &C,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
+		changes: &RefCell<OverlayedChanges>,
+		initialized_block: &RefCell<Option<BlockId<Block>>>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
+		skip_initialize_block: bool,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
-			ExecutionContext::BlockConstruction => self.execution_strategies.block_construction.get_manager(),
-			ExecutionContext::Syncing => self.execution_strategies.syncing.get_manager(),
-			ExecutionContext::Importing => self.execution_strategies.importing.get_manager(),
-			ExecutionContext::OffchainWorker(_) => self.execution_strategies.offchain_worker.get_manager(),
-			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
+			ExecutionContext::BlockConstruction =>
+				self.execution_strategies.block_construction.get_manager(),
+			ExecutionContext::Syncing =>
+				self.execution_strategies.syncing.get_manager(),
+			ExecutionContext::Importing =>
+				self.execution_strategies.importing.get_manager(),
+			ExecutionContext::OffchainWorker(_) =>
+				self.execution_strategies.offchain_worker.get_manager(),
+			ExecutionContext::Other =>
+				self.execution_strategies.other.get_manager(),
 		};
 
 		let mut offchain_extensions = match context {
@@ -1367,15 +1382,16 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		};
 
 		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
+			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
 			at,
 			function,
 			&args,
 			changes,
 			initialized_block,
-			|| self.prepare_environment_block(at),
 			manager,
 			native_call,
 			offchain_extensions.as_mut(),
+			skip_initialize_block,
 		)
 	}
 

@@ -17,21 +17,29 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::PhantomData};
+use std::{
+	collections::HashSet, sync::Arc, panic::UnwindSafe, result,
+	marker::PhantomData, cell::RefCell,
+};
 use futures::{IntoFuture, Future};
 
 use parity_codec::{Encode, Decode};
 use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded, OffchainExt};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
-use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges, ExecutionStrategy,
-	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager, NeverOffchainExt};
+use state_machine::{
+	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
+	ExecutionStrategy, create_proof_check_backend,
+	execution_proof_check_on_trie_backend, ExecutionManager, NeverOffchainExt
+};
 use hash_db::Hasher;
 
 use crate::backend::RemoteBackend;
 use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{
+	Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult
+};
 use crate::light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::{RuntimeVersion, NativeVersion};
 use heapsize::HeapSizeOf;
@@ -105,7 +113,7 @@ where
 
 	fn contextual_call<
 		O: OffchainExt,
-		PB: Fn() -> ClientResult<Block::Header>,
+		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -114,18 +122,19 @@ where
 		NC,
 	>(
 		&self,
+		_initialize_block: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
-		_prepare_environment_block: PB,
+		changes: &RefCell<OverlayedChanges>,
+		initialized_block: &RefCell<Option<BlockId<Block>>>,
 		execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
+		_skip_initialize_block: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
-		if !changes.is_empty() || initialized_block.is_some() {
+		if !changes.borrow().is_empty() || initialized_block.borrow().is_some() {
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
@@ -232,7 +241,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 
 	fn contextual_call<
 		O: OffchainExt,
-		PB: Fn() -> ClientResult<Block::Header>,
+		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -241,15 +250,16 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
+		initialize_block: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
-		prepare_environment_block: PB,
+		changes: &RefCell<OverlayedChanges>,
+		initialized_block: &RefCell<Option<BlockId<Block>>>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
+		skip_initialize_block: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -266,15 +276,16 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				NC
 			>(
 				&self.local,
+				initialize_block,
 				at,
 				method,
 				call_data,
 				changes,
 				initialized_block,
-				prepare_environment_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
+				skip_initialize_block,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
 			false => CallExecutor::contextual_call::<
 				_,
@@ -287,15 +298,16 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				NC
 			>(
 				&self.remote,
+				initialize_block,
 				at,
 				method,
 				call_data,
 				changes,
 				initialized_block,
-				prepare_environment_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
+				skip_initialize_block,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
 		}
 	}

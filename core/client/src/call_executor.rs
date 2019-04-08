@@ -14,21 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result};
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, RuntimeApiInfo};
+use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy, NeverOffchainExt,
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
+	ExecutionStrategy, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt};
+use primitives::{
+	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt
+};
 
 use crate::backend;
 use crate::error;
-use crate::runtime_api::Core as CoreApi;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -61,7 +63,7 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		O: OffchainExt,
-		PB: Fn() -> error::Result<B::Header>,
+		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -70,15 +72,16 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
+		initialize_block: IB,
 		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<B>>,
-		prepare_environment_block: PB,
+		changes: &RefCell<OverlayedChanges>,
+		initialized_block: &RefCell<Option<BlockId<B>>>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
+		skip_initialize_block: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -172,7 +175,8 @@ where
 {
 	type Error = E::Error;
 
-	fn call<O: OffchainExt>(&self,
+	fn call<O: OffchainExt>(
+		&self,
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
@@ -201,7 +205,7 @@ where
 
 	fn contextual_call<
 		O: OffchainExt,
-		PB: Fn() -> error::Result<Block::Header>,
+		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -210,48 +214,29 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
+		initialize_block: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
-		prepare_environment_block: PB,
+		changes: &RefCell<OverlayedChanges>,
+		initialized_block: &RefCell<Option<BlockId<Block>>>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		mut side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<&mut O>,
+		skip_initialize_block: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
 
-		let core_version = self.runtime_version(at)?.apis.iter().find(|a| a.0 == CoreApi::<Block>::ID).map(|a| a.1);
-		let init_block_function = if core_version < Some(2) {
-			"Core_initialise_block"
-		} else {
-			"Core_initialize_block"
-		};
-
-		if method != init_block_function && initialized_block.map(|id| id != *at).unwrap_or(true) {
-			let header = prepare_environment_block()?;
-			state_machine::new(
-				&state,
-				self.backend.changes_trie_storage(),
-				side_effects_handler.as_mut().map(|x| &mut **x),
-				changes,
-				&self.executor,
-				init_block_function,
-				&header.encode(),
-			).execute_using_consensus_failure_handler::<_, R, fn() -> _>(
-				execution_manager.clone(),
-				false,
-				None,
-			)?;
-			*initialized_block = Some(*at);
+		if !skip_initialize_block
+			&& initialized_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) {
+			initialize_block()?;
 		}
 
 		let result = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
 			side_effects_handler,
-			changes,
+			&mut *changes.borrow_mut(),
 			&self.executor,
 			method,
 			call_data,
@@ -260,11 +245,6 @@ where
 			false,
 			native_call,
 		).map(|(result, _, _)| result)?;
-
-		// If the method is `initialize_block` we need to set the `initialized_block`
-		if method == init_block_function {
-			*initialized_block = Some(*at);
-		}
 
 		self.backend.destroy_state(state)?;
 		Ok(result)

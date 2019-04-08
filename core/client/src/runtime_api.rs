@@ -42,7 +42,7 @@ use crate::error;
 use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
-use std::panic::UnwindSafe;
+use std::{panic::UnwindSafe, cell::RefCell};
 use rstd::vec::Vec;
 
 /// Something that can be constructed to a runtime api.
@@ -97,15 +97,18 @@ pub trait CallRuntimeAt<Block: BlockT> {
 	fn call_api_at<
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		C: Core<Block>,
 	>(
 		&self,
+		core_api: &C,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
+		changes: &RefCell<OverlayedChanges>,
+		initialized_block: &RefCell<Option<BlockId<Block>>>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
+		skip_initialize_block: bool,
 	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.
@@ -120,9 +123,11 @@ decl_runtime_apis! {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
+		#[skip_initialize_block]
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
+		#[skip_initialize_block]
 		fn initialize_block(header: &<Block as BlockT>::Header);
 		/// Returns the authorities.
 		#[deprecated(since = "1.0", note = "Please switch to `AuthoritiesApi`.")]
