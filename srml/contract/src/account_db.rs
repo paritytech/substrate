@@ -16,8 +16,10 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, Trait, TrieId, ContractInfoOf, BalanceOf, ContractInfo,
-	AliveContractInfo, TrieIdGenerator, Module};
+use super::{
+	CodeHash, Trait, TrieId, ContractInfoOf, BalanceOf, ContractInfo,
+	AliveContractInfo, TrieIdGenerator, Module
+};
 use crate::exec::StorageKey;
 use system;
 use rstd::cell::RefCell;
