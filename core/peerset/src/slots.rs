@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::mem;
+use std::{fmt, mem};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
 
@@ -49,11 +49,32 @@ pub enum SlotState {
 }
 
 /// Contains all information about group of slots.
-#[derive(Debug)]
 pub struct Slots {
+	/// Maximum number of slots. Total number of reserved and common slots must be always
+	/// smaller or equal to `max_slots`.
 	max_slots: usize,
-	/// Nodes and their type. We use `LinkedHashMap` to make this data structure more predictable
-	slots: LinkedHashMap<PeerId, SlotType>,
+	/// Reserved slots.
+	reserved: LinkedHashMap<PeerId,()>,
+	/// Common slots.
+	common: LinkedHashMap<PeerId, ()>,
+}
+
+impl fmt::Debug for Slots {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		struct ListFormatter<'a>(&'a LinkedHashMap<PeerId, ()>);
+
+		impl<'a> fmt::Debug for ListFormatter<'a> {
+			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+				f.debug_list().entries(self.0.keys()).finish()
+			}
+		}
+
+		f.debug_struct("Slots")
+			.field("max_slots", &self.max_slots)
+			.field("reserved", &ListFormatter(&self.reserved))
+			.field("common", &ListFormatter(&self.common))
+			.finish()
+	}
 }
 
 impl Slots {
@@ -62,39 +83,36 @@ impl Slots {
 		let max_slots = max_slots as usize;
 		Slots {
 			max_slots,
-			slots: LinkedHashMap::with_capacity(max_slots),
+			reserved: LinkedHashMap::new(),
+			common: LinkedHashMap::new(),
 		}
 	}
 
 	/// Returns true if one of the slots contains given peer.
 	pub fn contains(&self, peer_id: &PeerId) -> bool {
-		self.slots.contains_key(peer_id)
+		self.common.contains_key(peer_id) || self.reserved.contains_key(peer_id)
 	}
 
 	/// Tries to find a slot for a given peer and returns `SlotState`.
 	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> SlotState {
-		if let Some(st) = self.slots.get_mut(&peer_id) {
-			if *st == SlotType::Common && slot_type == SlotType::Reserved {
-				*st = SlotType::Reserved;
+		if self.reserved.contains_key(&peer_id) {
+			return SlotState::AlreadyConnected(peer_id);
+		}
+
+		if self.common.contains_key(&peer_id) {
+			if slot_type == SlotType::Reserved {
+				self.common.remove(&peer_id);
+				self.reserved.insert(peer_id.clone(), ());
 				return SlotState::Upgraded(peer_id);
 			} else {
 				return SlotState::AlreadyConnected(peer_id);
 			}
 		}
 
-		if self.slots.len() == self.max_slots {
+		if self.max_slots == (self.common.len() + self.reserved.len()) {
 			if let SlotType::Reserved = slot_type {
-				// if we are trying to insert a reserved peer, but we all of our slots are full,
-				// we need to remove one of the existing common connections
-				let to_remove = self.slots.iter()
-					.find(|(_, &slot_type)| slot_type == SlotType::Common)
-					.map(|(to_remove, _)| to_remove)
-					.cloned();
-
-				if let Some(to_remove) = to_remove {
-					self.slots.remove(&to_remove);
-					self.slots.insert(peer_id.clone(), slot_type);
-
+				if let Some((to_remove, _)) = self.common.pop_front() {
+					self.reserved.insert(peer_id.clone(), ());
 					return SlotState::Swaped {
 						removed: to_remove,
 						added: peer_id,
@@ -104,45 +122,88 @@ impl Slots {
 			return SlotState::MaxConnections(peer_id);
 		}
 
-		self.slots.insert(peer_id.clone(), slot_type);
+		match slot_type {
+			SlotType::Common => self.common.insert(peer_id.clone(), ()),
+			SlotType::Reserved => self.reserved.insert(peer_id.clone(), ()),
+		};
+
 		SlotState::Added(peer_id)
 	}
 
-	pub fn clear_common_slots(&mut self) -> Vec<PeerId> {
-		let slots = mem::replace(&mut self.slots, LinkedHashMap::with_capacity(self.max_slots));
-		let mut common_peers = Vec::new();
-		for (peer_id, slot_type) in slots {
-			match slot_type {
-				SlotType::Common => {
-					common_peers.push(peer_id);
-				},
-				SlotType::Reserved => {
-					self.slots.insert(peer_id, slot_type);
-				},
-			}
+	/// Pops the oldest peer from the list.
+	pub fn pop_peer(&mut self, reserved_only: bool) -> Option<(PeerId, SlotType)> {
+		if let Some((peer_id, _)) = self.reserved.pop_front() {
+			return Some((peer_id, SlotType::Reserved));
 		}
-		common_peers
+
+		if reserved_only {
+			return None;
+		}
+
+		self.common.pop_front()
+			.map(|(peer_id, _)| (peer_id, SlotType::Common))
+	}
+
+	pub fn clear_common_slots(&mut self) -> impl Iterator<Item = PeerId> {
+		let slots = mem::replace(&mut self.common, LinkedHashMap::new());
+		slots.into_iter().map(|(peer_id, _)| peer_id)
 	}
 
 	pub fn mark_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(slot_type) = self.slots.get_mut(peer_id) {
-			*slot_type = SlotType::Reserved;
+		if let Some(_) = self.common.remove(peer_id) {
+			self.reserved.insert(peer_id.clone(), ());
 		}
 	}
 
 	pub fn mark_not_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(slot_type) = self.slots.get_mut(peer_id) {
-			*slot_type = SlotType::Common;
+		if let Some(_) = self.reserved.remove(peer_id) {
+			self.common.insert(peer_id.clone(), ());
 		}
 	}
 
-	pub fn clear_slot(&mut self, peer_id: &PeerId) -> bool {
-		self.slots.remove(peer_id).is_some()
+	pub fn remove_peer(&mut self, peer_id: &PeerId) -> bool {
+		self.common.remove(peer_id).is_some() || self.reserved.remove(peer_id).is_some()
 	}
 
-	pub fn is_connected_and_reserved(&self, peer_id: &PeerId) -> bool {
-		self.slots.get(peer_id)
-			.map(|slot_type| *slot_type == SlotType::Reserved)
-			.unwrap_or_else(|| false)
+	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
+		self.reserved.contains_key(peer_id)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use libp2p::PeerId;
+	use super::{Slots, SlotType};
+
+	#[test]
+	fn test_slots_debug() {
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let common_peer = PeerId::random();
+		let mut slots = Slots::new(10);
+
+		slots.add_peer(reserved_peer.clone(), SlotType::Reserved);
+		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
+		slots.add_peer(common_peer.clone(), SlotType::Common);
+
+		let expected = format!("Slots {{
+    max_slots: 10,
+    reserved: [
+        PeerId(
+            {:?}
+        ),
+        PeerId(
+            {:?}
+        )
+    ],
+    common: [
+        PeerId(
+            {:?}
+        )
+    ]
+}}", reserved_peer.to_base58(), reserved_peer2.to_base58(), common_peer.to_base58());
+
+		let s = format!("{:#?}", slots);
+		assert_eq!(expected, s);
 	}
 }
