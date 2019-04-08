@@ -279,6 +279,7 @@ const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+const STAKING_ID: LockIdentifier = *b"staking ";
 
 /// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -433,8 +434,6 @@ pub trait Trait: system::Trait + session::Trait {
 	/// Handler for the unbalanced increment when rewarding a staker.
 	type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 }
-
-const STAKING_ID: LockIdentifier = *b"staking ";
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {

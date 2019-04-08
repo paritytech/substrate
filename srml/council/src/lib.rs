@@ -119,8 +119,8 @@ mod tests {
 			max_lock_periods: 6,
 		}.build_storage().unwrap().0);
 		t.extend(seats::GenesisConfig::<Test> {
-			candidacy_bond: 9,
-			voter_bond: 3,
+			candidacy_bond: 3,
+			voter_bond: 2,
 			present_slash_per_voter: 1,
 			carry_count: 2,
 			inactive_grace_period: 1,
