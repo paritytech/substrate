@@ -204,6 +204,10 @@ impl Network<Block> for MessageRouting {
 		})
 	}
 
+	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
+
+	}
+
 	fn announce(&self, _block: Hash) {
 
 	}
@@ -1112,7 +1116,8 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 		};
 		let routing = MessageRouting::new(net.clone(), 1);
-		let network = communication::NetworkBridge::new(routing, config.clone());
+		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone());
+		runtime.spawn(routing_work);
 
 		let (round_rx, round_tx) = network.round_communication(
 			communication::Round(1),

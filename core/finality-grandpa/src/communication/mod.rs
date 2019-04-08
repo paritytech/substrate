@@ -78,6 +78,9 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// Send a message to a bunch of specific peers, even if they've seen it already.
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
 
+	/// Report a peer's cost or benefit after some action.
+	fn report(&self, who: network::PeerId, cost_benefit: i32);
+
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash);
 }
@@ -134,6 +137,10 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 		})
 	}
 
+	fn report(&self, who: network::PeerId, cost_benefit: i32) {
+		self.report_peer(who, cost_benefit)
+	}
+
 	fn announce(&self, block: B::Hash) {
 		self.announce_block(block)
 	}
@@ -179,15 +186,21 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
-		let validator = Arc::new(GossipValidator::new(config));
+
+		let (validator, report_stream) = GossipValidator::new(config);
+		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
-		let bridge = NetworkBridge { service, validator: validator, neighbor_sender };
+		let reporting_job = report_stream.consume(service.clone());
+
+		let bridge = NetworkBridge { service, validator, neighbor_sender };
 
 		let startup_work = futures::future::lazy(move || {
-			// lazily spawn the rebroadcast job onto a separate task.
+			// lazily spawn these jobs onto their own tasks. the lazy future has access
+			// to tokio globals, which aren't available outside.
 			tokio::spawn(rebroadcast_job);
+			tokio::spawn(reporting_job);
 			Ok(())
 		});
 

@@ -73,7 +73,9 @@ use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::{trace, debug};
+use log::{trace, debug, warn};
+use futures::prelude::*;
+use futures::sync::mpsc;
 
 use crate::{CompactCommit, SignedMessage};
 use super::{Round, SetId};
@@ -614,12 +616,19 @@ impl<Block: BlockT> Inner<Block> {
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
+	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
-	pub(super) fn new(config: crate::Config) -> GossipValidator<Block> {
-		GossipValidator { inner: parking_lot::RwLock::new(Inner::new(config)) }
+	pub(super) fn new(config: crate::Config) -> (GossipValidator<Block>, ReportStream) {
+		let (tx, rx) = mpsc::unbounded();
+		let val = GossipValidator {
+			inner: parking_lot::RwLock::new(Inner::new(config)),
+			report_sender: tx,
+		};
+
+		(val, ReportStream { reports: rx })
 	}
 
 	/// Note a round in a set has started.
@@ -643,8 +652,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 		self.inner.write().note_commit_finalized(finalized, send_neighbor);
 	}
 
-	fn report(&self, _who: &PeerId, _cost_benefit: i32) {
-		// report
+	fn report(&self, who: PeerId, cost_benefit: i32) {
+		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
 	fn do_validate(&self, who: &PeerId, mut data: &[u8])
@@ -713,15 +722,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 		match action {
 			Action::Keep(topic, cb) => {
-				self.report(who, cb);
+				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {
-				self.report(who, cb);
+				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			}
 			Action::Discard(cb) => {
-				self.report(who, cb);
+				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::Discard
 			}
 		}
@@ -807,6 +816,61 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(_) => true,
 			}
 		})
+	}
+}
+
+struct PeerReport {
+	who: PeerId,
+	cost_benefit: i32,
+}
+
+// wrapper around a stream of reports.
+#[must_use = "The report stream must be consumed"]
+pub(super) struct ReportStream {
+	reports: mpsc::UnboundedReceiver<PeerReport>,
+}
+
+impl ReportStream {
+	/// Conse
+	pub(super) fn consume<B, N>(self, net: N)
+		-> impl Future<Item=(),Error=()> + Send + 'static
+	where
+		B: BlockT,
+		N: super::Network<B> + Send + 'static,
+	{
+		ReportingTask {
+			reports: self.reports,
+			net,
+			_marker: Default::default(),
+		}
+	}
+}
+
+/// A future for reporting peers.
+#[must_use = "Futures do nothing unless polled"]
+struct ReportingTask<B, N> {
+	reports: mpsc::UnboundedReceiver<PeerReport>,
+	net: N,
+	_marker: std::marker::PhantomData<B>,
+}
+
+impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<(), ()> {
+		loop {
+			match self.reports.poll() {
+				Err(_) => {
+					warn!(target: "afg", "Report stream terminated unexpectedly");
+					return Ok(Async::Ready(()))
+				}
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
+				Ok(Async::Ready(Some(PeerReport { who, cost_benefit }))) =>
+					self.net.report(who, cost_benefit),
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
+			}
+		}
 	}
 }
 
@@ -967,7 +1031,7 @@ mod tests {
 
 	#[test]
 	fn messages_not_expired_immediately() {
-		let val = GossipValidator::<Block>::new(config());
+		let (val, _) = GossipValidator::<Block>::new(config());
 
 		let set_id = 1;
 
@@ -981,14 +1045,12 @@ mod tests {
 
 			// messages from old rounds are expired.
 			for round_num in 1u64..last_kept_round {
-				println!("{} should be expired?", round_num);
 				let topic = crate::communication::round_topic::<Block>(round_num, 1);
 				assert!(is_expired(topic, &[1, 2, 3]));
 			}
 
 			// messages from not-too-old rounds are not expired.
 			for round_num in last_kept_round..10 {
-				println!("{} should not be expired?", round_num);
 				let topic = crate::communication::round_topic::<Block>(round_num, 1);
 				assert!(!is_expired(topic, &[1, 2, 3]));
 			}

@@ -39,7 +39,8 @@ pub(super) type NeighborPacketSender<B> = mpsc::UnboundedSender<(Vec<PeerId>, Ne
 
 /// Does the work of sending neighbor packets, asynchronously.
 ///
-/// It may rebroadcast the last neighbor packet periodically.
+/// It may rebroadcast the last neighbor packet periodically when no
+/// progress is made.
 pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 	impl Future<Item = (), Error = ()> + Send + 'static,
 	NeighborPacketSender<B>,
