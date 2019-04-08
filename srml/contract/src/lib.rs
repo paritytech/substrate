@@ -449,17 +449,30 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		fn claim_surchage(origin, dest: T::AccountId) {
+		fn claim_surchage(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+			let origin = origin.into();
+			let (signed, rewarded) = match origin {
+				Some(system::RawOrigin::Signed(ref account)) if aux_sender.is_none() => {
+					(true, account)
+				},
+				Some(system::RawOrigin::Inherent) if aux_sender.is_some() => {
+					(true, aux_sender.as_ref().expect("checked above"))
+				},
+				_ => return Err("Invalid surcharge claim: origin must be signed or \
+								inherent and auxiliary sender only provided on inherent")
+			};
+
 			let mut check_block = <system::Module<T>>::block_number();
 
-			if let Some(system::RawOrigin::Signed(_)) = origin.into() {
+			// Make validators advantaged
+			if signed {
 				check_block -= T::BlockNumber::sa(2u64);
 			}
 
 			match Self::check_rent(&dest, check_block) {
 				RentDecision::CantWithdrawRentWithoutDying(rent)
 				| RentDecision::AllowanceExceeded(rent) => {
-					// TODO TODO: reward caller
+					T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
 					Self::evict(&dest, rent);
 				}
 				RentDecision::FreeFromRent | RentDecision::CollectDues(_) => (),
@@ -514,7 +527,7 @@ decl_storage! {
 		RentDepositOffset get(rent_deposit_offset) config(): BalanceOf<T>;
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
-		SurchargeAmount get(surcharge_amount) config(): BalanceOf<T>;
+		SurchargeReward get(surcharge_reward) config(): BalanceOf<T>;
 		/// The fee required to make a transfer.
 		TransferFee get(transfer_fee) config(): BalanceOf<T>;
 		/// The fee required to create an account.
