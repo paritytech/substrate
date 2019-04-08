@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::blockchain::HeaderBackend;
-use client::error::{Error as ClientError, ErrorKind as ClientErrorKind};
+use client::error::Error as ClientError;
 use parity_codec::{Encode, Decode};
 use grandpa::VoterSet;
 use grandpa::{Error as GrandpaError};
@@ -64,7 +64,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		let error = || {
 			let msg = "invalid precommits for target commit".to_string();
-			Err(Error::Client(ClientErrorKind::BadJustification(msg).into()))
+			Err(Error::Client(ClientError::BadJustification(msg).into()))
 		};
 
 		for signed in commit.precommits.iter() {
@@ -103,7 +103,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	{
 		GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(|| {
 			let msg = "failed to decode grandpa justification".to_string();
-			ClientErrorKind::BadJustification(msg).into()
+			ClientError::BadJustification(msg).into()
 		}).and_then(|just| just.verify(set_id, voters).map(|_| just))
 	}
 
@@ -124,7 +124,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			Ok(Some(_)) => {},
 			_ => {
 				let msg = "invalid commit in grandpa justification".to_string();
-				return Err(ClientErrorKind::BadJustification(msg).into());
+				return Err(ClientError::BadJustification(msg).into());
 			}
 		}
 
@@ -137,7 +137,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 				self.round,
 				set_id,
 			) {
-				return Err(ClientErrorKind::BadJustification(
+				return Err(ClientError::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string()).into());
 			}
 
@@ -154,7 +154,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 					}
 				},
 				_ => {
-					return Err(ClientErrorKind::BadJustification(
+					return Err(ClientError::BadJustification(
 						"invalid precommit ancestry proof in grandpa justification".to_string()).into());
 				},
 			}
@@ -166,7 +166,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			.collect();
 
 		if visited_hashes != ancestry_hashes {
-			return Err(ClientErrorKind::BadJustification(
+			return Err(ClientError::BadJustification(
 				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
 		}
 

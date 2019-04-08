@@ -20,7 +20,7 @@ use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as Head
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
 
-use crate::error::{ErrorKind, Result};
+use crate::error::{Error, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
@@ -53,19 +53,19 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
 	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
-		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
+		self.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("{}", id)).into())
 	}
 
 	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is not found.
 	fn expect_block_number_from_id(&self, id: &BlockId<Block>) -> Result<NumberFor<Block>> {
 		self.block_number_from_id(id)
-			.and_then(|n| n.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into()))
+			.and_then(|n| n.ok_or_else(|| Error::UnknownBlock(format!("{}", id)).into()))
 	}
 
 	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is not found.
 	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
 		self.block_hash_from_id(id)
-			.and_then(|n| n.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into()))
+			.and_then(|n| n.ok_or_else(|| Error::UnknownBlock(format!("{}", id)).into()))
 	}
 }
 
@@ -187,7 +187,7 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 	let load_header = |id: BlockId<Block>| {
 		match backend.header(id) {
 			Ok(Some(hdr)) => Ok(hdr),
-			Ok(None) => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
+			Ok(None) => Err(Error::UnknownBlock(format!("Unknown block {:?}", id)).into()),
 			Err(e) => Err(e),
 		}
 	};
