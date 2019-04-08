@@ -54,9 +54,13 @@ use ed25519::Public as AuthorityId;
 /// Data about a completed round.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub struct CompletedRound<Block: BlockT> {
+	/// The round number.
 	pub number: u64,
+	/// The round state (prevote ghost, estimate, finalized, etc.)
 	pub state: RoundState<Block::Hash, NumberFor<Block>>,
+	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
+	/// All the votes observed in the round.
 	pub votes: Vec<SignedMessage<Block>>,
 }
 
@@ -215,7 +219,6 @@ impl<Block: BlockT> HasVoted<Block> {
 	pub fn can_precommit(&self) -> bool {
 		self.precommit().map(|_| false).unwrap_or(true)
 	}
-
 }
 
 /// A voter set state meant to be shared safely across multiple owners.

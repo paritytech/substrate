@@ -373,6 +373,11 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 
 /// A sink for outgoing messages to the network. Any messages that are sent will
 /// be replaced, as appropriate, according to the given `HasVoted`.
+/// NOTE: The votes are stored unsigned, which means that the signatures need to
+/// be "stable", i.e. we should end up with the exact same signed message if we
+/// use the same raw message and key to sign. This is currently true for
+/// `ed25519` and `BLS` signatures (which we might use in the future), care must
+/// be taken when switching to different key types.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
