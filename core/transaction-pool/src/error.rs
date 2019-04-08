@@ -16,6 +16,10 @@
 
 //! Transaction pool error.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+// https://github.com/paritytech/substrate/issues/1547
+#![allow(deprecated)]
+
 use client;
 use txpool;
 use error_chain::{
