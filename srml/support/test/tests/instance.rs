@@ -16,14 +16,11 @@
 
 #![recursion_limit="128"]
 
-#[cfg(feature = "std")]
-use serde_derive::Serialize;
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::rstd::prelude::*;
 use srml_support::rstd as rstd;
-use srml_support::codec::{Encode, Decode};
 use srml_support::runtime_primitives::{generic, BuildStorage};
-use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify, Digest};
+use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify};
 use srml_support::Parameter;
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
@@ -31,83 +28,9 @@ use inherents::{
 use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
 use primitives::{H256, sr25519};
 
-pub trait Currency {
-}
+mod system;
 
-// Mock
-mod system {
-	use super::*;
-
-	pub trait Trait: 'static + Eq + Clone {
-		type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
-		type BlockNumber;
-		type Digest: Digest<Hash = H256>;
-		type Hash;
-		type AccountId;
-		type Event: From<Event>;
-		type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
-	}
-
-	pub type DigestItemOf<T> = <<T as Trait>::Digest as Digest>::Item;
-
-	srml_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-			pub fn deposit_event(_event: T::Event) {
-			}
-		}
-	}
-	impl<T: Trait> Module<T> {
-		pub fn deposit_log(_item: <T::Digest as Digest>::Item) {
-			unimplemented!();
-		}
-	}
-
-	srml_support::decl_event!(
-		pub enum Event {
-			ExtrinsicSuccess,
-			ExtrinsicFailed,
-		}
-	);
-
-	/// Origin for the system module.
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
-	pub enum RawOrigin<AccountId> {
-		Root,
-		Signed(AccountId),
-		Inherent,
-	}
-
-	impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-		fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-			match s {
-				Some(who) => RawOrigin::Signed(who),
-				None => RawOrigin::Inherent,
-			}
-		}
-	}
-
-	pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
-
-	pub type Log<T> = RawLog<
-		<T as Trait>::Hash,
-	>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-	#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-	pub enum RawLog<H> {
-		ChangesTrieRoot(H),
-	}
-
-	pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
-		where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
-	{
-		match o.into() {
-			Some(RawOrigin::Root) => Ok(()),
-			_ => Err("bad origin: expected to be a root origin"),
-		}
-	}
-}
+pub trait Currency {}
 
 // Test for:
 // * No default instance
