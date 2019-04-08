@@ -231,6 +231,7 @@ mod tests {
 			assert_eq!(CouncilMotions::proposal_of(&hash), Some(proposal));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![1], Vec::<u64>::new())));
 
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -284,6 +285,7 @@ mod tests {
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, Vec::<u64>::new(), vec![1])));
 			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false), "duplicate vote ignored");
 
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -306,6 +308,7 @@ mod tests {
 			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, false));
 
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -332,6 +335,7 @@ mod tests {
 			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
 			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, true));
 
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),

@@ -341,6 +341,7 @@ fn instantiate_and_call_and_deposit_event() {
 				vec![],
 			);
 
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -416,6 +417,7 @@ fn dispatch_call() {
 
 			// Let's keep this assert even though it's redundant. If you ever need to update the
 			// wasm source this test will fail and will show you the actual hash.
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -443,6 +445,7 @@ fn dispatch_call() {
 				vec![],
 			));
 
+			System::flush_events();
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
