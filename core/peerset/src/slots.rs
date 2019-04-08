@@ -32,20 +32,20 @@ pub enum SlotType {
 pub enum SlotState {
 	/// Returned when `add_peer` successfully adds a peer to the slot.
 	Added(PeerId),
-	/// Returned we already have a connection to a given peer, but it is upgraded from
+	/// Returned when we already have given peer in our list, but it is upgraded from
 	/// `Common` to `Reserved`.
 	Upgraded(PeerId),
 	/// Returned when we should removed a common peer to make space for a reserved peer.
 	Swaped {
-		/// Peer we should disconnect from.
+		/// Peer was removed from the list.
 		removed: PeerId,
-		/// Peer we should connect to.
+		/// Peer was added to the list.
 		added: PeerId,
 	},
-	/// Error returned when we are already connected to this peer.
-	AlreadyConnected(PeerId),
-	/// Error returned when max number of connections has been already established.
-	MaxConnections(PeerId),
+	/// Error returned when we are already know about given peer.
+	AlreadyExists(PeerId),
+	/// Error returned when list is full and no more peers can be added.
+	MaxCapacity(PeerId),
 }
 
 /// Contains all information about group of slots.
@@ -94,9 +94,18 @@ impl Slots {
 	}
 
 	/// Tries to find a slot for a given peer and returns `SlotState`.
+	///
+	/// - If a peer is already inserted into reserved list or inserted or
+	/// inserted into common list and readded with the same `SlotType`,
+	/// the function returns `SlotState::AlreadyExists`
+	/// - If a peer is already inserted common list returns `SlotState::Upgraded`
+	/// - If there is no slot for a reserved peer, we try to drop one common peer
+	/// and it a new reserved one in it's place, function returns `SlotState::Swaped`
+	/// - If there is no place for a peer, function returns `SlotState::MaxCapacity`
+	/// - If the peer was simply added, `SlotState::Added` is returned
 	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> SlotState {
 		if self.reserved.contains_key(&peer_id) {
-			return SlotState::AlreadyConnected(peer_id);
+			return SlotState::AlreadyExists(peer_id);
 		}
 
 		if self.common.contains_key(&peer_id) {
@@ -105,7 +114,7 @@ impl Slots {
 				self.reserved.insert(peer_id.clone(), ());
 				return SlotState::Upgraded(peer_id);
 			} else {
-				return SlotState::AlreadyConnected(peer_id);
+				return SlotState::AlreadyExists(peer_id);
 			}
 		}
 
@@ -119,7 +128,7 @@ impl Slots {
 					};
 				}
 			}
-			return SlotState::MaxConnections(peer_id);
+			return SlotState::MaxCapacity(peer_id);
 		}
 
 		match slot_type {
@@ -130,8 +139,8 @@ impl Slots {
 		SlotState::Added(peer_id)
 	}
 
-	/// Pops the oldest peer from the list.
-	pub fn pop_peer(&mut self, reserved_only: bool) -> Option<(PeerId, SlotType)> {
+	/// Pops the oldest reserved peer. If none exists and `reserved_only = false` pops a common peer.
+	pub fn pop_most_important_peer(&mut self, reserved_only: bool) -> Option<(PeerId, SlotType)> {
 		if let Some((peer_id, _)) = self.reserved.pop_front() {
 			return Some((peer_id, SlotType::Reserved));
 		}
@@ -144,27 +153,32 @@ impl Slots {
 			.map(|(peer_id, _)| (peer_id, SlotType::Common))
 	}
 
+	/// Removes all common peers from the list and returns an iterator over them.
 	pub fn clear_common_slots(&mut self) -> impl Iterator<Item = PeerId> {
 		let slots = mem::replace(&mut self.common, LinkedHashMap::new());
 		slots.into_iter().map(|(peer_id, _)| peer_id)
 	}
 
+	/// Marks given peer as a reserved one.
 	pub fn mark_reserved(&mut self, peer_id: &PeerId) {
 		if let Some(_) = self.common.remove(peer_id) {
 			self.reserved.insert(peer_id.clone(), ());
 		}
 	}
 
+	/// Marks given peer as not reserved one.
 	pub fn mark_not_reserved(&mut self, peer_id: &PeerId) {
 		if let Some(_) = self.reserved.remove(peer_id) {
 			self.common.insert(peer_id.clone(), ());
 		}
 	}
 
+	/// Removes a peer from a list and returns true if it existed.
 	pub fn remove_peer(&mut self, peer_id: &PeerId) -> bool {
 		self.common.remove(peer_id).is_some() || self.reserved.remove(peer_id).is_some()
 	}
 
+	/// Returns true if given peer is reserved.
 	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
 		self.reserved.contains_key(peer_id)
 	}

@@ -212,10 +212,10 @@ impl Peerset {
 				self.message_queue.push_back(Message::Drop(removed));
 				self.message_queue.push_back(Message::Connect(added));
 			}
-			SlotState::AlreadyConnected(_) | SlotState::Upgraded(_) => {
+			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
 				return;
 			}
-			SlotState::MaxConnections(peer_id) => {
+			SlotState::MaxCapacity(peer_id) => {
 				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
 				return;
 			}
@@ -275,7 +275,7 @@ impl Peerset {
 	}
 
 	fn alloc_slots(&mut self) {
-		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer(self.data.reserved_only) {
+		while let Some((peer_id, slot_type)) = self.data.discovered.pop_most_important_peer(self.data.reserved_only) {
 			match self.data.out_slots.add_peer(peer_id, slot_type) {
 				SlotState::Added(peer_id) => {
 					self.message_queue.push_back(Message::Connect(peer_id));
@@ -286,10 +286,10 @@ impl Peerset {
 					self.message_queue.push_back(Message::Drop(removed));
 					self.message_queue.push_back(Message::Connect(added));
 				}
-				SlotState::Upgraded(_) | SlotState::AlreadyConnected(_) => {
+				SlotState::Upgraded(_) | SlotState::AlreadyExists(_) => {
 					// TODO: we should never reach this point
 				},
-				SlotState::MaxConnections(peer_id) => {
+				SlotState::MaxCapacity(peer_id) => {
 					self.data.discovered.add_peer(peer_id, slot_type);
 					break;
 				},
@@ -346,11 +346,11 @@ impl Peerset {
 				self.message_queue.push_back(Message::Drop(removed));
 				self.message_queue.push_back(Message::Accept(index));
 			},
-			SlotState::AlreadyConnected(_) | SlotState::Upgraded(_) => {
+			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
 				// we are already connected. in this case we do not answer
 				return;
 			},
-			SlotState::MaxConnections(peer_id) => {
+			SlotState::MaxCapacity(peer_id) => {
 				self.data.discovered.add_peer(peer_id, slot_type);
 				self.message_queue.push_back(Message::Reject(index));
 				return;
