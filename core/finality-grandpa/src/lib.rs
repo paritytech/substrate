@@ -73,7 +73,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
+use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
 
 use std::fmt;
 use std::sync::Arc;
@@ -98,8 +98,8 @@ pub use service_integration::{LinkHalfForService, BlockImportForService};
 pub use communication::Network;
 pub use finality_proof::{prove_finality, check_finality_proof};
 
-use aux_schema::{PersistentData, VoterSetState};
-use environment::Environment;
+use aux_schema::PersistentData;
+use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
@@ -119,6 +119,8 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	AuthorityId,
 >;
 
+/// A primary propose message for this chain's block type.
+pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
@@ -281,7 +283,7 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
-	persistent_data: PersistentData<Block::Hash, NumberFor<Block>>,
+	persistent_data: PersistentData<Block>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
@@ -333,6 +335,41 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			voter_commands_rx,
 		},
 	))
+}
+
+fn global_communication<Block: BlockT<Hash=H256>, I, O>(
+	commits_in: I,
+	commits_out: O,
+) -> (
+	impl Stream<
+		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		Error = CommandOrError<H256, NumberFor<Block>>,
+	>,
+	impl Sink<
+		SinkItem = voter::CommunicationOut<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
+		SinkError = CommandOrError<H256, NumberFor<Block>>,
+	>,
+) where
+	I: Stream<
+		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
+		Error = CommandOrError<H256, NumberFor<Block>>,
+	>,
+	O: Sink<
+		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
+		SinkError = CommandOrError<H256, NumberFor<Block>>,
+	>,
+{
+	let global_in = commits_in.map(|(round, commit)| {
+		voter::CommunicationIn::Commit(round, commit, voter::Callback::Blank)
+	});
+
+	// NOTE: eventually this will also handle catch-up requests
+	let global_out = commits_out.with(|global| match global {
+		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
+		_ => unimplemented!(),
+	});
+
+	(global_in, global_out)
 }
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
@@ -453,19 +490,44 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		set_id: authority_set.set_id(),
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
-		last_completed: environment::LastCompletedRound::new(set_state.round()),
+		voter_set_state: set_state.clone(),
 	});
 
-	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
+	initial_environment.update_voter_set_state(|voter_set_state| {
+		match voter_set_state {
+			VoterSetState::Live { current_round: HasVoted::Yes(id, _), completed_rounds } => {
+				let local_id = config.local_key.clone().map(|pair| pair.public());
+				let has_voted = match local_id {
+					Some(local_id) => if *id == local_id {
+						// keep the previous votes
+						return Ok(None);
+					} else {
+						HasVoted::No
+					},
+					_ => HasVoted::No,
+				};
+
+				// NOTE: only updated on disk when the voter first
+				// proposes/prevotes/precommits or completes a round.
+				Ok(Some(VoterSetState::Live {
+					current_round: has_voted,
+					completed_rounds: completed_rounds.clone(),
+				}))
+			},
+			_ => Ok(None),
+		}
+	}).expect("operation inside closure cannot fail; qed");
+
+	let initial_state = (initial_environment, voter_commands_rx.into_future());
 	let voter_work = future::loop_fn(initial_state, move |params| {
-		let (env, set_state, voter_commands_rx) = params;
+		let (env, voter_commands_rx) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?config.name(), "set_id" => ?env.set_id
 		);
 
-		let mut maybe_voter = match set_state.clone() {
-			VoterSetState::Live(last_round_number, last_round_state) => {
+		let mut maybe_voter = match &*env.voter_set_state.read() {
+			VoterSetState::Live { completed_rounds, .. } => {
 				let chain_info = match client.info() {
 					Ok(i) => i,
 					Err(e) => return future::Either::B(future::err(Error::Client(e))),
@@ -476,7 +538,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					chain_info.chain.finalized_number,
 				);
 
-				let committer_data = committer_communication(
+				let (commit_in, commit_out) = committer_communication(
 					config.local_key.as_ref(),
 					env.set_id,
 					&env.voters,
@@ -484,18 +546,25 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					&network,
 				);
 
+				let global_comms = global_communication::<Block, _, _>(
+					commit_in,
+					commit_out,
+				);
+
 				let voters = (*env.voters).clone();
+
+				let last_completed_round = completed_rounds.last();
 
 				Some(voter::Voter::new(
 					env.clone(),
 					voters,
-					committer_data,
-					last_round_number,
-					last_round_state,
+					global_comms,
+					last_completed_round.number,
+					last_completed_round.state.clone(),
 					last_finalized,
 				))
-			}
-			VoterSetState::Paused(_, _) => None,
+			},
+			VoterSetState::Paused { .. } => None,
 		};
 
 		// needs to be combined with another future otherwise it can deadlock.
@@ -526,6 +595,20 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
+
+					let set_state = VoterSetState::Live {
+						// always start at round 0 when changing sets.
+						completed_rounds: CompletedRounds::new(CompletedRound {
+							number: 0,
+							state: genesis_state,
+							base: (new.canon_hash, new.canon_number),
+							votes: Vec::new(),
+						}),
+						current_round: HasVoted::No,
+					};
+
+					let set_state: SharedVoterSetState<_> = set_state.into();
+
 					let env = Arc::new(Environment {
 						inner: client,
 						config,
@@ -534,32 +617,23 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						network,
 						authority_set,
 						consensus_changes,
-						last_completed: environment::LastCompletedRound::new(
-							(0, genesis_state.clone())
-						),
+						voter_set_state: set_state,
 					});
 
-
-					let set_state = VoterSetState::Live(
-						0, // always start at round 0 when changing sets.
-						genesis_state,
-					);
-
-					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
+					Ok(FutureLoop::Continue((env, voter_commands_rx)))
 				}
 				VoterCommand::Pause(reason) => {
 					info!(target: "afg", "Pausing old validator set: {}", reason);
 
 					// not racing because old voter is shut down.
-					let (last_round_number, last_round_state) = env.last_completed.read();
-					let set_state = VoterSetState::Paused(
-						last_round_number,
-						last_round_state,
-					);
+					env.update_voter_set_state(|voter_set_state| {
+						let completed_rounds = voter_set_state.completed_rounds();
+						let set_state = VoterSetState::Paused { completed_rounds };
+						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+						Ok(Some(set_state))
+					})?;
 
-					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
-
-					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
+					Ok(FutureLoop::Continue((env, voter_commands_rx)))
 				},
 			}
 		};
