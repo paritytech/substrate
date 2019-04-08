@@ -1,8 +1,9 @@
 use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
-	SudoConfig, IndicesConfig,
+	SudoConfig, IndicesConfig, FeesConfig,
 };
+use runtime_primitives::Permill
 use substrate_service;
 
 use ed25519::Public as AuthorityId;
@@ -111,6 +112,11 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 			creation_fee: 0,
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 			vesting: vec![],
+		}),
+		fees: Some(FeesConfig {
+			fees_to_block_author: Permill::from_percent(10),
+			fees_to_treasury: Permill::from_percent(10),
+			priority: Default::default(),
 		}),
 		sudo: Some(SudoConfig {
 			key: root_key,

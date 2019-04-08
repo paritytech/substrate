@@ -38,13 +38,14 @@ mod tests {
 		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
-	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult,
+		Permill, Perbill};
 	use {balances, indices, session, system, staking, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
+		SystemConfig, GrandpaConfig, IndicesConfig, FeesConfig, Event, Log};
 	use wabt;
 	use primitives::map;
 
@@ -285,6 +286,11 @@ mod tests {
 				transfer_fee: 0,
 				creation_fee: 0,
 				vesting: vec![],
+			}),
+			fees: Some(FeesConfig {
+				fees_to_block_author: Permill::from_percent(10),
+				fees_to_treasury: Permill::from_percent(10),
+				priority: Default::default(),
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,

@@ -190,21 +190,21 @@ use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 mod mock;
 mod tests;
 
-pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+// pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
-pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
-	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
+// pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
+// 	/// The balance of an account.
+// 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
-	/// A function that is invoked when the free-balance has fallen below the existential deposit and
-	/// has been reduced to zero.
-	///
-	/// Gives a chance to clean up resources associated with the given account.
-	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+// 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
+// 	/// has been reduced to zero.
+// 	///
+// 	/// Gives a chance to clean up resources associated with the given account.
+// 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
 
-	/// Handler for when a new account is created.
-	type OnNewAccount: OnNewAccount<Self::AccountId>;
-}
+// 	/// Handler for when a new account is created.
+// 	type OnNewAccount: OnNewAccount<Self::AccountId>;
+// }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -219,25 +219,25 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
-	/// Handler for the unbalanced reduction when taking transaction fees.
-	type TransactionPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
+	// /// Handler for the unbalanced reduction when taking transaction fees.
+	// type TransactionPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
-	/// Handler for the unbalanced reduction when taking fees associated with balance
-	/// transfer (which may also include account creation).
-	type TransferPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
+	// /// Handler for the unbalanced reduction when taking fees associated with balance
+	// /// transfer (which may also include account creation).
+	// type TransferPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
-	/// Handler for the unbalanced reduction when removing a dust account.
-	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
+	// /// Handler for the unbalanced reduction when removing a dust account.
+	// type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 }
 
-impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
-	type Balance = T::Balance;
-	type OnFreeBalanceZero = T::OnFreeBalanceZero;
-	type OnNewAccount = T::OnNewAccount;
-}
+// impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
+// 	type Balance = T::Balance;
+// 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+// 	type OnNewAccount = T::OnNewAccount;
+// }
 
 decl_event!(
 	pub enum Event<T, I: Instance = DefaultInstance> where
@@ -519,137 +519,137 @@ mod imbalances {
 	};
 	use rstd::mem;
 
-	/// Opaque, move-only struct with private fields that serves as a token denoting that
-	/// funds have been created without any equal and opposite accounting.
-	#[must_use]
-	pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
+	// /// Opaque, move-only struct with private fields that serves as a token denoting that
+	// /// funds have been created without any equal and opposite accounting.
+	// #[must_use]
+	// pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
-	impl<T: Subtrait<I>, I: Instance> PositiveImbalance<T, I> {
-		/// Create a new positive imbalance from a balance.
-		pub fn new(amount: T::Balance) -> Self {
-			PositiveImbalance(amount)
-		}
-	}
+	// impl<T: Subtrait<I>, I: Instance> PositiveImbalance<T, I> {
+	// 	/// Create a new positive imbalance from a balance.
+	// 	pub fn new(amount: T::Balance) -> Self {
+	// 		PositiveImbalance(amount)
+	// 	}
+	// }
 
-	/// Opaque, move-only struct with private fields that serves as a token denoting that
-	/// funds have been destroyed without any equal and opposite accounting.
-	#[must_use]
-	pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
+	// /// Opaque, move-only struct with private fields that serves as a token denoting that
+	// /// funds have been destroyed without any equal and opposite accounting.
+	// #[must_use]
+	// pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
 
-	impl<T: Subtrait<I>, I: Instance> NegativeImbalance<T, I> {
-		/// Create a new negative imbalance from a balance.
-		pub fn new(amount: T::Balance) -> Self {
-			NegativeImbalance(amount)
-		}
-	}
+	// impl<T: Subtrait<I>, I: Instance> NegativeImbalance<T, I> {
+	// 	/// Create a new negative imbalance from a balance.
+	// 	pub fn new(amount: T::Balance) -> Self {
+	// 		NegativeImbalance(amount)
+	// 	}
+	// }
 
-	impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
-		type Opposite = NegativeImbalance<T, I>;
+	// impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
+	// 	type Opposite = NegativeImbalance<T, I>;
 
-		fn zero() -> Self {
-			Self(Zero::zero())
-		}
-		fn drop_zero(self) -> result::Result<(), Self> {
-			if self.0.is_zero() {
-				Ok(())
-			} else {
-				Err(self)
-			}
-		}
-		fn split(self, amount: T::Balance) -> (Self, Self) {
-			let first = self.0.min(amount);
-			let second = self.0 - first;
+	// 	fn zero() -> Self {
+	// 		Self(Zero::zero())
+	// 	}
+	// 	fn drop_zero(self) -> result::Result<(), Self> {
+	// 		if self.0.is_zero() {
+	// 			Ok(())
+	// 		} else {
+	// 			Err(self)
+	// 		}
+	// 	}
+	// 	fn split(self, amount: T::Balance) -> (Self, Self) {
+	// 		let first = self.0.min(amount);
+	// 		let second = self.0 - first;
 
-			mem::forget(self);
-			(Self(first), Self(second))
-		}
-		fn merge(mut self, other: Self) -> Self {
-			self.0 = self.0.saturating_add(other.0);
-			mem::forget(other);
+	// 		mem::forget(self);
+	// 		(Self(first), Self(second))
+	// 	}
+	// 	fn merge(mut self, other: Self) -> Self {
+	// 		self.0 = self.0.saturating_add(other.0);
+	// 		mem::forget(other);
 
-			self
-		}
-		fn subsume(&mut self, other: Self) {
-			self.0 = self.0.saturating_add(other.0);
-			mem::forget(other);
-		}
-		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
-			let (a, b) = (self.0, other.0);
-			mem::forget((self, other));
+	// 		self
+	// 	}
+	// 	fn subsume(&mut self, other: Self) {
+	// 		self.0 = self.0.saturating_add(other.0);
+	// 		mem::forget(other);
+	// 	}
+	// 	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+	// 		let (a, b) = (self.0, other.0);
+	// 		mem::forget((self, other));
 
-			if a >= b {
-				Ok(Self(a - b))
-			} else {
-				Err(NegativeImbalance::new(b - a))
-			}
-		}
-		fn peek(&self) -> T::Balance {
-			self.0.clone()
-		}
-	}
+	// 		if a >= b {
+	// 			Ok(Self(a - b))
+	// 		} else {
+	// 			Err(NegativeImbalance::new(b - a))
+	// 		}
+	// 	}
+	// 	fn peek(&self) -> T::Balance {
+	// 		self.0.clone()
+	// 	}
+	// }
 
-	impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
-		type Opposite = PositiveImbalance<T, I>;
+	// impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
+	// 	type Opposite = PositiveImbalance<T, I>;
 
-		fn zero() -> Self {
-			Self(Zero::zero())
-		}
-		fn drop_zero(self) -> result::Result<(), Self> {
-			if self.0.is_zero() {
-				Ok(())
-			} else {
-				Err(self)
-			}
-		}
-		fn split(self, amount: T::Balance) -> (Self, Self) {
-			let first = self.0.min(amount);
-			let second = self.0 - first;
+	// 	fn zero() -> Self {
+	// 		Self(Zero::zero())
+	// 	}
+	// 	fn drop_zero(self) -> result::Result<(), Self> {
+	// 		if self.0.is_zero() {
+	// 			Ok(())
+	// 		} else {
+	// 			Err(self)
+	// 		}
+	// 	}
+	// 	fn split(self, amount: T::Balance) -> (Self, Self) {
+	// 		let first = self.0.min(amount);
+	// 		let second = self.0 - first;
 
-			mem::forget(self);
-			(Self(first), Self(second))
-		}
-		fn merge(mut self, other: Self) -> Self {
-			self.0 = self.0.saturating_add(other.0);
-			mem::forget(other);
+	// 		mem::forget(self);
+	// 		(Self(first), Self(second))
+	// 	}
+	// 	fn merge(mut self, other: Self) -> Self {
+	// 		self.0 = self.0.saturating_add(other.0);
+	// 		mem::forget(other);
 
-			self
-		}
-		fn subsume(&mut self, other: Self) {
-			self.0 = self.0.saturating_add(other.0);
-			mem::forget(other);
-		}
-		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
-			let (a, b) = (self.0, other.0);
-			mem::forget((self, other));
+	// 		self
+	// 	}
+	// 	fn subsume(&mut self, other: Self) {
+	// 		self.0 = self.0.saturating_add(other.0);
+	// 		mem::forget(other);
+	// 	}
+	// 	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+	// 		let (a, b) = (self.0, other.0);
+	// 		mem::forget((self, other));
 
-			if a >= b {
-				Ok(Self(a - b))
-			} else {
-				Err(PositiveImbalance::new(b - a))
-			}
-		}
-		fn peek(&self) -> T::Balance {
-			self.0.clone()
-		}
-	}
+	// 		if a >= b {
+	// 			Ok(Self(a - b))
+	// 		} else {
+	// 			Err(PositiveImbalance::new(b - a))
+	// 		}
+	// 	}
+	// 	fn peek(&self) -> T::Balance {
+	// 		self.0.clone()
+	// 	}
+	// }
 
-	impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
-		/// Basic drop handler will just square up the total issuance.
-		fn drop(&mut self) {
-			<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
-				|v| *v = v.saturating_add(self.0)
-			);
-		}
-	}
+	// impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
+	// 	/// Basic drop handler will just square up the total issuance.
+	// 	fn drop(&mut self) {
+	// 		<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
+	// 			|v| *v = v.saturating_add(self.0)
+	// 		);
+	// 	}
+	// }
 
-	impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
-		/// Basic drop handler will just square up the total issuance.
-		fn drop(&mut self) {
-			<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
-				|v| *v = v.saturating_sub(self.0)
-			);
-		}
-	}
+	// impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
+	// 	/// Basic drop handler will just square up the total issuance.
+	// 	fn drop(&mut self) {
+	// 		<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
+	// 			|v| *v = v.saturating_sub(self.0)
+	// 		);
+	// 	}
+	// }
 }
 
 // TODO: #2052
@@ -664,36 +664,36 @@ mod imbalances {
 // This should eventually be refactored so that the three type items that do
 // depend on the Imbalance type (TransactionPayment, TransferPayment, DustRemoval)
 // are placed in their own SRML module.
-struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
-impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
-	fn clone(&self) -> Self { unimplemented!() }
-}
-impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
-	fn eq(&self, _: &Self) -> bool { unimplemented!() }
-}
-impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
-impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
-	type Origin = T::Origin;
-	type Index = T::Index;
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	type Hashing = T::Hashing;
-	type Digest = T::Digest;
-	type AccountId = T::AccountId;
-	type Lookup = T::Lookup;
-	type Header = T::Header;
-	type Event = ();
-	type Log = T::Log;
-}
-impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
-	type Balance = T::Balance;
-	type OnFreeBalanceZero = T::OnFreeBalanceZero;
-	type OnNewAccount = T::OnNewAccount;
-	type Event = ();
-	type TransactionPayment = ();
-	type TransferPayment = ();
-	type DustRemoval = ();
-}
+// struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
+// impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
+// 	fn clone(&self) -> Self { unimplemented!() }
+// }
+// impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
+// 	fn eq(&self, _: &Self) -> bool { unimplemented!() }
+// }
+// impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
+// impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
+// 	type Origin = T::Origin;
+// 	type Index = T::Index;
+// 	type BlockNumber = T::BlockNumber;
+// 	type Hash = T::Hash;
+// 	type Hashing = T::Hashing;
+// 	type Digest = T::Digest;
+// 	type AccountId = T::AccountId;
+// 	type Lookup = T::Lookup;
+// 	type Header = T::Header;
+// 	type Event = ();
+// 	type Log = T::Log;
+// }
+// impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
+// 	type Balance = T::Balance;
+// 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
+// 	type OnNewAccount = T::OnNewAccount;
+// 	type Event = ();
+// 	type TransactionPayment = ();
+// 	type TransferPayment = ();
+// 	type DustRemoval = ();
+// }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where

@@ -206,6 +206,7 @@ construct_runtime!(
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
 		Balances: balances,
+		Fees: fees,
 		Session: session,
 		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy,

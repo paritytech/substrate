@@ -20,7 +20,7 @@ use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto:
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
+	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, FeesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::{hex, hex_impl};
@@ -92,6 +92,11 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
 			vesting: vec![],
+		}),
+		fees: Some(FeesConfig {
+			fees_to_block_author: Permill::from_percent(10),
+			fees_to_treasury: Permill::from_percent(10),
+			priority: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.iter().cloned()
@@ -252,6 +257,11 @@ pub fn testnet_genesis(
 			creation_fee: 0,
 			balances: endowed_accounts.iter().map(|k| (k.clone(), ENDOWMENT)).collect(),
 			vesting: vec![],
+		}),
+		fees: Some(FeesConfig {
+			fees_to_block_author: Permill::from_percent(10),
+			fees_to_treasury: Permill::from_percent(10),
+			priority: Default::default(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
