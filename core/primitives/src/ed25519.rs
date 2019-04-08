@@ -477,6 +477,7 @@ impl TraitPair for Pair {
 		let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
 		let msg = untrusted::Input::from(message.as_ref());
 		let sig = untrusted::Input::from(&sig.0[..]);
+
 		match signature::verify(&signature::ED25519, public_key, msg, sig) {
 			Ok(_) => true,
 			_ => false,

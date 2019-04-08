@@ -16,7 +16,6 @@
 
 //! Schema for stuff in the aux-db.
 
-use client::error::Error;
 use std::collections::{BTreeMap, btree_map::Entry};
 use std::sync::Arc;
 use codec::{Encode, Decode};
@@ -27,7 +26,7 @@ use runtime_primitives::traits::{Header};
 const VERSION_KEY: &[u8] = b"aura_schema_version";
 const SLOT_HEADER_MAP_KEY: &[u8] = b"aura_slot_header_map";
 const CURRENT_VERSION: u32 = 1;
-
+pub const MAX_SLOT_CAPACITY: u64 = 1000;
 
 fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
 	where
@@ -74,7 +73,7 @@ impl<H> EquivocationProof<H> {
 
 /// Check if the header is an equivocation and returns the proof in that case.
 pub fn check_equivocation<C, H>(
-	backend: Arc<C>,
+	backend: &Arc<C>,
 	slot: u64,
 	header: H,
 ) -> ClientResult<Option<EquivocationProof<H>>>
@@ -102,6 +101,10 @@ pub fn check_equivocation<C, H>(
 			}
 		},
 	};
+
+	if slot > MAX_SLOT_CAPACITY {
+		slot_header_map = slot_header_map.split_off(&(slot - MAX_SLOT_CAPACITY));
+	}
 
 	backend.insert_aux(
 		&[(SLOT_HEADER_MAP_KEY, slot_header_map.encode().as_slice())],

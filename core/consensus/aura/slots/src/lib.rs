@@ -18,7 +18,7 @@ mod slots;
 mod aux_schema;
 
 pub use slots::{Slots, SlotInfo};
-pub use aux_schema::check_equivocation;
+pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY};
 
 use std::sync::{mpsc, Arc};
 use std::thread;

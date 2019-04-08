@@ -36,7 +36,6 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
-use client::error::{Result as ClientResult};
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::blockchain::ProvideCache;
 use client::runtime_api::{ApiExt, Core as CoreApi};
@@ -141,10 +140,7 @@ impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P
 	fn as_aura_seal(&self) -> Option<(u64, Signature<P>)> {
 		match self {
 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => {
-				println!("before decode");
-				Decode::decode(&mut &seal[..])
-			},
+			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
 			_ => None,
 		}
 	}
@@ -307,6 +303,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 		let client = self.client.clone();
 		let block_import = self.block_import.clone();
 		let env = self.env.clone();
+
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
@@ -443,7 +440,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 // FIXME #1018 needs misbehavior types
 #[forbid(deprecated)]
 fn check_header<C, B: Block, P: Pair>(
-	client: Arc<C>,
+	client: &Arc<C>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -610,7 +607,6 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId<P>>>), String> {
-		println!("inside verify");
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
 		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
@@ -627,7 +623,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<_, B, P>(
-			self.client.clone(),
+			&self.client,
 			slot_now + 1,
 			header,
 			hash,
@@ -820,26 +816,22 @@ mod tests {
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::ed25519::Keyring;
-	use primitives::{ed25519, sr25519};
+	use primitives::ed25519;
 	use client::BlockchainEvents;
 	use test_client;
-	use aura_slots::{check_equivocation};
-	use client::backend::AuxStore;
 	use test_client::AuthorityKeyring;
-	use primitives::hash::{H256, H512};
-	use runtime_primitives::generic::DigestItem;
-	use runtime_primitives::testing::{Digest as DigestTest};
-	use runtime_primitives::testing::{Header, DigestItem as DigestItemT, TestXt, Block as RawBlock, ExtrinsicWrapper};
-	use runtime_primitives::traits::{Digest, Header as HeaderT, Hash, BlakeTwo256};
+	use primitives::hash::H256;
+	use runtime_primitives::testing::{Header, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
+	use runtime_primitives::traits::{Digest, Header as HeaderT};
 	use hex_literal::*;
-	
+	use aura_slots::MAX_SLOT_CAPACITY;
 
 	type Error = ::client::error::Error;
 
 	type TestClient = ::client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
 
 	struct DummyFactory(Arc<TestClient>);
-	struct DummyProposer(u64, Arc<TestClient>, Option<TestBlock>);
+	struct DummyProposer(u64, Arc<TestClient>);
 
 	impl Environment<TestBlock> for DummyFactory {
 		type Proposer = DummyProposer;
@@ -848,7 +840,7 @@ mod tests {
 		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId<ed25519::Pair>])
 			-> Result<DummyProposer, Error>
 		{
-			Ok(DummyProposer(parent_header.number + 1, self.0.clone(), None))
+			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
 		}
 	}
 
@@ -857,7 +849,7 @@ mod tests {
 		type Create = Result<TestBlock, Error>;
 
 		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
-			self.1.new_block_at(&BlockId::Number(0)).unwrap().bake().map_err(|e| e.into())
+			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}
 
@@ -1002,58 +994,55 @@ mod tests {
 		]);
 	}
 
+	fn create_header(slot_num: u64, number: u64) -> (Header, H256) {
+		// Construct one header.
+		let mut header = Header {
+			parent_hash: [69u8; 32].into(),
+			number,
+			state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
+			digest: DigestTest { logs: vec![], },
+		};
+		let header_hash: H256 = header.hash();
+		let to_sign = (slot_num, header_hash).encode();
+		let signature = AuthorityKeyring::Alice.sign(&to_sign[..]);
+		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<ed25519::Pair>>::aura_seal(
+			slot_num,
+			signature,
+		);
+		header.digest_mut().push(item);
+		(header, header_hash)
+	}
+
 	#[test]
-	fn check_header_works() {
+	fn check_header_works_with_equivocation() {
 		let client = test_client::new();
 		let authorities = authorities(&client, &BlockId::Number(0)).unwrap();
 		let slot_num = 3;
 
 		// Construct one header.
-		let mut header1 = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
-			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-			digest: DigestTest { logs: vec![], },
-		};
-		let header1_hash: H256 = header1.hash();
-		let to_sign1 = (slot_num, header1_hash).encode();
-		let signature1 = AuthorityKeyring::Alice.sign(&to_sign1[..]);
-		let item1 = <generic::DigestItem<_, _, _> as CompatibleDigestItem<ed25519::Pair>>::aura_seal(
-			slot_num,
-			signature1,
-		);
-		header1.digest_mut().push(item1);
+		let (header1, header1_hash) = create_header(slot_num, 1);
 		
-		// construct other header.
-		let mut header2 = Header {
-			parent_hash: [69u8; 32].into(),
-			number: 1,
-			state_root: hex!("50cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
-			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-			digest: DigestTest { logs: vec![], },
-		};
-		let header2_hash: H256 = header2.hash();
-		let to_sign2 = (slot_num, header2_hash).encode();
-		let signature2 = AuthorityKeyring::Alice.sign(&to_sign2[..]);
-		let item2 = <generic::DigestItem<_, _, _> as CompatibleDigestItem<ed25519::Pair>>::aura_seal(
-			slot_num,
-			signature2,
-		);
-		header2.digest_mut().push(item2);
+		// Construct a different header.
+		let (header2, header2_hash) = create_header(slot_num, 2);
 
+		// Construct a header with high slot number.
+		let (header3, header3_hash) = create_header(slot_num + MAX_SLOT_CAPACITY, 3);
 
-		let c1 = Arc::new(client);
-		let c2 = Arc::clone(&c1);
-		let c3 = Arc::clone(&c1);
-
-		// It is ok to sign same headers.
+		let c = Arc::new(client);
+		
 		type B = RawBlock<ExtrinsicWrapper<u64>>;
 		type P = ed25519::Pair;
-		assert!(check_header::<_, B, P>(c1, 100, header1.clone(), header1_hash, &authorities, false).is_ok());
-		assert!(check_header::<_, B, P>(c2, 100, header1, header1_hash, &authorities, false).is_ok());
+		let high_slot = 2000;
+
+		// It's ok to sign same headers.
+		assert!(check_header::<_, B, P>(&c, high_slot, header1.clone(), header1_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, high_slot, header1, header1_hash, &authorities, false).is_ok());
 		
 		// But not two different headers at the same slot.
-		assert!(check_header::<_, B, P>(c3, 100, header2.clone(), header2_hash, &authorities, false).is_err());
+		assert!(check_header::<_, B, P>(&c, high_slot, header2, header2_hash, &authorities, false).is_err());
+
+		// We should ignore old slot headers (out of MAX_SLOT_CAPACITY).
+		assert!(check_header::<_, B, P>(&c, high_slot, header3, header3_hash, &authorities, false).is_err());
 	}
 }
