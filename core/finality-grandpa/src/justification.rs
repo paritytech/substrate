@@ -109,7 +109,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		if (justification.commit.target_hash, justification.commit.target_number) != finalized_target {
 			let msg = "invalid commit target in grandpa justification".to_string();
-			Err(ClientErrorKind::BadJustification(msg).into())
+			Err(ClientError::BadJustification(msg).into())
 		} else {
 			justification.verify(set_id, voters).map(|_| justification)
 		}

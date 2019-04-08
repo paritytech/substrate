@@ -113,6 +113,12 @@ impl From<String> for Error {
 	}
 }
 
+impl<'a> From<&'a str> for Error {
+	fn from(s: &'a str) -> Self {
+		Error::Msg(s.into())
+	}
+}
+
 impl From<consensus::Error> for Error {
 	fn from(e: consensus::Error) -> Self {
 		Error::Consensus(e)

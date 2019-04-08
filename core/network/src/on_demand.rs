@@ -527,7 +527,7 @@ pub mod tests {
 	use std::time::Instant;
 	use futures::Future;
 	use runtime_primitives::traits::NumberFor;
-	use client::{error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
+	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 	use crate::config::Roles;
