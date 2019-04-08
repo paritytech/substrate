@@ -158,7 +158,8 @@ impl<Components: components::Components> Service<Components> {
 				Some(pid) => pid,
 				None => {
 					warn!("Using default protocol ID {:?} because none is configured in the \
-						chain specs", DEFAULT_PROTOCOL_ID);
+						chain specs", DEFAULT_PROTOCOL_ID
+					);
 					DEFAULT_PROTOCOL_ID	
 				}
 			}.as_bytes();
