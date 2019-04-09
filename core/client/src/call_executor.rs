@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
@@ -29,6 +29,7 @@ use primitives::{
 	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt
 };
 
+use crate::runtime_api::ProofRecorder;
 use crate::backend;
 use crate::error;
 
@@ -82,6 +83,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		skip_initialize_block: bool,
+		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -122,7 +124,10 @@ where
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
 		let trie_state = state.try_into_trie_backend()
-			.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
+			.ok_or_else(||
+				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+					as Box<state_machine::Error>
+			)?;
 		self.prove_at_trie_state(&trie_state, overlay, method, call_data)
 	}
 
@@ -224,6 +229,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		skip_initialize_block: bool,
+		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
 

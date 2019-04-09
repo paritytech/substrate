@@ -19,7 +19,7 @@
 
 use std::{
 	collections::HashSet, sync::Arc, panic::UnwindSafe, result,
-	marker::PhantomData, cell::RefCell,
+	marker::PhantomData, cell::RefCell, rc::Rc,
 };
 use futures::{IntoFuture, Future};
 
@@ -34,6 +34,7 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
+use crate::runtime_api::ProofRecorder;
 use crate::backend::RemoteBackend;
 use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
@@ -132,6 +133,7 @@ where
 		_native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		_skip_initialize_block: bool,
+		_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
 		if !changes.borrow().is_empty() || initialized_block.borrow().is_some() {
@@ -260,6 +262,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		skip_initialize_block: bool,
+		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -286,6 +289,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				native_call,
 				side_effects_handler,
 				skip_initialize_block,
+				recorder,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
 			false => CallExecutor::contextual_call::<
 				_,
@@ -308,6 +312,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				native_call,
 				side_effects_handler,
 				skip_initialize_block,
+				recorder,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
 		}
 	}

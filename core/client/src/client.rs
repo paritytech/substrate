@@ -18,7 +18,7 @@
 
 use std::{
 	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
-	panic::UnwindSafe, result, cell::RefCell,
+	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
 use crate::error::Error;
 use futures::sync::mpsc;
@@ -38,7 +38,9 @@ use runtime_primitives::traits::{
 	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem
 };
 use runtime_primitives::BuildStorage;
-use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi};
+use crate::runtime_api::{
+	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
+};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
 	NeverNativeValue, ExecutionContext
@@ -1362,6 +1364,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		native_call: Option<NC>,
 		context: ExecutionContext,
 		skip_initialize_block: bool,
+		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
@@ -1392,6 +1395,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			native_call,
 			offchain_extensions.as_mut(),
 			skip_initialize_block,
+			recorder,
 		)
 	}
 
