@@ -159,7 +159,7 @@ impl<T: Trait> ContractInfo<T> {
 
 #[derive(Encode, Decode)]
 pub struct AliveContractInfo<T: Trait> {
-	/// Unique ID for the subtree encoded as a byte vector
+	/// Unique ID for the subtree encoded as a bytes vector
 	pub trie_id: TrieId,
 	/// The size of stored value in octet
 	pub storage_size: u64,
