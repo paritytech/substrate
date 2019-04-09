@@ -559,9 +559,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::Encode;
 	use consensus_common::BlockOrigin;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::{Extrinsic, Transfer}};
+	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
