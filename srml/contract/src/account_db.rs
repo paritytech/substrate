@@ -143,7 +143,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					}
 				}
 
-				if old_info.map(|old_info| old_info == new_info).unwrap_or(false) {
+				if old_info.map(|old_info| old_info == new_info).unwrap_or(true) {
 					<ContractInfoOf<T>>::insert(&address, ContractInfo::Alive(new_info));
 				}
 			}
