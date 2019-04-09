@@ -131,21 +131,24 @@ pub enum ContractInfo<T: Trait> {
 }
 
 impl<T: Trait> ContractInfo<T> {
-	fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
-		if let ContractInfo::Alive(ref alive) = self {
-			Some(alive)
-		} else {
-			None
-		}
-	}
-	fn get_alive(self) -> Option<AliveContractInfo<T>> {
+	/// If contract is alive then return some alive info
+	pub fn get_alive(self) -> Option<AliveContractInfo<T>> {
 		if let ContractInfo::Alive(alive) = self {
 			Some(alive)
 		} else {
 			None
 		}
 	}
-	fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
+	/// If contract is alive then return some reference to alive info
+	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
+		if let ContractInfo::Alive(ref alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+	/// If contract is alive then return some mutable reference to alive info
+	pub fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
 		if let ContractInfo::Alive(ref mut alive) = self {
 			Some(alive)
 		} else {
