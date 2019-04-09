@@ -219,7 +219,6 @@ mod tests {
 		fn instantiate(
 			&mut self,
 			code_hash: &CodeHash<Test>,
-			rent_allowance: u64,
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],

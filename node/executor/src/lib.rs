@@ -727,7 +727,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contract(
-						contract::Call::create::<Runtime>(10, 10_000, transfer_ch, Vec::new())
+						contract::Call::create::<Runtime>(10, 10_000, transfer_ch, 40, Vec::new())
 					),
 				},
 				CheckedExtrinsic {
@@ -745,7 +745,7 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-			assert_eq!(&contract::CodeHashOf::<Runtime>::get(addr).unwrap(), &transfer_ch);
+			assert_eq!(&contract::ContractInfoOf::<Runtime>::get(addr).and_then(|c| c.get_alive()).unwrap().unwrap(), &transfer_ch);
 		});
 	}
 

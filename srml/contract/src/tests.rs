@@ -199,6 +199,11 @@ impl ExtBuilder {
 		);
 		t.extend(
 			GenesisConfig::<Test> {
+				rent_byte_price: 4,
+				rent_deposit_offset: 1000,
+				storage_size_offset: 8,
+				surcharge_reward: 150,
+				tombstone_deposit: 16,
 				transaction_base_fee: 0,
 				transaction_byte_fee: 0,
 				transfer_fee: self.transfer_fee,
@@ -249,8 +254,9 @@ fn account_removal_removes_storage() {
 				ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(AliveContractInfo {
 					trie_id: unique_id1.to_vec(),
 					storage_size: Contract::storage_size_offset(),
+					deduct_block: System::block_number(),
+					code_hash: H256::repeat_byte(1),
 					rent_allowance: 40,
-					deduct_block: System::block_number()
 				}));
 				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
 				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
@@ -260,8 +266,9 @@ fn account_removal_removes_storage() {
 				ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(AliveContractInfo {
 					trie_id: unique_id2.to_vec(),
 					storage_size: Contract::storage_size_offset(),
+					deduct_block: System::block_number(),
+					code_hash: H256::repeat_byte(2),
 					rent_allowance: 40,
-					deduct_block: System::block_number()
 				}));
 				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
 				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());

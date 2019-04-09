@@ -68,7 +68,6 @@ pub trait Ext {
 	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
-		rent_allowance: BalanceOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: &[u8],
@@ -358,7 +357,6 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
-		rent_allowance: BalanceOf<T>,
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<T::AccountId>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
@@ -381,7 +379,7 @@ where
 		let (change_set, events, calls) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
-			overlay.create_new_contract(&dest, code_hash.clone(), rent_allowance)
+			overlay.create_new_contract(&dest, code_hash.clone())
 				.map_err(|_| "contract or tombstone already exsists")?;
 
 			let mut nested = self.nested(overlay, dest.clone());
@@ -578,12 +576,11 @@ where
 	fn instantiate(
 		&mut self,
 		code_hash: &CodeHash<T>,
-		rent_allowance: BalanceOf<T>,
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
-		self.ctx.instantiate(endowment, gas_meter, code_hash, rent_allowance, input_data)
+		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
 	}
 
 	fn call(
@@ -770,7 +767,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&BOB, Some(exec_ch));
+			ctx.overlay.create_new_contract(&BOB, exec_ch).unwrap();
 
 			assert_matches!(
 				ctx.call(BOB, value, &mut gas_meter, &data, EmptyOutputBuf::new()),
@@ -1005,7 +1002,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&BOB, Some(return_ch));
+			ctx.overlay.create_new_contract(&BOB, return_ch).unwrap();
 
 			let result = ctx.call(
 				dest,
@@ -1033,7 +1030,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&BOB, Some(input_data_ch));
+			ctx.overlay.create_new_contract(&BOB, input_data_ch).unwrap();
 
 			let result = ctx.call(
 				BOB,
@@ -1092,7 +1089,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&BOB, Some(recurse_ch));
+			ctx.overlay.create_new_contract(&BOB, recurse_ch).unwrap();
 
 			let result = ctx.call(
 				BOB,
@@ -1139,8 +1136,8 @@ mod tests {
 			let cfg = Config::preload();
 
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&dest, Some(bob_ch));
-			ctx.overlay.set_code(&CHARLIE, Some(charlie_ch));
+			ctx.overlay.create_new_contract(&dest, bob_ch).unwrap();
+			ctx.overlay.create_new_contract(&CHARLIE, charlie_ch).unwrap();
 
 			let result = ctx.call(
 				dest,
@@ -1182,8 +1179,8 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&BOB, Some(bob_ch));
-			ctx.overlay.set_code(&CHARLIE, Some(charlie_ch));
+			ctx.overlay.create_new_contract(&BOB, bob_ch).unwrap();
+			ctx.overlay.create_new_contract(&CHARLIE, charlie_ch).unwrap();
 
 			let result = ctx.call(
 				BOB,
@@ -1249,7 +1246,7 @@ mod tests {
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
-				assert_eq!(ctx.overlay.get_code(&created_contract_address).unwrap(), dummy_ch);
+				assert_eq!(ctx.overlay.get_alive_code_hash(&created_contract_address).unwrap(), dummy_ch);
 				assert_eq!(&ctx.events, &[
 					RawEvent::Transfer(ALICE, created_contract_address, 100),
 					RawEvent::Instantiated(ALICE, created_contract_address),
@@ -1290,7 +1287,7 @@ mod tests {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				ctx.overlay.set_balance(&ALICE, 1000);
-				ctx.overlay.set_code(&BOB, Some(creator_ch));
+				ctx.overlay.create_new_contract(&BOB, creator_ch).unwrap();
 
 				assert_matches!(
 					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
@@ -1301,7 +1298,7 @@ mod tests {
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
-				assert_eq!(ctx.overlay.get_code(&created_contract_address).unwrap(), dummy_ch);
+				assert_eq!(ctx.overlay.get_alive_code_hash(&created_contract_address).unwrap(), dummy_ch);
 				assert_eq!(&ctx.events, &[
 					RawEvent::Transfer(ALICE, BOB, 20),
 					RawEvent::Transfer(BOB, created_contract_address, 15),
@@ -1341,7 +1338,7 @@ mod tests {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				ctx.overlay.set_balance(&ALICE, 1000);
-				ctx.overlay.set_code(&BOB, Some(creator_ch));
+				ctx.overlay.create_new_contract(&BOB, creator_ch).unwrap();
 
 				assert_matches!(
 					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),

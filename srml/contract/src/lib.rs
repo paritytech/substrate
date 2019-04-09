@@ -409,7 +409,6 @@ decl_module! {
 			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
 			code_hash: CodeHash<T>,
-			#[compact] rent_allowance: BalanceOf<T>,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -424,7 +423,7 @@ decl_module! {
 			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
 			let loader = crate::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
-			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, rent_allowance, &data);
+			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.

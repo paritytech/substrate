@@ -372,8 +372,6 @@ define_env!(Env, <E: Ext>,
 		ctx,
 		init_code_ptr: u32,
 		init_code_len: u32,
-		rent_allowance_ptr: u32,
-		rent_allowance_len: u32,
 		gas: u64,
 		value_ptr: u32,
 		value_len: u32,
@@ -383,11 +381,6 @@ define_env!(Env, <E: Ext>,
 		let code_hash = {
 			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
 			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
-		};
-		let rent_allowance = {
-			let rent_allowance_buf = read_sandbox_memory(ctx, rent_allowance_ptr, rent_allowance_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &rent_allowance_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
 		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
@@ -410,7 +403,6 @@ define_env!(Env, <E: Ext>,
 				Some(nested_meter) => {
 					ext.instantiate(
 						&code_hash,
-						rent_allowance,
 						value,
 						nested_meter,
 						&input_data
