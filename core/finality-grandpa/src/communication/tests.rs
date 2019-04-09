@@ -18,15 +18,15 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::{consensus_gossip as network_gossip, Service as NetworkService};
-use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
+use network::consensus_gossip as network_gossip;
+use network::test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::AuthorityKeyring;
-use parity_codec::{Encode, Decode};
+use parity_codec::Encode;
 
-use super::gossip::{self, GossipValidator, GossipMessage};
+use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
 enum Event {
@@ -253,7 +253,7 @@ fn good_commit_leads_to_relay() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test);
+	current_thread::block_on_all(test).unwrap();
 }
 
 #[test]
@@ -364,5 +364,5 @@ fn bad_commit_leads_to_report() {
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test);
+	current_thread::block_on_all(test).unwrap();
 }
