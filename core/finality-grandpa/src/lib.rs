@@ -89,6 +89,7 @@ mod environment;
 mod finality_proof;
 mod import;
 mod justification;
+mod observer;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
@@ -97,6 +98,7 @@ mod service_integration;
 pub use service_integration::{LinkHalfForService, BlockImportForService};
 pub use communication::Network;
 pub use finality_proof::{prove_finality, check_finality_proof};
+pub use observer::run_grandpa_observer;
 
 use aux_schema::PersistentData;
 use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
