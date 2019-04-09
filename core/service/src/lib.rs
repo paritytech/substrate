@@ -350,7 +350,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
-	/// return a shared instance of Telemtry (if enabled)
+	/// return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
