@@ -71,7 +71,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ## Example
 ///
-/// ```nocompile
+/// ```rust,ignore
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn foobar(origin, ...) -> Result {
@@ -119,7 +119,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// The `decl_module!` macro supports modules with instances with the following syntax:
 /// (DefaultInstance type is optional)
 ///
-/// ```nocompile
+/// ```rust,ignore
 /// pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 /// 	fn deposit_event<T, I>() = default; // If module emits events
 /// }
