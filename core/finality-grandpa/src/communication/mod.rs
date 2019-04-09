@@ -29,7 +29,7 @@
 
 use std::sync::Arc;
 
-use grandpa::voter_set::VoterSet;
+use grandpa::{voter, voter_set::VoterSet};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
@@ -39,7 +39,7 @@ use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
-use network::{consensus_gossip as network_gossip, Service as NetworkService,};
+use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
@@ -54,6 +54,27 @@ mod periodic;
 
 /// The consensus engine ID of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
+
+// cost scalars for reporting peers.
+mod cost {
+	pub(super) const PAST_REJECTION: i32 = -50;
+	pub(super) const BAD_SIGNATURE: i32 = -100;
+	pub(super) const MALFORMED_COMMIT: i32 = -1000;
+	pub(super) const FUTURE_MESSAGE: i32 = -500;
+
+	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
+	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
+	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
+	pub(super) const PER_BLOCK_LOADED: i32 = -10;
+	pub(super) const INVALID_COMMIT: i32 = -5000;
+}
+
+// benefit scalars for reporting peers.
+mod benefit {
+	pub(super) const ROUND_MESSAGE: i32 = 100;
+	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
+	pub(super) const PER_EQUIVOCATION: i32 = 10;
+}
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
@@ -314,9 +335,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	pub(crate) fn global_communication(&self,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		is_voter: bool
+		is_voter: bool,
 	) -> (
-		impl Stream<Item = (u64, CompactCommit<B>), Error = Error>,
+		impl Stream<Item = (u64, CompactCommit<B>, voter::Callback), Error = Error>,
 		impl Sink<SinkItem = (u64, Commit<B>), SinkError = Error>,
 	) {
 		self.validator.note_set(
@@ -324,6 +345,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
 		);
 
+		let service = self.service.clone();
 		let topic = global_topic::<B>(set_id.0);
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
@@ -332,28 +354,60 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				if decoded.is_none() {
 					trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
 				}
-				decoded
+
+				decoded.map(move |d| (notification, d))
 			})
-			.filter_map(move |msg| {
+			.filter_map(move |(notification, msg)| {
 				match msg {
 					GossipMessage::Commit(msg) => {
-						let round = msg.round;
 						let precommits_signed_by: Vec<String> =
 							msg.message.auth_data.iter().map(move |(_, a)| {
 								format!("{}", a)
 							}).collect();
 						telemetry!(CONSENSUS_INFO; "afg.received_commit";
 							"contains_precommits_signed_by" => ?precommits_signed_by,
-							"target_number" => ?msg.message.target_number,
-							"target_hash" => ?msg.message.target_hash,
+							"target_number" => ?msg.message.target_number.clone(),
+							"target_hash" => ?msg.message.target_hash.clone(),
 						);
-						check_compact_commit::<B>(msg.message, &*voters).map(move |c| (round.0, c))
+						if let Err(cost) = check_compact_commit::<B>(
+							&msg.message,
+							&*voters,
+							msg.round,
+							msg.set_id,
+						) {
+							if let Some(who) = notification.sender {
+ 								service.report(who, cost);
+							}
+							None
+						} else {
+							Some((msg, notification, service.clone()))
+						}
 					},
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
 						return None;
 					}
 				}
+			})
+			.map(move |(msg, mut notification, service)| {
+				use voter::CommitProcessingOutcome;
+
+				let round = msg.round.0;
+				let commit = msg.message;
+				let cb = move |outcome| match outcome {
+					CommitProcessingOutcome::Good(_good) => {
+						// if it checks out, gossip it.
+						service.gossip_message(topic, notification.message.clone(), false);
+					}
+					CommitProcessingOutcome::Bad(_bad) => {
+						// report peer and do not gossip.
+						if let Some(who) = notification.sender.take() {
+							service.report(who, cost::INVALID_COMMIT);
+						}
+					}
+				};
+
+				(round, commit, voter::Callback::Work(Box::new(cb)))
 			})
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
@@ -505,25 +559,60 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 	}
 }
 
+// checks a compact commit. returns `None` if it was bad and
 fn check_compact_commit<Block: BlockT>(
-	msg: CompactCommit<Block>,
+	msg: &CompactCommit<Block>,
 	voters: &VoterSet<AuthorityId>,
-) -> Option<CompactCommit<Block>> {
-	if msg.precommits.len() != msg.auth_data.len() || msg.precommits.is_empty() {
-		debug!(target: "afg", "Skipping malformed compact commit");
-		return None;
-	}
+	round: Round,
+	set_id: SetId,
+) -> Result<(), i32> {
+	// 4f + 1 = equivocations from f voters.
+	let full_threshold = voters.total_weight() + voters.threshold();
 
-	// check signatures on all contained precommits.
+	// check total weight is not too high.
+	let mut total_weight = 0;
 	for (_, ref id) in &msg.auth_data {
-		if !voters.contains_key(id) {
+		if let Some(weight) = voters.info(id).map(|info| info.weight()) {
+			total_weight += weight;
+			if total_weight > full_threshold {
+				return Err(cost::MALFORMED_COMMIT);
+			}
+		} else {
 			debug!(target: "afg", "Skipping commit containing unknown voter {}", id);
-			return None;
+			return Err(cost::MALFORMED_COMMIT);
 		}
 	}
 
-	Some(msg)
+	// check signatures on all contained precommits.
+	for (i, (precommit, &(ref sig, ref id))) in msg.precommits.iter()
+		.zip(&msg.auth_data)
+		.enumerate()
+	{
+		use crate::communication::gossip::Misbehavior;
+		use grandpa::Message as GrandpaMessage;
+
+		if let Err(()) = check_message_sig::<Block>(
+			&GrandpaMessage::Precommit(precommit.clone()),
+			id,
+			sig,
+			round.0,
+			set_id.0,
+		) {
+			debug!(target: "afg", "Bad commit message signature {}", id);
+			telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
+			let cost = Misbehavior::BadCommitMessage {
+				signatures_checked: i as i32,
+				blocks_loaded: 0,
+				equivocations_caught: 0,
+			}.cost();
+
+			return Err(cost);
+		}
+	}
+
+	Ok(())
 }
+
 /// An output sink for commit messages.
 struct CommitsOut<Block: BlockT, N: Network<Block>> {
 	network: N,

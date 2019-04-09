@@ -78,7 +78,7 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 
 use crate::{CompactCommit, SignedMessage};
-use super::{Round, SetId};
+use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -281,32 +281,12 @@ impl<N> VersionedNeighborPacket<N> {
 	}
 }
 
-// cost scalars for reporting peers.
-mod cost {
-	pub(super) const PAST_REJECTION: i32 = -50;
-	pub(super) const BAD_SIGNATURE: i32 = -100;
-	pub(super) const MALFORMED_COMMIT: i32 = -1000;
-	pub(super) const FUTURE_MESSAGE: i32 = -500;
-
-	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
-	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
-	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
-	pub(super) const PER_BLOCK_LOADED: i32 = -10;
-}
-
-// benefit scalars for reporting peers.
-mod benefit {
-	pub(super) const ROUND_MESSAGE: i32 = 100;
-	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
-	pub(super) const PER_EQUIVOCATION: i32 = 10;
-}
-
 /// Misbehavior that peers can perform.
 ///
 /// `cost` gives a cost that can be used to perform cost/benefit analysis of a
 /// peer.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Misbehavior {
+pub(super) enum Misbehavior {
 	// invalid neighbor message, considering the last one.
 	InvalidViewChange,
 	// could not decode neighbor message. bytes-length of the packet.
@@ -323,7 +303,7 @@ enum Misbehavior {
 }
 
 impl Misbehavior {
-	fn cost(&self) -> i32 {
+	pub(super) fn cost(&self) -> i32 {
 		use Misbehavior::*;
 
 		match *self {
@@ -534,7 +514,6 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		use grandpa::Message as GrandpaMessage;
 
 		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
 			return Action::Discard(misbehavior.cost());
@@ -555,28 +534,6 @@ impl<Block: BlockT> Inner<Block> {
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
 			);
 			return Action::Discard(cost::MALFORMED_COMMIT);
-		}
-
-		// check signatures on all contained precommits.
-		for (i, (precommit, &(ref sig, ref id))) in full.message.precommits.iter()
-			.zip(&full.message.auth_data)
-			.enumerate()
-		{
-			if let Err(()) = super::check_message_sig::<Block>(
-				&GrandpaMessage::Precommit(precommit.clone()),
-				id,
-				sig,
-				full.round.0,
-				full.set_id.0,
-			) {
-				debug!(target: "afg", "Bad commit message signature {}", id);
-				telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
-				return Action::Discard(Misbehavior::BadCommitMessage {
-					signatures_checked: i as i32,
-					blocks_loaded: 0,
-					equivocations_caught: 0,
-				}.cost());
-			}
 		}
 
 		// always discard commits initially and rebroadcast after doing full
@@ -831,7 +788,8 @@ pub(super) struct ReportStream {
 }
 
 impl ReportStream {
-	/// Conse
+	/// Consume the report stream, converting it into a future that
+	/// handles all reports.
 	pub(super) fn consume<B, N>(self, net: N)
 		-> impl Future<Item=(),Error=()> + Send + 'static
 	where

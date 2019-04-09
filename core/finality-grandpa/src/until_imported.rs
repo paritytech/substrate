@@ -258,13 +258,13 @@ pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block,
 ///
 /// This is used for compact commits which have already been checked for
 /// structural soundness.
-pub(crate) struct BlockCommitMessage<Block: BlockT> {
-	inner: Arc<(AtomicUsize, Mutex<Option<(u64, CompactCommit<Block>)>>)>,
+pub(crate) struct BlockCommitMessage<Block: BlockT, U> {
+	inner: Arc<(AtomicUsize, Mutex<Option<(u64, CompactCommit<Block>, U)>>)>,
 	target_number: NumberFor<Block>,
 }
 
-impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
-	type Blocked = (u64, CompactCommit<Block>);
+impl<Block: BlockT, U> BlockUntilImported<Block> for BlockCommitMessage<Block, U> {
+	type Blocked = (u64, CompactCommit<Block>, U);
 
 	fn schedule_wait<S, Wait, Ready>(
 		input: Self::Blocked,
@@ -400,11 +400,11 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 
 /// A stream which gates off incoming commit messages until all referenced
 /// block hashes have been imported.
-pub(crate) type UntilCommitBlocksImported<Block, Status, I> = UntilImported<
+pub(crate) type UntilCommitBlocksImported<Block, Status, I, U> = UntilImported<
 	Block,
 	Status,
 	I,
-	BlockCommitMessage<Block>,
+	BlockCommitMessage<Block, U>,
 >;
 
 #[cfg(test)]
