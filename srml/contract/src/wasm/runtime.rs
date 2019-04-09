@@ -631,7 +631,7 @@ define_env!(Env, <E: Ext>,
 
 	// Set rent allowance of the contract
 	//
-	// - value_ptr: a pointer to the buffer with value, how much value to send.
+	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
 	ext_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {

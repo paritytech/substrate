@@ -122,9 +122,9 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-#[derive(Encode, Decode)]
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
+#[derive(Encode, Decode)]
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),
@@ -159,7 +159,7 @@ impl<T: Trait> ContractInfo<T> {
 
 #[derive(Encode, Decode)]
 pub struct AliveContractInfo<T: Trait> {
-	/// Unique ID for the subtree encoded as a byte
+	/// Unique ID for the subtree encoded as a byte vector
 	pub trie_id: TrieId,
 	/// The size of stored value in octet
 	pub storage_size: u64,
@@ -199,7 +199,7 @@ pub struct TombstoneContractInfo<T: Trait>(T::Hash);
 impl<T: Trait> TombstoneContractInfo<T> {
 	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
 		let mut buf = storage_root;
-		buf.extend_from_slice(&storage_size.to_be_bytes());
+		buf.extend_from_slice(&storage_size.to_le_bytes());
 		buf.extend_from_slice(code_hash.as_ref());
 		TombstoneContractInfo(T::Hashing::hash(&buf[..]))
 	}
