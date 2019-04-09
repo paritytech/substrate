@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use log::{debug, warn, info};
-use parity_codec::Encode;
+use parity_codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
@@ -31,17 +31,21 @@ use client::{
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
 };
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, Era, UncheckedExtrinsic};
 use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use srml_indices::address::Address;
+use node_runtime::GrandpaCall;
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
 	CommandOrError, NewAuthoritySet, VoterCommand,
 };
+
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
@@ -78,7 +82,7 @@ impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, A: txpool::ChainApi> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -87,15 +91,17 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
+	pub(crate) transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, A> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA, A> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	N: Network<Block> + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
+	A: txpool::ChainApi,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		if base == block { return Err(GrandpaError::NotDescendent) }
@@ -200,7 +206,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA, A> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
@@ -210,6 +216,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	NumberFor<Block>: BlockNumberOps,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
+	A: txpool::ChainApi<Block=Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -334,9 +341,54 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet; this could craft misbehavior reports of some kind.
-		let runtime_api = self.inner.runtime_api();
-		runtime_api.do_report_misbehaviour(&BlockId::number(Zero::zero()));
+		
+		let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
+		let parent_header = self.inner.header(&block_id).unwrap().unwrap();
+		let parent_hash = parent_header.hash();		
+		
+		// let report = MisbehaviorReport {
+		// 	parent_hash: self.parent_hash.into(),
+		// 	parent_number: self.parent_number.as_(),
+		// 	target,
+		// 	misbehavior: match misbehavior {
+		// 		GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
+		// 		GenericMisbehavior::DoublePropose(_, _, _) => continue,
+		// 		GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
+		// 			=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
+		// 		GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
+		// 			=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
+		// 	}
+		// };
+		let payload = (
+			0, 1
+			// next_index,
+			// Call::Consensus(ConsensusCall::report_misbehavior(report)),
+			// Era::immortal(),
+			// self.client.genesis_hash()
+		);
+		let signed = self.config.local_key.clone().unwrap();
+		let signature: ed25519::Signature = signed.sign(&payload.encode()).into();
+		// next_index += 1;
+
+		// let local_id = signed.public().0.into();
+		let function = vec![0u8;0];
+		let local_id: ed25519::Public = signed.public();
+		let extrinsic = UncheckedExtrinsic::new_signed(0u64, function, Address::<_, u32>::Id(local_id), signature);
+		// let extrinsic = UncheckedExtrinsic::new_signed(0u64, function, Address::Id(signed.public().0.into()), signature);
+		let uxt = Decode::decode(
+			&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+		// let hash = BlockId::<<C as AuthoringApi>::Block>::hash(parent_hash);
+		// let uxt = match <A::Block as BlockT>::Extrinsic::decode(&mut &*ext) {
+		// 	Some(xt) => xt,
+		// 	None => {
+		// 		warn!("Unable to decode extrinsic: {:?}", ext);
+		// 		return
+		// 	},
+		// };
+		let hash = BlockId::hash(parent_hash);
+		if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
+			warn!("Error importing misbehavior report: {:?}", e);
+		}
 	}
 
 	fn precommit_equivocation(
