@@ -16,19 +16,17 @@
 
 //! Substrate client possible errors.
 
-#![allow(missing_docs)]
-
 use std::{self, error, result};
 use state_machine;
 use runtime_primitives::ApplyError;
 use consensus;
-use derive_more::Display;
+use derive_more::{Display, From};
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
 
 /// Substrate Client error
-#[derive(Debug, Display)]
+#[derive(Debug, Display, From)]
 pub enum Error {
 	/// Consensus Error
 	#[display(fmt = "Consensus: {}", _0)]
@@ -116,25 +114,6 @@ impl From<String> for Error {
 impl<'a> From<&'a str> for Error {
 	fn from(s: &'a str) -> Self {
 		Error::Msg(s.into())
-	}
-}
-
-impl From<consensus::Error> for Error {
-	fn from(e: consensus::Error) -> Self {
-		Error::Consensus(e)
-	}
-}
-
-
-impl From<Box<state_machine::Error>> for Error {
-	fn from(e: Box<state_machine::Error>) -> Self {
-		Error::Execution(e).into()
-	}
-}
-
-impl From<state_machine::backend::Void> for Error {
-	fn from(e: state_machine::backend::Void) -> Self {
-		match e {}
 	}
 }
 
