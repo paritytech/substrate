@@ -323,7 +323,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self>,
-		client: Arc<FullClient<Self>>
+		client: Arc<FullClient<Self>>, 
 	) -> Result<Self::SelectChain, error::Error>;
 
 	/// Build full service.
@@ -336,7 +336,8 @@ pub trait ServiceFactory: 'static + Sized {
 	/// ImportQueue for a full client
 	fn build_full_import_queue(
 		config: &mut FactoryFullConfiguration<Self>,
-		_client: Arc<FullClient<Self>>
+		_client: Arc<FullClient<Self>>,
+		_select_chain: Self::SelectChain
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
@@ -384,6 +385,7 @@ pub trait Components: Sized + 'static {
 	>;
 	/// Our Import Queue
 	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
+	type SelectChain: SelectChain<FactoryBlock<Self::Factory>>;
 
 	/// Create client.
 	fn build_client(
@@ -404,20 +406,21 @@ pub trait Components: Sized + 'static {
 	/// instance of import queue for clients
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
-		client: Arc<ComponentClient<Self>>
+		client: Arc<ComponentClient<Self>>,
+		select_chain: Self::SelectChain,
 	) -> Result<Self::ImportQueue, error::Error>;
 
 	/// Build fork choice selector
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::SelectChain, error::Error>;
+	) -> Result<Self::SelectChain, error::Error>;
 
 }
 
 /// A struct that implement `Components` for the full client.
 pub struct FullComponents<Factory: ServiceFactory> {
-	_factory: PhantomData<Factory>,
+	// _factory: PhantomData<Factory>,
 	service: Service<FullComponents<Factory>>,
 }
 
@@ -429,7 +432,6 @@ impl<Factory: ServiceFactory> FullComponents<Factory> {
 	) -> Result<Self, error::Error> {
 		Ok(
 			Self {
-				_factory: Default::default(),
 				service: Service::new(config, task_executor)?,
 			}
 		)
@@ -458,6 +460,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type ImportQueue = Factory::FullImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RuntimeServices = Factory::FullService;
+	type SelectChain = Factory::SelectChain;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -490,15 +493,16 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
-		client: Arc<ComponentClient<Self>>
+		client: Arc<ComponentClient<Self>>,
+		select_chain: Self::SelectChain,
 	) -> Result<Self::ImportQueue, error::Error> {
-		Factory::build_full_import_queue(config, client)
+		Factory::build_full_import_queue(config, client, select_chain)
 	}
 
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::SelectChain, error::Error> {
+	) -> Result<Self::SelectChain, error::Error> {
 		Self::Factory::build_select_chain(config, client)
 	}
 	
@@ -541,6 +545,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RuntimeServices = Factory::LightService;
+	type SelectChain = Factory::SelectChain;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -574,7 +579,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
-		client: Arc<ComponentClient<Self>>
+		client: Arc<ComponentClient<Self>>,
+		_select_chain: Self::SelectChain,
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
 	}
@@ -583,7 +589,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_select_chain(
 		_config: &mut FactoryFullConfiguration<Self::Factory>,
 		_client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::SelectChain, error::Error> {
+	) -> Result<Self::SelectChain, error::Error> {
 		// FIXME: this (and other places) need a "NotAvailableInMode" for never-in-light-client-features
 		// that doesn't break creation of light clients  
 		Err("Fork choice doesn't happen on light clients.".into())

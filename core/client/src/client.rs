@@ -110,7 +110,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
-	import_lock: Mutex<()>,
+	import_lock: Arc<Mutex<()>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	execution_strategies: ExecutionStrategies,
@@ -242,7 +242,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
 
-/// Create a client with the explicitely provided backend.
+/// Create a client with the explicitly provided backend.
 /// This is useful for testing backend implementations.
 pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
@@ -317,8 +317,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self.backend
 	}
 
-	fn import_lock(&self) -> &Mutex<()> {
-		&self.import_lock
+	/// Expose reference to import lock
+	// FIXME: the lock shouldn't be on client but on the import-queue
+	pub fn import_lock(&self) -> Arc<Mutex<()>> {
+		self.import_lock.clone()
 	}
 
 	/// Return storage entry keys in state in a block of given hash with given prefix.
@@ -1348,45 +1350,44 @@ where
 	}
 }
 
-struct LongestChain<B, E, Block, RA>
-where
-	B: backend::Backend<Block, Blake2Hasher> + Send + Sync,
-	Block: BlockT<Hash=H256> + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	RA: Send + Sync,
-{
-	client: Arc<Client<B, E, Block, RA>>
+/// Implement Longest Chain Select implementation
+/// where 'longest' is defined as the highest number of blocks
+pub struct LongestChain<B, Block> {
+	backend: Arc<B>,
+	import_lock: Arc<Mutex<()>>,
+	_phantom: PhantomData<Block>
 }
 
-impl<B, E, Block, RA> Clone for LongestChain<B, E, Block, RA>
-where
-	B: backend::Backend<Block, Blake2Hasher> + Send + Sync,
-	Block: BlockT<Hash=H256> + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	RA: Send + Sync,
-{
+impl<B, Block> Clone for LongestChain<B, Block> {
 	fn clone(&self) -> Self {
-		let client = self.client.clone();
+		let backend = self.backend.clone();
+		let import_lock = self.import_lock.clone();
 		LongestChain {
-			client
+			backend,
+			import_lock,
+			_phantom: Default::default()
 		}
 	}
 }
 
-
-impl<B, E, Block, RA> LongestChain<B, E, Block, RA>
+impl<B, Block> LongestChain<B, Block>
 where
 	B: backend::Backend<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	RA: Send + Sync,
 {
+	pub fn new(backend: Arc<B>, import_lock: Arc<Mutex<()>>) -> Self {
+		LongestChain {
+			backend,
+			import_lock,
+			_phantom: Default::default()
+		}
+	}
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
-		let info : ChainInfo<Block> = match self.client.backend().blockchain().info() {
+		let info : ChainInfo<Block> = match self.backend.blockchain().info() {
 			Ok(i) => i,
 			Err(e) => return Err(error::Error::from_blockchain(Box::new(e)))
 		};
-		Ok(self.client.backend().blockchain().header(BlockId::Hash(info.best_hash))?
+		Ok(self.backend.blockchain().header(BlockId::Hash(info.best_hash))?
 			.expect("Best block header must always exist"))
 	}
 
@@ -1408,7 +1409,7 @@ where
 		maybe_max_number: Option<NumberFor<Block>>
 	) -> error::Result<Option<Block::Hash>> {
 		let target_header = {
-			match self.client.backend().blockchain().header(BlockId::Hash(target_hash))? {
+			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
 				// target not in blockchain
 				None => { return Ok(None); },
@@ -1426,17 +1427,17 @@ where
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
-			let _import_lock = self.client.import_lock().lock();
+			let _import_lock = self.import_lock.lock();
 
-			let info = self.client.backend().blockchain().info()?;
+			let info = self.backend.blockchain().info()?;
 
-			let canon_hash = self.client.backend().blockchain().hash(*target_header.number())?
+			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
 				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
 
 			if canon_hash == target_hash {
 				// if no block at the given max depth exists fallback to the best block
 				if let Some(max_number) = maybe_max_number {
-					if let Some(header) = self.client.backend().blockchain().hash(max_number)? {
+					if let Some(header) = self.backend.blockchain().hash(max_number)? {
 						return Ok(Some(header));
 					}
 				}
@@ -1447,7 +1448,7 @@ where
 				return Ok(None);
 			}
 
-			(self.client.backend().blockchain().leaves()?, info.best_hash)
+			(self.backend.blockchain().leaves()?, info.best_hash)
 		};
 
 		// for each chain. longest chain first. shortest last
@@ -1467,7 +1468,7 @@ where
 			// waiting until we are <= max_number
 			if let Some(max_number) = maybe_max_number {
 				loop {
-					let current_header = self.client.backend().blockchain().header(BlockId::Hash(current_hash.clone()))?
+					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
 					if current_header.number() <= &max_number {
@@ -1486,7 +1487,7 @@ where
 					return Ok(Some(best_hash));
 				}
 
-				let current_header = self.client.backend().blockchain().header(BlockId::Hash(current_hash.clone()))?
+				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
 				// stop search in this chain once we go below the target's block number
@@ -1513,17 +1514,14 @@ where
 	}
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error> {
-		self.client.backend().blockchain().leaves()
+		self.backend.blockchain().leaves()
 	}
 }
 
-impl<B, E, Block, RA> SelectChain<Block> for LongestChain<B, E, Block, RA>
+impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
 where
-	B: backend::Backend<Block, Blake2Hasher> + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	Block: BlockT<Hash=H256> + Send + Sync,
-	E: Send + Sync,
-	RA: Send + Sync,
+	B: backend::Backend<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
 {
 	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
 		LongestChain::best_block_header(&self)

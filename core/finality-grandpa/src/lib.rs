@@ -290,8 +290,8 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 /// to it.
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
-	select_chain: SC,
-	api: Arc<PRA>
+	api: Arc<PRA>,
+	select_chain: SC
 ) -> Result<(
 		GrandpaBlockImport<B, E, Block, RA, PRA, SC>,
 		LinkHalf<B, E, Block, RA>

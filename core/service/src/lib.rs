@@ -72,7 +72,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: <<Components as components::Components>::Factory as ServiceFactory>::SelectChain,
+	select_chain: <Components as components::Components>::SelectChain,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
@@ -129,8 +129,12 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+		let import_queue = Box::new(Components::build_import_queue(
+			&mut config,
+			client.clone(),
+			select_chain.clone()
+		)?);
 		let best_header = select_chain.best_block_header()?;
 
 		let version = config.full_version();
@@ -327,8 +331,8 @@ impl<Components: components::Components> Service<Components> {
 
 		Ok(Service {
 			client,
-			select_chain,
 			network: Some(network),
+			select_chain,
 			transaction_pool,
 			inherents_pool,
 			signal: Some(signal),
@@ -354,7 +358,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
-	/// return a shared instance of Telemtry (if enabled)
+	/// return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
@@ -364,6 +368,11 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
+	}
+
+	/// Get clone of select chain.
+	pub fn select_chain(&self) -> <Components as components::Components>::SelectChain {
+		self.select_chain.clone()
 	}
 
 	/// Get shared network instance.
@@ -549,6 +558,8 @@ macro_rules! construct_service_factory {
 				{ $( $full_import_queue_init:tt )* },
 			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
+			SelectChain = $select_chain:ty
+				{ $( $select_chain_init:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -568,6 +579,7 @@ macro_rules! construct_service_factory {
 			type LightService = $light_service;
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
+			type SelectChain = $select_chain;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -591,11 +603,19 @@ macro_rules! construct_service_factory {
 				( $( $protocol_init )* ) (config)
 			}
 
+			fn build_select_chain(
+				config: &mut $crate::FactoryFullConfiguration<Self>,
+				client: Arc<$crate::FullClient<Self>>
+			) -> $crate::Result<Self::SelectChain, $crate::Error> {
+				( $( $select_chain_init )* ) (config, client)
+			}
+
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
+				select_chain: Self::SelectChain
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client)
+				( $( $full_import_queue_init )* ) (config, client, select_chain)
 			}
 
 			fn build_light_import_queue(
