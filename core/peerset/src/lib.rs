@@ -165,7 +165,7 @@ pub enum Message {
 }
 
 /// Opaque identifier for an incoming connection. Allocated by the network.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct IncomingIndex(pub u64);
 
 impl From<u64> for IncomingIndex {
@@ -491,7 +491,10 @@ impl Stream for Peerset {
 mod tests {
 	use libp2p::PeerId;
 	use futures::prelude::*;
+	use rand::thread_rng;
+	use rand::seq::SliceRandom;
 	use super::{PeersetConfig, Peerset, Message, IncomingIndex};
+	use std::collections::{HashMap, HashSet, VecDeque};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
 		for expected_message in messages {
@@ -509,6 +512,143 @@ mod tests {
 			.map_err(|_| ())?;
 		let message = next.ok_or_else(|| ())?;
 		Ok((message, peerset))
+	}
+
+	#[test]
+	fn test_random_api_use() {
+
+		#[derive(Debug)]
+		enum TestAction {
+			AddReservedPeer,
+			RemoveReservedPeer,
+			SetReservedOnly(bool),
+			ReportPeer(i32),
+			DropPeer,
+		}
+
+		let bootnode = PeerId::random();
+		let config = PeersetConfig {
+			in_peers: 100,
+			out_peers: 100,
+			bootnodes: vec![bootnode.clone()],
+			reserved_only: false,
+			reserved_nodes: Vec::new(),
+		};
+
+		let (mut peerset, handle) = Peerset::from_config(config);
+
+		let mut actions = vec![];
+		actions.push((bootnode.clone(), TestAction::AddReservedPeer));
+		actions.push((bootnode.clone(), TestAction::SetReservedOnly(true)));
+		actions.push((bootnode.clone(), TestAction::ReportPeer(-1)));
+		actions.push((bootnode.clone(), TestAction::SetReservedOnly(false)));
+		actions.push((bootnode.clone(), TestAction::RemoveReservedPeer));
+		actions.push((bootnode.clone(), TestAction::DropPeer));
+		for _ in 0..100 {
+			let peer_id = PeerId::random();
+			actions.push((peer_id.clone(), TestAction::AddReservedPeer));
+			actions.push((peer_id.clone(), TestAction::SetReservedOnly(true)));
+			actions.push((peer_id.clone(), TestAction::ReportPeer(-1)));
+			actions.push((peer_id.clone(), TestAction::SetReservedOnly(false)));
+			actions.push((peer_id.clone(), TestAction::RemoveReservedPeer));
+			actions.push((peer_id.clone(), TestAction::DropPeer));
+		}
+
+		let mut dropped_called = HashSet::new();
+		let mut performed_actions = HashMap::new();
+
+		let mut rng = thread_rng();
+		for (peer_id, action) in actions.choose_multiple(&mut rng, actions.len()) {
+			match action {
+				TestAction::AddReservedPeer => {
+					handle.add_reserved_peer(peer_id.clone());
+				},
+				TestAction::RemoveReservedPeer => {
+					handle.remove_reserved_peer(peer_id.clone());
+				},
+				TestAction::SetReservedOnly(reserved) => {
+					handle.set_reserved_only(reserved.clone());
+				},
+				TestAction::ReportPeer(diff_score) => {
+					handle.report_peer(peer_id.clone(), diff_score.clone());
+				},
+				TestAction::DropPeer => {
+					peerset.dropped(peer_id.clone());
+					dropped_called.insert(peer_id.clone());
+				},
+			}
+			let performed = performed_actions
+				.entry(peer_id.clone())
+				.or_insert(VecDeque::new());
+			performed.push_back(action)
+		}
+
+		drop(handle);
+
+		let mut last_connected_messages = HashMap::new();
+		let mut last_unconnected_messages = HashMap::new();
+		loop {
+			let message = match next_message(peerset) {
+				Ok((message, p)) => {
+					peerset = p;
+					message
+				},
+				_ => break,
+			};
+			match message {
+				Message::Connect(peer_id) => {
+					let last_message = last_connected_messages.get(&peer_id);
+					match last_message {
+						Some(Message::Drop(_)) => {},
+						_ => {
+							if !dropped_called.remove(&peer_id) && !(peer_id == bootnode) && !last_unconnected_messages.len() > 0 {
+								panic!("Unexpected Connect message after a {:?} message", last_message);
+							}
+						},
+					}
+					last_connected_messages.insert(peer_id.clone(), Message::Connect(peer_id));
+				},
+				Message::Drop(peer_id) => {
+					let maybe_related_action = {
+						if let Some(actions) = performed_actions.get_mut(&peer_id) {
+							actions.pop_front()
+						} else {
+							None
+						}
+					};
+					let last_message = last_connected_messages
+						.get(&peer_id);
+					match last_message {
+						Some(Message::Connect(_)) => {},
+						_ => {
+							println!("Last unconnected: {:?}", last_unconnected_messages);
+							if !last_unconnected_messages.len() > 0 {
+								panic!("Unexpected Drop message, after a {:?} message, a perhaps related action was: {:?}", last_message, maybe_related_action);
+							}
+						},
+					}
+					last_connected_messages.insert(peer_id.clone(), Message::Drop(peer_id));
+				},
+				Message::Accept(index) => {
+					if let Some(last_message) = last_unconnected_messages.get(&index) {
+						match last_message {
+							Message::Connect(_) => panic!("Unexpected Accept message, after a Connect message"),
+							_ => {},
+						}
+					}
+					last_unconnected_messages.insert(index.clone(), Message::Accept(index));
+				},
+				Message::Reject(index) => {
+					if let Some(last_message) = last_unconnected_messages.get(&index) {
+						match last_message {
+							Message::Connect(_) => panic!("Unexpected Reject message, after a Connect message"),
+							_ => {},
+						}
+					}
+					last_unconnected_messages.insert(index.clone(), Message::Reject(index));
+				},
+			}
+		}
 	}
 
 	#[test]
