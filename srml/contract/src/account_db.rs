@@ -64,8 +64,11 @@ pub trait AccountDb<T: Trait> {
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
 	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
+	/// If account has an alive contract then return the code_hash associated.
 	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
+	/// If account has a contract then return the rent allowance associated.
 	fn get_rent_allowance(&self, account: &T::AccountId) -> Option<BalanceOf<T>>;
+	/// Returns false iff account has no alive contract nor tombstone.
 	fn contract_exists(&self, account: &T::AccountId) -> bool;
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T>;
 
