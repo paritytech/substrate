@@ -105,5 +105,11 @@ error_chain! {
 			description("Import failed"),
 			display("Import failed: {}", reason),
 		}
+
+		/// Error from the client while importing
+		ChainLookup(reason: String) {
+			description("Looking up chain failed"),
+			display("Chain lookup failed: {}", reason),
+		}
 	}
 }
