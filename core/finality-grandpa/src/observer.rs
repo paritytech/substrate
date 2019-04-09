@@ -19,7 +19,7 @@ use std::sync::Arc;
 use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
-use grandpa::{BlockNumberOps, Error as GrandpaError};
+use grandpa::{BlockNumberOps, Error as GrandpaError, voter_set::VoterSet};
 use log::warn;
 
 use client::{CallExecutor, Client, backend::Backend};
@@ -28,9 +28,12 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT, DigestItemFor, Dige
 use substrate_primitives::{ed25519, H256, Blake2Hasher};
 
 use crate::{
-	committer_communication, CommandOrError, Config, environment, Error,
-	LinkHalf, Network, aux_schema::PersistentData,
+	AuthoritySignature, committer_communication, CommandOrError, Config,
+	environment, Error, LinkHalf, Network, aux_schema::PersistentData,
 };
+use crate::authorities::SharedAuthoritySet;
+use crate::communication::NetworkBridge;
+use crate::consensus_changes::SharedConsensusChanges;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
@@ -48,6 +51,80 @@ impl<'a, Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberF
 		// only used by voter
 		None
 	}
+}
+
+fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, S>(
+	client: &Arc<Client<B, E, Block, RA>>,
+	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
+	voters: &Arc<VoterSet<AuthorityId>>,
+	last_finalized_number: NumberFor<Block>,
+	network: &NetworkBridge<Block, N>, // FIXME: remove after rob's PR for commit callbacks
+	commits: S,
+) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
+	NumberFor<Block>: BlockNumberOps,
+	B: Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	RA: Send + Sync,
+	N: Network<Block>,
+	S: Stream<
+		Item = (u64, ::grandpa::CompactCommit<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>),
+		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
+	>,
+{
+	let authority_set = authority_set.clone();
+	let consensus_changes = consensus_changes.clone();
+	let client = client.clone();
+	let voters = voters.clone();
+	let network = network.clone();
+
+	let observer = commits.fold(last_finalized_number, move |last_finalized_number, (round, commit)| {
+		let commit = grandpa::Commit::from(commit);
+
+		// if the commit we've received targets a block lower than the last
+		// finalized, ignore it and continue with the current state
+		if commit.target_number < last_finalized_number {
+			return future::ok(last_finalized_number);
+		}
+
+		match grandpa::validate_commit(
+			&commit,
+			&voters,
+			&ObserverChain(&*client),
+		) {
+			Ok(ref result) if result.ghost().is_some() => {
+				let finalized_hash = commit.target_hash;
+				let finalized_number = commit.target_number;
+
+				// commit is valid, finalize the block it targets
+				match environment::finalize_block(
+					&client,
+					&authority_set,
+					&consensus_changes,
+					None,
+					finalized_hash,
+					finalized_number,
+					(round, commit).into(),
+				) {
+					Ok(_) => {},
+					Err(e) => return future::err(e),
+				};
+
+				network.clone().note_commit_finalized(finalized_number);
+
+				// proceed processing with new finalized block number
+				future::ok(finalized_number)
+			},
+			_ => {
+				// warn!(target: "afg")
+
+				// commit is invalid, continue processing commits with the current state
+				future::ok(last_finalized_number)
+			},
+		}
+	});
+
+	observer.map(|_| ())
 }
 
 /// Run a GRANDPA observer as a task, the observer will finalize blocks only by
@@ -100,67 +177,15 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 		let last_finalized_number = chain_info.chain.finalized_number;
 
-		let initial_state = (
+		let observer = grandpa_observer(
+			&client,
+			&authority_set,
+			&consensus_changes,
+			&voters,
 			last_finalized_number,
-			authority_set.clone(),
-			consensus_changes.clone(),
-			client.clone(),
-			network.clone(),
+			&network,
+			committer_in,
 		);
-
-		let observer = committer_in.fold(initial_state, move |state, (round, commit)| {
-			let commit = grandpa::Commit::from(commit);
-
-			// if the commit we've received targets a block lower than the last
-			// finalized, ignore it and continue with the current state
-			if commit.target_number < state.0 {
-				return future::ok::<_, super::CommandOrError<_, _>>(state);
-			}
-
-			match grandpa::validate_commit(
-				&commit,
-				&voters,
-				&ObserverChain(&*state.3),
-			) {
-				Ok(ref result) if result.ghost().is_some() => {
-					let (
-						_,
-						authority_set,
-						consensus_changes,
-						client,
-						network,
-					) = state;
-
-					let finalized_hash = commit.target_hash;
-					let finalized_number = commit.target_number;
-
-					// commit is valid, finalize the block it targets
-					match environment::finalize_block(
-						&client,
-						&authority_set,
-						&consensus_changes,
-						None,
-						finalized_hash,
-						finalized_number,
-						(round, commit).into(),
-					) {
-						Ok(_) => {},
-						Err(e) => return future::err(e),
-					};
-
-					network.clone().note_commit_finalized(finalized_number);
-
-					// proceed processing with new finalized block number
-					future::ok((finalized_number, authority_set, consensus_changes, client, network))
-				},
-				_ => {
-					// warn!(target: "afg")
-
-					// commit is invalid, continue processing commits with the current state
-					future::ok(state)
-				},
-			}
-		});
 
 		future::Either::A(observer.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A((_, _))) => {
