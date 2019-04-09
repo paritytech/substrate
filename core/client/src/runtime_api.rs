@@ -51,6 +51,7 @@ use rstd::vec::Vec;
 use primitives::Hasher as HasherT;
 
 #[cfg(feature = "std")]
+/// A type that records all accessed trie nodes and generates a proof out of it.
 pub type ProofRecorder<B> = state_machine::ProofRecorder<
 	<<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher as HasherT>::Out
 >;
