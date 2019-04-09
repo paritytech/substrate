@@ -367,7 +367,7 @@ where
 				AppliedChanges::None => None,
 			};
 
-			crate::aux_schema::update_authority_set(
+			crate::aux_schema::update_authority_set::<Block, _, _>(
 				authorities,
 				authorities_change,
 				|insert| block.auxiliary.extend(
