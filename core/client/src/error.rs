@@ -90,7 +90,7 @@ pub enum Error {
 	NotInFinalizedChain,
 	/// Hash that is required for building CHT is missing.
 	#[display(fmt = "Failed to get hash of block#{} for building CHT#{}", _0, _1)]
-	MissingHashRequiredForCHT (u64, u64),
+	MissingHashRequiredForCHT(u64, u64),
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
 	Msg(String),
