@@ -103,6 +103,7 @@ use environment::Environment;
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
+use service::TelemetryHookOnConnect;
 
 use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
@@ -420,6 +421,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	network: N,
 	inherent_data_providers: InherentDataProviders,
 	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
+	telemetry_notify: TelemetryHookOnConnect,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -443,6 +445,27 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
+
+	{
+		let authorities = authority_set.clone();
+		let events = telemetry_notify.telemetry_connection_sinks
+			.for_each(move |_| {
+				telemetry!(CONSENSUS_INFO; "afg.authority_set";
+					 "authority_set_id" => ?authorities.set_id(),
+					 "authorities" => {
+						let curr = authorities.current_authorities();
+						let voters = curr.voters();
+						let authorities: Vec<String> =
+							voters.iter().map(|(id, _)| format!("{}", id)).collect();
+						eprintln!("sending authorities to telemetry: {:?}", authorities);
+						format!("{:?}", authorities)
+					 });
+				Ok(())
+			})
+			.then(|_| Ok(()));
+		let events = events.select(telemetry_notify.on_exit).then(|_| Ok(()));
+		telemetry_notify.executor.spawn(events);
+	}
 
 	let voters = authority_set.current_authorities();
 	let initial_environment = Arc::new(Environment {

@@ -37,6 +37,7 @@ use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
 use log::info;
+use substrate_service::TelemetryHookOnConnect;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -110,6 +111,12 @@ construct_service_factory! {
 					local_key
 				};
 
+				let telemetry_notify = TelemetryHookOnConnect {
+					on_exit: Box::new(service.on_exit()),
+					telemetry_connection_sinks: service.telemetry_on_connect_stream(),
+					executor: &executor,
+				};
+
 				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
@@ -122,6 +129,7 @@ construct_service_factory! {
 					service.network(),
 					service.config.custom.inherent_data_providers.clone(),
 					service.on_exit(),
+					telemetry_notify,
 				)?);
 
 				Ok(service)
