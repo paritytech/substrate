@@ -305,20 +305,16 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				self.recorder = Some(Default::default());
 			}
 
-			fn extract_proof(&mut self) -> std::result::Result<Option<Vec<Vec<u8>>>, &'static str> {
-				match self.recorder.take().map(|r| std::rc::Rc::try_unwrap(r)) {
-					Some(Ok(r)) => {
-						Ok(Some(
-							r.into_inner()
-								.drain()
-								.into_iter()
-								.map(|n| n.data.to_vec())
-								.collect()
-						))
-					},
-					Some(Err(_)) => Err("Internal error. `ProofRecorder` still shared while calling `extract_proof`."),
-					None => Ok(None)
-				}
+			fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+				self.recorder
+					.take()
+					.map(|r| {
+						r.borrow_mut()
+							.drain()
+							.into_iter()
+							.map(|n| n.data.to_vec())
+							.collect()
+					})
 			}
 		}
 

@@ -102,8 +102,7 @@ pub enum Extrinsic {
 }
 
 #[cfg(feature = "std")]
-impl serde::Serialize for Extrinsic
-{
+impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}

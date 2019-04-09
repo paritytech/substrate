@@ -3001,6 +3001,7 @@ dependencies = [
  "sr-primitives 1.0.0",
  "sr-version 1.0.0",
  "substrate-client 1.0.0",
+ "substrate-consensus-common 1.0.0",
  "substrate-primitives 1.0.0",
  "substrate-state-machine 1.0.0",
  "substrate-test-client 1.0.0",

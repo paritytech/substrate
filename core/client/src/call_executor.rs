@@ -20,7 +20,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
 	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
-	ExecutionStrategy, NeverOffchainExt,
+	ExecutionStrategy, NeverOffchainExt, backend::Backend as _,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
@@ -231,29 +231,60 @@ where
 		skip_initialize_block: bool,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
-		let state = self.backend.state_at(*at)?;
-
 		if !skip_initialize_block
 			&& initialized_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) {
 			initialize_block()?;
 		}
 
-		let result = state_machine::new(
-			&state,
-			self.backend.changes_trie_storage(),
-			side_effects_handler,
-			&mut *changes.borrow_mut(),
-			&self.executor,
-			method,
-			call_data,
-		).execute_using_consensus_failure_handler(
-			execution_manager,
-			false,
-			native_call,
-		).map(|(result, _, _)| result)?;
+		let state = self.backend.state_at(*at)?;
 
-		self.backend.destroy_state(state)?;
-		Ok(result)
+		match recorder {
+			Some(recorder) => {
+				let trie_state = state.try_into_trie_backend()
+					.ok_or_else(||
+						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+							as Box<state_machine::Error>
+					)?;
+
+				let backend = state_machine::ProvingBackend::new_with_recorder(
+					&trie_state,
+					recorder.clone()
+				);
+
+				state_machine::new(
+					&backend,
+					self.backend.changes_trie_storage(),
+					side_effects_handler,
+					&mut *changes.borrow_mut(),
+					&self.executor,
+					method,
+					call_data,
+				)
+				.execute_using_consensus_failure_handler(
+					execution_manager,
+					false,
+					native_call,
+				)
+				.map(|(result, _, _)| result)
+				.map_err(Into::into)
+			}
+			None => state_machine::new(
+				&state,
+				self.backend.changes_trie_storage(),
+				side_effects_handler,
+				&mut *changes.borrow_mut(),
+				&self.executor,
+				method,
+				call_data,
+			)
+			.execute_using_consensus_failure_handler(
+				execution_manager,
+				false,
+				native_call,
+			)
+			.map(|(result, _, _)| result)
+			.map_err(Into::into)
+		}
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {

@@ -103,7 +103,7 @@ pub trait ApiExt<Block: BlockT> {
 
 	/// Extract the recorded proof.
 	/// This stops the proof recording.
-	fn extract_proof(&mut self) -> Result<Option<Vec<Vec<u8>>>, &'static str>;
+	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>>;
 }
 
 /// Something that can call into the runtime at a given block.

@@ -14,9 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use test_client::runtime::{TestAPI, DecodeFails};
-use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
-use state_machine::ExecutionStrategy;
+use test_client::{
+	AccountKeyring, runtime::{TestAPI, DecodeFails, Transfer, Header},
+	client::runtime_api::ApiExt, TestClient,
+};
+use runtime_primitives::{
+	generic::BlockId,
+	traits::{ProvideRuntimeApi, Block as _, Header as HeaderT, Hash as HashT},
+};
+use state_machine::{ExecutionStrategy, create_proof_check_backend};
+use consensus_common::BlockOrigin;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = test_client::new_with_execution_strategy(strat);
@@ -138,4 +145,48 @@ fn initialize_block_is_skipped() {
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
 	assert!(runtime_api.without_initialize_block(&block_id).unwrap());
+}
+
+#[test]
+fn record_proof_works() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let mut runtime_api = client.runtime_api();
+
+	let transaction = Transfer {
+		amount: 500,
+		nonce: 0,
+		from: AccountKeyring::Alice.into(),
+		to: Default::default(),
+	}.into_signed_tx();
+
+	// Build the block
+	let mut builder = client.new_block().unwrap();
+	builder.push(transaction.clone()).unwrap();
+	let block = builder.bake().unwrap();
+
+	// Extract some data for further usage
+	let storage_root = block.header().state_root().clone();
+	let block_id = BlockId::hash(block.header().hash());
+
+	// Import the generated block
+	client.import(BlockOrigin::Own, block).unwrap();
+
+	// Generate some proof
+	runtime_api.record_proof();
+
+	assert_eq!(
+		runtime_api.balance_of(
+			&block_id,
+			AccountKeyring::Alice.into()
+		).unwrap(),
+		500,
+	);
+
+	let proof = runtime_api.extract_proof().expect("Should have collected some proof.");
+	assert!(!proof.is_empty());
+
+	create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
+		storage_root,
+		proof,
+	).expect("Proof contains the storage root of the build block.");
 }
