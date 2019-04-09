@@ -628,4 +628,16 @@ define_env!(Env, <E: Ext>,
 
 		Ok(())
 	},
+
+	// Prints utf8 encoded string from the data buffer.
+	// MUST only be called from contracts deployed to `--dev` chains, NOT for use in production chains.
+	// This function may be removed in the future and superseded by "Diagnostic Runtimes":
+	// https://github.com/paritytech/substrate/issues/2082
+	ext_println(ctx, str_ptr: u32, str_len: u32) => {
+		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
+		if let Ok(utf8) = core::str::from_utf8(&data) {
+			runtime_io::print(utf8);
+		}
+		Ok(())
+	},
 );
