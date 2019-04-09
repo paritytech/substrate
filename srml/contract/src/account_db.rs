@@ -205,6 +205,12 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.or_insert(Default::default())
 			.code_hash = Some(code_hash);
 
+		self.local
+			.borrow_mut()
+			.entry(account.clone())
+			.or_insert(Default::default())
+			.rent_allowance = Some(<BalanceOf<T>>::zero());
+
 		Ok(())
 	}
 	pub fn set_rent_allowance(&mut self, account: &T::AccountId, rent_allowance: BalanceOf<T>) {

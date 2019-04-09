@@ -108,6 +108,12 @@ pub trait Ext {
 
 	/// Deposit an event.
 	fn deposit_event(&mut self, data: Vec<u8>);
+
+	/// Set rent allowance of the contract
+	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<Self::T>);
+
+	/// Rent allowance of the contract
+	fn rent_allowance(&self) -> BalanceOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -628,6 +634,15 @@ where
 
 	fn deposit_event(&mut self, data: Vec<u8>) {
 		self.ctx.events.push(RawEvent::Contract(self.ctx.self_account.clone(), data));
+	}
+
+	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
+		self.ctx.overlay.set_rent_allowance(&self.ctx.self_account, rent_allowance)
+	}
+
+	fn rent_allowance(&self) -> BalanceOf<T> {
+		self.ctx.overlay.get_rent_allowance(&self.ctx.self_account)
+			.unwrap_or(<BalanceOf<T>>::zero()) // Must never be triggered actually
 	}
 }
 

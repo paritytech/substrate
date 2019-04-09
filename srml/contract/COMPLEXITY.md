@@ -327,3 +327,22 @@ This function copies slice of data from the scratch buffer to the sandbox memory
 1. Storing a specified slice of the scratch buffer into the sandbox memory (see sandboxing memory set)
 
 **complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
+
+## ext_set_rent_allowance
+
+This function receives the following argument:
+
+- `value` buffer of a marshaled `Balance`,
+
+It consists of the following steps:
+
+1. Loading `value` buffer from the sandbox memory and then decoding it.
+2. Invoking `set_rent_allowance` executive function.
+
+**complexity**: The complexity of this function is proportional to the size of the `value` buffer.
+
+## ext_rent_allowance
+
+This function serializes the rent allowance of the current contract into the scratch buffer.
+
+**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity.
