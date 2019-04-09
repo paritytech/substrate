@@ -32,7 +32,12 @@ pub struct GenesisConfig {
 }
 
 impl GenesisConfig {
-	pub fn new(support_changes_trie: bool, authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, balance: u64) -> Self {
+	pub fn new(
+		support_changes_trie: bool,
+		authorities: Vec<AuthorityId>,
+		endowed_accounts: Vec<AccountId>,
+		balance: u64
+	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
 				true => Some(super::changes_trie_config()),

@@ -33,7 +33,7 @@ pub use runtime;
 pub use consensus;
 pub use keyring::{AuthorityKeyring, AccountKeyring};
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 use futures::future::FutureResult;
 use primitives::Blake2Hasher;
 use runtime_primitives::StorageOverlay;
@@ -98,6 +98,82 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 	>
 >;
 
+/// A builder for creating a test client instance.
+pub struct TestClientBuilder {
+	execution_strategies: ExecutionStrategies,
+	genesis_extension: HashMap<Vec<u8>, Vec<u8>>,
+	support_changes_trie: bool,
+}
+
+impl TestClientBuilder {
+	/// Create a new instance of the test client builder.
+	pub fn new() -> Self {
+		TestClientBuilder {
+			execution_strategies: ExecutionStrategies::default(),
+			genesis_extension: HashMap::default(),
+			support_changes_trie: false,
+		}
+	}
+
+	/// Set the execution strategy that should be used by all contexts.
+	pub fn set_execution_strategy(
+		mut self,
+		execution_strategy: ExecutionStrategy
+	) -> Self {
+		self.execution_strategies = ExecutionStrategies {
+			syncing: execution_strategy,
+			importing: execution_strategy,
+			block_construction: execution_strategy,
+			offchain_worker: execution_strategy,
+			other: execution_strategy,
+		};
+		self
+	}
+
+	/// Set an extension of the genesis storage.
+	pub fn set_genesis_extension(
+		mut self,
+		extension: HashMap<Vec<u8>, Vec<u8>>
+	) -> Self {
+		self.genesis_extension = extension;
+		self
+	}
+
+	/// Enable/Disable changes trie support.
+	pub fn set_support_changes_trie(mut self, enable: bool) -> Self {
+		self.support_changes_trie = enable;
+		self
+	}
+
+	/// Build the test client.
+	pub fn build(self) -> client::Client<
+		Backend, Executor, runtime::Block, runtime::RuntimeApi
+	> {
+		let backend = Arc::new(
+			Backend::new_test(::std::u32::MAX, ::std::u64::MAX)
+		);
+		self.build_with_backend(backend)
+	}
+
+	/// Build the test client with the given backend.
+	pub fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
+		B,
+		client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+		runtime::Block,
+		runtime::RuntimeApi
+	> where B: backend::LocalBackend<runtime::Block, Blake2Hasher> {
+		let executor = NativeExecutor::new(None);
+		let executor = LocalCallExecutor::new(backend.clone(), executor);
+
+		client::Client::new(
+			backend,
+			executor,
+			genesis_storage(self.support_changes_trie, self.genesis_extension),
+			self.execution_strategies
+		).expect("Creates new client")
+	}
+}
+
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	new_with_backend(Arc::new(Backend::new_test(::std::u32::MAX, ::std::u64::MAX)), false)
@@ -113,38 +189,21 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(blockchain.clone(), fetcher);
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	let call_executor = LightExecutor::new(backend.clone(), remote_call_executor, local_call_executor);
-	client::Client::new(backend, call_executor, genesis_storage(false), Default::default()).unwrap()
+	client::Client::new(backend, call_executor, genesis_storage(false, Default::default()), Default::default()).unwrap()
 }
 
 /// Creates new client instance used for tests with the given api execution strategy.
 pub fn new_with_execution_strategy(
 	execution_strategy: ExecutionStrategy
 ) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
-	let backend = Arc::new(Backend::new_test(::std::u32::MAX, ::std::u64::MAX));
-	let executor = NativeExecutor::new(None);
-	let executor = LocalCallExecutor::new(backend.clone(), executor);
-
-	let execution_strategies = ExecutionStrategies {
-		syncing: execution_strategy,
-		importing: execution_strategy,
-		block_construction: execution_strategy,
-		offchain_worker: execution_strategy,
-		other: execution_strategy,
-	};
-
-	client::Client::new(
-		backend,
-		executor,
-		genesis_storage(false),
-		execution_strategies
-	).expect("Creates new client")
+	TestClientBuilder::new().set_execution_strategy(execution_strategy).build()
 }
 
 /// Creates new test client instance that suports changes trie creation.
 pub fn new_with_changes_trie()
 	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>
 {
-	new_with_backend(Arc::new(Backend::new_test(::std::u32::MAX, ::std::u64::MAX)), true)
+	TestClientBuilder::new().set_support_changes_trie(true).build()
 }
 
 /// Creates new client instance used for tests with an explicitly provided backend.
@@ -159,8 +218,9 @@ pub fn new_with_backend<B>(
 	runtime::RuntimeApi
 > where B: backend::LocalBackend<runtime::Block, Blake2Hasher>
 {
-	let executor = NativeExecutor::new(None);
-	client::new_with_backend(backend, executor, genesis_storage(support_changes_trie)).unwrap()
+	TestClientBuilder::new()
+		.set_support_changes_trie(support_changes_trie)
+		.build_with_backend(backend)
 }
 
 fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
@@ -177,9 +237,16 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 	)
 }
 
-fn genesis_storage(support_changes_trie: bool) -> StorageOverlay {
+fn genesis_storage(
+	support_changes_trie: bool,
+	extension: HashMap<Vec<u8>, Vec<u8>>
+) -> StorageOverlay {
 	let mut storage = genesis_config(support_changes_trie).genesis_map();
-	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(storage.clone().into_iter());
+	storage.extend(extension.into_iter());
+
+	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+		storage.clone().into_iter()
+	);
 	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 	storage.extend(additional_storage_with_genesis(&block));
 	storage
