@@ -382,7 +382,13 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	let commits_in = commit_in.map_err(CommandOrError::from);
 	let commits_out = commit_out.sink_map_err(CommandOrError::from);
 
-	let global_in = commits_in.map(|(round, commit, callback)| {
+	let global_in = commits_in.map(|(round, commit, mut callback)| {
+		let callback = voter::Callback::Work(Box::new(move |outcome| match outcome {
+			voter::CommitProcessingOutcome::Good(_) =>
+				callback(communication::CommitProcessingOutcome::Good),
+			voter::CommitProcessingOutcome::Bad(_) =>
+				callback(communication::CommitProcessingOutcome::Bad),
+		}));
 		voter::CommunicationIn::Commit(round, commit, callback)
 	});
 

@@ -29,7 +29,7 @@
 
 use std::sync::Arc;
 
-use grandpa::{voter, voter_set::VoterSet};
+use grandpa::voter_set::VoterSet;
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
@@ -51,6 +51,9 @@ use substrate_primitives::ed25519::{Public as AuthorityId, Signature as Authorit
 
 pub mod gossip;
 mod periodic;
+
+#[cfg(test)]
+mod tests;
 
 /// The consensus engine ID of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = [b'a', b'f', b'g', b'1'];
@@ -193,6 +196,12 @@ impl Stream for NetworkStream {
 	}
 }
 
+/// The result of processing a commit.
+pub(crate) enum CommitProcessingOutcome {
+	Good,
+	Bad,
+}
+
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
@@ -332,12 +341,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	}
 
 	/// Set up the global communication streams.
-	pub(crate) fn global_communication(&self,
+	pub(crate) fn global_communication(
+		&self,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
 		is_voter: bool,
 	) -> (
-		impl Stream<Item = (u64, CompactCommit<B>, voter::Callback), Error = Error>,
+		impl Stream<Item = (u64, CompactCommit<B>, impl FnMut(CommitProcessingOutcome)), Error = Error>,
 		impl Sink<SinkItem = (u64, Commit<B>), SinkError = Error>,
 	) {
 		self.validator.note_set(
@@ -347,69 +357,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let service = self.service.clone();
 		let topic = global_topic::<B>(set_id.0);
-		let incoming = self.service.messages_for(topic)
-			.filter_map(|notification| {
-				// this could be optimized by decoding piecewise.
-				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-				if decoded.is_none() {
-					trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
-				}
-
-				decoded.map(move |d| (notification, d))
-			})
-			.filter_map(move |(notification, msg)| {
-				match msg {
-					GossipMessage::Commit(msg) => {
-						let precommits_signed_by: Vec<String> =
-							msg.message.auth_data.iter().map(move |(_, a)| {
-								format!("{}", a)
-							}).collect();
-						telemetry!(CONSENSUS_INFO; "afg.received_commit";
-							"contains_precommits_signed_by" => ?precommits_signed_by,
-							"target_number" => ?msg.message.target_number.clone(),
-							"target_hash" => ?msg.message.target_hash.clone(),
-						);
-						if let Err(cost) = check_compact_commit::<B>(
-							&msg.message,
-							&*voters,
-							msg.round,
-							msg.set_id,
-						) {
-							if let Some(who) = notification.sender {
- 								service.report(who, cost);
-							}
-							None
-						} else {
-							Some((msg, notification, service.clone()))
-						}
-					},
-					_ => {
-						debug!(target: "afg", "Skipping unknown message type");
-						return None;
-					}
-				}
-			})
-			.map(move |(msg, mut notification, service)| {
-				use voter::CommitProcessingOutcome;
-
-				let round = msg.round.0;
-				let commit = msg.message;
-				let cb = move |outcome| match outcome {
-					CommitProcessingOutcome::Good(_good) => {
-						// if it checks out, gossip it.
-						service.gossip_message(topic, notification.message.clone(), false);
-					}
-					CommitProcessingOutcome::Bad(_bad) => {
-						// report peer and do not gossip.
-						if let Some(who) = notification.sender.take() {
-							service.report(who, cost::INVALID_COMMIT);
-						}
-					}
-				};
-
-				(round, commit, voter::Callback::Work(Box::new(cb)))
-			})
-			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
+		let incoming = incoming_global(service, topic, voters);
 
 		let outgoing = CommitsOut::<B, N>::new(
 			self.service.clone(),
@@ -426,6 +374,73 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
 		);
 	}
+}
+
+fn incoming_global<B: BlockT, N: Network<B>>(
+	service: N,
+	topic: B::Hash,
+	voters: Arc<VoterSet<AuthorityId>>,
+) -> impl Stream<Item = (u64, CompactCommit<B>, impl FnMut(CommitProcessingOutcome)), Error = Error> {
+	service.messages_for(topic)
+		.filter_map(|notification| {
+			// this could be optimized by decoding piecewise.
+			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
+			if decoded.is_none() {
+				trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
+			}
+			decoded.map(move |d| (notification, d))
+		})
+		.filter_map(move |(notification, msg)| {
+			match msg {
+				GossipMessage::Commit(msg) => {
+					let precommits_signed_by: Vec<String> =
+						msg.message.auth_data.iter().map(move |(_, a)| {
+							format!("{}", a)
+						}).collect();
+					telemetry!(CONSENSUS_INFO; "afg.received_commit";
+						"contains_precommits_signed_by" => ?precommits_signed_by,
+						"target_number" => ?msg.message.target_number.clone(),
+						"target_hash" => ?msg.message.target_hash.clone(),
+					);
+					if let Err(cost) = check_compact_commit::<B>(
+						&msg.message,
+						&*voters,
+						msg.round,
+						msg.set_id,
+					) {
+						if let Some(who) = notification.sender {
+							service.report(who, cost);
+						}
+						None
+					} else {
+						Some((msg, notification, service.clone()))
+					}
+				},
+				_ => {
+					debug!(target: "afg", "Skipping unknown message type");
+					return None;
+				}
+			}
+		})
+		.map(move |(msg, mut notification, service)| {
+			let round = msg.round.0;
+			let commit = msg.message;
+			let cb = move |outcome| match outcome {
+				CommitProcessingOutcome::Good => {
+					// if it checks out, gossip it.
+					service.gossip_message(topic, notification.message.clone(), false);
+				}
+				CommitProcessingOutcome::Bad => {
+					// report peer and do not gossip.
+					if let Some(who) = notification.sender.take() {
+						service.report(who, cost::INVALID_COMMIT);
+					}
+				}
+			};
+
+			(round, commit, cb)
+		})
+		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
 impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
@@ -567,7 +582,8 @@ fn check_compact_commit<Block: BlockT>(
 	set_id: SetId,
 ) -> Result<(), i32> {
 	// 4f + 1 = equivocations from f voters.
-	let full_threshold = voters.total_weight() + voters.threshold();
+	let f = voters.total_weight() - voters.threshold();
+	let full_threshold = voters.total_weight() + f;
 
 	// check total weight is not too high.
 	let mut total_weight = 0;
@@ -581,6 +597,10 @@ fn check_compact_commit<Block: BlockT>(
 			debug!(target: "afg", "Skipping commit containing unknown voter {}", id);
 			return Err(cost::MALFORMED_COMMIT);
 		}
+	}
+
+	if total_weight < voters.threshold() {
+		return Err(cost::MALFORMED_COMMIT);
 	}
 
 	// check signatures on all contained precommits.

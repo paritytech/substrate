@@ -507,7 +507,7 @@ mod tests {
 			commit_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send((0, unknown_commit.clone())).unwrap();
+		commit_tx.unbounded_send((0, unknown_commit.clone(), ())).unwrap();
 
 		let inner_chain_state = chain_state.clone();
 		let work = until_imported
@@ -527,7 +527,7 @@ mod tests {
 			});
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, unknown_commit)));
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, unknown_commit, ())));
 	}
 
 	#[test]
@@ -567,11 +567,11 @@ mod tests {
 			commit_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send((0, known_commit.clone())).unwrap();
+		commit_tx.unbounded_send((0, known_commit.clone(), ())).unwrap();
 
 		let work = until_imported.into_future();
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, known_commit)));
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, known_commit, ())));
 	}
 }

@@ -404,7 +404,7 @@ impl<N: Ord> Peers<N> {
 }
 
 #[derive(Debug)]
-enum Action<H>  {
+pub(super) enum Action<H>  {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
 	Keep(H, i32),
 	// discard and process.
@@ -613,7 +613,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
-	fn do_validate(&self, who: &PeerId, mut data: &[u8])
+	pub(super) fn do_validate(&self, who: &PeerId, mut data: &[u8])
 		-> (Action<Block::Hash>, Vec<Block::Hash>)
 	{
 		let mut broadcast_topics = Vec::new();
