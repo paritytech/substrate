@@ -26,8 +26,11 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
-use srml_support::{StorageMap, traits::{UpdateBalanceOutcome,
-	SignedImbalance, Currency, Imbalance}, storage::child};
+use srml_support::{StorageMap, storage::child};
+use srml_support::traits::{
+	UpdateBalanceOutcome, SignedImbalance, Currency, Imbalance
+};
+
 
 // Note: we don't provide Option<Contract> because we can't create
 // the trie_id in the overlay, thus we provide an overlay on the fields
