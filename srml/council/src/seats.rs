@@ -85,11 +85,11 @@ use srml_support::decl_module;
 
 pub type VoteIndex = u32;
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
-/// Storing the activity status of a voter.
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default)]
+/// The activity status of a voter.
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct VoterActivity {
-	/// Last VoteIndex in which this voter assigned new approvals.
+	/// Last VoteIndex in which this voter assigned (or initialized) approvals.
 	last_active: VoteIndex,
 	/// Last VoteIndex in which one of this voter's approvals won.
 	last_win: VoteIndex,
@@ -146,8 +146,9 @@ decl_module! {
 
 			let who = T::Lookup::lookup(who)?;
 			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
-			ensure!(Self::voter_last_active(&reporter).is_some(), "reporter must be a voter");
-			let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
+			ensure!(Self::voter_activity(&reporter).is_some(), "reporter must be a voter");
+			let activity = Self::voter_activity(&who).ok_or("target for inactivity cleanup must be active")?;
+			let last_active = activity.last_active;
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
 			ensure!(assumed_vote_index > last_active + Self::inactivity_grace_period(), "cannot reap during grace period");
 			let voters = Self::voters();
@@ -196,7 +197,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::presentation_active(), "cannot retract when presenting");
-			ensure!(<LastActiveOf<T>>::exists(&who), "cannot retract non-voter");
+			ensure!(<VoterActivityInfo<T>>::exists(&who), "cannot retract non-voter");
 			let voters = Self::voters();
 			let index = index as usize;
 			ensure!(index < voters.len(), "retraction index invalid");
@@ -210,6 +211,7 @@ decl_module! {
 		/// Submit oneself for candidacy.
 		///
 		/// Account must have enough transferrable funds in it to pay the bond.
+		///
 		/// Note that if `origin` has already assigned approvals via [`set_approvals`],
 		/// it will NOT have any usable funds to pass candidacy bond and must first retract.
 		fn submit_candidacy(origin, #[compact] slot: u32) {
@@ -269,12 +271,11 @@ decl_module! {
 				Self::candidate_reg_info(&candidate).ok_or("presented candidate must be current")?;
 			let actual_total = voters.iter()
 				.filter_map(|(voter, stake)|
-							match Self::voter_last_active(voter) {
-								Some(b) if b >= registered_since => {
-									let last_win = Self::voter_last_win(voter).unwrap_or_default();
+							match Self::voter_activity(voter) {
+								Some(b) if b.last_active >= registered_since => {
+									let last_win = b.last_win;
 									let now = Self::vote_index();
 									let offset = Self::get_offset(*stake, now - last_win);
-									println!("for {:?} now {:?} last win {:?} offset {:?}", voter, now, last_win, offset);
 									let weight = *stake + offset + Self::voter_offset_pot(voter).unwrap_or_default();
 									Self::approvals_of(voter).get(candidate_index as usize)
 										.and_then(|approved| if *approved { Some(weight) } else { None })
@@ -282,8 +283,6 @@ decl_module! {
 								_ => None,
 							})
 				.fold(Zero::zero(), |acc, n| acc + n);
-			println!("Actual total {:?}", actual_total);
-			println!("Voters {:?}", Self::voters());
 			let dupe = leaderboard.iter().find(|&&(_, ref c)| c == &candidate).is_some();
 			if total == actual_total && !dupe {
 				// insert into leaderboard
@@ -296,7 +295,7 @@ decl_module! {
 				// better safe than sorry.
 				let imbalance = T::Currency::slash(&who, bad_presentation_punishment).0;
 				T::BadPresentation::on_unbalanced(imbalance);
-				Err(if dupe { "duplicate presentation" } else { println!("[---- total {:?} != actual_total {:?} ]", total, actual_total); "incorrect total" })
+				Err(if dupe { "duplicate presentation" } else { "incorrect total" })
 			}
 		}
 
@@ -380,10 +379,10 @@ decl_storage! {
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
 		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
-		/// The last cleared vote index that this voter was last active at. Updated only per [`set_approvals`].
-		pub LastActiveOf get(voter_last_active): map T::AccountId => Option<VoteIndex>;
-		/// The last vote index in which this voter won a round. Initialized per [`set_approvals`] and updated per win.
-		pub LastWinOf get(voter_last_win): map T::AccountId => Option<VoteIndex>;
+		/// Activity status of a voter.
+		/// Note that last_win = N indicates a last win at index N-1, hence last_win = 0 mean no win ever.
+		/// TODO: above could be tweaked...
+		pub VoterActivityInfo get(voter_activity): map T::AccountId => Option<VoterActivity>;
 		/// Accumulated offset weight of a voter. Has a value only when a voter is not winning and decides to change votes.
 		pub OffsetPotOf get(voter_offset_pot): map T::AccountId => Option<BalanceOf<T>>;
 		/// The present voter list and their _locked_ balance.
@@ -467,18 +466,15 @@ impl<T: Trait> Module<T> {
 	// Private
 	/// Check there's nothing to do this block
 	fn end_block(block_number: T::BlockNumber) -> Result {
-		print!("++ End Block {:?} ... ", block_number);
 		if (block_number % Self::voting_period()).is_zero() {
 			if let Some(number) = Self::next_tally() {
 				if block_number == number {
-					println!("start_tally()");
 					Self::start_tally();
 				}
 			}
 		}
 		if let Some((number, _, _)) = Self::next_finalize() {
 			if block_number == number {
-				println!("finalize_tally()");
 				Self::finalize_tally()?
 			}
 		}
@@ -489,8 +485,7 @@ impl<T: Trait> Module<T> {
 	fn remove_voter(voter: &T::AccountId, index: usize, mut voters: Vec<(T::AccountId, BalanceOf<T>)>) {
 		<Voters<T>>::put({ voters.swap_remove(index); voters });
 		<ApprovalsOf<T>>::remove(voter);
-		<LastActiveOf<T>>::remove(voter);
-		<LastWinOf<T>>::remove(voter);
+		<VoterActivityInfo<T>>::remove(voter);
 		<OffsetPotOf<T>>::remove(voter);
 	}
 
@@ -509,12 +504,11 @@ impl<T: Trait> Module<T> {
 		// Amount to be locked up.
 		let locked_balance = T::Currency::total_balance(&who);
 
-		if !<LastActiveOf<T>>::exists(&who) {
+		if !<VoterActivityInfo<T>>::exists(&who) {
 			// not yet a voter - deduct bond.
 			// NOTE: this must be the last potential bailer, since it changes state.
 			T::Currency::reserve(&who, Self::voting_bond())?;
 			<Voters<T>>::mutate(|v| v.push((who.clone(), locked_balance)));
-			println!("And now voters are {:?}", Self::voters());
 		} else {
 			<Voters<T>>::mutate(|v| {
 				if let Some(old_voter_idx) = v.iter().position(|i| i.0 == who) {
@@ -523,20 +517,16 @@ impl<T: Trait> Module<T> {
 					// update stake
 					v[old_voter_idx] = (who.clone(), locked_balance);
 					// We are sure that when last_active exists, last_win also always exists.
-					let last_win = Self::voter_last_win(&who).unwrap_or(Self::vote_index());
+					let activity = Self::voter_activity(&who).unwrap_or_default();
+					let last_win = activity.last_win;
 					let now = Self::vote_index();
 					let offset = Self::get_offset(stake, now - last_win);
 					<OffsetPotOf<T>>::insert(&who, offset);
-					println!("+++++ Storing in pot of {:?} value {:?}", &who, offset);
 				}
 			})
 		}
 
-		// TODO: we could lock until next tally.. but we don't know when that is...
-		// I think lock infinite + manual remove is much simpler.
-		// Either set it or update it.
-		// TOOD: this should be at uptop.?
-		println!("++++ Locking for {:?} amount {:?}", who, locked_balance);
+		// TODO: we could lock until next tally, but votes are persistent and stay until retracted.
 		T::Currency::set_lock(
 			COUNCIL_SEATS_ID,
 			&who,
@@ -545,8 +535,10 @@ impl<T: Trait> Module<T> {
 			WithdrawReasons::all()
 		);
 
-		<LastActiveOf<T>>::insert(&who, index);
-		<LastWinOf<T>>::insert(&who, index);
+		<VoterActivityInfo<T>>::insert(
+			&who,
+			VoterActivity { last_active: index, last_win: index }
+		);
 		<ApprovalsOf<T>>::insert(&who, votes);
 
 		Ok(())
@@ -599,7 +591,9 @@ impl<T: Trait> Module<T> {
 				.iter()
 				.map(|(a, _)| a)
 				.filter(|v| *Self::approvals_of(*v).get(index).unwrap_or(&false))
-				.for_each(|v| <LastWinOf<T>>::insert(v, Self::vote_index() + 1))
+				.for_each(|v| <VoterActivityInfo<T>>::mutate(v, |a| {
+					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
+				}));
 		});
 		let active_council = Self::active_council();
 		let outgoing = active_council.iter().take(expiring.len()).map(|a| a.0.clone()).collect();
@@ -700,7 +694,7 @@ mod tests {
 			assert_eq!(Council::candidate_reg_info(1), None);
 
 			assert_eq!(Council::voters(), Vec::<(u64, u64)>::new());
-			assert_eq!(Council::voter_last_active(1), None);
+			assert_eq!(Council::voter_activity(1), None);
 			assert_eq!(Council::approvals_of(1), vec![]);
 		});
 	}
@@ -869,9 +863,12 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 11), (5, 11)]);
+			assert_eq!(Council::voter_activity(6).unwrap(), VoterActivity{ last_win: 1, last_active: 0});
+			assert_eq!(Council::voter_activity(5).unwrap(), VoterActivity{ last_win: 1, last_active: 0});
+			assert_eq!(Council::voter_activity(1).unwrap(), VoterActivity{ last_win: 0, last_active: 0});
 
 			System::set_block_number(12);
-			// retract needed to unlock approval funds
+			// retract needed to unlock approval funds => submit candidacy again.
 			assert_ok!(Council::retract_voter(Origin::signed(6), 0));
 			assert_ok!(Council::retract_voter(Origin::signed(5), 1));
 			assert_ok!(Council::submit_candidacy(Origin::signed(6), 0));
@@ -879,8 +876,6 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(6), vec![true, false, false], 1));
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true, false], 1));
 			assert_ok!(Council::end_block(System::block_number()));
-
-			assert_eq!(Council::active_council(), vec![(6, 11), (5, 11)]);
 
 			System::set_block_number(14);
 			assert!(Council::presentation_active());
@@ -891,6 +886,9 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 19), (5, 19)]);
+			assert_eq!(Council::voter_activity(6).unwrap(), VoterActivity{ last_win: 2, last_active: 1});
+			assert_eq!(Council::voter_activity(5).unwrap(), VoterActivity{ last_win: 2, last_active: 1});
+			assert_eq!(Council::voter_activity(1).unwrap(), VoterActivity{ last_win: 0, last_active: 0});
 
 			System::set_block_number(20);
 			assert_ok!(Council::retract_voter(Origin::signed(6), 1));
@@ -917,6 +915,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 27), (5, 27)]);
+			assert_eq!(Council::voter_activity(6).unwrap(), VoterActivity{ last_win: 3, last_active: 2});
+			assert_eq!(Council::voter_activity(5).unwrap(), VoterActivity{ last_win: 3, last_active: 2});
+			assert_eq!(Council::voter_activity(1).unwrap(), VoterActivity{ last_win: 0, last_active: 0});
+
 
 			System::set_block_number(28);
 			assert_ok!(Council::retract_voter(Origin::signed(6), 1));
@@ -927,7 +929,7 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true, false], 3));
 			assert_ok!(Council::end_block(System::block_number()));
 
-			System::set_block_number(22);
+			System::set_block_number(30);
 			assert!(Council::presentation_active());
 			assert_eq!(Council::present_winner(Origin::signed(6), 6, 60, 3), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 50, 3), Ok(()));
@@ -941,6 +943,12 @@ mod tests {
 			);
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (10 + 9 + 9 + 8, 1), (50, 5), (60, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
+
+			assert_eq!(Council::active_council(), vec![(6, 35), (5, 35)]);
+			assert_eq!(Council::voter_activity(6).unwrap(), VoterActivity{ last_win: 4, last_active: 3});
+			assert_eq!(Council::voter_activity(5).unwrap(), VoterActivity{ last_win: 4, last_active: 3});
+			assert_eq!(Council::voter_activity(1).unwrap(), VoterActivity{ last_win: 0, last_active: 0});
+
 		})
 	}
 
@@ -1269,8 +1277,8 @@ mod tests {
 			assert!(!Council::is_a_candidate(&2));
 			assert!(!Council::is_a_candidate(&5));
 			assert_eq!(Council::vote_index(), 1);
-			assert_eq!(Council::voter_last_active(2), Some(0));
-			assert_eq!(Council::voter_last_active(5), Some(0));
+			assert_eq!(Council::voter_activity(2), Some(VoterActivity { last_win: 1, last_active: 0 }));
+			assert_eq!(Council::voter_activity(5), Some(VoterActivity { last_win: 1, last_active: 0 }));
 		});
 	}
 
@@ -1392,7 +1400,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			// This is now mandatory to disable the lock
+			// TODO: This is now mandatory to disable the lock
 			assert_ok!(Council::retract_voter(Origin::signed(2), 0));
 			assert_eq!(Council::submit_candidacy(Origin::signed(2), 0), Ok(()));
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 1));
@@ -1531,7 +1539,7 @@ mod tests {
 			assert_eq!(Council::vote_index(), 2);
 			assert_eq!(Council::inactivity_grace_period(), 1);
 			assert_eq!(Council::voting_period(), 4);
-			assert_eq!(Council::voter_last_active(4), Some(0));
+			assert_eq!(Council::voter_activity(4), Some(VoterActivity { last_win: 1, last_active: 0 }));
 
 			assert_ok!(Council::reap_inactive_voter(Origin::signed(4),
 				(voter_ids::<Test>().iter().position(|&i| i == 4).unwrap() as u32).into(),
@@ -1754,11 +1762,11 @@ mod tests {
 			assert!(Council::is_a_candidate(&3));
 			assert!(Council::is_a_candidate(&4));
 			assert_eq!(Council::vote_index(), 1);
-			assert_eq!(Council::voter_last_active(2), Some(0));
-			assert_eq!(Council::voter_last_active(3), Some(0));
-			assert_eq!(Council::voter_last_active(4), Some(0));
-			assert_eq!(Council::voter_last_active(5), Some(0));
-			assert_eq!(Council::voter_last_active(6), Some(0));
+			assert_eq!(Council::voter_activity(2), Some(VoterActivity { last_win: 0, last_active: 0 }));
+			assert_eq!(Council::voter_activity(3), Some(VoterActivity { last_win: 0, last_active: 0 }));
+			assert_eq!(Council::voter_activity(4), Some(VoterActivity { last_win: 0, last_active: 0 }));
+			assert_eq!(Council::voter_activity(5), Some(VoterActivity { last_win: 1, last_active: 0 }));
+			assert_eq!(Council::voter_activity(6), Some(VoterActivity { last_win: 1, last_active: 0 }));
 			assert_eq!(Council::candidate_reg_info(3), Some((0, 2)));
 			assert_eq!(Council::candidate_reg_info(4), Some((0, 3)));
 		});
@@ -1806,11 +1814,11 @@ mod tests {
 			assert!(!Council::is_a_candidate(&5));
 			assert!(Council::is_a_candidate(&4));
 			assert_eq!(Council::vote_index(), 2);
-			assert_eq!(Council::voter_last_active(2), Some(0));
-			assert_eq!(Council::voter_last_active(3), Some(0));
-			assert_eq!(Council::voter_last_active(4), Some(0));
-			assert_eq!(Council::voter_last_active(5), Some(0));
-			assert_eq!(Council::voter_last_active(6), Some(1));
+			assert_eq!(Council::voter_activity(2), Some( VoterActivity { last_win: 0, last_active: 0}));
+			assert_eq!(Council::voter_activity(3), Some( VoterActivity { last_win: 2, last_active: 0}));
+			assert_eq!(Council::voter_activity(4), Some( VoterActivity { last_win: 0, last_active: 0}));
+			assert_eq!(Council::voter_activity(5), Some( VoterActivity { last_win: 1, last_active: 0}));
+			assert_eq!(Council::voter_activity(6), Some( VoterActivity { last_win: 2, last_active: 1}));
 
 			assert_eq!(Council::candidate_reg_info(4), Some((0, 3)));
 		});
