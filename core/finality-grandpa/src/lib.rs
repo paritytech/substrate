@@ -67,6 +67,7 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
+use consensus_common::SelectChain;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 
@@ -287,16 +288,21 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
+	select_chain: SC,
 	api: Arc<PRA>
-) -> Result<(GrandpaBlockImport<B, E, Block, RA, PRA>, LinkHalf<B, E, Block, RA>), ClientError>
-	where
-		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
-		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
+) -> Result<(
+		GrandpaBlockImport<B, E, Block, RA, PRA, SC>,
+		LinkHalf<B, E, Block, RA>
+	), ClientError>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi,
+	PRA::Api: GrandpaApi<Block>,
+	SC: SelectChain<Block>,
 {
 	use runtime_primitives::traits::Zero;
 
@@ -322,6 +328,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	Ok((
 		GrandpaBlockImport::new(
 			client.clone(),
+			select_chain,
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
@@ -414,11 +421,12 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
 	inherent_data_providers: InherentDataProviders,
+	select_chain: SC,
 	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
@@ -426,6 +434,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
+	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
@@ -448,6 +457,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let initial_environment = Arc::new(Environment {
 		inner: client.clone(),
 		config: config.clone(),
+		select_chain: select_chain.clone(),
 		voters: Arc::new(voters),
 		network: network.clone(),
 		set_id: authority_set.set_id(),
@@ -507,6 +517,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let client = client.clone();
 		let config = config.clone();
 		let network = network.clone();
+		let select_chain = select_chain.clone();
 		let authority_set = authority_set.clone();
 		let consensus_changes = consensus_changes.clone();
 
@@ -528,6 +539,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
 					let env = Arc::new(Environment {
 						inner: client,
+						select_chain,
 						config,
 						voters: Arc::new(new.authorities.into_iter().collect()),
 						set_id: new.set_id,

@@ -23,7 +23,7 @@ use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, maybe_start_server};
-use consensus_common::import_queue::ImportQueue;
+use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
@@ -302,9 +302,11 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Extended light service type.
 	type LightService: ServiceTrait<LightComponents<Self>>;
 	/// ImportQueue for full client
-	type FullImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
+	type FullImportQueue: ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
-	type LightImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
+	type LightImportQueue: ImportQueue<Self::Block> + 'static;
+	/// The Fork Choice Strategy for the chain
+	type SelectChain: SelectChain<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
@@ -317,6 +319,12 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build network protocol.
 	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
 		-> Result<Self::NetworkProtocol, error::Error>;
+
+	/// Build the Fork Choice algorithm for full client
+	fn build_select_chain(
+		config: &mut FactoryFullConfiguration<Self>,
+		client: Arc<FullClient<Self>>
+	) -> Result<Self::SelectChain, error::Error>;
 
 	/// Build full service.
 	fn new_full(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
@@ -398,6 +406,13 @@ pub trait Components: Sized + 'static {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error>;
+
+	/// Build fork choice selector
+	fn build_select_chain(
+		config: &mut FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::SelectChain, error::Error>;
+
 }
 
 /// A struct that implement `Components` for the full client.
@@ -466,9 +481,10 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		)?), None))
 	}
 
-	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
-		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
-	{
+	fn build_transaction_pool(
+		config: TransactionPoolOptions, 
+		client: Arc<ComponentClient<Self>>
+	) -> Result<TransactionPool<Self::TransactionPoolApi>, error::Error> {
 		Factory::build_full_transaction_pool(config, client)
 	}
 
@@ -478,6 +494,14 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_full_import_queue(config, client)
 	}
+
+	fn build_select_chain(
+		config: &mut FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::SelectChain, error::Error> {
+		Self::Factory::build_select_chain(config, client)
+	}
+	
 }
 
 /// A struct that implement `Components` for the light client.
@@ -554,6 +578,17 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
 	}
+
+	/// Build fork choice selector
+	fn build_select_chain(
+		_config: &mut FactoryFullConfiguration<Self::Factory>,
+		_client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::SelectChain, error::Error> {
+		// FIXME: this (and other places) need a "NotAvailableInMode" for never-in-light-client-features
+		// that doesn't break creation of light clients  
+		Err("Fork choice doesn't happen on light clients.".into())
+	}
+
 }
 
 #[cfg(test)]

@@ -62,14 +62,14 @@ pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_comm
 /// Start a new slot worker in a separate thread.
 pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 	slot_duration: SlotDuration,
-	client: Arc<C>,
+	select_chain: C,
 	worker: Arc<W>,
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: SelectChain<B> + Send + Sync + 'static,
+	C: SelectChain<B> + Clone + 'static,
 	W: SlotWorker<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
 	SC: SlotCompatible + 'static,
@@ -90,7 +90,7 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 
 		let slot_worker_future = match start_slot_worker::<_, _, _, _, SC, _>(
 			slot_duration,
-			client,
+			select_chain,
 			worker,
 			sync_oracle,
 			on_exit,
@@ -119,14 +119,14 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 /// Start a new slot worker.
 pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 	slot_duration: SlotDuration,
-	client: Arc<C>,
+	client:  C,
 	worker: Arc<W>,
 	sync_oracle: SO,
 	on_exit: OnExit,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: SelectChain<B>,
+	C: SelectChain<B> +  Clone,
 	W: SlotWorker<B>,
 	SO: SyncOracle + Send + Clone,
 	SC: SlotCompatible,

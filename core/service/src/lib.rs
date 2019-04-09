@@ -72,6 +72,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
+	select_chain: <<Components as components::Components>::Factory as ServiceFactory>::SelectChain,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
@@ -129,7 +130,8 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
-		let best_header = client.best_block_header()?;
+		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+		let best_header = select_chain.best_block_header()?;
 
 		let version = config.full_version();
 		info!("Best block: #{}", best_header.number());
@@ -325,6 +327,7 @@ impl<Components: components::Components> Service<Components> {
 
 		Ok(Service {
 			client,
+			select_chain,
 			network: Some(network),
 			transaction_pool,
 			inherents_pool,

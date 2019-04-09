@@ -31,7 +31,7 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
-	SelectChain,  well_known_cache_keys
+	SelectChain, well_known_cache_keys
 };
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
@@ -165,10 +165,11 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker in a separate thread.
-pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
+pub fn start_aura_thread<B, C, SC, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
+	select_chain: SC,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -177,8 +178,9 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: SelectChain<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
+	C: ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
 	C::Api: AuthoritiesApi<B>,
+	SC: SelectChain<B> + Clone + 'static,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -204,7 +206,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 
 	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
 		slot_duration,
-		client,
+		select_chain,
 		Arc::new(worker),
 		sync_oracle,
 		on_exit,
@@ -213,10 +215,11 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
+	select_chain: SC,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -225,8 +228,9 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: SelectChain<B> + ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
+	SC: SelectChain<B> + Clone,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -250,7 +254,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	};
 	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
 		slot_duration,
-		client,
+		select_chain,
 		Arc::new(worker),
 		sync_oracle,
 		on_exit,
@@ -926,7 +930,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, ed25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, ed25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),

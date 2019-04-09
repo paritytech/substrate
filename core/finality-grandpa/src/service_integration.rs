@@ -30,6 +30,7 @@ pub type BlockImportForService<F> = crate::GrandpaBlockImport<
         <F as ServiceFactory>::Block,
         <F as ServiceFactory>::RuntimeApi
     >,
+	<F as ServiceFactory>::SelectChain
 >;
 
 pub type LinkHalfForService<F> = crate::LinkHalf<
