@@ -751,6 +751,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fees"
+version = "1.0.0"
+dependencies = [
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 1.0.0",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
+ "srml-support 1.0.0",
+ "srml-system 1.0.0",
+ "substrate-primitives 1.0.0",
+]
+
+[[package]]
 name = "finality-grandpa"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

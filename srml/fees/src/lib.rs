@@ -16,6 +16,7 @@
 
 //! # Fees Module
 
+
 // https://github.com/paritytech/substrate/issues/2052
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -117,7 +118,7 @@ decl_module! {
 		/// - Transfer funds to Treasury
 		/// - Burn remainder and update `TotalIssuance`
 		/// - Emit an event
-		fn on_finalize(block_fees: T::BalanceOf) {
+		fn on_finalize() {
 
 			ensure!(Self::fees_to_block_author() < Permill::from_percent(100),
 				"You can't pay more than 100% of fees to the block author.");
@@ -140,8 +141,9 @@ decl_module! {
 			}
 
 			// Transfer fees to author and Treasury
-			let mut total_fees = block_fees;
+			let mut total_fees = Self::total_block_fees();
 
+			// TODO: has Mul impl
 			let total_fees_to_author = total_fees * Self::fees_to_block_author() / 1_000_000;
 			let total_fees_to_treasury = total_fees * Self::fees_to_treasury() / 1_000_000;
 

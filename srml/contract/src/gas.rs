@@ -257,12 +257,12 @@ pub fn refund_unused_gas<T: Trait>(
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units
 /// at the given gas price.
-pub fn approx_gas_for_balance<T: Trait>(gas_price: BalanceOf<T>, balance: BalanceOf<T>) -> T::Gas {
-	let amount_in_gas: BalanceOf<T> = balance / gas_price;
+pub fn approx_gas_for_balance<T: Trait>(gas_price: Balanrefund_unused_gaslanceOf<T>) -> T::Gas {
+	let amount_in_gas: BalanceOf<T> = balance / gas_pricrefund_unused_gas
 	<T::Gas as As<BalanceOf<T>>>::sa(amount_in_gas)
 }
 
-/// A simple utility macro that helps to match against a
+/// A simple utility macro that helps to match against arefund_unused_gas
 /// list of tokens.
 #[macro_export]
 macro_rules! match_tokens {

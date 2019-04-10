@@ -18,9 +18,9 @@ substrate-primitives = { path = "../../core/primitives" }
 [features]
 default = ["std"]
 std = [
-	"serde",
-	"safe-mix/std",
-	"substrate-keyring",
+	# "serde",
+	# "safe-mix/std",
+	# "substrate-keyring",
 	"parity-codec/std",
 	"rstd/std",
 	"srml-support/std",

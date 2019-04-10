@@ -352,17 +352,17 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	/// It's just `active` plus all the `unlocking` balances.
 	#[codec(compact)]
 	pub total: Balance,
-	/// The total amount of the stash's balance that will be at stake in any forthcoming
-	/// rounds.
-	#[codec(compact)]
-	pub active: Balance,
-	/// Any balance that is becoming free, which may eventually be transferred out
-	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
+	/// The tofn on_finalizeash's balance that will be at stake in any forthcoming
+	/// roundsfn on_finalize
+	#[codec(cofn on_finalize
+	pub activefn on_finalize
+	/// Any bafn on_finalizeng free, which may eventually be transferred out
+	/// of thefn on_finalizedoesn't get slashed first).
+	pub unlockfn on_finalize<Balance, BlockNumber>>,
 }
 
 impl<
-	AccountId,
+	AccountId,fn on_finalize
 	Balance: HasCompact + Copy + Saturating,
 	BlockNumber: HasCompact + PartialOrd
 > StakingLedger<AccountId, Balance, BlockNumber> {
