@@ -638,12 +638,10 @@ mod tests {
 							None
 						}
 					};
-					let last_message = last_connected_messages
-						.get(&peer_id);
+					let last_message = last_connected_messages.get(&peer_id);
 					match last_message {
 						Some(Message::Connect(_)) => {},
 						_ => {
-							println!("Last unconnected: {:?}", last_unconnected_messages);
 							if !last_unconnected_messages.len() > 0 {
 								panic!("Unexpected Drop message, after a {:?} message, a perhaps related action was: {:?}", last_message, maybe_related_action);
 							}
