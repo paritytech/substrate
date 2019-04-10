@@ -19,8 +19,10 @@ use std::sync::Arc;
 use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
-use grandpa::{BlockNumberOps, Error as GrandpaError, voter_set::VoterSet};
-use log::{debug, warn};
+use grandpa::{
+	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter_set::VoterSet
+};
+use log::{debug, info, warn};
 
 use client::{CallExecutor, Client, backend::Backend};
 use ed25519::Public as AuthorityId;
@@ -28,12 +30,13 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT, DigestItemFor, Dige
 use substrate_primitives::{ed25519, H256, Blake2Hasher};
 
 use crate::{
-	AuthoritySignature, committer_communication, CommandOrError, Config,
-	environment, Error, LinkHalf, Network, aux_schema::PersistentData,
+	AuthoritySignature, committer_communication, CommandOrError, Config, environment,
+	Error, LinkHalf, Network, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
+use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
 
@@ -152,15 +155,16 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		voter_commands_rx,
 	} = link;
 
-	let PersistentData { authority_set, consensus_changes, .. } = persistent_data;
-	let initial_state = (authority_set, consensus_changes, voter_commands_rx.into_future());
+	let PersistentData { authority_set, consensus_changes, set_state } = persistent_data;
+	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
 
 	let network = super::communication::NetworkBridge::new(network, config.clone());
 
 	let observer_work = future::loop_fn(initial_state, move |state| {
-		let (authority_set, consensus_changes, voter_commands_rx) = state;
+		let (authority_set, consensus_changes, set_state, voter_commands_rx) = state;
 		let set_id = authority_set.set_id();
 		let voters = Arc::new(authority_set.current_authorities());
+		let client = client.clone();
 
 		// start global communication stream for the current set
 		let (committer_in, _) = committer_communication(
@@ -189,6 +193,45 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			committer_in,
 		);
 
+		let handle_voter_command = move |command, voter_commands_rx| {
+			// the observer doesn't use the voter set state, but we need to
+			// update it on-disk in case we restart as validator in the future.
+			let set_state = match command {
+				VoterCommand::Pause(reason) => {
+					info!(target: "afg", "Pausing old validator set: {}", reason);
+
+					let completed_rounds = set_state.read().completed_rounds();
+					let set_state = VoterSetState::Paused { completed_rounds };
+
+					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+
+					set_state
+				},
+				VoterCommand::ChangeAuthorities(new) => {
+					// start the new authority set using the block where the
+					// set changed (not where the signal happened!) as the base.
+					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
+
+					let set_state = VoterSetState::Live::<Block> {
+						// always start at round 0 when changing sets.
+						completed_rounds: CompletedRounds::new(CompletedRound {
+							number: 0,
+							state: genesis_state,
+							base: (new.canon_hash, new.canon_number),
+							votes: Vec::new(),
+						}),
+						current_round: HasVoted::No,
+					};
+
+					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+
+					set_state
+				},
+			};
+
+			Ok(FutureLoop::Continue((authority_set, consensus_changes, set_state.into(), voter_commands_rx)))
+		};
+
 		// run observer and listen to commands (switch authorities or pause)
 		future::Either::A(observer.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A((_, _))) => {
@@ -207,13 +250,13 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 				// return inner observer error
 				Err(e)
 			},
-			Ok(future::Either::B(((Some(_), voter_commands_rx), _))) => {
-				// some command issued externally, restart the observer regardless of the command
-				Ok(FutureLoop::Continue((authority_set, consensus_changes, voter_commands_rx.into_future())))
+			Ok(future::Either::B(((Some(command), voter_commands_rx), _))) => {
+				// some command issued externally
+				handle_voter_command(command, voter_commands_rx.into_future())
 			},
-			Err(future::Either::A((CommandOrError::VoterCommand(_), voter_commands_rx))) => {
-				// some command issued internally, restart the observer regardless of the command
-				Ok(FutureLoop::Continue((authority_set, consensus_changes, voter_commands_rx)))
+			Err(future::Either::A((CommandOrError::VoterCommand(command), voter_commands_rx))) => {
+				// some command issued internally
+				handle_voter_command(command, voter_commands_rx)
 			},
 		}))
 	});
