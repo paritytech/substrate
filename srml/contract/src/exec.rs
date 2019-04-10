@@ -1056,7 +1056,7 @@ mod tests {
 			assert_matches!(result, Ok(_));
 		});
 
-		// This one tests passing the input data into a contract via call.
+		// This one tests passing the input data into a contract via instantiate.
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
@@ -1366,5 +1366,30 @@ mod tests {
 				]);
 			}
 		);
+	}
+
+	#[test]
+	fn rent_allowance() {
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let rent_allowance_ch = loader.insert(|ctx| {
+			assert_eq!(ctx.ext.rent_allowance(), 0);
+			ctx.ext.set_rent_allowance(10);
+			assert_eq!(ctx.ext.rent_allowance(), 10);
+			VmExecResult::Ok
+		});
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+
+			let result = ctx.instantiate(
+				0,
+				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&rent_allowance_ch,
+				&[],
+			);
+			assert_matches!(result, Ok(_));
+		});
 	}
 }
