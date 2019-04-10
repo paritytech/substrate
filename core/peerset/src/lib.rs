@@ -565,6 +565,16 @@ mod tests {
 			actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
 		}
 
+		for _ in 0..25 {
+			// Actions for peers that do not include a AddReservedPeer.
+			let peer_id = PeerId::random();
+			discovered.push(peer_id.clone());
+			actions.push((peer_id.clone(), TestAction::ReportPeer(-1)));
+			actions.push((peer_id.clone(), TestAction::RemoveReservedPeer));
+			actions.push((peer_id.clone(), TestAction::DropPeer));
+			actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
+		}
+
 		let mut dropped_called = HashSet::new();
 		let mut discovered_called = HashSet::new();
 		let mut performed_actions = HashMap::new();
