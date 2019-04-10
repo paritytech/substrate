@@ -197,27 +197,23 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.insert(location, value);
 	}
 
-	pub fn create_new_contract(&mut self, account: &T::AccountId, code_hash: CodeHash<T>) -> Result<(), &'static str> {
+	/// Return an error if contract already exists (either if it is alive or tombstone)
+	pub fn create_contract(&mut self, account: &T::AccountId, code_hash: CodeHash<T>) -> Result<(), &'static str> {
 		if self.contract_exists(account) {
 			return Err("Alive contract or tombstone already exists");
 		}
 
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.code_hash = Some(code_hash);
+		let mut local = self.local.borrow_mut();
+		let contract = local.entry(account.clone())
+			.or_insert(Default::default());
 
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.rent_allowance = Some(<BalanceOf<T>>::zero());
+		contract.code_hash = Some(code_hash);
+		contract.rent_allowance = Some(<BalanceOf<T>>::zero());
 
 		Ok(())
 	}
+	/// Assume contract exists
 	pub fn set_rent_allowance(&mut self, account: &T::AccountId, rent_allowance: BalanceOf<T>) {
-		// TODO TODO: maybe assert contracts is alive
 		self.local
 			.borrow_mut()
 			.entry(account.clone())

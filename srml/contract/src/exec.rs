@@ -385,7 +385,7 @@ where
 		let (change_set, events, calls) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
-			overlay.create_new_contract(&dest, code_hash.clone())?;
+			overlay.create_contract(&dest, code_hash.clone())?;
 
 			let mut nested = self.nested(overlay, dest.clone());
 
@@ -781,7 +781,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.create_new_contract(&BOB, exec_ch).unwrap();
+			ctx.overlay.create_contract(&BOB, exec_ch).unwrap();
 
 			assert_matches!(
 				ctx.call(BOB, value, &mut gas_meter, &data, EmptyOutputBuf::new()),
@@ -1016,7 +1016,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.create_new_contract(&BOB, return_ch).unwrap();
+			ctx.overlay.create_contract(&BOB, return_ch).unwrap();
 
 			let result = ctx.call(
 				dest,
@@ -1044,7 +1044,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.create_new_contract(&BOB, input_data_ch).unwrap();
+			ctx.overlay.create_contract(&BOB, input_data_ch).unwrap();
 
 			let result = ctx.call(
 				BOB,
@@ -1103,7 +1103,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.create_new_contract(&BOB, recurse_ch).unwrap();
+			ctx.overlay.create_contract(&BOB, recurse_ch).unwrap();
 
 			let result = ctx.call(
 				BOB,
@@ -1150,8 +1150,8 @@ mod tests {
 			let cfg = Config::preload();
 
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.create_new_contract(&dest, bob_ch).unwrap();
-			ctx.overlay.create_new_contract(&CHARLIE, charlie_ch).unwrap();
+			ctx.overlay.create_contract(&dest, bob_ch).unwrap();
+			ctx.overlay.create_contract(&CHARLIE, charlie_ch).unwrap();
 
 			let result = ctx.call(
 				dest,
@@ -1193,8 +1193,8 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			ctx.overlay.create_new_contract(&BOB, bob_ch).unwrap();
-			ctx.overlay.create_new_contract(&CHARLIE, charlie_ch).unwrap();
+			ctx.overlay.create_contract(&BOB, bob_ch).unwrap();
+			ctx.overlay.create_contract(&CHARLIE, charlie_ch).unwrap();
 
 			let result = ctx.call(
 				BOB,
@@ -1301,7 +1301,7 @@ mod tests {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				ctx.overlay.set_balance(&ALICE, 1000);
-				ctx.overlay.create_new_contract(&BOB, creator_ch).unwrap();
+				ctx.overlay.create_contract(&BOB, creator_ch).unwrap();
 
 				assert_matches!(
 					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
@@ -1352,7 +1352,7 @@ mod tests {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				ctx.overlay.set_balance(&ALICE, 1000);
-				ctx.overlay.create_new_contract(&BOB, creator_ch).unwrap();
+				ctx.overlay.create_contract(&BOB, creator_ch).unwrap();
 
 				assert_matches!(
 					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
