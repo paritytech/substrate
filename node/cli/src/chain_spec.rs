@@ -152,6 +152,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
+			extrinsic_claim_delay: 2,
 			rent_byte_price: 4,
 			rent_deposit_offset: 1000,
 			storage_size_offset: 8,
@@ -314,6 +315,7 @@ pub fn testnet_genesis(
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
+			extrinsic_claim_delay: 2,
 			rent_byte_price: 4,
 			rent_deposit_offset: 1000,
 			storage_size_offset: 8,

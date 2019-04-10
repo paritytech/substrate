@@ -199,6 +199,7 @@ impl ExtBuilder {
 		);
 		t.extend(
 			GenesisConfig::<Test> {
+				extrinsic_claim_delay: 2,
 				rent_byte_price: 4,
 				rent_deposit_offset: 1000,
 				storage_size_offset: 8,

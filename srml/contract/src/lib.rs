@@ -468,7 +468,7 @@ decl_module! {
 
 			// Make validators advantaged
 			if signed {
-				check_block -= T::BlockNumber::sa(2u64);
+				check_block -= <Module<T>>::extrinsic_claim_delay();
 			}
 
 			match Self::check_rent(&dest, check_block) {
@@ -517,6 +517,11 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
+		/// Number of block delay an extrinsic claim surcharge has.
+		///
+		/// When claim surchage is called by an extrinsic the rent is checked
+		/// for current_block - delay
+		ExtrinsicClaimDelay get(extrinsic_claim_delay) config(): T::BlockNumber;
 		/// The minimum amount required to generate a tombstone.
 		TombstoneDeposit get(tombstone_deposit) config(): BalanceOf<T>;
 		/// Size of a contract at the time of creation. This is a simple way to ensure
