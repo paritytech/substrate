@@ -177,6 +177,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 		let last_finalized_number = chain_info.chain.finalized_number;
 
+		// create observer for the current set
 		let observer = grandpa_observer(
 			&client,
 			&authority_set,
@@ -187,6 +188,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			committer_in,
 		);
 
+		// run observer and listen to commands (switch authorities or pause)
 		future::Either::A(observer.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A((_, _))) => {
 				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
