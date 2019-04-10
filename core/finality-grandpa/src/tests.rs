@@ -419,7 +419,7 @@ fn run_to_completion_with<F>(
 
 		fn assert_send<T: Send>(_: &T) { }
 
-		let voter = run_grandpa(
+		let voter = run_grandpa_voter(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
@@ -517,7 +517,7 @@ fn finalize_3_voters_1_full_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let voter = run_grandpa(
+		let voter = run_grandpa_voter(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
@@ -679,7 +679,7 @@ fn transition_3_voters_twice_1_full_observer() {
 					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
-		let voter = run_grandpa(
+		let voter = run_grandpa_voter(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
@@ -1081,7 +1081,7 @@ fn voter_persists_its_votes() {
 			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
-			let mut voter = run_grandpa(
+			let mut voter = run_grandpa_voter(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
