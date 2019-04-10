@@ -561,8 +561,8 @@ mod tests {
 			actions.push((peer_id.clone(), TestAction::SetReservedOnly(false)));
 			actions.push((peer_id.clone(), TestAction::RemoveReservedPeer));
 			actions.push((peer_id.clone(), TestAction::DropPeer));
-			actions.push((bootnode.clone(), TestAction::Incoming(IncomingIndex(i))));
-			actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
+			actions.push((peer_id.clone(), TestAction::Incoming(IncomingIndex(i))));
+			actions.push((peer_id.clone(), TestAction::Discovered(discovered.clone())));
 		}
 
 		for _ in 0..25 {
@@ -572,7 +572,7 @@ mod tests {
 			actions.push((peer_id.clone(), TestAction::ReportPeer(-1)));
 			actions.push((peer_id.clone(), TestAction::RemoveReservedPeer));
 			actions.push((peer_id.clone(), TestAction::DropPeer));
-			actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
+			actions.push((peer_id.clone(), TestAction::Discovered(discovered.clone())));
 		}
 
 		let mut dropped_called = HashSet::new();
