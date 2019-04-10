@@ -524,6 +524,8 @@ mod tests {
 			SetReservedOnly(bool),
 			ReportPeer(i32),
 			DropPeer,
+			Incoming(IncomingIndex),
+			Discovered(Vec<PeerId>),
 		}
 
 		let bootnode = PeerId::random();
@@ -538,23 +540,33 @@ mod tests {
 		let (mut peerset, handle) = Peerset::from_config(config);
 
 		let mut actions = vec![];
+		let mut discovered = vec![];
+		discovered.push(bootnode.clone());
+
 		actions.push((bootnode.clone(), TestAction::AddReservedPeer));
 		actions.push((bootnode.clone(), TestAction::SetReservedOnly(true)));
 		actions.push((bootnode.clone(), TestAction::ReportPeer(-1)));
 		actions.push((bootnode.clone(), TestAction::SetReservedOnly(false)));
 		actions.push((bootnode.clone(), TestAction::RemoveReservedPeer));
 		actions.push((bootnode.clone(), TestAction::DropPeer));
-		for _ in 0..100 {
+		actions.push((bootnode.clone(), TestAction::Incoming(IncomingIndex(1))));
+		actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
+
+		for i in 0..100 {
 			let peer_id = PeerId::random();
+			discovered.push(peer_id.clone());
 			actions.push((peer_id.clone(), TestAction::AddReservedPeer));
 			actions.push((peer_id.clone(), TestAction::SetReservedOnly(true)));
 			actions.push((peer_id.clone(), TestAction::ReportPeer(-1)));
 			actions.push((peer_id.clone(), TestAction::SetReservedOnly(false)));
 			actions.push((peer_id.clone(), TestAction::RemoveReservedPeer));
 			actions.push((peer_id.clone(), TestAction::DropPeer));
+			actions.push((bootnode.clone(), TestAction::Incoming(IncomingIndex(i))));
+			actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
 		}
 
 		let mut dropped_called = HashSet::new();
+		let mut discovered_called = HashSet::new();
 		let mut performed_actions = HashMap::new();
 
 		let mut rng = thread_rng();
@@ -575,6 +587,15 @@ mod tests {
 				TestAction::DropPeer => {
 					peerset.dropped(peer_id.clone());
 					dropped_called.insert(peer_id.clone());
+				},
+				TestAction::Incoming(index) => {
+					peerset.incoming(peer_id.clone(), index.clone());
+				},
+				TestAction::Discovered(nodes) => {
+					peerset.discovered(nodes.clone());
+					for node in nodes {
+						discovered_called.insert(node.clone());
+					}
 				},
 			}
 			let performed = performed_actions
@@ -601,7 +622,8 @@ mod tests {
 					match last_message {
 						Some(Message::Drop(_)) => {},
 						_ => {
-							if !dropped_called.remove(&peer_id) && !(peer_id == bootnode) && !last_unconnected_messages.len() > 0 {
+							let relevant_api_called = dropped_called.remove(&peer_id) || discovered_called.remove(&peer_id);
+							if !relevant_api_called && !(peer_id == bootnode) && !last_unconnected_messages.len() > 0 {
 								panic!("Unexpected Connect message after a {:?} message", last_message);
 							}
 						},
