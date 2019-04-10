@@ -443,7 +443,6 @@ impl<B> Fetcher<B> for OnDemand<B> where
 			RemoteResponse { receiver })
 	}
 
-
 	fn remote_body(&self, request: RemoteBodyRequest<B::Header>) -> Self::RemoteBodyResult {
 		let (sender, receiver) = channel();
 		self.schedule_request(request.retry_count.clone(), RequestData::RemoteBody(request, sender),
@@ -623,11 +622,11 @@ impl<Block: BlockT> Request<Block> {
 			RequestData::RemoteBody(ref data, _) => {
 				message::generic::Message::BlockRequest(message::BlockRequest::<Block> {
 					id: self.id,
-					fields: message::BlockAttributes::BODY | message::BlockAttributes::JUSTIFICATION,
+					fields: message::BlockAttributes::BODY,
 					from: message::FromBlock::Hash(data.header.hash()),
 					to: None,
 					direction: message::Direction::Ascending,
-					max: None,
+					max: Some(1),
 				})
 			}
 		}
