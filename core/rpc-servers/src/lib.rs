@@ -57,13 +57,18 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 /// Start HTTP server listening on given address.
 pub fn start_http(
 	addr: &std::net::SocketAddr,
+	cors: Option<&Vec<String>>,
 	io: RpcHandler,
 ) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
 		.health_api(("/health", "system_health"))
-		.rest_api(http::RestApi::Unsecure)
-		.cors(http::DomainsValidation::Disabled)
+		.rest_api(if cors.is_some() {
+			http::RestApi::Secure
+		} else {
+			http::RestApi::Unsecure
+		})
+		.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 		.max_request_body_size(MAX_PAYLOAD)
 		.start_http(addr)
 }
@@ -71,10 +76,12 @@ pub fn start_http(
 /// Start WS server listening on given address.
 pub fn start_ws(
 	addr: &std::net::SocketAddr,
+	cors: Option<&Vec<String>>,
 	io: RpcHandler,
 ) -> io::Result<ws::Server> {
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
 		.max_payload(MAX_PAYLOAD)
+		.allowed_origins(map_cors(cors))
 		.start(addr)
 		.map_err(|err| match err {
 			ws::Error(ws::ErrorKind::Io(io), _) => io,
@@ -84,4 +91,10 @@ pub fn start_ws(
 				io::ErrorKind::Other.into()
 			}
 		})
+}
+
+fn map_cors<T: for<'a> From<&'a str>>(
+	cors: Option<&Vec<String>>
+) -> http::DomainsValidation<T> {
+	cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
 }
