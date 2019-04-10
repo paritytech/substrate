@@ -290,6 +290,72 @@ extern_functions! {
 
 	/// Submit extrinsic.
 	fn ext_submit_extrinsic(data: *const u8, len: u32);
+
+	/// Returns current UNIX timestamp (milliseconds)
+	fn ext_timestamp() -> u64;
+
+	/// Initiaties a http request.
+	fn ext_http_request_start(
+		method: *const u8,
+		method_len: u8,
+		url: *const u8,
+		url_len: u32,
+		meta: *const u8,
+		meta_len: u32
+	) -> u16;
+
+	/// Add a header to the request.
+	fn ext_http_request_add_header(
+		request_id: u16,
+		name: *const u8,
+		name_len: u32,
+		value: *const u8,
+		value_len: u32
+	);
+
+	/// Write a chunk of request body.
+	///
+	/// Writing an empty chunks finalises the request.
+	/// Passing `0` as deadline blocks forever.
+	fn ext_http_request_write_body(
+		request_id: u16,
+		chunk: *const u8,
+		chunk_len: u32,
+		deadline: u64
+	);
+
+	/// Block and wait for the responses for given requests.
+	///
+	/// Note that if deadline is not provided the method will block indefinitely,
+	/// otherwise unready responses will produce `WaitTimeout` status.
+	///
+	/// Make sure that `statuses` have the same length as ids.
+	/// Passing `0` as deadline blocks forever.
+	fn ext_http_response_wait(
+		ids: *const u16,
+		ids_len: u32,
+		statuses: *mut u16,
+		deadline: u64
+	);
+
+	/// Read all response headers.
+	///
+	/// Resturns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+	fn ext_http_response_headers(
+		id: u16,
+		written_out: *mut u32
+	) -> *mut u8;
+
+	/// Read a chunk of body response to given buffer.
+	///
+	/// Returns the number of bytes written.
+	/// Passing `0` as deadline blocks forever.
+	fn ext_http_response_read_body(
+		id: u16,
+		buffer: *mut u8,
+		buffer_len: u32,
+		deadline: u64
+	) -> u32;
 }
 
 /// Ensures we use the right crypto when calling into native
@@ -601,15 +667,203 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 	}
 }
 
-/// Submit extrinsic from the runtime.
+/// Functions available for offchain workers.
 ///
-/// Depending on the kind of extrinsic it will either be:
-/// 1. scheduled to be included in the next produced block (inherent)
-/// 2. added to the pool and propagated (transaction)
-pub fn submit_extrinsic<T: codec::Encode>(data: &T) {
-	let encoded_data = codec::Encode::encode(data);
-	unsafe {
-		ext_submit_extrinsic.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
+/// Calling any method from this module when outside of offchain worker context
+/// will fail.
+pub mod offchain {
+	use super::*;
+
+	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+	pub struct Timestamp(u64);
+
+	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+	pub struct Duration(u64);
+
+	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+	#[derive(codec::Encode, codec::Decode)]
+	pub enum RequestStatus {
+		Unknown,
+		Finished(u16),
+	}
+
+	impl Default for RequestStatus {
+		fn default() -> Self {
+			RequestStatus::Unknown
+		}
+	}
+
+	impl RequestStatus {
+		pub fn from_u16(status: u16) -> Option<Self> {
+			match status {
+				0 => Some(RequestStatus::Unknown),
+				100...999 => Some(RequestStatus::Finished(status)),
+				_ => None,
+			}
+		}
+	}
+
+	impl Timestamp {
+		// TODO [ToDr] More ops
+		pub fn add(&self, duration: Duration) -> Timestamp {
+			Timestamp(self.0.saturating_add(duration.0))
+		}
+	}
+
+	/// Opaque type for offchain http requests.
+	#[derive(Clone, Copy)]
+	pub struct RequestId(u16);
+
+	/// Submit extrinsic from the runtime.
+	///
+	/// Depending on the kind of extrinsic it will either be:
+	/// 1. scheduled to be included in the next produced block (inherent)
+	/// 2. added to the pool and propagated (transaction)
+	///
+	pub fn submit_extrinsic<T: codec::Encode>(data: &T) {
+		let encoded_data = codec::Encode::encode(data);
+		unsafe {
+			ext_submit_extrinsic.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
+		}
+	}
+
+	/// Returns current UNIX timestamp (in millis)
+	pub fn timestamp() -> Timestamp {
+		Timestamp(unsafe {
+			ext_timestamp.get()()
+		})
+	}
+
+	pub mod http {
+		use super::*;
+
+		/// Initiaties a http request.
+		pub fn request_start(
+			method: impl AsRef<[u8]>,
+			url: impl AsRef<[u8]>,
+			meta: &impl codec::Encode,
+		) -> RequestId {
+			let method = method.as_ref();
+			let url = url.as_ref();
+			let meta = codec::Encode::encode(meta);
+
+			RequestId(unsafe {
+				ext_http_request_start.get()(
+					method.as_ptr(),
+					method.len() as u8,
+					url.as_ptr(),
+					url.len() as u32,
+					meta.as_ptr(),
+					meta.len() as u32,
+				)
+			})
+		}
+
+		/// Add a header to the request.
+		pub fn request_add_header(
+			request_id: RequestId,
+			name: impl AsRef<[u8]>,
+			value: impl AsRef<[u8]>,
+		) {
+			let name = name.as_ref();
+			let value = value.as_ref();
+
+			unsafe {
+				ext_http_request_add_header.get()(
+					request_id.0,
+					name.as_ptr(),
+					name.len() as u32,
+					value.as_ptr(),
+					value.len() as u32,
+				)
+			}
+		}
+
+		/// Write a chunk of request body.
+		///
+		/// Writing an empty chunk finalises the request.
+		pub fn request_write_body(
+			request_id: RequestId,
+			chunk: impl AsRef<[u8]>,
+			deadline: Option<Timestamp>,
+		) {
+			let chunk = chunk.as_ref();
+
+			unsafe {
+				ext_http_request_write_body.get()(
+					request_id.0,
+					chunk.as_ptr(),
+					chunk.len() as u32,
+					deadline.map_or(0, |x| x.0),
+				)
+			}
+		}
+
+		/// Block and wait for the responses for given requests.
+		///
+		/// Note that if deadline is not provided the method will block indefinitely,
+		/// otherwise unready responses will produce `WaitTimeout` status.
+		pub fn response_wait(
+			ids: &[RequestId],
+			deadline: Option<Timestamp>,
+		) -> Vec<RequestStatus> {
+			let ids = ids.iter().map(|x| x.0).collect::<Vec<_>>();
+			let mut statuses = Vec::new();
+			statuses.resize(ids.len(), 0u16);
+
+			unsafe {
+				ext_http_response_wait.get()(
+					ids.as_ptr(),
+					ids.len() as u32,
+					statuses.as_mut_ptr(),
+					deadline.map_or(0, |x| x.0),
+				)
+			}
+
+			statuses
+				.into_iter()
+				.map(|status| RequestStatus::from_u16(status).unwrap_or_default())
+				.collect()
+		}
+
+		/// Read all response headers to given buffer.
+		///
+		/// Returns the number of bytes written.
+		pub fn response_headers(
+			request_id: RequestId,
+		) -> Vec<(Vec<u8>, Vec<u8>)> {
+			let mut len = 0u32;
+			let raw_result = unsafe {
+				let ptr = ext_http_response_headers.get()(
+					request_id.0,
+					&mut len,
+				);
+				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+				// See #300 for more details.
+				<Vec<u8>>::from_raw_parts(ptr, len as usize, len as usize)
+			};
+
+			codec::Decode::decode(&mut &*raw_result).unwrap_or_default()
+		}
+
+		/// Read a chunk of body response to given buffer.
+		///
+		/// Returns the number of bytes written.
+		pub fn response_read_body(
+			request_id: RequestId,
+			buffer: &mut [u8],
+			deadline: Option<Timestamp>,
+		) -> usize {
+			unsafe {
+				ext_http_response_read_body.get()(
+					request_id.0,
+					buffer.as_mut_ptr(),
+					buffer.len() as u32,
+					deadline.map_or(0, |x| x.0),
+				) as usize
+			}
+		}
 	}
 }
 
