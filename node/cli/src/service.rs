@@ -119,7 +119,7 @@ construct_service_factory! {
 						name: Some(service.config.name.clone())
 					},
 					link_half,
-					grandpa::NetworkBridge::new(service.network()),
+					service.network(),
 					service.config.custom.inherent_data_providers.clone(),
 					service.on_exit(),
 				)?);
@@ -148,7 +148,6 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
-					true,
 				).map_err(Into::into)
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
@@ -160,7 +159,6 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
-					true,
 				).map_err(Into::into)
 			}
 		},

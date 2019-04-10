@@ -274,9 +274,9 @@ cargo run --release \-- \
 
 Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
-=== Joining the Dried Danta Testnet
+=== Joining the Emberic Elm Testnet
 
-Dried Danta is the new testnet for Substrate 1.0 gamma. Please note that 1.0 gamma is not compatible with the BBQ-Birch or Charred-Cherry testnets. Ensure you have the dependencies listed above before compiling.
+Emberic Elm is the new testnet for Substrate 1.0. Please note that 1.0 is not compatible with the BBQ-Birch, Charred-Cherry, or Dried-Danta testnets. Ensure you have the dependencies listed above before compiling.
 
 [source, shell]
 ----
@@ -304,7 +304,7 @@ For example, you can choose a custom node name:
 [source, shell]
 cargo run --release \-- --name my_custom_name
 
-If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Dried%20Danta
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Emberic%20Elm
 
 
 == Documentation

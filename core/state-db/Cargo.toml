@@ -1,6 +1,6 @@
 [package]
 name = "substrate-state-db"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
@@ -8,7 +8,7 @@ edition = "2018"
 parking_lot = "0.7.1"
 log = "0.4"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-parity-codec = { version = "3.2", features = ["derive"] }
+parity-codec = { version = "3.3", features = ["derive"] }
 
 [dev-dependencies]
 env_logger = "0.6"

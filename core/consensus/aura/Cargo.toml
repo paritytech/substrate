@@ -1,12 +1,12 @@
 [package]
 name = "substrate-consensus-aura"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.2"
+parity-codec = "3.3"
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }

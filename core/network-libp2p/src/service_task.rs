@@ -38,7 +38,7 @@ use std::time::Duration;
 pub fn start_service<TMessage>(
 	config: NetworkConfiguration,
 	registered_custom: RegisteredProtocol<TMessage>,
-) -> Result<(Service<TMessage>, Arc<substrate_peerset::Peerset>), IoError>
+) -> Result<(Service<TMessage>, substrate_peerset::PeersetHandle), IoError>
 where TMessage: CustomMessage + Send + 'static {
 
 	if let Some(ref path) = config.net_config_path {
@@ -72,7 +72,7 @@ where TMessage: CustomMessage + Send + 'static {
 	}
 
 	// Build the peerset.
-	let (peerset, peerset_receiver) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
+	let (peerset, peerset_handle) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
 		in_peers: config.in_peers,
 		out_peers: config.out_peers,
 		bootnodes,
@@ -88,7 +88,7 @@ where TMessage: CustomMessage + Send + 'static {
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset_receiver, config.enable_mdns);
+		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset, config.enable_mdns);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
@@ -116,7 +116,7 @@ where TMessage: CustomMessage + Send + 'static {
 		injected_events: Vec::new(),
 	};
 
-	Ok((service, peerset))
+	Ok((service, peerset_handle))
 }
 
 /// Event produced by the service.

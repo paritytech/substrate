@@ -1,8 +1,8 @@
 [package]
 name = "fork-tree"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-parity-codec = { version = "3.2", features = ["derive"] }
+parity-codec = { version = "3.3", features = ["derive"] }

@@ -1,6 +1,6 @@
 [package]
 name = "substrate-finality-grandpa"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
@@ -11,7 +11,7 @@ log = "0.4"
 parking_lot = "0.7.1"
 tokio = "0.1.7"
 rand = "0.6"
-parity-codec = { version = "3.2", features = ["derive"] }
+parity-codec = { version = "3.3", features = ["derive"] }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
@@ -22,7 +22,7 @@ network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
-grandpa = { package = "finality-grandpa", version = "0.6.0", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.7.1", features = ["derive-codec"] }
 
 [dev-dependencies]
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }

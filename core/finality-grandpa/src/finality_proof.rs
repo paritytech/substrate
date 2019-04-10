@@ -29,7 +29,7 @@
 //! The caller should track the `set_id`. The most straightforward way is to fetch finality
 //! proofs ONLY for blocks on the tip of the chain and track the latest known `set_id`.
 
-use grandpa::VoterSet;
+use grandpa::voter_set::VoterSet;
 
 use client::{
 	blockchain::Backend as BlockchainBackend,
