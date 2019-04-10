@@ -64,8 +64,8 @@ pub trait AccountDb<T: Trait> {
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
 	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
-	/// If account has an alive contract then return the code_hash associated.
-	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
+	/// If account has an alive contract then return the code hash associated.
+	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	/// If account has an alive contract then return the rent allowance associated.
 	fn get_rent_allowance(&self, account: &T::AccountId) -> Option<BalanceOf<T>>;
 	/// Returns false iff account has no alive contract nor tombstone.
@@ -80,7 +80,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, location))
 	}
-	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
+	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
 	}
 	fn get_rent_allowance(&self, account: &T::AccountId) -> Option<BalanceOf<T>> {
@@ -197,9 +197,9 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.insert(location, value);
 	}
 
-	pub fn create_new_contract(&mut self, account: &T::AccountId, code_hash: CodeHash<T>) -> Result<(), ()> {
+	pub fn create_new_contract(&mut self, account: &T::AccountId, code_hash: CodeHash<T>) -> Result<(), &'static str> {
 		if self.contract_exists(account) {
-			return Err(());
+			return Err("Alive contract or tombstone already exists");
 		}
 
 		self.local
@@ -242,12 +242,12 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, location))
 	}
-	fn get_alive_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
+	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local
 			.borrow()
 			.get(account)
 			.and_then(|changes| changes.code_hash)
-			.or_else(|| self.underlying.get_alive_code_hash(account))
+			.or_else(|| self.underlying.get_code_hash(account))
 	}
 	fn get_rent_allowance(&self, account: &T::AccountId) -> Option<BalanceOf<T>> {
 		self.local

@@ -328,7 +328,7 @@ where
 				)?;
 			}
 
-			if let Some(dest_code_hash) = self.overlay.get_alive_code_hash(&dest) {
+			if let Some(dest_code_hash) = self.overlay.get_code_hash(&dest) {
 				let executable = self.loader.load_main(&dest_code_hash)?;
 				output_data = self
 					.vm
@@ -385,8 +385,7 @@ where
 		let (change_set, events, calls) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
-			overlay.create_new_contract(&dest, code_hash.clone())
-				.map_err(|_| "contract or tombstone already exsists")?;
+			overlay.create_new_contract(&dest, code_hash.clone())?;
 
 			let mut nested = self.nested(overlay, dest.clone());
 
@@ -1261,7 +1260,7 @@ mod tests {
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
-				assert_eq!(ctx.overlay.get_alive_code_hash(&created_contract_address).unwrap(), dummy_ch);
+				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
 				assert_eq!(&ctx.events, &[
 					RawEvent::Transfer(ALICE, created_contract_address, 100),
 					RawEvent::Instantiated(ALICE, created_contract_address),
@@ -1313,7 +1312,7 @@ mod tests {
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
-				assert_eq!(ctx.overlay.get_alive_code_hash(&created_contract_address).unwrap(), dummy_ch);
+				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
 				assert_eq!(&ctx.events, &[
 					RawEvent::Transfer(ALICE, BOB, 20),
 					RawEvent::Transfer(BOB, created_contract_address, 15),
