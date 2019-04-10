@@ -475,7 +475,6 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
-	// NOTE default is `Some(vec![])` to disallow all origins.
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| Some(vec![
 		"http://localhost:*".into(),
 		"https://localhost:*".into(),

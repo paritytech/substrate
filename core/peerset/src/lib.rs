@@ -22,77 +22,19 @@ mod slots;
 use std::collections::VecDeque;
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
-use linked_hash_map::LinkedHashMap;
 use log::trace;
 use lru_cache::LruCache;
 use slots::{SlotType, SlotState, Slots};
 pub use serde_json::Value;
 
 const PEERSET_SCORES_CACHE_SIZE: usize = 1000;
-
-/// FIFO-ordered list of nodes that we know exist, but we are not connected to.
-#[derive(Debug, Default)]
-struct Discovered {
-	/// Nodes we should connect to first.
-	reserved: LinkedHashMap<PeerId, ()>,
-	/// All remaining nodes.
-	common: LinkedHashMap<PeerId, ()>,
-}
-
-impl Discovered {
-	/// Returns true if we already know given node.
-	fn contains(&self, peer_id: &PeerId) -> bool {
-		self.reserved.contains_key(peer_id) || self.common.contains_key(peer_id)
-	}
-
-	/// Returns true if given node is reserved.
-	fn is_reserved(&self, peer_id: &PeerId) -> bool {
-		self.reserved.contains_key(peer_id)
-	}
-
-	/// Adds new peer of a given type.
-	fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) {
-		if !self.contains(&peer_id) {
-			match slot_type {
-				SlotType::Common => self.common.insert(peer_id, ()),
-				SlotType::Reserved => self.reserved.insert(peer_id, ()),
-			};
-		}
-	}
-
-	/// Pops the oldest peer from the list.
-	fn pop_peer(&mut self, reserved_only: bool) -> Option<(PeerId, SlotType)> {
-		if let Some((peer_id, _)) = self.reserved.pop_front() {
-			return Some((peer_id, SlotType::Reserved));
-		}
-
-		if reserved_only {
-			return None;
-		}
-
-		self.common.pop_front()
-			.map(|(peer_id, _)| (peer_id, SlotType::Common))
-	}
-
-	/// Marks the node as not reserved.
-	fn mark_not_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.reserved.remove(peer_id) {
-			self.common.insert(peer_id.clone(), ());
-		}
-	}
-
-	/// Removes the node from the list.
-	fn remove_peer(&mut self, peer_id: &PeerId) {
-		self.reserved.remove(peer_id);
-		self.common.remove(peer_id);
-	}
-}
+const DISCOVERED_NODES_LIMIT: u32 = 1000;
 
 #[derive(Debug)]
 struct PeersetData {
 	/// List of nodes that we know exist, but we are not connected to.
 	/// Elements in this list must never be in `out_slots` or `in_slots`.
-	discovered: Discovered,
+	discovered: Slots,
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
 	/// Node slots for outgoing connections.
@@ -216,7 +158,7 @@ impl Peerset {
 		let (tx, rx) = mpsc::unbounded();
 
 		let data = PeersetData {
-			discovered: Default::default(),
+			discovered: Slots::new(DISCOVERED_NODES_LIMIT),
 			reserved_only: config.reserved_only,
 			out_slots: Slots::new(config.out_peers),
 			in_slots: Slots::new(config.in_peers),
@@ -270,10 +212,10 @@ impl Peerset {
 				self.message_queue.push_back(Message::Drop(removed));
 				self.message_queue.push_back(Message::Connect(added));
 			}
-			SlotState::AlreadyConnected(_) | SlotState::Upgraded(_) => {
+			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
 				return;
 			}
-			SlotState::MaxConnections(peer_id) => {
+			SlotState::MaxCapacity(peer_id) => {
 				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
 				return;
 			}
@@ -285,7 +227,7 @@ impl Peerset {
 		self.data.out_slots.mark_not_reserved(&peer_id);
 		self.data.discovered.mark_not_reserved(&peer_id);
 		if self.data.reserved_only {
-			if self.data.in_slots.clear_slot(&peer_id) || self.data.out_slots.clear_slot(&peer_id) {
+			if self.data.in_slots.remove_peer(&peer_id) || self.data.out_slots.remove_peer(&peer_id) {
 				// insert peer back into discovered list
 				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
 				self.message_queue.push_back(Message::Drop(peer_id));
@@ -325,15 +267,15 @@ impl Peerset {
 		if score < 0 {
 			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
 			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
-				self.data.in_slots.clear_slot(&peer_id);
-				self.data.out_slots.clear_slot(&peer_id);
+				self.data.in_slots.remove_peer(&peer_id);
+				self.data.out_slots.remove_peer(&peer_id);
 				self.message_queue.push_back(Message::Drop(peer_id));
 			}
 		}
 	}
 
 	fn alloc_slots(&mut self) {
-		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer(self.data.reserved_only) {
+		while let Some((peer_id, slot_type)) = self.data.discovered.pop_most_important_peer(self.data.reserved_only) {
 			match self.data.out_slots.add_peer(peer_id, slot_type) {
 				SlotState::Added(peer_id) => {
 					self.message_queue.push_back(Message::Connect(peer_id));
@@ -344,10 +286,10 @@ impl Peerset {
 					self.message_queue.push_back(Message::Drop(removed));
 					self.message_queue.push_back(Message::Connect(added));
 				}
-				SlotState::Upgraded(_) | SlotState::AlreadyConnected(_) => {
+				SlotState::Upgraded(_) | SlotState::AlreadyExists(_) => {
 					// TODO: we should never reach this point
 				},
-				SlotState::MaxConnections(peer_id) => {
+				SlotState::MaxCapacity(peer_id) => {
 					self.data.discovered.add_peer(peer_id, slot_type);
 					break;
 				},
@@ -404,11 +346,11 @@ impl Peerset {
 				self.message_queue.push_back(Message::Drop(removed));
 				self.message_queue.push_back(Message::Accept(index));
 			},
-			SlotState::AlreadyConnected(_) | SlotState::Upgraded(_) => {
+			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
 				// we are already connected. in this case we do not answer
 				return;
 			},
-			SlotState::MaxConnections(peer_id) => {
+			SlotState::MaxCapacity(peer_id) => {
 				self.data.discovered.add_peer(peer_id, slot_type);
 				self.message_queue.push_back(Message::Reject(index));
 				return;
@@ -427,14 +369,14 @@ impl Peerset {
 			peer_id, self.data.in_slots, self.data.out_slots
 		);
 		// Automatically connect back if reserved.
-		if self.data.in_slots.is_connected_and_reserved(&peer_id) || self.data.out_slots.is_connected_and_reserved(&peer_id) {
+		if self.data.in_slots.is_reserved(&peer_id) || self.data.out_slots.is_reserved(&peer_id) {
 			self.message_queue.push_back(Message::Connect(peer_id));
 			return;
 		}
 
 		// Otherwise, free the slot.
-		self.data.in_slots.clear_slot(&peer_id);
-		self.data.out_slots.clear_slot(&peer_id);
+		self.data.in_slots.remove_peer(&peer_id);
+		self.data.out_slots.remove_peer(&peer_id);
 
 		// Note: in this dummy implementation we consider that peers never expire. As soon as we
 		// are disconnected from a peer, we try again.
