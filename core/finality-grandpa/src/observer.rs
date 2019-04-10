@@ -20,7 +20,7 @@ use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
 use grandpa::{BlockNumberOps, Error as GrandpaError, voter_set::VoterSet};
-use log::warn;
+use log::{debug, warn};
 
 use client::{CallExecutor, Client, backend::Backend};
 use ed25519::Public as AuthorityId;
@@ -116,7 +116,8 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, S>(
 				future::ok(finalized_number)
 			},
 			_ => {
-				// warn!(target: "afg")
+				// FIXME: update to use commit processing callback (#2229)
+				debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
 
 				// commit is invalid, continue processing commits with the current state
 				future::ok(last_finalized_number)
