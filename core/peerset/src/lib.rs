@@ -200,6 +200,7 @@ impl Peerset {
 				self.data.discovered.remove_peer(&peer_id);
 
 				// notify that connection has been made
+				trace!(target: "peerset", "Connecting to new reserved peer {}", peer_id);
 				self.message_queue.push_back(Message::Connect(peer_id));
 				return;
 			},
@@ -209,6 +210,7 @@ impl Peerset {
 				// let's add the peer we disconnected from to the discovered list again
 				self.data.discovered.add_peer(removed.clone(), SlotType::Common);
 				// swap connections
+				trace!(target: "peerset", "Connecting to new reserved peer {}, dropping {}", added, removed);
 				self.message_queue.push_back(Message::Drop(removed));
 				self.message_queue.push_back(Message::Connect(added));
 			}
@@ -278,10 +280,12 @@ impl Peerset {
 		while let Some((peer_id, slot_type)) = self.data.discovered.pop_most_important_peer(self.data.reserved_only) {
 			match self.data.out_slots.add_peer(peer_id, slot_type) {
 				SlotState::Added(peer_id) => {
+					trace!(target: "peerset", "Connecting to new peer {}", peer_id);
 					self.message_queue.push_back(Message::Connect(peer_id));
 				},
 				SlotState::Swaped { removed, added } => {
 					// insert peer back into discovered list
+					trace!(target: "peerset", "Connecting to new peer {}, dropping {}", added, removed);
 					self.data.discovered.add_peer(removed.clone(), SlotType::Common);
 					self.message_queue.push_back(Message::Drop(removed));
 					self.message_queue.push_back(Message::Connect(added));
