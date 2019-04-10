@@ -2025,6 +2025,7 @@ dependencies = [
  "srml-balances 1.0.0",
  "srml-consensus 1.0.0",
  "srml-executive 1.0.0",
+ "srml-grandpa 1.0.0",
  "srml-indices 1.0.0",
  "srml-sudo 1.0.0",
  "srml-support 1.0.0",

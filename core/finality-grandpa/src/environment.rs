@@ -23,7 +23,7 @@ use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
 
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GrandpaApi, GrandpaEquivocationProof};
 
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
@@ -38,7 +38,7 @@ use runtime_primitives::traits::{
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use srml_indices::address::Address;
-use node_runtime::GrandpaCall;
+use node_runtime::{Call, GrandpaModule};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
@@ -335,6 +335,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		).map_err(|e| Error::Timer(e).into()))
 	}
 
+	
 	fn prevote_equivocation(
 		&self,
 		_round: u64,
@@ -345,50 +346,11 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
 		let parent_header = self.inner.header(&block_id).unwrap().unwrap();
 		let parent_hash = parent_header.hash();		
-		
-		// let report = MisbehaviorReport {
-		// 	parent_hash: self.parent_hash.into(),
-		// 	parent_number: self.parent_number.as_(),
-		// 	target,
-		// 	misbehavior: match misbehavior {
-		// 		GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
-		// 		GenericMisbehavior::DoublePropose(_, _, _) => continue,
-		// 		GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
-		// 			=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
-		// 		GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
-		// 			=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
-		// 	}
-		// };
-		let payload = (
-			0, 1
-			// next_index,
-			// Call::Consensus(ConsensusCall::report_misbehavior(report)),
-			// Era::immortal(),
-			// self.client.genesis_hash()
-		);
-		let signed = self.config.local_key.clone().unwrap();
-		let signature: ed25519::Signature = signed.sign(&payload.encode()).into();
-		// next_index += 1;
-
-		// let local_id = signed.public().0.into();
-		let function = vec![0u8;0];
-		let local_id: ed25519::Public = signed.public();
-		let extrinsic = UncheckedExtrinsic::new_signed(0u64, function, Address::<_, u32>::Id(local_id), signature);
-		// let extrinsic = UncheckedExtrinsic::new_signed(0u64, function, Address::Id(signed.public().0.into()), signature);
-		let uxt = Decode::decode(
-			&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-		// let hash = BlockId::<<C as AuthoringApi>::Block>::hash(parent_hash);
-		// let uxt = match <A::Block as BlockT>::Extrinsic::decode(&mut &*ext) {
-		// 	Some(xt) => xt,
-		// 	None => {
-		// 		warn!("Unable to decode extrinsic: {:?}", ext);
-		// 		return
-		// 	},
-		// };
 		let hash = BlockId::hash(parent_hash);
-		if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
-			warn!("Error importing misbehavior report: {:?}", e);
-		}
+		let equivocation_proof = GrandpaEquivocationProof {};
+		let report_call = self.inner.runtime_api().construct_report_call(&hash, equivocation_proof).unwrap();
+
+		sign_and_dispatch(Arc::clone(&self.transaction_pool), hash, report_call);
 	}
 
 	fn precommit_equivocation(
@@ -398,6 +360,30 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet
+	}
+}
+
+fn sign_and_dispatch<Block: BlockT<Hash=H256>, A: txpool::ChainApi<Block=Block>>(
+	transaction_pool: Arc<TransactionPool<A>>,
+	hash: BlockId<Block>,
+	report_call: Vec<u8>
+) {
+	// let next_index = 209;
+	// let payload = (
+	// 	next_index,
+	// 	report_call,
+	// 	Era::immortal(),
+	// 	self.inner.info().unwrap().chain.genesis_hash,
+	// );
+	// let signed = self.config.local_key.clone().unwrap();
+	// let signature: ed25519::Signature = signed.sign(&payload.encode()).into();
+	
+	// let local_id: ed25519::Public = signed.public();
+	// let extrinsic = UncheckedExtrinsic::new_signed(0u64, payload.1, Address::<_, u32>::Id(local_id), signature);
+	let uxt = Decode::decode(&mut report_call.encode().as_slice()).expect("Encoded extrinsic is valid");
+	
+	if let Err(e) = transaction_pool.submit_one(&hash, uxt) {
+		warn!("Error importing misbehavior report: {:?}", e);
 	}
 }
 

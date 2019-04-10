@@ -35,7 +35,7 @@ use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode};
-use fg_primitives::ScheduledChange;
+use fg_primitives::{ScheduledChange, GrandpaEquivocationProof};
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
@@ -256,7 +256,9 @@ impl<T: Trait> Module<T> {
 		<AuthorityStorageVec<T::SessionKey>>::items()
 	}
 
-	pub fn do_report_misbehaviour() {}
+	pub fn construct_report_call(evidence: GrandpaEquivocationProof) -> Vec<u8> {
+		Vec::new()
+	}
 
 	/// Schedule a change in the authorities.
 	///

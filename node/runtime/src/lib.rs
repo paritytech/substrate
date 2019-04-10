@@ -26,7 +26,7 @@ use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
 };
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationProof};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -51,6 +51,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use grandpa::Call as GrandpaCall;
+pub use grandpa::Module as GrandpaModule;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
@@ -331,8 +332,8 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn do_report_misbehaviour() {
-			Grandpa::do_report_misbehaviour()
+		fn construct_report_call(evidence: GrandpaEquivocationProof) -> Vec<u8> {
+			Vec::new()
 		}
 	}
 

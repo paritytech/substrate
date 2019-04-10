@@ -27,8 +27,12 @@ use substrate_primitives::ed25519;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
-
 use ed25519::Public as AuthorityId;
+
+#[cfg_attr(feature = "std", derive(Debug, PartialEq))]
+#[derive(Encode, Decode, Clone)]
+pub struct GrandpaEquivocationProof {}
+
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
@@ -109,6 +113,6 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
-		fn do_report_misbehaviour();
+		fn construct_report_call(evidence: GrandpaEquivocationProof) -> Vec<u8>;
 	}
 }
