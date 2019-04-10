@@ -677,6 +677,7 @@ enum RentDecision<T: Trait> {
 }
 
 impl<T: Trait> Module<T> {
+	// Check rent at this block number
 	fn check_rent(account: &T::AccountId, block_number: T::BlockNumber) -> RentDecision<T> {
 		let contract = match <ContractInfoOf<T>>::get(account) {
 			None | Some(ContractInfo::Tombstone(_)) => return RentDecision::FreeFromRent,
@@ -684,7 +685,7 @@ impl<T: Trait> Module<T> {
 		};
 
 		// Rent has already been payed
-		if contract.deduct_block == block_number {
+		if contract.deduct_block >= block_number {
 			return RentDecision::FreeFromRent
 		}
 
