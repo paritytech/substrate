@@ -37,5 +37,5 @@ std = [
 	"timestamp/std",
 	"staking/std",
 	"inherents/std",
-    "babe-primitives/std",
+	"babe-primitives/std",
 ]
