@@ -535,6 +535,7 @@ fn run_thread<B: BlockT + 'static>(
 					Severity::Bad(message) => {
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
 						network_service_2.lock().drop_node(&who);
+						// temporary: make sure the peer gets dropped from the peerset
 						peerset.report_peer(who, i32::min_value());
 					},
 					Severity::Useless(message) => {
