@@ -238,7 +238,7 @@ mod tests {
 
 	#[test]
 	fn basic_environment_works() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(CouncilVoting::cooloff_period(), 2);
@@ -266,7 +266,7 @@ mod tests {
 
 	#[test]
 	fn referendum_cancellation_should_work_when_unanimous() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
@@ -289,7 +289,7 @@ mod tests {
 
 	#[test]
 	fn referendum_cancellation_should_fail_when_not_unanimous() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
@@ -309,7 +309,7 @@ mod tests {
 
 	#[test]
 	fn referendum_cancellation_should_fail_when_abstentions() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
@@ -328,7 +328,7 @@ mod tests {
 
 	#[test]
 	fn veto_should_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -341,7 +341,7 @@ mod tests {
 
 	#[test]
 	fn double_veto_should_not_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -356,7 +356,7 @@ mod tests {
 
 	#[test]
 	fn retry_in_cooloff_should_not_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -370,7 +370,7 @@ mod tests {
 
 	#[test]
 	fn retry_after_cooloff_should_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -392,7 +392,7 @@ mod tests {
 
 	#[test]
 	fn alternative_double_veto_should_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -409,7 +409,7 @@ mod tests {
 
 	#[test]
 	fn simple_propose_should_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -423,7 +423,7 @@ mod tests {
 
 	#[test]
 	fn unvoted_proposal_should_expire_without_action() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
@@ -439,7 +439,7 @@ mod tests {
 
 	#[test]
 	fn unanimous_proposal_should_expire_with_biased_referendum() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
@@ -457,7 +457,7 @@ mod tests {
 
 	#[test]
 	fn majority_proposal_should_expire_with_unbiased_referendum() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
@@ -475,7 +475,7 @@ mod tests {
 
 	#[test]
 	fn propose_by_public_should_not_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_noop!(CouncilVoting::propose(Origin::signed(4), Box::new(proposal)), "proposer would not be on council");
@@ -484,7 +484,7 @@ mod tests {
 
 	#[test]
 	fn vote_by_public_should_not_work() {
-		with_externalities(&mut new_test_ext(true), || {
+		with_externalities(&mut ExtBuilder::default().with_council(true).build(), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));

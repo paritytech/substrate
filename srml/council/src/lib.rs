@@ -100,46 +100,78 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(balances::GenesisConfig::<Test>{
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			existential_deposit: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			vesting: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(democracy::GenesisConfig::<Test>{
-			launch_period: 1,
-			voting_period: 3,
-			minimum_deposit: 1,
-			public_delay: 0,
-			max_lock_periods: 6,
-		}.build_storage().unwrap().0);
-		t.extend(seats::GenesisConfig::<Test> {
-			candidacy_bond: 3,
-			voter_bond: 2,
-			present_slash_per_voter: 1,
-			carry_count: 2,
-			inactive_grace_period: 1,
-			active_council: if with_council { vec![
-				(1, 10),
-				(2, 10),
-				(3, 10)
-			] } else { vec![] },
-			approval_voting_period: 4,
-			presentation_duration: 2,
-			desired_seats: 2,
-			term_duration: 5,
-		}.build_storage().unwrap().0);
-		t.extend(voting::GenesisConfig::<Test> {
-			cooloff_period: 2,
-			voting_period: 1,
-			enact_delay_period: 0,
-		}.build_storage().unwrap().0);
-		runtime_io::TestExternalities::new(t)
+	pub struct ExtBuilder {
+		balance_factor: u64,
+		with_council: bool,
+	}
+
+	impl Default for ExtBuilder {
+		fn default() -> Self {
+			Self {
+				balance_factor: 1,
+				with_council: false,
+			}
+		}
+	}
+
+	impl ExtBuilder {
+		pub fn with_council(mut self, council: bool) -> Self {
+			self.with_council = council;
+			self
+		}
+		pub fn balance_factor(mut self, factor: u64) -> Self {
+			self.balance_factor = factor;
+			self
+		}
+
+		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+			let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+			t.extend(balances::GenesisConfig::<Test>{
+				transaction_base_fee: 0,
+				transaction_byte_fee: 0,
+				balances: vec![
+					(1, 10 * self.balance_factor),
+					(2, 20 * self.balance_factor),
+					(3, 30 * self.balance_factor),
+					(4, 40 * self.balance_factor),
+					(5, 50 * self.balance_factor),
+					(6, 60 * self.balance_factor)
+				],
+				existential_deposit: 0,
+				transfer_fee: 0,
+				creation_fee: 0,
+				vesting: vec![],
+			}.build_storage().unwrap().0);
+			t.extend(democracy::GenesisConfig::<Test>{
+				launch_period: 1,
+				voting_period: 3,
+				minimum_deposit: 1,
+				public_delay: 0,
+				max_lock_periods: 6,
+			}.build_storage().unwrap().0);
+			t.extend(seats::GenesisConfig::<Test> {
+				candidacy_bond: 3,
+				voter_bond: 2,
+				present_slash_per_voter: 1,
+				carry_count: 2,
+				inactive_grace_period: 1,
+				active_council: if self.with_council { vec![
+					(1, 10),
+					(2, 10),
+					(3, 10)
+				] } else { vec![] },
+				approval_voting_period: 4,
+				presentation_duration: 2,
+				desired_seats: 2,
+				term_duration: 5,
+			}.build_storage().unwrap().0);
+			t.extend(voting::GenesisConfig::<Test> {
+				cooloff_period: 2,
+				voting_period: 1,
+				enact_delay_period: 0,
+			}.build_storage().unwrap().0);
+			runtime_io::TestExternalities::new(t)
+		}
 	}
 
 	pub type System = system::Module<Test>;
