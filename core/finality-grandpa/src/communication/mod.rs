@@ -29,8 +29,8 @@
 
 use std::sync::Arc;
 
-use grandpa::VoterSet;
-use grandpa::Message::{Prevote, Precommit};
+use grandpa::voter_set::VoterSet;
+use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
@@ -43,6 +43,7 @@ use network::{consensus_gossip as network_gossip, Service as NetworkService,};
 use network_gossip::ConsensusMessage;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
+use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
@@ -184,7 +185,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
 		local_key: Option<Arc<ed25519::Pair>>,
-		has_voted: HasVoted,
+		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
@@ -220,6 +221,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						}
 
 						match &msg.message.message {
+							PrimaryPropose(propose) => {
+								telemetry!(CONSENSUS_INFO; "afg.received_propose";
+									"voter" => ?format!("{}", msg.message.id),
+									"target_number" => ?propose.target_number,
+									"target_hash" => ?propose.target_hash,
+								);
+							},
 							Prevote(prevote) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
 									"voter" => ?format!("{}", msg.message.id),
@@ -363,55 +371,20 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	}
 }
 
-/// Whether we've voted already during a prior run of the program.
-#[derive(Decode, Encode)]
-pub(crate) enum HasVoted {
-	/// Has not voted already in this round.
-	#[codec(index = "0")]
-	No,
-	/// Has cast a proposal.
-	#[codec(index = "1")]
-	Proposed,
-	/// Has cast a prevote.
-	#[codec(index = "2")]
-	Prevoted,
-	/// Has cast a precommit (implies prevote.)
-	#[codec(index = "3")]
-	Precommitted,
-}
-
-impl HasVoted {
-	#[allow(unused)]
-	fn can_propose(&self) -> bool {
-		match *self {
-			HasVoted::No => true,
-			HasVoted::Proposed | HasVoted::Prevoted | HasVoted::Precommitted => false,
-		}
-	}
-
-	fn can_prevote(&self) -> bool {
-		match *self {
-			HasVoted::No | HasVoted::Proposed => true,
-			HasVoted::Prevoted | HasVoted::Precommitted => false,
-		}
-	}
-
-	fn can_precommit(&self) -> bool {
-		match *self {
-			HasVoted::No | HasVoted::Proposed | HasVoted::Prevoted => true,
-			HasVoted::Precommitted => false,
-		}
-	}
-}
-
-/// A sink for outgoing messages to the network.
+/// A sink for outgoing messages to the network. Any messages that are sent will
+/// be replaced, as appropriate, according to the given `HasVoted`.
+/// NOTE: The votes are stored unsigned, which means that the signatures need to
+/// be "stable", i.e. we should end up with the exact same signed message if we
+/// use the same raw message and key to sign. This is currently true for
+/// `ed25519` and `BLS` signatures (which we might use in the future), care must
+/// be taken when switching to different key types.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
 	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
-	has_voted: HasVoted,
+	has_voted: HasVoted<Block>,
 }
 
 impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
@@ -419,15 +392,25 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 	type SinkItem = Message<Block>;
 	type SinkError = Error;
 
-	fn start_send(&mut self, msg: Message<Block>) -> StartSend<Message<Block>, Error> {
-		// only sign if we haven't voted in this round already.
-		let should_sign = match msg {
-			grandpa::Message::Prevote(_) => self.has_voted.can_prevote(),
-			grandpa::Message::Precommit(_) => self.has_voted.can_precommit(),
-		};
+	fn start_send(&mut self, mut msg: Message<Block>) -> StartSend<Message<Block>, Error> {
+		// if we've voted on this round previously under the same key, send that vote instead
+		match &mut msg {
+			grandpa::Message::PrimaryPropose(ref mut vote) =>
+				if let Some(propose) = self.has_voted.propose() {
+					*vote = propose.clone();
+				},
+			grandpa::Message::Prevote(ref mut vote) =>
+				if let Some(prevote) = self.has_voted.prevote() {
+					*vote = prevote.clone();
+				},
+			grandpa::Message::Precommit(ref mut vote) =>
+				if let Some(precommit) = self.has_voted.precommit() {
+					*vote = precommit.clone();
+				},
+		}
 
 		// when locals exist, sign messages on import
-		if let (true, &Some((ref pair, ref local_id))) = (should_sign, &self.locals) {
+		if let Some((ref pair, ref local_id)) = self.locals {
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
 

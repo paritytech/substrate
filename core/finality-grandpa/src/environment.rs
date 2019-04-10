@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
+use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use log::{debug, warn, info};
-use parity_codec::Encode;
+use parity_codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
@@ -27,7 +29,8 @@ use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
+	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
+	voter, voter_set::VoterSet,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -37,8 +40,8 @@ use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
-	Commit, Config, Error, Network, Precommit, Prevote,
-	CommandOrError, NewAuthoritySet, VoterCommand,
+	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
+	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
 use crate::authorities::SharedAuthoritySet;
@@ -49,27 +52,210 @@ use crate::until_imported::UntilVoteTargetImported;
 use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.
-pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
-
-/// A read-only view of the last completed round.
-pub(crate) struct LastCompletedRound<H, N> {
-	inner: RwLock<CompletedRound<H, N>>,
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub struct CompletedRound<Block: BlockT> {
+	/// The round number.
+	pub number: u64,
+	/// The round state (prevote ghost, estimate, finalized, etc.)
+	pub state: RoundState<Block::Hash, NumberFor<Block>>,
+	/// The target block base used for voting in the round.
+	pub base: (Block::Hash, NumberFor<Block>),
+	/// All the votes observed in the round.
+	pub votes: Vec<SignedMessage<Block>>,
 }
 
-impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
-	/// Create a new tracker based on some starting last-completed round.
-	pub(crate) fn new(round: CompletedRound<H, N>) -> Self {
-		LastCompletedRound { inner: RwLock::new(round) }
+// Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
+// contains data about at least one round (genesis).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletedRounds<Block: BlockT> {
+	inner: VecDeque<CompletedRound<Block>>,
+}
+
+// NOTE: the current strategy for persisting completed rounds is very naive
+// (update everything) and we also rely on cloning to do atomic updates,
+// therefore this value should be kept small for now.
+const NUM_LAST_COMPLETED_ROUNDS: usize = 2;
+
+impl<Block: BlockT> Encode for CompletedRounds<Block> {
+	fn encode(&self) -> Vec<u8> {
+		Vec::from_iter(&self.inner).encode()
+	}
+}
+
+impl<Block: BlockT> Decode for CompletedRounds<Block> {
+	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+		Vec::<CompletedRound<Block>>::decode(value)
+			.map(|completed_rounds| CompletedRounds {
+				inner: completed_rounds.into(),
+			})
+	}
+}
+
+impl<Block: BlockT> CompletedRounds<Block> {
+	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
+	pub fn new(genesis: CompletedRound<Block>) -> CompletedRounds<Block> {
+		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
+		inner.push_back(genesis);
+		CompletedRounds { inner }
 	}
 
-	/// Read the last completed round.
-	pub(crate) fn read(&self) -> CompletedRound<H, N> {
-		self.inner.read().clone()
+	/// Returns the last (latest) completed round.
+	pub fn last(&self) -> &CompletedRound<Block> {
+		self.inner.back()
+			.expect("inner is never empty; always contains at least genesis; qed")
+	}
+
+	/// Push a new completed round, returns false if the given round is older
+	/// than the last completed round.
+	pub fn push(&mut self, completed_round: CompletedRound<Block>) -> bool {
+		if self.last().number >= completed_round.number {
+			return false;
+		}
+
+		if self.inner.len() == NUM_LAST_COMPLETED_ROUNDS {
+			self.inner.pop_front();
+		}
+
+		self.inner.push_back(completed_round);
+
+		true
+	}
+}
+
+/// The state of the current voter set, whether it is currently active or not
+/// and information related to the previously completed rounds. Current round
+/// voting status is used when restarting the voter, i.e. it will re-use the
+/// previous votes for a given round if appropriate (same round and same local
+/// key).
+#[derive(Debug, Decode, Encode, PartialEq)]
+pub enum VoterSetState<Block: BlockT> {
+	/// The voter is live, i.e. participating in rounds.
+	Live {
+		/// The previously completed rounds.
+		completed_rounds: CompletedRounds<Block>,
+		/// Vote status for the current round.
+		current_round: HasVoted<Block>,
+	},
+	/// The voter is paused, i.e. not casting or importing any votes.
+	Paused {
+		/// The previously completed rounds.
+		completed_rounds: CompletedRounds<Block>,
+	},
+}
+
+impl<Block: BlockT> VoterSetState<Block> {
+	/// Returns the last completed rounds.
+	pub(crate) fn completed_rounds(&self) -> CompletedRounds<Block> {
+		match self {
+			VoterSetState::Live { completed_rounds, .. } =>
+				completed_rounds.clone(),
+			VoterSetState::Paused { completed_rounds } =>
+				completed_rounds.clone(),
+		}
+	}
+}
+
+/// Whether we've voted already during a prior run of the program.
+#[derive(Debug, Decode, Encode, PartialEq)]
+pub enum HasVoted<Block: BlockT> {
+	/// Has not voted already in this round.
+	No,
+	/// Has voted in this round.
+	Yes(AuthorityId, Vote<Block>),
+}
+
+/// The votes cast by this voter already during a prior run of the program.
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub enum Vote<Block: BlockT> {
+	/// Has cast a proposal.
+	Propose(PrimaryPropose<Block>),
+	/// Has cast a prevote.
+	Prevote(Option<PrimaryPropose<Block>>, Prevote<Block>),
+	/// Has cast a precommit (implies prevote.)
+	Precommit(Option<PrimaryPropose<Block>>, Prevote<Block>, Precommit<Block>),
+}
+
+impl<Block: BlockT> HasVoted<Block> {
+	/// Returns the proposal we should vote with (if any.)
+	pub fn propose(&self) -> Option<&PrimaryPropose<Block>> {
+		match self {
+			HasVoted::Yes(_, Vote::Propose(propose)) =>
+				Some(propose),
+			HasVoted::Yes(_, Vote::Prevote(propose, _)) | HasVoted::Yes(_, Vote::Precommit(propose, _, _)) =>
+				propose.as_ref(),
+			_ => None,
+		}
+	}
+
+	/// Returns the prevote we should vote with (if any.)
+	pub fn prevote(&self) -> Option<&Prevote<Block>> {
+		match self {
+			HasVoted::Yes(_, Vote::Prevote(_, prevote)) | HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) =>
+				Some(prevote),
+			_ => None,
+		}
+	}
+
+	/// Returns the precommit we should vote with (if any.)
+	pub fn precommit(&self) -> Option<&Precommit<Block>> {
+		match self {
+			HasVoted::Yes(_, Vote::Precommit(_, _, precommit)) =>
+				Some(precommit),
+			_ => None,
+		}
+	}
+
+	/// Returns true if the voter can still propose, false otherwise.
+	pub fn can_propose(&self) -> bool {
+		self.propose().is_none()
+	}
+
+	/// Returns true if the voter can still prevote, false otherwise.
+	pub fn can_prevote(&self) -> bool {
+		self.prevote().is_none()
+	}
+
+	/// Returns true if the voter can still precommit, false otherwise.
+	pub fn can_precommit(&self) -> bool {
+		self.precommit().is_none()
+	}
+}
+
+/// A voter set state meant to be shared safely across multiple owners.
+#[derive(Clone)]
+pub struct SharedVoterSetState<Block: BlockT> {
+	inner: Arc<RwLock<VoterSetState<Block>>>,
+}
+
+impl<Block: BlockT> From<VoterSetState<Block>> for SharedVoterSetState<Block> {
+	fn from(set_state: VoterSetState<Block>) -> Self {
+		SharedVoterSetState::new(set_state)
+	}
+}
+
+impl<Block: BlockT> SharedVoterSetState<Block> {
+	/// Create a new shared voter set tracker with the given state.
+	pub(crate) fn new(state: VoterSetState<Block>) -> Self {
+		SharedVoterSetState { inner: Arc::new(RwLock::new(state)) }
+	}
+
+	/// Read the inner voter set state.
+	pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
+		self.inner.read()
+	}
+
+	/// Return vote status information for the current round.
+	pub(crate) fn has_voted(&self) -> HasVoted<Block> {
+		match &*self.inner.read() {
+			VoterSetState::Live { current_round: HasVoted::Yes(id, vote), .. } =>
+				HasVoted::Yes(id.clone(), vote.clone()),
+			_ => HasVoted::No,
+		}
 	}
 
 	// NOTE: not exposed outside of this module intentionally.
 	fn with<F, R>(&self, f: F) -> R
-		where F: FnOnce(&mut CompletedRound<H, N>) -> R
+		where F: FnOnce(&mut VoterSetState<Block>) -> R
 	{
 		f(&mut *self.inner.write())
 	}
@@ -84,7 +270,23 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
-	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
+	pub(crate) voter_set_state: SharedVoterSetState<Block>,
+}
+
+impl<B, E, Block: BlockT, N: Network<Block>, RA> Environment<B, E, Block, N, RA> {
+	/// Updates the voter set state using the given closure. The write lock is
+	/// held during evaluation of the closure and the environment's voter set
+	/// state is set to its result if successful.
+	pub(crate) fn update_voter_set_state<F>(&self, f: F) -> Result<(), Error> where
+		F: FnOnce(&VoterSetState<Block>) -> Result<Option<VoterSetState<Block>>, Error>
+	{
+		self.voter_set_state.with(|voter_set_state| {
+			if let Some(set_state) = f(&voter_set_state)? {
+				*voter_set_state = set_state;
+			}
+			Ok(())
+		})
+	}
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
@@ -226,7 +428,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	fn round_data(
 		&self,
 		round: u64
-	) -> voter::RoundData<Self::Timer, Self::In, Self::Out> {
+	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
 		let now = Instant::now();
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
@@ -239,7 +441,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
 			local_key.cloned(),
-			crate::communication::HasVoted::No,
+			self.voter_set_state.has_voted(),
 		);
 
 		// schedule incoming messages from the network to be held until
@@ -254,6 +456,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
 		voter::RoundData {
+			voter_id: self.config.local_key.as_ref().map(|pair| pair.public().clone()),
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
 			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			incoming,
@@ -261,7 +464,131 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn completed(&self, round: u64, state: RoundState<Block::Hash, NumberFor<Block>>) -> Result<(), Self::Error> {
+	fn proposed(&self, _round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
+		let local_id = self.config.local_key.as_ref()
+			.map(|pair| pair.public().into())
+			.filter(|id| self.voters.contains_key(&id));
+
+		let local_id = match local_id {
+			Some(id) => id,
+			None => return Ok(()),
+		};
+
+		self.update_voter_set_state(|voter_set_state| {
+			let completed_rounds = match voter_set_state {
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } => completed_rounds,
+				VoterSetState::Live { current_round, .. } if !current_round.can_propose() => {
+					// we've already proposed in this round (in a previous run),
+					// ignore the given vote and don't update the voter set
+					// state
+					return Ok(None);
+				},
+				_ => {
+					let msg = "Voter proposing after prevote/precommit or while paused.";
+					return Err(Error::Safety(msg.to_string()));
+				},
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				completed_rounds: completed_rounds.clone(),
+				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
+			};
+
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+
+			Ok(Some(set_state))
+		})?;
+
+		Ok(())
+	}
+
+	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
+		let local_id = self.config.local_key.as_ref()
+			.map(|pair| pair.public().into())
+			.filter(|id| self.voters.contains_key(&id));
+
+		let local_id = match local_id {
+			Some(id) => id,
+			None => return Ok(()),
+		};
+
+		self.update_voter_set_state(|voter_set_state| {
+			let (completed_rounds, propose) = match voter_set_state {
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } =>
+					(completed_rounds, None),
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
+					(completed_rounds, Some(propose)),
+				VoterSetState::Live { current_round, .. } if !current_round.can_prevote() => {
+					// we've already prevoted in this round (in a previous run),
+					// ignore the given vote and don't update the voter set
+					// state
+					return Ok(None);
+				},
+				_ => {
+					let msg = "Voter prevoting after precommit or while paused.";
+					return Err(Error::Safety(msg.to_string()));
+				},
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				completed_rounds: completed_rounds.clone(),
+				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
+			};
+
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+
+			Ok(Some(set_state))
+		})?;
+
+		Ok(())
+	}
+
+	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+		let local_id = self.config.local_key.as_ref()
+			.map(|pair| pair.public().into())
+			.filter(|id| self.voters.contains_key(&id));
+
+		let local_id = match local_id {
+			Some(id) => id,
+			None => return Ok(()),
+		};
+
+		self.update_voter_set_state(|voter_set_state| {
+			let (completed_rounds, propose, prevote) = match voter_set_state {
+				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
+					(completed_rounds, propose, prevote),
+				VoterSetState::Live { current_round, .. } if !current_round.can_precommit() => {
+					// we've already precommitted in this round (in a previous run),
+					// ignore the given vote and don't update the voter set
+					// state
+					return Ok(None);
+				},
+				_ => {
+					let msg = "Voter precommitting while paused.";
+					return Err(Error::Safety(msg.to_string()));
+				}
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				completed_rounds: completed_rounds.clone(),
+				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
+			};
+
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+
+			Ok(Some(set_state))
+		})?;
+
+		Ok(())
+	}
+
+	fn completed(
+		&self,
+		round: u64,
+		state: RoundState<Block::Hash, NumberFor<Block>>,
+		base: (Block::Hash, NumberFor<Block>),
+		votes: Vec<SignedMessage<Block>>,
+	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
 			self.config.name(),
@@ -271,13 +598,31 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.finalized.as_ref().map(|e| e.1),
 		);
 
-		self.last_completed.with(|last_completed| {
-			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
+		self.update_voter_set_state(|voter_set_state| {
+			let mut completed_rounds = voter_set_state.completed_rounds();
+
+			// NOTE: the Environment assumes that rounds are *always* completed in-order.
+			if !completed_rounds.push(CompletedRound {
+				number: round,
+				state: state.clone(),
+				base,
+				votes,
+			}) {
+				let msg = "Voter completed round that is older than the last completed round.";
+				return Err(Error::Safety(msg.to_string()));
+			};
+
+			let set_state = VoterSetState::<Block>::Live {
+				completed_rounds,
+				current_round: HasVoted::No,
+			};
+
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
-			*last_completed = (round, state); // after writing to DB successfully.
-			Ok(())
-		})
+			Ok(Some(set_state))
+		})?;
+
+		Ok(())
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
@@ -498,7 +843,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		};
 
 		if status.changed {
-			let write_result = crate::aux_schema::update_authority_set(
+			let write_result = crate::aux_schema::update_authority_set::<Block, _, _>(
 				&authority_set,
 				new_authorities.as_ref(),
 				|insert| client.apply_aux(import_op, insert, &[]),

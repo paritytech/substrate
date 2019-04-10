@@ -118,6 +118,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		}
 	}
 
+	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage(key)
+	}
+
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		self.changes.child_storage(storage_key, key)?.map(Vec::from)
 	}
