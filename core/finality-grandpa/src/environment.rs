@@ -380,19 +380,6 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 
-	{
-		let (set_id, set_ref) = authority_set.current();
-		telemetry!(CONSENSUS_INFO; "afg.authority_set";
-			"hash" => ?hash,
-			"number" => ?number,
-			"authority_set_id" => ?set_id,
-			"authorities" => {
-				let authorities: Vec<String> =
-					set_ref.iter().map(|(id, _)| format!("{}", id)).collect();
-				format!("{:?}", authorities)
-			});
-	}
-
 	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();
 	// holds the old consensus changes in case it is changed below, needed for
