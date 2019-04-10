@@ -15,13 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
-#![deny(warnings)]
+#![forbid(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 #![allow(unused_imports)]
 extern crate core;
 pub use babe_primitives::*;
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
+use std::{
+	sync::Arc,
+	time::Duration,
+	thread,
+	marker::PhantomData,
+	hash::Hash,
+	fmt::Debug,
+};
 use parity_codec::{Decode, Encode, Input};
+use parking_lot::Mutex;
 use runtime_primitives::generic;
 use substrate_primitives::{
 	crypto::Pair,
@@ -167,6 +175,7 @@ pub const VRF_OUTPUT_POINT_SEED: [u8; 32] = [
 	0x89, 0x63, 0x3d, 0x43, 0xcd, 0xec, 0x1c, 0x51,
 ];
 
+/// The constant string used to initialize the transcript
 pub const TRANSCRIPT_INIT: &'static [u8] = b"substrate-babe";
 
 /// A slot duration. Create with `get_or_compute`.
@@ -235,7 +244,7 @@ pub fn start_babe_thread<B, C, E, I, SO, Error, OnExit>(
 		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
-		transcript: Transcript::new(TRANSCRIPT_INIT),
+		transcript: Mutex::new(Transcript::new(TRANSCRIPT_INIT)),
 		fixed_points: VRFInOut {
 			input: RistrettoBoth::from_bytes(&VRF_INPUT_POINT_SEED).unwrap(),
 			output: RistrettoBoth::from_bytes(&VRF_OUTPUT_POINT_SEED).unwrap(),
@@ -284,7 +293,7 @@ pub fn start_babe<B, C, E, I, SO, Error, OnExit>(
 		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
-		transcript: Transcript::new(TRANSCRIPT_INIT),
+		transcript: Mutex::new(Transcript::new(TRANSCRIPT_INIT)),
 		fixed_points: VRFInOut {
 			input: RistrettoBoth::from_bytes(&VRF_INPUT_POINT_SEED).unwrap(),
 			output: RistrettoBoth::from_bytes(&VRF_OUTPUT_POINT_SEED).unwrap(),
@@ -326,7 +335,7 @@ struct BabeWorker<C, E, I, SO> {
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	transcript: Transcript,
+	transcript: Mutex<Transcript>,
 	fixed_points: VRFInOut,
 }
 
@@ -353,7 +362,7 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 }
 
 fn author_block(
-	slot_num: u64,
+	_slot_num: u64,
 	authorities: &[sr25519::Public],
 	key: &sr25519::Pair,
 	transcript: &mut Transcript,
@@ -391,7 +400,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
 		let pair = self.local_key.clone();
-		let public_key = self.local_key.public();
+		let _public_key = self.local_key.public();
 		let client = self.client.clone();
 		let block_import = self.block_import.clone();
 		let env = self.env.clone();
@@ -421,7 +430,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 			);
 			return Box::new(future::ok(()));
 		}
-		let proposal_work = if let Some(seal) = author_block(slot_num, &authorities, &pair, &mut self.transcript, &self.fixed_points) {
+		let proposal_work = if let Some(_seal) = author_block(slot_num, &authorities, &pair, &mut self.transcript.lock(), &self.fixed_points) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
 				slot_num,
