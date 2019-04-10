@@ -651,8 +651,8 @@ mod tests {
 				},
 				Message::Accept(index) => {
 					if let Some(last_message) = last_unconnected_messages.get(&index) {
-						// Note: this will never hit, since Connect messages are stored by peer_id in last_connected_message...
 						match last_message {
+							// Note: this will never hit, since Connect messages are stored by peer_id in last_connected_message...
 							Message::Connect(_) => panic!("Unexpected Accept message, after a Connect message"),
 							_ => {},
 						}
@@ -661,8 +661,8 @@ mod tests {
 				},
 				Message::Reject(index) => {
 					if let Some(last_message) = last_unconnected_messages.get(&index) {
-						// Note: this will never hit, since Connect messages are stored by peer_id in last_connected_message...
 						match last_message {
+							// Note: this will never hit, since Connect messages are stored by peer_id in last_connected_message...
 							Message::Connect(_) => panic!("Unexpected Reject message, after a Connect message"),
 							_ => {},
 						}
