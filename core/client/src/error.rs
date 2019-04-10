@@ -120,12 +120,12 @@ impl<'a> From<&'a str> for Error {
 impl Error {
 	/// Chain a blockchain error.
 	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
-		Error::Blockchain(e).into()
+		Error::Blockchain(e)
 	}
 
 	/// Chain a state error.
 	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
-		Error::Execution(e).into()
+		Error::Execution(e)
 	}
 }
 

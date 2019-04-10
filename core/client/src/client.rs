@@ -408,7 +408,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
  		let first = first.as_();
 		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
 		if first > last_num {
-			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()).into());
+			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
  		let finalized_number = self.backend.blockchain().info()?.finalized_number;
 		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.as_());
@@ -439,7 +439,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.backend.blockchain().info()?.best_number.as_(),
 			&key.0)
 		.and_then(|r| r.map(|r| r.map(|(block, tx)| (As::sa(block), tx))).collect::<Result<_, _>>())
-		.map_err(|err| error::Error::ChangesTrieAccessFailed(err).into())
+		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
@@ -1240,7 +1240,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
 			match self.backend.blockchain().header(BlockId::Hash(id))? {
 				Some(hdr) => Ok(hdr),
-				None => Err(Error::UnknownBlock(format!("Unknown block {:?}", id)).into()),
+				None => Err(Error::UnknownBlock(format!("Unknown block {:?}", id))),
 			}
 		};
 

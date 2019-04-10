@@ -225,7 +225,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Some(body) => Ok(Some(body)),
-				None => return Err(client::error::Error::Backend("Error decoding body".into()).into()),
+				None => return Err(client::error::Error::Backend("Error decoding body".into())),
 			}
 			None => Ok(None),
 		}
@@ -235,7 +235,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
-				None => return Err(client::error::Error::Backend("Error decoding justification".into()).into()),
+				None => return Err(client::error::Error::Backend("Error decoding justification".into())),
 			}
 			None => Ok(None),
 		}
@@ -926,7 +926,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					(number.clone(), hash.clone())
 				)?;
 			} else {
-				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)).into())
+				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
 		}
 
@@ -1185,10 +1185,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let state = DbState::new(self.storage.clone(), root);
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
-					Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)).into())
+					Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
 				}
 			},
-			Ok(None) => Err(client::error::Error::UnknownBlock(format!("Unknown state for block {:?}", block)).into()),
+			Ok(None) => Err(client::error::Error::UnknownBlock(format!("Unknown state for block {:?}", block))),
 			Err(e) => Err(e),
 		}
 	}

@@ -549,28 +549,28 @@ pub mod tests {
 		) -> ClientResult<Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
-				_ => Err(ClientError::Backend("Test error".into()).into()),
+				_ => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_read_proof(&self, _: &RemoteReadRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),
-				false => Err(ClientError::Backend("Test error".into()).into()),
+				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
-				false => Err(ClientError::Backend("Test error".into()).into()),
+				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: ChangesProof<Header>) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
 			match self.ok {
 				true => Ok(vec![(100, 2)]),
-				false => Err(ClientError::Backend("Test error".into()).into()),
+				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 	}

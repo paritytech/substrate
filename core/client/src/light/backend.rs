@@ -323,7 +323,7 @@ where
 		let mut header = self.cached_header.read().clone();
 		if header.is_none() {
 			let cached_header = self.blockchain.upgrade()
-				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", self.block)).into())
+				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", self.block)))
 				.and_then(|blockchain| blockchain.expect_header(BlockId::Hash(self.block)))?;
 			header = Some(cached_header.clone());
 			*self.cached_header.write() = Some(cached_header);

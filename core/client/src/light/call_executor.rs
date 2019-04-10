@@ -275,7 +275,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string())).into()),
+			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => CallExecutor::contextual_call::<
 				_,
 				_,
@@ -296,7 +296,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string())).into()),
+			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 		}
 	}
 
@@ -346,7 +346,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string())).into())
+			).map_err(|e| ClientError::Execution(Box::new(e.to_string())))
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(

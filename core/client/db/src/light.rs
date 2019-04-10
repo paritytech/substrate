@@ -330,7 +330,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		cht_size: u64,
 		block: NumberFor<Block>
 	) -> ClientResult<Block::Hash> {
-		let no_cht_for_block = || ClientError::Backend(format!("CHT for block {} not exists", block)).into();
+		let no_cht_for_block = || ClientError::Backend(format!("CHT for block {} not exists", block));
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_size, cht_number);
@@ -474,7 +474,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			self.db.write(transaction).map_err(db_err)?;
 			Ok(())
 		} else {
-			Err(ClientError::UnknownBlock(format!("Cannot set head {:?}", id)).into())
+			Err(ClientError::UnknownBlock(format!("Cannot set head {:?}", id)))
 		}
 	}
 
@@ -514,7 +514,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 			Ok(())
 		} else {
-			Err(ClientError::UnknownBlock(format!("Cannot finalize block {:?}", id)).into())
+			Err(ClientError::UnknownBlock(format!("Cannot finalize block {:?}", id)))
 		}
 	}
 

@@ -151,7 +151,7 @@ impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 			.map_err(db_err)
 			.and_then(|entry| match entry {
 				Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])
-					.ok_or_else(|| ClientError::Backend("Failed to decode cache entry".into()).into())
+					.ok_or_else(|| ClientError::Backend("Failed to decode cache entry".into()))
 					.map(Some),
 				None => Ok(None),
 			})
@@ -253,19 +253,19 @@ pub mod tests {
 
 	impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for FaultyStorage {
 		fn read_id(&self, _at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-			Err(ClientError::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 
 		fn read_header(&self, _at: &Block::Hash) -> ClientResult<Option<Block::Header>> {
-			Err(ClientError::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 
 		fn read_meta(&self) -> ClientResult<Metadata<Block>> {
-			Err(ClientError::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 
 		fn read_entry(&self, _at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
-			Err(ClientError::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 	}
 

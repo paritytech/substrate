@@ -109,7 +109,7 @@ fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
 			.ok_or_else(
-				|| ClientError::Backend(format!("GRANDPA DB is corrupted.")).into(),
+				|| ClientError::Backend(format!("GRANDPA DB is corrupted.")),
 			)
 			.map(Some)
 	}

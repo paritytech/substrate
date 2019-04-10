@@ -247,7 +247,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			remote_max_block.as_(),
 			&request.key)
 		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
-		.map_err(|err| ClientError::ChangesTrieAccessFailed(err).into())
+		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
 	/// Check CHT-based proof for changes tries roots.
@@ -473,7 +473,7 @@ pub mod tests {
 			let builder = remote_client.new_block().unwrap();
 			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 			local_headers_hashes.push(remote_client.block_hash(i + 1)
-				.map_err(|_| ClientError::Backend("TestError".into()).into()));
+				.map_err(|_| ClientError::Backend("TestError".into())));
 		}
 
 		// 'fetch' header proof from remote node

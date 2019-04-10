@@ -64,7 +64,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		let error = || {
 			let msg = "invalid precommits for target commit".to_string();
-			Err(Error::Client(ClientError::BadJustification(msg).into()))
+			Err(Error::Client(ClientError::BadJustification(msg)))
 		};
 
 		for signed in commit.precommits.iter() {
@@ -109,7 +109,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		if (justification.commit.target_hash, justification.commit.target_number) != finalized_target {
 			let msg = "invalid commit target in grandpa justification".to_string();
-			Err(ClientError::BadJustification(msg).into())
+			Err(ClientError::BadJustification(msg))
 		} else {
 			justification.verify(set_id, voters).map(|_| justification)
 		}
@@ -132,7 +132,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			Ok(ref result) if result.ghost().is_some() => {},
 			_ => {
 				let msg = "invalid commit in grandpa justification".to_string();
-				return Err(ClientError::BadJustification(msg).into());
+				return Err(ClientError::BadJustification(msg));
 			}
 		}
 

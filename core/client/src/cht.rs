@@ -246,7 +246,7 @@ fn build_pairs<Header, I>(
 	if pairs.len() as u64 == cht_size {
 		Ok(pairs)
 	} else {
-		Err(ClientError::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()).into())
+		Err(ClientError::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()))
 	}
 }
 

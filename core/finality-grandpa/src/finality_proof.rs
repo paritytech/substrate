@@ -392,7 +392,7 @@ mod tests {
 			fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
 			fn verify(&self, _set_id: u64, _authorities: &VoterSet<AuthorityId>) -> ClientResult<()> {
-				Err(ClientError::Backend("test error".into()).into())
+				Err(ClientError::Backend("test error".into()))
 			}
 		}
 

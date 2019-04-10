@@ -89,7 +89,7 @@ where
 					Ok(())
 				}
 				Err(e) => {
-					Err(error::Error::ApplyExtrinsicFailed(e).into())
+					Err(error::Error::ApplyExtrinsicFailed(e))
 				}
 			}
 		})
