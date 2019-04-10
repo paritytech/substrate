@@ -305,7 +305,7 @@ pub struct RunCmd {
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 
-	/// Run in light client mode
+	/// Experimental: Run in light client mode
 	#[structopt(long = "light")]
 	pub light: bool,
 
