@@ -729,7 +729,6 @@ pub fn import_queue<B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
-	allow_old_seals: bool,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
@@ -748,7 +747,42 @@ pub fn import_queue<B, C, E, P>(
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
-			allow_old_seals,
+			allow_old_seals: false,
+		}
+	);
+	Ok(BasicQueue::new(verifier, block_import, justification_import))
+}
+
+/// Start an import queue for the Aura consensus algorithm with backwards compatibility.
+#[deprecated(
+	note = "should not be used unless backwards compatibility with an older chain is needed."
+)]
+pub fn import_queue_accept_old_seals<B, C, E, P>(
+	slot_duration: SlotDuration,
+	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
+	client: Arc<C>,
+	extra: E,
+	inherent_data_providers: InherentDataProviders,
+) -> Result<AuraImportQueue<B>, consensus_common::Error> where
+	B: Block,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
+	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	E: 'static + ExtraVerification<B>,
+	P: Pair + Send + Sync + 'static,
+	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Signature: Encode + Decode,
+{
+	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+
+	let verifier = Arc::new(
+		AuraVerifier {
+			client: client.clone(),
+			extra,
+			inherent_data_providers,
+			phantom: PhantomData,
+			allow_old_seals: true,
 		}
 	);
 	Ok(BasicQueue::new(verifier, block_import, justification_import))

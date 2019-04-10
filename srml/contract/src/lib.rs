@@ -404,6 +404,9 @@ decl_event! {
 		/// A call was dispatched from the given account. The bool signals whether it was
 		/// successful execution or not.
 		Dispatched(AccountId, bool),
+
+		/// An event from contract of account.
+		Contract(AccountId, Vec<u8>),
 	}
 }
 
@@ -502,6 +505,12 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte returned.
 	pub return_data_per_byte_cost: Gas,
 
+	/// Gas cost to deposit an event; the per-byte portion.
+	pub event_data_per_byte_cost: Gas,
+
+	/// Gas cost to deposit an event; the base.
+	pub event_data_base_cost: Gas,
+
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
 
@@ -526,6 +535,8 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			grow_mem_cost: Gas::sa(1),
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),
+			event_data_per_byte_cost: Gas::sa(1),
+			event_data_base_cost: Gas::sa(1),
 			sandbox_data_read_cost: Gas::sa(1),
 			sandbox_data_write_cost: Gas::sa(1),
 			max_stack_height: 64 * 1024,
