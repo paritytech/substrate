@@ -552,7 +552,7 @@ mod tests {
 		actions.push((bootnode.clone(), TestAction::Incoming(IncomingIndex(1))));
 		actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
 
-		for i in 0..100 {
+		for i in 0..125 {
 			let peer_id = PeerId::random();
 			discovered.push(peer_id.clone());
 			actions.push((peer_id.clone(), TestAction::AddReservedPeer));
