@@ -101,7 +101,7 @@
 //!
 //! ## Genesis Config
 //!
-//! The Balances module depends on the [genesis configuration](./struct.GenesisConfig.html).
+//! The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 //! You need to set an initial superuser account as the sudo `key`.
 //!
 //! ```ignore
