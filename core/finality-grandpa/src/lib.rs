@@ -458,7 +458,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	network: N,
 	inherent_data_providers: InherentDataProviders,
 	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
-	telemetry_notify: TelemetryHookOnConnect,
+	telemetry_notify: Option<TelemetryHookOnConnect>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -483,7 +483,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
-	{
+	if let Some(telemetry_notify) = telemetry_notify {
 		let authorities = authority_set.clone();
 		let events = telemetry_notify.telemetry_connection_sinks
 			.for_each(move |_| {

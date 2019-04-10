@@ -129,7 +129,7 @@ construct_service_factory! {
 					service.network(),
 					service.config.custom.inherent_data_providers.clone(),
 					service.on_exit(),
-					telemetry_notify,
+					Some(telemetry_notify),
 				)?);
 
 				Ok(service)

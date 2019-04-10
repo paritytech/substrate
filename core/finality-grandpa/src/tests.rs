@@ -403,6 +403,7 @@ fn run_to_completion_with<F: FnOnce()>(
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
 			futures::empty(),
+			None,
 		).expect("all in order with client and network");
 
 		assert_send(&voter);
@@ -504,6 +505,7 @@ fn finalize_3_voters_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
 			futures::empty(),
+			None,
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -666,6 +668,7 @@ fn transition_3_voters_twice_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
 			futures::empty(),
+			None,
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -1066,6 +1069,7 @@ fn voter_persists_its_votes() {
 				MessageRouting::new(net.clone(), 0),
 				InherentDataProviders::new(),
 				futures::empty(),
+				None,
 			).expect("all in order with client and network");
 
 			let voter = future::poll_fn(move || {
