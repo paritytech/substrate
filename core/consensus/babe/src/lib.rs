@@ -361,9 +361,8 @@ fn author_block(
 ) -> Option<VRFProof> {
 	// FIXME this is O(n)
 	if !authorities.contains(&key.public()) { return None }
-	let keypair: &Keypair = <sr25519::Pair as AsRef<Keypair>>::as_ref(key);
 	// FIXME: batching
-	Some(keypair.dleq_proove(transcript, p).0)
+	Some(get_keypair(key).dleq_proove(transcript, p).0)
 }
 
 impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
