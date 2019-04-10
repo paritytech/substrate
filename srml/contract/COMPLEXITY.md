@@ -345,7 +345,7 @@ It consists of the following steps:
 1. Loading `value` buffer from the sandbox memory and then decoding it.
 2. Invoking `set_rent_allowance` AccountDB function.
 
-**complexity**: The complexity of this function is proportional to the size of the `value` buffer.
+**complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
 
 ## ext_rent_allowance
 
