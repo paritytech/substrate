@@ -45,7 +45,7 @@ pub enum Error {
 	Execution(Box<state_machine::Error>),
 	/// Blockchain error.
 	#[display(fmt = "Blockchain: {}", _0)]
-	Blockchain(Box<std::error::Error + Send>),
+	Blockchain(Box<Error>),
 	/// Invalid authorities set received from the runtime.
 	#[display(fmt = "Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,
@@ -100,6 +100,7 @@ impl error::Error for Error {
 	fn source(&self) -> Option<&(error::Error + 'static)> {
 		match self {
 			Error::Consensus(e) => Some(e),
+			Error::Blockchain(e) => Some(e),
 			_ => None,
 		}
 	}
@@ -119,7 +120,7 @@ impl<'a> From<&'a str> for Error {
 
 impl Error {
 	/// Chain a blockchain error.
-	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
+	pub fn from_blockchain(e: Box<Error>) -> Self {
 		Error::Blockchain(e)
 	}
 
