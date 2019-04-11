@@ -289,8 +289,6 @@ mod tests {
 			}),
 			fees: Some(FeesConfig {
 				fees_to_block_author: Permill::from_percent(10),
-				fees_to_treasury: Permill::from_percent(10),
-				priority: Default::default(),
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,

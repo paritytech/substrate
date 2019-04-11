@@ -23,7 +23,7 @@
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
-use rstd::{prelude::*, result};
+use rstd::{prelude::*, result, mem};
 use parity_codec::{HasCompact, Encode, Decode};
 //use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
@@ -31,23 +31,16 @@ use srml_support::traits::{
 	Currency, OnFreeBalanceZero, OnUnbalanced, Imbalance,
 };
 use primitives::Permill;
+use primitives::sr25519; // hack to get an account id, remove when we have working get_block_author
 
 // we will need the `BalanceOf` type for account balances
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-pub enum Priority {
-
-	/// Pay fees to the block author before the Treasury.
-	Author,
-
-	/// Pay fees to the Treasury before the block author.
-	Treasury,
-}
-
-impl Default for Priority {
-	fn default() -> Self {
-		Priority::Treasury
-	}
+// Only used to inform the final Event if the issuance changed and in what direction
+enum BurnOrMint {
+	Burn,
+	Mint,
+	Null,
 }
 
 pub trait Trait: system::Trait {
@@ -55,10 +48,7 @@ pub trait Trait: system::Trait {
 	pub type Currency: Currency<Self::AccountId>;
 
 	/// Type that determines how many funds go to the block author.
-	pub type ToBlockAuthor: Fn() -> Permill;
-
-	/// Type that determines how many funds go to the Treasury.
-	pub type ToTreasury: Fn() -> Permill;
+	pub type ToBlockAuthor: BlockPayout<BalanceOf>;
 
 	/// Handler for the unbalanced reduction when taking transaction fees.
 	type TransactionPayment: OnUnbalanced<NegativeImbalance<Self>>;
@@ -75,8 +65,8 @@ decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 
 		/// The block has been finalized and fees distributed. `BalanceOf` to `AccountId` (block author),
-		/// `BalanceOf` to the Treasury, and `BalanceOf` burned.
-		Distribution(AccountId, BalanceOf, BalanceOf, BalanceOf),
+		/// `BalanceOf` burned or minted.
+		Distribution(AccountId, BalanceOf, BalanceOf, BurnOrMint),
 	}
 );
 
@@ -88,20 +78,17 @@ decl_storage! {
 		/// Fees will be added to this until the block is finalized, at which point
 		/// one portion of the fees will go to the block author, one portion will
 		/// go to the Treasury (if implemented), and the remainder will be burned.
-		TotalBlockFees get(total_block_fees): T::BalanceOf;
+		TotalBlockFees get(total_block_fees): map T::BlockNumber => T::BalanceOf;
+
+		/// Cumulative new issuance for a block.
+		///
+		/// When new units are minted (e.g. for rewarding a validator), they will
+		/// get added to this storage item. When a block is finalized, its issuance
+		/// will be updated accordingly.
+		TotalBlockMint get(block_new_issuance): map T::BlockNumber => T::BalanceOf;
 
 		/// Proportion of fees that will go to the block author when a block is finalized.
 		pub FeesToBlockAuthor get(fees_to_block_author) config(): Permill;
-
-		/// Proportion of fees that will go to the Treasury when a block is finalized.
-		/// Note that the Treasury may burn some portion of funds it receives.
-		pub FeesToTreasury get(fees_to_treasury) config(): Permill;
-
-		/// Who gets paid first. Only relevant if you configure your
-		/// (`FeesToBlockAuthor` + `FeesToTreasury`) > 100%. `Priority` will keep the selected
-		/// fees the same and reduce the fees of the other so that exactly 100% of the fees
-		/// are handled.
-		pub Priority get(priority) config(): Priority = Priority::default();
 	}
 }
 
@@ -112,57 +99,123 @@ decl_module! {
 
 		/// Should be called when a block has been finalized. This function cannot fail.
 		///
-		/// Needs to:
-		/// - Ensure that (% to author) + (% to Treasury) <= 100
-		/// - Transfer funds to author
-		/// - Transfer funds to Treasury
-		/// - Burn remainder and update `TotalIssuance`
-		/// - Emit an event
-		fn on_finalize() {
+		/// Modules that take fees or mint rewards should pass those values into
+		/// `take_fee` or `issue_units`, respectively. They will be accumulated
+		/// into storage items that are private to this module.
+		///
+		/// When a block is finalized, this function will distribute fees as configured
+		/// in the chain spec (some going to the block author, some being burned) and
+		/// update the total issuance accounting for all mints and burns in a block.
+		///
+		/// TODO: Send some funds to the Treasury.
+		fn on_finalize(n: T::BlockNumber) {
 
+			// Should probably be handled somewhere else, like in config, so that this won't fail.
 			ensure!(Self::fees_to_block_author() < Permill::from_percent(100),
 				"You can't pay more than 100% of fees to the block author.");
 
-			ensure!(Self::fees_to_treasury() < Permill::from_percent(100),
-				"You can't pay more than 100% of fees to the Treasury.");
+			let mut total_fees = Self::total_block_fees();
+			let fees_to_author = Self::fees_to_block_author().mul(total_fees);
 
-			if Self::fees_to_block_author() + Self::fees_to_treasury() > Permill::from_percent(100) {
-				match priority {
-					// Shouldn't need `saturating_sub` here as already ensured that the second term is <100, but being safe
-					Priority::Author => {
-						<FeesToTreasury<T>>::set(Permill::from_percent(100)
-							.saturating_sub(Self::fees_to_block_author()));
-					},
-					Priority::Treasury => {
-						<FeesToBlockAuthor<T>>::set(Permill::from_percent(100)
-							.saturating_sub(Self::fees_to_treasury()));
-					},
-				}
+			// Author
+			let author = get_block_author(n);
+			let author_balance = Self::free_balance(author);
+			let would_create = author_balance.is_zero(); // Impossible, but safe
+			let new_author_balance = author_balance.saturating_add(fees_to_author);
+
+			if would_create && new_author_balance < T::Currency::minimum_balance() {
+				// Normally would return an error, but this can't fail. Burn everything instead.
+				// Issue some kind of warning?
+				let fees_to_author = Zero::zero();
 			}
 
-			// Transfer fees to author and Treasury
-			let mut total_fees = Self::total_block_fees();
-
-			// TODO: has Mul impl
-			let total_fees_to_author = total_fees * Self::fees_to_block_author() / 1_000_000;
-			let total_fees_to_treasury = total_fees * Self::fees_to_treasury() / 1_000_000;
-
 			// Burn remaining fees
-			let fees_to_burn = total_fees
-								.saturating_sub(total_fees_to_author)
-								.saturating_sub(total_fees_to_treasury);
+			let units2burn = total_fees.saturating_sub(fees_to_author);
 
-			T::OnUnbalanced::on_imbalanced(NegativeImbalance::new(fees_to_burn));
+			// Burn or mint tokens
+			let units2mint = Self::block_new_issuance(n);
+
+			if units2burn > units2mint {
+				let imbalance = NegativeImbalance::new(units2burn.saturating_sub(units2mint));
+				let bm = BurnOrMint::Burn;
+			} else if units2mint > units2burn {
+				let imbalance = PositiveImbalance::new(units2mint.saturating_sub(units2burn));
+				let bm = BurnOrMint::Mint;
+			} else {
+				let imbalance = PositiveImbalance::new(Zero::zero());
+				let bm = BurnOrMint::Null;
+			}
+
+			let imbalance_mag = imbalance.peek();
+
+			// Send fees to author
+			T::BlockPayout::pay_block_author(author, new_author_balance);
+
+			// Update total issuance
+			T::OnUnbalanced::on_imbalanced(imbalance);
 
 			// Emit an event
-			Self::deposit_event(RawEvent::Distribution(&1, // `AccountId` of block author
-													total_fees_to_author,
-													total_fees_to_treasury,
-													fees_to_burn));
+			Self::deposit_event(RawEvent::Distribution(
+				&author, // `AccountId` of block author
+				fees_to_author,
+				imbalance_mag,
+				bm));
 		}
 
 	}
 }
+
+impl Module {
+	/// Take a transaction fee. This will add it to the fees for the block.
+	pub fn take_fee(n: T::BlockNumber, fee: T::BalanceOf) {
+		let current_block_fees = Self::total_block_fees(n);
+		let new_block_fees = current_block_fees + fee;
+		<TotalBlockFees<T>>::insert(n, new_block_fees);
+	}
+
+	/// Account for new tokens minted, e.g. a reward
+	pub fn issue_units(n: T::BlockNumber, units: T::BalanceOf) {
+		let current_new_issuance = Self::block_new_issuance(n);
+		let new_units_minted = current_new_issuance + units;
+		<TotalBlockMint<T>>::insert(n, new_units_minted)
+	}
+
+	// https://github.com/paritytech/substrate/issues/2232
+	// Currently a hack to get an AccountId into the dispatchable.
+	// Will need to write a real function here.
+	fn get_block_author(n: T::BlockNumber) -> T::AccountId {
+		let s = "dummy author account";
+		sr25519::Pair::from_string(&format!("//{}", s), None)
+			.expect("static values are valid; qed")
+			.public()
+	}
+}
+
+pub trait OnUnbalanced<T::BalanceOf> {
+	/// Handler for some imbalance. Infallible.
+	fn on_unbalanced(amount: T::BalanceOf);
+}
+
+impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
+	fn on_unbalanced(amount: Imbalance) { drop(amount); }
+}
+
+pub trait BlockPayout<T::BalanceOf> {
+	fn pay_block_author(author: T::AccountId, amount: T::BalanceOf);
+}
+
+impl BlockPayout {
+	fn pay_block_author(author: T::AccountId, amount: T::BalanceOf) {
+		T::Currency::set_free_balance(author, amount);
+	}
+}
+
+/*
+
+	Below here is copied in from the balances module to avoid the Subtrait/ElevatedTrait
+	hack. Will need updating to integrate with other modules from here.
+
+*/
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that
 /// funds have been created without any equal and opposite accounting.
@@ -327,14 +380,4 @@ impl<T: Trait<I>, I: Instance> PartialEq for NegativeImbalance<T, I> {
 impl<T::Trait> OnUnbalanced<T> {
 
 	fn on_unbalanced(amount: T::BalanceOf) { drop(amount); }
-}
-
-//
-pub trait OnUnbalanced<T::BalanceOf> {
-	/// Handler for some imbalance. Infallible.
-	fn on_unbalanced(amount: T::BalanceOf);
-}
-
-impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
-	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }

@@ -115,8 +115,6 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		}),
 		fees: Some(FeesConfig {
 			fees_to_block_author: Permill::from_percent(10),
-			fees_to_treasury: Permill::from_percent(10),
-			priority: Default::default(),
 		}),
 		sudo: Some(SudoConfig {
 			key: root_key,

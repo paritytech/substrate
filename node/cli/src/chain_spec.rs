@@ -95,8 +95,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		fees: Some(FeesConfig {
 			fees_to_block_author: Permill::from_percent(10),
-			fees_to_treasury: Permill::from_percent(10),
-			priority: Default::default(),
 		}),
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.iter().cloned()
@@ -260,8 +258,6 @@ pub fn testnet_genesis(
 		}),
 		fees: Some(FeesConfig {
 			fees_to_block_author: Permill::from_percent(10),
-			fees_to_treasury: Permill::from_percent(10),
-			priority: Default::default(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
