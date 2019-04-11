@@ -261,7 +261,7 @@ pub struct ExecutionStrategies {
 	)]
 	pub block_construction_execution: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime while constructing blocks.
+	/// The means of execution used when calling into the runtime while using an off-chain worker.
 	#[structopt(
 		long = "offchain-worker-execution",
 		value_name = "STRATEGY",
