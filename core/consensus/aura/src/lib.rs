@@ -75,7 +75,7 @@ type Signature<P> = <P as Pair>::Signature;
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
 #[deprecated(
-	since = "1.1",
+	since = "1.0.1",
 	note = "This is dead code and will be removed in a future release",
 )]
 pub trait Network: Clone {

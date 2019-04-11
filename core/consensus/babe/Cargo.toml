@@ -6,8 +6,8 @@ description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.4"
-parity-codec-derive = "3.3"
+parity-codec = "3.4.0"
+parity-codec-derive = "3.3.0"
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
@@ -21,11 +21,11 @@ consensus_common = { package = "substrate-consensus-common", path = "../common" 
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-futures = "^0.1.26"
-tokio = "^0.1.18"
-parking_lot = "^0.7.1"
-error-chain = "^0.12.0"
-log = "^0.4.6"
+futures = "0.1.26"
+tokio = "0.1.18"
+parking_lot = "0.7.1"
+error-chain = "0.12.0"
+log = "0.4.6"
 
 [dependencies.schnorrkel]
 git = "https://github.com/paritytech/schnorrkel"
@@ -37,4 +37,4 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
-env_logger = "^0.6.1"
+env_logger = "0.6.1"
