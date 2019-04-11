@@ -146,41 +146,50 @@ impl executive::ExecuteBlock<Block> for BlockExecutor {
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
-	if check_signature(&utx).is_err() {
-		return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
-	}
+	// assert!(false, "validate_transaction system");
+	// if check_signature(&utx).is_err() {
+	// 	return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
+	// }
 
-	let tx = utx.transfer();
-	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
-	if tx.nonce < expected_nonce {
-		return TransactionValidity::Invalid(ApplyError::Stale as i8);
-	}
-	if tx.nonce > expected_nonce + 64 {
-		return TransactionValidity::Unknown(ApplyError::Future as i8);
-	}
+	// let tx = utx.transfer();
+	// let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
+	// let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
+	// if tx.nonce < expected_nonce {
+	// 	return TransactionValidity::Invalid(ApplyError::Stale as i8);
+	// }
+	// if tx.nonce > expected_nonce + 64 {
+	// 	return TransactionValidity::Unknown(ApplyError::Future as i8);
+	// }
 
-	let hash = |from: &AccountId, nonce: u64| {
-		twox_128(&nonce.to_keyed_vec(&from.encode())).to_vec()
-	};
-	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
-		let mut deps = Vec::new();
-		deps.push(hash(&tx.from, tx.nonce - 1));
-		deps
-	} else { Vec::new() };
+	// let hash = |from: &AccountId, nonce: u64| {
+	// 	twox_128(&nonce.to_keyed_vec(&from.encode())).to_vec()
+	// };
+	// let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
+	// 	let mut deps = Vec::new();
+	// 	deps.push(hash(&tx.from, tx.nonce - 1));
+	// 	deps
+	// } else { Vec::new() };
 
-	let provides = {
-		let mut p = Vec::new();
-		p.push(hash(&tx.from, tx.nonce));
-		p
-	};
+	// let provides = {
+	// 	let mut p = Vec::new();
+	// 	p.push(hash(&tx.from, tx.nonce));
+	// 	p
+	// };
 
-	TransactionValidity::Valid {
-		priority: tx.amount,
-		requires,
-		provides,
-		longevity: 64,
-	}
+	// TransactionValidity::Valid {
+	// 	priority: tx.amount,
+	// 	requires,
+	// 	provides,
+	// 	longevity: 64,
+	// }
+	return TransactionValidity::Invalid(
+		-10i8
+			// if xt.sender().is_none() {
+				// MISSING_SENDER
+			// } else {
+				// INVALID_INDEX
+			// }
+	)
 }
 
 /// Execute a transaction outside of the block execution function.

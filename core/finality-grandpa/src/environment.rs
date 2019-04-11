@@ -31,6 +31,7 @@ use client::{
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
 };
+use runtime_primitives::OpaqueExtrinsic;
 use runtime_primitives::generic::{BlockId, Era, UncheckedExtrinsic};
 use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi,
@@ -38,7 +39,7 @@ use runtime_primitives::traits::{
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use srml_indices::address::Address;
-use node_runtime::{Call, GrandpaModule};
+use node_runtime::{Call, GrandpaModule, GrandpaCall};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
@@ -350,7 +351,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		let equivocation_proof = GrandpaEquivocationProof {};
 		let report_call = self.inner.runtime_api().construct_report_call(&hash, equivocation_proof).unwrap();
 
-		sign_and_dispatch(Arc::clone(&self.transaction_pool), hash, report_call);
+		sign_and_dispatch(
+			self.inner.info().unwrap().chain.genesis_hash,
+			self.config.local_key.clone().unwrap(),
+			Arc::clone(&self.transaction_pool),
+			hash,
+			report_call
+		);
 	}
 
 	fn precommit_equivocation(
@@ -364,23 +371,24 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 }
 
 fn sign_and_dispatch<Block: BlockT<Hash=H256>, A: txpool::ChainApi<Block=Block>>(
+	genesis_hash: H256,
+	signed: Arc<ed25519::Pair>,
 	transaction_pool: Arc<TransactionPool<A>>,
 	hash: BlockId<Block>,
 	report_call: Vec<u8>
 ) {
-	// let next_index = 209;
-	// let payload = (
-	// 	next_index,
-	// 	report_call,
-	// 	Era::immortal(),
-	// 	self.inner.info().unwrap().chain.genesis_hash,
-	// );
-	// let signed = self.config.local_key.clone().unwrap();
-	// let signature: ed25519::Signature = signed.sign(&payload.encode()).into();
+	let next_index = 10000u32;
+	let payload = (
+		next_index,
+		Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
+		Era::immortal(),
+		genesis_hash,
+	);
+	let signature: ed25519::Signature = signed.sign(&payload.encode()).into();
 	
-	// let local_id: ed25519::Public = signed.public();
-	// let extrinsic = UncheckedExtrinsic::new_signed(0u64, payload.1, Address::<_, u32>::Id(local_id), signature);
-	let uxt = Decode::decode(&mut report_call.encode().as_slice()).expect("Encoded extrinsic is valid");
+	let local_id: ed25519::Public = signed.public();
+	let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(local_id), signature);
+	let uxt: <Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
 	
 	if let Err(e) = transaction_pool.submit_one(&hash, uxt) {
 		warn!("Error importing misbehavior report: {:?}", e);

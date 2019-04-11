@@ -289,6 +289,7 @@ impl_runtime_apis! {
 
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+			assert!(false, "hola!");
 			Executive::validate_transaction(tx)
 		}
 	}

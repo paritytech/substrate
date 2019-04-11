@@ -349,6 +349,7 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					println!("more aca");
 					system::validate_transaction(utx)
 				}
 			}
@@ -465,6 +466,7 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					assert!(false, "......");
 					system::validate_transaction(utx)
 				}
 			}

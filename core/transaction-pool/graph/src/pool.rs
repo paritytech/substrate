@@ -120,7 +120,7 @@ impl<B: ChainApi> Pool<B> {
 	{
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
-
+		println!("block_number {:?}", block_number);
 		let results = xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
@@ -128,8 +128,11 @@ impl<B: ChainApi> Pool<B> {
 				if self.rotator.is_banned(&hash) {
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
-
-				match self.api.validate_transaction(at, xt.clone())? {
+				println!("before validating");
+				// assert!(false, "leaving!");
+				let r = self.api.validate_transaction(at, xt.clone());
+				println!("after r {:?}", r); 
+				match r? {
 					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
 							data: xt,
@@ -151,6 +154,7 @@ impl<B: ChainApi> Pool<B> {
 				}
 			})
 			.map(|tx| {
+				println!("after the transaction {:?}", tx);
 				let imported = self.pool.write().import(tx?)?;
 
 				if let base::Imported::Ready { .. } = imported {
@@ -471,7 +475,7 @@ mod tests {
 
 		/// Verify extrinsic at given block.
 		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
-
+			println!("pool test validate");
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
 

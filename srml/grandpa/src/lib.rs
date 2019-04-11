@@ -217,7 +217,7 @@ decl_module! {
 
 		/// Report some misbehavior.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
-			ensure_signed(origin)?;
+			// ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 

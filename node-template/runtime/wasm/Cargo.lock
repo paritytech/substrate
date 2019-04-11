@@ -1273,6 +1273,7 @@ dependencies = [
  "srml-balances 1.0.0",
  "srml-consensus 1.0.0",
  "srml-executive 1.0.0",
+ "srml-grandpa 1.0.0",
  "srml-indices 1.0.0",
  "srml-sudo 1.0.0",
  "srml-support 1.0.0",
@@ -2168,6 +2169,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-finality-tracker"
+version = "1.0.0"
+dependencies = [
+ "hex-literal 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
+ "srml-support 1.0.0",
+ "srml-system 1.0.0",
+ "substrate-inherents 1.0.0",
+]
+
+[[package]]
+name = "srml-grandpa"
+version = "1.0.0"
+dependencies = [
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
+ "srml-consensus 1.0.0",
+ "srml-finality-tracker 1.0.0",
+ "srml-session 1.0.0",
+ "srml-support 1.0.0",
+ "srml-system 1.0.0",
+ "substrate-finality-grandpa-primitives 1.0.0",
+ "substrate-primitives 1.0.0",
+]
+
+[[package]]
 name = "srml-indices"
 version = "1.0.0"
 dependencies = [
@@ -2506,6 +2537,17 @@ dependencies = [
  "substrate-trie 1.0.0",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-finality-grandpa-primitives"
+version = "1.0.0"
+dependencies = [
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
+ "substrate-client 1.0.0",
+ "substrate-primitives 1.0.0",
 ]
 
 [[package]]

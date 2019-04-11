@@ -88,6 +88,7 @@ where
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
+		assert!(false, "checking the unchecked extrinsic!");
 		Ok(match self.signature {
 			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);
