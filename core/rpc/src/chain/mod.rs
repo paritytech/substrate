@@ -37,6 +37,8 @@ mod number;
 
 use self::error::Result;
 
+pub use self::gen_client::Client as ChainClient;
+
 /// Substrate blockchain API
 #[rpc]
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {

@@ -45,6 +45,8 @@ mod tests;
 
 use self::error::Result;
 
+pub use self::gen_client::Client as StateClient;
+
 /// Substrate state API
 #[rpc]
 pub trait StateApi<Hash> {

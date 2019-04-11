@@ -30,6 +30,8 @@ use runtime_primitives::traits::{self, Header as HeaderT};
 use self::error::Result;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 
+pub use self::gen_client::Client as SystemClient;
+
 /// Substrate system RPC API
 #[rpc]
 pub trait SystemApi<Hash, Number> {

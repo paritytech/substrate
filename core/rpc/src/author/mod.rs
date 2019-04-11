@@ -45,6 +45,8 @@ mod tests;
 
 use self::error::Result;
 
+pub use self::gen_client::Client as AuthorClient;
+
 /// Substrate authoring RPC API
 #[rpc]
 pub trait AuthorApi<Hash, BlockHash> {
