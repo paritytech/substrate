@@ -114,7 +114,7 @@ fn test_random_api_use() {
 
 	drop(handle);
 
-	let mut received_messages = HashMap::new();
+	let mut last_received_messages = HashMap::new();
 	loop {
 		let message = match next_message(peerset) {
 			Ok((message, p)) => {
@@ -126,7 +126,7 @@ fn test_random_api_use() {
 		};
 		match message {
 			Message::Connect(peer_id) => {
-				let last_message = received_messages.get(&peer_id);
+				let last_message = last_received_messages.get(&peer_id);
 				match last_message {
 					Some(Message::Drop(_)) | Some(Message::Reject(_)) => {},
 					_ => {
@@ -136,7 +136,7 @@ fn test_random_api_use() {
 						}
 					},
 				}
-				received_messages.insert(peer_id.clone(), Message::Connect(peer_id));
+				last_received_messages.insert(peer_id.clone(), Message::Connect(peer_id));
 			},
 			Message::Drop(peer_id) => {
 				let maybe_related_action = {
@@ -146,27 +146,27 @@ fn test_random_api_use() {
 						None
 					}
 				};
-				let last_message = received_messages.get(&peer_id);
+				let last_message = last_received_messages.get(&peer_id);
 				match last_message {
 					Some(Message::Connect(_)) | Some(Message::Accept(_)) => {},
 					_ => panic!("Unexpected Drop message, after a {:?} message, a perhaps related action was: {:?}", last_message, maybe_related_action),
 				}
-				received_messages.insert(peer_id.clone(), Message::Drop(peer_id));
+				last_received_messages.insert(peer_id.clone(), Message::Drop(peer_id));
 			},
 			Message::Accept(index) => {
 				let peer_id = index_to_peer.get(&index).expect("Unknown index");
 				println!("ID: {:?}", peer_id);
-				if let Some(Message::Connect(_)) = received_messages.get(&peer_id) {
+				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
 					panic!("Unexpected Accept message, after a Connect message");
 				}
-				received_messages.insert(peer_id.clone(), Message::Accept(index));
+				last_received_messages.insert(peer_id.clone(), Message::Accept(index));
 			},
 			Message::Reject(index) => {
 				let peer_id = index_to_peer.get(&index).expect("Unknown index");
-				if let Some(Message::Connect(_)) = received_messages.get(&peer_id) {
+				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
 					panic!("Unexpected Reject message, after a Connect message");
 				}
-				received_messages.insert(peer_id.clone(), Message::Reject(index));
+				last_received_messages.insert(peer_id.clone(), Message::Reject(index));
 			},
 		}
 	}
