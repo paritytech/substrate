@@ -628,4 +628,15 @@ define_env!(Env, <E: Ext>,
 
 		Ok(())
 	},
+
+	// Prints utf8 encoded string from the data buffer.
+	// Only available on `--dev` chains.
+	// This function may be removed at any time, superseded by a more general contract debugging feature.
+	ext_println(ctx, str_ptr: u32, str_len: u32) => {
+		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
+		if let Ok(utf8) = core::str::from_utf8(&data) {
+			runtime_io::print(utf8);
+		}
+		Ok(())
+	},
 );
