@@ -17,20 +17,17 @@
 //! Auxilliaries to help with managing partial changes to accounts state.
 
 use super::{
-	CodeHash, Trait, TrieId, ContractInfoOf, BalanceOf, ContractInfo,
-	AliveContractInfo, TrieIdGenerator, Module
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Module, Trait, TrieId,
+	TrieIdGenerator,
 };
 use crate::exec::StorageKey;
-use system;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
-use srml_support::{StorageMap, storage::child};
-use srml_support::traits::{
-	UpdateBalanceOutcome, SignedImbalance, Currency, Imbalance
-};
-
+use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
+use srml_support::{storage::child, StorageMap};
+use system;
 
 // Note: we don't provide Option<Contract> because we can't create
 // the trie_id in the overlay, thus we provide an overlay on the fields
@@ -106,7 +103,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				}
 			}
 
-			if changed.code_hash.is_some() || changed.rent_allowance.is_some() || !changed.storage.is_empty() {
+			if changed.code_hash.is_some()
+				|| changed.rent_allowance.is_some()
+				|| !changed.storage.is_empty()
+			{
 				let old_info = match <ContractInfoOf<T>>::get(&address) {
 					Some(ContractInfo::Alive(alive)) => Some(alive),
 					None => None,
@@ -149,7 +149,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					}
 				}
 
-				if old_info.map(|old_info| old_info == new_info).unwrap_or(true) {
+				if old_info
+					.map(|old_info| old_info == new_info)
+					.unwrap_or(true)
+				{
 					<ContractInfoOf<T>>::insert(&address, ContractInfo::Alive(new_info));
 				}
 			}
@@ -171,9 +174,7 @@ pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	underlying: &'a AccountDb<T>,
 }
 impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	pub fn new(
-		underlying: &'a AccountDb<T>,
-	) -> OverlayAccountDb<'a, T> {
+	pub fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
 		OverlayAccountDb {
 			local: RefCell::new(ChangeSet::new()),
 			underlying,
@@ -198,14 +199,17 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 	}
 
 	/// Return an error if contract already exists (either if it is alive or tombstone)
-	pub fn create_contract(&mut self, account: &T::AccountId, code_hash: CodeHash<T>) -> Result<(), &'static str> {
+	pub fn create_contract(
+		&mut self,
+		account: &T::AccountId,
+		code_hash: CodeHash<T>,
+	) -> Result<(), &'static str> {
 		if self.contract_exists(account) {
 			return Err("Alive contract or tombstone already exists");
 		}
 
 		let mut local = self.local.borrow_mut();
-		let contract = local.entry(account.clone())
-			.or_insert(Default::default());
+		let contract = local.entry(account.clone()).or_insert(Default::default());
 
 		contract.code_hash = Some(code_hash);
 		contract.rent_allowance = Some(<BalanceOf<T>>::zero());
