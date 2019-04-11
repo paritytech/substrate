@@ -157,40 +157,19 @@ impl<T: Trait> ContractInfo<T> {
 	}
 }
 
-#[derive(Encode, Decode)]
-pub struct AliveContractInfo<T: Trait> {
+pub type AliveContractInfo<T> = RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
+
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector
 	pub trie_id: TrieId,
 	/// The size of stored value in octet
 	pub storage_size: u64,
 	/// The code associated with a given account.
-	pub code_hash: CodeHash<T>,
-	pub rent_allowance: BalanceOf<T>,
-	pub deduct_block: T::BlockNumber,
-}
-
-impl<T: Trait> Clone for AliveContractInfo<T> {
-	fn clone(&self) -> Self {
-		AliveContractInfo {
-			trie_id: self.trie_id.clone(),
-			storage_size: self.storage_size.clone(),
-			code_hash: self.code_hash.clone(),
-			rent_allowance: self.rent_allowance.clone(),
-			deduct_block: self.deduct_block.clone(),
-		}
-	}
-}
-
-impl<T: Trait> Eq for AliveContractInfo<T> {}
-
-impl<T: Trait> PartialEq for AliveContractInfo<T> {
-	fn eq(&self, other: &Self) -> bool {
-		self.trie_id == other.trie_id
-			&& self.storage_size == other.storage_size
-			&& self.rent_allowance == other.rent_allowance
-			&& self.code_hash == other.code_hash
-			&& self.deduct_block == other.deduct_block
-	}
+	pub code_hash: CodeHash,
+	pub rent_allowance: Balance,
+	pub deduct_block: BlockNumber,
 }
 
 #[derive(Encode, Decode)]

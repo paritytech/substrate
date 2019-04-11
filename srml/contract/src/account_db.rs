@@ -117,7 +117,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				let mut new_info = if let Some(info) = old_info.clone() {
 					info
 				} else if let Some(code_hash) = changed.code_hash {
-					AliveContractInfo {
+					AliveContractInfo::<T> {
 						code_hash,
 						storage_size: <Module<T>>::storage_size_offset(),
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
