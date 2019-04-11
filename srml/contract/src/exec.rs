@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
-	TrieId, BalanceOf, ContractInfoOf, Module};
+	TrieId, BalanceOf, ContractInfoOf};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
@@ -307,7 +307,7 @@ where
 		// Assumption: pay_rent doesn't collide with overlay because
 		// pay_rent will be done on first call and dest contract and balance
 		// cannot be change before first call
-		<Module<T>>::pay_rent(&dest);
+		crate::rent::pay_rent::<T>(&dest);
 
 		let mut output_data = Vec::new();
 
