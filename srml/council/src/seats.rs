@@ -651,6 +651,7 @@ impl<T: Trait> Module<T> {
 	/// to a voter's stake value to get the correct weight. Indeed, zero is
 	/// returned if T is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
+		// TODO: this still needs some bounds on how to behave on large numbers of t
 		let mut offset = stake;
 		let mut r = <BalanceOf<T> as Zero>::zero();
 		// TODO: decide on where to store this: 5/100 etc.
@@ -1047,7 +1048,6 @@ mod tests {
 			// give 1 some new high balance
 			let _ = Balances::make_free_balance_be(&1, 995); // + 5 reserved => 1000
 			assert_ok!(Council::set_approvals(Origin::signed(1), vec![false, false, true], 1));
-			println!("Council::voter_offset_pot(1) = {:?}", Council::offset_pot(1));
 			assert_eq!(Council::offset_pot(1).unwrap(), Council::get_offset(100, 1));
 			assert_ok!(Council::end_block(System::block_number()));
 
