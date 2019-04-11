@@ -3,11 +3,10 @@ use rand::thread_rng;
 use rand::seq::SliceRandom;
 use super::{PeersetConfig, Peerset, Message, IncomingIndex, next_message};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::{self, Debug};
 
 #[test]
 fn test_random_api_use() {
-
-	#[derive(Debug)]
 	enum TestAction {
 		AddReservedPeer,
 		RemoveReservedPeer,
@@ -16,6 +15,34 @@ fn test_random_api_use() {
 		DropPeer,
 		Incoming(IncomingIndex),
 		Discovered(Vec<PeerId>),
+	}
+
+	impl Debug for TestAction {
+	    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+	        match self {
+				TestAction::AddReservedPeer => {
+					write!(f, "AddReservedPeer")
+				},
+				TestAction::RemoveReservedPeer => {
+					write!(f, "RemoveReservedPeer")
+				},
+				TestAction::SetReservedOnly(reserved) => {
+					write!(f, "SetReservedOnly {:?}", reserved)
+				},
+				TestAction::ReportPeer(diff_score) => {
+					write!(f, "ReportPeer {:?}", diff_score)
+				},
+				TestAction::DropPeer => {
+					write!(f, "DropPeer")
+				},
+				TestAction::Incoming(index) => {
+					write!(f, "Incoming {:?}", index)
+				},
+				TestAction::Discovered(nodes) => {
+					write!(f, "Discovered {:?}", nodes.len())
+				},
+	        }
+	    }
 	}
 
 	let bootnode = PeerId::random();
@@ -127,21 +154,28 @@ fn test_random_api_use() {
 		match message {
 			Message::Connect(peer_id) => {
 				let last_message = last_received_messages.get(&peer_id);
+				let action_sequence = {
+					if let Some(actions) = performed_actions.get_mut(&peer_id) {
+						Some(actions.clone())
+					} else {
+						None
+					}
+				};
 				match last_message {
 					Some(Message::Drop(_)) | Some(Message::Reject(_)) => {},
 					_ => {
 						let relevant_api_called = dropped_called.remove(&peer_id) || discovered_called.remove(&peer_id);
 						if !relevant_api_called && !(peer_id == bootnode) {
-							panic!("Unexpected Connect message after a {:?} message", last_message);
+							panic!("Unexpected Connect message after a {:?} message, sequence of actions: {:?}", last_message, action_sequence);
 						}
 					},
 				}
 				last_received_messages.insert(peer_id.clone(), Message::Connect(peer_id));
 			},
 			Message::Drop(peer_id) => {
-				let maybe_related_action = {
+				let action_sequence = {
 					if let Some(actions) = performed_actions.get_mut(&peer_id) {
-						actions.pop_front()
+						Some(actions.clone())
 					} else {
 						None
 					}
@@ -149,22 +183,36 @@ fn test_random_api_use() {
 				let last_message = last_received_messages.get(&peer_id);
 				match last_message {
 					Some(Message::Connect(_)) | Some(Message::Accept(_)) => {},
-					_ => panic!("Unexpected Drop message, after a {:?} message, a perhaps related action was: {:?}", last_message, maybe_related_action),
+					_ => panic!("Unexpected Drop message, after a {:?} message, sequence of actions: {:?}", last_message, action_sequence),
 				}
 				last_received_messages.insert(peer_id.clone(), Message::Drop(peer_id));
 			},
 			Message::Accept(index) => {
 				let peer_id = index_to_peer.get(&index).expect("Unknown index");
+				let action_sequence = {
+					if let Some(actions) = performed_actions.get_mut(&peer_id) {
+						Some(actions.clone())
+					} else {
+						None
+					}
+				};
 				println!("ID: {:?}", peer_id);
 				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
-					panic!("Unexpected Accept message, after a Connect message");
+					panic!("Unexpected Accept message, after a Connect message, sequence of actions: {:?}", action_sequence);
 				}
 				last_received_messages.insert(peer_id.clone(), Message::Accept(index));
 			},
 			Message::Reject(index) => {
 				let peer_id = index_to_peer.get(&index).expect("Unknown index");
+				let action_sequence = {
+					if let Some(actions) = performed_actions.get_mut(&peer_id) {
+						Some(actions.clone())
+					} else {
+						None
+					}
+				};
 				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
-					panic!("Unexpected Reject message, after a Connect message");
+					panic!("Unexpected Reject message, after a Connect message, sequence of actions: {:?}", action_sequence);
 				}
 				last_received_messages.insert(peer_id.clone(), Message::Reject(index));
 			},
