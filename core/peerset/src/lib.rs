@@ -337,7 +337,9 @@ impl Peerset {
 
 	fn alloc_slots(&mut self) {
 		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer(self.data.reserved_only) {
-			match self.data.out_slots.add_peer(peer_id, slot_type) {
+			let state = self.data.out_slots.add_peer(peer_id, slot_type);
+			println!("State: {:?}", state);
+			match state {
 				SlotState::Added(peer_id) => {
 					self.message_queue.push_back(Message::Connect(peer_id));
 				},
@@ -377,6 +379,7 @@ impl Peerset {
 		// a) it is not reserved, so we reject the connection
 		// b) we are already connected to it, so we reject the connection
 		if self.data.reserved_only && !self.data.discovered.is_reserved(&peer_id) {
+			println!("Reject: {:?} {:?}", peer_id, index);
 			self.message_queue.push_back(Message::Reject(index));
 			return;
 		}
@@ -393,7 +396,9 @@ impl Peerset {
 			SlotType::Common
 		};
 
-		match self.data.in_slots.add_peer(peer_id, slot_type) {
+		let state = self.data.in_slots.add_peer(peer_id, slot_type);
+		println!("State 2: {:?} Index: {:?}", state, index);
+		match state {
 			SlotState::Added(peer_id) => {
 				// reserved node may have been previously stored as normal node in discovered list
 				self.data.discovered.remove_peer(&peer_id);
@@ -502,11 +507,7 @@ pub fn next_message(peerset: Peerset) -> Result<(Message, Peerset), ()> {
 #[cfg(test)]
 mod tests {
 	use libp2p::PeerId;
-	use futures::prelude::*;
-	use rand::thread_rng;
-	use rand::seq::SliceRandom;
 	use super::{PeersetConfig, Peerset, Message, IncomingIndex, next_message};
-	use std::collections::{HashMap, HashSet, VecDeque};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
 		for expected_message in messages {

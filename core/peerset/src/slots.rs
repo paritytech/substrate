@@ -28,6 +28,7 @@ pub enum SlotType {
 	Common,
 }
 
+#[derive(Debug)]
 /// Descibes the result of `add_peer` action.
 pub enum SlotState {
 	/// Returned when `add_peer` successfully adds a peer to the slot.
