@@ -56,7 +56,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let rent_limited = rent.min(contract.rent_allowance);
 
 	let rent_allowance_exceeded = rent > contract.rent_allowance;
-	let is_below_subsistence = balance >= subsistence_threshold;
+	let is_below_subsistence = balance < subsistence_threshold;
 	let go_below_subsistence = balance.saturating_sub(rent_limited) >= subsistence_threshold;
 	let can_withdraw_rent = T::Currency::ensure_can_withdraw(
 		account,
