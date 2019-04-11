@@ -451,7 +451,12 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		fn claim_surchage(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+		/// Allows validators to claim a small reward for evicting a contract. If a validator
+		/// fails to do so, a regular users will be allowed to do so.
+		///
+		/// If contract is not evicted as a result of this call, no actions are taken and
+		/// the sender is not eligible for the reward.
+		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match origin {
 				Some(system::RawOrigin::Signed(ref account)) if aux_sender.is_none() => {
@@ -468,16 +473,15 @@ decl_module! {
 
 			// Make validators advantaged
 			if signed {
-				check_block -= <Module<T>>::extrinsic_claim_delay();
+				check_block = check_block.saturating_sub(<Module<T>>::signed_claim_handicap());
 			}
 
 			match Self::check_rent(&dest, check_block) {
-				RentDecision::CantWithdrawRentWithoutDying(rent)
-				| RentDecision::AllowanceExceeded(rent) => {
+				RentDecision::Evict(rent) => {
 					T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
 					Self::evict(&dest, rent);
 				}
-				RentDecision::FreeFromRent | RentDecision::CollectDues(_) => (),
+				RentDecision::ExemptFromRent | RentDecision::CollectDues(_) => (),
 			}
 		}
 
@@ -521,7 +525,7 @@ decl_storage! {
 		///
 		/// When claim surchage is called by an extrinsic the rent is checked
 		/// for current_block - delay
-		ExtrinsicClaimDelay get(extrinsic_claim_delay) config(): T::BlockNumber;
+		SignedClaimHandicap get(signed_claim_handicap) config(): T::BlockNumber;
 		/// The minimum amount required to generate a tombstone.
 		TombstoneDeposit get(tombstone_deposit) config(): BalanceOf<T>;
 		/// Size of a contract at the time of creation. This is a simple way to ensure
@@ -531,6 +535,11 @@ decl_storage! {
 		RentByteFee get(rent_byte_price) config(): BalanceOf<T>;
 		/// The amount of funds a contract should deposit in order to offset
 		/// the cost of one byte.
+		///
+		/// Let's suppose the deposit is 1,000 EDG/byte and the rent is 1 EDG/byte/day, then a contract
+		/// with 1,000,000 EDG that uses 1,000 bytes of storage would pay no rent.
+		/// But if the balance reduced to 500,000 EDG and the storage stayed the same at 1,000,
+		/// then it would pay 500 EDG/day.
 		RentDepositOffset get(rent_deposit_offset) config(): BalanceOf<T>;
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
@@ -670,76 +679,98 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 }
 
 enum RentDecision<T: Trait> {
-	/// Happens when the rent is offset completely by the `rent_deposit_offset`.
-	/// Or Rent has already been payed
-	/// Or account doesn't has rent because no contract or tombstone contract
-	FreeFromRent,
-	/// The contract still have funds to keep itself from eviction. Collect dues.
-	/// It is ensure that account can withdraw dues without dying.
+	/// The contract is free from rent, either:
+	/// * rent is offset completely by the `rent_deposit_offset`,
+	/// * or rent has already been paid for this block number,
+	/// * or account doesn't have a contract,
+	/// * or account has a tombstone.
+	ExemptFromRent,
+	/// The contract still has funds to keep itself from eviction. Collect dues.
+	///
+	/// It ensures that:
+	/// * account can withdraw without going below subsistance threshold
+	/// * account has an alive contract (otherwise he would be exempt from rent)
+	/// * rent is below or equal to rent allowance (otherwise must be evicted)
 	CollectDues(BalanceOf<T>),
-	CantWithdrawRentWithoutDying(BalanceOf<T>),
-	AllowanceExceeded(BalanceOf<T>),
+	/// The contract must be evicted, either:
+	/// * rent exceed rent allowance, then rent allowance is returned
+	/// * or rent allowance is not reached and:
+	///   * the account can't withdraw the rent,
+	///   * or he will go bellow subsistance threshold.
+	///
+	/// It ensures that account had an alive contract
+	/// (otherwise he would be exempt from rent).
+	Evict(BalanceOf<T>),
 }
 
 impl<T: Trait> Module<T> {
-	// Check rent at this block number
+	/// Check rent at this block number and return the RentDecition according to spec.
 	fn check_rent(account: &T::AccountId, block_number: T::BlockNumber) -> RentDecision<T> {
 		let contract = match <ContractInfoOf<T>>::get(account) {
-			None | Some(ContractInfo::Tombstone(_)) => return RentDecision::FreeFromRent,
+			None | Some(ContractInfo::Tombstone(_)) => return RentDecision::ExemptFromRent,
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 
-		// Rent has already been payed
+		// Rent has already been paid
 		if contract.deduct_block >= block_number {
-			return RentDecision::FreeFromRent
+			return RentDecision::ExemptFromRent
 		}
 
 		let balance = T::Currency::free_balance(account);
 
+		let free_storage = balance.checked_div(&<Module<T>>::rent_deposit_offset())
+			.unwrap_or(<BalanceOf<T>>::sa(0)));
+
 		let effective_storage_size = <BalanceOf<T>>::sa(contract.storage_size)
-			.saturating_sub(balance.checked_div(&<Module<T>>::rent_deposit_offset()).unwrap_or(<BalanceOf<T>>::sa(0)));
+			.saturating_sub(free_storage);
 
 		let fee_per_block: BalanceOf<T> = effective_storage_size * <Module<T>>::rent_byte_price();
 
 		if fee_per_block.is_zero() {
 			// The rent deposit offset reduced the fee to 0. This means that the contract
 			// gets the rent for free.
-			return RentDecision::FreeFromRent
+			return RentDecision::ExemptFromRent
 		}
 
-		let rent = fee_per_block * <BalanceOf<T>>::sa((block_number.saturating_sub(contract.deduct_block)).as_());
+		let blocks_to_rent= block_number.saturating_sub(contract.deduct_block);
+		let rent = fee_per_block * <BalanceOf<T>>::sa(blocks_to_rent.as_());
+		let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
 
 		// Pay rent up to rent_allowance
 		if rent <= contract.rent_allowance {
-			// TODO TODO: this could be one call if ensure_can_withdraw took exitence requirement
-			if balance.saturating_sub(rent) > T::Currency::minimum_balance()
-				&& T::Currency::ensure_can_withdraw(account, rent, WithdrawReason::Fee, balance.saturating_sub(rent)).is_ok()
+			let new_balance = balance.saturating_sub(rent);
+			if new_balance >= subsistence_threshold
+				&& T::Currency::ensure_can_withdraw(account, rent, WithdrawReason::Fee, new_balance).is_ok()
 			{
 				RentDecision::CollectDues(rent)
 			} else {
-				RentDecision::CantWithdrawRentWithoutDying(rent)
+				// TODO TODO: should we prefer returning balance - subsistence_deposit
+				// TODO TODO: when a contract is restored do we want it to pay for the unpaid rent ?
+				RentDecision::Evict(rent)
 			}
 		} else {
-			RentDecision::AllowanceExceeded(contract.rent_allowance)
+			RentDecision::Evict(contract.rent_allowance)
 		}
 	}
 
 	fn pay_rent(account: &T::AccountId) {
 		match Self::check_rent(account, <system::Module<T>>::block_number()) {
-			RentDecision::FreeFromRent => (),
+			RentDecision::ExemptFromRent => (),
 			RentDecision::CollectDues(rent) => {
 				let imbalance = T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::KeepAlive)
-					.expect("Assumption of check_rent");
+					.expect("Rent decision collect dues ensure account can withdraw \
+							rent while being above subsistance threshold;
+							subsistance threshold is superior to existencial deposit;
+							thus account can withdraw while being kept alive; qed");
 				<ContractInfoOf<T>>::mutate(account, |contract| {
 					// rent_allowance isn't reached is guaranted by check_rent
 					contract.as_mut()
 						.and_then(|c| c.as_alive_mut())
-						.expect("Only existing alive contracts pay rent")
+						.expect("Rent decision collect dues only on alive contract; qed")
 						.rent_allowance -= imbalance.peek();
 				})
 			},
-			RentDecision::CantWithdrawRentWithoutDying(rent)
-			| RentDecision::AllowanceExceeded(rent) => {
+			RentDecision::Evict(rent) => {
 				Self::evict(account, rent);
 			}
 		}
@@ -747,16 +778,18 @@ impl<T: Trait> Module<T> {
 
 	fn evict(account: &T::AccountId, rent: BalanceOf<T>) {
 		match T::Currency::withdraw(account, rent, WithdrawReason::Fee, ExistenceRequirement::AllowDeath) {
-			Ok(imbalance) => drop(imbalance),
-			Err(_) => { T::Currency::slash(account, rent); },
+			Ok(_imbalance) => (),
+			Err(_) => { let (_imbalance, _remaining) = T::Currency::slash(account, rent); },
 		}
 
-		if T::Currency::free_balance(account) >= <Module<T>>::tombstone_deposit() + T::Currency::minimum_balance() {
+		let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
+		if T::Currency::free_balance(account) >= subsistence_threshold {
 			let contract = <ContractInfoOf<T>>::get(account)
 				.and_then(|c| c.get_alive())
-				.expect("Rent is only payed by alive contracts");
+				.expect("Only alive contract can be evicted; ");
 
 			let tombstone = TombstoneContractInfo::new(
+				// Note: this operation is heavy
 				runtime_io::child_storage_root(&contract.trie_id).unwrap(),
 				contract.storage_size,
 				contract.code_hash,
