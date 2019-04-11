@@ -39,9 +39,10 @@ use primitives::Blake2Hasher;
 use runtime_primitives::StorageOverlay;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use state_machine::ExecutionStrategy;
+use state_machine::{ExecutionStrategy, CodeExecutor};
 use client::LocalCallExecutor;
 
+#[cfg(feature = "include-wasm-blob")]
 mod local_executor {
 	#![allow(missing_docs)]
 	use runtime;
@@ -56,12 +57,14 @@ mod local_executor {
 }
 
 /// Native executor used for tests.
+#[cfg(feature = "include-wasm-blob")]
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
 pub type Backend = client_db::Backend<runtime::Block>;
 
 /// Test client executor.
+#[cfg(feature = "include-wasm-blob")]
 pub type Executor = client::LocalCallExecutor<
 	Backend,
 	executor::NativeExecutor<LocalExecutor>,
@@ -78,6 +81,7 @@ pub type LightBackend = client::light::backend::Backend<
 pub struct LightFetcher;
 
 /// Test client light executor.
+#[cfg(feature = "include-wasm-blob")]
 pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor<
 	runtime::Block,
 	LightBackend,
@@ -146,16 +150,16 @@ impl TestClientBuilder {
 	}
 
 	/// Build the test client.
+	#[cfg(feature = "include-wasm-blob")]
 	pub fn build(self) -> client::Client<
 		Backend, Executor, runtime::Block, runtime::RuntimeApi
 	> {
-		let backend = Arc::new(
-			Backend::new_test(::std::u32::MAX, ::std::u64::MAX)
-		);
+		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		self.build_with_backend(backend)
 	}
 
 	/// Build the test client with the given backend.
+	#[cfg(feature = "include-wasm-blob")]
 	pub fn build_with_backend<B>(self, backend: Arc<B>) -> client::Client<
 		B,
 		client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
@@ -172,14 +176,40 @@ impl TestClientBuilder {
 			self.execution_strategies
 		).expect("Creates new client")
 	}
+
+	/// Build the test client with the given native executor.
+	pub fn build_with_native_executor<E>(
+		self,
+		executor: executor::NativeExecutor<E>
+	) -> client::Client<
+		Backend,
+		client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
+		runtime::Block,
+		runtime::RuntimeApi
+	> where E: executor::NativeExecutionDispatch +
+		CodeExecutor<Blake2Hasher> +
+		executor::RuntimeInfo
+	{
+		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
+		let executor = LocalCallExecutor::new(backend.clone(), executor);
+
+		client::Client::new(
+			backend,
+			executor,
+			genesis_storage(self.support_changes_trie, self.genesis_extension),
+			self.execution_strategies
+		).expect("Creates new client")
+	}
 }
 
 /// Creates new client instance used for tests.
+#[cfg(feature = "include-wasm-blob")]
 pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	new_with_backend(Arc::new(Backend::new_test(::std::u32::MAX, ::std::u64::MAX)), false)
 }
 
 /// Creates new light client instance used for tests.
+#[cfg(feature = "include-wasm-blob")]
 pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi> {
 	let storage = client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
@@ -193,6 +223,7 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 }
 
 /// Creates new client instance used for tests with the given api execution strategy.
+#[cfg(feature = "include-wasm-blob")]
 pub fn new_with_execution_strategy(
 	execution_strategy: ExecutionStrategy
 ) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
@@ -200,6 +231,7 @@ pub fn new_with_execution_strategy(
 }
 
 /// Creates new test client instance that suports changes trie creation.
+#[cfg(feature = "include-wasm-blob")]
 pub fn new_with_changes_trie()
 	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>
 {
@@ -208,6 +240,7 @@ pub fn new_with_changes_trie()
 
 /// Creates new client instance used for tests with an explicitly provided backend.
 /// This is useful for testing backend implementations.
+#[cfg(feature = "include-wasm-blob")]
 pub fn new_with_backend<B>(
 	backend: Arc<B>,
 	support_changes_trie: bool
