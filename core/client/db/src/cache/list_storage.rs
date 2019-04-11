@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use client::error::{Error as ClientError, Result as ClientResult};
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -59,7 +59,7 @@ pub trait Storage<Block: BlockT, T: CacheItemT> {
 		self.read_entry(at)
 			.and_then(|entry| entry
 				.ok_or_else(|| ClientError::from(
-					ClientErrorKind::Backend(format!("Referenced cache entry at {:?} is not found", at)))))
+					ClientError::Backend(format!("Referenced cache entry at {:?} is not found", at)))))
 	}
 }
 
@@ -151,7 +151,7 @@ impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 			.map_err(db_err)
 			.and_then(|entry| match entry {
 				Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])
-					.ok_or_else(|| ClientErrorKind::Backend("Failed to decode cache entry".into()).into())
+					.ok_or_else(|| ClientError::Backend("Failed to decode cache entry".into()))
 					.map(Some),
 				None => Ok(None),
 			})
@@ -236,9 +236,9 @@ mod meta {
 	pub fn decode<Block: BlockT>(encoded: &[u8]) -> ClientResult<Metadata<Block>> {
 		let input = &mut &*encoded;
 		let finalized: Option<ComplexBlockId<Block>> = Decode::decode(input)
-			.ok_or_else(|| ClientError::from(ClientErrorKind::Backend("Error decoding cache meta".into())))?;
+			.ok_or_else(|| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
 		let unfinalized: Vec<ComplexBlockId<Block>> = Decode::decode(input)
-			.ok_or_else(|| ClientError::from(ClientErrorKind::Backend("Error decoding cache meta".into())))?;
+			.ok_or_else(|| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
 
 		Ok(Metadata { finalized, unfinalized })
 	}
@@ -253,19 +253,19 @@ pub mod tests {
 
 	impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for FaultyStorage {
 		fn read_id(&self, _at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-			Err(ClientErrorKind::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 
 		fn read_header(&self, _at: &Block::Hash) -> ClientResult<Option<Block::Header>> {
-			Err(ClientErrorKind::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 
 		fn read_meta(&self) -> ClientResult<Metadata<Block>> {
-			Err(ClientErrorKind::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 
 		fn read_entry(&self, _at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
-			Err(ClientErrorKind::Backend("TestError".into()).into())
+			Err(ClientError::Backend("TestError".into()))
 		}
 	}
 

@@ -44,7 +44,7 @@ fn should_call_contract() {
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
-		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
+		Err(Error(ErrorKind::Client(client::error::Error::Execution(_)), _))
 	)
 }
 

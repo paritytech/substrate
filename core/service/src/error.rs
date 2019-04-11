@@ -28,12 +28,12 @@ use error_chain::*;
 
 error_chain! {
 	foreign_links {
+		Client(client::error::Error) #[doc="Client error"];
 		Io(::std::io::Error) #[doc="IO error"];
 	}
 
 	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
-		Consensus(consensus_common::Error, consensus_common::ErrorKind) #[doc="Consesus error"];
+		Consensus(consensus_common::Error, consensus_common::ErrorKind) #[doc="Consensus error"];
 		Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
 		Keystore(keystore::Error, keystore::ErrorKind) #[doc="Keystore error"];
 	}

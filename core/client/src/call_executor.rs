@@ -274,7 +274,7 @@ where
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
-		self.executor.runtime_version(&mut ext).ok_or(error::ErrorKind::VersionInvalid.into())
+		self.executor.runtime_version(&mut ext).ok_or(error::Error::VersionInvalid.into())
 	}
 
 	fn call_at_state<
