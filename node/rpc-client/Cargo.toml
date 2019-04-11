@@ -1,0 +1,15 @@
+[package]
+name = "node-rpc-client"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+env_logger = "0.6"
+futures = "0.1.26"
+hyper = "0.12"
+jsonrpc-core = "11.0.0"
+jsonrpc-core-client = "11.0.0"
+log = "0.4"
+node-primitives = { path = "../primitives" }
+substrate-rpc = { path = "../../core/rpc", version = "1.0.0" }

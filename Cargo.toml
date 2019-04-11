@@ -81,6 +81,7 @@ members = [
 	"node/executor",
 	"node/primitives",
 	"node/runtime",
+	"node/rpc-client",
 	"node-template",
 	"subkey",
 ]
