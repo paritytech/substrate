@@ -99,6 +99,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(account: &T::AccountId, block_number: T::
 				contract.code_hash,
 			);
 			<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));
+			runtime_io::kill_child_storage(&contract.trie_id);
 		}
 
 		return true;
