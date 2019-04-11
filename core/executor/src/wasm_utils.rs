@@ -42,12 +42,14 @@ impl ConvertibleToWasm for usize { type NativeType = u32; const VALUE_TYPE: Valu
 impl<T> ConvertibleToWasm for *const T { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) } }
 impl<T> ConvertibleToWasm for *mut T { type NativeType = u32; const VALUE_TYPE: ValueType = ValueType::I32; fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I32(self as isize as i32) } }
 
+/// Converts arguments into respective WASM types.
 #[macro_export]
 macro_rules! convert_args {
 	() => ([]);
 	( $( $t:ty ),* ) => ( [ $( { use $crate::wasm_utils::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
+/// Generates a WASM signature for given list of parameters.
 #[macro_export]
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
@@ -85,6 +87,7 @@ macro_rules! resolve_fn {
 	);
 }
 
+/// Converts the list of arguments coming from WASM into their native types.
 #[macro_export]
 macro_rules! unmarshall_args {
 	( $body:tt, $objectname:ident, $args_iter:ident, $( $names:ident : $params:ty ),*) => ({
@@ -120,6 +123,7 @@ where
 	f
 }
 
+/// Pass the list of parameters by converting them to respective WASM types.
 #[macro_export]
 macro_rules! marshall {
 	( $args_iter:ident, $objectname:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
@@ -162,6 +166,7 @@ macro_rules! dispatch_fn {
 	);
 }
 
+/// Implements `wasmi::Externals` trait and `Resolver` for given struct.
 #[macro_export]
 macro_rules! impl_function_executor {
 	( $objectname:ident : $structname:ty,
