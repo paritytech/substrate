@@ -335,15 +335,25 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 /// * epoch
 /// * genesis hash
 /// * chain randomness
-fn author_block<T: SigningTranscript>(
-	_slot_num: u64,
+fn author_block(
+	randomness: &[u8],
+	slot_number: u64,
+	genesis_hash: &[u8],
+	epoch: u64,
 	authorities: &[sr25519::Public],
 	key: &sr25519::Pair,
-	transcript: T,
 	threshold: u64,
 ) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
 	// FIXME this is O(n)
 	if !authorities.contains(&key.public()) { return None }
+
+	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
+	transcript.proto_name(&BABE_ENGINE_ID);
+	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
+	transcript.commit_bytes(b"genesis block hash", genesis_hash);
+	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
+	transcript.commit_bytes(b"chain randomness", randomness);
+
 	let (inout, proof, batchable_proof) = get_keypair(key).vrf_sign(transcript);
 	let r: u64 = inout.make_chacharng(b"substrate-babe-vrf").gen();
 	if r < threshold {
@@ -410,11 +420,13 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 			return Box::new(future::ok(()));
 		}
 
-		let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-		transcript.proto_name(&BABE_ENGINE_ID);
-		transcript.commit_bytes(b"slot_num", &slot_num.to_le_bytes());
-
-		let proposal_work = if let Some(_seal) = author_block(slot_num, &authorities, &pair, &mut transcript, u64::MAX / 4) {
+		// FIXME replace the dummy empty slices with real data
+		let proposal_work = if let Some(_seal) = author_block(
+			&[0u8; 0],
+			slot_info.number,
+			&[0u8; 0],
+			0,
+			&authorities, &pair, u64::MAX / 4) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
 				slot_num,
