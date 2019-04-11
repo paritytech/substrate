@@ -216,7 +216,7 @@ pub fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AccountId, AuthorityId)>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
-	enable_contract_debug: bool,
+	enable_println: bool,
 ) -> GenesisConfig {
 	let endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
@@ -252,7 +252,7 @@ pub fn testnet_genesis(
 		current_schedule: Default::default(),
 	};
 	// this should only be enabled on development chains
-	contract_config.current_schedule.enable_debug = enable_contract_debug;
+	contract_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {

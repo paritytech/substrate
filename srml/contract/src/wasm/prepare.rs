@@ -241,7 +241,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 
 			// We disallow importing `ext_println` unless debug features are enabled,
 			// which should only be allowed on a dev chain
-			if !self.schedule.enable_debug && import.field().as_bytes() == b"ext_println" {
+			if !self.schedule.enable_println && import.field().as_bytes() == b"ext_println" {
 				return Err("module imports `ext_println` but debug features disabled");
 			}
 
@@ -606,7 +606,7 @@ mod tests {
 				"#
 			).unwrap();
 			let mut schedule = Schedule::<u64>::default();
-			schedule.enable_debug = true;
+			schedule.enable_println = true;
 			let r = prepare_contract::<Test, TestEnv>(wasm.as_ref(), &schedule);
 			assert_matches!(r, Ok(_));
 		}
