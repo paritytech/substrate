@@ -16,6 +16,10 @@
 
 //! Transaction pool error.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+// https://github.com/paritytech/substrate/issues/1547
+#![allow(deprecated)]
+
 use client;
 use txpool;
 use error_chain::{
@@ -23,8 +27,10 @@ use error_chain::{
 };
 
 error_chain! {
+	foreign_links {
+		Client(client::error::Error) #[doc = "Client error"];
+	}
 	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
 	}
 }

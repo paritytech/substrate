@@ -226,7 +226,7 @@ impl SlotDuration {
 		match client.get_aux(SLOT_KEY)? {
 			Some(v) => u64::decode(&mut &v[..])
 				.map(SlotDuration)
-				.ok_or_else(|| ::client::error::ErrorKind::Backend(
+				.ok_or_else(|| ::client::error::Error::Backend(
 					format!("Aura slot duration kept in invalid format"),
 				).into()),
 			None => {

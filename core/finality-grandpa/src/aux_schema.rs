@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
-use client::error::{Result as ClientResult, Error as ClientError, ErrorKind as ClientErrorKind};
+use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
@@ -109,7 +109,7 @@ fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
 			.ok_or_else(
-				|| ClientErrorKind::Backend(format!("GRANDPA DB is corrupted.")).into(),
+				|| ClientError::Backend(format!("GRANDPA DB is corrupted.")),
 			)
 			.map(Some)
 	}
@@ -314,8 +314,8 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 					set_state: set_state.into(),
 				});
 			}
-		},
-		Some(other) => return Err(ClientErrorKind::Backend(
+		}
+		Some(other) => return Err(ClientError::Backend(
 			format!("Unsupported GRANDPA DB version: {:?}", other)
 		).into()),
 	}
