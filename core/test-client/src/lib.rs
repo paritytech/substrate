@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 pub mod client_ext;
+#[cfg(feature = "include-wasm-blob")]
 pub mod trait_tests;
 mod block_builder_ext;
 
