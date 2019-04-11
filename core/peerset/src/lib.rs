@@ -396,8 +396,8 @@ impl Peerset {
 			SlotType::Common
 		};
 
-		let state = self.data.in_slots.add_peer(peer_id, slot_type);
-		println!("State 2: {:?} Index: {:?}", state, index);
+		let state = self.data.in_slots.add_peer(peer_id.clone(), slot_type);
+		println!("State 2: {:?} ID: {:?} Index: {:?}", state, peer_id, index);
 		match state {
 			SlotState::Added(peer_id) => {
 				// reserved node may have been previously stored as normal node in discovered list
@@ -434,8 +434,10 @@ impl Peerset {
 			"Dropping {:?}\nin_slots={:?}\nout_slots={:?}",
 			peer_id, self.data.in_slots, self.data.out_slots
 		);
+		println!("Dropping {:?}", peer_id);
 		// Automatically connect back if reserved.
 		if self.data.in_slots.is_connected_and_reserved(&peer_id) || self.data.out_slots.is_connected_and_reserved(&peer_id) {
+			println!("reconnecting {:?}", peer_id);
 			self.message_queue.push_back(Message::Connect(peer_id));
 			return;
 		}

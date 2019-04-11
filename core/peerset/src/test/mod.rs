@@ -32,18 +32,21 @@ fn test_random_api_use() {
 	let mut actions = vec![];
 	let mut discovered = vec![];
 	let mut index_to_peer = HashMap::new();
-	discovered.push(bootnode.clone());
 
+	let bootnode_index = IncomingIndex(0);
 	actions.push((bootnode.clone(), TestAction::AddReservedPeer));
 	actions.push((bootnode.clone(), TestAction::SetReservedOnly(true)));
 	actions.push((bootnode.clone(), TestAction::ReportPeer(-1)));
 	actions.push((bootnode.clone(), TestAction::SetReservedOnly(false)));
 	actions.push((bootnode.clone(), TestAction::RemoveReservedPeer));
 	actions.push((bootnode.clone(), TestAction::DropPeer));
-	actions.push((bootnode.clone(), TestAction::Incoming(IncomingIndex(1))));
+	actions.push((bootnode.clone(), TestAction::Incoming(bootnode_index)));
 	actions.push((bootnode.clone(), TestAction::Discovered(discovered.clone())));
 
-	for i in 0..150 {
+	index_to_peer.insert(bootnode_index, bootnode.clone());
+	discovered.push(bootnode.clone());
+
+	for i in 1..150 {
 		let peer_id = PeerId::random();
 		let index = IncomingIndex(i);
 		println!("Peer: {:?} {:?}", peer_id, index);
