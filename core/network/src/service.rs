@@ -487,8 +487,9 @@ fn start_thread<B: BlockT + 'static>(
 	let (close_tx, close_rx) = oneshot::channel();
 	let service_clone = service.clone();
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
+	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol_sender, service_clone, network_port)
+		let fut = run_thread(protocol_sender, service_clone, network_port, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -509,6 +510,7 @@ fn run_thread<B: BlockT + 'static>(
 	protocol_sender: Sender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
+	peerset: PeersetHandle,
 ) -> impl Future<Item = (), Error = io::Error> {
 
 	let network_service_2 = network_service.clone();
@@ -532,9 +534,9 @@ fn run_thread<B: BlockT + 'static>(
 				match severity {
 					Severity::Bad(message) => {
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
-						warn!(target: "sync", "Banning a node is a deprecated mechanism that \
-							should be removed");
-						network_service_2.lock().drop_node(&who)
+						network_service_2.lock().drop_node(&who);
+						// temporary: make sure the peer gets dropped from the peerset
+						peerset.report_peer(who, i32::min_value());
 					},
 					Severity::Useless(message) => {
 						debug!(target: "sync", "Dropping {:?} because {:?}", who, message);
