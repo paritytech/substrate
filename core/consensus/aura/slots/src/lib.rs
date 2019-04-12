@@ -119,7 +119,7 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, OnExit>(
 /// Start a new slot worker.
 pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 	slot_duration: SlotDuration,
-	client:  C,
+	client: C,
 	worker: Arc<W>,
 	sync_oracle: SO,
 	on_exit: OnExit,
