@@ -22,7 +22,7 @@
 //! ## Overview
 //!
 //! The executive module is not a typical SRML module providing functionality around a specific feature.
-//! It is cross-cutting framework component for the SRML. It works in conjunction with the
+//! It is a cross-cutting framework component for the SRML. It works in conjunction with the
 //! [SRML System module](../srml_system/index.html) to perform these cross-cutting functions.
 //!
 //! The Executive module provides functions to:
