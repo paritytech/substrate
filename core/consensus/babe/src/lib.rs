@@ -49,7 +49,10 @@ use schnorrkel::{
 	context::SigningTranscript,
 	points::RistrettoBoth,
 	keys::Keypair,
-	vrf::{VRFProof, VRFProofBatchable, VRF_PROOF_LENGTH, VRFInOut},
+	vrf::{
+		VRFProof, VRFProofBatchable, VRF_PROOF_LENGTH, VRFInOut, VRFOutput,
+		VRF_OUTPUT_LENGTH,
+	},
 	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
 pub use consensus_common::SyncOracle;
@@ -89,6 +92,7 @@ use rand::Rng;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabeSeal {
 	proof: VRFProof,
+	vrf_output: VRFOutput,
 	signature: LocalizedSignature,
 	slot_num: u64,
 }
@@ -97,6 +101,7 @@ impl Encode for BabeSeal {
 	fn encode(&self) -> Vec<u8> {
 		parity_codec::Encode::encode(&(
 			self.proof.to_bytes(),
+			self.vrf_output.as_bytes(),
 			self.signature.signature.0,
 			self.signature.signer.0,
 			self.slot_num,
@@ -106,14 +111,16 @@ impl Encode for BabeSeal {
 
 impl Decode for BabeSeal {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (public_key, proof, sig, slot_num): (
+		let (public_key, proof, output, sig, slot_num): (
 			[u8; PUBLIC_KEY_LENGTH],
-			[u8; VRF_PROOF_LENGTH],
+			[u8; PUBLIC_KEY_LENGTH],
+			[u8; VRF_OUTPUT_LENGTH],
 			[u8; SIGNATURE_LENGTH],
 			u64,
 		) = Decode::decode(i)?;
 		Some(BabeSeal {
 			proof: VRFProof::from_bytes(&proof).ok()?,
+			vrf_output: VRFOutput::from_bytes(&output).ok()?,
 			signature: LocalizedSignature {
 				signature: Signature(sig),
 				signer: Public(public_key),
@@ -142,21 +149,6 @@ impl SlotDuration {
 	pub fn get(&self) -> u64 {
 		self.0.slot_duration()
 	}
-}
-
-/// Get slot author for given block along with authorities.
-fn slot_author(slot_num: u64, authorities: &[Public]) -> Option<&Public> {
-	if authorities.is_empty() { return None }
-
-	let idx = slot_num % (authorities.len() as u64);
-	assert!(idx <= usize::max_value() as u64,
-		"It is impossible to have a vector with length beyond the address space; qed");
-
-	let current_author = authorities.get(idx as usize)
-		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed");
-
-	Some(current_author)
 }
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
@@ -357,7 +349,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		}
 
 		// FIXME replace the dummy empty slices with real data
-		let (proposal_work, proof) = if let Some((_inout, proof, _batchable_proof)) = author_block(
+		let (proposal_work, vrf_output, proof) = if let Some((inout, proof, _batchable_proof)) = author_block(
 			&[0u8; 0], slot_info.number, &[0u8; 0],	0, &authorities, &pair, u64::MAX / 4) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
@@ -386,7 +378,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 			(Timeout::new(
 				proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
 				remaining_duration,
-			), proof)
+			), inout.to_output(), proof)
 		} else {
 			return Box::new(future::ok(()));
 		};
@@ -424,6 +416,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 							signer: pair.public(),
 						},
 						slot_num,
+						vrf_output,
 					});
 
 					let import_block: ImportBlock<B> = ImportBlock {
@@ -468,7 +461,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
-fn check_header<B: Block>(
+fn check_header<B: Block + Sized>(
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -481,28 +474,40 @@ fn check_header<B: Block>(
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
 
-	let BabeSeal { slot_num, signature, .. } = digest_item.as_babe_seal().ok_or_else(|| {
+	let BabeSeal { slot_num, signature: LocalizedSignature { signer, signature }, proof, vrf_output } = digest_item.as_babe_seal().ok_or_else(|| {
 		debug!(target: "babe", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
-
+	// FIXME!!
+	let threshold = u64::MAX / 4;
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
 		Ok(CheckedHeader::Deferred(header, slot_num))
+	} else if !authorities.contains(&signer) {
+		Err("Slot Author not found".to_string())
 	} else {
-		// check the signature is valid under the expected authority and
-		// chain state.
-		let expected_author = match slot_author(slot_num, &authorities) {
-			None => return Err("Slot Author not found".to_string()),
-			Some(author) => author,
-		};
-
 		let pre_hash = header.hash();
 		let to_sign = (slot_num, pre_hash).encode();
-		let public = expected_author;
 
-		if sr25519::Pair::verify(&signature.signature, &to_sign[..], public) {
-			Ok(CheckedHeader::Checked(header, digest_item))
+		if sr25519::Pair::verify(&signature, &to_sign[..], &signer) {
+			let (inout, _batchable_proof) = {
+				let transcript = make_transcript(
+					Default::default(),
+					slot_num,
+					Default::default(),
+					0,
+				);
+				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| p.vrf_verify(transcript, &vrf_output, &proof)).map_err(|s| {
+					debug!(target: "babe", "VRF verification failed: {:?}", s);
+					format!("VRF verification failed")
+				})?
+			};
+			let r: u64 = inout.make_chacharng(b"substrate-babe-vrf").gen();
+			if r < threshold {
+				Ok(CheckedHeader::Checked(header, digest_item))
+			} else {
+				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
+			}
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -636,6 +641,21 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 /// 2. * VRF randomness
 ///    * relative time
 
+fn make_transcript(
+	randomness: &[u8],
+	slot_number: u64,
+	genesis_hash: &[u8],
+	epoch: u64,
+) -> Transcript {
+	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
+	transcript.proto_name(&BABE_ENGINE_ID);
+	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
+	transcript.commit_bytes(b"genesis block hash", genesis_hash);
+	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
+	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript
+}
+
 /// Hash into chain:
 /// 
 /// * slot number
@@ -653,15 +673,15 @@ fn author_block(
 ) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
 	// FIXME this is O(n)
 	if !authorities.contains(&key.public()) { return None }
-
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.proto_name(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"genesis block hash", genesis_hash);
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
-
-	let (inout, proof, batchable_proof) = get_keypair(key).vrf_sign(transcript);
+	let (inout, proof, batchable_proof) = {
+		let transcript = make_transcript(
+			randomness,
+			slot_number,
+			genesis_hash,
+			epoch,
+		);
+		get_keypair(key).vrf_sign(transcript)
+	};
 	let r: u64 = inout.make_chacharng(b"substrate-babe-vrf").gen();
 	if r < threshold {
 		Some((inout, proof, batchable_proof))
