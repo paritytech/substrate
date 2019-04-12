@@ -176,9 +176,10 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 pub struct TombstoneContractInfo<T: Trait>(T::Hash);
 
 impl<T: Trait> TombstoneContractInfo<T> {
-	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
-		let mut buf = storage_root;
-		buf.extend_from_slice(&storage_size.to_le_bytes());
+	fn new(storage_root: Option<Vec<u8>>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
+		let mut buf = Vec::new();
+		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
+		storage_size.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
 		TombstoneContractInfo(T::Hashing::hash(&buf[..]))
 	}

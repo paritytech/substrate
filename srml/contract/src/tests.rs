@@ -34,7 +34,7 @@ use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
 	Trait, ComputeDispatchFee, TrieIdGenerator, TrieId,
-	ContractInfoOf, ContractInfo, AliveContractInfo,
+	ContractInfoOf, ContractInfo, RawAliveContractInfo,
 };
 use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
@@ -252,7 +252,7 @@ fn account_removal_removes_storage() {
 			// Set up two accounts with free balance above the existential threshold.
 			{
 				Balances::deposit_creating(&1, 110);
-				ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(AliveContractInfo {
+				ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
 					trie_id: unique_id1.to_vec(),
 					storage_size: Contract::storage_size_offset(),
 					deduct_block: System::block_number(),
@@ -264,7 +264,7 @@ fn account_removal_removes_storage() {
 				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
 
 				Balances::deposit_creating(&2, 110);
-				ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(AliveContractInfo {
+				ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
 					trie_id: unique_id2.to_vec(),
 					storage_size: Contract::storage_size_offset(),
 					deduct_block: System::block_number(),

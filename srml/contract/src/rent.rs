@@ -1,5 +1,5 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
-use runtime_primitives::traits::{As, CheckedDiv, Saturating, Zero, Bounded};
+use runtime_primitives::traits::{As, CheckedDiv, Saturating, Zero, Bounded, CheckedMul};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 
@@ -39,8 +39,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let effective_storage_size =
 		<BalanceOf<T>>::sa(contract.storage_size).saturating_sub(free_storage);
 
-	let fee_per_block: BalanceOf<T> = effective_storage_size.checked_mul(<Module<T>>::rent_byte_price())
-		.unwrap_or(BalanceOf<T>::max_value());
+	let fee_per_block = effective_storage_size.checked_mul(&<Module<T>>::rent_byte_price())
+		.unwrap_or(<BalanceOf<T>>::max_value());
 
 	if fee_per_block.is_zero() {
 		// The rent deposit offset reduced the fee to 0. This means that the contract
@@ -49,8 +49,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	}
 
 	let blocks_to_rent = block_number.saturating_sub(contract.deduct_block);
-	let rent = fee_per_block.checked_mul(<BalanceOf<T>>::sa(blocks_to_rent.as_()))
-		.unwrap_or(BalanceOf<T>::max_value());
+	let rent = fee_per_block.checked_mul(&<BalanceOf<T>>::sa(blocks_to_rent.as_()))
+		.unwrap_or(<BalanceOf<T>>::max_value());
 	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
 
 	let rent_limited = rent.min(contract.rent_allowance);
@@ -108,9 +108,12 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		}
 
 		if !is_below_subsistence {
+			// Note: this operation is heavy.
+			// Note: if the storage hasn't been touched then it returns None, which is OK.
+			let child_storage_root = runtime_io::child_storage_root(&contract.trie_id);
+
 			let tombstone = TombstoneContractInfo::new(
-				// Note: this operation is heavy
-				runtime_io::child_storage_root(&contract.trie_id).unwrap(), // TODO TODO: this unwrap ?
+				child_storage_root,
 				contract.storage_size,
 				contract.code_hash,
 			);
