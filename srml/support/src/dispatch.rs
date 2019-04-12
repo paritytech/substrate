@@ -34,7 +34,7 @@ pub enum Never {}
 /// or an error message.
 pub type Result = result::Result<(), &'static str>;
 
-/// A lazy call (module function and argument values) that can be executed via its dispatch()
+/// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Dispatchable {
 	/// Every function call to your runtime has an origin, which specifies where the extrinsic was
