@@ -37,7 +37,7 @@ pub type Result = result::Result<(), &'static str>;
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Dispatchable {
-	/// Every function call to your runtime has an origin, which specifies where the extrinsic was
+	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
 	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
 	type Origin;
