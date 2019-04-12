@@ -35,8 +35,9 @@ pub use once_cell;
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::generator::Storage as GenericStorage;
-pub use self::storage::unhashed::generator::UnhashedStorage as GenericUnhashedStorage;
+pub use self::storage::twox_128::generator::Twox128Storage;
+pub use self::storage::blake2_256::generator::Blake2_256Storage;
+pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]
 pub mod dispatch;
@@ -56,7 +57,7 @@ pub mod inherent;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
+pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;

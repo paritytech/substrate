@@ -18,7 +18,11 @@ pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
 	ModuleMetadata, RuntimeMetadataV3,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
+	StorageMetadata, StorageFunctionMetadata,
+	StorageFunctionType, StorageFunctionModifier,
+	DefaultByte,
 };
+
 
 /// Implements the metadata support for the given runtime and all its modules.
 ///

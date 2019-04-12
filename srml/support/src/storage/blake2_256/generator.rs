@@ -14,12 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::codec;
-use runtime_io::blake2_256;
-use crate::rstd::vec::Vec;
+//! Abstract storage to use on Blake2_256Storage trait
 
-/// Abstraction around storage with unhashed access.
-pub trait UnhashedStorage {
+use crate::codec;
+use crate::rstd::prelude::{Vec, Box};
+#[cfg(feature = "std")]
+use crate::storage::unhashed::generator::UnhashedStorage;
+#[cfg(feature = "std")]
+use runtime_io::blake2_256;
+
+/// Abstraction around storage.
+pub trait Blake2_256Storage {
 	/// true if the key exists in storage.
 	fn exists(&self, key: &[u8]) -> bool;
 
@@ -40,9 +45,6 @@ pub trait UnhashedStorage {
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]);
 
-	/// Remove the bytes of a key from storage.
-	fn kill_prefix(&self, prefix: &[u8]);
-
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
 		let value = self.get(key);
@@ -59,44 +61,26 @@ pub trait UnhashedStorage {
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl UnhashedStorage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
+impl Blake2_256Storage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
 	fn exists(&self, key: &[u8]) -> bool {
-		self.borrow().contains_key(key)
+		UnhashedStorage::exists(self, &blake2_256(key))
 	}
 
 	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		self.borrow().get(key)
-			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
+		UnhashedStorage::get(self, &blake2_256(key))
 	}
 
 	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		self.borrow_mut().insert(key.to_vec(), codec::Encode::encode(val));
+		UnhashedStorage::put(self, &blake2_256(key), val)
 	}
 
 	fn kill(&self, key: &[u8]) {
-		self.borrow_mut().remove(key);
-	}
-
-	fn kill_prefix(&self, prefix: &[u8]) {
-		self.borrow_mut().retain(|key, _| {
-			!key.starts_with(prefix)
-		})
+		UnhashedStorage::kill(self, &blake2_256(key))
 	}
 }
 
-/// An implementation of a map with a two keys.
-///
-/// It provides an important ability to efficiently remove all entries
-/// that have a common first key.
-///
-/// # Mapping of keys to a storage path
-///
-/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
-/// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
-/// is a hash of a `Key2`.
-///
-/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
-pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> {
+/// A strongly-typed map in storage.
+pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -104,41 +88,38 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(k1: &K1, k2: &K2) -> Vec<u8>;
-
-	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
-	fn prefix_for(k1: &K1) -> Vec<u8> {
-		let mut key = Self::prefix().to_vec();
-		codec::Encode::encode_to(k1, &mut key);
-		blake2_256(&key).to_vec()
-	}
+	fn key_for(x: &K) -> Vec<u8>;
 
 	/// true if the value is defined in storage.
-	fn exists<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> bool {
-		storage.exists(&Self::key_for(k1, k2))
+	fn exists<S: Blake2_256Storage>(key: &K, storage: &S) -> bool {
+		storage.exists(&Self::key_for(key)[..])
 	}
 
 	/// Load the value associated with the given key from the map.
-	fn get<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+	fn get<S: Blake2_256Storage>(key: &K, storage: &S) -> Self::Query;
 
 	/// Take the value under a key.
-	fn take<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+	fn take<S: Blake2_256Storage>(key: &K, storage: &S) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<S: UnhashedStorage>(k1: &K1, k2: &K2, val: &V, storage: &S) {
-		storage.put(&Self::key_for(k1, k2), val);
+	fn insert<S: Blake2_256Storage>(key: &K, val: &V, storage: &S) {
+		storage.put(&Self::key_for(key)[..], val);
 	}
 
 	/// Remove the value under a key.
-	fn remove<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) {
-		storage.kill(&Self::key_for(k1, k2));
-	}
-
-	/// Removes all entries that shares the `k1` as the first key.
-	fn remove_prefix<S: UnhashedStorage>(k1: &K1, storage: &S) {
-		storage.kill_prefix(&Self::prefix_for(k1));
+	fn remove<S: Blake2_256Storage>(key: &K, storage: &S) {
+		storage.kill(&Self::key_for(key)[..]);
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &S) -> R;
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Blake2_256Storage>(key: &K, f: F, storage: &S) -> R;
+}
+
+/// A `StorageMap` with enumerable entries.
+pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
+	/// Return current head element.
+	fn head<S: Blake2_256Storage>(storage: &S) -> Option<K>;
+
+	/// Enumerate all elements in the map.
+	fn enumerate<'a, S: Blake2_256Storage>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }

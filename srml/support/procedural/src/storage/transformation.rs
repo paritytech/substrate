@@ -156,13 +156,13 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #module_ident<#traitinstance, #instance> {
 			#impl_store_fns
 			#[doc(hidden)]
-			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
-				#scrate::storage::generator::StorageMetadata {
-					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
+			pub fn store_metadata() -> #scrate::metadata::StorageMetadata {
+				#scrate::metadata::StorageMetadata {
+					functions: #scrate::metadata::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
 			#[doc(hidden)]
-			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
+			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageFunctionMetadata] {
 				#store_functions_to_metadata
 			}
 			#[doc(hidden)]
@@ -284,7 +284,7 @@ fn decl_store_extra_genesis(
 						use #scrate::codec::{Encode, Decode};
 
 						let v = (#builder)(&self);
-						<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
+						<#name<#traitinstance, #instance> as #scrate::storage::twox_128::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -294,7 +294,7 @@ fn decl_store_extra_genesis(
 
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
+							<#name<#traitinstance, #instance> as #scrate::storage::blake2_256::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
 				},
@@ -402,7 +402,7 @@ fn decl_store_extra_genesis(
 
 					quote!{
 						#[serde(skip)]
-						pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>,
+						pub _genesis_phantom_data: #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>,
 					},
 					quote!{
 						_genesis_phantom_data: Default::default(),
@@ -440,12 +440,12 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			impl#fparam_impl #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
 				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
-					use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-					let storage = (RefCell::new(r), PhantomData::<Self>::default());
+					use #scrate::rstd::cell::RefCell;
+					let storage = RefCell::new(r);
 
 					#builders
 
-					let r = storage.0.into_inner();
+					let r = storage.into_inner();
 
 					#scall(r, c, &self);
 
@@ -662,15 +662,15 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
-							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
+							<#name<#traitinstance, #instance> as #scrate::storage::twox_128::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
 						}
 					}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
 						#( #[ #attrs ] )*
-						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #value_type {
-							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
+						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
+							<#name<#traitinstance, #instance> as #scrate::storage::blake2_256::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
@@ -678,8 +678,8 @@ fn impl_store_fns(
 					quote!{
 						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
 						where
-							KArg1: #scrate::storage::generator::Borrow<#key1_type>,
-							KArg2: #scrate::storage::generator::Borrow<#key2_type>,
+							KArg1: #scrate::rstd::borrow::Borrow<#key1_type>,
+							KArg2: #scrate::rstd::borrow::Borrow<#key2_type>,
 						{
 							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>> :: get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
 						}
@@ -727,17 +727,17 @@ fn store_functions_to_metadata (
 		let stype = match type_infos.kind {
 			DeclStorageTypeInfosKind::Simple => {
 				quote!{
-					#scrate::storage::generator::StorageFunctionType::Plain(
-						#scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					#scrate::metadata::StorageFunctionType::Plain(
+						#scrate::metadata::DecodeDifferent::Encode(#styp),
 					)
 				}
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked } => {
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
-					#scrate::storage::generator::StorageFunctionType::Map {
-						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
-						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					#scrate::metadata::StorageFunctionType::Map {
+						key: #scrate::metadata::DecodeDifferent::Encode(#kty),
+						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
 						is_linked: #is_linked,
 					}
 				}
@@ -747,22 +747,22 @@ fn store_functions_to_metadata (
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
 				let k2_hasher = clean_type_string(&key2_hasher.to_string());
 				quote!{
-					#scrate::storage::generator::StorageFunctionType::DoubleMap {
-						key1: #scrate::storage::generator::DecodeDifferent::Encode(#k1ty),
-						key2: #scrate::storage::generator::DecodeDifferent::Encode(#k2ty),
-						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
-						key2_hasher: #scrate::storage::generator::DecodeDifferent::Encode(#k2_hasher),
+					#scrate::metadata::StorageFunctionType::DoubleMap {
+						key1: #scrate::metadata::DecodeDifferent::Encode(#k1ty),
+						key2: #scrate::metadata::DecodeDifferent::Encode(#k2ty),
+						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
+						key2_hasher: #scrate::metadata::DecodeDifferent::Encode(#k2_hasher),
 					}
 				}
 			},
 		};
 		let modifier = if type_infos.is_option {
 			quote!{
-				#scrate::storage::generator::StorageFunctionModifier::Optional
+				#scrate::metadata::StorageFunctionModifier::Optional
 			}
 		} else {
 			quote!{
-				#scrate::storage::generator::StorageFunctionModifier::Default
+				#scrate::metadata::StorageFunctionModifier::Default
 			}
 		};
 		let default = default_value.inner.as_ref().map(|d| &d.expr)
@@ -786,16 +786,16 @@ fn store_functions_to_metadata (
 		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
 		let cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
 		let item = quote! {
-			#scrate::storage::generator::StorageFunctionMetadata {
-				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
+			#scrate::metadata::StorageFunctionMetadata {
+				name: #scrate::metadata::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
-				default: #scrate::storage::generator::DecodeDifferent::Encode(
-					#scrate::storage::generator::DefaultByteGetter(
+				default: #scrate::metadata::DecodeDifferent::Encode(
+					#scrate::metadata::DefaultByteGetter(
 						&#struct_name::<#traitinstance, #instance>(#scrate::rstd::marker::PhantomData)
 					)
 				),
-				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
+				documentation: #scrate::metadata::DecodeDifferent::Encode(&[ #docs ]),
 			},
 		};
 		items.extend(item);
@@ -806,7 +806,7 @@ fn store_functions_to_metadata (
 			#[allow(non_upper_case_globals)]
 			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#cache_name.get_or_init(|| {
@@ -816,7 +816,7 @@ fn store_functions_to_metadata (
 				}
 			}
 			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #value_type = #default;

@@ -67,13 +67,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		let mutate_impl = if !is_option {
 			quote!{
-				<Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage)
+				<Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::put(&val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => <Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage),
-					None => <Self as #scrate::storage::generator::StorageValue<#typ>>::kill(storage),
+					Some(ref val) => <Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::put(&val, storage),
+					None => <Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::kill(storage),
 				}
 			}
 		};
@@ -96,9 +96,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		// generator for value
 		quote!{
 			#( #[ #attrs ] )*
-			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>
+				(#scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable>
+				#scrate::storage::twox_128::generator::StorageValue<#typ> for #name<#traitinstance, #instance>
+			{
 				type Query = #value_type;
 
 				/// Get the storage key.
@@ -107,20 +110,20 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Load the value from the provided storage instance.
-				fn get<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
-					storage.get(<Self as #scrate::storage::generator::StorageValue<#typ>>::key())
+				fn get<S: #scrate::Twox128Storage>(storage: &S) -> Self::Query {
+					storage.get(<Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take a value from storage, removing it afterwards.
-				fn take<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
-					storage.take(<Self as #scrate::storage::generator::StorageValue<#typ>>::key())
+				fn take<S: #scrate::Twox128Storage>(storage: &S) -> Self::Query {
+					storage.take(<Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key.
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(f: F, storage: &S) -> R {
-					let mut val = <Self as #scrate::storage::generator::StorageValue<#typ>>::get(storage);
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Twox128Storage>(f: F, storage: &S) -> R {
+					let mut val = <Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::get(storage);
 
 					let ret = f(&mut val);
 					#mutate_impl ;
@@ -147,15 +150,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
 
+		let as_map = quote!{ <Self as #scrate::storage::blake2_256::generator::StorageMap<#kty, #typ>> };
+
 		let mutate_impl = if !is_option {
 			quote!{
-				<Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage)
+				#as_map::insert(key, &val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage),
-					None => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::remove(key, storage),
+					Some(ref val) => #as_map::insert(key, &val, storage),
+					None => #as_map::remove(key, storage),
 				}
 			}
 		};
@@ -178,9 +183,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		// generator for map
 		quote!{
 			#( #[ #attrs ] )*
-			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>
+				(#scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable>
+				#scrate::storage::blake2_256::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+			{
 				type Query = #value_type;
 
 				/// Get the prefix key in storage.
@@ -190,26 +198,26 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				/// Get the storage key used to fetch a value corresponding to a specific key.
 				fn key_for(x: &#kty) -> #scrate::rstd::vec::Vec<u8> {
-					let mut key = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::prefix().to_vec();
+					let mut key = #as_map::prefix().to_vec();
 					#scrate::codec::Encode::encode_to(x, &mut key);
 					key
 				}
 
 				/// Load the value associated with the given key from the map.
-				fn get<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let key = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key);
+				fn get<S: #scrate::Blake2_256Storage>(key: &#kty, storage: &S) -> Self::Query {
+					let key = #as_map::key_for(key);
 					storage.get(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take the value, reading and removing it.
-				fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let key = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key);
+				fn take<S: #scrate::Blake2_256Storage>(key: &#kty, storage: &S) -> Self::Query {
+					let key = #as_map::key_for(key);
 					storage.take(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
-					let mut val = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::get(key, storage);
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Blake2_256Storage>(key: &#kty, f: F, storage: &S) -> R {
+					let mut val = #as_map::get(key, storage);
 
 					let ret = f(&mut val);
 					#mutate_impl ;
@@ -264,8 +272,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		let name_lowercase = name.to_string().to_lowercase();
 		let inner_module = syn::Ident::new(&format!("__linked_map_details_for_{}_do_not_use", name_lowercase), name.span());
 		let linkage = syn::Ident::new(&format!("__LinkageFor{}DoNotUse", name), name.span());
-		let phantom_data = quote! { #scrate::storage::generator::PhantomData };
-		let as_map = quote!{ <Self as #scrate::storage::generator::StorageMap<#kty, #typ>> };
+		let phantom_data = quote! { #scrate::rstd::marker::PhantomData };
+		let as_map = quote!{ <Self as #scrate::storage::blake2_256::generator::StorageMap<#kty, #typ>> };
 		let put_or_insert = quote! {
 			match linkage {
 				Some(linkage) => storage.put(key_for, &(val, linkage)),
@@ -316,14 +324,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					pub _data: #phantom_data<V>,
 				}
 
-				impl<'a, S: #scrate::GenericStorage, #traitinstance: #traittype, #instance #bound_instantiable> Iterator for Enumerator<'a, S, #kty, (#typ, #traitinstance, #instance)>
+				impl<'a, S: #scrate::Blake2_256Storage, #traitinstance: #traittype, #instance #bound_instantiable>
+					Iterator for Enumerator<'a, S, #kty, (#typ, #traitinstance, #instance)>
 					where #traitinstance: 'a
 				{
 					type Item = (#kty, #typ);
 
 					fn next(&mut self) -> Option<Self::Item> {
 						let next = self.next.take()?;
-						let key_for = <super::#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(&next);
+						let key_for = <super::#name<#traitinstance, #instance>
+							as #scrate::storage::blake2_256::generator::StorageMap<#kty, #typ>>::key_for(&next);
+
 						let (val, linkage): (#typ, Linkage<#kty>) = self.storage.get(&*key_for)
 							.expect("previous/next only contain existing entires; we enumerate using next; entry exists; qed");
 						self.next = linkage.next;
@@ -336,26 +347,26 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					///
 					/// Takes care of updating previous and next elements points
 					/// as well as updates head if the element is first or last.
-					fn remove_linkage<S: #scrate::GenericStorage>(linkage: Linkage<#kty>, storage: &S);
+					fn remove_linkage<S: #scrate::Blake2_256Storage>(linkage: Linkage<#kty>, storage: &S);
 
 					/// Read the contained data and it's linkage.
-					fn read_with_linkage<S: #scrate::GenericStorage>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>;
+					fn read_with_linkage<S: #scrate::Blake2_256Storage>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>;
 
 					/// Generate linkage for newly inserted element.
 					///
 					/// Takes care of updating head and previous head's pointer.
-					fn new_head_linkage<S: #scrate::GenericStorage>(
+					fn new_head_linkage<S: #scrate::Blake2_256Storage>(
 						storage: &S,
 						key: &#kty,
 					) -> Linkage<#kty>;
 
 					/// Read current head pointer.
-					fn read_head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty>;
+					fn read_head<S: #scrate::Blake2_256Storage>(storage: &S) -> Option<#kty>;
 
 					/// Overwrite current head pointer.
 					///
 					/// If `None` is given head is removed from storage.
-					fn write_head<S: #scrate::GenericStorage>(storage: &S, head: Option<&#kty>);
+					fn write_head<S: #scrate::Blake2_256Storage>(storage: &S, head: Option<&#kty>);
 				}
 			}
 		};
@@ -365,7 +376,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#phantom_data<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> self::#inner_module::Utils<#traitinstance, #instance> for #name<#traitinstance, #instance> {
-				fn remove_linkage<S: #scrate::GenericStorage>(
+				fn remove_linkage<S: #scrate::Blake2_256Storage>(
 					linkage: self::#inner_module::Linkage<#kty>,
 					storage: &S,
 				) {
@@ -394,14 +405,14 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					}
 				}
 
-				fn read_with_linkage<S: #scrate::GenericStorage>(
+				fn read_with_linkage<S: #scrate::Blake2_256Storage>(
 					storage: &S,
 					key: &[u8],
 				) -> Option<(#value_type, self::#inner_module::Linkage<#kty>)> {
 					storage.get(key)
 				}
 
-				fn new_head_linkage<S: #scrate::GenericStorage>(
+				fn new_head_linkage<S: #scrate::Blake2_256Storage>(
 					storage: &S,
 					key: &#kty,
 				) -> self::#inner_module::Linkage<#kty> {
@@ -433,11 +444,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					}
 				}
 
-				fn read_head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
+				fn read_head<S: #scrate::Blake2_256Storage>(storage: &S) -> Option<#kty> {
 					storage.get(#final_head_key)
 				}
 
-				fn write_head<S: #scrate::GenericStorage>(storage: &S, head: Option<&#kty>) {
+				fn write_head<S: #scrate::Blake2_256Storage>(storage: &S, head: Option<&#kty>) {
 					match head {
 						Some(head) => storage.put(#final_head_key, head),
 						None => storage.kill(#final_head_key),
@@ -451,7 +462,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			#structure
 
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable>
+				#scrate::storage::blake2_256::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+			{
 				type Query = #value_type;
 
 				/// Get the prefix key in storage.
@@ -467,12 +480,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Load the value associated with the given key from the map.
-				fn get<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
+				fn get<S: #scrate::Blake2_256Storage>(key: &#kty, storage: &S) -> Self::Query {
 					storage.get(&*#as_map::key_for(key)).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take the value, reading and removing it.
-				fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::Blake2_256Storage>(key: &#kty, storage: &S) -> Self::Query {
 					use self::#inner_module::Utils;
 
 					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
@@ -486,12 +499,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Remove the value under a key.
-				fn remove<S: #scrate::GenericStorage>(key: &#kty, storage: &S) {
+				fn remove<S: #scrate::Blake2_256Storage>(key: &#kty, storage: &S) {
 					#as_map::take(key, storage);
 				}
 
 				/// Store a value to be associated with the given key from the map.
-				fn insert<S: #scrate::GenericStorage>(key: &#kty, val: &#typ, storage: &S) {
+				fn insert<S: #scrate::Blake2_256Storage>(key: &#kty, val: &#typ, storage: &S) {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -505,7 +518,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Blake2_256Storage>(key: &#kty, f: F, storage: &S) -> R {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -519,20 +532,22 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 
-			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
-				fn head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
+			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
+				#scrate::storage::blake2_256::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+			{
+				fn head<S: #scrate::Blake2_256Storage>(storage: &S) -> Option<#kty> {
 					use self::#inner_module::Utils;
 
 					Self::read_head(storage)
 				}
 
-				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> #scrate::storage::generator::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
+				fn enumerate<'a, S: #scrate::Blake2_256Storage>(storage: &'a S) -> #scrate::rstd::boxed::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
 					#kty: 'a,
 					#typ: 'a,
 				{
 					use self::#inner_module::{Utils, Enumerator};
 
-					#scrate::storage::generator::Box::new(Enumerator {
+					#scrate::rstd::boxed::Box::new(Enumerator {
 						next: Self::read_head(storage),
 						storage,
 						_data: #phantom_data::<(#typ, #traitinstance, #instance)>::default(),
@@ -593,9 +608,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		// generator for double map
 		quote!{
 			#( #[ #attrs ] )*
-			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>
+				(#scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ> for #name<#traitinstance, #instance> {
+			impl<#traitinstance: #traittype, #instance #bound_instantiable>
+				#scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ> for #name<#traitinstance, #instance>
+			{
 				type Query = #value_type;
 
 				fn prefix() -> &'static [u8] {
@@ -608,17 +626,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					key
 				}
 
-				fn get<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+				fn get<S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
 					let key = #as_double_map::key_for(key1, key2);
 					storage.get(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn take<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
 					let key = #as_double_map::key_for(key1, key2);
 					storage.take(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &S) -> R {
 					let mut val = #as_double_map::get(key1, key2, storage);
 
 					let ret = f(&mut val);
