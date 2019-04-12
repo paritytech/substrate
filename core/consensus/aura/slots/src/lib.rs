@@ -156,7 +156,7 @@ pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 				}
 
 				let slot_num = slot_info.number;
-				let chain_head = match client.best_block_header() {
+				let chain_head = match client.best_block_header_for_authoring() {
 					Ok(x) => x,
 					Err(e) => {
 						warn!(target: "aura", "Unable to author block in slot {}. \

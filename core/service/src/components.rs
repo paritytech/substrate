@@ -619,7 +619,8 @@ mod tests {
 			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
 			Extrinsic::Transfer(transfer, signature)
 		};
-		let best = LongestChain::new(client.backend().clone(), client.import_lock()).best_block_header().unwrap();
+		let best = LongestChain::new(client.backend().clone(), client.import_lock())
+			.best_block_header_for_authoring().unwrap();
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 

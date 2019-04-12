@@ -135,7 +135,7 @@ impl<Components: components::Components> Service<Components> {
 			client.clone(),
 			select_chain.clone()
 		)?);
-		let best_header = select_chain.best_block_header()?;
+		let best_header = select_chain.best_block_header_for_authoring()?;
 
 		let version = config.full_version();
 		info!("Best block: #{}", best_header.number());

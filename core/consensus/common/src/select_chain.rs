@@ -23,63 +23,44 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 /// specific chain build.
 ////
 /// The Strategy can be customised for the two use cases of authoring new blocks
-/// upon the best chain or which fork to finalise or just the main methods
-/// `best_block_header` and `best_containing` can be implemented if the same strategy
-/// is being used.
+/// upon the best chain or which fork to finalise. Unless implemented differently
+/// by default finalisation methods fall back to use authoring, so as a minimum
+/// `_authoring`-functions must be implemented. 
+///
+/// Any particular user must make explicit, however, whether they intend to finalise
+/// or author through the using the right function call, as these might differ in
+/// some implemntations.
+///
+/// Non-deterministicly finalising chains may only use the `_authoring` functions.
 pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 
 	/// Get all leaves of the chain: block hashes that have no children currently.
 	/// Leaves that can never be finalized will not be returned.
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, Error>;
 
-	/// Get best block header.
-	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, Error>;
-
-	/// Get best block header for authoring
-	fn best_block_header_for_authoring(&self) -> Result<<Block as BlockT>::Header, Error> {
-        self.best_block_header()
-    }
+	/// Get best block header for authoring.
+	fn best_block_header_for_authoring(&self) -> Result<<Block as BlockT>::Header, Error>;
 
 	/// Get best block header for finalisation
 	fn best_block_header_for_finalisation(&self) -> Result<<Block as BlockT>::Header, Error> {
-        self.best_block_header()
-    }
+		self.best_block_header_for_authoring()
+	}
 
 	/// Get the most recent block hash of the best chain that contain block
-    /// with the given `target_hash`.
-    fn best_containing(
-        &self,
-        target_hash: <Block as BlockT>::Hash,
-        maybe_max_number: Option<NumberFor<Block>>
-    ) -> Result<Option<<Block as BlockT>::Hash>, Error>;
-	
+	/// with the given `target_hash` for authoring
+	fn best_containing_for_authoring(
+		&self,
+		target_hash: <Block as BlockT>::Hash,
+		maybe_max_number: Option<NumberFor<Block>>
+	) -> Result<Option<<Block as BlockT>::Hash>, Error>;
+
 	/// Get the most recent block hash of the best chain that contain block
-    /// with the given `target_hash` for authoring
-    fn best_containing_for_authoring(
-        &self,
-        target_hash: <Block as BlockT>::Hash,
-        maybe_max_number: Option<NumberFor<Block>>
-    ) -> Result<Option<<Block as BlockT>::Hash>, Error> {
-        self.best_containing(target_hash, maybe_max_number)
-    }
-	/// Get the most recent block hash of the best chain that contain block
-    /// with the given `target_hash` for finalisation
-    fn best_containing_for_finalisation(
-        &self,
-        target_hash: <Block as BlockT>::Hash,
-        maybe_max_number: Option<NumberFor<Block>>
-    ) -> Result<Option<<Block as BlockT>::Hash>, Error> {
-        self.best_containing(target_hash, maybe_max_number)
-    }
+	/// with the given `target_hash` for finalisation
+	fn best_containing_for_finalisation(
+		&self,
+		target_hash: <Block as BlockT>::Hash,
+		maybe_max_number: Option<NumberFor<Block>>
+	) -> Result<Option<<Block as BlockT>::Hash>, Error> {
+		self.best_containing_for_authoring(target_hash, maybe_max_number)
+	}
 }
-
-
-// pub trait SelectChainClone<Block: BlockT, B> {
-// 	fn clone_box(&self) -> Box<SelectChain<Block, B>>;
-// }
-
-// impl<Block: BlockT, B> Clone for Box<SelectChain<Block, B>> {
-// 	fn clone(&self) -> Box<SelectChain<Block, B>> {
-// 		self.clone_box()
-// 	}
-// }

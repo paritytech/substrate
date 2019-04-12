@@ -1529,12 +1529,14 @@ where
 	B: backend::Backend<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
-	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
+	fn best_block_header_for_authoring(&self)
+		-> Result<<Block as BlockT>::Header, ConsensusError>
+	{
 		LongestChain::best_block_header(&self)
 			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
 	}
 
-	fn best_containing(
+	fn best_containing_for_authoring(
 		&self,
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>
@@ -1778,7 +1780,8 @@ pub(crate) mod tests {
 		);
 
 
-		assert_eq!(genesis_hash.clone(), longest_chain_select.best_containing(genesis_hash.clone(), None).unwrap().unwrap());
+		assert_eq!(genesis_hash.clone(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash.clone(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -1794,7 +1797,8 @@ pub(crate) mod tests {
 				Arc::new(backend),
 				client.import_lock());
 
-		assert_eq!(None, longest_chain_select.best_containing(uninserted_block.hash().clone(), None).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			uninserted_block.hash().clone(), None).unwrap());
 	}
 
 	#[test]
@@ -1929,9 +1933,12 @@ pub(crate) mod tests {
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(genesis_hash, None).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(a1.hash(), None).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(a2.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			a2.hash(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -2024,127 +2031,204 @@ pub(crate) mod tests {
 
 		// search without restriction
 
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(genesis_hash, None).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a1.hash(), None).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a2.hash(), None).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a3.hash(), None).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a4.hash(), None).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a5.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a2.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a3.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a4.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a5.hash(), None).unwrap().unwrap());
 
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b2.hash(), None).unwrap().unwrap());
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b3.hash(), None).unwrap().unwrap());
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b4.hash(), None).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b2.hash(), None).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b3.hash(), None).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b4.hash(), None).unwrap().unwrap());
 
-		assert_eq!(c3.hash(), longest_chain_select.best_containing(c3.hash(), None).unwrap().unwrap());
+		assert_eq!(c3.hash(), longest_chain_select.best_containing_for_authoring(
+			c3.hash(), None).unwrap().unwrap());
 
-		assert_eq!(d2.hash(), longest_chain_select.best_containing(d2.hash(), None).unwrap().unwrap());
+		assert_eq!(d2.hash(), longest_chain_select.best_containing_for_authoring(
+			d2.hash(), None).unwrap().unwrap());
 
 
 		// search only blocks with number <= 5. equivalent to without restriction for this scenario
 
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(genesis_hash, Some(5)).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a1.hash(), Some(5)).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a2.hash(), Some(5)).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a3.hash(), Some(5)).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a4.hash(), Some(5)).unwrap().unwrap());
-		assert_eq!(a5.hash(), longest_chain_select.best_containing(a5.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a2.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a3.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a4.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), longest_chain_select.best_containing_for_authoring(
+			a5.hash(), Some(5)).unwrap().unwrap());
 
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b2.hash(), Some(5)).unwrap().unwrap());
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b3.hash(), Some(5)).unwrap().unwrap());
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b4.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b2.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b3.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b4.hash(), Some(5)).unwrap().unwrap());
 
-		assert_eq!(c3.hash(), longest_chain_select.best_containing(c3.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(c3.hash(), longest_chain_select.best_containing_for_authoring(
+			c3.hash(), Some(5)).unwrap().unwrap());
 
-		assert_eq!(d2.hash(), longest_chain_select.best_containing(d2.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(d2.hash(), longest_chain_select.best_containing_for_authoring(
+			d2.hash(), Some(5)).unwrap().unwrap());
 
 
 		// search only blocks with number <= 4
 
-		assert_eq!(a4.hash(), longest_chain_select.best_containing(genesis_hash, Some(4)).unwrap().unwrap());
-		assert_eq!(a4.hash(), longest_chain_select.best_containing(a1.hash(), Some(4)).unwrap().unwrap());
-		assert_eq!(a4.hash(), longest_chain_select.best_containing(a2.hash(), Some(4)).unwrap().unwrap());
-		assert_eq!(a4.hash(), longest_chain_select.best_containing(a3.hash(), Some(4)).unwrap().unwrap());
-		assert_eq!(a4.hash(), longest_chain_select.best_containing(a4.hash(), Some(4)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a5.hash(), Some(4)).unwrap());
+		assert_eq!(a4.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), longest_chain_select.best_containing_for_authoring(
+			a2.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), longest_chain_select.best_containing_for_authoring(
+			a3.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), longest_chain_select.best_containing_for_authoring(
+			a4.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a5.hash(), Some(4)).unwrap());
 
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b2.hash(), Some(4)).unwrap().unwrap());
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b3.hash(), Some(4)).unwrap().unwrap());
-		assert_eq!(b4.hash(), longest_chain_select.best_containing(b4.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b2.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b3.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), longest_chain_select.best_containing_for_authoring(
+			b4.hash(), Some(4)).unwrap().unwrap());
 
-		assert_eq!(c3.hash(), longest_chain_select.best_containing(c3.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(c3.hash(), longest_chain_select.best_containing_for_authoring(
+			c3.hash(), Some(4)).unwrap().unwrap());
 
-		assert_eq!(d2.hash(), longest_chain_select.best_containing(d2.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(d2.hash(), longest_chain_select.best_containing_for_authoring(
+			d2.hash(), Some(4)).unwrap().unwrap());
 
 
 		// search only blocks with number <= 3
 
-		assert_eq!(a3.hash(), longest_chain_select.best_containing(genesis_hash, Some(3)).unwrap().unwrap());
-		assert_eq!(a3.hash(), longest_chain_select.best_containing(a1.hash(), Some(3)).unwrap().unwrap());
-		assert_eq!(a3.hash(), longest_chain_select.best_containing(a2.hash(), Some(3)).unwrap().unwrap());
-		assert_eq!(a3.hash(), longest_chain_select.best_containing(a3.hash(), Some(3)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a4.hash(), Some(3)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a5.hash(), Some(3)).unwrap());
+		assert_eq!(a3.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), longest_chain_select.best_containing_for_authoring(
+			a2.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), longest_chain_select.best_containing_for_authoring(
+			a3.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a4.hash(), Some(3)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a5.hash(), Some(3)).unwrap());
 
-		assert_eq!(b3.hash(), longest_chain_select.best_containing(b2.hash(), Some(3)).unwrap().unwrap());
-		assert_eq!(b3.hash(), longest_chain_select.best_containing(b3.hash(), Some(3)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b4.hash(), Some(3)).unwrap());
+		assert_eq!(b3.hash(), longest_chain_select.best_containing_for_authoring(
+			b2.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(b3.hash(), longest_chain_select.best_containing_for_authoring(
+			b3.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b4.hash(), Some(3)).unwrap());
 
-		assert_eq!(c3.hash(), longest_chain_select.best_containing(c3.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(c3.hash(), longest_chain_select.best_containing_for_authoring(
+			c3.hash(), Some(3)).unwrap().unwrap());
 
-		assert_eq!(d2.hash(), longest_chain_select.best_containing(d2.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(d2.hash(), longest_chain_select.best_containing_for_authoring(
+			d2.hash(), Some(3)).unwrap().unwrap());
 
 
 		// search only blocks with number <= 2
 
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(genesis_hash, Some(2)).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(a1.hash(), Some(2)).unwrap().unwrap());
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(a2.hash(), Some(2)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a3.hash(), Some(2)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a4.hash(), Some(2)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a5.hash(), Some(2)).unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(2)).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			a2.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a3.hash(), Some(2)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a4.hash(), Some(2)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a5.hash(), Some(2)).unwrap());
 
-		assert_eq!(b2.hash(), longest_chain_select.best_containing(b2.hash(), Some(2)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b3.hash(), Some(2)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b4.hash(), Some(2)).unwrap());
+		assert_eq!(b2.hash(), longest_chain_select.best_containing_for_authoring(
+			b2.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b3.hash(), Some(2)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b4.hash(), Some(2)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(c3.hash(), Some(2)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			c3.hash(), Some(2)).unwrap());
 
-		assert_eq!(d2.hash(), longest_chain_select.best_containing(d2.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(d2.hash(), longest_chain_select.best_containing_for_authoring(
+			d2.hash(), Some(2)).unwrap().unwrap());
 
 
 		// search only blocks with number <= 1
 
-		assert_eq!(a1.hash(), longest_chain_select.best_containing(genesis_hash, Some(1)).unwrap().unwrap());
-		assert_eq!(a1.hash(), longest_chain_select.best_containing(a1.hash(), Some(1)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a2.hash(), Some(1)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a3.hash(), Some(1)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a4.hash(), Some(1)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a5.hash(), Some(1)).unwrap());
+		assert_eq!(a1.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(1)).unwrap().unwrap());
+		assert_eq!(a1.hash(), longest_chain_select.best_containing_for_authoring(
+			a1.hash(), Some(1)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a2.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a3.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a4.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a5.hash(), Some(1)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(b2.hash(), Some(1)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b3.hash(), Some(1)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b4.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b2.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b3.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b4.hash(), Some(1)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(c3.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			c3.hash(), Some(1)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(d2.hash(), Some(1)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			d2.hash(), Some(1)).unwrap());
 
 		// search only blocks with number <= 0
 
-		assert_eq!(genesis_hash, longest_chain_select.best_containing(genesis_hash, Some(0)).unwrap().unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a1.hash(), Some(0)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a2.hash(), Some(0)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a3.hash(), Some(0)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a4.hash(), Some(0)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(a5.hash(), Some(0)).unwrap());
+		assert_eq!(genesis_hash, longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(0)).unwrap().unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a1.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a2.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a3.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a4.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			a5.hash(), Some(0)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(b2.hash(), Some(0)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b3.hash(), Some(0)).unwrap());
-		assert_eq!(None, longest_chain_select.best_containing(b4.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b2.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b3.hash(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			b4.hash(), Some(0)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(c3.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			c3.hash().clone(), Some(0)).unwrap());
 
-		assert_eq!(None, longest_chain_select.best_containing(d2.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, longest_chain_select.best_containing_for_authoring(
+			d2.hash().clone(), Some(0)).unwrap());
 	}
 
 	#[test]
@@ -2168,7 +2252,8 @@ pub(crate) mod tests {
 			client.import_lock()
 		);
 
-		assert_eq!(a2.hash(), longest_chain_select.best_containing(genesis_hash, Some(10)).unwrap().unwrap());
+		assert_eq!(a2.hash(), longest_chain_select.best_containing_for_authoring(
+			genesis_hash, Some(10)).unwrap().unwrap());
 	}
 
 	#[test]

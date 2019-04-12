@@ -92,7 +92,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
 				pending_change.effective_number() > chain_info.finalized_number &&
 				pending_change.effective_number() <= chain_info.best_number
 			{
-				let effective_block_hash = self.select_chain.best_containing(
+				let effective_block_hash = self.select_chain.best_containing_for_authoring(
 					pending_change.canon_hash,
 					Some(pending_change.effective_number()),
 				);
