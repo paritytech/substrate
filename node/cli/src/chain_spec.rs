@@ -135,6 +135,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			approval_voting_period: 2 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
+			decay_ratio: 0,
 			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
 		}),
 		council_voting: Some(CouncilVotingConfig {
@@ -292,6 +293,7 @@ pub fn testnet_genesis(
 			approval_voting_period: 20,
 			term_duration: 1000000,
 			desired_seats: (endowed_accounts.len() / 2 - initial_authorities.len()) as u32,
+			decay_ratio: 24,
 			inactive_grace_period: 1,
 		}),
 		council_voting: Some(CouncilVotingConfig {

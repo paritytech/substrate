@@ -102,6 +102,7 @@ mod tests {
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
+		decay_ratio: u32,
 		with_council: bool,
 	}
 
@@ -109,6 +110,7 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				balance_factor: 1,
+				decay_ratio: 24,
 				with_council: false,
 			}
 		}
@@ -121,6 +123,10 @@ mod tests {
 		}
 		pub fn balance_factor(mut self, factor: u64) -> Self {
 			self.balance_factor = factor;
+			self
+		}
+		pub fn decay_ratio(mut self, ratio: u32) -> Self {
+			self.decay_ratio = ratio;
 			self
 		}
 
@@ -163,6 +169,7 @@ mod tests {
 				approval_voting_period: 4,
 				presentation_duration: 2,
 				desired_seats: 2,
+				decay_ratio: self.decay_ratio,
 				term_duration: 5,
 			}.build_storage().unwrap().0);
 			t.extend(voting::GenesisConfig::<Test> {

@@ -363,6 +363,11 @@ decl_storage! {
 		pub TermDuration get(term_duration) config(): T::BlockNumber = T::BlockNumber::sa(5);
 		/// Number of accounts that should be sitting on the council.
 		pub DesiredSeats get(desired_seats) config(): u32;
+		/// Decay factor of weight when being accumulated. It should typically be set the council size
+		/// to keep the council secure.
+		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight increment step `t`.
+		/// 0 will result in no weight being added at all (normal approval voting).
+		pub DecayRatio get(decay_ratio) config(decay_ratio): u32 = 24;
 
 		// permanent state (always relevant, changes only at the finalization of voting)
 		/// The current council. When there's a vote going on, this should still be used for executive
@@ -651,16 +656,13 @@ impl<T: Trait> Module<T> {
 	/// to a voter's stake value to get the correct weight. Indeed, zero is
 	/// returned if T is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
-		// TODO: this still needs some bounds on how to behave on large numbers of t
+		let decay_ratio = BalanceOf::<T>::sa(Self::decay_ratio() as u64);
+		if t > 150 { return stake * decay_ratio }
 		let mut offset = stake;
-		let mut r = <BalanceOf<T> as Zero>::zero();
-		// TODO: decide on where to store this: 5/100 etc.
-		// - constant in code
-		// - storage config()
-		// - fixed to 1 + desired_seats().
-		let decay_factor = BalanceOf::<T>::sa(20);
+		let mut r = BalanceOf::<T>::zero();
+		let decay = decay_ratio + BalanceOf::<T>::sa(1);
 		for _ in 0..t {
-			offset = offset.saturating_sub(offset / decay_factor);
+			offset = offset.saturating_sub(offset / decay);
 			r += offset
 		}
 		r
@@ -894,7 +896,7 @@ mod tests {
 			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 100 + Council::get_offset(100, 1), 1), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 95, 1), (500, 5), (600, 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 19), (5, 19)]);
@@ -916,7 +918,7 @@ mod tests {
 			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 2), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 2), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 100 + Council::get_offset(100, 2), 2), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 95 + 91, 1), (500, 5), (600, 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 27), (5, 27)]);
@@ -939,7 +941,7 @@ mod tests {
 			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 3), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 3), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(1), 1, 100 + Council::get_offset(100, 3), 3), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 95 + 91 + 87, 1), (500, 5), (600, 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93 + 90, 1), (500, 5), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 35), (5, 35)]);
@@ -991,7 +993,7 @@ mod tests {
 			assert_eq!(Council::present_winner(Origin::signed(4), 4, 400, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(3), 3, 300 + Council::get_offset(300, 1), 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(2), 2, 300 + Council::get_offset(300, 1), 1), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(400, 4), (585, 2), (585, 3), (600, 6)]));
+			assert_eq!(Council::leaderboard(), Some(vec![(400, 4), (588, 2), (588, 3), (600, 6)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 19), (3, 19)]);
@@ -1000,11 +1002,11 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(22);
-			// 2 will not get re-elected with 300 + 285, instead just 300.
+			// 2 will not get re-elected with 300 + 288, instead just 300.
 			// because one of 3's candidates (3) won in previous round
 			// 4 on the other hand will get extra weight since it was unlucky.
 			assert_eq!(Council::present_winner(Origin::signed(3), 2, 300, 2), Ok(()));
-			assert_eq!(Council::present_winner(Origin::signed(4), 4, 400 + 380, 2), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(4), 4, 400 + Council::get_offset(400, 1), 2), Ok(()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(4, 27), (2, 27)]);
@@ -1057,8 +1059,8 @@ mod tests {
 			assert!(Council::presentation_active());
 			assert_eq!(Council::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
 			assert_eq!(Council::present_winner(Origin::signed(5), 5, 500, 1), Ok(()));
-			assert_eq!(Council::present_winner(Origin::signed(1), 1, 1000 + 95 /* pot */, 1), Ok(()));
-			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (500, 5), (600, 6), (1095, 1)]));
+			assert_eq!(Council::present_winner(Origin::signed(1), 1, 1000 + 96 /* pot */, 1), Ok(()));
+			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (500, 5), (600, 6), (1096, 1)]));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(1, 19), (6, 19)]);
@@ -1069,10 +1071,32 @@ mod tests {
 	fn get_offset_works() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_eq!(Council::get_offset(100, 0), 0);
-			assert_eq!(Council::get_offset(100, 1), 95);
-			assert_eq!(Council::get_offset(100, 2), 95 + 91);
-			assert_eq!(Council::get_offset(100, 3), 95 + 91 + 87);
-			assert_eq!(Council::get_offset(100, 4), 95 + 91 + 87 + 83);
+			assert_eq!(Council::get_offset(100, 1), 96);
+			assert_eq!(Council::get_offset(100, 2), 96 + 93);
+			assert_eq!(Council::get_offset(100, 3), 96 + 93 + 90);
+			assert_eq!(Council::get_offset(100, 4), 96 + 93 + 90 + 87);
+			// limit
+			assert_eq!(Council::get_offset(100, 1000), 100 * 24);
+
+			assert_eq!(Council::get_offset(50_000_000_000, 0), 0);
+			assert_eq!(Council::get_offset(50_000_000_000, 1), 48_000_000_000);
+			assert_eq!(Council::get_offset(50_000_000_000, 2), 48_000_000_000 + 46_080_000_000);
+			assert_eq!(Council::get_offset(50_000_000_000, 3), 48_000_000_000 + 46_080_000_000 + 44_236_800_000);
+			assert_eq!(Council::get_offset(50_000_000_000, 4), 48_000_000_000 + 46_080_000_000 + 44_236_800_000 + 42_467_328_000);
+			// limit
+			assert_eq!(Council::get_offset(50_000_000_000, 1000), 50_000_000_000 * 24);
+		})
+	}
+
+	#[test]
+	fn get_offset_with_zero_decay() {
+		with_externalities(&mut ExtBuilder::default().decay_ratio(0).build(), || {
+			assert_eq!(Council::get_offset(100, 0), 0);
+			assert_eq!(Council::get_offset(100, 1), 0);
+			assert_eq!(Council::get_offset(100, 2), 0);
+			assert_eq!(Council::get_offset(100, 3), 0);
+			// limit
+			assert_eq!(Council::get_offset(100, 1000), 0);
 		})
 	}
 
