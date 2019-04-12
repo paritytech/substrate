@@ -29,7 +29,7 @@ use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBloc
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
 use crate::cht;
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::call_executor::check_execution_proof;
 
@@ -193,7 +193,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
 		if remote_proof.max_block > request.max_block.0 || remote_proof.max_block < request.last_block.0 {
-			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
+			return Err(ClientError::ChangesTrieAccessFailed(format!(
 				"Invalid max_block used by the remote node: {}. Local: {}..{}..{}",
 				remote_proof.max_block, request.first_block.0, request.last_block.0, request.max_block.0,
 			)).into());
@@ -209,7 +209,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			.map(|last_root| *last_root >= request.tries_roots.0)
 			.unwrap_or(false);
 		if is_extra_first_root || is_extra_last_root {
-			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
+			return Err(ClientError::ChangesTrieAccessFailed(format!(
 				"Extra changes tries roots proofs provided by the remote node: [{:?}..{:?}]. Expected in range: [{}; {})",
 				remote_proof.roots.keys().next(), remote_proof.roots.keys().next_back(),
 				request.first_block.0, request.tries_roots.0,
@@ -247,7 +247,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			remote_max_block.as_(),
 			&request.key)
 		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
-		.map_err(|err| ClientErrorKind::ChangesTrieAccessFailed(err).into())
+		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
 	/// Check CHT-based proof for changes tries roots.
@@ -283,7 +283,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
 				if !storage.contains(&cht_root, &[]) {
-					return Err(ClientErrorKind::InvalidCHTProof.into());
+					return Err(ClientError::InvalidCHTProof.into());
 				}
 
 				// check proof for single changes trie root
@@ -320,7 +320,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Block::Header> {
 		let remote_header = remote_header.ok_or_else(||
-			ClientError::from(ClientErrorKind::InvalidCHTProof))?;
+			ClientError::from(ClientError::InvalidCHTProof))?;
 		let remote_header_hash = remote_header.hash();
 		cht::check_proof::<Block::Header, H>(
 			request.cht_root,
@@ -390,6 +390,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number
 pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
+	use parity_codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
@@ -436,7 +437,7 @@ pub mod tests {
 
 	type TestChecker = LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>;
 
-	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, usize) {
+	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, u32) {
 		// prepare remote client
 		let remote_client = test_client::new();
 		let remote_block_id = BlockId::Number(0);
@@ -445,7 +446,9 @@ pub mod tests {
 		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
-		let authorities_len = remote_client.authorities_at(&remote_block_id).unwrap().len();
+		let authorities_len = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::AUTHORITY_COUNT.to_vec()))
+			.unwrap()
+			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
 
 		// check remote read proof locally
@@ -470,7 +473,7 @@ pub mod tests {
 			let builder = remote_client.new_block().unwrap();
 			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 			local_headers_hashes.push(remote_client.block_hash(i + 1)
-				.map_err(|_| ClientErrorKind::Backend("TestError".into()).into()));
+				.map_err(|_| ClientError::Backend("TestError".into())));
 		}
 
 		// 'fetch' header proof from remote node

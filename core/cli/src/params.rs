@@ -118,6 +118,11 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
 	pub in_peers: u32,
 
+	/// By default, the network will use mDNS to discover other nodes on the local network. This
+	/// disables it.
+	#[structopt(long = "no-mdns")]
+	pub no_mdns: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams
@@ -256,7 +261,7 @@ pub struct ExecutionStrategies {
 	)]
 	pub block_construction_execution: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime while constructing blocks.
+	/// The means of execution used when calling into the runtime while using an off-chain worker.
 	#[structopt(
 		long = "offchain-worker-execution",
 		value_name = "STRATEGY",
@@ -300,7 +305,7 @@ pub struct RunCmd {
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 
-	/// Run in light client mode
+	/// Experimental: Run in light client mode
 	#[structopt(long = "light")]
 	pub light: bool,
 
@@ -323,6 +328,13 @@ pub struct RunCmd {
 	/// Specify WebSockets RPC server TCP port
 	#[structopt(long = "ws-port", value_name = "PORT")]
 	pub ws_port: Option<u16>,
+
+	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
+	/// It's a comma-separated list of origins (protocol://domain or special `null` value).
+	/// Value of `all` will disable origin validation.
+	/// Default is to allow localhost and https://polkadot.js.org origin.
+	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = "parse_cors"))]
+	pub rpc_cors: Option<Option<Vec<String>>>,
 
 	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
@@ -463,6 +475,23 @@ fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<std::error::Er
 			Ok((url, verbosity))
 		}
 	}
+}
+
+/// Parse cors origins
+fn parse_cors(s: &str) -> Result<Option<Vec<String>>, Box<std::error::Error>> {
+	let mut is_all = false;
+	let mut origins = Vec::new();
+	for part in s.split(',') {
+		match part {
+			"all" | "*" => {
+				is_all = true;
+				break;
+			},
+			other => origins.push(other.to_owned()),
+		}
+	}
+
+	Ok(if is_all { None } else { Some(origins) })
 }
 
 impl_augment_clap!(RunCmd);

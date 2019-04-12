@@ -204,6 +204,16 @@ where
 			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.child_storage(storage_key, key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||

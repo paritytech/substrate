@@ -17,18 +17,19 @@
 //! Light client blockchin backend. Only stores headers and justifications of recent
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
-use std::sync::Weak;
+use std::{sync::{Weak, Arc}, collections::HashMap};
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
 use runtime_primitives::{Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use consensus::well_known_cache_keys;
 
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache};
 use crate::cht;
-use crate::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
@@ -40,7 +41,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
@@ -61,7 +62,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
 
 	/// Get storage cache.
-	fn cache(&self) -> Option<&BlockchainCache<Block>>;
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>>;
 }
 
 /// Light client blockchain.
@@ -113,7 +114,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 					return Ok(None);
 				}
 
-				self.fetcher().upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
+				self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 					.remote_header(RemoteHeaderRequest {
 						cht_root: self.storage.header_cht_root(cht::SIZE, number)?,
 						block: number,
@@ -156,7 +157,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 		self.storage.last_finalized()
 	}
 
-	fn cache(&self) -> Option<&BlockchainCache<Block>> {
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
 		self.storage.cache()
 	}
 
@@ -166,6 +167,12 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		unimplemented!()
+	}
+}
+
+impl<S: Storage<Block>, F, Block: BlockT> ProvideCache<Block> for Blockchain<S, F> {
+	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
+		self.storage.cache()
 	}
 }
 
@@ -195,22 +202,22 @@ pub mod tests {
 
 	impl BlockchainHeaderBackend<Block> for DummyStorage {
 		fn header(&self, _id: BlockId<Block>) -> ClientResult<Option<Header>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn info(&self) -> ClientResult<Info<Block>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn status(&self, _id: BlockId<Block>) -> ClientResult<BlockStatus> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn number(&self, hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
 			if hash == Default::default() {
 				Ok(Some(Default::default()))
 			} else {
-				Err(ClientErrorKind::Backend("Test error".into()).into())
+				Err(ClientError::Backend("Test error".into()))
 			}
 		}
 
@@ -218,7 +225,7 @@ pub mod tests {
 			if number == 0 {
 				Ok(Some(Default::default()))
 			} else {
-				Err(ClientErrorKind::Backend("Test error".into()).into())
+				Err(ClientError::Backend("Test error".into()))
 			}
 		}
 	}
@@ -246,7 +253,7 @@ pub mod tests {
 		fn import_header(
 			&self,
 			_header: Header,
-			_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+			_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
@@ -254,31 +261,31 @@ pub mod tests {
 		}
 
 		fn set_head(&self, _block: BlockId<Block>) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn finalize_header(&self, _block: BlockId<Block>) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn last_finalized(&self) -> ClientResult<Hash> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Hash> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Err(ClientError::Backend("Test error".into()))
 		}
 
 		fn changes_trie_cht_root(&self, cht_size: u64, block: u64) -> ClientResult<Hash> {
 			cht::block_to_cht_number(cht_size, block)
 				.and_then(|cht_num| self.changes_tries_cht_roots.get(&cht_num))
 				.cloned()
-				.ok_or_else(|| ClientErrorKind::Backend(
+				.ok_or_else(|| ClientError::Backend(
 					format!("Test error: CHT for block #{} not found", block)
 				).into())
 		}
 
-		fn cache(&self) -> Option<&BlockchainCache<Block>> {
+		fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
 			None
 		}
 	}

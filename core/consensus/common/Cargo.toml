@@ -1,13 +1,13 @@
 [package]
 name = "substrate-consensus-common"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
 crossbeam-channel = "0.3.4"
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "substrate-tmp-2019-03-20", default-features = false }
+libp2p = { version = "0.6.0", default-features = false }
 log = "0.4"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
@@ -16,8 +16,11 @@ futures = "0.1"
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 tokio = "0.1.7"
-parity-codec = "3.2"
-parity-codec-derive = "3.1"
+parity-codec = { version = "3.3", features = ["derive"] }
 
 [dev-dependencies]
 test_client = { package = "substrate-test-client", path = "../../test-client" }
+
+[features]
+default = []
+test-helpers = []

@@ -43,7 +43,7 @@ use std::collections::BTreeSet;
 
 use log::warn;
 
-use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
+use client::error::{Error as ClientError, Result as ClientResult};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, As, Zero};
 
 use crate::cache::{CacheItemT, ComplexBlockId};
@@ -537,10 +537,10 @@ mod chain {
 	) -> ClientResult<bool> {
 		let (begin, end) = if block1 > block2 { (block2, block1) } else { (block1, block2) };
 		let mut current = storage.read_header(&end.hash)?
-			.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", end.hash)))?;
+			.ok_or_else(|| ClientError::UnknownBlock(format!("{}", end.hash)))?;
 		while *current.number() > begin.number {
 			current = storage.read_header(current.parent_hash())?
-				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", current.parent_hash())))?;
+				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", current.parent_hash())))?;
 		}
 
 		Ok(begin.hash == current.hash())

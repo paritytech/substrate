@@ -103,7 +103,7 @@ decl_storage! {
 		/// Timestamp when current session started.
 		pub CurrentStart get(current_start) build(|_| T::Moment::zero()): T::Moment;
 
-		/// New session is being forced is this entry exists; in which case, the boolean value is whether
+		/// New session is being forced if this entry exists; in which case, the boolean value is whether
 		/// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
 		pub ForcingNewSession get(forcing_new_session): Option<bool>;
 		/// Block at which the session length last changed.
@@ -121,12 +121,12 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	/// The number of validators currently.
+	/// The current number of validators.
 	pub fn validator_count() -> u32 {
 		<Validators<T>>::get().len() as u32
 	}
 
-	/// The last length change, if there was one, zero if not.
+	/// The last length change if there was one, zero if not.
 	pub fn last_length_change() -> T::BlockNumber {
 		<LastLengthChange<T>>::get().unwrap_or_else(T::BlockNumber::zero)
 	}
@@ -140,7 +140,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of validators.
 	///
-	/// Called by `staking::new_era()` only. `rotate_session` must be called after this in order to
+	/// Called by `staking::new_era` only. `rotate_session` must be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());
@@ -148,9 +148,9 @@ impl<T: Trait> Module<T> {
 
 	/// Hook to be called after transaction processing.
 	pub fn check_rotate_session(block_number: T::BlockNumber) {
-		// do this last, after the staking system has had chance to switch out the authorities for the
+		// Do this last, after the staking system has had the chance to switch out the authorities for the
 		// new set.
-		// check block number and call next_session if necessary.
+		// Check block number and call `rotate_session` if necessary.
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
 		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
 			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
@@ -159,7 +159,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Move onto next session: register the new authority set.
+	/// Move on to next session: register the new authority set.
 	pub fn rotate_session(is_final_block: bool, apply_rewards: bool) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Number of blocks remaining in this session, not counting this one. If the session is
-	/// due to rotate at the end of this block, then it will return 0. If the just began, then
+	/// due to rotate at the end of this block, then it will return 0. If the session just began, then
 	/// it will return `Self::length() - 1`.
 	pub fn blocks_remaining() -> T::BlockNumber {
 		let length = Self::length();

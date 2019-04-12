@@ -359,6 +359,8 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
+	config.enable_mdns = !cli.no_mdns;
+
 	Ok(())
 }
 
@@ -473,6 +475,11 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
+	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| Some(vec![
+		"http://localhost:*".into(),
+		"https://localhost:*".into(),
+		"https://polkadot.js.org".into()
+	]));
 
 	// Override telemetry
 	if cli.no_telemetry {

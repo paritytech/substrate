@@ -24,16 +24,17 @@ use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
+use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
 
@@ -46,7 +47,7 @@ pub struct Backend<S, F, H> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F, H> {
 	header: Option<Block::Header>,
-	authorities: Option<Vec<AuthorityIdFor<Block>>>,
+	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
@@ -117,7 +118,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			header: None,
-			authorities: None,
+			cache: Default::default(),
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
@@ -146,7 +147,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			let is_genesis_import = header.number().is_zero();
 			self.blockchain.storage().import_header(
 				header,
-				operation.authorities,
+				operation.cache,
 				operation.leaf_state,
 				operation.aux_ops,
 			)?;
@@ -207,7 +208,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 }
 
@@ -254,8 +255,8 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
-		self.authorities = Some(authorities);
+	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>) {
+		self.cache = cache;
 	}
 
 	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
@@ -322,13 +323,13 @@ where
 		let mut header = self.cached_header.read().clone();
 		if header.is_none() {
 			let cached_header = self.blockchain.upgrade()
-				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", self.block)).into())
+				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", self.block)))
 				.and_then(|blockchain| blockchain.expect_header(BlockId::Hash(self.block)))?;
 			header = Some(cached_header.clone());
 			*self.cached_header.write() = Some(cached_header);
 		}
 
-		self.fetcher.upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
+		self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 			.remote_read(RemoteReadRequest {
 				block: self.block,
 				header: header.expect("if block above guarantees that header is_some(); qed"),
@@ -339,7 +340,7 @@ where
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {

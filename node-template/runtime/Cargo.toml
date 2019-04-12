@@ -1,14 +1,14 @@
 [package]
 name = "node-template-runtime"
-version = "0.9.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+version = "1.0.0"
+authors = ["Anonymous"]
 edition = "2018"
 
 [dependencies]
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false }
-parity-codec = { version = "3.2", default-features = false, features = ["derive"] }
+parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default_features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default_features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default_features = false }
@@ -26,6 +26,7 @@ runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitiv
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
 consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
+consensus_authorities = { package = "substrate-consensus-authorities", path = "../../core/consensus/authorities", default-features = false }
 
 [features]
 default = ["std"]

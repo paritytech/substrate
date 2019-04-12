@@ -18,15 +18,26 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
+use primitives::{traits::{IdentityLookup, Convert}, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait, StakerStatus};
 
-// The AccountId alias in this test module.
+/// The AccountId alias in this test module.
 pub type AccountIdType = u64;
+
+/// Simple structure that exposes how u64 currency can be represented as... u64.
+pub struct CurrencyToVoteHandler;
+impl Convert<u64, u64> for CurrencyToVoteHandler {
+	fn convert(x: u64) -> u64 { x }
+}
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 {
+		x as u64
+	}
+}
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -73,6 +84,7 @@ impl timestamp::Trait for Test {
 }
 impl Trait for Test {
 	type Currency = balances::Module<Self>;
+	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = ();
 	type Event = ();
 	type Slash = ();
@@ -89,7 +101,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
-	fare: bool,
+	fair: bool,
 }
 
 impl Default for ExtBuilder {
@@ -104,7 +116,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
-			fare: true
+			fair: true
 		}
 	}
 }
@@ -131,7 +143,6 @@ impl ExtBuilder {
 		self
 	}
 	pub fn nominate(mut self, nominate: bool) -> Self {
-		// NOTE: this only sets a dummy nominator for tests that want 10 and 20 (default validators) to be chosen by default.
 		self.nominate = nominate;
 		self
 	}
@@ -143,8 +154,8 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
-	pub fn fare(mut self, is_fare: bool) -> Self {
-		self.fare = is_fare;
+	pub fn fair(mut self, is_fair: bool) -> Self {
+		self.fair = is_fair;
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -194,7 +205,7 @@ impl ExtBuilder {
 			stakers: if self.validator_pool {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * if self.fair { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
 					(31, 30, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					(41, 40, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					// nominator
@@ -203,7 +214,8 @@ impl ExtBuilder {
 			} else {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * if self.fair { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(31, 30, 1, StakerStatus::<AccountIdType>::Validator),
 					// nominator
 					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]

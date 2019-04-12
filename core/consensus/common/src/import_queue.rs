@@ -28,6 +28,7 @@ use crate::block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
 };
 use crossbeam_channel::{self as channel, Receiver, Sender};
+use parity_codec::Encode;
 
 use std::sync::Arc;
 use std::thread;
@@ -38,6 +39,7 @@ use runtime_primitives::traits::{
 use runtime_primitives::Justification;
 
 use crate::error::Error as ConsensusError;
+use parity_codec::alloc::collections::hash_map::HashMap;
 
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
@@ -147,6 +149,18 @@ impl<B: BlockT> BasicQueue<B> {
 			sender: importer_sender,
 		}
 	}
+
+	/// Send synchronization request to the block import channel.
+	///
+	/// The caller should wait for Link::synchronized() call to ensure that it has synchronized
+	/// with ImportQueue.
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn synchronize(&self) {
+		self
+			.sender
+			.send(BlockImportMsg::Synchronize)
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
+	}
 }
 
 impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
@@ -189,6 +203,8 @@ pub enum BlockImportMsg<B: BlockT> {
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
 	Start(Box<Link<B>>, Sender<Result<(), std::io::Error>>),
 	Stop,
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
 }
 
 pub enum BlockImportWorkerMsg<B: BlockT> {
@@ -199,6 +215,8 @@ pub enum BlockImportWorkerMsg<B: BlockT> {
 			B::Hash,
 		)>,
 	),
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
 }
 
 enum ImportMsgType<B: BlockT> {
@@ -277,13 +295,32 @@ impl<B: BlockT> BlockImporter<B> {
 				let _ = sender.send(Ok(()));
 			},
 			BlockImportMsg::Stop => return false,
+			#[cfg(any(test, feature = "test-helpers"))]
+			BlockImportMsg::Synchronize => {
+				self.worker_sender
+					.send(BlockImportWorkerMsg::Synchronize)
+					.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
+			},
 		}
 		true
 	}
 
 	fn handle_worker_msg(&mut self, msg: BlockImportWorkerMsg<B>) -> bool {
+		let link = match self.link.as_ref() {
+			Some(link) => link,
+			None => {
+				trace!(target: "sync", "Received import result while import-queue has no link");
+				return true;
+			},
+		};
+
 		let results = match msg {
 			BlockImportWorkerMsg::Imported(results) => (results),
+			#[cfg(any(test, feature = "test-helpers"))]
+			BlockImportWorkerMsg::Synchronize => {
+				link.synchronized();
+				return true;
+			},
 			_ => unreachable!("Import Worker does not send ImportBlocks message; qed"),
 		};
 		let mut has_error = false;
@@ -298,14 +335,6 @@ impl<B: BlockT> BlockImporter<B> {
 			if result.is_err() {
 				has_error = true;
 			}
-
-			let link = match self.link.as_ref() {
-				Some(link) => link,
-				None => {
-					trace!(target: "sync", "Received import result for {} while import-queue has no link", hash);
-					return true;
-				},
-			};
 
 			match result {
 				Ok(BlockImportResult::ImportedKnown(number)) => link.block_imported(&hash, number),
@@ -401,8 +430,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 					// Working until all senders have been dropped...
 					match msg {
 						BlockImportWorkerMsg::ImportBlocks(origin, blocks) => {
-							worker.import_a_batch_of_blocks(origin, blocks)
-						}
+							worker.import_a_batch_of_blocks(origin, blocks);
+						},
+						#[cfg(any(test, feature = "test-helpers"))]
+						BlockImportWorkerMsg::Synchronize => {
+							let _ = worker.result_sender.send(BlockImportWorkerMsg::Synchronize);
+						},
 						_ => unreachable!("Import Worker does not receive the Imported message; qed"),
 					}
 				}
@@ -478,6 +511,9 @@ pub trait Link<B: BlockT>: Send {
 	fn note_useless_and_restart_sync(&self, _who: Origin, _reason: &str) {}
 	/// Restart sync.
 	fn restart(&self) {}
+	/// Synchronization request has been processed.
+	#[cfg(any(test, feature = "test-helpers"))]
+	fn synchronized(&self) {}
 }
 
 /// Block import successful result.
@@ -566,7 +602,12 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			BlockImportError::VerificationFailed(peer.clone(), msg)
 		})?;
 
-	import_error(import_handle.import_block(import_block, new_authorities))
+	let mut cache = HashMap::new();
+	if let Some(authorities) = new_authorities {
+		cache.insert(crate::well_known_cache_keys::AUTHORITIES, authorities.encode());
+	}
+
+	import_error(import_handle.import_block(import_block, cache))
 }
 
 #[cfg(test)]

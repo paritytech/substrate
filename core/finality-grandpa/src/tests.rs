@@ -20,6 +20,7 @@ use super::*;
 use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
+use network::consensus_gossip as network_gossip;
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::AuthorityKeyring;
@@ -33,11 +34,12 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 
 use authorities::AuthoritySet;
+use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -137,102 +139,72 @@ impl TestNetFactory for GrandpaTestNet {
 struct MessageRouting {
 	inner: Arc<Mutex<GrandpaTestNet>>,
 	peer_id: usize,
-	validator: Arc<GossipValidator<Block>>,
 }
 
 impl MessageRouting {
 	fn new(inner: Arc<Mutex<GrandpaTestNet>>, peer_id: usize,) -> Self {
-		let validator = Arc::new(GossipValidator::new());
-		let v = validator.clone();
-		{
-			let inner = inner.lock();
-			let peer = inner.peer(peer_id);
-			peer.with_gossip(move |gossip, _| {
-				gossip.register_validator(GRANDPA_ENGINE_ID, v);
-			});
-		}
 		MessageRouting {
 			inner,
 			peer_id,
-			validator,
 		}
 	}
-
-	fn drop_messages(&self, topic: Hash) {
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-		peer.consensus_gossip_collect_garbage_for_topic(topic);
-	}
-}
-
-fn make_topic(round: u64, set_id: u64) -> Hash {
-	message_topic::<Block>(round, set_id)
-}
-
-fn make_commit_topic(set_id: u64) -> Hash {
-	commit_topic::<Block>(set_id)
 }
 
 impl Network<Block> for MessageRouting {
-	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
+	type In = Box<Stream<Item=network_gossip::TopicNotification, Error=()> + Send>;
 
-	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.validator.note_round(round, set_id);
+	/// Get a stream of messages for a specific gossip topic.
+	fn messages_for(&self, topic: Hash) -> Self::In {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
+
 		let messages = peer.consensus_gossip_messages_for(
 			GRANDPA_ENGINE_ID,
-			make_topic(round, set_id),
+			topic,
 		);
 
 		let messages = messages.map_err(
-			move |_| panic!("Messages for round {} dropped too early", round)
+			move |_| panic!("Messages for topic {} dropped too early", topic)
 		);
 
 		Box::new(messages)
 	}
 
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>, force: bool) {
-		let inner = self.inner.lock();
-		inner.peer(self.peer_id)
-			.gossip_message(make_topic(round, set_id), GRANDPA_ENGINE_ID, message, force);
-	}
-
-	fn drop_round_messages(&self, round: u64, set_id: u64) {
-		self.validator.drop_round(round, set_id);
-		let topic = make_topic(round, set_id);
-		self.drop_messages(topic);
-	}
-
-	fn drop_set_messages(&self, set_id: u64) {
-		self.validator.drop_set(set_id);
-		let topic = make_commit_topic(set_id);
-		self.drop_messages(topic);
-	}
-
-	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.validator.note_set(set_id);
+	fn register_validator(&self, v: Arc<dyn network_gossip::Validator<Block>>) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		let messages = peer.consensus_gossip_messages_for(
-			GRANDPA_ENGINE_ID,
-			make_commit_topic(set_id),
-		);
-
-		let messages = messages.map_err(
-			move |_| panic!("Commit messages for set {} dropped too early", set_id)
-		);
-
-		Box::new(messages)
+		peer.with_gossip(move |gossip, context| {
+			gossip.register_validator(context, GRANDPA_ENGINE_ID, v);
+		});
 	}
 
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>, force: bool) {
+	fn gossip_message(&self, topic: Hash, data: Vec<u8>, force: bool) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id)
-			.gossip_message(make_commit_topic(set_id), GRANDPA_ENGINE_ID, message, force);
+		inner.peer(self.peer_id).gossip_message(
+			topic,
+			GRANDPA_ENGINE_ID,
+			data,
+			force,
+		);
 	}
 
-	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+
+		peer.with_gossip(move |gossip, ctx| for who in &who {
+			gossip.send_message(
+				ctx,
+				who,
+				network_gossip::ConsensusMessage {
+					engine_id: GRANDPA_ENGINE_ID,
+					data: data.clone(),
+				}
+			)
+		})
+	}
+
+	fn announce(&self, _block: Hash) {
 
 	}
 }
@@ -267,7 +239,7 @@ impl ProvideRuntimeApi for TestApi {
 }
 
 impl Core<Block> for RuntimeApi {
-	fn version_runtime_api_impl(
+	fn Core_version_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
 		_: ExecutionContext,
@@ -277,17 +249,7 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<AuthorityId>>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn execute_block_runtime_api_impl(
+	fn Core_execute_block_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
 		_: ExecutionContext,
@@ -297,13 +259,22 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn initialize_block_runtime_api_impl(
+	fn Core_initialize_block_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<&<Block as BlockT>::Header>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<()>> {
+		unimplemented!("Not required for testing!")
+	}
+	fn Core_authorities_runtime_api_impl(
+		&self,
+		_: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<()>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Vec<AuthorityId>>> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -322,7 +293,7 @@ impl ApiExt<Block> for RuntimeApi {
 }
 
 impl GrandpaApi<Block> for RuntimeApi {
-	fn grandpa_authorities_runtime_api_impl(
+	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
@@ -336,7 +307,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		}
 	}
 
-	fn grandpa_pending_change_runtime_api_impl(
+	fn GrandpaApi_grandpa_pending_change_runtime_api_impl(
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
@@ -353,7 +324,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
 	}
 
-	fn grandpa_forced_change_runtime_api_impl(
+	fn GrandpaApi_grandpa_forced_change_runtime_api_impl(
 		&self,
 		at: &BlockId<Block>,
 		_: ExecutionContext,
@@ -448,7 +419,7 @@ fn run_to_completion_with<F: FnOnce()>(
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
@@ -544,7 +515,7 @@ fn finalize_3_voters_1_observer() {
 		.map_err(|_| ());
 
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().route_fast(); Ok(()) })
+		.for_each(move |_| { net.lock().sync_without_disconnects(); Ok(()) })
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -709,7 +680,7 @@ fn transition_3_voters_twice_1_observer() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
@@ -818,7 +789,7 @@ fn sync_justifications_on_change_blocks() {
 
 	// the last peer should get the justification by syncing from other peers
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
-		net.lock().route_fast();
+		net.lock().sync_without_disconnects();
 	}
 }
 
@@ -992,12 +963,12 @@ fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: false }),
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
@@ -1035,12 +1006,205 @@ fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: true }),
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), None).unwrap(),
+		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::AlreadyInChain
 	);
+}
+
+#[test]
+fn voter_persists_its_votes() {
+	use std::iter::FromIterator;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use futures::future;
+	use futures::sync::mpsc;
+
+	let _ = env_logger::try_init();
+
+	// we have two authorities but we'll only be running the voter for alice
+	// we are going to be listening for the prevotes it casts
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let voters = make_ids(peers);
+
+	// alice has a chain with 20 blocks
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 20,
+			   "Peer #{} failed to sync", 0);
+
+	let mut runtime = current_thread::Runtime::new().unwrap();
+
+	let client = net.peer(0).client().clone();
+	let net = Arc::new(Mutex::new(net));
+
+	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+
+	// startup a grandpa voter for alice but also listen for messages on a
+	// channel. whenever a message is received the voter is restarted. when the
+	// sender is dropped the voter is stopped.
+	{
+		let net = net.clone();
+
+		let voter = future::loop_fn(voter_rx, move |rx| {
+			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
+			let link = link.lock().take().unwrap();
+
+			let mut voter = run_grandpa(
+				Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					justification_period: 32,
+					local_key: Some(Arc::new(peers[0].clone().into())),
+					name: Some(format!("peer#{}", 0)),
+				},
+				link,
+				MessageRouting::new(net.clone(), 0),
+				InherentDataProviders::new(),
+				futures::empty(),
+			).expect("all in order with client and network");
+
+			let voter = future::poll_fn(move || {
+				// we need to keep the block_import alive since it owns the
+				// sender for the voter commands channel, if that gets dropped
+				// then the voter will stop
+				let _block_import = _block_import.clone();
+				voter.poll()
+			});
+
+			voter.select2(rx.into_future()).then(|res| match res {
+				Ok(future::Either::A(x)) => {
+					panic!("voter stopped unexpectedly: {:?}", x);
+				},
+				Ok(future::Either::B(((Some(()), rx), _))) => {
+					Ok(future::Loop::Continue(rx))
+				},
+				Ok(future::Either::B(((None, _), _))) => {
+					Ok(future::Loop::Break(()))
+				},
+				Err(future::Either::A(err)) => {
+					panic!("unexpected error: {:?}", err);
+				},
+				Err(future::Either::B(..)) => {
+					// voter_rx dropped, stop the voter.
+					Ok(future::Loop::Break(()))
+				},
+			})
+		});
+
+		runtime.spawn(voter);
+	}
+
+	let (exit_tx, exit_rx) = futures::sync::oneshot::channel::<()>();
+
+	// create the communication layer for bob, but don't start any
+	// voter. instead we'll listen for the prevote that alice casts
+	// and cast our own manually
+	{
+		let config = Config {
+			gossip_duration: TEST_GOSSIP_DURATION,
+			justification_period: 32,
+			local_key: Some(Arc::new(peers[1].clone().into())),
+			name: Some(format!("peer#{}", 1)),
+		};
+		let routing = MessageRouting::new(net.clone(), 1);
+		let network = communication::NetworkBridge::new(routing, config.clone());
+
+		let (round_rx, round_tx) = network.round_communication(
+			communication::Round(1),
+			communication::SetId(0),
+			Arc::new(VoterSet::from_iter(voters)),
+			Some(config.local_key.unwrap()),
+			HasVoted::No,
+		);
+
+		let round_tx = Arc::new(Mutex::new(round_tx));
+		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
+
+		let net = net.clone();
+		let state = AtomicUsize::new(0);
+
+		runtime.spawn(round_rx.for_each(move |signed| {
+			if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+				// the first message we receive should be a prevote from alice.
+				let prevote = match signed.message {
+					grandpa::Message::Prevote(prevote) => prevote,
+					_ => panic!("voter should prevote."),
+				};
+
+				// its chain has 20 blocks and the voter targets 3/4 of the
+				// unfinalized chain, so the vote should be for block 15
+				assert!(prevote.target_number == 15);
+
+				// we push 20 more blocks to alice's chain
+				net.lock().peer(0).push_blocks(20, false);
+				net.lock().sync();
+
+				assert_eq!(net.lock().peer(0).client().info().unwrap().chain.best_number, 40,
+						   "Peer #{} failed to sync", 0);
+
+				let block_30_hash =
+					net.lock().peer(0).client().backend().blockchain().hash(30).unwrap().unwrap();
+
+				// we restart alice's voter
+				voter_tx.unbounded_send(()).unwrap();
+
+				// and we push our own prevote for block 30
+				let prevote = grandpa::Prevote {
+					target_number: 30,
+					target_hash: block_30_hash,
+				};
+
+				round_tx.lock().start_send(grandpa::Message::Prevote(prevote)).unwrap();
+
+			} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+				// the next message we receive should be our own prevote
+				let prevote = match signed.message {
+					grandpa::Message::Prevote(prevote) => prevote,
+					_ => panic!("We should receive our own prevote."),
+				};
+
+				// targeting block 30
+				assert!(prevote.target_number == 30);
+
+				// after alice restarts it should send its previous prevote
+				// therefore we won't ever receive it again since it will be a
+				// known message on the gossip layer
+
+			} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+				// we then receive a precommit from alice for block 15
+				// even though we casted a prevote for block 30
+				let precommit = match signed.message {
+					grandpa::Message::Precommit(precommit) => precommit,
+					_ => panic!("voter should precommit."),
+				};
+
+				assert!(precommit.target_number == 15);
+
+				// signal exit
+				exit_tx.clone().lock().take().unwrap().send(()).unwrap();
+			}
+
+			Ok(())
+		}).map_err(|_| ()));
+	}
+
+	let net = net.clone();
+	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		.for_each(move |_| {
+			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
+			net.lock().sync_without_disconnects();
+			Ok(())
+		})
+		.map(|_| ())
+		.map_err(|_| ());
+
+	let exit = exit_rx.into_future().map(|_| ()).map_err(|_| ());
+
+	runtime.block_on(drive_to_completion.select(exit).map(|_| ()).map_err(|_| ())).unwrap();
 }

@@ -152,6 +152,35 @@ impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B { Default::default() }
 }
 
+/// A structure that converts the currency type into a lossy u64
+/// And back from u128
+pub struct CurrencyToVoteHandler;
+
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 {
+		if x >> 96 == 0 {
+			// Remove dust; divide by 2^32
+			(x >> 32) as u64
+		} else {
+			u64::max_value()
+		}
+	}
+}
+
+impl Convert<u128, u128> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u128 {
+		// if it practically fits in u64
+		if x >> 64 == 0 {
+			// Add zero dust; multiply by 2^32
+			x << 32
+		}
+		else {
+			// 0000_0000_FFFF_FFFF_FFFF_FFFF_0000_0000
+			(u64::max_value() << 32) as u128
+		}
+	}
+}
+
 /// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {

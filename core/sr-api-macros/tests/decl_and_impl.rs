@@ -68,13 +68,13 @@ impl_runtime_apis! {
 		fn version() -> runtime_api::RuntimeVersion {
 			unimplemented!()
 		}
-		fn authorities() -> Vec<AuthorityIdFor<Block>> {
-			unimplemented!()
-		}
 		fn execute_block(_: Block) {
 			unimplemented!()
 		}
 		fn initialize_block(_: &<Block as BlockT>::Header) {
+			unimplemented!()
+		}
+		fn authorities() -> Vec<AuthorityIdFor<Block>> {
 			unimplemented!()
 		}
 	}
