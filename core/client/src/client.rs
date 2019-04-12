@@ -28,7 +28,7 @@ use runtime_primitives::{
 use consensus::{
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
 	BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId,
-	SelectChain, self, 
+	SelectChain, self,
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
@@ -1533,7 +1533,7 @@ where
 		LongestChain::best_block_header(&self)
 			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
 	}
-	
+
 	fn best_containing(
 		&self,
 		target_hash: Block::Hash,
@@ -1774,9 +1774,9 @@ pub(crate) mod tests {
 		// G
 
 		let client = test_client::new();
-		
+
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-		let longest_chain_select = LongestChain::new(
+		let longest_chain_select = test_client::client::LongestChain::new(
 			client.backend().clone(),
 			client.import_lock()
 		);
@@ -1794,7 +1794,7 @@ pub(crate) mod tests {
 
 		let uninserted_block = client.new_block().unwrap().bake().unwrap();
 		let backend = client.backend().as_in_memory();
-		let longest_chain_select = LongestChain::new(
+		let longest_chain_select = test_client::client::LongestChain::new(
 				Arc::new(backend),
 				client.import_lock());
 
@@ -1929,7 +1929,7 @@ pub(crate) mod tests {
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
-		let longest_chain_select = LongestChain::new(
+		let longest_chain_select = test_client::client::LongestChain::new(
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
@@ -2019,7 +2019,7 @@ pub(crate) mod tests {
 		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-		let longest_chain_select = LongestChain::new(
+		let longest_chain_select = test_client::client::LongestChain::new(
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
@@ -2172,9 +2172,10 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-		let longest_chain_select = LongestChain::new(
-				Arc::new(client.backend().as_in_memory()),
-				client.import_lock());
+		let longest_chain_select = test_client::client::LongestChain::new(
+			Arc::new(client.backend().as_in_memory()),
+			client.import_lock()
+		);
 
 		// assert_eq!(a2.hash(), longest_chain_select.best_containing(genesis_hash, Some(10)).unwrap().unwrap());
 	}
