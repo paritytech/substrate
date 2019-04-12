@@ -588,8 +588,6 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		_config: &mut FactoryFullConfiguration<Self::Factory>,
 		_client: Arc<ComponentClient<Self>>
 	) -> Result<Self::SelectChain, error::Error> {
-		// FIXME: this (and other places) need a "NotAvailableInMode" for never-in-light-client-features
-		// that doesn't break creation of light clients  
 		Err("Fork choice doesn't happen on light clients.".into())
 	}
 

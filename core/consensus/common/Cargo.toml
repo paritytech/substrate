@@ -6,7 +6,6 @@ description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.7.1"
 crossbeam-channel = "0.3.4"
 libp2p = { version = "0.6.0", default-features = false }
 log = "0.4"
