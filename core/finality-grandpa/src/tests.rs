@@ -419,7 +419,7 @@ fn run_to_completion_with<F: FnOnce()>(
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
@@ -515,7 +515,7 @@ fn finalize_3_voters_1_observer() {
 		.map_err(|_| ());
 
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().route_fast(); Ok(()) })
+		.for_each(move |_| { net.lock().sync_without_disconnects(); Ok(()) })
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -680,7 +680,7 @@ fn transition_3_voters_twice_1_observer() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
@@ -789,7 +789,7 @@ fn sync_justifications_on_change_blocks() {
 
 	// the last peer should get the justification by syncing from other peers
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
-		net.lock().route_fast();
+		net.lock().sync_without_disconnects();
 	}
 }
 
@@ -1198,7 +1198,7 @@ fn voter_persists_its_votes() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
