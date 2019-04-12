@@ -39,7 +39,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor
 };
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use state_machine::{ExecutionStrategy, CodeExecutor};
+use state_machine::ExecutionStrategy;
 use client::LocalCallExecutor;
 
 #[cfg(feature = "include-wasm-blob")]
@@ -186,9 +186,7 @@ impl TestClientBuilder {
 		client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
 		runtime::Block,
 		runtime::RuntimeApi
-	> where E: executor::NativeExecutionDispatch +
-		CodeExecutor<Blake2Hasher> +
-		executor::RuntimeInfo
+	> where E: executor::NativeExecutionDispatch
 	{
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		let executor = LocalCallExecutor::new(backend.clone(), executor);
