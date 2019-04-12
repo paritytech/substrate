@@ -239,6 +239,12 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 				.get(*type_idx as usize)
 				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
 
+			// We disallow importing `ext_println` unless debug features are enabled,
+			// which should only be allowed on a dev chain
+			if !self.schedule.enable_println && import.field().as_bytes() == b"ext_println" {
+				return Err("module imports `ext_println` but debug features disabled");
+			}
+
 			// We disallow importing `gas` function here since it is treated as implementation detail.
 			if import.field().as_bytes() == b"gas"
 				|| !C::can_satisfy(import.field().as_bytes(), func_ty)
@@ -347,6 +353,8 @@ mod tests {
 		gas(_ctx, _amount: u32) => { unreachable!(); },
 
 		nop(_ctx, _unused: u64) => { unreachable!(); },
+
+		ext_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
 	);
 
 	macro_rules! prepare_test {
@@ -572,6 +580,36 @@ mod tests {
 			"#,
 			Err("module imports a non-existent function")
 		);
+
+		prepare_test!(ext_println_debug_disabled,
+			r#"
+			(module
+				(import "env" "ext_println" (func $ext_println (param i32 i32)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("module imports `ext_println` but debug features disabled")
+		);
+
+		#[test]
+		fn ext_println_debug_enabled() {
+			let wasm = wabt::Wat2Wasm::new().validate(false).convert(
+				r#"
+				(module
+					(import "env" "ext_println" (func $ext_println (param i32 i32)))
+
+					(func (export "call"))
+					(func (export "deploy"))
+				)
+				"#
+			).unwrap();
+			let mut schedule = Schedule::<u64>::default();
+			schedule.enable_println = true;
+			let r = prepare_contract::<Test, TestEnv>(wasm.as_ref(), &schedule);
+			assert_matches!(r, Ok(_));
+		}
 	}
 
 	mod entrypoints {

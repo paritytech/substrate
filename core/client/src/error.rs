@@ -16,159 +16,117 @@
 
 //! Substrate client possible errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-#![allow(missing_docs)]
-
-use std;
+use std::{self, error, result};
 use state_machine;
 use runtime_primitives::ApplyError;
 use consensus;
-use error_chain::*;
+use derive_more::{Display, From};
 
-error_chain! {
-	links {
-		Consensus(consensus::Error, consensus::ErrorKind);
-	}
-	errors {
-		/// Backend error.
-		Backend(s: String) {
-			description("Unrecoverable backend error"),
-			display("Backend error: {}", s),
-		}
+/// Client Result type alias
+pub type Result<T> = result::Result<T, Error>;
 
-		/// Unknown block.
-		UnknownBlock(h: String) {
-			description("unknown block"),
-			display("UnknownBlock: {}", &*h),
-		}
+/// Substrate Client error
+#[derive(Debug, Display, From)]
+pub enum Error {
+	/// Consensus Error
+	#[display(fmt = "Consensus: {}", _0)]
+	Consensus(consensus::Error),
+	/// Backend error.
+	#[display(fmt = "Backend error: {}", _0)]
+	Backend(String),
+	/// Unknown block.
+	#[display(fmt = "UnknownBlock: {}", _0)]
+	UnknownBlock(String),
+	/// Applying extrinsic error.
+	#[display(fmt = "Extrinsic error: {:?}", _0)]
+	ApplyExtrinsicFailed(ApplyError),
+	/// Execution error.
+	#[display(fmt = "Execution: {}", _0)]
+	Execution(Box<state_machine::Error>),
+	/// Blockchain error.
+	#[display(fmt = "Blockchain: {}", _0)]
+	Blockchain(Box<Error>),
+	/// Invalid authorities set received from the runtime.
+	#[display(fmt = "Current state of blockchain has invalid authorities set")]
+	InvalidAuthoritiesSet,
+	/// Could not get runtime version.
+	#[display(fmt = "On-chain runtime does not specify version")]
+	VersionInvalid,
+	/// Genesis config is invalid.
+	#[display(fmt = "Genesis config provided is invalid")]
+	GenesisInvalid,
+	/// Bad justification for header.
+	#[display(fmt = "bad justification for header: {}", _0)]
+	BadJustification(String),
+	/// Not available on light client.
+	#[display(fmt = "This method is not currently available when running in light client mode")]
+	NotAvailableOnLightClient,
+	/// Invalid remote CHT-based proof.
+	#[display(fmt = "Remote node has responded with invalid header proof")]
+	InvalidCHTProof,
+	/// Remote fetch has been cancelled.
+	#[display(fmt = "Remote data fetch has been cancelled")]
+	RemoteFetchCancelled,
+	/// Remote fetch has been failed.
+	#[display(fmt = "Remote data fetch has been failed")]
+	RemoteFetchFailed,
+	/// Error decoding call result.
+	#[display(fmt = "Error decoding call result of {}", _0)]
+	CallResultDecode(&'static str),
+	/// Error converting a parameter between runtime and node.
+	#[display(fmt = "Error converting `{}` between runtime and node", _0)]
+	RuntimeParamConversion(&'static str),
+	/// Changes tries are not supported.
+	#[display(fmt = "Changes tries are not supported by the runtime")]
+	ChangesTriesNotSupported,
+	/// Key changes query has failed.
+	#[display(fmt = "Failed to check changes proof: {}", _0)]
+	ChangesTrieAccessFailed(String),
+	/// Last finalized block not parent of current.
+	#[display(fmt = "Did not finalize blocks in sequential order.")]
+	NonSequentialFinalization(String),
+	/// Safety violation: new best block not descendent of last finalized.
+	#[display(fmt = "Potential long-range attack: block not in finalized chain.")]
+	NotInFinalizedChain,
+	/// Hash that is required for building CHT is missing.
+	#[display(fmt = "Failed to get hash of block#{} for building CHT#{}", _0, _1)]
+	MissingHashRequiredForCHT(u64, u64),
+	/// A convenience variant for String
+	#[display(fmt = "{}", _0)]
+	Msg(String),
+}
 
-		/// Applying extrinsic error.
-		ApplyExtrinsicFailed(e: ApplyError) {
-			description("Extrinsic error"),
-			display("Extrinsic error: {:?}", e),
-		}
-
-		/// Execution error.
-		Execution(e: Box<state_machine::Error>) {
-			description("execution error"),
-			display("Execution: {}", e),
-		}
-
-		/// Blockchain error.
-		Blockchain(e: Box<std::error::Error + Send>) {
-			description("Blockchain error"),
-			display("Blockchain: {}", e),
-		}
-
-		/// Could not get runtime version.
-		VersionInvalid {
-			description("Runtime version error"),
-			display("On-chain runtime does not specify version"),
-		}
-
-		/// Genesis config is invalid.
-		GenesisInvalid {
-			description("Genesis config error"),
-			display("Genesis config provided is invalid"),
-		}
-
-		/// Bad justification for header.
-		BadJustification(h: String) {
-			description("bad justification for header"),
-			display("bad justification for header: {}", &*h),
-		}
-
-		/// Not available on light client.
-		NotAvailableOnLightClient {
-			description("not available on light client"),
-			display("This method is not currently available when running in light client mode"),
-		}
-
-		/// Invalid remote CHT-based proof.
-		InvalidCHTProof {
-			description("invalid header proof"),
-			display("Remote node has responded with invalid header proof"),
-		}
-
-		/// Remote fetch has been cancelled.
-		RemoteFetchCancelled {
-			description("remote fetch cancelled"),
-			display("Remote data fetch has been cancelled"),
-		}
-
-		/// Remote fetch has been failed.
-		RemoteFetchFailed {
-			description("remote fetch failed"),
-			display("Remote data fetch has been failed"),
-		}
-
-		/// Error decoding call result.
-		CallResultDecode(method: &'static str) {
-			description("Error decoding call result")
-			display("Error decoding call result of {}", method)
-		}
-
-		/// Error converting a parameter between runtime and node.
-		RuntimeParamConversion(param: &'static str) {
-			description("Error converting parameter between runtime and node")
-			display("Error converting `{}` between runtime and node", param)
-		}
-
-		/// Changes tries are not supported.
-		ChangesTriesNotSupported {
-			description("changes tries are not supported"),
-			display("Changes tries are not supported by the runtime"),
-		}
-
-		/// Key changes query has failed.
-		ChangesTrieAccessFailed(e: String) {
-			description("invalid changes proof"),
-			display("Failed to check changes proof: {}", e),
-		}
-
-		/// Last finalized block not parent of current.
-		NonSequentialFinalization(s: String) {
-			description("Did not finalize blocks in sequential order."),
-			display("Did not finalize blocks in sequential order."),
-		}
-
-		/// Safety violation: new best block not descendent of last finalized.
-		NotInFinalizedChain {
-			description("Potential long-range attack: block not in finalized chain."),
-			display("Potential long-range attack: block not in finalized chain."),
-		}
-
-		/// Hash that is required for building CHT is missing.
-		MissingHashRequiredForCHT(cht_num: u64, block_number: u64) {
-			description("missed hash required for building CHT"),
-			display("Failed to get hash of block#{} for building CHT#{}", block_number, cht_num),
+impl error::Error for Error {
+	fn source(&self) -> Option<&(error::Error + 'static)> {
+		match self {
+			Error::Consensus(e) => Some(e),
+			Error::Blockchain(e) => Some(e),
+			_ => None,
 		}
 	}
 }
 
-impl From<Box<state_machine::Error>> for Error {
-	fn from(e: Box<state_machine::Error>) -> Self {
-		ErrorKind::Execution(e).into()
+impl From<String> for Error {
+	fn from(s: String) -> Self {
+		Error::Msg(s)
 	}
 }
 
-impl From<state_machine::backend::Void> for Error {
-	fn from(e: state_machine::backend::Void) -> Self {
-		match e {}
+impl<'a> From<&'a str> for Error {
+	fn from(s: &'a str) -> Self {
+		Error::Msg(s.into())
 	}
 }
 
 impl Error {
 	/// Chain a blockchain error.
-	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
-		ErrorKind::Blockchain(e).into()
+	pub fn from_blockchain(e: Box<Error>) -> Self {
+		Error::Blockchain(e)
 	}
 
 	/// Chain a state error.
 	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
-		ErrorKind::Execution(e).into()
+		Error::Execution(e)
 	}
 }
 

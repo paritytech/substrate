@@ -105,7 +105,7 @@ pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> Vec<u8> where
 /// all block lookup keys start with the block number.
 pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
 	if key.len() < 4 {
-		return Err(client::error::ErrorKind::Backend("Invalid block key".into()).into());
+		return Err(client::error::Error::Backend("Invalid block key".into()));
 	}
 	Ok((key[0] as u64) << 24
 		| (key[1] as u64) << 16
@@ -187,21 +187,21 @@ pub fn block_id_to_lookup_key<Block>(
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {
 	use std::error::Error;
-	client::error::ErrorKind::Backend(err.description().into()).into()
+	client::error::Error::Backend(err.description().into())
 }
 
 /// Open RocksDB database.
 pub fn open_database(config: &DatabaseSettings, col_meta: Option<u32>, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;
-	let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
+	let path = config.path.to_str().ok_or_else(|| client::error::Error::Backend("Invalid database path".into()))?;
 	let db = Database::open(&db_config, &path).map_err(db_err)?;
 
 	// check database type
 	match db.get(col_meta, meta_keys::TYPE).map_err(db_err)? {
 		Some(stored_type) => {
 			if db_type.as_bytes() != &*stored_type {
-				return Err(client::error::ErrorKind::Backend(
+				return Err(client::error::Error::Backend(
 					format!("Unexpected database type. Expected: {}", db_type)).into());
 			}
 		},
@@ -237,7 +237,7 @@ pub fn read_header<Block: BlockT>(
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
 			Some(header) => Ok(Some(header)),
 			None => return Err(
-				client::error::ErrorKind::Backend("Error decoding header".into()).into()
+				client::error::Error::Backend("Error decoding header".into())
 			),
 		}
 		None => Ok(None),
@@ -252,7 +252,7 @@ pub fn require_header<Block: BlockT>(
 	id: BlockId<Block>,
 ) -> client::error::Result<Block::Header> {
 	read_header(db, col_index, col, id)
-		.and_then(|header| header.ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
+		.and_then(|header| header.ok_or_else(|| client::error::Error::UnknownBlock(format!("{}", id))))
 }
 
 /// Read meta from the database.
@@ -266,7 +266,7 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Opti
 	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Some(h) => h,
-			None => return Err(client::error::ErrorKind::Backend("Error decoding genesis hash".into()).into()),
+			None => return Err(client::error::Error::Backend("Error decoding genesis hash".into())),
 		},
 		None => return Ok(Meta {
 			best_hash: Default::default(),
