@@ -126,7 +126,7 @@ pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: SelectChain<B> +  Clone,
+	C: SelectChain<B> + Clone,
 	W: SlotWorker<B>,
 	SO: SyncOracle + Send + Clone,
 	SC: SlotCompatible,
