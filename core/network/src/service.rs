@@ -464,6 +464,9 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 	Outgoing(PeerId, Message<B>),
 	/// Report a peer.
 	ReportPeer(PeerId, Severity),
+	/// Synchronization response.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronized,
 }
 
 /// Starts the background thread that handles the networking.
@@ -544,6 +547,8 @@ fn run_thread<B: BlockT + 'static>(
 					},
 				}
 			},
+			#[cfg(any(test, feature = "test-helpers"))]
+			NetworkMsg::Synchronized => (),
 		}
 		Ok(())
 	})
