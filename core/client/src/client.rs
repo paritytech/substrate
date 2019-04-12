@@ -1380,6 +1380,7 @@ where
 	B: backend::Backend<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
+	/// Instantiate a new LongestChain for Backend B
 	pub fn new(backend: Arc<B>, import_lock: Arc<Mutex<()>>) -> Self {
 		LongestChain {
 			backend,
