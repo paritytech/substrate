@@ -455,6 +455,8 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(List::len(), 2);
 		assert_eq!(List::get(0), Some(0));
 		assert_eq!(List::get(1), Some(1));
+		assert_eq!(List::pop(), Some(1));
+		assert_eq!(List::get(1), None);
 
 		assert_eq!(Value::exists(), true);
 		assert_eq!(Value::get(), 4);

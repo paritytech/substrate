@@ -256,6 +256,9 @@ pub trait StorageList<T: Codec> {
 	/// Push a new item to the list.
 	fn push(item: &T);
 
+	/// Pop a item from the list.
+	fn pop() -> Option<T>;
+
 	/// Set the current set of items.
 	fn set_items(items: &[T]);
 
@@ -291,6 +294,10 @@ impl<T: Codec, U> StorageList<T> for U where U: generator::StorageList<T> {
 
 	fn push(item: &T) {
 		U::push(item, &RuntimeStorage)
+	}
+
+	fn pop() -> Option<T> {
+		U::pop(&RuntimeStorage)
 	}
 
 	fn set_items(items: &[T]) {

@@ -227,6 +227,18 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					storage.put(&<Self as #scrate::storage::generator::StorageList<#typ>>::key_for(index)[..], item);
 				}
 
+				fn pop<S: #scrate::GenericStorage>(storage: &S) -> Option<#typ> {
+					let count = <Self as #scrate::storage::generator::StorageList<#typ>>::len(storage);
+					let index = if count == 0 {
+						return None
+					} else {
+						count - 1
+					};
+					let ret = <Self as #scrate::storage::generator::StorageList<#typ>>::get(index, storage);
+					Self::set_len(index, storage);
+					ret
+				}
+
 				/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 				fn get<S: #scrate::GenericStorage>(index: u32, storage: &S) -> Option<#typ> {
 					storage.get(&<Self as #scrate::storage::generator::StorageList<#typ>>::key_for(index)[..])

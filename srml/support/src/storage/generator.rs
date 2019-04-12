@@ -169,6 +169,9 @@ pub trait StorageList<T: codec::Codec> {
 	/// Push a new item to the list.
 	fn push<S: Storage>(item: &T, storage: &S);
 
+	/// Pop a item from the list.
+	fn pop<S: Storage>(storage: &S) -> Option<T>;
+
 	/// Set the current set of items.
 	fn set_items<S: Storage>(items: &[T], storage: &S);
 
@@ -516,11 +519,23 @@ macro_rules! __storage_items_internal {
 			}
 
 			fn push<S: $crate::GenericStorage>(item: &$ty, storage: &S) {
-				let index = Self::len(storage);
+				let index = <$name as $crate::storage::generator::StorageList<$ty>>::len(storage);
 				let count = index + 1;
 				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key(), &count);
 
 				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
+			}
+
+			fn pop<S: $crate::GenericStorage>(storage: &S) -> Option<$ty> {
+				let count = <$name as $crate::storage::generator::StorageList<$ty>>::len(storage);
+				let index = if count == 0 {
+					return None
+				} else {
+					count - 1
+				};
+				let ret = <$name as $crate::storage::generator::StorageList<$ty>>::get(index, storage);
+				Self::set_len(index, storage);
+				ret
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
