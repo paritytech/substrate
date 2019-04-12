@@ -311,14 +311,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Expose backend reference. To be used in tests only
-	// FIXME: this is being used in non-test cases as well, we probably
-	//        want to decide if that is correct or other ways are more appropriate.
+	#[doc(hidden)]
+	#[deprecated(since="1.0.1", note="Rather than relying on `client` \
+	to provide this, access to the backend should be handled at setup \
+	only - see #1134. This function will be removed once that is in place.")]
 	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
 	}
 
 	/// Expose reference to import lock
-	// FIXME: the lock shouldn't be on client but on the import-queue
+	#[doc(hidden)]
+	#[deprecated(since="1.0.1", note="Rather than relying on `client` \
+	to provide this, access to the backend should be handled at setup \
+	only - see #1134. This function will be removed once that is in place.")]
 	pub fn import_lock(&self) -> Arc<Mutex<()>> {
 		self.import_lock.clone()
 	}
@@ -1382,6 +1387,7 @@ where
 			_phantom: Default::default()
 		}
 	}
+
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info : ChainInfo<Block> = match self.backend.blockchain().info() {
 			Ok(i) => i,
