@@ -22,11 +22,6 @@
 //!
 //! ## Interface
 //!
-//! ### Dispatchable Functions
-//!
-//! There are no dispatchable functions for this module as it mainly serves to monitor offline interaction in the
-//! context of Aura consensus and doesn't operate independent of this consensus algorithm.
-//!
 //! ### Public Functions
 //!
 //! See the [`Module`](./struct.Module.html) struct for details on publicly available functions.
@@ -35,8 +30,7 @@
 //!
 //! ### Prerequisites
 //!
-//! Use of this module implies selection of the Aura algorithm. More details on consensus configuration will be revealed
-//! once [Swappable Consensus](https://github.com/paritytech/substrate/issues/1304) is formalized.
+//! Use of this module implies selection of the Aura algorithm.
 //!
 //! ### Simple Code Snippet
 //!
@@ -47,14 +41,6 @@
 //! 	start_slot: 6, // The first skipped slot
 //! 	skipped: 3,   // The number of authorities skipped
 //! }
-//! ```
-//!
-//! Punish validators that did not fulfill their duties (*skipped*):
-//!
-//! ```rust,ignore
-//! let mut validators = vec![0; 10];
-//! report.punish(10, |idx, count| validators[idx] += count);
-//! assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0]);
 //! ```
 //!
 //! See the `tests.rs` file in this module's directory for other simple code snippets that may make this module's
