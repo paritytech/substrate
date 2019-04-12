@@ -6,7 +6,7 @@ build = "build.rs"
 edition = "2018"
 
 [[bin]]
-name = "template-node"
+name = "node-template"
 path = "src/main.rs"
 
 [dependencies]
