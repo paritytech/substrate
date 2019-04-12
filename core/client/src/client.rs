@@ -1078,7 +1078,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 		match hash_and_number {
 			Some((hash, number)) => {
-				if self.backend().have_state_at(&hash, number) {
+				if self.backend.have_state_at(&hash, number) {
 					Ok(BlockStatus::InChainWithState)
 				} else {
 					Ok(BlockStatus::InChainPruned)

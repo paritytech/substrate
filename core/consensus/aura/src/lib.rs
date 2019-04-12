@@ -25,7 +25,7 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-#![deny(deprecated)]
+
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
@@ -803,7 +803,7 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::ed25519::Keyring;
 	use primitives::ed25519;
-	use client::BlockchainEvents;
+	use client::{LongestChain, BlockchainEvents};
 	use test_client;
 
 	type Error = ::client::error::Error;
@@ -915,6 +915,10 @@ mod tests {
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
 			let client = net.lock().peer(*peer_id).client().clone();
+			let select_chain = LongestChain::new(
+				client.backend().clone(),
+				client.import_lock().clone()
+			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
@@ -934,6 +938,7 @@ mod tests {
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
+				select_chain,
 				client,
 				environ.clone(),
 				DummyOracle,

@@ -28,6 +28,7 @@ use client::{
 	BlockchainEvents, error::Result,
 	blockchain::Backend as BlockchainBackend,
 	runtime_api::{Core, RuntimeVersion, ApiExt},
+	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
@@ -106,9 +107,15 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_block_import(&self, client: Arc<PeersClient>)
 		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, PeerData)
 	{
+		
+		let select_chain = LongestChain::new(
+			client.backend().clone(),
+			client.import_lock().clone()
+		);
 		let (import, link) = block_import(
 			client,
-			Arc::new(self.test_config.clone())
+			Arc::new(self.test_config.clone()),
+			select_chain,
 		).expect("Could not create block import for fresh peer.");
 		let shared_import = Arc::new(import);
 		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
@@ -379,6 +386,10 @@ fn run_to_completion_with<F: FnOnce()>(
 				link,
 			)
 		};
+		let select_chain = LongestChain::new(
+			client.backend().clone(),
+			client.import_lock().clone()
+		);
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(move |n| {
@@ -402,6 +413,7 @@ fn run_to_completion_with<F: FnOnce()>(
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
+			select_chain,
 			futures::empty(),
 		).expect("all in order with client and network");
 
@@ -488,6 +500,10 @@ fn finalize_3_voters_1_observer() {
 				link,
 			)
 		};
+		let select_chain = LongestChain::new(
+			client.backend().clone(),
+			client.import_lock().clone()
+		);
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| Ok(n.header.number() < &20))
@@ -503,6 +519,7 @@ fn finalize_3_voters_1_observer() {
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
+			select_chain,
 			futures::empty(),
 		).expect("all in order with client and network");
 
@@ -642,6 +659,12 @@ fn transition_3_voters_twice_1_observer() {
 				link,
 			)
 		};
+
+		let select_chain = LongestChain::new(
+			client.backend().clone(),
+			client.import_lock().clone()
+		);
+
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| Ok(n.header.number() < &30))
@@ -665,6 +688,7 @@ fn transition_3_voters_twice_1_observer() {
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
+			select_chain,
 			futures::empty(),
 		).expect("all in order with client and network");
 
@@ -1052,6 +1076,10 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
+			let select_chain = LongestChain::new(
+				client.backend().clone(),
+				client.import_lock().clone()
+			);
 			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
@@ -1065,6 +1093,7 @@ fn voter_persists_its_votes() {
 				link,
 				MessageRouting::new(net.clone(), 0),
 				InherentDataProviders::new(),
+				select_chain,
 				futures::empty(),
 			).expect("all in order with client and network");
 

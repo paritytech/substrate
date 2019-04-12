@@ -602,6 +602,7 @@ mod tests {
 	use super::*;
 	use parity_codec::Encode;
 	use consensus_common::BlockOrigin;
+	use client::LongestChain;
 	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::{Extrinsic, Transfer}};
 
 	#[test]
@@ -618,8 +619,9 @@ mod tests {
 			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
 			Extrinsic::Transfer(transfer, signature)
 		};
+		let best = LongestChain::new(client.backend().clone(), client.import_lock()).best_block_header().unwrap();
 		// store the transaction in the pool
-		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 
 		// import the block
 		let mut builder = client.new_block().unwrap();
