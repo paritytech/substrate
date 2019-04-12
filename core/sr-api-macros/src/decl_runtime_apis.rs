@@ -637,7 +637,7 @@ impl<'a> ToClientSideDecl<'a> {
 								#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
 									<#ret_type as #crate_::runtime_api::Decode>::decode(&mut &r[..])
 										.ok_or_else(||
-											#crate_::error::ErrorKind::CallResultDecode(
+											#crate_::error::Error::CallResultDecode(
 												#function_name
 											).into()
 										)

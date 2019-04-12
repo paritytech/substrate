@@ -225,7 +225,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Some(body) => Ok(Some(body)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
+				None => return Err(client::error::Error::Backend("Error decoding body".into())),
 			}
 			None => Ok(None),
 		}
@@ -235,7 +235,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
+				None => return Err(client::error::Error::Backend("Error decoding justification".into())),
 			}
 			None => Ok(None),
 		}
@@ -326,14 +326,14 @@ where Block: BlockT<Hash=H256>,
 	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-			return Err(client::error::ErrorKind::GenesisInvalid.into());
+			return Err(client::error::Error::GenesisInvalid.into());
 		}
 
 		let mut transaction: PrefixedMemoryDB<Blake2Hasher> = Default::default();
 
 		for (child_key, child_map) in children {
 			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(client::error::ErrorKind::GenesisInvalid.into());
+				return Err(client::error::Error::GenesisInvalid.into());
 			}
 
 			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
@@ -684,7 +684,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 						(&r.number, &r.hash)
 					);
 
-					return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
+					return Err(::client::error::Error::NotInFinalizedChain.into());
 				}
 
 				retracted.push(r.hash.clone());
@@ -726,7 +726,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	) -> Result<(), client::error::Error> {
 		let last_finalized = last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
 		if *header.parent_hash() != last_finalized {
-			return Err(::client::error::ErrorKind::NonSequentialFinalization(
+			return Err(::client::error::Error::NonSequentialFinalization(
 				format!("Last finalized {:?} not parent of {:?}", last_finalized, header.hash()),
 			).into());
 		}
@@ -926,7 +926,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					(number.clone(), hash.clone())
 				)?;
 			} else {
-				return Err(client::error::ErrorKind::UnknownBlock(format!("Cannot set head {:?}", set_head)).into())
+				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
 		}
 
@@ -1138,12 +1138,12 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				Some(commit) => {
 					apply_state_commit(&mut transaction, commit);
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
-						|| client::error::ErrorKind::UnknownBlock(
+						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 
 					best -= As::sa(1);  // prev block
 					let hash = self.blockchain.hash(best)?.ok_or_else(
-						|| client::error::ErrorKind::UnknownBlock(
+						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash);
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
@@ -1185,10 +1185,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let state = DbState::new(self.storage.clone(), root);
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
-					Err(client::error::ErrorKind::UnknownBlock(format!("State already discarded for {:?}", block)).into())
+					Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
 				}
 			},
-			Ok(None) => Err(client::error::ErrorKind::UnknownBlock(format!("Unknown state for block {:?}", block)).into()),
+			Ok(None) => Err(client::error::Error::UnknownBlock(format!("Unknown state for block {:?}", block))),
 			Err(e) => Err(e),
 		}
 	}
