@@ -28,6 +28,7 @@ fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "pri
 grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 node-runtime = { path = "../../node/runtime" }
+keyring = { package = "substrate-keyring", path = "../keyring" }
 
 [dev-dependencies]
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
