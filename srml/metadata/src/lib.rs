@@ -258,6 +258,7 @@ impl std::fmt::Debug for DefaultByteGetter {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum StorageFunctionType {
 	Plain(DecodeDifferentStr),
+	List(DecodeDifferentStr),
 	Map {
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,

@@ -130,6 +130,125 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		}
 	}
 
+	pub fn list(self) -> TokenStream2 {
+		let Self {
+			scrate,
+			visibility,
+			traitinstance,
+			traittype,
+			instance_opts,
+			type_infos,
+			prefix,
+			name,
+			attrs,
+			..
+		} = self;
+		let DeclStorageTypeInfos { typ, .. } = type_infos;
+
+		let InstanceOpts {
+			comma_instance,
+			equal_default_instance,
+			bound_instantiable,
+			instance,
+			..
+		} = instance_opts;
+
+		let final_prefix = if let Some(instance) = instance {
+			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
+			quote!{ #instance::#const_name.as_bytes() }
+		} else {
+			quote!{ #prefix.as_bytes() }
+		};
+
+		// generator for list
+		quote!{
+			#( #[ #attrs ] )*
+			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
+
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #name<#traitinstance, #instance> {
+				fn clear_item<S: #scrate::GenericStorage>(index: u32, storage: &S) {
+					if index < <Self as #scrate::storage::generator::StorageList<#typ>>::len(storage) {
+						storage.kill(&<Self as #scrate::storage::generator::StorageList<#typ>>::key_for(index));
+					}
+				}
+
+				fn set_len<S: #scrate::GenericStorage>(count: u32, storage: &S) {
+					(count..<Self as #scrate::storage::generator::StorageList<#typ>>::len(storage)).for_each(|i| Self::clear_item(i, storage));
+					storage.put(&<Self as #scrate::storage::generator::StorageList<#typ>>::len_key(), &count);
+				}
+			}
+
+			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageList<#typ> for #name<#traitinstance, #instance> {
+				/// Get the prefix key in storage.
+				fn prefix() -> &'static [u8] {
+					#final_prefix
+				}
+
+				/// Get the key used to put the length field.
+				fn len_key() -> #scrate::rstd::vec::Vec<u8> {
+					let mut key = #final_prefix.to_vec();
+					key.extend(b"len");
+					key
+				}
+
+				/// Get the storage key used to fetch a value at a given index.
+				fn key_for(index: u32) -> #scrate::rstd::vec::Vec<u8> {
+					let mut key = #final_prefix.to_vec();
+					#scrate::codec::Encode::encode_to(&index, &mut key);
+					key
+				}
+
+				/// Read out all the items.
+				fn items<S: #scrate::GenericStorage>(storage: &S) -> #scrate::rstd::vec::Vec<#typ> {
+					(0..<Self as #scrate::storage::generator::StorageList<#typ>>::len(storage))
+						.map(|i| <Self as #scrate::storage::generator::StorageList<#typ>>::get(i, storage).expect("all items within length are set; qed"))
+						.collect()
+				}
+
+				/// Set the current set of items.
+				fn set_items<S: #scrate::GenericStorage>(items: &[#typ], storage: &S) {
+					Self::set_len(items.len() as u32, storage);
+					items.iter()
+						.enumerate()
+						.for_each(|(i, item)| <Self as #scrate::storage::generator::StorageList<#typ>>::set_item(i as u32, item, storage));
+				}
+
+				fn set_item<S: #scrate::GenericStorage>(index: u32, item: &#typ, storage: &S) {
+					if index < <Self as #scrate::storage::generator::StorageList<#typ>>::len(storage) {
+						storage.put(&<Self as #scrate::storage::generator::StorageList<#typ>>::key_for(index)[..], item);
+					}
+				}
+
+				fn push<S: #scrate::GenericStorage>(item: &#typ, storage: &S) {
+					let index = <Self as #scrate::storage::generator::StorageList<#typ>>::len(storage);
+					let count = index + 1;
+					storage.put(&<Self as #scrate::storage::generator::StorageList<#typ>>::len_key(), &count);
+
+					storage.put(&<Self as #scrate::storage::generator::StorageList<#typ>>::key_for(index)[..], item);
+				}
+
+				/// Load the value at given index. Returns `None` if the index is out-of-bounds.
+				fn get<S: #scrate::GenericStorage>(index: u32, storage: &S) -> Option<#typ> {
+					storage.get(&<Self as #scrate::storage::generator::StorageList<#typ>>::key_for(index)[..])
+				}
+
+				/// Load the length of the list.
+				fn len<S: #scrate::GenericStorage>(storage: &S) -> u32 {
+					storage.get(&<Self as #scrate::storage::generator::StorageList<#typ>>::len_key()).unwrap_or_default()
+				}
+
+				/// Clear the list.
+				fn clear<S: #scrate::GenericStorage>(storage: &S) {
+					for i in 0..<Self as #scrate::storage::generator::StorageList<#typ>>::len(storage) {
+						Self::clear_item(i, storage);
+					}
+
+					storage.kill(&<Self as #scrate::storage::generator::StorageList<#typ>>::len_key()[..])
+				}
+			}
+		}
+	}
+
 	pub fn map(self, kty: &syn::Type) -> TokenStream2 {
 		let Self {
 			scrate,

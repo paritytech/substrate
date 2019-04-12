@@ -28,7 +28,7 @@ use srml_support::Parameter;
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
-use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
+use srml_support::{StorageValue, StorageMap, StorageDoubleMap, StorageList};
 use primitives::{H256, sr25519};
 
 pub trait Currency {
@@ -144,6 +144,7 @@ mod module1 {
 		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 {
 			pub Value config(value): u64;
 			pub Map: map u32 => u64;
+			pub List: u32;
 			pub LinkedMap: linked_map u32 => u64;
 		}
 	}
@@ -217,6 +218,7 @@ mod module2 {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
+			pub List config(list): list u32;
 			pub LinkedMap config(linked_map): linked_map u64 => u64;
 			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
 		}
@@ -370,12 +372,14 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		module2: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
+			list: vec![0],
 			linked_map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
 		}),
 		module2_Instance1: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
+			list: vec![0],
 			linked_map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
 		}),
@@ -442,6 +446,15 @@ fn storage_with_instance_basic_operation() {
 		type Map = module2::Map<Runtime, module2::Instance1>;
 		type LinkedMap = module2::LinkedMap<Runtime, module2::Instance1>;
 		type DoubleMap = module2::DoubleMap<Runtime, module2::Instance1>;
+		type List = module2::List<Runtime, module2::Instance1>;
+
+		assert_eq!(List::len(), 1);
+		assert_eq!(List::get(0), Some(0));
+		assert_eq!(List::get(1), None);
+		List::push(&1);
+		assert_eq!(List::len(), 2);
+		assert_eq!(List::get(0), Some(0));
+		assert_eq!(List::get(1), Some(1));
 
 		assert_eq!(Value::exists(), true);
 		assert_eq!(Value::get(), 4);

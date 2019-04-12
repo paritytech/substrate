@@ -129,10 +129,17 @@ struct DeclStorageBuild {
 
 #[derive(Parse, ToTokens, Debug)]
 enum DeclStorageType {
+	List(DeclStorageList),
 	Map(DeclStorageMap),
 	LinkedMap(DeclStorageLinkedMap),
 	DoubleMap(DeclStorageDoubleMap),
 	Simple(syn::Type),
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageList {
+	pub list_keyword: ext::CustomToken<ListKeyword>,
+	pub value: syn::Type,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -185,6 +192,7 @@ custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
 custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
+custom_keyword!(ListKeyword, "list", "list as keyword");
 custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
 custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
 custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");

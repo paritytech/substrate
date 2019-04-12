@@ -166,6 +166,9 @@ pub trait StorageList<T: codec::Codec> {
 	/// Read out all the items.
 	fn items<S: Storage>(storage: &S) -> Vec<T>;
 
+	/// Push a new item to the list.
+	fn push<S: Storage>(item: &T, storage: &S);
+
 	/// Set the current set of items.
 	fn set_items<S: Storage>(items: &[T], storage: &S);
 
@@ -510,6 +513,14 @@ macro_rules! __storage_items_internal {
 				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
 					storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
+			}
+
+			fn push<S: $crate::GenericStorage>(item: &$ty, storage: &S) {
+				let index = Self::len(storage);
+				let count = index + 1;
+				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key(), &count);
+
+				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.

@@ -253,6 +253,9 @@ pub trait StorageList<T: Codec> {
 	/// Read out all the items.
 	fn items() -> Vec<T>;
 
+	/// Push a new item to the list.
+	fn push(item: &T);
+
 	/// Set the current set of items.
 	fn set_items(items: &[T]);
 
@@ -284,6 +287,10 @@ impl<T: Codec, U> StorageList<T> for U where U: generator::StorageList<T> {
 
 	fn items() -> Vec<T> {
 		U::items(&RuntimeStorage)
+	}
+
+	fn push(item: &T) {
+		U::push(item, &RuntimeStorage)
 	}
 
 	fn set_items(items: &[T]) {
@@ -560,7 +567,7 @@ pub trait StorageVec {
 /// child storage NOTE could replace unhashed by having only one kind of storage (root being null storage
 /// key (storage_key can become Option<&[u8]>).
 /// This module is a currently only a variant of unhashed with additional `storage_key`.
-/// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to 
+/// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
 	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput};
@@ -632,7 +639,7 @@ pub mod child {
 		runtime_io::read_child_storage(storage_key, key, &mut [0;0][..], 0).is_some()
 	}
 
-	/// Remove all `storage_key` key/values 
+	/// Remove all `storage_key` key/values
 	pub fn kill_storage(storage_key: &[u8]) {
 		runtime_io::kill_child_storage(storage_key)
 	}

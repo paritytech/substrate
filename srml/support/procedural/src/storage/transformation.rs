@@ -252,10 +252,13 @@ fn decl_store_extra_genesis(
 				DeclStorageTypeInfosKind::Simple => {
 					quote!( #( #[ #attrs ] )* pub #ident: #storage_type, )
 				},
-				DeclStorageTypeInfosKind::Map {key_type, .. } => {
+				DeclStorageTypeInfosKind::List => {
+					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#storage_type)>, )
+				},
+				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key_type, #storage_type)>, )
 				},
-				DeclStorageTypeInfosKind::DoubleMap {key1_type, key2_type, .. } => {
+				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
 					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
 				},
 			});
@@ -287,13 +290,24 @@ fn decl_store_extra_genesis(
 						<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
+				DeclStorageTypeInfosKind::List => {
+					quote!{{
+						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+						use #scrate::codec::{Encode, Decode};
+
+						let data = (#builder)(&self);
+						for v in data {
+							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageList<#typ>>::push(&v, &storage);
+						}
+					}}
+				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{{
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
 						let data = (#builder)(&self);
-						for (k, v) in data.into_iter() {
+						for (k, v) in data {
 							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
@@ -304,7 +318,7 @@ fn decl_store_extra_genesis(
 						use #scrate::codec::{Encode, Decode};
 
 						let data = (#builder)(&self);
-						for (k1, k2, v) in data.into_iter() {
+						for (k1, k2, v) in data {
 							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
 						}
 					}}
@@ -515,7 +529,7 @@ fn decl_storage_items(
 
 			impls.extend(quote! {
 				/// Tag a type as an instance of a module.
-				/// 
+				///
 				/// Defines storage prefixes, they must be unique.
 				pub trait #instantiable: 'static {
 					#const_impls
@@ -588,6 +602,9 @@ fn decl_storage_items(
 		let implementation = match kind {
 			DeclStorageTypeInfosKind::Simple => {
 				i.simple_value()
+			},
+			DeclStorageTypeInfosKind::List => {
+				i.list()
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked: false } => {
 				i.map(key_type)
@@ -666,6 +683,14 @@ fn impl_store_fns(
 						}
 					}
 				},
+				DeclStorageTypeInfosKind::List => {
+					quote!{
+						#( #[ #attrs ] )*
+						pub fn #get_fn(index: u32) -> #value_type {
+							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageList<#typ>> :: get(index, &#scrate::storage::RuntimeStorage)
+						}
+					}
+				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
 						#( #[ #attrs ] )*
@@ -728,6 +753,13 @@ fn store_functions_to_metadata (
 			DeclStorageTypeInfosKind::Simple => {
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Plain(
+						#scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					)
+				}
+			},
+			DeclStorageTypeInfosKind::List => {
+				quote!{
+					#scrate::storage::generator::StorageFunctionType::List(
 						#scrate::storage::generator::DecodeDifferent::Encode(#styp),
 					)
 				}
@@ -847,6 +879,7 @@ pub(crate) struct DeclStorageTypeInfos<'a> {
 #[derive(Debug, Clone)]
 enum DeclStorageTypeInfosKind<'a> {
 	Simple,
+	List,
 	Map {
 		key_type: &'a syn::Type,
 		is_linked: bool,
@@ -855,7 +888,7 @@ enum DeclStorageTypeInfosKind<'a> {
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
 		key2_hasher: TokenStream2,
-	}
+	},
 }
 
 impl<'a> DeclStorageTypeInfosKind<'a> {
@@ -870,6 +903,7 @@ impl<'a> DeclStorageTypeInfosKind<'a> {
 fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 	let (value_type, kind) = match storage_type {
 		DeclStorageType::Simple(ref st) => (st, DeclStorageTypeInfosKind::Simple),
+		DeclStorageType::List(ref list) => (&list.value, DeclStorageTypeInfosKind::List),
 		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
 			key_type: &map.key,
 			is_linked: false,
