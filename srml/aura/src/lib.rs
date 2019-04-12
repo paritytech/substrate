@@ -48,12 +48,12 @@
 //!
 //! ## Related Modules
 //!
-//! - [`staking`](../srml_staking/index.html): The Staking module is called in aura to enforce slashing
+//! - [`staking`](../srml_staking/index.html): The Staking module is called in Aura to enforce slashing
 //!  if validators miss a certain number of slots (see the [`StakingSlasher`](./struct.StakingSlasher.html)
 //!  struct and associated method).
-//! - [`timestamp`](../srml_timestamp/index.html): The Timestamp module is used in aura to track
+//! - [`timestamp`](../srml_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//! - [`consensus`](../srml_consensus/index.html): The Consensus module does not relate directly to aura,
+//! - [`consensus`](../srml_consensus/index.html): The Consensus module does not relate directly to Aura,
 //!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References
@@ -82,13 +82,13 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 mod mock;
 mod tests;
 
-/// The aura inherent identifier.
+/// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
-/// The type of the aura inherent.
+/// The type of the Aura inherent.
 pub type InherentType = u64;
 
-/// Auxiliary trait to extract aura inherent data.
+/// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
 	/// Get aura inherent data.
 	fn aura_inherent_data(&self) -> result::Result<InherentType, RuntimeString>;
@@ -179,7 +179,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
 }
 
-/// A report of skipped authorities in aura.
+/// A report of skipped authorities in Aura.
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
@@ -249,7 +249,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	}
 }
 
-/// A type for performing slashing based on aura reports.
+/// A type for performing slashing based on Aura reports.
 pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
