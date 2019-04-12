@@ -950,7 +950,7 @@ mod tests {
 		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
-				net.lock().route_fast();
+				net.lock().sync_without_disconnects();
 				Ok(())
 			})
 			.map(|_| ())

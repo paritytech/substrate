@@ -20,3 +20,7 @@ parity-codec = { version = "3.3", features = ["derive"] }
 
 [dev-dependencies]
 test_client = { package = "substrate-test-client", path = "../../test-client" }
+
+[features]
+default = []
+test-helpers = []
