@@ -769,7 +769,8 @@ pub fn import_queue<B, C, E, P>(
 
 /// Start an import queue for the Aura consensus algorithm with backwards compatibility.
 #[deprecated(
-	note = "should not be used unless backwards compatibility with an older chain is needed."
+	since = "1.0.1",
+	note = "should not be used unless backwards compatibility with an older chain is needed.",
 )]
 pub fn import_queue_accept_old_seals<B, C, E, P>(
 	slot_duration: SlotDuration,

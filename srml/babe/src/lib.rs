@@ -25,7 +25,6 @@ use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
-use babe_primitives::BabeConfiguration;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -37,7 +36,13 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the babe inherent.
-pub type InherentType = BabeConfiguration;
+#[derive(Encode, Decode, PartialEq, Eq, Hash, Debug)]
+pub struct InherentType {
+	/// The slot number
+	pub slot_num: u64,
+	/// The slot duration
+	pub slot_duration: u64,
+}
 
 /// Auxiliary trait to extract babe inherent data.
 pub trait BabeInherentData {
@@ -236,7 +241,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let seal_slot = data.babe_inherent_data()?;
 
-		if timestamp_based_slot == seal_slot.slot_duration() {
+		if timestamp_based_slot == seal_slot.slot_num {
 			Ok(())
 		} else {
 			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())
