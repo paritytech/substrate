@@ -90,6 +90,13 @@ decl_storage! {
 		/// Proportion of fees that will go to the block author when a block is finalized.
 		pub FeesToBlockAuthor get(fees_to_block_author) config(): Permill;
 	}
+	add_extra_genesis {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+			with_storage(storage, || {
+				ensure!(config::fees_to_block_author() < Permill::from_percent(100));
+			};
+		};
+	}
 }
 
 decl_module! {
@@ -110,11 +117,7 @@ decl_module! {
 		/// TODO: Send some funds to the Treasury.
 		fn on_finalize(n: T::BlockNumber) {
 
-			// Should probably be handled somewhere else, like in config, so that this won't fail.
-			ensure!(Self::fees_to_block_author() < Permill::from_percent(100),
-				"You can't pay more than 100% of fees to the block author.");
-
-			let mut total_fees = Self::total_block_fees();
+			let total_fees = Self::total_block_fees();
 			let fees_to_author = Self::fees_to_block_author().mul(total_fees);
 
 			// Author
