@@ -35,7 +35,7 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::HashMap;
 
-use client::backend::{NewBlockState, Backend as BackendT};
+use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
 use parity_codec::{Decode, Encode};
