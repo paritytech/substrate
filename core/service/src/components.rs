@@ -16,7 +16,7 @@
 
 //! Substrate service components.
 
-use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref, ops::DerefMut};
+use std::{sync::Arc, net::SocketAddr, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
 use crate::chain_spec::ChainSpec;
@@ -385,6 +385,7 @@ pub trait Components: Sized + 'static {
 	>;
 	/// Our Import Queue
 	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
+	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<FactoryBlock<Self::Factory>>;
 
 	/// Create client.
@@ -420,7 +421,6 @@ pub trait Components: Sized + 'static {
 
 /// A struct that implement `Components` for the full client.
 pub struct FullComponents<Factory: ServiceFactory> {
-	// _factory: PhantomData<Factory>,
 	service: Service<FullComponents<Factory>>,
 }
 
@@ -510,7 +510,6 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 
 /// A struct that implement `Components` for the light client.
 pub struct LightComponents<Factory: ServiceFactory> {
-	_factory: PhantomData<Factory>,
 	service: Service<LightComponents<Factory>>,
 }
 
@@ -522,7 +521,6 @@ impl<Factory: ServiceFactory> LightComponents<Factory> {
 	) -> Result<Self, error::Error> {
 		Ok(
 			Self {
-				_factory: Default::default(),
 				service: Service::new(config, task_executor)?,
 			}
 		)
