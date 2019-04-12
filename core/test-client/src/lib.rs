@@ -25,11 +25,8 @@ mod block_builder_ext;
 
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
-pub use client;
-pub use client::ExecutionStrategies;
-pub use client::blockchain;
-pub use client::backend;
-pub use executor::NativeExecutor;
+pub use client::{ExecutionStrategies, blockchain, backend, self};
+pub use executor::{NativeExecutor, self};
 pub use runtime;
 pub use consensus;
 pub use keyring::{AuthorityKeyring, AccountKeyring};
@@ -38,7 +35,9 @@ use std::{sync::Arc, collections::HashMap};
 use futures::future::FutureResult;
 use primitives::Blake2Hasher;
 use runtime_primitives::StorageOverlay;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor
+};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use state_machine::{ExecutionStrategy, CodeExecutor};
 use client::LocalCallExecutor;
