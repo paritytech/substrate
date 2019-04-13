@@ -508,7 +508,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						let voters = curr.voters();
 						let authorities: Vec<String> =
 							voters.iter().map(|(id, _)| format!("{}", id)).collect();
-						eprintln!("sending authorities to telemetry: {:?}", authorities);
 						format!("{:?}", authorities)
 					 });
 				Ok(())
