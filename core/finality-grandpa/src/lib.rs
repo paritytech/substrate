@@ -103,7 +103,7 @@ use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, Shared
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
-use service::TelemetryHookOnConnect;
+use service::TelemetryOnConnect;
 
 use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
@@ -457,7 +457,7 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
 	pub network: N,
 	pub inherent_data_providers: InherentDataProviders,
 	pub on_exit: Box<Future<Item=(),Error=()> + Send + 'static>,
-	pub telemetry_on_connect: Option<TelemetryHookOnConnect<'a>>,
+	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a

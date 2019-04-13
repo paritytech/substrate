@@ -103,7 +103,7 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
 
 /// Used to hook on telemetry connection established events.
-pub struct TelemetryHookOnConnect<'a> {
+pub struct TelemetryOnConnect<'a> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
 	/// Event stream.

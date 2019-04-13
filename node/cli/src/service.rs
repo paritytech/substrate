@@ -37,7 +37,7 @@ use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
 use log::info;
-use substrate_service::TelemetryHookOnConnect;
+use substrate_service::TelemetryOnConnect;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -111,7 +111,7 @@ construct_service_factory! {
 					local_key
 				};
 
-				let telemetry_on_connect = TelemetryHookOnConnect {
+				let telemetry_on_connect = TelemetryOnConnect {
 					on_exit: Box::new(service.on_exit()),
 					telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 					executor: &executor,
