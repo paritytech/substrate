@@ -29,7 +29,7 @@ decl_storage! {
 	}
 }
 
-// dispatchable functions of this module
+// The module's dispatchable functions.
 decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
