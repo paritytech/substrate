@@ -14,7 +14,102 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! # Council System Module
+//! <!-- Original author of paragraph: @gavofyork -->
+//!
 //! Council system: Handles the voting in and maintenance of council members.
+//!
+//! ## Overview
+//!
+//! The Council system module provides functionality for different voting systems, including:
+//!
+//! * Council Motions
+//! * Council Voting
+//!
+//! To use it in your runtime, you need to implement the council [`Trait`](./trait.Trait.html).
+//!
+//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+//!
+//! ### Terminology
+//! <!-- Original author of paragraph: @gavofyork -->
+//!
+//! * **Councillor** A councillor is a countable stakeholder. They may vote on a council proposal during the voting period if they did not create the proposal.
+//!
+//! #### Council proposals
+//!
+//! * **Council motion:** A mechanism used enact an outer `Call` dispatch (of type `Proposal`) from a council origin.
+//! * **Council motion vote:** Allows an arbitrary number of councillors (other than the councillor that proposed the motion) to vote and initiate a call. 
+//! * **Council origin:** The council origin is the Council (not Root) and contains the council motion mechanism. It has different mechanics to other origins. 
+//! * **Council proposal validity prerequisites:** A council proposal is valid when:
+//!   * Submitted by a councillor.
+//!   * Not a duplicate proposal.
+//!   * Not vetoed.
+//!   * Council term does not expire before the proposals' voting period has lapsed.
+//! * **Council term:** **TODO**
+//! * **Council proposal creation:** TODO
+//! * **Council proposal creation storage** A council proposal after being deemed valid is stored as follows:
+//!   * Proposals' storage vector is updated with a tuple containing the proposal's hash and the expiry block number of its voting period.
+//!   * Proposals' hash is mapped to the proposals' value in storage using `ProposalOf`.
+//!   * Proposals' hash is mapped to a vector of account ids that have voted the proposal in storage using `ProposalVoters`. Initially the account ID of the councillor that created the proposal is added to the vector.
+//!   * Councillor's vote storage tuple `CouncilVoteOf` is updated with a mapping between the proposal's hash and the councillor's account id. Initially the councillor that created the proposal is added with a vote of yay.
+//! * **Council proposal vote storage** A council proposal vote that occurs after council proposal creation is stored as follows:
+//!   * `ProposalVoters` storage vector that contains account IDs that have voted for the proposal's hash is updated with the Councillor's new vote.
+//!   * Councillor's vote storage tuple `CouncilVoteOf` is updated with a mapping between a tuple containing the proposal's hash and the councillor's account id, and the Councillor's new vote. 
+//!	  * `Voting` storage mapping is updated with the Councillor's vote.
+//! 	* Note that `Voting` maps the proposal's hash to a tuple containing the corresponding proposal's index, vote threshold, and vectors of both yay and nay voter account IDs. 
+//! * **Council proposal voting rules**
+//!   * Duplicate votes from the same councillor are ignored.
+//!   * Councillors may swap their vote from yay to nay and vice versa.
+//! * **Council proposal vote threshold**
+//!   * A council proposal that is created with a threshold level of one is voted upon and approved by the councillor that created it, and then executed.
+//!	  * A council proposal with a threshold level of more than one is added to the `Voting` storage mapping.
+//!
+//! #### Council XXXX
+//! * **Council voting:**
+//!   * The vote function in srml/council/src/voting.rs is for the Council Voting as a body regarding tabling referenda.
+//!
+//! ### Goals
+//!
+//! The council system in Substrate is designed to make the following possible:
+//!
+//! TODO
+//!
+//! ### Scenarios
+//!
+//! #### 
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! TODO
+//!
+//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//!
+//! ### Public Functions
+//!
+//! TODO
+//!
+//! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
+//!
+//! ## Usage
+//!
+//! The following example shows how to use the Council module in your runtime by exposing public functions to:
+//!
+//! TODO
+//!
+//! ### Prerequisites
+//!
+//! Import the Council module and types and derive your runtime's configuration traits from the Council module trait.
+//!
+//! ### Simple Code Snippet
+//!
+//! TODO
+//!
+//! ## Related Modules
+//!
+//! * [`System`](../srml_system/index.html)
+//! * [`Support`](../srml_support/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
