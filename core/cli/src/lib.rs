@@ -39,7 +39,7 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
+	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
 	path::{Path, PathBuf}, str::FromStr,
 };
 
@@ -673,10 +673,17 @@ where
 		}
 	}
 
-	fs::remove_dir_all(&db_path)?;
-	println!("{:?} removed.", &db_path);
-
-	Ok(())
+	match fs::remove_dir_all(&db_path) {
+		Result::Ok(_) => {
+			println!("{:?} removed.", &db_path);
+			Ok(())
+		},
+		Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+			println!("{:?} did not exist.", &db_path);
+			Ok(())
+		},
+		Result::Err(err) => Result::Err(err.into())
+	}
 }
 
 fn parse_address(
