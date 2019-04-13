@@ -111,7 +111,7 @@ construct_service_factory! {
 					local_key
 				};
 
-				let telemetry_notify = TelemetryHookOnConnect {
+				let telemetry_on_connect = TelemetryHookOnConnect {
 					on_exit: Box::new(service.on_exit()),
 					telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 					executor: &executor,
@@ -129,7 +129,7 @@ construct_service_factory! {
 					network: service.network(),
 					inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
 					on_exit: Box::new(service.on_exit()),
-					telemetry_notify: Some(telemetry_notify),
+					telemetry_on_connect: Some(telemetry_on_connect),
 				};
 				executor.spawn(grandpa::run_grandpa(grandpa_config)?);
 

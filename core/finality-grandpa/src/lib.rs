@@ -457,7 +457,7 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
 	pub network: N,
 	pub inherent_data_providers: InherentDataProviders,
 	pub on_exit: Box<Future<Item=(),Error=()> + Send + 'static>,
-	pub telemetry_notify: Option<TelemetryHookOnConnect<'a>>,
+	pub telemetry_on_connect: Option<TelemetryHookOnConnect<'a>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -481,7 +481,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		network,
 		inherent_data_providers,
 		on_exit,
-		telemetry_notify
+		telemetry_on_connect,
 	} = grandpa_params;
 
 	use futures::future::{self, Loop as FutureLoop};
@@ -497,9 +497,9 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
-	if let Some(telemetry_notify) = telemetry_notify {
+	if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = authority_set.clone();
-		let events = telemetry_notify.telemetry_connection_sinks
+		let events = telemetry_on_connect.telemetry_connection_sinks
 			.for_each(move |_| {
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					 "authority_set_id" => ?authorities.set_id(),
@@ -513,8 +513,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 				Ok(())
 			})
 			.then(|_| Ok(()));
-		let events = events.select(telemetry_notify.on_exit).then(|_| Ok(()));
-		telemetry_notify.executor.spawn(events);
+		let events = events.select(telemetry_on_connect.on_exit).then(|_| Ok(()));
+		telemetry_on_connect.executor.spawn(events);
 	}
 
 	let voters = authority_set.current_authorities();
