@@ -117,7 +117,7 @@ construct_service_factory! {
 					executor: &executor,
 				};
 
-				let grandpa_config = grandpa::GrandpaParams{
+				let grandpa_config = grandpa::GrandpaParams {
 					config: grandpa::Config {
 						local_key,
 						// FIXME #1578 make this available through chainspec

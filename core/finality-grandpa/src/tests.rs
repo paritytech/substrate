@@ -392,19 +392,20 @@ fn run_to_completion_with<F: FnOnce()>(
 		);
 		fn assert_send<T: Send>(_: &T) { }
 
-		let voter = run_grandpa(
-			Config {
+		let grandpa_params = GrandpaParams {
+			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
 				local_key: Some(Arc::new(key.clone().into())),
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link,
-			MessageRouting::new(net.clone(), peer_id),
-			InherentDataProviders::new(),
-			futures::empty(),
-			None,
-		).expect("all in order with client and network");
+			link: link,
+			network: MessageRouting::new(net.clone(), peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: futures::empty(),
+			telemetry_notify: None,
+		};
+		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
 
 		assert_send(&voter);
 
@@ -494,19 +495,21 @@ fn finalize_3_voters_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let voter = run_grandpa(
-			Config {
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link,
-			MessageRouting::new(net.clone(), peer_id),
-			InherentDataProviders::new(),
-			futures::empty(),
-			None,
-		).expect("all in order with client and network");
+			link: link,
+			network: MessageRouting::new(net.clone(), peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: futures::empty(),
+			telemetry_notify: None,
+		};
+		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
 
 		runtime.spawn(voter);
 	}
@@ -657,19 +660,20 @@ fn transition_3_voters_twice_1_observer() {
 					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
-		let voter = run_grandpa(
-			Config {
+		let grandpa_params = GrandpaParams {
+			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link,
-			MessageRouting::new(net.clone(), peer_id),
-			InherentDataProviders::new(),
-			futures::empty(),
-			None,
-		).expect("all in order with client and network");
+			link: link,
+			network: MessageRouting::new(net.clone(), peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: futures::empty(),
+			telemetry_notify: None,
+		};
+		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
 
 		runtime.spawn(voter);
 	}
@@ -1058,19 +1062,20 @@ fn voter_persists_its_votes() {
 			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
-			let mut voter = run_grandpa(
-				Config {
+			let grandpa_params = GrandpaParams {
+				config: Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
 					local_key: Some(Arc::new(peers[0].clone().into())),
 					name: Some(format!("peer#{}", 0)),
 				},
-				link,
-				MessageRouting::new(net.clone(), 0),
-				InherentDataProviders::new(),
-				futures::empty(),
-				None,
-			).expect("all in order with client and network");
+				link: link,
+				network: MessageRouting::new(net.clone(), 0),
+				inherent_data_providers: InherentDataProviders::new(),
+				on_exit: futures::empty(),
+				telemetry_notify: None,
+			};
+			let mut voter = run_grandpa(grandpa_params).expect("all in order with client and network");
 
 			let voter = future::poll_fn(move || {
 				// we need to keep the block_import alive since it owns the
