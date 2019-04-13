@@ -46,10 +46,9 @@
 //!
 //! The assets system in Substrate is designed to make the following possible:
 //!
-//! * Create a unique, fungible asset.
-//! * Issue fungible assets that are controlled by a cold wallet.
-//! * Transfer fungible assets between cold wallets.
-//! * Destroy a portion of fungible assets that are controlled by a cold wallet.
+//! * Issue a unique asset to its creators' account.
+//! * Move assets between accounts.
+//! * Remove an accounts' balance of an asset from its total supply when requested by that accounts owner.
 //!
 //! ## Interface
 //!
