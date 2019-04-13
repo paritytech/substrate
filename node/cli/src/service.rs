@@ -117,20 +117,21 @@ construct_service_factory! {
 					executor: &executor,
 				};
 
-				executor.spawn(grandpa::run_grandpa(
-					grandpa::Config {
+				let grandpa_config = grandpa::GrandpaParams{
+					config: grandpa::Config {
 						local_key,
 						// FIXME #1578 make this available through chainspec
 						gossip_duration: Duration::from_millis(333),
 						justification_period: 4096,
-						name: Some(service.config.name.clone())
+						name: Some(service.config.name.clone()),
 					},
-					link_half,
-					service.network(),
-					service.config.custom.inherent_data_providers.clone(),
-					service.on_exit(),
-					Some(telemetry_notify),
-				)?);
+					link: link_half,
+					network: service.network(),
+					inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+					on_exit: Box::new(service.on_exit()),
+					telemetry_notify: Some(telemetry_notify),
+				};
+				executor.spawn(grandpa::run_grandpa(grandpa_config)?);
 
 				Ok(service)
 			}

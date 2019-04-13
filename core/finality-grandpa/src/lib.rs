@@ -450,15 +450,20 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	}
 }
 
+/// Parameters used to run Grandpa.
+pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
+	pub config: Config,
+	pub link: LinkHalf<B, E, Block, RA>,
+	pub network: N,
+	pub inherent_data_providers: InherentDataProviders,
+	pub on_exit: Box<Future<Item=(),Error=()> + Send + 'static>,
+	pub telemetry_notify: Option<TelemetryHookOnConnect<'a>>,
+}
+
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
-	config: Config,
-	link: LinkHalf<B, E, Block, RA>,
-	network: N,
-	inherent_data_providers: InherentDataProviders,
-	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
-	telemetry_notify: Option<TelemetryHookOnConnect>,
+	grandpa_params: GrandpaParams<B, E, Block, N, RA>
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -470,6 +475,15 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
 {
+	let GrandpaParams {
+		config,
+		link,
+		network,
+		inherent_data_providers,
+		on_exit,
+		telemetry_notify
+	} = grandpa_params;
+
 	use futures::future::{self, Loop as FutureLoop};
 
 	let network = NetworkBridge::new(network, config.clone());
