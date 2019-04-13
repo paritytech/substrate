@@ -402,7 +402,7 @@ fn run_to_completion_with<F: FnOnce()>(
 			link: link,
 			network: MessageRouting::new(net.clone(), peer_id),
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: futures::empty(),
+			on_exit: Box::new(futures::empty()),
 			telemetry_on_connect: None,
 		};
 		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
@@ -506,7 +506,7 @@ fn finalize_3_voters_1_observer() {
 			link: link,
 			network: MessageRouting::new(net.clone(), peer_id),
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: futures::empty(),
+			on_exit: Box::new(futures::empty()),
 			telemetry_on_connect: None,
 		};
 		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
@@ -670,7 +670,7 @@ fn transition_3_voters_twice_1_observer() {
 			link: link,
 			network: MessageRouting::new(net.clone(), peer_id),
 			inherent_data_providers: InherentDataProviders::new(),
-			on_exit: futures::empty(),
+			on_exit: Box::new(futures::empty()),
 			telemetry_on_connect: None,
 		};
 		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
@@ -1072,7 +1072,7 @@ fn voter_persists_its_votes() {
 				link: link,
 				network: MessageRouting::new(net.clone(), 0),
 				inherent_data_providers: InherentDataProviders::new(),
-				on_exit: futures::empty(),
+				on_exit: Box::new(futures::empty()),
 				telemetry_on_connect: None,
 			};
 			let mut voter = run_grandpa(grandpa_params).expect("all in order with client and network");
