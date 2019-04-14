@@ -19,8 +19,6 @@ use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::config::Roles;
 use consensus::BlockOrigin;
 use std::collections::HashSet;
-use std::thread;
-use std::time::Duration;
 use super::*;
 
 fn test_ancestor_search_when_common_is(n: usize) {

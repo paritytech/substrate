@@ -675,8 +675,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
-		use runtime_primitives::traits::Digest;
-
 		let ImportBlock {
 			origin,
 			header,
