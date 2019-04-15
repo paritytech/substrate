@@ -91,7 +91,7 @@ fn deposit_events(n: usize) {
 
 fn sr_system_benchmark(c: &mut Criterion) {
 	c.bench_function("deposit 100 events", |b| {
-		b.iter(|| deposit_events(black_box(1000)))
+		b.iter(|| deposit_events(black_box(100)))
 	});
 }
 
