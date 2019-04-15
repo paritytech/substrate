@@ -453,11 +453,17 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 
 /// Parameters used to run Grandpa.
 pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
+	/// Configuration for the GRANDPA service.
 	pub config: Config,
+	/// A GRANDPA worker linked together with a block import object.
 	pub link: LinkHalf<B, E, Block, RA>,
+	/// The Network instance.
 	pub network: N,
+	/// The inherent data providers.
 	pub inherent_data_providers: InherentDataProviders,
+	/// Handle to a future that will resolve on exit.
 	pub on_exit: Box<Future<Item=(),Error=()> + Send + 'static>,
+	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
 }
 
