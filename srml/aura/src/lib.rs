@@ -31,6 +31,7 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+use primitives::EquivocationProof;
 
 mod mock;
 mod tests;
@@ -166,6 +167,10 @@ impl<T: Trait> Module<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
+	}
+
+	pub fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+		Some(Vec::new())
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {

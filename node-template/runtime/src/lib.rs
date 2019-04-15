@@ -14,7 +14,8 @@ use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify},
+	EquivocationProof,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -31,6 +32,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use grandpa::Call as GrandpaCall;
+pub use system::Call as SystemCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
@@ -280,11 +282,19 @@ impl_runtime_apis! {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
+
+		fn get_account_nonce(account: &sr25519::Public) -> u64 {
+			System::get_account_nonce(account)
+		}
 	}
 
 	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
+		}
+		
+		fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+			Some(Vec::new())
 		}
 	}
 

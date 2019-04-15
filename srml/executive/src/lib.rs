@@ -272,7 +272,6 @@ impl<
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
-			println!("index {:?} expected {:?}", index, expected_index);
 			if index < &expected_index {
 				return TransactionValidity::Invalid(ApplyError::Stale as i8)
 			}

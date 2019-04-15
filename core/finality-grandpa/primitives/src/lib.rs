@@ -24,14 +24,11 @@ extern crate alloc;
 
 use parity_codec::{Encode, Decode};
 use substrate_primitives::ed25519;
-use sr_primitives::traits::{DigestFor, NumberFor};
+use sr_primitives::traits::{DigestFor, NumberFor, HashFor};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 use ed25519::Public as AuthorityId;
-
-#[cfg_attr(feature = "std", derive(Debug, PartialEq))]
-#[derive(Encode, Decode, Clone)]
-pub struct GrandpaEquivocationProof {}
+use substrate_primitives::EquivocationProof;
 
 
 /// A scheduled change of authority set.
@@ -113,6 +110,6 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
-		fn construct_report_call(evidence: GrandpaEquivocationProof) -> Vec<u8>;
+		fn construct_report_call(evidence: EquivocationProof<(NumberFor<Block>, HashFor<Block>), AuthorityId>) -> Option<Vec<u8>>;
 	}
 }

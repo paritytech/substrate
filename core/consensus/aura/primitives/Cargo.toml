@@ -8,6 +8,8 @@ edition = "2018"
 [dependencies]
 substrate-client = { path = "../../../client", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../primitives" }
 
 [features]
 default = ["std"]

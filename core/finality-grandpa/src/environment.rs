@@ -23,7 +23,7 @@ use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
 
-use fg_primitives::{GrandpaApi, GrandpaEquivocationProof};
+use fg_primitives::GrandpaApi;
 
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
@@ -31,6 +31,7 @@ use client::{
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
 };
+use runtime_primitives::EquivocationProof;
 use runtime_primitives::AnySignature;
 use runtime_primitives::OpaqueExtrinsic;
 use runtime_primitives::generic::{BlockId, Era};
@@ -53,7 +54,7 @@ use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use keyring::AccountKeyring;
+use keyring::{AccountKeyring, AuthorityKeyring};
 use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.
@@ -344,17 +345,20 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		
+		println!("equivocation => {:?}", equivocation);
 		let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
-		let equivocation_proof = GrandpaEquivocationProof {};
-		let report_call = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof).unwrap();
-		
-		sign_and_dispatch(
-			self.inner.info().unwrap().chain.genesis_hash,
-			Arc::clone(&self.transaction_pool),
-			block_id,
-			report_call
-		);
+		let equivocation_proof = EquivocationProof<Prevote<Block>, Self::Id> {
+			first,
+			second,
+			identity,
+		};
+		if let Ok(Some(report_call)) = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof) {
+			sign_and_dispatch(
+				self.inner.clone(),
+				self.transaction_pool.clone(),
+				report_call
+			);
+		}
 	}
 
 	fn precommit_equivocation(
@@ -363,33 +367,48 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet
+		
+		// let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
+		// let equivocation_proof = EquivocationProof {};
+		// if let Some(report_call) = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof) {
+		// 	sign_and_dispatch(
+		// 		self.inner.clone(),
+		// 		self.transaction_pool.clone(),
+		// 		report_call
+		// 	);
+		// }
 	}
 }
 
-/// TODO: move this somewhere else.
-pub fn sign_and_dispatch<Block: BlockT<Hash=H256>, A: txpool::ChainApi<Block=Block>>(
-	genesis_hash: H256,
+/// TODO: move to a place where can be used by other consensus engines.
+pub fn sign_and_dispatch<B, E, RA, Block: BlockT<Hash=H256>, A>(
+	client: Arc<Client<B, E, Block, RA>>,
 	transaction_pool: Arc<TransactionPool<A>>,
-	hash: BlockId<Block>,
 	report_call: Vec<u8>
-) {
-	let signed: sr25519::Public = AccountKeyring::Alice.into();
-	let next_index = transaction_pool.get_account_nonce(&hash, &signed).unwrap();
+) where 
+	Block: 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	A: txpool::ChainApi<Block=Block>,
+{
+	let public = AccountKeyring::Alice.into();
+	let block_id = BlockId::number(client.info().unwrap().chain.best_number);
+	let genesis_hash = client.info().unwrap().chain.genesis_hash;
+	let next_index = transaction_pool.get_account_nonce(&block_id, &public).unwrap();
+	let call: Call = Decode::decode(&mut report_call.as_slice()).expect("Valid encoded call");
 	let payload = (
 		Compact::from(next_index),
-		Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
+		call.clone(),
 		Era::immortal(),
 		genesis_hash,
 	);
-	let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
+	let signature: sr25519::Signature = AccountKeyring::from_public(&public).unwrap().sign(&payload.encode()).into();
 	let any_signature = AnySignature::from(signature);
-	let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
+	let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), any_signature, Era::Immortal);
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-	if let Err(e) = transaction_pool.submit_one(&hash, uxt) {
-		warn!("Error importing misbehavior report: {:?}", e);
-	} else {
-		println!("Import was good! @@@@@@@");
+	match transaction_pool.submit_one(&block_id, uxt) {
+		Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+		Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
 	}
 }
 

@@ -35,7 +35,7 @@ use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode};
-use fg_primitives::{ScheduledChange, GrandpaEquivocationProof};
+use fg_primitives::ScheduledChange;
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
@@ -43,6 +43,7 @@ use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::CurrentHeight;
 use substrate_primitives::ed25519;
 use system::ensure_signed;
+use primitives::EquivocationProof;
 use primitives::traits::MaybeSerializeDebug;
 use ed25519::Public as AuthorityId;
 
@@ -216,7 +217,7 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Report some misbehavior.
-		fn report_misbehavior(origin, _report: Vec<u8>) {
+		fn report_misbehavior(origin, report: EquivocationProof) {
 			// ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
@@ -254,10 +255,6 @@ impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> Vec<(T::SessionKey, u64)> {
 		<AuthorityStorageVec<T::SessionKey>>::items()
-	}
-
-	pub fn construct_report_call(evidence: GrandpaEquivocationProof) -> Vec<u8> {
-		Vec::new()
 	}
 
 	/// Schedule a change in the authorities.

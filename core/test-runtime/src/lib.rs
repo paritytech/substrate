@@ -35,7 +35,7 @@ use substrate_client::{
 };
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity,
-	create_runtime_str,
+	create_runtime_str, EquivocationProof,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
@@ -469,7 +469,7 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-					aystem::validate_transaction(utx)
+					system::validate_transaction(utx)
 				}
 
 				fn get_account_nonce(account: &sr25519::Public) -> u64 {
@@ -552,6 +552,9 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+				fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+					Some(Vec::new())
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

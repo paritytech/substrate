@@ -18,8 +18,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::vec::Vec;
 use substrate_client::decl_runtime_apis;
-use runtime_primitives::ConsensusEngineId;
+use runtime_primitives::{ConsensusEngineId, EquivocationProof};
+use primitives::ed25519;
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
@@ -33,5 +35,6 @@ decl_runtime_apis! {
 		///
 		/// Dynamic slot duration may be supported in the future.
 		fn slot_duration() -> u64;
+		// fn construct_report_call(evidence: EquivocationProof<ed25519::Public>) -> Option<Vec<u8>>;
 	}
 }
