@@ -161,14 +161,14 @@ impl Slots {
 
 	/// Marks given peer as a reserved one.
 	pub fn mark_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.common.remove(peer_id) {
+		if self.common.remove(peer_id).is_some() {
 			self.reserved.insert(peer_id.clone(), ());
 		}
 	}
 
 	/// Marks given peer as not reserved one.
 	pub fn mark_not_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.reserved.remove(peer_id) {
+		if self.reserved.remove(peer_id).is_some() {
 			self.common.insert(peer_id.clone(), ());
 		}
 	}
@@ -181,43 +181,5 @@ impl Slots {
 	/// Returns true if given peer is reserved.
 	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
 		self.reserved.contains_key(peer_id)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use libp2p::PeerId;
-	use super::{Slots, SlotType};
-
-	#[test]
-	fn test_slots_debug() {
-		let reserved_peer = PeerId::random();
-		let reserved_peer2 = PeerId::random();
-		let common_peer = PeerId::random();
-		let mut slots = Slots::new(10);
-
-		slots.add_peer(reserved_peer.clone(), SlotType::Reserved);
-		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
-		slots.add_peer(common_peer.clone(), SlotType::Common);
-
-		let expected = format!("Slots {{
-    max_slots: 10,
-    reserved: [
-        PeerId(
-            {:?}
-        ),
-        PeerId(
-            {:?}
-        )
-    ],
-    common: [
-        PeerId(
-            {:?}
-        )
-    ]
-}}", reserved_peer.to_base58(), reserved_peer2.to_base58(), common_peer.to_base58());
-
-		let s = format!("{:#?}", slots);
-		assert_eq!(expected, s);
 	}
 }
