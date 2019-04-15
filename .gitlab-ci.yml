@@ -18,6 +18,7 @@ variables:
   GIT_STRATEGY:                    fetch
   CI_SERVER_NAME:                  "GitLab CI"
   CARGO_HOME:                      "/ci-cache/substrate/cargo/${CI_JOB_NAME}"
+  SCCACHE_CACHE_SIZE:              50G
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
 
