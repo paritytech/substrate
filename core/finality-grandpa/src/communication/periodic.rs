@@ -72,7 +72,10 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 		// re-scheduling.
 		loop {
 			match delay.poll() {
-				Err(e) => warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e),
+				Err(e) => {
+					warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e);
+					delay.reset(rebroadcast_instant());
+				}
 				Ok(Async::Ready(())) => {
 					delay.reset(rebroadcast_instant());
 

@@ -1129,7 +1129,7 @@ fn voter_persists_its_votes() {
 		};
 		let routing = MessageRouting::new(net.clone(), 1);
 		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone(), Exit);
-		runtime.spawn(routing_work);
+		runtime.block_on(routing_work).unwrap();
 
 		let (round_rx, round_tx) = network.round_communication(
 			communication::Round(1),
