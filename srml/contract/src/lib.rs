@@ -527,6 +527,10 @@ pub struct Schedule<Gas> {
 	/// What is the maximal memory pages amount is allowed to have for
 	/// a contract.
 	pub max_memory_pages: u32,
+
+	/// Whether the `ext_println` function is allowed to be used contracts.
+	/// MUST only be enabled for `dev` chains, NOT for production chains
+	pub enable_println: bool,
 }
 
 impl<Gas: As<u64>> Default for Schedule<Gas> {
@@ -543,6 +547,7 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			sandbox_data_write_cost: Gas::sa(1),
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
+			enable_println: false,
 		}
 	}
 }

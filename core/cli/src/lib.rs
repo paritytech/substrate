@@ -39,7 +39,7 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
+	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
 	path::{Path, PathBuf}, str::FromStr,
 };
 
@@ -475,6 +475,11 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
+	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| Some(vec![
+		"http://localhost:*".into(),
+		"https://localhost:*".into(),
+		"https://polkadot.js.org".into()
+	]));
 
 	// Override telemetry
 	if cli.no_telemetry {
@@ -668,10 +673,17 @@ where
 		}
 	}
 
-	fs::remove_dir_all(&db_path)?;
-	println!("{:?} removed.", &db_path);
-
-	Ok(())
+	match fs::remove_dir_all(&db_path) {
+		Result::Ok(_) => {
+			println!("{:?} removed.", &db_path);
+			Ok(())
+		},
+		Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+			println!("{:?} did not exist.", &db_path);
+			Ok(())
+		},
+		Result::Err(err) => Result::Err(err.into())
+	}
 }
 
 fn parse_address(

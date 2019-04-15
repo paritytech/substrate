@@ -187,25 +187,25 @@ struct ContextData<B: BlockT, H: ExHashT> {
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>>  {
-    fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
+pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>> {
+	fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
-    fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
-        (*self)(spec, context)
-    }
+	fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
+		(*self)(spec, context)
+	}
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait GossipTask<B: BlockT>  {
-    fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
+pub trait GossipTask<B: BlockT> {
+	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
 }
 
 impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
-    fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
-        (*self)(gossip, context)
-    }
+	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
+		(*self)(gossip, context)
+	}
 }
 
 /// Messages sent to Protocol from elsewhere inside the system.
@@ -246,6 +246,9 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	Stop,
 	/// Tell protocol to perform regular maintenance.
 	Tick,
+	/// Synchronization request.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
 }
 
 /// Messages sent to Protocol from Network-libp2p.
@@ -258,6 +261,9 @@ pub enum FromNetworkMsg<B: BlockT> {
 	CustomMessage(PeerId, Message<B>),
 	/// Let protocol know a peer is currenlty clogged.
 	PeerClogged(PeerId, Option<Message<B>>),
+	/// Synchronization request.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
 }
 
 enum Incoming<B: BlockT, S: NetworkSpecialization<B>> {
@@ -408,6 +414,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.stop();
 				return false;
 			},
+			#[cfg(any(test, feature = "test-helpers"))]
+			ProtocolMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
 		}
 		true
 	}
@@ -420,6 +428,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			FromNetworkMsg::CustomMessage(who, message) => {
 				self.on_custom_message(who, message)
 			},
+			#[cfg(any(test, feature = "test-helpers"))]
+			FromNetworkMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
 		}
 		true
 	}

@@ -1,31 +1,35 @@
 [package]
-name = "substrate-consensus-aura"
-version = "1.0.1"
+name = "substrate-consensus-babe"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Aura consensus algorithm for substrate"
+description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.4"
+parity-codec = "3.4.0"
+parity-codec-derive = "3.3.0"
+babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
-slots = { package = "substrate-consensus-slots", path = "../slots" }
-aura_primitives = { package = "substrate-consensus-aura-primitives", path = "primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
-srml-aura = { path = "../../../srml/aura" }
-client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
-futures = "0.1.17"
-tokio = "0.1.7"
-parking_lot = "0.7.1"
-error-chain = "0.12"
-log = "0.4"
+client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
+slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+futures = "0.1.26"
+tokio = "0.1.18"
+parking_lot = "0.7.1"
+error-chain = "0.12.0"
+log = "0.4.6"
+
+[dependencies.schnorrkel]
+git = "https://github.com/paritytech/schnorrkel"
+branch = "master"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }
@@ -33,4 +37,4 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
-env_logger = "0.6"
+env_logger = "0.6.1"

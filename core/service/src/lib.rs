@@ -183,7 +183,7 @@ impl<Components: components::Components> Service<Components> {
 					warn!("Using default protocol ID {:?} because none is configured in the \
 						chain specs", DEFAULT_PROTOCOL_ID
 					);
-					DEFAULT_PROTOCOL_ID	
+					DEFAULT_PROTOCOL_ID
 				}
 			}.as_bytes();
 			let mut protocol_id = network::ProtocolId::default();
@@ -324,7 +324,7 @@ impl<Components: components::Components> Service<Components> {
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
+			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
 		)?;
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
