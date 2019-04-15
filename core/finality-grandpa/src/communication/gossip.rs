@@ -390,9 +390,13 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		if peer.view.last_commit.as_ref() >= Some(&new_height) {
+		// this doesn't allow a peer to send us unlimited commits with the
+		// same height, because there is still a misbehavior condition based on
+		// sending commits that are <= the best we are aware of.
+		if peer.view.last_commit.as_ref() > Some(&new_height) {
 			return Err(Misbehavior::InvalidViewChange);
 		}
+
 		peer.view.last_commit = Some(new_height);
 
 		Ok(())

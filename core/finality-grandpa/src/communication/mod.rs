@@ -38,7 +38,7 @@ use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::ConsensusEngineId;
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
 
@@ -361,22 +361,16 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let service = self.service.clone();
 		let topic = global_topic::<B>(set_id.0);
-		let incoming = incoming_global(service, topic, voters);
+		let incoming = incoming_global(service, topic, voters, self.validator.clone());
 
 		let outgoing = CommitsOut::<B, N>::new(
 			self.service.clone(),
 			set_id.0,
 			is_voter,
+			self.validator.clone(),
 		);
 
 		(incoming, outgoing)
-	}
-
-	pub(crate) fn note_commit_finalized(&self, number: NumberFor<B>) {
-		self.validator.note_commit_finalized(
-			number,
-			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
-		);
 	}
 }
 
@@ -384,6 +378,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 	service: N,
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
+	gossip_validator: Arc<GossipValidator<B>>,
 ) -> impl Stream<Item = (u64, CompactCommit<B>, impl FnMut(CommitProcessingOutcome)), Error = Error> {
 	service.messages_for(topic)
 		.filter_map(|notification| {
@@ -429,9 +424,21 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.map(move |(msg, mut notification, service)| {
 			let round = msg.round.0;
 			let commit = msg.message;
+			let finalized_number = commit.target_number;
+			let gossip_validator = gossip_validator.clone();
 			let cb = move |outcome| match outcome {
 				CommitProcessingOutcome::Good => {
-					// if it checks out, gossip it.
+					// if it checks out, gossip it. not accounting for
+					// any discrepancy between the actual ghost and the claimed
+					// finalized number.
+					gossip_validator.note_commit_finalized(
+						finalized_number,
+						|to, neighbor_msg| service.send_message(
+							to,
+							GossipMessage::<B>::from(neighbor_msg).encode(),
+						),
+					);
+
 					service.gossip_message(topic, notification.message.clone(), false);
 				}
 				CommitProcessingOutcome::Bad => {
@@ -642,17 +649,22 @@ struct CommitsOut<Block: BlockT, N: Network<Block>> {
 	network: N,
 	set_id: SetId,
 	is_voter: bool,
-	_marker: ::std::marker::PhantomData<Block>,
+	gossip_validator: Arc<GossipValidator<Block>>,
 }
 
 impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
-	pub(crate) fn new(network: N, set_id: u64, is_voter: bool) -> Self {
+	pub(crate) fn new(
+		network: N,
+		set_id: u64,
+		is_voter: bool,
+		gossip_validator: Arc<GossipValidator<Block>>,
+	) -> Self {
 		CommitsOut {
 			network,
 			set_id: SetId(set_id),
 			is_voter,
-			_marker: Default::default(),
+			gossip_validator,
 		}
 	}
 }
@@ -690,6 +702,16 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		});
 
 		let topic = global_topic::<Block>(self.set_id.0);
+
+		// the gossip validator needs to be made aware of the best commit-height we know of
+		// before gosipping
+		self.gossip_validator.note_commit_finalized(
+			commit.target_number,
+			|to, neighbor| self.network.send_message(
+				to,
+				GossipMessage::<Block>::from(neighbor).encode(),
+			),
+		);
 		self.network.gossip_message(topic, message.encode(), false);
 
 		Ok(AsyncSink::Ready)
