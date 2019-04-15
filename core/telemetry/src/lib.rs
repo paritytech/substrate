@@ -24,15 +24,12 @@
 use std::{io, time, thread};
 use std::sync::Arc;
 use parking_lot::Mutex;
-use slog::{Drain, o};
+use slog::{Drain, o, OwnedKVList, PushFnValue, Record};
 use log::trace;
 use rand::{thread_rng, Rng};
 pub use slog_scope::with_logger;
 pub use slog;
 use serde_derive::{Serialize, Deserialize};
-use slog::OwnedKVList;
-use slog::Record;
-use slog::PushFnValue;
 use slog_json::JsonBuilder;
 use core::result;
 
