@@ -64,6 +64,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
+	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
+	pub rpc_cors: Option<Vec<String>>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// The default number of 64KB pages to allocate for Wasm execution
@@ -97,6 +99,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
+			rpc_cors: Some(vec![]),
 			telemetry_endpoints: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
