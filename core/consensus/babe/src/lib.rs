@@ -17,9 +17,7 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
 //!
 //! Note that 1 second slot time is optimal.
-#![forbid(warnings)]
-#![forbid(unsafe_code, missing_docs)]
-#![allow(unused_imports)]
+#![forbid(warnings, unsafe_code, missing_docs)]
 extern crate core;
 pub use babe_primitives::*;
 use runtime_primitives::{generic, generic::BlockId, Justification};
@@ -30,14 +28,12 @@ use std::{
 	sync::Arc,
 	time::Duration,
 	thread,
-	marker::PhantomData,
 	hash::Hash,
 	fmt::Debug,
 	u64,
 };
 use parity_codec::{Decode, Encode, Input};
-use parking_lot::Mutex;
-use substrate_primitives::{
+use primitives::{
 	crypto::Pair,
 	sr25519::{Public, Signature, LocalizedSignature, self},
 };
@@ -47,10 +43,9 @@ use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS
 use schnorrkel::{
 	SecretKey as Secret,
 	context::SigningTranscript,
-	points::RistrettoBoth,
 	keys::Keypair,
 	vrf::{
-		VRFProof, VRFProofBatchable, VRF_PROOF_LENGTH, VRFInOut, VRFOutput,
+		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
 		VRF_OUTPUT_LENGTH,
 	},
 	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
@@ -70,13 +65,13 @@ use client::{
 	ChainHead,
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
-	runtime_api::{ApiExt, Core as CoreApi},
+	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
 };
 use slots::CheckedHeader;
 
-use futures::{Future, IntoFuture, future, stream::Stream};
+use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
 

@@ -9,7 +9,7 @@ edition = "2018"
 parity-codec = "3.4.0"
 parity-codec-derive = "3.3.0"
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
-substrate_primitives = { package = "substrate-primitives", path = "../../primitives", features = ["std"] }
+primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }

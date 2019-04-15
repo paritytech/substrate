@@ -66,7 +66,7 @@ pub type BlockResponse<B> = generic::BlockResponse<
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
 
-/// Bits of block data and associated artifacts to request.
+// Bits of block data and associated artifacts to request.
 bitflags! {
 	/// Node roles bitmask.
 	pub struct BlockAttributes: u8 {
