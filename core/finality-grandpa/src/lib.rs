@@ -658,3 +658,24 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }
+
+#[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
+	config: Config,
+	link: LinkHalf<B, E, Block, RA>,
+	network: N,
+	inherent_data_providers: InherentDataProviders,
+	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+	Block::Hash: Ord,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
+	N::In: Send + 'static,
+	NumberFor<Block>: BlockNumberOps,
+	DigestFor<Block>: Encode,
+	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
+	RA: Send + Sync + 'static,
+{
+	run_grandpa_voter(config, link, network, inherent_data_providers, on_exit)
+}
