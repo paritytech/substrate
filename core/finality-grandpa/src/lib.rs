@@ -69,6 +69,7 @@ use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use serde_json;
 
 use srml_finality_tracker;
 
@@ -463,7 +464,7 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA>
+	grandpa_params: GrandpaParams<B, E, Block, N, RA>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -507,9 +508,11 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						let curr = authorities.current_authorities();
 						let voters = curr.voters();
 						let authorities: Vec<String> =
-							voters.iter().map(|(id, _)| format!("{}", id)).collect();
-						format!("{:?}", authorities)
-					 });
+							voters.iter().map(|(id, _)| id.to_string()).collect();
+						serde_json::to_string(&authorities)
+							.expect("authorities is always at least an empty vector; elements are always of type string")
+					 }
+				);
 				Ok(())
 			})
 			.then(|_| Ok(()));

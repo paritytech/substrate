@@ -374,7 +374,8 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 				let authorities: Vec<String> =
 					new_set.authorities.iter().map(|(id, _)| format!("{}", id)).collect();
 				format!("{:?}", authorities)
-			});
+			}
+		);
 
 		// we also overwrite the "last completed round" entry with a blank slate
 		// because from the perspective of the finality gadget, the chain has
