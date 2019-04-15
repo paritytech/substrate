@@ -607,6 +607,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						current_round: HasVoted::No,
 					};
 
+					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+
 					let set_state: SharedVoterSetState<_> = set_state.into();
 
 					let env = Arc::new(Environment {
