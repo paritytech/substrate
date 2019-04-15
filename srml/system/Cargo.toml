@@ -16,6 +16,9 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 
+[dev-dependencies]
+criterion = "0.2"
+
 [features]
 default = ["std"]
 std = [
@@ -29,3 +32,7 @@ std = [
 	"srml-support/std",
 	"primitives/std",
 ]
+
+[[bench]]
+name = "bench"
+harness = false
