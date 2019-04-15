@@ -20,7 +20,7 @@ use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
 use grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter_set::VoterSet
+	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
 
@@ -30,7 +30,7 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT, DigestItemFor, Dige
 use substrate_primitives::{ed25519, H256, Blake2Hasher};
 
 use crate::{
-	AuthoritySignature, committer_communication, CommandOrError, Config, environment,
+	AuthoritySignature, global_communication, CommandOrError, Config, environment,
 	Error, LinkHalf, Network, aux_schema::PersistentData, VoterCommand, VoterSetState,
 };
 use crate::authorities::SharedAuthoritySet;
@@ -56,22 +56,20 @@ impl<'a, Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberF
 	}
 }
 
-fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, S>(
+fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 	client: &Arc<Client<B, E, Block, RA>>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	last_finalized_number: NumberFor<Block>,
-	network: &NetworkBridge<Block, N>, // FIXME: remove after rob's PR for commit callbacks
 	commits: S,
 ) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
 	NumberFor<Block>: BlockNumberOps,
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
-	N: Network<Block>,
 	S: Stream<
-		Item = (u64, ::grandpa::CompactCommit<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>),
+		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
 		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
 	>,
 {
@@ -79,10 +77,18 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, S>(
 	let consensus_changes = consensus_changes.clone();
 	let client = client.clone();
 	let voters = voters.clone();
-	let network = network.clone();
 
-	let observer = commits.fold(last_finalized_number, move |last_finalized_number, (round, commit)| {
-		let commit = grandpa::Commit::from(commit);
+	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
+		let (round, commit, mut callback) = match global {
+			voter::CommunicationIn::Commit(round, commit, callback) => {
+				let commit = grandpa::Commit::from(commit);
+				(round, commit, callback)
+			},
+			voter::CommunicationIn::Auxiliary(_) => {
+				// ignore aux messages
+				return future::ok(last_finalized_number);
+			},
+		};
 
 		// if the commit we've received targets a block lower than the last
 		// finalized, ignore it and continue with the current state
@@ -90,41 +96,46 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, S>(
 			return future::ok(last_finalized_number);
 		}
 
-		match grandpa::validate_commit(
+		let validation_result = match grandpa::validate_commit(
 			&commit,
 			&voters,
 			&ObserverChain(&*client),
 		) {
-			Ok(ref result) if result.ghost().is_some() => {
-				let finalized_hash = commit.target_hash;
-				let finalized_number = commit.target_number;
+			Ok(r) => r,
+			Err(e) => return future::err(e.into()),
+		};
 
-				// commit is valid, finalize the block it targets
-				match environment::finalize_block(
-					&client,
-					&authority_set,
-					&consensus_changes,
-					None,
-					finalized_hash,
-					finalized_number,
-					(round, commit).into(),
-				) {
-					Ok(_) => {},
-					Err(e) => return future::err(e),
-				};
+		if let Some(_) = validation_result.ghost() {
+			let finalized_hash = commit.target_hash;
+			let finalized_number = commit.target_number;
 
-				network.clone().note_commit_finalized(finalized_number);
+			// commit is valid, finalize the block it targets
+			match environment::finalize_block(
+				&client,
+				&authority_set,
+				&consensus_changes,
+				None,
+				finalized_hash,
+				finalized_number,
+				(round, commit).into(),
+			) {
+				Ok(_) => {},
+				Err(e) => return future::err(e),
+			};
 
-				// proceed processing with new finalized block number
-				future::ok(finalized_number)
-			},
-			_ => {
-				// FIXME: update to use commit processing callback (#2229)
-				debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
+			callback.run(voter::CommitProcessingOutcome::Good(voter::GoodCommit::new()));
 
-				// commit is invalid, continue processing commits with the current state
-				future::ok(last_finalized_number)
-			},
+			// proceed processing with new finalized block number
+			future::ok(finalized_number)
+		} else {
+			debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
+
+			callback.run(
+				voter::CommitProcessingOutcome::Bad(voter::BadCommit::from(validation_result))
+			);
+
+			// commit is invalid, continue processing commits with the current state
+			future::ok(last_finalized_number)
 		}
 	});
 
@@ -139,7 +150,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
-	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
+	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -158,7 +169,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let PersistentData { authority_set, consensus_changes, set_state } = persistent_data;
 	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
 
-	let network = super::communication::NetworkBridge::new(network, config.clone());
+	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
 
 	let observer_work = future::loop_fn(initial_state, move |state| {
 		let (authority_set, consensus_changes, set_state, voter_commands_rx) = state;
@@ -167,7 +178,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let client = client.clone();
 
 		// start global communication stream for the current set
-		let (committer_in, _) = committer_communication(
+		let (global_in, _) = global_communication(
 			None,
 			set_id,
 			&voters,
@@ -189,8 +200,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			&consensus_changes,
 			&voters,
 			last_finalized_number,
-			&network,
-			committer_in,
+			global_in,
 		);
 
 		let handle_voter_command = move |command, voter_commands_rx| {
@@ -266,6 +276,8 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		.map_err(|e| {
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
+
+	let observer_work = network_startup.and_then(move |()| observer_work);
 
 	Ok(observer_work.select(on_exit).map(|_| ()).map_err(|_| ()))
 }
