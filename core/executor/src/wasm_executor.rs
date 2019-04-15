@@ -28,7 +28,7 @@ use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
+use primitives::{blake2_128, blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -449,6 +449,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_256"))?;
+		Ok(())
+	},
+	ext_blake2_128(data: *const u8, len: u32, out: *mut u8) => {
+		let result: [u8; 16] = if len == 0 {
+			let hashed = blake2_128(&[0u8; 0]);
+			this.hash_lookup.insert(hashed.to_vec(), vec![]);
+			hashed
+		} else {
+			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_blake2_128"))?;
+			let hashed_key = blake2_128(&key);
+			this.hash_lookup.insert(hashed_key.to_vec(), key);
+			hashed_key
+		};
+
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_128"))?;
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
@@ -909,6 +924,21 @@ mod tests {
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
+
+	#[test]
+	fn blake2_128_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
+			blake2_128(&b""[..]).encode()
+		);
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", b"Hello world!").unwrap(),
+			blake2_128(&b"Hello world!"[..]).encode()
+		);
+	}
+
 
 	#[test]
 	fn twox_256_should_work() {

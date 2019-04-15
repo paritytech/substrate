@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Abstract storage to use on Blake2_256Storage trait
+//! Abstract storage to use on Blake2_128Storage trait
 
 use crate::codec;
 use crate::rstd::prelude::{Vec, Box};
 #[cfg(feature = "std")]
 use crate::storage::unhashed::generator::UnhashedStorage;
 #[cfg(feature = "std")]
-use runtime_io::blake2_256;
+use runtime_io::blake2_128;
 
 /// Abstraction around storage.
-pub trait Blake2_256Storage {
+pub trait Blake2_128Storage {
 	/// true if the key exists in storage.
 	fn exists(&self, key: &[u8]) -> bool;
 
@@ -61,21 +61,21 @@ pub trait Blake2_256Storage {
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl Blake2_256Storage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
+impl Blake2_128Storage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
 	fn exists(&self, key: &[u8]) -> bool {
-		UnhashedStorage::exists(self, &blake2_256(key))
+		UnhashedStorage::exists(self, &blake2_128(key))
 	}
 
 	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		UnhashedStorage::get(self, &blake2_256(key))
+		UnhashedStorage::get(self, &blake2_128(key))
 	}
 
 	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		UnhashedStorage::put(self, &blake2_256(key), val)
+		UnhashedStorage::put(self, &blake2_128(key), val)
 	}
 
 	fn kill(&self, key: &[u8]) {
-		UnhashedStorage::kill(self, &blake2_256(key))
+		UnhashedStorage::kill(self, &blake2_128(key))
 	}
 }
 
@@ -91,35 +91,35 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	fn key_for(x: &K) -> Vec<u8>;
 
 	/// true if the value is defined in storage.
-	fn exists<S: Blake2_256Storage>(key: &K, storage: &S) -> bool {
+	fn exists<S: Blake2_128Storage>(key: &K, storage: &S) -> bool {
 		storage.exists(&Self::key_for(key)[..])
 	}
 
 	/// Load the value associated with the given key from the map.
-	fn get<S: Blake2_256Storage>(key: &K, storage: &S) -> Self::Query;
+	fn get<S: Blake2_128Storage>(key: &K, storage: &S) -> Self::Query;
 
 	/// Take the value under a key.
-	fn take<S: Blake2_256Storage>(key: &K, storage: &S) -> Self::Query;
+	fn take<S: Blake2_128Storage>(key: &K, storage: &S) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<S: Blake2_256Storage>(key: &K, val: &V, storage: &S) {
+	fn insert<S: Blake2_128Storage>(key: &K, val: &V, storage: &S) {
 		storage.put(&Self::key_for(key)[..], val);
 	}
 
 	/// Remove the value under a key.
-	fn remove<S: Blake2_256Storage>(key: &K, storage: &S) {
+	fn remove<S: Blake2_128Storage>(key: &K, storage: &S) {
 		storage.kill(&Self::key_for(key)[..]);
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Blake2_256Storage>(key: &K, f: F, storage: &S) -> R;
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Blake2_128Storage>(key: &K, f: F, storage: &S) -> R;
 }
 
 /// A `StorageMap` with enumerable entries.
 pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
 	/// Return current head element.
-	fn head<S: Blake2_256Storage>(storage: &S) -> Option<K>;
+	fn head<S: Blake2_128Storage>(storage: &S) -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate<'a, S: Blake2_256Storage>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
+	fn enumerate<'a, S: Blake2_128Storage>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }

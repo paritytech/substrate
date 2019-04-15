@@ -1534,7 +1534,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
-	use primitives::blake2_256;
+	use primitives::blake2_128;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient, AccountKeyring};
@@ -1584,12 +1584,12 @@ pub(crate) mod tests {
 		}
 
 		// prepare test cases
-		let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
-		let bob = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
-		let charlie = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Charlie.into())).to_vec();
-		let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
-		let eve = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
-		let ferdie = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
+		let alice = blake2_128(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
+		let bob = blake2_128(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
+		let charlie = blake2_128(&runtime::system::balance_of_key(AccountKeyring::Charlie.into())).to_vec();
+		let dave = blake2_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let eve = blake2_128(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
+		let ferdie = blake2_128(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
 		let test_cases = vec![
 			(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
 			(1, 3, alice.clone(), vec![(1, 0)]),

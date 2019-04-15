@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::codec;
-use runtime_io::blake2_256;
+use runtime_io::blake2_128;
 use crate::rstd::vec::Vec;
 
 /// Abstraction around storage with unhashed access.
@@ -110,7 +110,7 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	fn prefix_for(k1: &K1) -> Vec<u8> {
 		let mut key = Self::prefix().to_vec();
 		codec::Encode::encode_to(k1, &mut key);
-		blake2_256(&key).to_vec()
+		blake2_128(&key).to_vec()
 	}
 
 	/// true if the value is defined in storage.

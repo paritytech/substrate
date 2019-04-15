@@ -226,13 +226,13 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
 		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			<$name as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+			<$name as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::blake2_256::generator::StorageMap<$kty, $ty> for $name {
+		impl $crate::storage::blake2_128::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
 
 			/// Get the prefix key in storage.
@@ -248,31 +248,31 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::Blake2_256Storage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>>::key_for(key);
+			fn get<S: $crate::Blake2_128Storage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$getter(&key[..])
 			}
 
 			/// Take the value, reading and removing it.
-			fn take<S: $crate::Blake2_256Storage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>>::key_for(key);
+			fn take<S: $crate::Blake2_128Storage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
 
 			/// Mutate the value under a key.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::Blake2_256Storage>(key: &$kty, f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>>::take(key, storage);
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::Blake2_128Storage>(key: &$kty, f: F, storage: &S) -> R {
+				let mut val = <Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
+					<Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-						None => <Self as $crate::storage::blake2_256::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+						Some(ref val) => <Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
 
@@ -386,7 +386,7 @@ mod tests {
 	use crate::metadata::*;
 	use crate::rstd::marker::PhantomData;
 	use crate::storage::twox_128::generator::*;
-	use crate::storage::blake2_256::generator::*;
+	use crate::storage::blake2_128::generator::*;
 
 	storage_items! {
 		Value: b"a" => u32;

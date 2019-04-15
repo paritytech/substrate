@@ -294,7 +294,7 @@ fn decl_store_extra_genesis(
 
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::blake2_256::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
+							<#name<#traitinstance, #instance> as #scrate::storage::blake2_128::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
 				},
@@ -670,7 +670,7 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
-							<#name<#traitinstance, #instance> as #scrate::storage::blake2_256::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
+							<#name<#traitinstance, #instance> as #scrate::storage::blake2_128::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}

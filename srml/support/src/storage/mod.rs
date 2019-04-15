@@ -24,7 +24,7 @@ use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
 pub mod storage_items;
 pub mod unhashed;
 pub mod twox_128;
-pub mod blake2_256;
+pub mod blake2_128;
 
 struct IncrementalInput<'a> {
 	key: &'a [u8],
@@ -84,29 +84,29 @@ impl twox_128::generator::Twox128Storage for RuntimeStorage {
 	}
 }
 
-impl blake2_256::generator::Blake2_256Storage for RuntimeStorage {
+impl blake2_128::generator::Blake2_128Storage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		blake2_256::exists(key)
+		blake2_128::exists(key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		blake2_256::get(key)
+		blake2_128::get(key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		blake2_256::put(key, val)
+		blake2_128::put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		blake2_256::kill(key)
+		blake2_128::kill(key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		blake2_256::take(key)
+		blake2_128::take(key)
 	}
 }
 
@@ -292,15 +292,15 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
-impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: blake2_256::generator::StorageMap<K, V> {
+impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: blake2_128::generator::StorageMap<K, V> {
 	type Query = U::Query;
 
 	fn prefix() -> &'static [u8] {
-		<U as blake2_256::generator::StorageMap<K, V>>::prefix()
+		<U as blake2_128::generator::StorageMap<K, V>>::prefix()
 	}
 
 	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
-		<U as blake2_256::generator::StorageMap<K, V>>::key_for(key.borrow())
+		<U as blake2_128::generator::StorageMap<K, V>>::key_for(key.borrow())
 	}
 
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
@@ -340,13 +340,13 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: blake2_256::generator::EnumerableStorageMap<K, V> {
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: blake2_128::generator::EnumerableStorageMap<K, V> {
 	fn head() -> Option<K> {
-		<U as blake2_256::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
+		<U as blake2_128::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
 
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
-		<U as blake2_256::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
+		<U as blake2_128::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
 

@@ -36,7 +36,7 @@ pub use paste;
 pub use sr_primitives as runtime_primitives;
 
 pub use self::storage::twox_128::generator::Twox128Storage;
-pub use self::storage::blake2_256::generator::Blake2_256Storage;
+pub use self::storage::blake2_128::generator::Blake2_128Storage;
 pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]
