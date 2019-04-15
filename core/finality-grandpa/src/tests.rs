@@ -1269,7 +1269,7 @@ fn finalize_3_voters_1_light_observer() {
 				},
 				link,
 				MessageRouting::new(net.clone(), 3),
-				futures::empty(),
+				Exit,
 			).unwrap()
 		).unwrap();
 

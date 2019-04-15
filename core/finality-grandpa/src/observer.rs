@@ -79,7 +79,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 	let voters = voters.clone();
 
 	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
-		let (round, commit, mut callback) = match global {
+		let (round, commit, callback) = match global {
 			voter::CommunicationIn::Commit(round, commit, callback) => {
 				let commit = grandpa::Commit::from(commit);
 				(round, commit, callback)
@@ -123,16 +123,14 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 				Err(e) => return future::err(e),
 			};
 
-			callback.run(voter::CommitProcessingOutcome::Good(voter::GoodCommit::new()));
+			grandpa::process_commit_validation_result(validation_result, callback);
 
 			// proceed processing with new finalized block number
 			future::ok(finalized_number)
 		} else {
 			debug!(target: "afg", "Received invalid commit: ({:?}, {:?})", round, commit);
 
-			callback.run(
-				voter::CommitProcessingOutcome::Bad(voter::BadCommit::from(validation_result))
-			);
+			grandpa::process_commit_validation_result(validation_result, callback);
 
 			// commit is invalid, continue processing commits with the current state
 			future::ok(last_finalized_number)
