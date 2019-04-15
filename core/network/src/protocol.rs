@@ -50,9 +50,9 @@ const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 2;
+pub(crate) const CURRENT_VERSION: u32 = 3;
 /// Lowest version we support
-const MIN_VERSION: u32 = 2;
+pub(crate) const MIN_VERSION: u32 = 2;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -505,11 +505,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
 			GenericMessage::Consensus(msg) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
-					who,
-					msg,
-				);
+				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
+					self.consensus_gossip.on_incoming(
+						&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+						who,
+						msg,
+					);
+				}
 			}
 			other => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
@@ -561,11 +563,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let removed = {
 			self.handshaking_peers.remove(&peer);
 			self.connected_peers.write().remove(&peer);
-			self.context_data.peers.remove(&peer).is_some()
+			self.context_data.peers.remove(&peer)
 		};
-		if removed {
+		if let Some(peer_data) = removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
-			self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
+			if peer_data.info.protocol_version > 2 {
+				self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
+			}
 			self.sync.peer_disconnected(&mut context, peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
@@ -721,7 +725,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called by peer to report status
 	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
-		{
+		let protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
 				debug!("Unexpected status packet from {}", who);
 				return;
@@ -801,15 +805,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			self.context_data.peers.insert(who.clone(), peer);
 
 			debug!(target: "sync", "Connected {}", who);
-		}
+			status.version
+		};
 
 		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
 		self.on_demand
 			.as_ref()
 			.map(|s| s.on_connect(who.clone(), status.roles, status.best_number));
 		self.sync.new_peer(&mut context, who.clone());
-		self.consensus_gossip
-			.new_peer(&mut context, who.clone(), status.roles);
+		if protocol_version > 2 {
+			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
+		}
 		self.specialization.on_connect(&mut context, who, status);
 	}
 
