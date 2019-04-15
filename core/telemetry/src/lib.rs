@@ -166,7 +166,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 macro_rules! telemetry {
 	 ( $a:expr; $b:expr; $( $t:tt )* ) => {
 		$crate::with_logger(|l| {
-			$crate::slog::slog_info!(l, #$a, $b; "verbosity" => stringify!($a), $($t)* )
+			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
 		})
     }
 }
