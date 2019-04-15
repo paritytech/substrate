@@ -14,7 +14,111 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Democratic system: Handles administration of general stakeholder voting.
+//! # Democractic System Module
+//!
+//! ## Overview
+//! <!-- Original author of paragraph: @gavofyork -->
+//!
+//! The Democratic System Module handles administration of general stakeholder voting.
+//!
+//! To use it in your runtime, you need to implement the session [`Trait`](./trait.Trait.html).
+//!
+//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+//!
+//! ### Terminology
+//! <!-- Original author of paragraph: @gavofyork -->
+//!
+//! #### Public Proposal
+//!
+//! * **Public proposal creation** Created a public proposal using the `propose` call that anyone may execute by signing and submitting an extrinsic.
+//! * **Public proposal validity** The proposer's deposit must be above the minimum required amount and they must have sufficient account balance to transfer it into a reserve.
+//! * **Public proposal sponsorship** Sponsor (second) a public proposal using the `second` call that anyone may execute by signing and submitting an extrinsic.
+//! * **Public proposal sponsorship validity** The proposal to be sponsored must exist and a deposit from its proposer must have been locked away. The sponsor must have sufficient account balance to transfer a matching deposit into a reserve.
+//! * **Public proposal elevation** Winning public proposals are elevated to the Table of Referenda as a Public Referendum.
+//! * **Public proposal elevation process** If checking the configured `LaunchPeriod` in blocks indicates that a new public referendum should be launched then we find and remove from `PublicProps` the public proposal index with the largest locked deposit amount and declare it the winning proposal. The account id's that locked a deposit into this winning proposal that are stored in `DepositOf` are refunded the deposit they reserved. The `Tabled` event is then emitted to indicate that the winning proposal is being elevated to the Table of Referenda. Lastly it starts a public referendum with the winning proposal using a voting threshold of 'super majority approve'.
+//!
+//! #### Public Referendum
+//!
+//! * **Public referendum start** Start a public referendum using the `start_referendum` call that anyone may execute by signing and submitting an extrinsic. It is allocated the next referendum index that is mapped to its corresponding voting period expiry block, the proposal it relates to, and the given voting threshold.
+//! * **Public referendum cancellation** Remove all information about a referendum index.
+//! * **Public referendum validity** The new to be started must not have a voting period that ends before any existing referendum.
+//! * **Public referendum voting** Voters may vote on a public referendum index using the `vote` call that anyone may execute by signing and submitting an extrinsic. Voters and their votes (yay or nay) for a public referendum index are stored in `VoteOf` and `VotersFor`.
+//! * **Public referendum vote delegation** Voters may delegate and undelegate their votes for an amount of lock periods.
+//! * **Public referendum proxy account configuration** Stash accounts (see Staking Module) may add or remove a proxy account.
+//! * **Public referendum proxy account voting** Voters may vote on a public proposal on behalf of a stash account (see Staking Module).
+//! * **Public referendum vote validity** The referendum index being voted on must be an active referendum index of the `ReferendumInfoOf` mapping. The voter (transactor) must have a balance above zero to signal approval.
+//! * **Public referendum maturity** Public referendums that are expiring at the current block.
+//! * **Public referendum vote tallying, passing and execution** Searching for maturing public referendums to tally their votes by calling `maturing_referendums_at`, then removing them from the Table of Referenda. Pass and execute each public referendum if their vote tally meets their vote threshold, otherwise do not pass or execute them. Lastly increment `NextTally` to determine the next public referendum index to have its votes tallied.
+//!
+//! #### Other Terminology
+//!
+//! In modules of the SRML, the `on_finalise` signature is used in the module declaration to run anything that needs to be done at the end of the block. In the Democracy System Module it calls a private function `end_block` with the current block as an argument.
+//!
+//! To ensure that information about the origin where a dispatch initiated is a signed account we use `ensure_signed`.
+//!
+//! ### Goals
+//!
+//! The Democratic System Module in Substrate is designed to make the following possible:
+//!
+//! * Create and Sponsor Public Proposals.
+//! * Elevate Public Proposals to the Table of Referenda.
+//! * Start and Cancel Public Referendums.
+//! * Vote on Public Referendums.
+//! * Delegate or Proxy Voting rights of Public Referendums.
+//! * Tally Votes of Public Referendums.
+//! * Pass and Execute Maturing Public Referendums.
+//!
+//! ## Interface
+//!
+//! ### Dispatchable Functions
+//!
+//! * `propose` - TODO.
+//! * `second` - TODO.
+//! * `vote` - TODO.
+//! * `proxy_vote` - TODO.
+//! * `start_referendum` - TODO.
+//! * `cancel_referendum` - TODO.
+//! * `cancel_queued` - TODO.
+//! * `on_finalize` - TODO.
+//! * `set_proxy` - TODO.
+//! * `resign_proxy` - TODO.
+//! * `remove_proxy` - TODO.
+//! * `delegate` - TODO.
+//! * `undelegate` - TODO.
+//!
+//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//!
+//! ### Public Functions
+//!
+//! * `locked_for` - TODO.
+//! * `is_active_referendum` - TODO.
+//! * `active_referendums` - TODO.
+//! * `maturing_referendums_at` - TODO.
+//! * `tally` - TODO.
+//! * `tally_delegation` - TODO.
+//! * `delegated_votes` - TODO.
+//! * `force_proxy` - TODO.
+//! * `internal_start_referendum` - TODO.
+//! * `internal_cancel_referendum` - TODO.
+//!
+//! Please refer to the [`Module`](https://crates.parity.io/srml_democracy/struct.Module.html) struct for details on publicly available functions.
+//!
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//!
+//! ## Usage
+//!
+//! ### Prerequisites
+//!
+//! Import the Democracy module and types and derive your runtime's configuration traits from the Democracy module trait.
+//!
+//! ### Simple Code Snippet
+//!
+//! See the tests contained in files in this module's directory for simple code snippets that may make this module's functionalities clearer.
+//!
+//! ## Related Modules
+//!
+//! * [`System`](../srml_system/index.html)
+//! * [`Support`](../srml_support/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
