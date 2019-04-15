@@ -178,8 +178,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			params.transaction_pool,
 			params.specialization,
 		)?;
-		let versions = [(protocol::CURRENT_VERSION as u8)];
-		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
+		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
+		let registered = RegisteredProtocol::new(protocol_id, &versions);
 		let (thread, network, peerset) = start_thread(
 			network_to_protocol_sender,
 			network_port,
@@ -568,7 +568,10 @@ fn run_thread<B: BlockT + 'static>(
 	let network = stream::poll_fn(move || network_service.lock().poll()).for_each(move |event| {
 		match event {
 			NetworkServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. } => {
-				debug_assert_eq!(version, protocol::CURRENT_VERSION as u8);
+				debug_assert!(
+					version <= protocol::CURRENT_VERSION as u8
+					&& version >= protocol::MIN_VERSION as u8
+				);
 				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(peer_id, debug_info));
 			}
 			NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. } => {
