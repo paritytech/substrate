@@ -46,9 +46,9 @@
 //!
 //! The assets system in Substrate is designed to make the following possible:
 //!
-//! * Issue a unique asset to its creators' account.
+//! * Issue a unique asset to its creator's account.
 //! * Move assets between accounts.
-//! * Remove an accounts' balance of an asset from its total supply when requested by that accounts owner.
+//! * Remove an account's balance of an asset when requested by that account's owner and update the asset's total supply.
 //!
 //! ## Interface
 //!
