@@ -27,6 +27,7 @@ use substrate_primitives::{
 	H256,
 	Blake2Hasher,
 	Hasher,
+	sr25519,
 };
 use sr_primitives::{
 	generic::BlockId,
@@ -64,7 +65,6 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	type Error = error::Error;
 
 	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		println!("here?");
 		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
 	}
 
@@ -80,5 +80,9 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 		ex.using_encoded(|x| {
 			(Blake2Hasher::hash(x), x.len())
 		})
+	}
+
+	fn get_account_nonce(&self, at: &BlockId<Self::Block>, account: &sr25519::Public) -> error::Result<u64> {
+		Ok(self.client.runtime_api().get_account_nonce(at, account)?)
 	}
 }

@@ -40,7 +40,7 @@ use runtime_primitives::traits::{
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair, sr25519};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use srml_indices::address::Address;
-use node_runtime::{Call, GrandpaModule, GrandpaCall, UncheckedExtrinsic};
+use node_runtime::{Call, SystemCall, GrandpaCall, UncheckedExtrinsic, Context};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
@@ -349,12 +349,12 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		let equivocation_proof = GrandpaEquivocationProof {};
 		let report_call = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof).unwrap();
 		
-		// SignAndDispatch::<UncheckedExtrinsic, Block, A>::sign_and_dispatch(
-		// 	self.inner.info().unwrap().chain.genesis_hash,
-		// 	Arc::clone(&self.transaction_pool),
-		// 	block_id,
-		// 	report_call
-		// );
+		sign_and_dispatch(
+			self.inner.info().unwrap().chain.genesis_hash,
+			Arc::clone(&self.transaction_pool),
+			block_id,
+			report_call
+		);
 	}
 
 	fn precommit_equivocation(
@@ -367,53 +367,29 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 	}
 }
 
-
-trait SignAndDispatch<S, Block: BlockT<Hash=H256>, A: txpool::ChainApi<Block=Block>> {
-	fn sign_and_dispatch(
-		genesis_hash: H256,
-		transaction_pool: Arc<TransactionPool<A>>,
-		hash: BlockId<Block>,
-		report_call: Vec<u8>
+/// TODO: move this somewhere else.
+pub fn sign_and_dispatch<Block: BlockT<Hash=H256>, A: txpool::ChainApi<Block=Block>>(
+	genesis_hash: H256,
+	transaction_pool: Arc<TransactionPool<A>>,
+	hash: BlockId<Block>,
+	report_call: Vec<u8>
+) {
+	let signed: sr25519::Public = AccountKeyring::Alice.into();
+	let next_index = transaction_pool.get_account_nonce(&hash, &signed).unwrap();
+	let payload = (
+		Compact::from(next_index),
+		Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
+		Era::immortal(),
+		genesis_hash,
 	);
-}
-
-impl<S, B, E, Block: BlockT<Hash=H256>, N, RA, A> SignAndDispatch<S, Block, A> for Environment<B, E, Block, N, RA, A> where
-	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network<Block> + 'static + Send,
-	RA: 'static + Send + Sync,
-	NumberFor<Block>: BlockNumberOps,
-	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
-	A: txpool::ChainApi<Block=Block>,
-{
-	fn sign_and_dispatch(
-		genesis_hash: H256,
-		transaction_pool: Arc<TransactionPool<A>>,
-		hash: BlockId<Block>,
-		report_call: Vec<u8>
-	) {
-		let next_index = 10000u64;
-		let signed: sr25519::Public = AccountKeyring::Alice.into();
-		let payload = (
-			Compact::from(next_index),
-			Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
-			Era::immortal(),
-			genesis_hash,
-		);
-		let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
-		println!("payload = {:?}", payload);
-		// let local_id: sr25519::Public = signed.public();
-		let any_signature = AnySignature::from(signature);
-		println!("any signature = {:?}", any_signature);
-		let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
-		// let extrinsic = UncheckedExtrinsic::new_unsigned(payload.1);
-		let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-		// assert_eq!(extrinsic, uxt);
-		if let Err(e) = transaction_pool.submit_one(&hash, uxt) {
-			warn!("Error importing misbehavior report: {:?}", e);
-		}
+	let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
+	let any_signature = AnySignature::from(signature);
+	let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
+	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+	if let Err(e) = transaction_pool.submit_one(&hash, uxt) {
+		warn!("Error importing misbehavior report: {:?}", e);
+	} else {
+		println!("Import was good! @@@@@@@");
 	}
 }
 

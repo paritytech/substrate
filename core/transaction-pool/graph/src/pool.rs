@@ -37,7 +37,7 @@ use sr_primitives::{
 	traits::{self, As},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
-
+use substrate_primitives::sr25519;
 pub use crate::base_pool::Limit;
 
 /// Modification notification event stream type;
@@ -74,6 +74,8 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
+
+	fn get_account_nonce(&self, at: &BlockId<Self::Block>, account: &sr25519::Public) -> Result<u64, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -419,6 +421,10 @@ impl<B: ChainApi> Pool<B> {
 	/// Returns pool status.
 	pub fn status(&self) -> base::Status {
 		self.pool.read().status()
+	}
+
+	pub fn get_account_nonce(&self, at: &BlockId<B::Block>, account: &sr25519::Public) -> Result<u64, B::Error> {
+		self.api.get_account_nonce(at, account)
 	}
 
 	/// Returns transaction hash

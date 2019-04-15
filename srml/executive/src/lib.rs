@@ -253,7 +253,6 @@ impl<
 		const MISSING_SENDER: i8 = -20;
 		const INVALID_INDEX: i8 = -10;
 		let encoded_len = uxt.encode().len();
-		println!("validating transaction()");
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -273,6 +272,7 @@ impl<
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
+			println!("index {:?} expected {:?}", index, expected_index);
 			if index < &expected_index {
 				return TransactionValidity::Invalid(ApplyError::Stale as i8)
 			}

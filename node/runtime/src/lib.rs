@@ -43,7 +43,7 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::OpaqueMetadata;
+use substrate_primitives::{OpaqueMetadata, sr25519};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -51,7 +51,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use grandpa::Call as GrandpaCall;
-pub use grandpa::Module as GrandpaModule;
+pub use system::Call as SystemCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
@@ -223,6 +223,8 @@ construct_runtime!(
 	}
 );
 
+/// The type used as a helper for interpreting the sender of transactions.
+pub type Context = system::ChainContext<Runtime>;
 /// The address format for describing accounts.
 pub type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
@@ -290,6 +292,10 @@ impl_runtime_apis! {
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+
+		fn get_account_nonce(account: &sr25519::Public) -> u64 {
+			System::get_account_nonce(account)
 		}
 	}
 

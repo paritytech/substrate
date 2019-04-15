@@ -349,8 +349,11 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-					println!("more aca");
 					system::validate_transaction(utx)
+				}
+
+				fn get_account_nonce(account: &sr25519::Public) -> u64 {
+					system::get_account_nonce(account)
 				}
 			}
 
@@ -466,8 +469,11 @@ cfg_if! {
 
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-					assert!(false, "......");
-					system::validate_transaction(utx)
+					aystem::validate_transaction(utx)
+				}
+
+				fn get_account_nonce(account: &sr25519::Public) -> u64 {
+					system::get_account_nonce(account)
 				}
 			}
 

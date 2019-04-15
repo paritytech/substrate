@@ -74,7 +74,7 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	BlockNumber: SimpleArithmetic,
-	Hash: Encode + std::fmt::Debug,
+	Hash: Encode,
 	Context: Lookup<Source=Address, Target=AccountId>
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
@@ -82,32 +82,23 @@ where
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
-		println!("checking transaction!!!");
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
 				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.current_height().as_())))
 					.ok_or("transaction birth block ancient")?;
-				println!("signed 0 {:?}", signed);
 				
 				let signed = context.lookup(signed)?;
 				let raw_payload = (index, self.function, era, h);
-				println!("raw payload={:?}", raw_payload);
-				println!("signed {:?}", signed);
-				println!("signature {:?}", signature);
 				if !raw_payload.using_encoded(|payload| {
-					println!("payload.len()={}", payload.len());
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
 					} else {
 						let r = signature.verify(payload, &signed);
-						println!("verification result = {}", r);
 						r
 					}
 				}) {
-					println!("bad signature!!!");
 					return Err(crate::BAD_SIGNATURE)
 				}
-				println!("returning extrinsic");
 				CheckedExtrinsic {
 					signed: Some((signed, (raw_payload.0).0)),
 					function: raw_payload.1,
