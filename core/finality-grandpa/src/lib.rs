@@ -438,7 +438,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
 	inherent_data_providers: InherentDataProviders,
-	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
+	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -452,7 +452,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 {
 	use futures::future::{self, Loop as FutureLoop};
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone());
+	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
 
 	let LinkHalf {
 		client,

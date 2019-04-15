@@ -120,7 +120,24 @@ fn config() -> crate::Config {
 fn make_test_network() -> impl Future<Item=Tester,Error=()> {
 	let (tx, rx) = mpsc::unbounded();
 	let net = TestNetwork { sender: tx };
-	let (bridge, startup_work) = super::NetworkBridge::new(net.clone(), config());
+
+	#[derive(Clone)]
+	struct Exit;
+
+	impl Future for Exit {
+		type Item = ();
+		type Error = ();
+
+		fn poll(&mut self) -> Poll<(), ()> {
+			Ok(Async::NotReady)
+		}
+	}
+
+	let (bridge, startup_work) = super::NetworkBridge::new(
+		net.clone(),
+		config(),
+		Exit,
+	);
 
 	startup_work.map(move |()| Tester {
 		gossip_validator: bridge.validator.clone(),

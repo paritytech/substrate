@@ -212,7 +212,11 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
-	pub(crate) fn new(service: N, config: crate::Config) -> (
+	pub(crate) fn new(
+		service: N,
+		config: crate::Config,
+		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
@@ -229,8 +233,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
-			tokio::spawn(rebroadcast_job);
-			tokio::spawn(reporting_job);
+			tokio::spawn(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(())));
+			tokio::spawn(reporting_job.select(on_exit.clone()).then(|_| Ok(())));
 			Ok(())
 		});
 
