@@ -32,6 +32,8 @@ pub use slog;
 use serde_derive::{Serialize, Deserialize};
 use slog::OwnedKVList;
 use slog::Record;
+use slog::PushFnValue;
+use slog_json::JsonBuilder;
 use core::result;
 
 /// Configuration for telemetry.
@@ -93,6 +95,18 @@ impl<D: Drain> Drain for Multiply<D> {
 	}
 }
 
+fn create_json_builder(writer: TelemetryWriter) -> JsonBuilder<TelemetryWriter> {
+	slog_json::Json::new(writer)
+		.add_key_value(o!(
+			"ts" => PushFnValue(move |_ : &Record, ser| {
+				ser.emit(chrono::Local::now().to_rfc3339())
+			}),
+			"msg" => PushFnValue(move |record : &Record, ser| {
+				ser.emit(record.msg())
+			}),
+		))
+}
+
 /// Initialize telemetry.
 pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
 	let mut endpoint_drains: Vec<Box<slog::Filter<_, _>>> = Vec::new();
@@ -106,7 +120,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 
 		let until_verbosity = *verbosity;
 		let filter = slog::Filter(
-			slog_json::Json::default(writer).fuse(),
+			create_json_builder(writer).build().fuse(),
 			move |rec| {
 				let tag = rec.tag().parse::<u8>()
 					.expect("`telemetry!` macro requires tag.");

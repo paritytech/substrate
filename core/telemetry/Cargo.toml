@@ -17,3 +17,4 @@ slog-json = "^2"
 slog-async = "^2"
 slog-scope = "^4"
 ws = { version = "^0.7", features = ["ssl"] }
+chrono = "0.4"
