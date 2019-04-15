@@ -303,11 +303,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							msg.message.auth_data.iter().map(move |(_, a)| {
 								format!("{}", a)
 							}).collect();
-						telemetry!(CONSENSUS_DEBUG; "afg.received_commit";
-							"contains_precommits_signed_by" => ?precommits_signed_by,
-							"target_number" => ?msg.message.target_number,
-							"target_hash" => ?msg.message.target_hash,
-						);
 						check_compact_commit::<B>(msg.message, &*voters).map(move |c| (round.0, c))
 					},
 					_ => {
