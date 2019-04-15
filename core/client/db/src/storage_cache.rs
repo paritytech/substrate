@@ -39,6 +39,10 @@ pub struct Cache<B: Block, H: Hasher> {
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
+	/// Maximum cache size available, in Bytes.
+	shared_cache_size: usize,
+	/// Used storage size, in Bytes.
+	storage_used_size: usize,
 }
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
@@ -50,6 +54,8 @@ pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> Shared
 		storage: LruCache::new(cache_items),
 		hashes: LruCache::new(cache_items),
 		modifications: VecDeque::new(),
+		shared_cache_size: shared_cache_size,
+		storage_used_size: 0,
 	}))
 }
 
@@ -109,6 +115,24 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		}
 	}
 
+	fn storage_insert(&self, cache: &mut Cache<B, H>, k: StorageValue, v: Option<StorageValue>) {
+		if let Some(v_) = &v {
+			cache.storage_used_size = cache.storage_used_size + v_.len();
+		}
+		cache.storage.insert(k, v);
+	}
+
+	fn storage_remove(&self,
+		storage: &mut LruCache<StorageKey, Option<StorageValue>>,
+		k: &StorageKey,
+		storage_used_size: &mut usize,
+	) {
+		let v = storage.remove(k);
+		if let Some(Some(v_)) = v {
+			*storage_used_size = *storage_used_size - v_.len();
+		}
+	}
+
 	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
@@ -139,7 +163,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = true;
 					for a in &m.storage {
 						trace!("Reverting enacted key {:?}", a);
-						cache.storage.remove(a);
+						self.storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
 					}
 					false
 				} else {
@@ -155,7 +179,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = false;
 					for a in &m.storage {
 						trace!("Retracted key {:?}", a);
-						cache.storage.remove(a);
+						self.storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
 					}
 					false
 				} else {
@@ -178,7 +202,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			if is_best {
 				trace!("Committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 				for (k, v) in local_cache.storage.drain() {
-					cache.storage.insert(k, v);
+					self.storage_insert(cache, k, v);
 				}
 				for (k, v) in local_cache.hashes.drain() {
 					cache.hashes.insert(k, v);
@@ -198,7 +222,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				modifications.insert(k.clone());
 				if is_best {
 					cache.hashes.remove(&k);
-					cache.storage.insert(k, v);
+					self.storage_insert(cache, k, v);
 				}
 			}
 			// Save modified storage. These are ordered by the block number.
@@ -417,5 +441,22 @@ mod tests {
 		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], vec![], Some(h3b.clone()), Some(3), || true);
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
 		assert!(s.storage(&key).unwrap().is_none());
+	}
+
+	#[test]
+	fn should_track_used_size_correctly() {
+		let root_parent = H256::random();
+		let shared = new_shared_cache::<Block, Blake2Hasher>(5);
+		let h0 = H256::random();
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2, 3]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 3 /* bytes */);
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 5 /* bytes */);
 	}
 }
