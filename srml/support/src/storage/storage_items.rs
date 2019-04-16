@@ -178,12 +178,12 @@ macro_rules! __storage_items_internal {
 	// generator for values.
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype { <$name as $crate::storage::twox_128::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::twox_128::generator::StorageValue<$ty> for $name {
+		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
 
 			/// Get the storage key.
@@ -203,18 +203,18 @@ macro_rules! __storage_items_internal {
 
 			/// Mutate this value.
 			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::Twox128Storage>(f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::twox_128::generator::StorageValue<$ty>>::get(storage);
+				let mut val = <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::get(storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::twox_128::generator::StorageValue<$ty>>::put(&val, storage)
+					<Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::twox_128::generator::StorageValue<$ty>>::put(&val, storage),
-						None => <Self as $crate::storage::twox_128::generator::StorageValue<$ty>>::kill(storage),
+						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::kill(storage),
 					}
 				});
 
@@ -226,13 +226,13 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
 		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			<$name as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+			<$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::blake2_128::generator::StorageMap<$kty, $ty> for $name {
+		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
 
 			/// Get the prefix key in storage.
@@ -249,30 +249,30 @@ macro_rules! __storage_items_internal {
 
 			/// Load the value associated with the given key from the map.
 			fn get<S: $crate::Blake2_128Storage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::key_for(key);
+				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$getter(&key[..])
 			}
 
 			/// Take the value, reading and removing it.
 			fn take<S: $crate::Blake2_128Storage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::key_for(key);
+				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
 
 			/// Mutate the value under a key.
 			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::Blake2_128Storage>(key: &$kty, f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::take(key, storage);
+				let mut val = <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
+					<Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-						None => <Self as $crate::storage::blake2_128::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
 
@@ -286,18 +286,18 @@ macro_rules! __storage_items_internal {
 
 		impl $name {
 			fn clear_item<S: $crate::Twox128Storage>(index: u32, storage: &S) {
-				if index < <$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len(storage) {
-					storage.kill(&<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::key_for(index));
+				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
+					storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
 			fn set_len<S: $crate::Twox128Storage>(count: u32, storage: &S) {
-				(count..<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
-				storage.put(&<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len_key(), &count);
+				(count..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
+				storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key(), &count);
 			}
 		}
 
-		impl $crate::storage::twox_128::generator::StorageList<$ty> for $name {
+		impl $crate::storage::hashed::generator::StorageList<$ty> for $name {
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
 				$prefix
@@ -319,8 +319,8 @@ macro_rules! __storage_items_internal {
 
 			/// Read out all the items.
 			fn items<S: $crate::Twox128Storage>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
-				(0..<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len(storage))
-					.map(|i| <$name as $crate::storage::twox_128::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
+				(0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage))
+					.map(|i| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
 					.collect()
 			}
 
@@ -329,32 +329,32 @@ macro_rules! __storage_items_internal {
 				$name::set_len(items.len() as u32, storage);
 				items.iter()
 					.enumerate()
-					.for_each(|(i, item)| <$name as $crate::storage::twox_128::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
+					.for_each(|(i, item)| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
 			fn set_item<S: $crate::Twox128Storage>(index: u32, item: &$ty, storage: &S) {
-				if index < <$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len(storage) {
-					storage.put(&<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::key_for(index)[..], item);
+				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
+					storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 			fn get<S: $crate::Twox128Storage>(index: u32, storage: &S) -> Option<$ty> {
-				storage.get(&<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::key_for(index)[..])
+				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..])
 			}
 
 			/// Load the length of the list.
 			fn len<S: $crate::Twox128Storage>(storage: &S) -> u32 {
-				storage.get(&<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
+				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
 			}
 
 			/// Clear the list.
 			fn clear<S: $crate::Twox128Storage>(storage: &S) {
-				for i in 0..<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len(storage) {
+				for i in 0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					$name::clear_item(i, storage);
 				}
 
-				storage.kill(&<$name as $crate::storage::twox_128::generator::StorageList<$ty>>::len_key()[..])
+				storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()[..])
 			}
 		}
 	};
@@ -385,8 +385,7 @@ mod tests {
 	use super::*;
 	use crate::metadata::*;
 	use crate::rstd::marker::PhantomData;
-	use crate::storage::twox_128::generator::*;
-	use crate::storage::blake2_128::generator::*;
+	use crate::storage::hashed::generator::*;
 
 	storage_items! {
 		Value: b"a" => u32;

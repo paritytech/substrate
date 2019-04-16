@@ -19,12 +19,12 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
+use runtime_io::{twox_128, blake2_128};
 
 #[macro_use]
 pub mod storage_items;
 pub mod unhashed;
-pub mod twox_128;
-pub mod blake2_128;
+pub mod hashed;
 
 struct IncrementalInput<'a> {
 	key: &'a [u8],
@@ -58,55 +58,55 @@ impl<'a> Input for IncrementalChildInput<'a> {
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
 
-impl twox_128::generator::Twox128Storage for RuntimeStorage {
+impl hashed::generator::Twox128Storage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		twox_128::exists(key)
+		hashed::exists(&twox_128, key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		twox_128::get(key)
+		hashed::get(&twox_128, key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		twox_128::put(key, val)
+		hashed::put(&twox_128, key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		twox_128::kill(key)
+		hashed::kill(&twox_128, key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		twox_128::take(key)
+		hashed::take(&twox_128, key)
 	}
 }
 
-impl blake2_128::generator::Blake2_128Storage for RuntimeStorage {
+impl hashed::generator::Blake2_128Storage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		blake2_128::exists(key)
+		hashed::exists(&blake2_128, key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		blake2_128::get(key)
+		hashed::get(&blake2_128, key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		blake2_128::put(key, val)
+		hashed::put(&blake2_128, key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		blake2_128::kill(key)
+		hashed::kill(&blake2_128, key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		blake2_128::take(key)
+		hashed::take(&blake2_128, key)
 	}
 }
 
@@ -168,11 +168,11 @@ pub trait StorageValue<T: Codec> {
 	fn take() -> Self::Query;
 }
 
-impl<T: Codec, U> StorageValue<T> for U where U: twox_128::generator::StorageValue<T> {
+impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue<T> {
 	type Query = U::Query;
 
 	fn key() -> &'static [u8] {
-		<U as twox_128::generator::StorageValue<T>>::key()
+		<U as hashed::generator::StorageValue<T>>::key()
 	}
 	fn exists() -> bool {
 		U::exists(&RuntimeStorage)
@@ -224,17 +224,17 @@ pub trait StorageList<T: Codec> {
 	fn clear();
 }
 
-impl<T: Codec, U> StorageList<T> for U where U: twox_128::generator::StorageList<T> {
+impl<T: Codec, U> StorageList<T> for U where U: hashed::generator::StorageList<T> {
 	fn prefix() -> &'static [u8] {
-		<U as twox_128::generator::StorageList<T>>::prefix()
+		<U as hashed::generator::StorageList<T>>::prefix()
 	}
 
 	fn len_key() -> Vec<u8> {
-		<U as twox_128::generator::StorageList<T>>::len_key()
+		<U as hashed::generator::StorageList<T>>::len_key()
 	}
 
 	fn key_for(index: u32) -> Vec<u8> {
-		<U as twox_128::generator::StorageList<T>>::key_for(index)
+		<U as hashed::generator::StorageList<T>>::key_for(index)
 	}
 
 	fn items() -> Vec<T> {
@@ -292,15 +292,15 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
-impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: blake2_128::generator::StorageMap<K, V> {
+impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
 	type Query = U::Query;
 
 	fn prefix() -> &'static [u8] {
-		<U as blake2_128::generator::StorageMap<K, V>>::prefix()
+		<U as hashed::generator::StorageMap<K, V>>::prefix()
 	}
 
 	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
-		<U as blake2_128::generator::StorageMap<K, V>>::key_for(key.borrow())
+		<U as hashed::generator::StorageMap<K, V>>::key_for(key.borrow())
 	}
 
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
@@ -340,13 +340,13 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: blake2_128::generator::EnumerableStorageMap<K, V> {
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: hashed::generator::EnumerableStorageMap<K, V> {
 	fn head() -> Option<K> {
-		<U as blake2_128::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
+		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
 
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
-		<U as blake2_128::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
+		<U as hashed::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
 

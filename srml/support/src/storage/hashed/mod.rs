@@ -14,88 +14,91 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Operation on runtime storage using twox 128 to hash keys
+//! Operation on runtime storage using hashed keys.
 
 pub mod generator;
-
 use super::unhashed;
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
 use crate::codec::{Codec, Encode, Decode, KeyedVec};
 
+type HashFn = Fn(&[u8]) -> [u8; 16];
+
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	unhashed::get(&twox_128(key))
+pub fn get<T: Decode + Sized>(hash: &HashFn, key: &[u8]) -> Option<T> {
+	unhashed::get(&hash(key))
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
-pub fn get_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	unhashed::get_or_default(&twox_128(key))
+pub fn get_or_default<T: Decode + Sized + Default>(hash: &HashFn, key: &[u8]) -> T {
+	unhashed::get_or_default(&hash(key))
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
-pub fn get_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
-	unhashed::get_or(&twox_128(key), default_value)
+pub fn get_or<T: Decode + Sized>(hash: &HashFn, key: &[u8], default_value: T) -> T {
+	unhashed::get_or(&hash(key), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
-pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-	unhashed::get_or_else(&twox_128(key), default_value)
+pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(hash: &HashFn, key: &[u8], default_value: F) -> T {
+	unhashed::get_or_else(&hash(key), default_value)
 }
 
 /// Put `value` in storage under `key`.
-pub fn put<T: Encode>(key: &[u8], value: &T) {
-	unhashed::put(&twox_128(key), value)
+pub fn put<T: Encode>(hash: &HashFn, key: &[u8], value: &T) {
+	unhashed::put(&hash(key), value)
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-pub fn take<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	unhashed::take(&twox_128(key))
+pub fn take<T: Decode + Sized>(hash: &HashFn, key: &[u8]) -> Option<T> {
+	unhashed::take(&hash(key))
 }
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
-pub fn take_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	unhashed::take_or_default(&twox_128(key))
+pub fn take_or_default<T: Decode + Sized + Default>(hash: &HashFn, key: &[u8]) -> T {
+	unhashed::take_or_default(&hash(key))
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
-	unhashed::take_or(&twox_128(key), default_value)
+pub fn take_or<T: Decode + Sized>(hash: &HashFn, key: &[u8], default_value: T) -> T {
+	unhashed::take_or(&hash(key), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-	unhashed::take_or_else(&twox_128(key), default_value)
+pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(hash: &HashFn, key: &[u8], default_value: F) -> T {
+	unhashed::take_or_else(&hash(key), default_value)
 }
 
 /// Check to see if `key` has an explicit entry in storage.
-pub fn exists(key: &[u8]) -> bool {
-	unhashed::exists(&twox_128(key))
+pub fn exists(hash: &HashFn, key: &[u8]) -> bool {
+	unhashed::exists(&hash(key))
 }
 
 /// Ensure `key` has no explicit entry in storage.
-pub fn kill(key: &[u8]) {
-	unhashed::kill(&twox_128(key))
+pub fn kill(hash: &HashFn, key: &[u8]) {
+	unhashed::kill(&hash(key))
 }
 
 /// Get a Vec of bytes from storage.
-pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	unhashed::get_raw(&twox_128(key))
+pub fn get_raw(hash: &HashFn, key: &[u8]) -> Option<Vec<u8>> {
+	unhashed::get_raw(&hash(key))
 }
 
 /// Put a raw byte slice into storage.
-pub fn put_raw(key: &[u8], value: &[u8]) {
-	unhashed::put_raw(&twox_128(key), value)
+pub fn put_raw(hash: &HashFn, key: &[u8], value: &[u8]) {
+	unhashed::put_raw(&hash(key), value)
 }
 
 /// A trait to conveniently store a vector of storable data.
+///
+/// It uses twox_128 hasher. Final keys in trie are `twox_128(concatenation(PREFIX,count))`
 pub trait StorageVec {
 	type Item: Default + Sized + Codec;
 	const PREFIX: &'static [u8];
@@ -114,7 +117,7 @@ pub trait StorageVec {
 		let mut count: u32 = 0;
 
 		for i in items.into_iter() {
-			put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
+			put(&twox_128, &count.to_keyed_vec(Self::PREFIX), i.borrow());
 			count = count.checked_add(1).expect("exceeded runtime storage capacity");
 		}
 
@@ -124,33 +127,33 @@ pub trait StorageVec {
 	/// Push an item.
 	fn push(item: &Self::Item) {
 		let len = Self::count();
-		put(&len.to_keyed_vec(Self::PREFIX), item);
+		put(&twox_128, &len.to_keyed_vec(Self::PREFIX), item);
 		Self::set_count(len + 1);
 	}
 
 	fn set_item(index: u32, item: &Self::Item) {
 		if index < Self::count() {
-			put(&index.to_keyed_vec(Self::PREFIX), item);
+			put(&twox_128, &index.to_keyed_vec(Self::PREFIX), item);
 		}
 	}
 
 	fn clear_item(index: u32) {
 		if index < Self::count() {
-			kill(&index.to_keyed_vec(Self::PREFIX));
+			kill(&twox_128, &index.to_keyed_vec(Self::PREFIX));
 		}
 	}
 
 	fn item(index: u32) -> Self::Item {
-		get_or_default(&index.to_keyed_vec(Self::PREFIX))
+		get_or_default(&twox_128, &index.to_keyed_vec(Self::PREFIX))
 	}
 
 	fn set_count(count: u32) {
 		(count..Self::count()).for_each(Self::clear_item);
-		put(&b"len".to_keyed_vec(Self::PREFIX), &count);
+		put(&twox_128, &b"len".to_keyed_vec(Self::PREFIX), &count);
 	}
 
 	fn count() -> u32 {
-		get_or_default(&b"len".to_keyed_vec(Self::PREFIX))
+		get_or_default(&twox_128, &b"len".to_keyed_vec(Self::PREFIX))
 	}
 }
 
@@ -164,14 +167,14 @@ mod tests {
 		let mut t = TestExternalities::default();
 		with_externalities(&mut t, || {
 			let x = 69u32;
-			put(b":test", &x);
-			let y: u32 = get(b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: u32 = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 		with_externalities(&mut t, || {
 			let x = 69426942i64;
-			put(b":test", &x);
-			let y: i64 = get(b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: i64 = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}
@@ -181,15 +184,15 @@ mod tests {
 		let mut t = TestExternalities::default();
 		with_externalities(&mut t, || {
 			let x = true;
-			put(b":test", &x);
-			let y: bool = get(b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: bool = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 
 		with_externalities(&mut t, || {
 			let x = false;
-			put(b":test", &x);
-			let y: bool = get(b":test").unwrap();
+			put(&twox_128, b":test", &x);
+			let y: bool = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}
@@ -200,7 +203,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			runtime_io::set_storage(&twox_128(b":test"), b"\x2cHello world");
 			let x = b"Hello world".to_vec();
-			let y = get::<Vec<u8>>(b":test").unwrap();
+			let y = get::<Vec<u8>>(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 
 		});
@@ -212,11 +215,11 @@ mod tests {
 		let x = b"Hello world".to_vec();
 
 		with_externalities(&mut t, || {
-			put(b":test", &x);
+			put(&twox_128, b":test", &x);
 		});
 
 		with_externalities(&mut t, || {
-			let y: Vec<u8> = get(b":test").unwrap();
+			let y: Vec<u8> = get(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
 		});
 	}

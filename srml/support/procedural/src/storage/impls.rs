@@ -67,13 +67,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		let mutate_impl = if !is_option {
 			quote!{
-				<Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::put(&val, storage)
+				<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => <Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::put(&val, storage),
-					None => <Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::kill(storage),
+					Some(ref val) => <Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&val, storage),
+					None => <Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::kill(storage),
 				}
 			}
 		};
@@ -100,7 +100,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				(#scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable>
-				#scrate::storage::twox_128::generator::StorageValue<#typ> for #name<#traitinstance, #instance>
+				#scrate::storage::hashed::generator::StorageValue<#typ> for #name<#traitinstance, #instance>
 			{
 				type Query = #value_type;
 
@@ -111,19 +111,19 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 				/// Load the value from the provided storage instance.
 				fn get<S: #scrate::Twox128Storage>(storage: &S) -> Self::Query {
-					storage.get(<Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::key())
+					storage.get(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take a value from storage, removing it afterwards.
 				fn take<S: #scrate::Twox128Storage>(storage: &S) -> Self::Query {
-					storage.take(<Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::key())
+					storage.take(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key.
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Twox128Storage>(f: F, storage: &S) -> R {
-					let mut val = <Self as #scrate::storage::twox_128::generator::StorageValue<#typ>>::get(storage);
+					let mut val = <Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::get(storage);
 
 					let ret = f(&mut val);
 					#mutate_impl ;
@@ -150,7 +150,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
 
-		let as_map = quote!{ <Self as #scrate::storage::blake2_128::generator::StorageMap<#kty, #typ>> };
+		let as_map = quote!{ <Self as #scrate::storage::hashed::generator::StorageMap<#kty, #typ>> };
 
 		let mutate_impl = if !is_option {
 			quote!{
@@ -187,7 +187,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				(#scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable>
-				#scrate::storage::blake2_128::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+				#scrate::storage::hashed::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance>
 			{
 				type Query = #value_type;
 
@@ -273,7 +273,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		let inner_module = syn::Ident::new(&format!("__linked_map_details_for_{}_do_not_use", name_lowercase), name.span());
 		let linkage = syn::Ident::new(&format!("__LinkageFor{}DoNotUse", name), name.span());
 		let phantom_data = quote! { #scrate::rstd::marker::PhantomData };
-		let as_map = quote!{ <Self as #scrate::storage::blake2_128::generator::StorageMap<#kty, #typ>> };
+		let as_map = quote!{ <Self as #scrate::storage::hashed::generator::StorageMap<#kty, #typ>> };
 		let put_or_insert = quote! {
 			match linkage {
 				Some(linkage) => storage.put(key_for, &(val, linkage)),
@@ -333,7 +333,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					fn next(&mut self) -> Option<Self::Item> {
 						let next = self.next.take()?;
 						let key_for = <super::#name<#traitinstance, #instance>
-							as #scrate::storage::blake2_128::generator::StorageMap<#kty, #typ>>::key_for(&next);
+							as #scrate::storage::hashed::generator::StorageMap<#kty, #typ>>::key_for(&next);
 
 						let (val, linkage): (#typ, Linkage<#kty>) = self.storage.get(&*key_for)
 							.expect("previous/next only contain existing entires; we enumerate using next; entry exists; qed");
@@ -463,7 +463,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			#structure
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable>
-				#scrate::storage::blake2_128::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+				#scrate::storage::hashed::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance>
 			{
 				type Query = #value_type;
 
@@ -533,7 +533,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			}
 
 			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
-				#scrate::storage::blake2_128::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+				#scrate::storage::hashed::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance>
 			{
 				fn head<S: #scrate::Blake2_128Storage>(storage: &S) -> Option<#kty> {
 					use self::#inner_module::Utils;
