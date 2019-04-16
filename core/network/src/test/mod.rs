@@ -720,6 +720,21 @@ pub trait TestNetFactory: Sized {
 		net
 	}
 
+	/// Add created peer.
+	fn add_peer(&mut self, peer: Arc<Peer<Self::PeerData, Self::Specialization>>) {
+		if self.started() {
+			peer.start();
+			self.peers().iter().for_each(|other| {
+				other.on_connect(&*peer);
+				peer.on_connect(other);
+			});
+		}
+
+		self.mut_peers(|peers| {
+			peers.push(peer)
+		});
+	}
+
 	/// Add a full peer.
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
@@ -757,7 +772,7 @@ pub trait TestNetFactory: Sized {
 			specialization,
 		).unwrap();
 
-		let peer = Arc::new(Peer::new(
+		self.add_peer(Arc::new(Peer::new(
 			is_offline,
 			is_major_syncing,
 			peers,
@@ -768,11 +783,7 @@ pub trait TestNetFactory: Sized {
 			network_sender,
 			network_port,
 			data,
-		));
-
-		self.mut_peers(|peers| {
-			peers.push(peer)
-		});
+		)));
 	}
 
 	/// Add a light peer.
@@ -815,7 +826,7 @@ pub trait TestNetFactory: Sized {
 			specialization,
 		).unwrap();
 
-		let peer = Arc::new(Peer::new(
+		self.add_peer(Arc::new(Peer::new(
 			is_offline,
 			is_major_syncing,
 			peers,
@@ -826,11 +837,7 @@ pub trait TestNetFactory: Sized {
 			network_sender,
 			network_port,
 			data,
-		));
-
-		self.mut_peers(|peers| {
-			peers.push(peer)
-		});
+		)));
 	}
 
 	/// Start network.

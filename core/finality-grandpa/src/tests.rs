@@ -1353,7 +1353,6 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	let forced_transitions = api.forced_changes.clone();
 	let net = GrandpaTestNet::new(api, 3);
 	let net = Arc::new(Mutex::new(net));
-	net.lock().add_light_peer(&GrandpaTestNet::default_config());
 
 	let runner_net = net.clone();
 	let add_blocks = move || {
@@ -1379,6 +1378,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// finalize block #11 on full clients
 	run_to_completion_with(11, runner_net.clone(), peers_a, add_blocks);
 	// request finalization by light client
+	runner_net.lock().add_light_peer(&GrandpaTestNet::default_config());
 	runner_net.lock().sync_without_disconnects();
 
  	// check block, finalized on light client
