@@ -216,6 +216,7 @@ pub fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AccountId, AuthorityId)>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
+	enable_println: bool,
 ) -> GenesisConfig {
 	let endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
@@ -236,6 +237,22 @@ pub fn testnet_genesis(
 
 	const STASH: u128 = 1 << 20;
 	const ENDOWMENT: u128 = 1 << 20;
+
+	let mut contract_config = ContractConfig {
+		transaction_base_fee: 1,
+		transaction_byte_fee: 0,
+		transfer_fee: 0,
+		creation_fee: 0,
+		contract_fee: 21,
+		call_base_fee: 135,
+		create_base_fee: 175,
+		gas_price: 1,
+		max_depth: 1024,
+		block_gas_limit: 10_000_000,
+		current_schedule: Default::default(),
+	};
+	// this should only be enabled on development chains
+	contract_config.current_schedule.enable_println = enable_println;
 
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
@@ -308,19 +325,7 @@ pub fn testnet_genesis(
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
 		}),
-		contract: Some(ContractConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			contract_fee: 21,
-			call_base_fee: 135,
-			create_base_fee: 175,
-			gas_price: 1,
-			max_depth: 1024,
-			block_gas_limit: 10_000_000,
-			current_schedule: Default::default(),
-		}),
+		contract: Some(contract_config),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
@@ -337,6 +342,7 @@ fn development_config_genesis() -> GenesisConfig {
 		],
 		get_account_id_from_seed("Alice"),
 		None,
+		true,
 	)
 }
 
@@ -353,6 +359,7 @@ fn local_testnet_genesis() -> GenesisConfig {
 		],
 		get_account_id_from_seed("Alice"),
 		None,
+		false,
 	)
 }
 

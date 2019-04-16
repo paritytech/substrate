@@ -203,7 +203,6 @@ fn test_random_api_use() {
                         let incoming_position = actions.rposition(|x| x == &TestAction::Incoming(index));
                         match (drop_position, incoming_position) {
                             (Some(drop), Some(incoming)) => {
-
                                 assert!(drop < incoming);
                                 continue
                             },
