@@ -482,7 +482,8 @@ where
 		Some(vec![
 			"http://localhost:*".into(),
 			"https://localhost:*".into(),
-			"https://polkadot.js.org".into()
+			"https://polkadot.js.org".into(),
+			"https://substrate-ui.parity.io".into(),
 		])
 	});
 
