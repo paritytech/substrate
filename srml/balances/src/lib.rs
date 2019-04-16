@@ -16,29 +16,28 @@
 
 //! # Balances Module
 //!
-//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need
-//! to implement the [balances Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables
-//! are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
+//! The Balances module provides functionality for handling accounts and balances.
+//! To use it in your runtime, you need to implement the [`balances::Trait`](./trait.Trait.html).
+//! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
 //!
 //! ## Overview
 //!
-//! The balances module provides functions for:
+//! The Balances module provides functions for:
 //!
-//! - Getting and setting free balances
-//! - Retrieving total, reserved and unreserved balances
-//! - Repatriating a reserved balance to a beneficiary account that exists
-//! - Transferring a balance between accounts (when not reserved)
-//! - Slashing an account balance
-//! - Account creation and removal
-//! - Lookup of an index to reclaim an account
-//! - Managing total issuance
-//! - Setting and managing locks
+//! - Getting and setting free balances.
+//! - Retrieving total, reserved and unreserved balances.
+//! - Repatriating a reserved balance to a beneficiary account that exists.
+//! - Transferring a balance between accounts (when not reserved).
+//! - Slashing an account balance.
+//! - Account creation and removal.
+//! - Managing total issuance.
+//! - Setting and managing locks.
 //!
 //! ### Terminology
 //!
 //! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
 //! "dust accounts" from filling storage.
-//! - **Total Issuance:** The total amount of units in existence in a system.
+//! - **Total Issuance:** The total number of units in existence in a system.
 //! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set
 //! to zero.
 //! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only balance that matters
@@ -48,8 +47,9 @@
 //! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
 //! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
 //! deleted, then the account is said to be dead.
-//! - **Imbalance:** A condition when some funds were created or deducted without equal and opposite accounting.
-//! Functions that result in an imbalance will return an object of the `Imbalance` trait that must be handled.
+//! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
+//! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
+//! return an object of the `Imbalance` trait that must be handled.
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
@@ -57,82 +57,64 @@
 //!
 //! ### Implementations
 //!
-//! The balances module provides implementations for the following traits. If these traits provide the functionality
-//! that you need, then you can avoid coupling with the balances module.
+//! The Balances module provides implementations for the following traits. If these traits provide the functionality
+//! that you need, then you can avoid coupling with the Balances module.
 //!
-//! - [`Currency`](https://crates.parity.io/srml_support/traits/trait.Currency.html): Functions for dealing with a
+//! - [`Currency`](../srml_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
-//! - [`ReservableCurrency`](https://crates.parity.io/srml_support/traits/trait.ReservableCurrency.html):
+//! - [`ReservableCurrency`](../srml_support/traits/trait.ReservableCurrency.html):
 //! Functions for dealing with assets that can be reserved from an account.
-//! - [`LockableCurrency`](https://crates.parity.io/srml_support/traits/trait.LockableCurrency.html): Functions for
+//! - [`LockableCurrency`](../srml_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
-//! - [`Imbalance`](https://crates.parity.io/srml_support/traits/trait.Imbalance.html): Functions for handling
+//! - [`Imbalance`](../srml_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayment`](https://crates.parity.io/srml_support/traits/trait.MakePayment.html): Simple trait designed
+//! - [`MakePayment`](../srml_support/traits/trait.MakePayment.html): Simple trait designed
 //! for hooking into a transaction payment.
-//! - [`IsDeadAccount`](https://crates.parity.io/srml_system/trait.IsDeadAccount.html): Determiner to say whether a
+//! - [`IsDeadAccount`](../srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
-//!
-//! Example of using the `Currency` trait from the treasury module:
-//!
-//! ```rust,ignore
-//! pub trait Trait: system::Trait {
-//! 	/// The staking balance.
-//! 	type Currency: Currency<Self::AccountId>;
-//! }
-//! ```
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! The `Call` enum is documented [here](https://crates.parity.io/srml_balances/enum.Call.html).
-//!
 //! - `transfer` - Transfer some liquid free balance to another account.
 //! - `set_balance` - Set the balances of a given account. The origin of this call must be root.
 //!
+//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
+//!
 //! ### Public Functions
 //!
-//! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available
-//! functions.
+//! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
+//!
+//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
 //! ## Usage
 //!
-//! The following examples show how to use the balances module in your custom module.
+//! The following examples show how to use the Balances module in your custom module.
 //!
-//! ### Import and Balance Transfer
+//! ### Example from the SRML
 //!
-//! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call
-//! functions from the module.
+//! The Contract module uses the `Currency` trait to handle gas.
 //!
-//! ```rust,ignore
-//! use support::{decl_module, dispatch::Result};
-//! use system::ensure_signed;
-//!
-//! pub trait Trait: balances::Trait {}
-//!
-//! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		fn transfer_proxy(origin, to: T::AccountId, value: T::Balance) -> Result {
-//! 			let sender = ensure_signed(origin)?;
-//! 			<balances::Module<T>>::make_transfer(&sender, &to, value)?;
-//!
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
-//! ```
-//!
-//! ### Real Use Example
-//!
-//! Use in the `contract` module (gas.rs):
+//! [(lib.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/lib.rs):
 //!
 //! ```rust,ignore
+//! use srml_support::traits::Currency
+//!
+//! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+//! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+//!```
+//!
+//! [(gas.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/gas.rs):
+//!
+//! ```rust,ignore
+//! use srml_support::traits::Currency
+//!
 //! pub fn refund_unused_gas<T: Trait>(
 //! 	transactor: &T::AccountId,
 //! 	gas_meter: GasMeter<T>,
-//! 	imbalance: balances::NegativeImbalance<T>,
+//! 	imbalance: NegativeImbalanceOf<T>,
 //! ) {
 //! 	let gas_spent = gas_meter.spent();
 //! 	let gas_left = gas_meter.gas_left();
@@ -140,10 +122,9 @@
 //! 	// Increase total spent gas.
 //! 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 //!
-//! 	let refund = <T::Gas as As<T::Balance>>::as_(gas_left) * gas_meter.gas_price;
-//! 	// Refund gas using balances module
-//! 	let refund_imbalance = <balances::Module<T>>::deposit_creating(transactor, refund);
-//! 	// Handle imbalance
+//! 	// Refund gas left by the price it was bought at.
+//! 	let refund = <T::Gas as As<BalanceOf<T>>>::as_(gas_left) * gas_meter.gas_price;
+//! 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 //! 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
 //! 		T::GasPayment::on_unbalanced(imbalance);
 //! 	}
@@ -152,22 +133,13 @@
 //!
 //! ## Genesis config
 //!
-//! The following storage items depend on the genesis config:
-//!
-//! - `TotalIssuance`
-//! - `ExistentialDeposit`
-//! - `TransferFee`
-//! - `CreationFee`
-//! - `Vesting`
-//! - `FreeBalance`
-//! - `TransactionBaseFee`
-//! - `TransactionByteFee`
+//! The Balances module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
+//! struct for a list of attributes that can be provided.
 //!
 //! ## Related Modules
 //!
-//! The balances module depends on the [`system`](https://crates.parity.io/srml_system/index.html) and
-//! [`srml_support`](https://crates.parity.io/srml_support/index.html) modules as well as Substrate Core
-//! libraries and the Rust standard library.
+//! - [`system`](../srml_system/index.html)
+//! - [`srml_support`](../srml_support/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

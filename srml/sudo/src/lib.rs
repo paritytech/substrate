@@ -18,31 +18,29 @@
 //!
 //! ## Overview
 //!
-//! The sudo module allows for a single account (called the "sudo key")
+//! The Sudo module allows for a single account (called the "sudo key")
 //! to execute dispatchable functions that require a `Root` call
 //! or designate a new account to replace them as the sudo key.
 //! Only one account can be the sudo key at a time.
 //!
-//! You can start using the sudo module by implementing the sudo [`Trait`].
-//!
-//! Supported dispatchable functions are documented in the [`Call`] enum.
+//! You can start using the Sudo module by implementing the [`sudo::Trait`](./trait.Trait.html).
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! Only the sudo key can call the dispatchable functions from the sudo module.
+//! Only the sudo key can call the dispatchable functions from the Sudo module.
 //!
 //! * `sudo` - Make a `Root` call to a dispatchable function.
 //! * `set_key` - Assign a new account to be the sudo key.
 //!
-//! Please refer to the [`Call`] enum and its associated variants for documentation on each function.
+//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
 //!
 //! ## Usage
 //!
 //! ### Prerequisites
 //!
-//! To use the sudo module in your runtime, you must implement the following trait in your runtime:
+//! To use the Sudo module in your runtime, you must implement the following trait in your runtime:
 //!
 //! ```ignore
 //! impl sudo::Trait for Runtime {
@@ -59,8 +57,8 @@
 //!
 //! ### Executing Privileged Functions
 //!
-//! The sudo module itself is not intended to be used within other modules.
-//! Instead, you can build "privileged functions" in other modules that require `Root` origin.
+//! The Sudo module itself is not intended to be used within other modules.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other modules.
 //! You can execute these privileged functions by calling `sudo` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
 //!
@@ -91,7 +89,7 @@
 //!
 //! ### Example from SRML
 //!
-//! The consensus module exposes a `set_code` privileged function
+//! The Consensus module exposes a `set_code` privileged function
 //! that allows you to set the on-chain Wasm runtime code:
 //!
 //! ```ignore
@@ -103,7 +101,8 @@
 //!
 //! ## Genesis Config
 //!
-//! To use the sudo module, you need to set an initial superuser account as the sudo `key`.
+//! The Sudo module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! You need to set an initial superuser account as the sudo `key`.
 //!
 //! ```ignore
 //! GenesisConfig {
