@@ -142,7 +142,7 @@ fn test_random_api_use() {
 
 	drop(handle);
 
-	let mut last_received_messages = HashMap::new();
+	let mut last_received_messages: HashMap<PeerId, VecDeque<Message>> = HashMap::new();
 	loop {
 		let message = match next_message(peerset) {
 			Ok((message, p)) => {
@@ -153,7 +153,13 @@ fn test_random_api_use() {
 		};
 		match message {
 			Message::Connect(peer_id) => {
-				let last_message = last_received_messages.get(&peer_id);
+				let last_message = {
+                    if let Some(messages) = last_received_messages.get_mut(&peer_id) {
+                        messages.pop_front()
+                    } else {
+                        None
+                    }
+                };
 				let action_sequence = {
 					if let Some(actions) = performed_actions.get_mut(&peer_id) {
 						Some(actions.clone())
@@ -170,7 +176,8 @@ fn test_random_api_use() {
 						}
 					},
 				}
-				last_received_messages.insert(peer_id.clone(), Message::Connect(peer_id));
+				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
+                received.push_back(Message::Connect(peer_id));
 			},
 			Message::Drop(peer_id) => {
 				let action_sequence = {
@@ -180,12 +187,19 @@ fn test_random_api_use() {
 						None
 					}
 				};
-				let last_message = last_received_messages.get(&peer_id);
+				let last_message = {
+                    if let Some(messages) = last_received_messages.get_mut(&peer_id) {
+                        messages.pop_front()
+                    } else {
+                        None
+                    }
+                };
 				match last_message {
 					Some(Message::Connect(_)) | Some(Message::Accept(_)) => {},
 					_ => panic!("Unexpected Drop message, after a {:?} message, sequence of actions: {:?}", last_message, action_sequence),
 				}
-				last_received_messages.insert(peer_id.clone(), Message::Drop(peer_id));
+				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
+                received.push_back(Message::Drop(peer_id));
 			},
 			Message::Accept(index) => {
 				let peer_id = index_to_peer.get(&index).expect("Unknown index");
@@ -196,7 +210,14 @@ fn test_random_api_use() {
 						None
 					}
 				};
-				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
+				let last_messages = {
+                    if let Some(messages) = last_received_messages.get_mut(&peer_id) {
+                        messages
+                    } else {
+                        continue;
+                    }
+                };
+				if let Some(Message::Connect(_)) = last_messages.pop_front() {
                     if let Some(action_sequence) = action_sequence.clone() {
                         let mut actions = action_sequence.into_iter();
                         let drop_position = actions.clone().rposition(|x| x == &TestAction::DropPeer);
@@ -204,6 +225,8 @@ fn test_random_api_use() {
                         match (drop_position, incoming_position) {
                             (Some(drop), Some(incoming)) => {
                                 assert!(drop < incoming);
+                                println!("Last messages: {:?}", last_messages);
+                                assert!(last_messages.contains(&Message::Connect(peer_id.clone())));
                                 continue
                             },
                             _ => {}
@@ -211,7 +234,8 @@ fn test_random_api_use() {
                     }
 					panic!("Unexpected Accept message, after a Connect message, sequence of actions: {:?}", action_sequence);
 				}
-				last_received_messages.insert(peer_id.clone(), Message::Accept(index));
+				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
+                received.push_back(Message::Accept(index));
 			},
 			Message::Reject(index) => {
 				let peer_id = index_to_peer.get(&index).expect("Unknown index");
@@ -222,10 +246,18 @@ fn test_random_api_use() {
 						None
 					}
 				};
-				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
+				let last_messages = {
+                    if let Some(messages) = last_received_messages.get_mut(&peer_id) {
+                        messages
+                    } else {
+                        continue;
+                    }
+                };
+				if let Some(Message::Connect(_)) = last_messages.pop_front() {
 					panic!("Unexpected Reject message, after a Connect message, sequence of actions: {:?}", action_sequence);
 				}
-				last_received_messages.insert(peer_id.clone(), Message::Reject(index));
+				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
+                received.push_back(Message::Reject(index));
 			},
 		}
 	}
