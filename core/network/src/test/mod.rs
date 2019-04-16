@@ -933,6 +933,11 @@ pub trait TestNetFactory: Sized {
 		self.peers()[i].restart_sync();
 	}
 
+	/// Maintain sync for a peer.
+	fn tick_peer(&mut self, i: usize) {
+		self.peers()[i].sync_step();
+	}
+
 	/// Perform synchronization until complete, if provided the
 	/// given nodes set are excluded from sync.
 	fn sync_with(&mut self, disconnect: bool, disconnected: Option<HashSet<usize>>) {

@@ -1314,10 +1314,13 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	net.peer(0).push_authorities_change_block(vec![AuthorityId::from_raw([42; 32])]);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(1, net.clone(), peers);
-	net.lock().sync();
+	net.lock().sync_without_disconnects();
 
 	// check that the block#1 is finalized on light client
-	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);
+	while net.lock().peer(1).client().info().unwrap().chain.finalized_number != 1 {
+		net.lock().tick_peer(1);
+		net.lock().sync_without_disconnects();
+	}
 }
 
 #[test]
@@ -1370,17 +1373,17 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 		net.lock().peer(0).push_blocks(8, false); // best is #9
 		net.lock().peer(0).push_authorities_change_block(vec![AuthorityId::from_raw([42; 32])]); // #10
 		net.lock().peer(0).push_blocks(1, false); // best is #11
-		net.lock().sync();
+		net.lock().sync_without_disconnects();
 	};
 
 	// finalize block #11 on full clients
 	run_to_completion_with(11, runner_net.clone(), peers_a, add_blocks);
 	// request finalization by light client
-//	runner_net.lock().sync();
+	runner_net.lock().sync_without_disconnects();
 
-	// check block, finalized on light client
-	let required_finalized_number = if FORCE_CHANGE { 0 } else { 10 };
-	while runner_net.lock().peer(1).client().info().unwrap().chain.finalized_number != required_finalized_number {
-		runner_net.lock().sync();
-	}
+ 	// check block, finalized on light client
+	assert_eq!(
+		runner_net.lock().peer(3).client().info().unwrap().chain.finalized_number,
+		if FORCE_CHANGE { 0 } else { 10 },
+	);
 }
