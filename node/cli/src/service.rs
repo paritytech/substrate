@@ -128,7 +128,7 @@ construct_service_factory! {
 					link: link_half,
 					network: service.network(),
 					inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-					on_exit: Box::new(service.on_exit()),
+					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(telemetry_on_connect),
 				};
 				executor.spawn(grandpa::run_grandpa(grandpa_config)?);

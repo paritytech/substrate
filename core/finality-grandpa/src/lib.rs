@@ -452,7 +452,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
+pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, X> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A GRANDPA worker linked together with a block import object.
@@ -462,15 +462,15 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA> {
 	/// The inherent data providers.
 	pub inherent_data_providers: InherentDataProviders,
 	/// Handle to a future that will resolve on exit.
-	pub on_exit: Box<Future<Item=(),Error=()> + Send + 'static>,
+	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA>,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -481,6 +481,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
+	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
 	let GrandpaParams {
 		config,
