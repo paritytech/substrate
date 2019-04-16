@@ -35,7 +35,7 @@ use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.
@@ -160,11 +160,11 @@ fn do_check_proof<Header, Hasher, F>(
 	let root: Hasher::Out = convert_hash(&local_root);
 	let local_cht_key = encode_cht_key(local_number);
 	let local_cht_value = checker(root, &local_cht_key)?;
-	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
-	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
+	let local_cht_value = local_cht_value.ok_or_else(|| ClientError::InvalidCHTProof)?;
+	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientError::InvalidCHTProof)?;
 	match &local_hash[..] == remote_hash.as_ref() {
 		true => Ok(()),
-		false => Err(ClientErrorKind::InvalidCHTProof.into()),
+		false => Err(ClientError::InvalidCHTProof.into()),
 	}
 
 }
@@ -186,7 +186,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	for block in blocks {
 		let new_cht_num = match block_to_cht_number(cht_size, block.as_()) {
 			Some(new_cht_num) => new_cht_num,
-			None => return Err(ClientErrorKind::Backend(format!(
+			None => return Err(ClientError::Backend(format!(
 				"Cannot compute CHT root for the block #{}", block)).into()
 			),
 		};
@@ -234,7 +234,7 @@ fn build_pairs<Header, I>(
 	let mut hash_number = start_num;
 	for hash in hashes.into_iter().take(cht_size as usize) {
 		let hash = hash?.ok_or_else(|| ClientError::from(
-			ClientErrorKind::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_())
+			ClientError::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_())
 		))?;
 		pairs.push((
 			encode_cht_key(hash_number).to_vec(),
@@ -246,7 +246,7 @@ fn build_pairs<Header, I>(
 	if pairs.len() as u64 == cht_size {
 		Ok(pairs)
 	} else {
-		Err(ClientErrorKind::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()).into())
+		Err(ClientError::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()))
 	}
 }
 

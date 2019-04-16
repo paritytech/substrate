@@ -265,6 +265,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	}
 }
 
+/// Implements a `NativeExecutionDispatch` for provided parameters.
 #[macro_export]
 macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path, $code:expr) => {

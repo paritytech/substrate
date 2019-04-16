@@ -97,6 +97,12 @@ pub trait Storage {
 
 	/// Take a value from storage, deleting it after reading.
 	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+
+	/// Get a Vec of bytes from storage.
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Put a raw byte slice into storage.
+	fn put_raw(&self, key: &[u8], value: &[u8]);
 }
 
 // We use a construct like this during when genesis storage is being built.
@@ -116,6 +122,14 @@ impl<S: sr_primitives::BuildStorage> Storage for (crate::rstd::cell::RefCell<&mu
 
 	fn kill(&self, key: &[u8]) {
 		UnhashedStorage::kill(self, &S::hash(key))
+	}
+
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+		UnhashedStorage::get_raw(self, key)
+	}
+
+	fn put_raw(&self, key: &[u8], value: &[u8]) {
+		UnhashedStorage::put_raw(self, key, value)
 	}
 }
 
@@ -149,6 +163,20 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Clear the storage value.
 	fn kill<S: Storage>(storage: &S) {
 		storage.kill(Self::key())
+	}
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<S: Storage, I: codec::Encode>(
+		items: &[I], storage: &S
+	) -> Result<(), &'static str> where T: codec::EncodeAppend<Item=I> {
+		let new_val = <T as codec::EncodeAppend>::append(
+			storage.get_raw(Self::key()).unwrap_or_default(),
+			items,
+		).ok_or_else(|| "Could not append given item")?;
+		storage.put_raw(Self::key(), &new_val);
+		Ok(())
 	}
 }
 
@@ -575,6 +603,14 @@ mod tests {
 
 		fn kill(&self, key: &[u8]) {
 			self.borrow_mut().remove(key);
+		}
+
+		fn put_raw(&self, key: &[u8], value: &[u8]) {
+			self.borrow_mut().insert(key.to_owned(), value.to_owned());
+		}
+
+		fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+			self.borrow().get(key).cloned()
 		}
 	}
 

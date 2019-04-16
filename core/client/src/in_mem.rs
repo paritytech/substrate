@@ -207,7 +207,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn set_head(&self, id: BlockId<Block>) -> error::Result<()> {
 		let header = match self.header(id)? {
 			Some(h) => h,
-			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+			None => return Err(error::Error::UnknownBlock(format!("{}", id))),
 		};
 
 		self.apply_head(&header)
@@ -258,7 +258,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
-			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+			None => return Err(error::Error::UnknownBlock(format!("{}", id))),
 		};
 
 		let mut storage = self.storage.write();
@@ -416,12 +416,12 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 
 	fn header_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
 		self.storage.read().header_cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::ErrorKind::Backend(format!("Header CHT for block {} not exists", block)).into())
+			.ok_or_else(|| error::Error::Backend(format!("Header CHT for block {} not exists", block)))
 	}
 
 	fn changes_trie_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::ErrorKind::Backend(format!("Changes trie CHT for block {} not exists", block)).into())
+			.ok_or_else(|| error::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 	}
 
 	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
@@ -665,7 +665,7 @@ where
 
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
-			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
+			None => Err(error::Error::UnknownBlock(format!("{}", block))),
 		}
 	}
 
@@ -717,11 +717,11 @@ impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> w
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> error::Result<()> {
 	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(error::ErrorKind::GenesisInvalid.into());
+		return Err(error::Error::GenesisInvalid.into());
 	}
 
 	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-		return Err(error::ErrorKind::GenesisInvalid.into());
+		return Err(error::Error::GenesisInvalid.into());
 	}
 
 	Ok(())

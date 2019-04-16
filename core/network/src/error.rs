@@ -27,10 +27,7 @@ use client;
 error_chain! {
 	foreign_links {
 		Io(IoError) #[doc = "IO error."];
-	}
-
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
+		Client(client::error::Error) #[doc="Client error"];
 	}
 
 	errors {

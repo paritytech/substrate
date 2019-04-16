@@ -180,9 +180,16 @@ decl_module! {
 		pub fn deposit_event(event: T::Event) {
 			let extrinsic_index = Self::extrinsic_index();
 			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-			let mut events = Self::events();
-			events.push(EventRecord { phase, event });
-			<Events<T>>::put(events);
+			let event = EventRecord { phase, event };
+
+			// Appending can only fail if `Events<T>` can not be decoded or
+			// when we try to insert more than `u32::max_value()` events.
+			// If one of these conditions is met, we just insert the new event.
+			let events = [event];
+			if <Events<T>>::append(&events).is_err() {
+				let [event] = events;
+				<Events<T>>::put(vec![event]);
+			}
 		}
 	}
 }
@@ -599,7 +606,10 @@ mod tests {
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
-			assert_eq!(System::events(), vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]);
+			assert_eq!(
+				System::events(),
+				vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]
+			);
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);

@@ -9,12 +9,15 @@ hex-literal = "0.1.0"
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false}
-parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+parity-codec = { version = "3.5", default-features = false, features = ["derive"] }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
+
+[dev-dependencies]
+criterion = "0.2"
 
 [features]
 default = ["std"]
@@ -29,3 +32,7 @@ std = [
 	"srml-support/std",
 	"primitives/std",
 ]
+
+[[bench]]
+name = "bench"
+harness = false

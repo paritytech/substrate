@@ -33,7 +33,7 @@ use grandpa::voter_set::VoterSet;
 
 use client::{
 	blockchain::Backend as BlockchainBackend,
-	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
+	error::{Error as ClientError, Result as ClientResult},
 	light::fetcher::RemoteCallRequest,
 };
 use parity_codec::{Encode, Decode};
@@ -73,7 +73,7 @@ pub fn prove_finality<Block: BlockT, B, G>(
 	// early-return if we sure that the block is NOT a part of canonical chain
 	let canonical_block = blockchain.expect_block_hash_from_id(&BlockId::Number(block_number))?;
 	if block != canonical_block {
-		return Err(ClientErrorKind::Backend(
+		return Err(ClientError::Backend(
 			"Cannot generate finality proof for non-canonical block".into()
 		).into());
 	}
@@ -111,7 +111,7 @@ pub fn prove_finality<Block: BlockT, B, G>(
 		}
 	}
 
-	Err(ClientErrorKind::Backend(
+	Err(ClientError::Backend(
 		"cannot find justification for finalized block".into()
 	).into())
 }
@@ -156,16 +156,16 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 {
 	// decode finality proof
 	let proof = FinalityProof::<Block::Header, J>::decode(&mut &remote_proof[..])
-		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode finality proof".into()))?;
+		.ok_or_else(|| ClientError::BadJustification("failed to decode finality proof".into()))?;
 
 	// check that the first header in finalization path is the block itself
 	{
 		let finalized_header = proof.finalization_path.first()
-			.ok_or_else(|| ClientError::from(ClientErrorKind::BadJustification(
+			.ok_or_else(|| ClientError::from(ClientError::BadJustification(
 				"finality proof: finalized path is empty".into()
 			)))?;
 		if *finalized_header.number() != block.0 || finalized_header.hash() != block.1 {
-			return Err(ClientErrorKind::BadJustification(
+			return Err(ClientError::BadJustification(
 				"finality proof: block is not a part of finalized path".into()
 			).into());
 		}
@@ -177,7 +177,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		let finalized_header = proof.finalization_path.last()
 			.expect("checked above that proof.finalization_path is not empty; qed");
 		if *finalized_header.number() != just_block.0 || finalized_header.hash() != just_block.1 {
-			return Err(ClientErrorKind::BadJustification(
+			return Err(ClientError::BadJustification(
 				"finality proof: target justification block is not a part of finalized path".into()
 			).into());
 		}
@@ -192,7 +192,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		retry_count: None,
 	})?;
 	let grandpa_authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &grandpa_authorities[..])
-		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode GRANDPA authorities set proof".into()))?;
+		.ok_or_else(|| ClientError::BadJustification("failed to decode GRANDPA authorities set proof".into()))?;
 
 	// and now check justification
 	proof.justification.verify(set_id, &grandpa_authorities.into_iter().collect())?;
@@ -392,7 +392,7 @@ mod tests {
 			fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
 			fn verify(&self, _set_id: u64, _authorities: &VoterSet<AuthorityId>) -> ClientResult<()> {
-				Err(ClientErrorKind::Backend("test error".into()).into())
+				Err(ClientError::Backend("test error".into()))
 			}
 		}
 
