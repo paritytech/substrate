@@ -10,7 +10,6 @@ substrate-primitives = { path = "../../primitives", default-features = false }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 sr-primitives = { path = "../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
-grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 
 [features]
 default = ["std"]

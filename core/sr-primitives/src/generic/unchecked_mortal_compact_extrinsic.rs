@@ -93,8 +93,7 @@ where
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
 					} else {
-						let r = signature.verify(payload, &signed);
-						r
+						signature.verify(payload, &signed)
 					}
 				}) {
 					return Err(crate::BAD_SIGNATURE)

@@ -252,6 +252,9 @@ impl<
 		const UNKNOWN_ERROR: i8 = -127;
 		const MISSING_SENDER: i8 = -20;
 		const INVALID_INDEX: i8 = -10;
+
+		println!("starting to validate");
+
 		let encoded_len = uxt.encode().len();
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
@@ -263,7 +266,7 @@ impl<
 			Err(primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
-
+		println!("all good");
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {

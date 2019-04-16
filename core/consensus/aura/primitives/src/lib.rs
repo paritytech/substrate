@@ -20,8 +20,7 @@
 
 use rstd::vec::Vec;
 use substrate_client::decl_runtime_apis;
-use runtime_primitives::{ConsensusEngineId, EquivocationProof};
-use primitives::ed25519;
+use runtime_primitives::{ConsensusEngineId};
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];

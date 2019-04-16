@@ -122,7 +122,6 @@ impl<B: ChainApi> Pool<B> {
 	{
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
-		println!("block_number {:?}", block_number);
 		let results = xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
@@ -130,10 +129,7 @@ impl<B: ChainApi> Pool<B> {
 				if self.rotator.is_banned(&hash) {
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
-				println!("before validating");
-				// assert!(false, "leaving!");
 				let r = self.api.validate_transaction(at, xt.clone());
-				println!("after r {:?}", r); 
 				match r? {
 					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
@@ -156,7 +152,6 @@ impl<B: ChainApi> Pool<B> {
 				}
 			})
 			.map(|tx| {
-				println!("after the transaction {:?}", tx);
 				let imported = self.pool.write().import(tx?)?;
 
 				if let base::Imported::Ready { .. } = imported {

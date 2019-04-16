@@ -31,7 +31,6 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use primitives::EquivocationProof;
 
 mod mock;
 mod tests;
@@ -41,6 +40,8 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
 /// The type of the aura inherent.
 pub type InherentType = u64;
+
+pub struct EquivocationProof {}
 
 /// Auxiliary trait to extract aura inherent data.
 pub trait AuraInherentData {
@@ -169,9 +170,9 @@ impl<T: Trait> Module<T> {
 		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
 	}
 
-	pub fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-		Some(Vec::new())
-	}
+	// pub fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+	// 	Some(Vec::new())
+	// }
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();

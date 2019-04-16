@@ -429,13 +429,6 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 	)
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub struct EquivocationProof<H, I> {
-	first: H,
-	second: H,
-	identity: I,
-}
 
 /// Helper macro for `impl_outer_config`
 #[macro_export]

@@ -24,14 +24,14 @@ use rstd::prelude::*;
 use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature,
 };
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives::{self, ScheduledChange, EquivocationProof};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, generic, create_runtime_str, EquivocationProof};
+use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
@@ -43,7 +43,7 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::{OpaqueMetadata, sr25519};
+use substrate_primitives::{OpaqueMetadata, sr25519, ed25519};
 use parity_codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
@@ -339,8 +339,8 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-			let function = Call::Grandpa(GrandpaCall::report_misbehavior(evidence));
+		fn construct_report_call(equivocation_proof: EquivocationProof<(Vec<u8>, ed25519::Signature), AuthorityId>) -> Option<Vec<u8>> {
+			let function = Call::Grandpa(GrandpaCall::report_misbehavior(equivocation_proof));
 			Some(function.encode().as_slice().to_vec())
 		}
 	}
@@ -350,9 +350,9 @@ impl_runtime_apis! {
 			Aura::slot_duration()
 		}
 
-		fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-			Some(Vec::new())
-		}
+		// fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+		// 	Some(Vec::new())
+		// }
 	}
 
 	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {

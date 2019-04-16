@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::communication::localized_payload;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -23,22 +24,22 @@ use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
 
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GrandpaApi, EquivocationProof};
 
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
+	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet, Message,
 };
-use runtime_primitives::EquivocationProof;
 use runtime_primitives::AnySignature;
 use runtime_primitives::OpaqueExtrinsic;
 use runtime_primitives::generic::{BlockId, Era};
 use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi,
+	Verify,
 };
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair, sr25519};
+use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair, sr25519, hashing::blake2_256};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use srml_indices::address::Address;
 use node_runtime::{Call, SystemCall, GrandpaCall, UncheckedExtrinsic, Context};
@@ -341,16 +342,19 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 	
 	fn prevote_equivocation(
 		&self,
-		_round: u64,
+		round: u64,
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		println!("equivocation => {:?}", equivocation);
 		let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
-		let equivocation_proof = EquivocationProof<Prevote<Block>, Self::Id> {
-			first,
-			second,
-			identity,
+		let fst_msg = Message::Prevote(equivocation.first.0);
+		let snd_msg = Message::Prevote(equivocation.second.0);
+		let fst_payload = localized_payload(round, self.set_id, &fst_msg);
+		let snd_payload = localized_payload(round, self.set_id, &snd_msg);
+		let equivocation_proof = EquivocationProof {
+			first: (fst_payload, equivocation.first.1),
+			second: (snd_payload, equivocation.second.1),
+			identity: equivocation.identity,
 		};
 		if let Ok(Some(report_call)) = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof) {
 			sign_and_dispatch(
@@ -402,7 +406,8 @@ pub fn sign_and_dispatch<B, E, RA, Block: BlockT<Hash=H256>, A>(
 		Era::immortal(),
 		genesis_hash,
 	);
-	let signature: sr25519::Signature = AccountKeyring::from_public(&public).unwrap().sign(&payload.encode()).into();
+	let payload_hash = blake2_256(&payload.encode());
+	let signature: sr25519::Signature = AccountKeyring::from_public(&public).unwrap().sign(&payload_hash[..]).into();
 	let any_signature = AnySignature::from(signature);
 	let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), any_signature, Era::Immortal);
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");

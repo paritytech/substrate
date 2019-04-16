@@ -35,7 +35,7 @@ use substrate_client::{
 };
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity,
-	create_runtime_str, EquivocationProof,
+	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
@@ -552,9 +552,9 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
-				fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-					Some(Vec::new())
-				}
+				// fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+				// 	Some(Vec::new())
+				// }
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

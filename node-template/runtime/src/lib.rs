@@ -15,7 +15,6 @@ use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify},
-	EquivocationProof,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -293,9 +292,9 @@ impl_runtime_apis! {
 			Aura::slot_duration()
 		}
 		
-		fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-			Some(Vec::new())
-		}
+		// fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
+		// 	Some(Vec::new())
+		// }
 	}
 
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

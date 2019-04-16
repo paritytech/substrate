@@ -529,18 +529,6 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "finality-grandpa"
-version = "0.6.0"
-dependencies = [
- "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "fixed-hash"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2607,7 +2595,6 @@ dependencies = [
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
  "substrate-client 1.0.0",
- "substrate-primitives 1.0.0",
 ]
 
 [[package]]
@@ -2669,7 +2656,6 @@ dependencies = [
 name = "substrate-finality-grandpa-primitives"
 version = "1.0.0"
 dependencies = [
- "finality-grandpa 0.6.0",
  "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
