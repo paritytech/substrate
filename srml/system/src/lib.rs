@@ -15,46 +15,46 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # System module
-//! 
+//!
 //! The system module provides low-level access to core types and cross-cutting utilities.
 //! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
 //! To use it in your module, you should ensure your module's trait implies the system [`Trait`].
-//! 
+//!
 //! ## Overview
-//! 
+//!
 //! The system module defines the core data types used in a Substrate runtime.
 //! It also provides several utility functions (see [`Module`]) for other runtime modules.
-//! 
-//! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items, 
+//!
+//! In addition, it manages the storage items for extrinsics data, indexes, event record and digest items,
 //! among other things that support the execution of the current block.
-//! 
+//!
 //! It also handles low level tasks like depositing logs, basic set up and take down of
 //! temporary storage entries and access to previous block hashes.
-//! 
+//!
 //! ## Interface
-//! 
+//!
 //! ### Dispatchable functions
-//! 
+//!
 //! The system module does not implement any dispatchable functions.
-//! 
+//!
 //! ### Public functions
-//! 
+//!
 //! All public functions are available as part of the [`Module`] type.
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! ### Prerequisites
-//! 
+//!
 //! Import the system module and derive your module's configuration trait from the system trait.
-//! 
+//!
 //! ### Example - Get random seed and extrinsic count for the current block
-//! 
+//!
 //! ```
 //! use srml_support::{decl_module, dispatch::Result};
 //! use srml_system::{self as system, ensure_signed};
-//! 
+//!
 //! pub trait Trait: system::Trait {}
-//! 
+//!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn system_module_example(origin) -> Result {
@@ -135,12 +135,12 @@ pub trait Trait: 'static + Eq + Clone {
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
 		+ rstd::hash::Hash;
-	
+
 	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
 		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
-	
+
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -180,9 +180,16 @@ decl_module! {
 		pub fn deposit_event(event: T::Event) {
 			let extrinsic_index = Self::extrinsic_index();
 			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-			let mut events = Self::events();
-			events.push(EventRecord { phase, event });
-			<Events<T>>::put(events);
+			let event = EventRecord { phase, event };
+
+			// Appending can only fail if `Events<T>` can not be decoded or
+			// when we try to insert more than `u32::max_value()` events.
+			// If one of these conditions is met, we just insert the new event.
+			let events = [event];
+			if <Events<T>>::append(&events).is_err() {
+				let [event] = events;
+				<Events<T>>::put(vec![event]);
+			}
 		}
 	}
 }
@@ -599,7 +606,10 @@ mod tests {
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
-			assert_eq!(System::events(), vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]);
+			assert_eq!(
+				System::events(),
+				vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]
+			);
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
