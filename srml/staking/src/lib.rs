@@ -544,7 +544,7 @@ decl_storage! {
 			with_storage(storage, || {
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 					assert!(T::Currency::free_balance(&stash) >= balance);
-					// TODO: #
+					// TODO: #2301
 					// The notation of minimum valuable balance in staking is currently not properly demonstrated in any
 					// parameter in the system. It should be declared, the assertion should change accordingly and it should
 					// influence the value of shift in Staking's `CurrencyToVote`.
