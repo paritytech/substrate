@@ -16,14 +16,15 @@
 
 //! # Sudo Module
 //!
+//! - [`sudo::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
 //! ## Overview
 //!
 //! The Sudo module allows for a single account (called the "sudo key")
 //! to execute dispatchable functions that require a `Root` call
 //! or designate a new account to replace them as the sudo key.
 //! Only one account can be the sudo key at a time.
-//!
-//! You can start using the Sudo module by implementing the [`sudo::Trait`](./trait.Trait.html).
 //!
 //! ## Interface
 //!
@@ -33,8 +34,6 @@
 //!
 //! * `sudo` - Make a `Root` call to a dispatchable function.
 //! * `set_key` - Assign a new account to be the sudo key.
-//!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
 //!
 //! ## Usage
 //!

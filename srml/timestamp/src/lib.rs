@@ -17,8 +17,10 @@
 //! # Timestamp Module
 //!
 //! The Timestamp module provides functionality to get and set the on-chain time.
-//! To use it in your runtime, you need to implement the [`timestamp::Trait`](./trait.Trait.html).
-//! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
+//!
+//! - [`timestamp::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //! ## Overview
 //!
@@ -38,15 +40,11 @@
 //!
 //! * `set` - Sets the current time.
 //!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
-//!
 //! ### Public functions
 //!
 //! * `get` - Gets the current time for the current block. If this function is called prior to
 //! setting the timestamp, it will return the timestamp of the previous block.
 //! * `minimum_period` - Gets the minimum (and advised) period between blocks for the chain.
-//!
-//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
 //! ## Usage
 //!
@@ -83,8 +81,7 @@
 //!
 //! ## Related Modules
 //!
-//! * [`System`](../srml_system/index.html)
-//! * [`Session`](../srml_session/index.html)
+//! * [Session](../srml_session/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
