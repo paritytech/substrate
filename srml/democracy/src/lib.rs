@@ -251,7 +251,11 @@ decl_module! {
 		}
 
 		/// Start a referendum.
-		fn start_referendum(proposal: Box<T::Proposal>, threshold: VoteThreshold, delay: T::BlockNumber) -> Result {
+		fn start_referendum(
+			proposal: Box<T::Proposal>,
+			threshold: VoteThreshold,
+			delay: T::BlockNumber
+		) -> Result {
 			Self::inject_referendum(
 				<system::Module<T>>::block_number() + Self::voting_period(),
 				*proposal,
@@ -304,7 +308,13 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			// Currency is locked indefinitely as long as it's delegated.
-			T::Currency::extend_lock(DEMOCRACY_ID, &who, Bounded::max_value(), T::BlockNumber::max_value(), WithdrawReason::Transfer.into());
+			T::Currency::extend_lock(
+				DEMOCRACY_ID,
+				&who,
+				Bounded::max_value(),
+				T::BlockNumber::max_value(),
+				WithdrawReason::Transfer.into()
+			);
 			Self::deposit_event(RawEvent::Delegated(who, to));
 		}
 
@@ -317,7 +327,12 @@ decl_module! {
 			let lock_period = Self::public_delay();
 			let now = <system::Module<T>>::block_number();
 			let locked_until = now + lock_period * T::BlockNumber::sa(d.1 as u64);
-			T::Currency::set_lock(DEMOCRACY_ID, &who, Bounded::max_value(), locked_until, WithdrawReason::Transfer.into());
+			T::Currency::set_lock(DEMOCRACY_ID,
+				&who,
+				Bounded::max_value(),
+				locked_until,
+				WithdrawReason::Transfer.into()
+			);
 			Self::deposit_event(RawEvent::Undelegated(who));
 		}
 	}
@@ -339,7 +354,12 @@ pub struct ReferendumInfo<BlockNumber: Parameter, Proposal: Parameter> {
 
 impl<BlockNumber: Parameter, Proposal: Parameter> ReferendumInfo<BlockNumber, Proposal> {
 	/// Create a new instance.
-	pub fn new(end: BlockNumber, proposal: Proposal, threshold: VoteThreshold, delay: BlockNumber) -> Self {
+	pub fn new(
+		end: BlockNumber,
+		proposal: Proposal,
+		threshold: VoteThreshold,
+		delay: BlockNumber
+	) -> Self {
 		ReferendumInfo { end, proposal, threshold, delay }
 	}
 }
@@ -429,7 +449,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get all referenda ready for tally at block `n`.
-	pub fn maturing_referendums_at(n: T::BlockNumber) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
+	pub fn maturing_referendums_at(
+		n: T::BlockNumber,
+	) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
 		(next..last).into_iter()
@@ -462,7 +484,12 @@ impl<T: Trait> Module<T> {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
 				let vote = Self::vote_of((ref_index, voter.clone()));
-				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT);
+				let (votes, balance) = Self::delegated_votes(
+					ref_index,
+					voter.clone(),
+					vote.multiplier(),
+					MAX_RECURSION_LIMIT
+				);
 				if vote.is_aye() {
 					(approve_acc + votes, against_acc, capital_acc + balance)
 				} else {
@@ -501,9 +528,14 @@ impl<T: Trait> Module<T> {
 	pub fn internal_start_referendum(
 		proposal: T::Proposal,
 		threshold: VoteThreshold,
-		delay: T::BlockNumber
+		delay: T::BlockNumber,
 	) -> result::Result<ReferendumIndex, &'static str> {
-		<Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, threshold, delay)
+		<Module<T>>::inject_referendum(
+			<system::Module<T>>::block_number() + <Module<T>>::voting_period(),
+			proposal,
+			threshold,
+			delay
+		)
 	}
 
 	/// Remove a referendum. Can be called directly by the council.
@@ -575,7 +607,12 @@ impl<T: Trait> Module<T> {
 					T::Currency::unreserve(d, deposit);
 				}
 				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
-				Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove, Self::public_delay())?;
+				Self::inject_referendum(
+					now + Self::voting_period(),
+					proposal,
+					VoteThreshold::SuperMajorityApprove,
+					Self::public_delay()
+				)?;
 			}
 		}
 
@@ -587,7 +624,7 @@ impl<T: Trait> Module<T> {
 	fn bake_referendum(
 		now: T::BlockNumber,
 		index: ReferendumIndex,
-		info: ReferendumInfo<T::BlockNumber, T::Proposal>
+		info: ReferendumInfo<T::BlockNumber, T::Proposal>,
 	) -> Result {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
@@ -606,7 +643,13 @@ impl<T: Trait> Module<T> {
 			// lock should they win...
 			let locked_until = now + lock_period * T::BlockNumber::sa((vote.multiplier()) as u64);
 			// ...extend their bondage until at least then.
-			T::Currency::extend_lock(DEMOCRACY_ID, &a, Bounded::max_value(), locked_until, WithdrawReason::Transfer.into());
+			T::Currency::extend_lock(
+				DEMOCRACY_ID,
+				&a,
+				Bounded::max_value(),
+				locked_until,
+				WithdrawReason::Transfer.into()
+			);
 		}
 
 		Self::clear_referendum(index);
