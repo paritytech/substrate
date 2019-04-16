@@ -337,9 +337,12 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	))
 }
 
-fn global_communication<Block: BlockT<Hash=H256>, I, O>(
-	commits_in: I,
-	commits_out: O,
+fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+	local_key: Option<&Arc<ed25519::Pair>>,
+	set_id: u64,
+	voters: &Arc<VoterSet<AuthorityId>>,
+	client: &Arc<Client<B, E, Block, RA>>,
+	network: &NetworkBridge<Block, N>,
 ) -> (
 	impl Stream<
 		Item = voter::CommunicationIn<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>,
@@ -350,44 +353,6 @@ fn global_communication<Block: BlockT<Hash=H256>, I, O>(
 		SinkError = CommandOrError<H256, NumberFor<Block>>,
 	>,
 ) where
-	I: Stream<
-		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
-		Error = CommandOrError<H256, NumberFor<Block>>,
-	>,
-	O: Sink<
-		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
-		SinkError = CommandOrError<H256, NumberFor<Block>>,
-	>,
-{
-	let global_in = commits_in.map(|(round, commit)| {
-		voter::CommunicationIn::Commit(round, commit, voter::Callback::Blank)
-	});
-
-	// NOTE: eventually this will also handle catch-up requests
-	let global_out = commits_out.with(|global| match global {
-		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
-		_ => unimplemented!(),
-	});
-
-	(global_in, global_out)
-}
-
-fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<&Arc<ed25519::Pair>>,
-	set_id: u64,
-	voters: &Arc<VoterSet<AuthorityId>>,
-	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block, N>,
-) -> (
-	impl Stream<
-		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
-		Error = CommandOrError<H256, NumberFor<Block>>,
-	>,
-	impl Sink<
-		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, AuthoritySignature, AuthorityId>),
-		SinkError = CommandOrError<H256, NumberFor<Block>>,
-	>,
-) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	N: Network<Block>,
@@ -395,6 +360,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 {
+
 	let is_voter = local_key
 		.map(|pair| voters.contains_key(&pair.public().into()))
 		.unwrap_or(false);
@@ -413,10 +379,26 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		commit_in,
 	);
 
-	let commit_in = commit_in.map_err(Into::into);
-	let commit_out = commit_out.sink_map_err(Into::into);
+	let commits_in = commit_in.map_err(CommandOrError::from);
+	let commits_out = commit_out.sink_map_err(CommandOrError::from);
 
-	(commit_in, commit_out)
+	let global_in = commits_in.map(|(round, commit, mut callback)| {
+		let callback = voter::Callback::Work(Box::new(move |outcome| match outcome {
+			voter::CommitProcessingOutcome::Good(_) =>
+				callback(communication::CommitProcessingOutcome::Good),
+			voter::CommitProcessingOutcome::Bad(_) =>
+				callback(communication::CommitProcessingOutcome::Bad),
+		}));
+		voter::CommunicationIn::Commit(round, commit, callback)
+	});
+
+	// NOTE: eventually this will also handle catch-up requests
+	let global_out = commits_out.with(|global| match global {
+		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
+		_ => unimplemented!(),
+	});
+
+	(global_in, global_out)
 }
 
 /// Register the finality tracker inherent data provider (which is used by
@@ -456,7 +438,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
 	inherent_data_providers: InherentDataProviders,
-	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
+	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -470,7 +452,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 {
 	use futures::future::{self, Loop as FutureLoop};
 
-	let network = NetworkBridge::new(network, config.clone());
+	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
 
 	let LinkHalf {
 		client,
@@ -538,17 +520,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					chain_info.chain.finalized_number,
 				);
 
-				let (commit_in, commit_out) = committer_communication(
+				let global_comms = global_communication(
 					config.local_key.as_ref(),
 					env.set_id,
 					&env.voters,
 					&client,
 					&network,
-				);
-
-				let global_comms = global_communication::<Block, _, _>(
-					commit_in,
-					commit_out,
 				);
 
 				let voters = (*env.voters).clone();
@@ -674,6 +651,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			warn!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
+
+	let voter_work = network_startup.and_then(move |()| voter_work);
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }

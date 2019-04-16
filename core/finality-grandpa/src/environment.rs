@@ -642,7 +642,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
-		let res = finalize_block(
+		finalize_block(
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
@@ -650,13 +650,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			hash,
 			number,
 			(round, commit).into(),
-		);
-
-		if let Ok(_) = res {
-			self.network.note_commit_finalized(number);
-		}
-
-		res
+		)
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
