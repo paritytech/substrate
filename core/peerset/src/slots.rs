@@ -17,6 +17,7 @@
 use std::{fmt, mem};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
+use serde_json::json;
 
 /// Describes the nature of connection with a given peer.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -181,5 +182,73 @@ impl Slots {
 	/// Returns true if given peer is reserved.
 	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
 		self.reserved.contains_key(peer_id)
+	}
+
+	/// Produces a JSON object containing the state of slots, for debugging purposes.
+	pub fn debug_info(&self) -> serde_json::Value {
+		json!({
+			"max_slots": self.max_slots,
+			"reserved": self.reserved.keys().map(|peer_id| peer_id.to_base58()).collect::<Vec<_>>(),
+			"common": self.common.keys().map(|peer_id| peer_id.to_base58()).collect::<Vec<_>>()
+		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use libp2p::PeerId;
+	use serde_json::json;
+	use super::{Slots, SlotType};
+
+	#[test]
+	fn test_slots_debug_info() {
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let common_peer = PeerId::random();
+		let mut slots = Slots::new(10);
+
+		slots.add_peer(reserved_peer.clone(), SlotType::Reserved);
+		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
+		slots.add_peer(common_peer.clone(), SlotType::Common);
+
+		let expected = json!({
+			"max_slots": 10,
+			"reserved": vec![reserved_peer.to_base58(), reserved_peer2.to_base58()],
+			"common": vec![common_peer.to_base58()],
+		});
+
+		assert_eq!(expected, slots.debug_info());
+	}
+
+	#[test]
+	fn test_slots_debug() {
+		let reserved_peer = PeerId::random();
+		let reserved_peer2 = PeerId::random();
+		let common_peer = PeerId::random();
+		let mut slots = Slots::new(10);
+
+		slots.add_peer(reserved_peer.clone(), SlotType::Reserved);
+		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
+		slots.add_peer(common_peer.clone(), SlotType::Common);
+
+		let expected = format!("Slots {{
+    max_slots: 10,
+    reserved: [
+        PeerId(
+            {:?}
+        ),
+        PeerId(
+            {:?}
+        )
+    ],
+    common: [
+        PeerId(
+            {:?}
+        )
+    ]
+}}", reserved_peer.to_base58(), reserved_peer2.to_base58(), common_peer.to_base58());
+
+		let s = format!("{:#?}", slots);
+		assert_eq!(expected, s);
 	}
 }
