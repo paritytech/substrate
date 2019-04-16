@@ -23,7 +23,7 @@
 //! 
 //! Funds for treasury are raised in two ways:
 //! 1. By minting new tokens, leading to inflation, and
-//! 2. By channelling some of the tokens set for burning from transaction fees and slashing.
+//! 2. By channeling tokens from transaction fees and slashing.
 //! 
 //! Treasury funds can be used to pay for developers who provide software updates,
 //! any changes decided by referenda, and to generally keep the system running smoothly. 
