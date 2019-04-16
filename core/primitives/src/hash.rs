@@ -17,6 +17,7 @@
 //! A fixed hash type.
 
 pub use primitive_types::{H160, H256, H512};
+use crate::crypto::UncheckedFrom;
 
 /// Hash conversion. Used to convert between unbound associated hash types in traits,
 /// implemented by the same hash type.
@@ -27,6 +28,19 @@ pub fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 
 	dest.as_mut().copy_from_slice(src.as_ref());
 	dest
 }
+
+impl UncheckedFrom<[u8; 32]> for H256 {
+	fn unchecked_from(x: [u8; 32]) -> Self {
+        x.into()
+	}
+}
+
+impl UncheckedFrom<H256> for H256 {
+	fn unchecked_from(x: H256) -> Self {
+		x
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -30,7 +30,7 @@ pub use serde_derive;
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
-use substrate_primitives::{ed25519, sr25519, hash::H512};
+use substrate_primitives::{ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -349,15 +349,21 @@ impl Verify for MultiSignature {
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
-	type Signer = sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0) ||
-			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0)
+	type Signer = H256;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer) ||
+			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer)
 	}
 }
 
 impl From<sr25519::Signature> for AnySignature {
 	fn from(s: sr25519::Signature) -> AnySignature {
+		AnySignature(s.0.into())
+	}
+}
+
+impl From<ed25519::Signature> for AnySignature {
+	fn from(s: ed25519::Signature) -> AnySignature {
 		AnySignature(s.0.into())
 	}
 }
