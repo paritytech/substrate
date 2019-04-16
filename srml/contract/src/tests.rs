@@ -244,6 +244,8 @@ fn account_removal_removes_storage() {
 		|| {
 			let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 			let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
+			let key1 = &[1; 32];
+			let key2 = &[2; 32];
 
 			// Set up two accounts with free balance above the existential threshold.
 			{
@@ -254,8 +256,8 @@ fn account_removal_removes_storage() {
 				});
 
 				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-				overlay.set_storage(&1, b"foo".to_vec(), Some(b"1".to_vec()));
-				overlay.set_storage(&1, b"bar".to_vec(), Some(b"2".to_vec()));
+				overlay.set_storage(&1, key1.clone(), Some(b"1".to_vec()));
+				overlay.set_storage(&1, key2.clone(), Some(b"2".to_vec()));
 				DirectAccountDb.commit(overlay.into_change_set());
 
 				Balances::deposit_creating(&2, 110);
@@ -265,8 +267,8 @@ fn account_removal_removes_storage() {
 				});
 
 				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-				overlay.set_storage(&2, b"foo".to_vec(), Some(b"3".to_vec()));
-				overlay.set_storage(&2, b"bar".to_vec(), Some(b"4".to_vec()));
+				overlay.set_storage(&2, key1.clone(), Some(b"3".to_vec()));
+				overlay.set_storage(&2, key2.clone(), Some(b"4".to_vec()));
 				DirectAccountDb.commit(overlay.into_change_set());
 			}
 
@@ -280,15 +282,15 @@ fn account_removal_removes_storage() {
 			// entries from account 2 is in place.
 			{
 				// let a: <Test as system::Trait>::AccountId = 1;
-				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), b"foo").is_none());
-				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), b"bar").is_none());
+				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
+				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
 
 				assert_eq!(
-					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), b"foo"),
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), b"bar"),
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key2),
 					Some(b"4".to_vec())
 				);
 			}
