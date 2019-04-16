@@ -35,7 +35,7 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
-		NativeOrEncoded};
+		NativeOrEncoded, sr25519};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
@@ -81,7 +81,7 @@ mod tests {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
-				let key = AccountKeyring::from_public(&signed).unwrap();
+				let key = AccountKeyring::from_public(&sr25519::Public::from_h256(signed)).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
 						key.sign(&runtime_io::blake2_256(b))
@@ -257,7 +257,7 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let three = AccountId::from_raw([3u8; 32]);
+		let three = [3u8; 32].into();
 		TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(SystemConfig {
