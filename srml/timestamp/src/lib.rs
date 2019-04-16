@@ -16,39 +16,46 @@
 
 //! # Timestamp Module
 //!
-//! The timestamp module provides functionality to get and set the on-chain time.
-//! To use it in your module, you need to implement the timestamp [`Trait`].
-//! The supported dispatchable functions are documented as part of the [`Call`] enum.
+//! The Timestamp module provides functionality to get and set the on-chain time.
+//! To use it in your runtime, you need to implement the [`timestamp::Trait`](./trait.Trait.html).
+//! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
 //!
 //! ## Overview
 //!
-//! The timestamp module allows the validators to set and validate a timestamp with each block.
+//! The Timestamp module allows the validators to set and validate a timestamp with each block.
 //!
-//! It uses inherents for timestamp data, which is provided by the block author and validated/verified by other validators.
-//! The timestamp can be set only once per block and must be set each block. There could be a constraint on how much time must pass before setting the new timestamp.
+//! It uses inherents for timestamp data, which is provided by the block author and validated/verified
+//! by other validators. The timestamp can be set only once per block and must be set each block.
+//! There could be a constraint on how much time must pass before setting the new timestamp.
 //!
-//! **NOTE:** The timestamp module is the recommended way to query the on-chain time instead of using an approach based on block numbers.
-//! The block numbers based time measurement can cause issues because of cummulative calculation errors and hence it should be avoided.
+//! **NOTE:** The Timestamp module is the recommended way to query the on-chain time instead of using
+//! an approach based on block numbers. The block number based time measurement can cause issues
+//! because of cumulative calculation errors and hence should be avoided.
 //!
 //! ## Interface
 //!
-//! ### Dispatchable functions ([`Call`])
+//! ### Dispatchable Functions
 //!
 //! * `set` - Sets the current time.
 //!
-//! ### Public functions ([`Module`])
+//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
 //!
-//! * `get` - Gets the current time for the current block. If this function is called prior the setting to timestamp, it will return the timestamp of the previous block.
+//! ### Public functions
 //!
+//! * `get` - Gets the current time for the current block. If this function is called prior to
+//! setting the timestamp, it will return the timestamp of the previous block.
 //! * `minimum_period` - Gets the minimum (and advised) period between blocks for the chain.
+//!
+//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the timestamp module in your custom module to query the current timestamp.
+//! The following example shows how to use the Timestamp module in your custom module to query the current timestamp.
 //!
 //! ### Prerequisites
 //!
-//! Import the `timestamp` module in your custom module and derive the module configuration trait from the `timestamp` trait.
+//! Import the Timestamp module into your custom module and derive the module configuration
+//! trait from the timestamp trait.
 //!
 //! ### Get current timestamp
 //!
@@ -69,15 +76,15 @@
 //! }
 //! ```
 //!
-//! ### Example from SRML
+//! ### Example from the SRML
 //!
-//! The [`Session` module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses the `timestamp` module for session management.
+//! The [Session module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses
+//! the Timestamp module for session management.
 //!
 //! ## Related Modules
 //!
-//! * [`System`](https://crates.parity.io/srml_system/index.html)
-//! * [`Session`](https://crates.parity.io/srml_session/index.html)
-//!
+//! * [`System`](../srml_system/index.html)
+//! * [`Session`](../srml_session/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

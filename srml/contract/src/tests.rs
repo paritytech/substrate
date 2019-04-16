@@ -34,11 +34,12 @@ use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
 	Trait, ComputeDispatchFee, TrieIdGenerator, TrieId,
-	AccountInfo, AccountInfoOf,
+	AccountInfo, AccountInfoOf, TrieIdFromParentCounter
 };
 use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::account_db::{DirectAccountDb, OverlayAccountDb, AccountDb};
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -238,29 +239,37 @@ fn refunds_unused_gas() {
 
 #[test]
 fn account_removal_removes_storage() {
-	let unique_id1 = b"unique_id1";
-	let unique_id2 = b"unique_id2";
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
+			let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
+			let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
+			let key1 = &[1; 32];
+			let key2 = &[2; 32];
+
 			// Set up two accounts with free balance above the existential threshold.
 			{
 				Balances::deposit_creating(&1, 110);
 				AccountInfoOf::<Test>::insert(1, &AccountInfo {
-					trie_id: unique_id1.to_vec(),
+					trie_id: trie_id1.clone(),
 					storage_size: 0,
 				});
-				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
-				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
-				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
+
+				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+				overlay.set_storage(&1, key1.clone(), Some(b"1".to_vec()));
+				overlay.set_storage(&1, key2.clone(), Some(b"2".to_vec()));
+				DirectAccountDb.commit(overlay.into_change_set());
 
 				Balances::deposit_creating(&2, 110);
 				AccountInfoOf::<Test>::insert(2, &AccountInfo {
-					trie_id: unique_id2.to_vec(),
+					trie_id: trie_id2.clone(),
 					storage_size: 0,
 				});
-				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
-				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
+
+				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+				overlay.set_storage(&2, key1.clone(), Some(b"3".to_vec()));
+				overlay.set_storage(&2, key2.clone(), Some(b"4".to_vec()));
+				DirectAccountDb.commit(overlay.into_change_set());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
@@ -272,15 +281,16 @@ fn account_removal_removes_storage() {
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
 			{
-				assert_eq!(child::get_raw(&unique_id1[..], &b"foo".to_vec()), None);
-				assert_eq!(child::get_raw(&unique_id1[..], &b"bar".to_vec()), None);
+				// let a: <Test as system::Trait>::AccountId = 1;
+				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
+				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
 
 				assert_eq!(
-					child::get(&unique_id2[..], &b"hello".to_vec()),
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					child::get(&unique_id2[..], &b"world".to_vec()),
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key2),
 					Some(b"4".to_vec())
 				);
 			}
