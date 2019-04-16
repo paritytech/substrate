@@ -20,7 +20,7 @@ once_cell = { version = "0.1.6", default-features = false, optional = true }
 bitmask = { version = "0.5", default-features = false }
 
 [dev-dependencies]
-pretty_assertions = "0.5.1"
+pretty_assertions = "0.6.1"
 
 [features]
 default = ["std"]

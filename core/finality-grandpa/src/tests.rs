@@ -204,8 +204,24 @@ impl Network<Block> for MessageRouting {
 		})
 	}
 
+	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
+
+	}
+
 	fn announce(&self, _block: Hash) {
 
+	}
+}
+
+#[derive(Clone)]
+struct Exit;
+
+impl Future for Exit {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<(), ()> {
+		Ok(Async::NotReady)
 	}
 }
 
@@ -402,7 +418,7 @@ fn run_to_completion_with<F: FnOnce()>(
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
-			futures::empty(),
+			Exit,
 		).expect("all in order with client and network");
 
 		assert_send(&voter);
@@ -503,7 +519,7 @@ fn finalize_3_voters_1_observer() {
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
-			futures::empty(),
+			Exit,
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -665,7 +681,7 @@ fn transition_3_voters_twice_1_observer() {
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 			InherentDataProviders::new(),
-			futures::empty(),
+			Exit,
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -1065,7 +1081,7 @@ fn voter_persists_its_votes() {
 				link,
 				MessageRouting::new(net.clone(), 0),
 				InherentDataProviders::new(),
-				futures::empty(),
+				Exit,
 			).expect("all in order with client and network");
 
 			let voter = future::poll_fn(move || {
@@ -1112,7 +1128,8 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 		};
 		let routing = MessageRouting::new(net.clone(), 1);
-		let network = communication::NetworkBridge::new(routing, config.clone());
+		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone(), Exit);
+		runtime.block_on(routing_work).unwrap();
 
 		let (round_rx, round_tx) = network.round_communication(
 			communication::Round(1),
