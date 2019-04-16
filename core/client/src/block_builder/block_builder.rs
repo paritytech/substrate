@@ -51,11 +51,11 @@ where
 	/// build upon.
 	pub fn at_block(block_id: &BlockId<Block>, api: &'a A) -> error::Result<Self> {
 		let number = api.block_number_from_id(block_id)?
-			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
+			.ok_or_else(|| error::Error::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
 
 		let parent_hash = api.block_hash_from_id(block_id)?
-			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
+			.ok_or_else(|| error::Error::UnknownBlock(format!("{}", block_id)))?;
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
@@ -89,7 +89,7 @@ where
 					Ok(())
 				}
 				Err(e) => {
-					Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
+					Err(error::Error::ApplyExtrinsicFailed(e))
 				}
 			}
 		})

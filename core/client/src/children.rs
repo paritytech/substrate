@@ -32,7 +32,7 @@ pub fn read_children<
 
 	let raw_val_opt = match db.get(column, &buf[..]) {
 		Ok(raw_val_opt) => raw_val_opt,
-		Err(_) => return Err(error::ErrorKind::Backend("Error reading value from database".into()).into()),
+		Err(_) => return Err(error::Error::Backend("Error reading value from database".into())),
 	};
 
 	let raw_val = match raw_val_opt {
@@ -42,7 +42,7 @@ pub fn read_children<
 
 	let children: Vec<V> = match Decode::decode(&mut &raw_val[..]) {
 		Some(children) => children,
-		None => return Err(error::ErrorKind::Backend("Error decoding children".into()).into()),
+		None => return Err(error::Error::Backend("Error decoding children".into())),
 	};
 
 	Ok(children)

@@ -385,7 +385,7 @@ pub fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
 	let storage_key = subtrie.parent_key(); // no prefix
 	unsafe {
 		ext_set_child_storage.get()(
-			storage_key.as_ptr(), key.len() as u32,
+			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32,
 			value.as_ptr(), value.len() as u32
 		);

@@ -1,12 +1,12 @@
 [package]
 name = "node-template"
 version = "1.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Anonymous"]
 build = "build.rs"
 edition = "2018"
 
 [[bin]]
-name = "template-node"
+name = "node-template"
 path = "src/main.rs"
 
 [dependencies]
