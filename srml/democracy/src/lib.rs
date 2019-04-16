@@ -16,13 +16,13 @@
 
 //! # Democracy Module
 //!
-//! ## Overview
-//!
-//! The Democracy Module handles administration of general stakeholder voting.
+//! The Democracy module handles administration of general stakeholder voting.
 //!
 //! - [`democracy::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
+//!
+//! ## Overview
 //!
 //! ### Terminology
 //!
@@ -71,7 +71,7 @@
 //!
 //! ### Goals
 //!
-//! The Democracy Module in Substrate is designed to make the following possible:
+//! The Democracy module in Substrate is designed to make the following possible:
 //!
 //! - Create and sponsor public proposals.
 //! - Elevate public proposals to the Table of Referenda.
