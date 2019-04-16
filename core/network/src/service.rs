@@ -45,7 +45,6 @@ pub use network_libp2p::PeerId;
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 
-
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get a stream of sync statuses.
@@ -126,6 +125,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 	fn restart(&self) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RestartSync);
+	}
+}
+
+/// A cloneable handle for reporting cost/benefits of peers.
+#[derive(Clone)]
+pub struct ReportHandle {
+	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
+}
+
+impl ReportHandle {
+	/// Report a given peer as either beneficial (+) or costly (-) according to the
+	/// given scalar.
+	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
+		self.inner.report_peer(who, cost_benefit);
 	}
 }
 
@@ -266,6 +279,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			.send(ProtocolMsg::GossipConsensusMessage(
 				topic, engine_id, message, recipient,
 			));
+	}
+
+	/// Return a cloneable handle for reporting peers' benefits or misbehavior.
+	pub fn report_handle(&self) -> ReportHandle {
+		ReportHandle { inner: self.peerset.clone() }
+	}
+
+	/// Report a given peer as either beneficial (+) or costly (-) according to the
+	/// given scalar.
+	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
+		self.peerset.report_peer(who, cost_benefit);
 	}
 
 	/// Execute a closure with the chain-specific network specialization.

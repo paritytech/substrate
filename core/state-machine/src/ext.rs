@@ -297,7 +297,8 @@ where
 		}
 
 		let mut transaction = B::Transaction::default();
-		let child_storage_keys: Vec<_> = self.overlay.prospective.children.keys().cloned().collect();
+		let child_storage_keys: std::collections::BTreeSet<_> = self.overlay.prospective.children.keys().cloned()
+			.chain(self.overlay.committed.children.keys().cloned()).collect();
 
 		for key in child_storage_keys {
 			let (_, t) = self.child_storage_root_transaction(&key);

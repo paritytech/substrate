@@ -55,6 +55,12 @@ pub trait UnhashedStorage {
 
 	/// Take a value from storage, deleting it after reading.
 	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+
+	/// Get a Vec of bytes from storage.
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Put a raw byte slice into storage.
+	fn put_raw(&self, key: &[u8], value: &[u8]);
 }
 
 // We use a construct like this during when genesis storage is being built.
@@ -81,6 +87,14 @@ impl<H> UnhashedStorage for (crate::rstd::cell::RefCell<&mut sr_primitives::Stor
 		self.0.borrow_mut().retain(|key, _| {
 			!key.starts_with(prefix)
 		})
+	}
+
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.0.borrow().get(key).cloned()
+	}
+
+	fn put_raw(&self, key: &[u8], value: &[u8]) {
+		self.0.borrow_mut().insert(key.to_vec(), value.to_vec());
 	}
 }
 
