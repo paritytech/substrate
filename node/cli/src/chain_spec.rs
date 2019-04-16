@@ -235,8 +235,8 @@ pub fn testnet_genesis(
 		]
 	});
 
-	const STASH: u128 = 1 << 20;
-	const ENDOWMENT: u128 = 1 << 20;
+	const STASH: u128 = 1 << 34;
+	const ENDOWMENT: u128 = 1 << 36;
 
 	let mut contract_config = ContractConfig {
 		transaction_base_fee: 1,
