@@ -282,7 +282,7 @@ pub fn testnet_genesis(
 			minimum_validator_count: 1,
 			validator_count: 2,
 			sessions_per_era: 5,
-			bonding_duration: 1,
+			bonding_duration: 12,
 			offline_slash: Perbill::zero(),
 			session_reward: Perbill::zero(),
 			current_session_reward: 0,
