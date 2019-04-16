@@ -18,8 +18,6 @@ use client::{backend::Backend, blockchain::HeaderBackend};
 use crate::config::Roles;
 use consensus::BlockOrigin;
 use std::collections::HashSet;
-use std::thread;
-use std::time::Duration;
 use super::*;
 
 fn test_ancestor_search_when_common_is(n: usize) {
@@ -47,8 +45,7 @@ fn sync_peers_works() {
 	net.sync();
 	for peer in 0..3 {
 		// Assert peers is up to date.
-		let peers = net.peer(peer).peers.read();
-		assert_eq!(peers.len(), 2);
+		assert_eq!(net.peer(peer).peers.read().len(), 2);
 		// And then disconnect.
 		for other in 0..3 {
 			if other != peer {
@@ -77,9 +74,6 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
 	net.start();
-	net.route_fast();
-	thread::sleep(Duration::from_millis(100));
-	net.route_fast();
 	for peer in 0..3 {
 		// Online
 		assert!(!net.peer(peer).is_offline());
@@ -101,7 +95,6 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 				net.peer(peer).on_disconnect(net.peer(other));
 			}
 		}
-		thread::sleep(Duration::from_millis(100));
 		assert!(net.peer(peer).is_offline());
 		assert!(!net.peer(peer).is_major_syncing());
 	}
@@ -115,9 +108,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	// Generate blocks.
 	net.peer(2).push_blocks(100, false);
 	net.start();
-	net.route_fast();
-	thread::sleep(Duration::from_millis(100));
-	net.route_fast();
+	net.sync_step();
 
 	// Peer 1 is major-syncing.
 	assert!(net.peer(1).is_major_syncing());
@@ -125,7 +116,6 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	// Disconnect peer 1 form everyone else.
 	net.peer(1).on_disconnect(net.peer(0));
 	net.peer(1).on_disconnect(net.peer(2));
-	thread::sleep(Duration::from_millis(100));
 
 	// Peer 1 is not major-syncing.
 	assert!(!net.peer(1).is_major_syncing());
@@ -362,7 +352,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 	let mut disconnected = HashSet::new();
 	disconnected.insert(0);
 	disconnected.insert(2);
-	net.sync_with_disconnected(disconnected);
+	net.sync_with(true, Some(disconnected));
 
 	// peer 0 has the best chain
 	// peer 1 has the best chain

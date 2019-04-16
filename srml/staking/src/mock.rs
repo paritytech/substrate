@@ -101,7 +101,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
-	fare: bool,
+	fair: bool,
 }
 
 impl Default for ExtBuilder {
@@ -116,7 +116,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
-			fare: true
+			fair: true
 		}
 	}
 }
@@ -154,8 +154,8 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
-	pub fn fare(mut self, is_fare: bool) -> Self {
-		self.fare = is_fare;
+	pub fn fair(mut self, is_fair: bool) -> Self {
+		self.fair = is_fair;
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -205,7 +205,7 @@ impl ExtBuilder {
 			stakers: if self.validator_pool {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * if self.fair { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
 					(31, 30, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					(41, 40, balance_factor * 1000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					// nominator
@@ -214,7 +214,8 @@ impl ExtBuilder {
 			} else {
 				vec![
 					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
-					(21, 20, balance_factor * if self.fare { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * if self.fair { 1000 } else { 2000 }, StakerStatus::<AccountIdType>::Validator),
+					(31, 30, 1, StakerStatus::<AccountIdType>::Validator),
 					// nominator
 					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![11, 21]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]

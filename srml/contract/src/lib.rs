@@ -128,7 +128,7 @@ pub struct AccountInfo {
 	/// unique ID for the subtree encoded as a byte
 	pub trie_id: TrieId,
 	/// the size of stored value in octet
-	pub current_mem_stored: u64,
+	pub storage_size: u64,
 }
 
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context)
@@ -405,6 +405,9 @@ decl_event! {
 		/// A call was dispatched from the given account. The bool signals whether it was
 		/// successful execution or not.
 		Dispatched(AccountId, bool),
+
+		/// An event from contract of account.
+		Contract(AccountId, Vec<u8>),
 	}
 }
 
@@ -450,9 +453,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<DirectAccountDb as AccountDb<T>>::get_account_info(&DirectAccountDb, who).map(|subtrie| {
-			child::kill_storage(&subtrie.trie_id);
-		});
+		<AccountInfoOf<T>>::get(who).map(|info| child::kill_storage(&info.trie_id));
 	}
 }
 
@@ -505,6 +506,12 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte returned.
 	pub return_data_per_byte_cost: Gas,
 
+	/// Gas cost to deposit an event; the per-byte portion.
+	pub event_data_per_byte_cost: Gas,
+
+	/// Gas cost to deposit an event; the base.
+	pub event_data_base_cost: Gas,
+
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
 
@@ -520,6 +527,10 @@ pub struct Schedule<Gas> {
 	/// What is the maximal memory pages amount is allowed to have for
 	/// a contract.
 	pub max_memory_pages: u32,
+
+	/// Whether the `ext_println` function is allowed to be used contracts.
+	/// MUST only be enabled for `dev` chains, NOT for production chains
+	pub enable_println: bool,
 }
 
 impl<Gas: As<u64>> Default for Schedule<Gas> {
@@ -530,10 +541,13 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			grow_mem_cost: Gas::sa(1),
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),
+			event_data_per_byte_cost: Gas::sa(1),
+			event_data_base_cost: Gas::sa(1),
 			sandbox_data_read_cost: Gas::sa(1),
 			sandbox_data_write_cost: Gas::sa(1),
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
+			enable_println: false,
 		}
 	}
 }

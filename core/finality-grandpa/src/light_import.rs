@@ -23,7 +23,7 @@ use client::{
 	CallExecutor, Client,
 	backend::{AuxStore, Backend},
 	blockchain::HeaderBackend,
-	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
+	error::Error as ClientError,
 };
 use parity_codec::{Encode, Decode};
 use consensus_common::{
@@ -370,7 +370,7 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	// BadJustification error means that justification has been successfully decoded, but
 	// it isn't valid within current authority set
 	let justification = match justification {
-		Err(ClientError(ClientErrorKind::BadJustification(_), _)) => {
+		Err(ClientError::BadJustification(_)) => {
 			trace!(
 				target: "finality",
 				"Justification for {} is not valid within current authorities set. Requesting finality proof.",

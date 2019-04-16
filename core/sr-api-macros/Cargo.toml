@@ -1,6 +1,6 @@
 [package]
 name = "sr-api-macros"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
@@ -8,8 +8,8 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-quote = "0.6"
-syn = { version = "^0.15.22", features = [ "full", "fold", "extra-traits", "visit" ] }
+quote = "0.6.12"
+syn = { version = "^0.15.30", features = [ "full", "fold", "extra-traits", "visit" ] }
 proc-macro2 = "0.4"
 blake2-rfc = "0.2"
 proc-macro-crate = "0.1.3"

@@ -35,7 +35,7 @@ use log::{trace, warn};
 
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
-	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
+	error::{Error as ClientError, Result as ClientResult},
 	light::fetcher::{FetchChecker, RemoteCallRequest},
 	ExecutionStrategy, NeverOffchainExt,
 };
@@ -74,9 +74,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 			ExecutionStrategy::NativeElseWasm,
 			NeverOffchainExt::new(),
 		).and_then(|call_result| Decode::decode(&mut &call_result[..])
-			.ok_or_else(|| ClientError::from(ClientErrorKind::CallResultDecode(
+			.ok_or_else(|| ClientError::CallResultDecode(
 				"failed to decode GRANDPA authorities set proof".into(),
-			))))
+			)))
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>> {
@@ -114,9 +114,9 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<FetchChecker<B
 		self.check_execution_proof(&request, proof)
 			.and_then(|authorities| {
 				let authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
-					.ok_or_else(|| ClientError::from(ClientErrorKind::CallResultDecode(
+					.ok_or_else(|| ClientError::CallResultDecode(
 						"failed to decode GRANDPA authorities set proof".into(),
-					)))?;
+					))?;
 				Ok(authorities.into_iter().collect())
 			})
 	}
@@ -162,7 +162,7 @@ impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofPro
 		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
 			.ok_or_else(|| {
 				warn!(target: "finality", "Unable to decode finality proof request.");
-				ClientError::from(ClientErrorKind::Backend(format!("Invalid finality proof request")))
+				ClientError::Backend(format!("Invalid finality proof request"))
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
@@ -276,17 +276,17 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	// that it only asks peers that know about whole blocks range
 	let end_number = blockchain.expect_block_number_from_id(&BlockId::Hash(end))?;
 	if begin_number + One::one() > end_number {
-		return Err(ClientErrorKind::Backend(
+		return Err(ClientError::Backend(
 			format!("Cannot generate finality proof for invalid range: {}..{}", begin_number, end_number),
-		).into());
+		));
 	}
 
 	// early-return if we sure that the block is NOT a part of canonical chain
 	let canonical_begin = blockchain.expect_block_hash_from_id(&BlockId::Number(begin_number))?;
 	if begin != canonical_begin {
-		return Err(ClientErrorKind::Backend(
+		return Err(ClientError::Backend(
 			format!("Cannot generate finality proof for non-canonical block: {}", begin),
-		).into());
+		));
 	}
 
 	// iterate justifications && try to prove finality
@@ -437,11 +437,11 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 {
 	// decode finality proof
 	let proof = FinalityProof::<Block::Header>::decode(&mut &remote_proof[..])
-		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode finality proof".into()))?;
+		.ok_or_else(|| ClientError::BadJustification("failed to decode finality proof".into()))?;
 
 	// empty proof can't prove anything
 	if proof.is_empty() {
-		return Err(ClientErrorKind::BadJustification("empty proof of finality".into()).into());
+		return Err(ClientError::BadJustification("empty proof of finality".into()));
 	}
 
 	// iterate and verify proof fragments
@@ -454,7 +454,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 			let has_unknown_headers = !proof_fragment.unknown_headers.is_empty();
 			let has_new_authorities = proof_fragment.authorities_proof.is_some();
 			if has_unknown_headers || !has_new_authorities {
-				return Err(ClientErrorKind::BadJustification("redundant proof of finality".into()).into());
+				return Err(ClientError::BadJustification("redundant proof of finality".into()));
 			}
 		}
 
@@ -492,7 +492,7 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 	// verify justification using previous authorities set
 	let (mut current_set_id, mut current_authorities) = authority_set.extract_authorities();
 	let justification: J = Decode::decode(&mut &proof_fragment.justification[..])
-		.ok_or_else(|| ClientError::from(ClientErrorKind::JustificationDecode))?;
+		.ok_or_else(|| ClientError::JustificationDecode)?;
 	justification.verify(current_set_id, &current_authorities)?;
 
 	// and now verify new authorities proof (if provided)
@@ -552,9 +552,7 @@ pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 		set_id: u64,
 		authorities: &[(AuthorityId, u64)],
 	) -> ClientResult<Self> {
-		let justification = Self::decode(&mut &**justification).ok_or_else(|| {
-			ClientError::from(ClientErrorKind::JustificationDecode)
-		})?;
+		let justification = Self::decode(&mut &**justification).ok_or(ClientError::JustificationDecode)?;
 		justification.verify(set_id, authorities)?;
 		Ok(justification)
 	}
@@ -616,7 +614,7 @@ pub(crate) mod tests {
 			if self.0 {
 				Ok(())
 			} else {
-				Err(ClientErrorKind::BadJustification("test".into()).into())
+				Err(ClientError::BadJustification("test".into()))
 			}
 		}
 	}

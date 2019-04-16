@@ -87,34 +87,34 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
-				import_queue::<_, _, _, Pair>(
-					SlotDuration::get_or_compute(&*client)?,
-					client.clone(),
-					None,
-					None,
-					None,
-					client,
-					NothingExtra,
-					config.custom.inherent_data_providers.clone(),
-					true,
-				).map_err(Into::into)
-			}},
+					import_queue::<_, _, _, Pair>(
+						SlotDuration::get_or_compute(&*client)?,
+						client.clone(),
+						None,
+						None,
+						None,
+						client,
+						NothingExtra,
+						config.custom.inherent_data_providers.clone(),
+					).map_err(Into::into)
+				}
+			},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-				import_queue::<_, _, _, Pair>(
-					SlotDuration::get_or_compute(&*client)?,
-					client.clone(),
-					None,
-					None,
-					None,
-					client,
-					NothingExtra,
-					config.custom.inherent_data_providers.clone(),
-					true,
-				).map_err(Into::into)
-			}},
+					import_queue::<_, _, _, Pair>(
+						SlotDuration::get_or_compute(&*client)?,
+						client.clone(),
+						None,
+						None,
+						None,
+						client,
+						NothingExtra,
+						config.custom.inherent_data_providers.clone(),
+					).map_err(Into::into)
+				}
+			},
 		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {
 			Ok(None)
 		}},

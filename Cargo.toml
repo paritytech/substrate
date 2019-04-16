@@ -4,7 +4,7 @@ path = "node/src/main.rs"
 
 [package]
 name = "substrate"
-version = "0.11.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 edition = "2018"
@@ -25,7 +25,9 @@ members = [
 	"core/client/db",
 	"core/consensus/common",
 	"core/consensus/aura",
+	"core/consensus/babe",
 	"core/consensus/rhd",
+	"core/consensus/slots",
 	"core/executor",
 	"core/finality-grandpa",
 	"core/finality-grandpa/primitives",
@@ -100,4 +102,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
