@@ -22,13 +22,13 @@ use parity_codec::{Encode, Decode};
 use primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
 
-/// A means of determining if a vote is past pass threshold.
+/// A means of determining if a vote is passed its pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum VoteThreshold {
 	/// A supermajority of approvals is needed to pass this vote.
 	SuperMajorityApprove,
-	/// A supermajority of rejects is needed to fail this vote.
+	/// A supermajority of rejections is needed to fail this vote.
 	SuperMajorityAgainst,
 	/// A simple majority of approvals is needed to pass this vote.
 	SimpleMajority,

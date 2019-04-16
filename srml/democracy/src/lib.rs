@@ -14,96 +14,101 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # Democractic System Module
+//! # Democracy Module
 //!
 //! ## Overview
-//! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! The Democratic System Module handles administration of general stakeholder voting.
+//! The Democracy Module handles administration of general stakeholder voting.
 //!
-//! To use it in your runtime, you need to implement the session [`Trait`](./trait.Trait.html).
-//!
-//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+//! - [`democracy::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //! ### Terminology
-//! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! #### Public Proposal
+//! - **Proposal:** A spending proposal in which the proposer proposes to send funds to a beneficiary account.
+//! The proposer must attach a bond with the proposal, which will be taken if it is rejected.
+//! - **Referendum:** A mechanism for voting on proposals. A referendum includes a proposal, as well as a block
+//! number when voting will end, a threshold mechanism, and a delay (in blocks) to wait before deploying a
+//! proposal (if successfully passed).
+//! - **Vote threshold mechanisms:** Different criteria for passing or rejecting a referendum (e.g. supermajority for,
+//! supermajority against, simple majority).
 //!
-//! * **Public proposal creation** Created a public proposal using the `propose` call that anyone may execute by signing and submitting an extrinsic.
-//! * **Public proposal validity** The proposer's deposit must be above the minimum required amount and they must have sufficient account balance to transfer it into a reserve.
-//! * **Public proposal sponsorship** Sponsor (second) a public proposal using the `second` call that anyone may execute by signing and submitting an extrinsic.
-//! * **Public proposal sponsorship validity** The proposal to be sponsored must exist and a deposit from its proposer must have been locked away. The sponsor must have sufficient account balance to transfer a matching deposit into a reserve.
-//! * **Public proposal elevation** Winning public proposals are elevated to the Table of Referenda as a Public Referendum.
-//! * **Public proposal elevation process** If checking the configured `LaunchPeriod` in blocks indicates that a new public referendum should be launched then we find and remove from `PublicProps` the public proposal index with the largest locked deposit amount and declare it the winning proposal. The account id's that locked a deposit into this winning proposal that are stored in `DepositOf` are refunded the deposit they reserved. The `Tabled` event is then emitted to indicate that the winning proposal is being elevated to the Table of Referenda. Lastly it starts a public referendum with the winning proposal using a voting threshold of 'super majority approve'.
+//! #### Proposal Terminology
 //!
-//! #### Public Referendum
+//! - **Validity:** The proposer's deposit must be above the minimum required amount and must
+//!  have sufficient account balance to transfer it into a reserve.
+//! - **Sponsorship:** Sponsor (second) a public proposal using the `second` call that anyone may
+//!  execute by signing and submitting an extrinsic.
+//! - **Sponsorship validity:** For a second to be valid, the sponsored proposal must exist and a
+//!  deposit from its proposer must have been reserved. The sponsor must have sufficient account balance
+//!  to reserve a matching deposit.
+//! - **Elevation process:** If checking the configured `LaunchPeriod` indicates that a new public referendum
+//!  should be launched, then we find the public proposal index with the largest locked deposit amount
+//!  and declare it the winning proposal. This proposal is removed from `PublicProps` and becomes a public referendum.
+//!  The accounts that locked a deposit into this winning proposal are refunded their reserved deposit.
 //!
-//! * **Public referendum start** Start a public referendum using the `start_referendum` call that anyone may execute by signing and submitting an extrinsic. It is allocated the next referendum index that is mapped to its corresponding voting period expiry block, the proposal it relates to, and the given voting threshold.
-//! * **Public referendum cancellation** Remove all information about a referendum index.
-//! * **Public referendum validity** The new to be started must not have a voting period that ends before any existing referendum.
-//! * **Public referendum voting** Voters may vote on a public referendum index using the `vote` call that anyone may execute by signing and submitting an extrinsic. Voters and their votes (yay or nay) for a public referendum index are stored in `VoteOf` and `VotersFor`.
-//! * **Public referendum vote delegation** Voters may delegate and undelegate their votes for an amount of lock periods.
-//! * **Public referendum proxy account configuration** Stash accounts (see Staking Module) may add or remove a proxy account.
-//! * **Public referendum proxy account voting** Voters may vote on a public proposal on behalf of a stash account (see Staking Module).
-//! * **Public referendum vote validity** The referendum index being voted on must be an active referendum index of the `ReferendumInfoOf` mapping. The voter (transactor) must have a balance above zero to signal approval.
-//! * **Public referendum maturity** Public referendums that are expiring at the current block.
-//! * **Public referendum vote tallying, passing and execution** Searching for maturing public referendums to tally their votes by calling `maturing_referendums_at`, then removing them from the Table of Referenda. Pass and execute each public referendum if their vote tally meets their vote threshold, otherwise do not pass or execute them. Lastly increment `NextTally` to determine the next public referendum index to have its votes tallied.
+//! #### Referenda Terminology
 //!
-//! #### Other Terminology
-//!
-//! In modules of the SRML, the `on_finalise` signature is used in the module declaration to run anything that needs to be done at the end of the block. In the Democracy System Module it calls a private function `end_block` with the current block as an argument.
-//!
-//! To ensure that information about the origin where a dispatch initiated is a signed account we use `ensure_signed`.
+//! - **Start:** Start a public referendum using the `start_referendum` call that anyone may execute
+//!  by signing and submitting an extrinsic. It is allocated the next referendum index that is mapped to its
+//!  corresponding voting period expiry block, the proposal it relates to, and the given voting threshold.
+//! - **Cancellation:** Remove all information about a referendum.
+//! - **Validity:** The new referendum must not have a voting period that ends before any existing referenda.
+//! - **Voting:** Voters may vote on a public referendum using the `vote` call that anyone may execute
+//!  by signing and submitting an extrinsic. Voters and their votes (yay or nay) for a public referendum
+//!  are stored in `VoteOf` and `VotersFor`.
+//! - **Vote delegation:** Voters may delegate and undelegate their votes for an amount of lock periods.
+//! - **Proxy account:** Stash accounts (see the [Staking module](../srml_staking/index.html)) may add or
+//!  remove a proxy account to vote on a public referendum on behalf of the stash account.
+//! - **Vote validity:** The referendum being voted on must be an active referendum index of the
+//!  `ReferendumInfoOf` mapping. The voter (transactor) must have a balance above zero to signal approval.
+//! - **Maturity:** A mature referendum is one that expires at the current block.
+//! - **Vote tallying, passing, and execution:** Searching for maturing public referenda to
+//!  tally their votes by calling `maturing_referendums_at`, then removing them from the Table of Referenda.
+//!  Pass and execute each public referendum if its vote tally meets its vote threshold, otherwise do not
+//!  pass or execute them. Lastly increment `NextTally` to determine the next public referendum index to tally.
 //!
 //! ### Goals
 //!
-//! The Democratic System Module in Substrate is designed to make the following possible:
+//! The Democracy Module in Substrate is designed to make the following possible:
 //!
-//! * Create and Sponsor Public Proposals.
-//! * Elevate Public Proposals to the Table of Referenda.
-//! * Start and Cancel Public Referendums.
-//! * Vote on Public Referendums.
-//! * Delegate or Proxy Voting rights of Public Referendums.
-//! * Tally Votes of Public Referendums.
-//! * Pass and Execute Maturing Public Referendums.
+//! - Create and sponsor public proposals.
+//! - Elevate public proposals to the Table of Referenda.
+//! - Start and cancel public referenda.
+//! - Vote on public referenda.
+//! - Delegate proxy voting rights of public referenda.
+//! - Tally votes of public referenda.
+//! - Pass and execute maturing public referenda.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! * `propose` - TODO.
-//! * `second` - TODO.
-//! * `vote` - TODO.
-//! * `proxy_vote` - TODO.
-//! * `start_referendum` - TODO.
-//! * `cancel_referendum` - TODO.
-//! * `cancel_queued` - TODO.
-//! * `on_finalize` - TODO.
-//! * `set_proxy` - TODO.
-//! * `resign_proxy` - TODO.
-//! * `remove_proxy` - TODO.
-//! * `delegate` - TODO.
-//! * `undelegate` - TODO.
-//!
-//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//! - `propose` - Propose a sensitive action to be taken.
+//! - `second` - Second (sponsor) a proposal.
+//! - `vote` - Vote in a referendum.
+//! - `proxy_vote` - Vote in a referendum on behalf of a stash.
+//! - `start_referendum` - Start a referendum.
+//! - `cancel_referendum` - Remove a referendum.
+//! - `cancel_queued` - Cancel a proposal queued for enactment.
+//! - `on_finalize` - Called when a block is finalized.
+//! - `set_proxy` - Specify a proxy. Called by the stash.
+//! - `resign_proxy` - Clear the proxy. Called by the proxy.
+//! - `remove_proxy` - Clear the proxy. Called by the stash.
+//! - `delegate` - Delegate vote.
+//! - `undelegate` - Undelegate vote.
 //!
 //! ### Public Functions
 //!
-//! * `locked_for` - TODO.
-//! * `is_active_referendum` - TODO.
-//! * `active_referendums` - TODO.
-//! * `maturing_referendums_at` - TODO.
-//! * `tally` - TODO.
-//! * `tally_delegation` - TODO.
-//! * `delegated_votes` - TODO.
-//! * `force_proxy` - TODO.
-//! * `internal_start_referendum` - TODO.
-//! * `internal_cancel_referendum` - TODO.
-//!
-//! Please refer to the [`Module`](https://crates.parity.io/srml_democracy/struct.Module.html) struct for details on publicly available functions.
-//!
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! - `locked_for` - Get the balance locked in support of a proposal.
+//! - `is_active_referendum` - Return true if given index corresponds to an on-going referendum.
+//! - `active_referendums` - Get all referenda that are currently active and their corresponding info.
+//! - `maturing_referendums_at` - Get all referenda ready for tally at block `n`.
+//! - `tally` - Tally the votes for the current proposal.
+//! - `force_proxy` - Forcibly insert a proxy voter for a stash account.
+//! - `internal_start_referendum` - Start a referendum. Can be called directly by the council.
+//! - `internal_cancel_referendum` - Remove a referendum. Can be called directly by the council.
 //!
 //! ## Usage
 //!
@@ -111,14 +116,23 @@
 //!
 //! Import the Democracy module and types and derive your runtime's configuration traits from the Democracy module trait.
 //!
-//! ### Simple Code Snippet
+//! ### Example from the SRML
 //!
-//! See the tests contained in files in this module's directory for simple code snippets that may make this module's functionalities clearer.
+//! The [Council module](../srml_council/index.html) uses the Democracy module for voting.
 //!
-//! ## Related Modules
+//! ```
+//! pub trait Trait: democracy::Trait { }
 //!
-//! * [`System`](../srml_system/index.html)
-//! * [`Support`](../srml_support/index.html)
+//! fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
+//! 	let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
+//! 	Self::do_set_approvals(who, votes, index)
+//! }
+//! # fn main(){}
+//! ```
+//!
+//! ## Genesis Config
+//!
+//! The Democracy module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -211,7 +225,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
 
-		/// Propose a sensitive action to be taken.
+		/// Second (sponsor) a proposal.
 		fn second(origin, #[compact] proposal: PropIndex) {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
@@ -222,14 +236,14 @@ decl_module! {
 			<DepositOf<T>>::insert(proposal, deposit);
 		}
 
-		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
+		/// Vote in a referendum. If `vote.is_aye`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_vote(who, ref_index, vote)
 		}
 
-		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact the proposal;
+		/// Vote in a referendum on behalf of a stash. If `vote.is_aye`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		fn proxy_vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
@@ -257,6 +271,8 @@ decl_module! {
 			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
 		}
 
+		/// Called when a block is finalized. Will launch a new referendum if it is time, finish
+		/// any referenda that are ready to be tallied, and enact proposals that are ready.
 		fn on_finalize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				runtime_io::print(e);
@@ -332,8 +348,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
 
 		/// The number of (public) proposals that have been made so far.
-		pub PublicPropCount get(public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
-		/// The public proposals. Unsorted.
+		pub PublicPropCount get(public_prop_count) build(|_| 0 as PropIndex): PropIndex;
+		/// The public proposals. Unsorted. `T::AccountId` refers to the account that proposed.
 		pub PublicProps get(public_props): Vec<(PropIndex, T::Proposal, T::AccountId)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(deposit_of): map PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
@@ -343,13 +359,14 @@ decl_storage! {
 		pub MinimumDeposit get(minimum_deposit) config(): BalanceOf<T>;
 		/// The delay before enactment for all public referenda.
 		pub PublicDelay get(public_delay) config(): T::BlockNumber;
-		/// The maximum number of additional lock periods a voter may offer to strengthen their vote. Multiples of `PublicDelay`.
+		/// The maximum number of additional lock periods a voter may offer to strengthen
+		/// his or her vote. Multiples of `PublicDelay`.
 		pub MaxLockPeriods get(max_lock_periods) config(): LockPeriods;
 
 		/// How often (in blocks) to check for new votes.
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
-		/// The next free referendum index, aka the number of referendums started so far.
+		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// The next referendum index that should be tallied.
 		pub NextTally get(next_tally) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -391,7 +408,7 @@ decl_event!(
 impl<T: Trait> Module<T> {
 	// exposed immutables.
 
-	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
+	/// Get the balance locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
 		Self::deposit_of(proposal).map(|(d, l)| d * BalanceOf::<T>::sa(l.len() as u64))
@@ -402,7 +419,7 @@ impl<T: Trait> Module<T> {
 		<ReferendumInfoOf<T>>::exists(ref_index)
 	}
 
-	/// Get all referendums currently active.
+	/// Get all referenda that are currently active and their corresponding info.
 	pub fn active_referendums() -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
@@ -411,7 +428,7 @@ impl<T: Trait> Module<T> {
 			.collect()
 	}
 
-	/// Get all referendums ready for tally at block `n`.
+	/// Get all referenda ready for tally at block `n`.
 	pub fn maturing_referendums_at(n: T::BlockNumber) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
@@ -421,7 +438,8 @@ impl<T: Trait> Module<T> {
 			.collect()
 	}
 
-	/// Get the voters for the current proposal.
+	/// Tally the votes for the current proposal. Returns a tuple with weighted votes for,
+	/// weighted votes against, and total capital represented in the vote.
 	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		let (approve, against, capital): (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) = Self::voters_for(ref_index).iter()
 			.map(|voter| (
@@ -439,7 +457,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get the delegated voters for the current proposal.
-	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done.
+	/// May go into a worker once https://github.com/paritytech/substrate/issues/1458 is done.
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
@@ -473,13 +491,18 @@ impl<T: Trait> Module<T> {
 
 	// Exposed mutables.
 
+	/// Forcibly insert a proxy voter for a stash account.
 	#[cfg(feature = "std")]
 	pub fn force_proxy(stash: T::AccountId, proxy: T::AccountId) {
 		<Proxy<T>>::insert(proxy, stash)
 	}
 
 	/// Start a referendum. Can be called directly by the council.
-	pub fn internal_start_referendum(proposal: T::Proposal, threshold: VoteThreshold, delay: T::BlockNumber) -> result::Result<ReferendumIndex, &'static str> {
+	pub fn internal_start_referendum(
+		proposal: T::Proposal,
+		threshold: VoteThreshold,
+		delay: T::BlockNumber
+	) -> result::Result<ReferendumIndex, &'static str> {
 		<Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, threshold, delay)
 	}
 
@@ -502,7 +525,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Start a referendum
+	/// Start a referendum.
 	fn inject_referendum(
 		end: T::BlockNumber,
 		proposal: T::Proposal,
@@ -535,6 +558,8 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Executed(index, ok));
 	}
 
+	/// Finds the proposal that will be the next referendum, unreserves the currency of
+	/// the depositors, and opens the voting period.
 	fn launch_next(now: T::BlockNumber) -> Result {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
@@ -557,7 +582,13 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn bake_referendum(now: T::BlockNumber, index: ReferendumIndex, info: ReferendumInfo<T::BlockNumber, T::Proposal>) -> Result {
+	/// Tally the votes for a referendum, apply appropriate currency locks to voters, clear the
+	/// referendum from the table, and either enact the referendum or add it to `DispatchQueue`.
+	fn bake_referendum(
+		now: T::BlockNumber,
+		index: ReferendumIndex,
+		info: ReferendumInfo<T::BlockNumber, T::Proposal>
+	) -> Result {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
