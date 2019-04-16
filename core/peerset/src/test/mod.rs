@@ -7,6 +7,8 @@ use std::fmt::{self, Debug};
 
 #[test]
 fn test_random_api_use() {
+
+    #[derive(Eq, PartialEq)]
 	enum TestAction {
 		AddReservedPeer,
 		RemoveReservedPeer,
@@ -76,7 +78,6 @@ fn test_random_api_use() {
 	for i in 1..150 {
 		let peer_id = PeerId::random();
 		let index = IncomingIndex(i);
-		println!("Peer: {:?} {:?}", peer_id, index);
 		index_to_peer.insert(index, peer_id.clone());
 		discovered.push(peer_id.clone());
 		if i > 75 {
@@ -145,7 +146,6 @@ fn test_random_api_use() {
 	loop {
 		let message = match next_message(peerset) {
 			Ok((message, p)) => {
-				println!("Message {:?}", message);
 				peerset = p;
 				message
 			},
@@ -196,8 +196,20 @@ fn test_random_api_use() {
 						None
 					}
 				};
-				println!("ID: {:?}", peer_id);
 				if let Some(Message::Connect(_)) = last_received_messages.get(&peer_id) {
+                    if let Some(action_sequence) = action_sequence.clone() {
+                        let mut actions = action_sequence.into_iter();
+                        let drop_position = actions.clone().rposition(|x| x == &TestAction::DropPeer);
+                        let incoming_position = actions.rposition(|x| x == &TestAction::Incoming(index));
+                        match (drop_position, incoming_position) {
+                            (Some(drop), Some(incoming)) => {
+
+                                assert!(drop < incoming);
+                                continue
+                            },
+                            _ => {}
+                        }
+                    }
 					panic!("Unexpected Accept message, after a Connect message, sequence of actions: {:?}", action_sequence);
 				}
 				last_received_messages.insert(peer_id.clone(), Message::Accept(index));
