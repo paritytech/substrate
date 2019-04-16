@@ -38,6 +38,17 @@ mod list_storage;
 /// Minimal post-finalization age age of finalized blocks before they'll pruned.
 const PRUNE_DEPTH: u64 = 1024;
 
+/// The type of entry that is inserted to the cache.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EntryType {
+	/// Non-final entry.
+	NonFinal,
+	/// Final entry.
+	Final,
+	/// Genesis entry (inserted during cache initialization).
+	Genesis,
+}
+
 /// Block identifier that holds both hash and number.
 #[derive(Clone, Debug, Encode, Decode, PartialEq)]
 pub struct ComplexBlockId<Block: BlockT> {
@@ -190,7 +201,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
 		data_at: HashMap<CacheKeyId, Vec<u8>>,
-		is_final: bool,
+		entry_type: EntryType,
 	) -> ClientResult<Self> {
 		assert!(self.cache_at_op.is_empty());
 
@@ -211,7 +222,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				parent.clone(),
 				block.clone(),
 				value.or(cache.value_at_block(&parent)?),
-				is_final,
+				entry_type,
 			)?;
 			if let Some(op) = op {
 				self.cache_at_op.insert(name, op);
@@ -222,8 +233,10 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		data_at.into_iter().try_for_each(|(name, data)| insert_op(name, Some(data)))?;
 		missed_caches.into_iter().try_for_each(|name| insert_op(name, None))?;
 
-		if is_final {
-			self.best_finalized_block = Some(block);
+		match entry_type {
+			EntryType::Final | EntryType::Genesis =>
+				self.best_finalized_block = Some(block),
+			EntryType::NonFinal => (),
 		}
 
 		Ok(self)
@@ -273,7 +286,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			ComplexBlockId::new(Default::default(), Zero::zero()),
 			ComplexBlockId::new(genesis_hash, Zero::zero()),
 			cache_contents,
-			true,
+			EntryType::Genesis,
 		)?;
 		let tx_ops = tx.into_ops();
 		db.write(dbtx).map_err(db_err)?;
