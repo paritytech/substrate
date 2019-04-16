@@ -247,7 +247,7 @@ pub fn refund_unused_gas<T: Trait>(
 	// also has T::Gas type.
 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
-	// Refund gas left by the price it was bought.
+	// Refund gas left by the price it was bought at.
 	let refund = <T::Gas as As<BalanceOf<T>>>::as_(gas_left) * gas_meter.gas_price;
 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
