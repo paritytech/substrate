@@ -231,8 +231,10 @@ pub struct LocalizedSignature {
 impl Signature {
 	/// A new instance from the given 64-byte `data`.
 	///
-	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
-	/// you are certain that the array actually is a signature. GIGO!
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use
+	/// it if you are certain that the array actually is a signature, or if you
+	/// immediately verify the signature.  All functions that verify signatures
+	/// will fail if the `Signature` is not actually a valid signature.
 	pub fn from_raw(data: [u8; 64]) -> Signature {
 		Signature(data)
 	}

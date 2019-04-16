@@ -31,7 +31,7 @@ use hash_db::Hasher;
 use crate::backend::RemoteBackend;
 use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::{RuntimeVersion, NativeVersion};
 use heapsize::HeapSizeOf;
@@ -126,7 +126,7 @@ where
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
 		if !changes.is_empty() || initialized_block.is_some() {
-			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
+			return Err(ClientError::NotAvailableOnLightClient.into());
 		}
 
 		self.call(at, method, call_data, (&execution_manager).into(), side_effects_handler).map(NativeOrEncoded::Encoded)
@@ -135,7 +135,7 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		let call_result = self.call(id, "version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
-			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
+			.ok_or_else(|| ClientError::VersionInvalid.into())
 	}
 
 	fn call_at_state<
@@ -156,7 +156,7 @@ where
 		_native_call: Option<NC>,
 		_side_effects_handler: Option<&mut O>,
 	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
@@ -166,7 +166,7 @@ where
 		_method: &str,
 		_call_data: &[u8]
 	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
@@ -275,7 +275,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
+			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => CallExecutor::contextual_call::<
 				_,
 				_,
@@ -296,7 +296,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
+			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 		}
 	}
 
@@ -346,7 +346,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into())
+			).map_err(|e| ClientError::Execution(Box::new(e.to_string())))
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(

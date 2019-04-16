@@ -1,0 +1,19 @@
+[package]
+name = "substrate-consensus-babe-primitives"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Primitives for BABE consensus"
+edition = "2018"
+
+[dependencies]
+substrate-client = { path = "../../../client", default-features = false }
+runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
+slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
+parity-codec = "^3.4.0"
+
+[features]
+default = ["std"]
+std = [
+	"substrate-client/std",
+	"slots",
+]

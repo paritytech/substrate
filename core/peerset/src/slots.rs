@@ -162,14 +162,14 @@ impl Slots {
 
 	/// Marks given peer as a reserved one.
 	pub fn mark_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.common.remove(peer_id) {
+		if self.common.remove(peer_id).is_some() {
 			self.reserved.insert(peer_id.clone(), ());
 		}
 	}
 
 	/// Marks given peer as not reserved one.
 	pub fn mark_not_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.reserved.remove(peer_id) {
+		if self.reserved.remove(peer_id).is_some() {
 			self.common.insert(peer_id.clone(), ());
 		}
 	}
@@ -197,7 +197,7 @@ impl Slots {
 #[cfg(test)]
 mod tests {
 	use libp2p::PeerId;
-	use serde_json::to_string_pretty;
+	use serde_json::json;
 	use super::{Slots, SlotType};
 
 	#[test]
@@ -211,19 +211,13 @@ mod tests {
 		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
 		slots.add_peer(common_peer.clone(), SlotType::Common);
 
-		let expected = format!(r#"{{
-  "common": [
-    {:?}
-  ],
-  "max_slots": 10,
-  "reserved": [
-    {:?},
-    {:?}
-  ]
-}}"#, common_peer.to_base58(), reserved_peer.to_base58(), reserved_peer2.to_base58());
+		let expected = json!({
+			"max_slots": 10,
+			"reserved": vec![reserved_peer.to_base58(), reserved_peer2.to_base58()],
+			"common": vec![common_peer.to_base58()],
+		});
 
-		let s = to_string_pretty(&slots.debug_info()).unwrap();
-		assert_eq!(expected, s);
+		assert_eq!(expected, slots.debug_info());
 	}
 
 	#[test]
