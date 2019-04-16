@@ -604,6 +604,14 @@ mod tests {
 		fn kill(&self, key: &[u8]) {
 			self.borrow_mut().remove(key);
 		}
+
+		fn put_raw(&self, key: &[u8], value: &[u8]) {
+			self.borrow_mut().insert(key.to_owned(), value.to_owned());
+		}
+
+		fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+			self.borrow().get(key).cloned()
+		}
 	}
 
 	storage_items! {

@@ -185,9 +185,10 @@ decl_module! {
 			// Appending can only fail if `Events<T>` can not be decoded or
 			// when we try to insert more than `u32::max_value()` events.
 			// If one of these conditions is met, we just insert the new event.
-			let events = &[event];
-			if <Events<T>>::append(events).is_err() {
-				<Events<T>>::put(events.to_vec());
+			let events = [event];
+			if <Events<T>>::append(&events).is_err() {
+				let [event] = events;
+				<Events<T>>::put(vec![event]);
 			}
 		}
 	}
