@@ -112,7 +112,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			current_session_reward: 0,
 			validator_count: 7,
 			sessions_per_era: 12,
-			bonding_duration: 1,
+			bonding_duration: 12,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
