@@ -16,14 +16,14 @@
 
 //! # Contract Module
 //!
-//! The contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
-//! The supported dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
+//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+//! To use it in your runtime, you need to implement the [`contracts::Trait`](./trait.Trait.html).
 //!
 //! ## Overview
 //!
-//! This module extends accounts (see `Balances` module) to have smart-contract functionality.
-//! These "smart-contract accounts" have the ability to create smart-contracts and make calls to other contract
-//! and non-contract accounts.
+//! This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
+//! be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
+//! have the ability to create smart-contracts and make calls to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
 //! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
@@ -33,9 +33,8 @@
 //! This call can alter the storage entries of the smart-contract account, create new smart-contracts,
 //! or call other smart-contracts.
 //!
-//! Finally, when the `Balances` module determines an account is dead (i.e. account balance fell below the
-//! existential deposit), it reaps the account. This will delete the associated code and storage of the
-//! smart-contract account.
+//! Finally, when an account is reaped, its associated code and storage of the smart-contract account
+//! will also be deleted.
 //!
 //! ### Gas
 //!
@@ -57,28 +56,28 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * `put_code` - Stores the given binary Wasm code into the chains storage and returns its `code_hash`.
-//!
+//! * `put_code` - Stores the given binary Wasm code into the chain's storage and returns its `code_hash`.
 //! * `create` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
-//!
 //! * `call` - Makes a call to an account, optionally transferring some balance.
+//!
+//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
 //!
 //! ### Public functions
 //!
-//! See the [module](./struct.Module.html) for details on publicly available functions.
+//! See the [`Module`](./struct.Module.html) struct for details on publicly available functions.
 //!
 //! ## Usage
 //!
-//! The contract module is a work in progress. The following examples show how this contract module can be
+//! The Contract module is a work in progress. The following examples show how this Contract module can be
 //! used to create and call contracts.
 //!
-//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language which enables writing
+//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language that enables writing
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 //!
 //! ## Related Modules
-//! * [`Balances`](https://crates.parity.io/srml_balances/index.html)
 //!
+//! * [`Balances`](../srml_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -122,38 +121,38 @@ pub trait ComputeDispatchFee<Call, Balance> {
 }
 
 #[derive(Encode,Decode,Clone,Debug)]
-/// Information for managing an acocunt and its sub trie abstraction.
-/// This is the required info to cache for an account
+/// Information for managing an account and its sub trie abstraction.
+/// This is the required info to cache for an account.
 pub struct AccountInfo {
-	/// unique ID for the subtree encoded as a byte
+	/// Unique ID for the subtree encoded as a byte.
 	pub trie_id: TrieId,
-	/// the size of stored value in octet
+	/// The size of stored value in octet.
 	pub storage_size: u64,
 }
 
-/// Get a trie id (trie id must be unique and collision resistant depending upon its context)
-/// Note that it is different than encode because trie id should have collision resistance
-/// property (being a proper uniqueid).
+/// Get a trie id (trie id must be unique and collision resistant depending upon its context).
+/// Note that it is different than encode because trie id should be collision resistant
+/// (being a proper unique identifier).
 pub trait TrieIdGenerator<AccountId> {
-	/// get a trie id for an account, using reference to parent account trie id to ensure
-	/// uniqueness of trie id
-	/// The implementation must ensure every new trie id is unique: two consecutive call with the
+	/// Get a trie id for an account, using reference to parent account trie id to ensure
+	/// uniqueness of trie id.
+	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
 	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
-/// Get trie id from `account_id`
+/// Get trie id from `account_id`.
 pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
 
-/// This generator use inner counter for account id and apply hash over `AccountId +
-/// accountid_counter`
+/// This generator uses inner counter for account id and applies the hash over `AccountId +
+/// accountid_counter`.
 impl<T: Trait> TrieIdGenerator<T::AccountId> for TrieIdFromParentCounter<T>
 where
 	T::AccountId: AsRef<[u8]>
 {
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
-		// note that skipping a value due to error is not an issue here.
-		// we only need uniqueness, not sequence.
+		// Note that skipping a value due to error is not an issue here.
+		// We only need uniqueness, not sequence.
 		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
 
 		let mut buf = Vec::new();
@@ -175,7 +174,7 @@ pub trait Trait: timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	// As<u32> is needed for wasm-utils
+	// `As<u32>` is needed for wasm-utils
 	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<BalanceOf<Self>> + As<u64> + As<u32>;
 
 	/// A function type to get the contract address given the creator.
@@ -184,7 +183,7 @@ pub trait Trait: timestamp::Trait {
 	/// A function type that computes the fee for dispatching the given `Call`.
 	///
 	/// It is recommended (though not required) for this function to return a fee that would be taken
-	/// by executive module for regular dispatch.
+	/// by the Executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
 
 	/// trieid id generator
@@ -194,10 +193,10 @@ pub trait Trait: timestamp::Trait {
 	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
-/// Simple contract address determintator.
+/// Simple contract address determiner.
 ///
-/// Address calculated from the code (of the constructor), input data to the constructor
-/// and account id which requested the account creation.
+/// Address calculated from the code (of the constructor), input data to the constructor,
+/// and the account id that requested the account creation.
 ///
 /// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
@@ -218,7 +217,7 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// implementation of `MakePayment` for balances module does.
+/// the implementation of `MakePayment` for the Balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
@@ -248,7 +247,7 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Stores the given binary Wasm code into the chains storage and returns its `codehash`.
+		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
 		fn put_code(
 			origin,
@@ -310,7 +309,7 @@ decl_module! {
 
 			// Refund cost of the unused gas.
 			//
-			// NOTE: this should go after the commit to the storage, since the storage changes
+			// NOTE: This should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
 			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
@@ -327,9 +326,9 @@ decl_module! {
 		///
 		/// Creation is executed as follows:
 		///
-		/// - the destination address is computed based on the sender and hash of the code.
-		/// - the smart-contract account is created at the computed address.
-		/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
+		/// - The destination address is computed based on the sender and hash of the code.
+		/// - The smart-contract account is created at the computed address.
+		/// - The `ctor_code` is executed in the context of the newly-created account. Buffer returned
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
@@ -344,7 +343,7 @@ decl_module! {
 
 			// Commit the gas upfront.
 			//
-			// NOTE: it is very important to avoid any state changes before
+			// NOTE: It is very important to avoid any state changes before
 			// paying for the gas.
 			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
@@ -364,7 +363,7 @@ decl_module! {
 
 			// Refund cost of the unused gas.
 			//
-			// NOTE: this should go after the commit to the storage, since the storage changes
+			// NOTE: This should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
 			gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
@@ -441,9 +440,9 @@ decl_storage! {
 		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
-		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
+		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
-		/// The subtrie counter
+		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
 		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
@@ -494,7 +493,7 @@ pub struct Schedule<Gas> {
 	/// Version of the schedule.
 	pub version: u32,
 
-	/// Cost of putting a byte of code into the storage.
+	/// Cost of putting a byte of code into storage.
 	pub put_code_per_byte_cost: Gas,
 
 	/// Gas cost of a growing memory by single page.
@@ -518,14 +517,13 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte written to the sandbox memory.
 	pub sandbox_data_write_cost: Gas,
 
-	/// How tall the stack is allowed to grow?
+	/// Maximum allowed stack height.
 	///
 	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
 	/// how the stack frame cost is calculated.
 	pub max_stack_height: u32,
 
-	/// What is the maximal memory pages amount is allowed to have for
-	/// a contract.
+	/// Maximum number of memory pages allowed for a contract.
 	pub max_memory_pages: u32,
 
 	/// Whether the `ext_println` function is allowed to be used contracts.
