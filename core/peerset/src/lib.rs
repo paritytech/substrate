@@ -337,9 +337,7 @@ impl Peerset {
 
 	fn alloc_slots(&mut self) {
 		while let Some((peer_id, slot_type)) = self.data.discovered.pop_peer(self.data.reserved_only) {
-			let state = self.data.out_slots.add_peer(peer_id, slot_type);
-			println!("State: {:?}", state);
-			match state {
+			match self.data.out_slots.add_peer(peer_id, slot_type) {
 				SlotState::Added(peer_id) => {
 					self.message_queue.push_back(Message::Connect(peer_id));
 				},
@@ -379,7 +377,6 @@ impl Peerset {
 		// a) it is not reserved, so we reject the connection
 		// b) we are already connected to it, so we reject the connection
 		if self.data.reserved_only && !self.data.discovered.is_reserved(&peer_id) {
-			println!("Reject: {:?} {:?}", peer_id, index);
 			self.message_queue.push_back(Message::Reject(index));
 			return;
 		}
@@ -396,9 +393,7 @@ impl Peerset {
 			SlotType::Common
 		};
 
-		let state = self.data.in_slots.add_peer(peer_id.clone(), slot_type);
-		println!("State 2: {:?} ID: {:?} Index: {:?}", state, peer_id, index);
-		match state {
+		match self.data.in_slots.add_peer(peer_id.clone(), slot_type) {
 			SlotState::Added(peer_id) => {
 				// reserved node may have been previously stored as normal node in discovered list
 				self.data.discovered.remove_peer(&peer_id);
@@ -434,10 +429,8 @@ impl Peerset {
 			"Dropping {:?}\nin_slots={:?}\nout_slots={:?}",
 			peer_id, self.data.in_slots, self.data.out_slots
 		);
-		println!("Dropping {:?}", peer_id);
 		// Automatically connect back if reserved.
 		if self.data.in_slots.is_connected_and_reserved(&peer_id) || self.data.out_slots.is_connected_and_reserved(&peer_id) {
-			println!("reconnecting {:?}", peer_id);
 			self.message_queue.push_back(Message::Connect(peer_id));
 			return;
 		}
