@@ -400,9 +400,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 			.listeners()
 			.next()
 			.map(|addr| {
-				let mut addr = addr.clone();
-				addr.append(multiaddr::Protocol::P2p(network.peer_id().clone().into()));
-				addr.to_string()
+				addr.clone()
+					.with(multiaddr::Protocol::P2p(network.peer_id().clone().into()))
+					.to_string()
 			});
 		ret
 	}
