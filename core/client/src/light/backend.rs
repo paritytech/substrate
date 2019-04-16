@@ -342,7 +342,7 @@ where
 	}
 
 	fn child_storage(&self, _subtrie: &SubTrie, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {

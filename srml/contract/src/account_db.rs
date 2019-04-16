@@ -118,7 +118,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 
 				let mut new_storage_size = info.storage_size;
 				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get::<Vec<u8>>(&subtrie, &k) {
+					if let Some(value) = child::get_raw(&subtrie, &k) {
 						new_storage_size -= value.len() as u64;
 					}
 					if let Some(value) = v {
