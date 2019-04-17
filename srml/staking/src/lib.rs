@@ -127,42 +127,7 @@
 //!
 //! ## Usage
 //!
-//! ### Snippet: Bonding and Accepting Roles
-//!
-//! An arbitrary account pair, given that the associated stash has the required funds,
-//! can become stakers via the following call:
-//!
-//! ```rust,ignore
-//! // Bond account 3 as stash.
-//! // Account 4 as controller.
-//! // Stash value of 1500 units.
-//! // Rewards get transferred to the controller account.
-//! Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller);
-//! ```
-//!
-//! To state desire to become a validator:
-//!
-//! ```rust,ignore
-//! // Controller account 4 states desire for validation with the given preferences.
-//! Staking::validate(Origin::signed(4), ValidatorPrefs::default());
-//! ```
-//!
-//! Similarly, to state desire in nominating:
-//!
-//! ```rust,ignore
-//! // Controller account 4 nominates for accounts 10 and 20.
-//! Staking::nominate(Origin::signed(4), vec![20, 10]);
-//! ```
-//!
-//! Finally, account 4 can withdraw from any of the above roles via
-//!
-//! ```rust,ignore
-//! Staking::chill(Origin::signed(4));
-//! ```
-//!
-//! You can find the equivalent of the above calls in your [Substrate UI](https://substrate-ui.parity.io).
-//!
-//! ### Snippet: Reporting Misbehavior
+//! ### Example: Reporting Misbehavior
 //!
 //! ```
 //! use srml_support::{decl_module, dispatch::Result};
