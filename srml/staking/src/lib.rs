@@ -15,16 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Staking Module
-//! <!-- Original author of paragraph: @gavofyork -->
+//!
+//! The Staking module is used to manage funds at stake by network maintainers.
+//!
+//! - [`staking::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
+//!
+//! ## Overview
 //!
 //! The Staking module is the means by which a set of network maintainers (known as _authorities_ in some contexts
 //! and _validators_ in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit,
 //! those funds are rewarded under normal operation but are held at pain of _slash_ (expropriation) should the
 //! staked maintainer be found not to be discharging its duties properly.
-//!
-//! To use the Staking module in your runtime, you need to implement the [`staking::Trait`](./trait.Trait.html).
-//!
-//! ## Overview
 //!
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
@@ -118,12 +121,9 @@
 //! The dispatchable functions of the Staking module enable the steps needed for entities to accept and change their
 //! role, alongside some helper functions to get/set the metadata of the module.
 //!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
-//!
 //! ### Public Functions
 //!
-//! The Staking module contains many public storage items and (im)mutable functions. Please refer to the
-//! [struct list](#structs) below and the [`Module`](./struct.Module.html) struct definition for more details.
+//! The Staking module contains many public storage items and (im)mutable functions.
 //!
 //! ## Usage
 //!
@@ -260,15 +260,13 @@
 //!
 //! ## GenesisConfig
 //!
-//! The Staking module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
-//! struct for a list of attributes that can be provided.
+//! The Staking module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 //!
 //! ## Related Modules
 //!
-//! - [**Balances**](../srml_balances/index.html): Used to manage values at stake.
-//! - [**Session**](../srml_session/index.html): Used to manage sessions. Also, a list of new validators is
+//! - [Balances](../srml_balances/index.html): Used to manage values at stake.
+//! - [Session](../srml_session/index.html): Used to manage sessions. Also, a list of new validators is
 //! stored in the Session module's `Validators` at the end of each era.
-//! - [**System**](../srml_system/index.html): Used to obtain block number and time, among other details.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
