@@ -122,8 +122,8 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		self.storage(key)
 	}
 
-	fn child_storage<SK: Into<ChildStorageKey<H>>>(&self, storage_key: SK, key: &[u8]) -> Option<Vec<u8>> {
-		self.changes.child_storage(storage_key.into().as_ref(), key)?.map(Vec::from)
+	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		self.changes.child_storage(storage_key.as_ref(), key)?.map(Vec::from)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -139,14 +139,12 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		}
 	}
 
-	fn place_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK, key: Vec<u8>, value: Option<Vec<u8>>) {
-		let storage_key = storage_key.into();
+	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>) {
 		self.changes.set_child_storage(storage_key.as_ref().to_vec(), key, value);
 		// TODO place_child_storage and set_child_storage should always be valid (create child on set)?
 	}
 
-	fn kill_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK) {
-		let storage_key = storage_key.into();
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {
 		self.changes.clear_child_storage(storage_key.as_ref());
 	}
 
@@ -161,7 +159,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
-	fn child_storage_root<SK: Into<ChildStorageKey<H>>>(&mut self, _storage_key: SK) -> Option<Vec<u8>> {
+	fn child_storage_root(&mut self, _storage_key: ChildStorageKey<H>) -> Option<Vec<u8>> {
 		None
 	}
 

@@ -144,7 +144,7 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Read child runtime storage.
-	fn child_storage<SK: Into<ChildStorageKey<H>>>(&self, storage_key: SK, key: &[u8]) -> Option<Vec<u8>>;
+	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -152,7 +152,7 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Set child storage entry `key` of current contract being called (effective immediately).
-	fn set_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK, key: Vec<u8>, value: Vec<u8>) {
+	fn set_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Vec<u8>) {
 		self.place_child_storage(storage_key, key, Some(value))
 	}
 
@@ -162,7 +162,7 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
-	fn clear_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK, key: &[u8]) {
+	fn clear_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: &[u8]) {
 		self.place_child_storage(storage_key, key.to_vec(), None)
 	}
 
@@ -172,12 +172,12 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Whether a child storage entry exists.
-	fn exists_child_storage<SK: Into<ChildStorageKey<H>>>(&self, storage_key: SK, key: &[u8]) -> bool {
+	fn exists_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> bool {
 		self.child_storage(storage_key, key).is_some()
 	}
 
 	/// Clear an entire child storage.
-	fn kill_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK);
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -186,7 +186,7 @@ pub trait Externalities<H: Hasher> {
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
-	fn place_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK, key: Vec<u8>, value: Option<Vec<u8>>);
+	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
@@ -198,7 +198,7 @@ pub trait Externalities<H: Hasher> {
 	/// Get the trie root of a child storage map. This will also update the value of the child storage keys in the top-level storage map. If the storage root equals default hash as defined by trie, the key in top-level storage map will be removed.
 	///
 	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
-	fn child_storage_root<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK) -> Option<Vec<u8>>;
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Option<Vec<u8>>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;

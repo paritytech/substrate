@@ -174,11 +174,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				HexDisplay::from(&key)
 			);
 		}
-		if this.ext.set_child_storage(storage_key, key, value) {
-			Ok(())
-		} else {
-			Err(UserError("ext_set_child_storage: storage_key is invalid"))
-		}
+		let storage_key = ChildStorageKey::new(storage_key)
+			.ok_or_else(||
+				UserError("ext_set_child_storage: child storage key is invalid")
+			)?;
+		this.ext.set_child_storage(storage_key, key, value)
+		Ok(())
 	},
 	ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
 		let storage_key = this.memory.get(
@@ -194,11 +195,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			}, HexDisplay::from(&key)
 		);
-		if this.ext.clear_child_storage(&storage_key, &key) {
-			Ok(())
-		} else {
-			Err(UserError("ext_clear_child_storage: storage_key is invalid"))
-		}
+		let storage_key = ChildStorageKey::new(storage_key)
+			.ok_or_else(||
+				UserError("ext_clear_child_storage: child storage key is not valid")
+			)?;
+		this.ext.clear_child_storage(storage_key, &key);
+		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
@@ -221,6 +223,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
+		let storage_key = ChildStorageKey::new(storage_key)
+			.ok_or_else(||
+				UserError("ext_exists_child_storage: child storage key is not valid")
+			)?;
 		Ok(if this.ext.exists_child_storage(&storage_key, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
@@ -233,7 +239,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
-		this.ext.kill_child_storage(&storage_key);
+		let storage_key = ChildStorageKey::new(storage_key)
+			.ok_or_else(||
+				UserError("ext_exists_child_storage: child storage key is not valid")
+			)?;
+		this.ext.kill_child_storage(storage_key);
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
@@ -280,7 +290,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
-		let maybe_value = this.ext.child_storage(&storage_key, &key);
+
+		let maybe_value = {
+			// TODO: Deal with this clone or will it be elided?
+			let storage_key = ChildStorageKey::new(storage_key.clone())
+				.ok_or_else(||
+					UserError("ext_get_allocated_child_storage: child storage key is not valid")
+				)?;
+			this.ext.child_storage(storage_key, &key)
+		};
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
@@ -346,7 +364,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to get key in ext_get_child_storage_into"))?;
-		let maybe_value = this.ext.child_storage(&storage_key, &key);
+
+		let maybe_value = {
+			let storage_key = ChildStorageKey::new(storage_key.clone())
+				.ok_or_else(||
+					UserError("ext_get_child_storage_into: child storage key is not valid")
+				)?;
+			this.ext.child_storage(storage_key, &key)
+		};
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
@@ -378,7 +403,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
-		let r = this.ext.child_storage_root(&storage_key);
+		let storage_key = ChildStorageKey::new(storage_key.clone())
+				.ok_or_else(||
+					UserError("ext_get_child_storage_into: child storage key is not valid")
+				)?;
+		let r = this.ext.child_storage_root(storage_key);
 		if let Some(value) = r {
 			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;

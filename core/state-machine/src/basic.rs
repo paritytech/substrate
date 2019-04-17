@@ -115,7 +115,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage<SK: Into<ChildStorageKey<H>>>(&self, storage_key: SK, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
 		None
 	}
 
@@ -132,10 +132,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		}
 	}
 
-	fn place_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, _storage_key: SK, _key: Vec<u8>, _value: Option<Vec<u8>>) {
+	fn place_child_storage(&mut self, _storage_key: ChildStorageKey<H>, _key: Vec<u8>, _value: Option<Vec<u8>>) {
 	}
 
-	fn kill_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, _storage_key: SK) { }
+	fn kill_child_storage(&mut self, _storage_key: ChildStorageKey<H>) { }
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.changes.clear_prefix(prefix);
@@ -148,7 +148,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
-	fn child_storage_root<SK: Into<ChildStorageKey<H>>>(&mut self, _storage_key: SK) -> Option<Vec<u8>> {
+	fn child_storage_root(&mut self, _storage_key: ChildStorageKey<H>) -> Option<Vec<u8>> {
 		None
 	}
 

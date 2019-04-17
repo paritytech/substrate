@@ -214,9 +214,7 @@ where
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn child_storage<SK: Into<ChildStorageKey<H>>>(&self, storage_key: SK, key: &[u8]) -> Option<Vec<u8>> {
-		let storage_key = storage_key.into();
-
+	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
@@ -230,9 +228,8 @@ where
 		}
 	}
 
-	fn exists_child_storage<SK: Into<ChildStorageKey<H>>>(&self, storage_key: SK, key: &[u8]) -> bool {
+	fn exists_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
-		let storage_key = storage_key.into();
 
 		match self.overlay.child_storage(storage_key.as_ref(), key) {
 			Some(x) => x.is_some(),
@@ -251,17 +248,15 @@ where
 		self.overlay.set_storage(key, value);
 	}
 
-	fn place_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK, key: Vec<u8>, value: Option<Vec<u8>>) {
+	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>) {
 		let _guard = panic_handler::AbortGuard::new(true);
-		let storage_key = storage_key.into();
 
 		self.mark_dirty();
 		self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key, value);
 	}
 
-	fn kill_child_storage<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK) {
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {
 		let _guard = panic_handler::AbortGuard::new(true);
-		let storage_key = storage_key.into();
 
 		self.mark_dirty();
 		self.overlay.clear_child_storage(storage_key.as_ref());
@@ -313,10 +308,8 @@ where
 		root
 	}
 
-	fn child_storage_root<SK: Into<ChildStorageKey<H>>>(&mut self, storage_key: SK) -> Option<Vec<u8>> {
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		let storage_key = storage_key.into();
-
 		if self.storage_transaction.is_some() {
 			return Some(self.storage(storage_key.as_ref()).unwrap_or(default_child_trie_root::<H>(storage_key.as_ref())));
 		}
