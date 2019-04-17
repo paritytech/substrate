@@ -347,23 +347,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
-		let fst_msg = Message::Prevote(equivocation.first.0);
-		let snd_msg = Message::Prevote(equivocation.second.0);
-		let fst_payload = localized_payload(round, self.set_id, &fst_msg);
-		let snd_payload = localized_payload(round, self.set_id, &snd_msg);
-		let equivocation_proof = EquivocationProof {
-			first: (fst_payload, equivocation.first.1),
-			second: (snd_payload, equivocation.second.1),
-			identity: equivocation.identity,
-		};
-		if let Ok(Some(report_call)) = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof) {
-			sign_and_dispatch(
-				self.inner.clone(),
-				self.transaction_pool.clone(),
-				report_call
-			);
-		}
 	}
 
 	fn precommit_equivocation(
@@ -372,61 +355,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		
-		// let block_id = BlockId::number(self.inner.info().unwrap().chain.best_number);
-		// let equivocation_proof = EquivocationProof {};
-		// if let Some(report_call) = self.inner.runtime_api().construct_report_call(&block_id, equivocation_proof) {
-		// 	sign_and_dispatch(
-		// 		self.inner.clone(),
-		// 		self.transaction_pool.clone(),
-		// 		report_call
-		// 	);
-		// }
 	}
 }
-
-
-/// TODO: move to a place where can be used by other consensus engines.
-pub fn sign_and_dispatch<B, E, RA, Block: BlockT<Hash=H256>, A>(
-	client: Arc<Client<B, E, Block, RA>>,
-	transaction_pool: Arc<TransactionPool<A>>,
-	report_call: Vec<u8>
-) where 
-	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	A: txpool::ChainApi<Block=Block>,
-	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: TransactionBuilderApi<Block>,
-{
-	let public = AccountKeyring::Alice.into();
-	let block_id = BlockId::number(client.info().unwrap().chain.best_number);
-	let genesis_hash = client.info().unwrap().chain.genesis_hash;
-
-	/// this goes inside the API functions
-	// let next_index = transaction_pool.get_account_nonce(&block_id, &public).unwrap();
-	let payload_hash = client.runtime_api().signing_payload(&block_id, report_call).unwrap();
-	// let next_index = 0u64;
-	/// signing_payload(report_call.as_slice())
-	
-	/// -> payload_hash[..]
-	
-	let signature: sr25519::Signature = AccountKeyring::from_public(&public).unwrap().sign(&payload_hash[..]).into();
-	let encoded_extrinsic = client.runtime_api().build_transaction(&block_id, payload_hash, AnySignature::from(signature)).unwrap();
-	
-	/// build_transaction(payload_hash[..], signature)
-	// let any_signature = AnySignature::from(signature);
-	// let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), any_signature, Era::Immortal);
-	/// -> extrinsic.encode().as_slice()
-	let uxt = Decode::decode(&mut encoded_extrinsic.as_slice()).expect("Encoded extrinsic is valid");
-
-	
-	match transaction_pool.submit_one(&block_id, uxt) {
-		Err(e) => warn!("Error importing misbehavior report: {:?}", e),
-		Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
-	}
-}
-
 
 pub(crate) enum JustificationOrCommit<Block: BlockT> {
 	Justification(GrandpaJustification<Block>),

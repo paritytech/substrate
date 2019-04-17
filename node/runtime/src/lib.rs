@@ -292,24 +292,10 @@ impl_runtime_apis! {
 
 	impl transaction_builder_api::TransactionBuilder<Block> for Runtime {
 		fn signing_payload(encoded_call: Vec<u8>) -> Vec<u8> {
-			let public = Default::default();
-			let context = Context::default();
-			let genesis_hash = context.genesis_hash();
-			let next_index = System::get_account_nonce(&public);
-			let call: Call = Decode::decode(&mut encoded_call.as_slice()).expect("Valid encoded call");
-			let payload = (
-				Compact::from(next_index),
-				call,
-				Era::immortal(),
-				genesis_hash,
-			).encode();
-			payload
-			// blake2_256(&payload.encode())
+			Vec::new()
 		}
 
-		fn build_transaction(signing_payload: Vec<u8>, signature: AnySignature) -> Vec<u8> {
-			// let next_index = 1000u64;
-			// let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), signature, Era::Immortal);
+		fn build_transaction(signing_payload: Vec<u8>, public_key: Vec<u8>, signature: Vec<u8>) -> Vec<u8> {
 			Vec::new()
 		}
 	}

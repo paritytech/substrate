@@ -26,6 +26,6 @@ decl_runtime_apis! {
 	/// The `TransactionBuilder` api trait that provides required functions for building a transaction for a runtime.
 	pub trait TransactionBuilder {
 		fn signing_payload(encoded_call: Vec<u8>) -> Vec<u8>;
-		fn build_transaction(signing_payload: Vec<u8>, signature: AnySignature) -> Vec<u8>;
+		fn build_transaction(signing_payload: Vec<u8>, public_key: Vec<u8>, signature: Vec<u8>) -> Vec<u8>;
 	}
 }
