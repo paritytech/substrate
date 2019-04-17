@@ -92,7 +92,7 @@ where Balance: IntegerSquareRoot
 		approve: Balance,
 		against: Balance,
 		voters: Balance,
-		electorate: Balance
+		electorate: Balance,
 	) -> bool {
 		let sqrt_voters = voters.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();

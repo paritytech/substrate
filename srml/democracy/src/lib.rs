@@ -361,7 +361,7 @@ impl<BlockNumber: Parameter, Proposal: Parameter> ReferendumInfo<BlockNumber, Pr
 		end: BlockNumber,
 		proposal: Proposal,
 		threshold: VoteThreshold,
-		delay: BlockNumber
+		delay: BlockNumber,
 	) -> Self {
 		ReferendumInfo { end, proposal, threshold, delay }
 	}
