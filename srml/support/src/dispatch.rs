@@ -72,20 +72,25 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// ## Declaration
 ///
 /// ```rust
+/// # #[macro_use]
+/// # extern crate srml_support;
+/// use srml_support::dispatch::Result;
+/// # use srml_system::{self as system, Trait, ensure_signed};
+/// 
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn my_function(origin, var: u64) -> Result {
-///				let sender = ensure_signed(origin)?;
 ///				// Your implementation
-/// 			Ok(())
+///				Ok(())
 /// 		}
-/// 
+///
 ///			// Public functions are easily accessible to other modules
-///			pub my_pub_function(origin) -> Result {
-/// 			Ok(())
+///			pub fn my_public_function(origin) -> Result {
+///				Ok(())
 /// 		}
 ///		}
-/// }
+///	}
+/// fn main() {}
 /// ```
 /// 
 /// The declaration is set with the header where:
@@ -97,6 +102,11 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// ## Shorthand Example
 /// 
 ///	```rust
+/// # #[macro_use]
+/// # extern crate srml_support;
+/// use srml_support::dispatch::Result;
+/// # use srml_system::{self as system, Trait, ensure_signed};
+/// 
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn my_function(origin) {
@@ -104,12 +114,18 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 		}
 ///		}
 /// }
+/// fn main() {}
 /// ```
 /// 
 /// The macro automatically expands a shorthand function declaration to return the `Result` type.
 /// 
 /// ## Priviledged Function Example
 /// ```rust
+/// # #[macro_use]
+/// # extern crate srml_support;
+/// use srml_support::dispatch::Result;
+/// # use srml_system::{self as system, Trait, ensure_signed};
+///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///			fn my_function() -> Result {
@@ -118,18 +134,20 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 		}
 ///		}
 /// }
+/// fn main() {}
 /// ```
 /// 
 /// If the `origin` param is omitted, the macro assumes the `origin` to be `Root`.
 /// 
 /// ## Multiple Module Instances Example
 /// 
-/// ```rust
+/// ```rust,ignore
 /// decl_module! {
 /// 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 /// 		// Your implementation
 /// 	}
 /// }
+/// fn main() {}
 /// ```
 /// 
 /// This macro supports modules with multiple instances. See [balances](https://crates.parity.io/srml_balances/index.html) example. 
