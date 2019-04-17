@@ -17,8 +17,10 @@
 //! # Balances Module
 //!
 //! The Balances module provides functionality for handling accounts and balances.
-//! To use it in your runtime, you need to implement the [`balances::Trait`](./trait.Trait.html).
-//! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
+//!
+//! - [`balances::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //! ## Overview
 //!
@@ -81,13 +83,9 @@
 //! - `transfer` - Transfer some liquid free balance to another account.
 //! - `set_balance` - Set the balances of a given account. The origin of this call must be root.
 //!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
-//!
 //! ### Public Functions
 //!
 //! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
-//!
-//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
 //! ## Usage
 //!
@@ -99,17 +97,24 @@
 //!
 //! [(lib.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/lib.rs):
 //!
-//! ```rust,ignore
-//! use srml_support::traits::Currency
+//! ```ignore
+//! # extern crate srml_support;
+//! use srml_support::traits::Currency;
+//! # pub trait Trait: balances::Trait {
+//! # 	type Currency: Currency<Self::AccountId>;
+//! # }
 //!
 //! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 //! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+//!
+//! # fn main() {}
 //!```
 //!
 //! [(gas.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/gas.rs):
 //!
-//! ```rust,ignore
-//! use srml_support::traits::Currency
+//! ```ignore
+//! use srml_support::traits::Currency;
+//! # pub trait Trait: system::Trait {}
 //!
 //! pub fn refund_unused_gas<T: Trait>(
 //! 	transactor: &T::AccountId,
@@ -129,17 +134,12 @@
 //! 		T::GasPayment::on_unbalanced(imbalance);
 //! 	}
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! ## Genesis config
 //!
-//! The Balances module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
-//! struct for a list of attributes that can be provided.
-//!
-//! ## Related Modules
-//!
-//! - [`system`](../srml_system/index.html)
-//! - [`srml_support`](../srml_support/index.html)
+//! The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
