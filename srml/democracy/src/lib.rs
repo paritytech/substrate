@@ -33,6 +33,7 @@
 //! proposal (if successfully passed).
 //! - **Vote threshold mechanisms:** Different criteria for passing or rejecting a referendum (e.g. supermajority for,
 //! supermajority against, simple majority).
+//! - **Table of Referenda:** A set of referenda that are currently open for voting.
 //!
 //! #### Proposal Terminology
 //!
@@ -44,30 +45,30 @@
 //!  deposit from its proposer must have been reserved. The sponsor must have sufficient account balance
 //!  to reserve a matching deposit.
 //! - **Elevation process:** If checking the configured `LaunchPeriod` indicates that a new public referendum
-//!  should be launched, then we find the public proposal index with the largest locked deposit amount
-//!  and declare it the winning proposal. This proposal is removed from `PublicProps` and becomes a public referendum.
+//!  should be launched, then the public proposal index with the largest locked deposit amount is declared
+//!  the winning proposal. This proposal is removed from `PublicProps` and becomes a public referendum.
 //!  The accounts that locked a deposit into this winning proposal are refunded their reserved deposit.
 //!
 //! #### Referenda Terminology
 //!
 //! - **Start:** Start a public referendum using the `start_referendum` call that anyone may execute
-//!  by signing and submitting an extrinsic. It is allocated the next referendum index that is mapped to its
+//!  by signing and submitting an extrinsic. It is allocated the next referendum index, which is mapped to its
 //!  corresponding voting period expiry block, the proposal it relates to, and the given voting threshold.
 //! - **Cancellation:** Remove all information about a referendum.
 //! - **Validity:** The new referendum must not have a voting period that ends before any existing referenda.
 //! - **Voting:** Voters may vote on a public referendum using the `vote` call that anyone may execute
 //!  by signing and submitting an extrinsic. Voters and their votes (yay or nay) for a public referendum
-//!  are stored in `VoteOf` and `VotersFor`.
+//!  are stored in `VotersFor` and `VoteOf`, respectively.
 //! - **Vote delegation:** Voters may delegate and undelegate their votes for an amount of lock periods.
 //! - **Proxy account:** Stash accounts (see the [Staking module](../srml_staking/index.html)) may add or
 //!  remove a proxy account to vote on a public referendum on behalf of the stash account.
 //! - **Vote validity:** The referendum being voted on must be an active referendum index of the
 //!  `ReferendumInfoOf` mapping. The voter (transactor) must have a balance above zero to signal approval.
 //! - **Maturity:** A mature referendum is one that expires at the current block.
-//! - **Vote tallying, passing, and execution:** Searching for maturing public referenda to
-//!  tally their votes by calling `maturing_referendums_at`, then removing them from the Table of Referenda.
-//!  Pass and execute each public referendum if its vote tally meets its vote threshold, otherwise do not
-//!  pass or execute them. Lastly increment `NextTally` to determine the next public referendum index to tally.
+//! - **Vote tallying, passing, and execution:** When a block is finalized, the Democracy module will search
+//!  for mature referenda and tally their votes, then remove them from the Table of Referenda. If a referendum's
+//!  vote tally meets its vote threshold, then it will be passed and executed. Last, increment `NextTally`
+//!  to determine the next public referendum index to tally.
 //!
 //! ### Goals
 //!
@@ -103,7 +104,8 @@
 //!
 //! - `locked_for` - Get the balance locked in support of a proposal.
 //! - `is_active_referendum` - Return true if given index corresponds to an on-going referendum.
-//! - `active_referendums` - Get all referenda that are currently active and their corresponding info.
+//! - `active_referendums` - Get all referenda that are currently active and their corresponding info. Equivalent
+//!  to the Table of Referenda.
 //! - `maturing_referendums_at` - Get all referenda ready for tally at block `n`.
 //! - `tally` - Tally the votes for the current proposal.
 //! - `force_proxy` - Forcibly insert a proxy voter for a stash account.
@@ -120,7 +122,7 @@
 //!
 //! The [Council module](../srml_council/index.html) uses the Democracy module for voting.
 //!
-//! ```
+//! ```ignore
 //! pub trait Trait: democracy::Trait { }
 //!
 //! fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
@@ -327,7 +329,8 @@ decl_module! {
 			let lock_period = Self::public_delay();
 			let now = <system::Module<T>>::block_number();
 			let locked_until = now + lock_period * T::BlockNumber::sa(d.1 as u64);
-			T::Currency::set_lock(DEMOCRACY_ID,
+			T::Currency::set_lock(
+				DEMOCRACY_ID,
 				&who,
 				Bounded::max_value(),
 				locked_until,
