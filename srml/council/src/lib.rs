@@ -143,16 +143,6 @@
 //! * `is_councillor` - Check if a given account id is a councillor.
 //! * `tally` - Tally's council votes.
 //!
-//! ## Usage
-//!
-//! ### Prerequisites
-//!
-//! Import the Council module and types and derive your runtime's configuration traits from the Council module trait.
-//!
-//! ### Simple Code Snippet
-//!
-//! See the tests contained in files in this module's directory for simple code snippets that may make this module's functionalities clearer.
-//!
 //! ## Related Modules
 //!
 //! * [`System`](../srml_system/index.html)
