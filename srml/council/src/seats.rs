@@ -203,6 +203,8 @@ decl_module! {
 				.map_err(|_| "candidate has not enough funds")?;
 
 			<RegisterInfoOf<T>>::insert(&who, (Self::vote_index(), slot as u32));
+
+			Self::deposit_event(RawEvent::CandidacySubmitted(who.clone(), slot as u32));
 			let mut candidates = candidates;
 			if slot == candidates.len() {
 				candidates.push(who);
@@ -368,6 +370,8 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::AccountId {
+		/// new candidate announced in given slot
+		CandidacySubmitted(AccountId, u32),
 		/// reaped voter, reaper
 		VoterReaped(AccountId, AccountId),
 		/// slashed reaper

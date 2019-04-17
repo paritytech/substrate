@@ -53,6 +53,7 @@ decl_module! {
 			<ProposalOf<T>>::insert(proposal_hash, *proposal);
 			<ProposalVoters<T>>::insert(proposal_hash, vec![who.clone()]);
 			<CouncilVoteOf<T>>::insert((proposal_hash, who.clone()), true);
+			Self::deposit_event(RawEvent::Proposed(proposal_hash, expiry));
 		}
 
 		fn vote(origin, proposal: T::Hash, approve: bool) {
@@ -126,7 +127,9 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::Hash {
+	pub enum Event<T> where <T as system::Trait>::Hash, <T as system::Trait>::BlockNumber {
+		/// A council proposal has been created, ending at provided block.
+		Proposed(Hash, BlockNumber),
 		/// A voting tally has happened for a referendum cancellation vote.
 		/// Last three are yes, no, abstain counts.
 		TallyCancelation(Hash, u32, u32, u32),
