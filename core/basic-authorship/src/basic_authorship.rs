@@ -232,7 +232,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);
 						}
-						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
+						Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
 							if is_first {
 								debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
 								unqueue_invalid.push(pending.hash.clone());

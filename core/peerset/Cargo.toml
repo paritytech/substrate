@@ -8,13 +8,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-fnv = "1.0"
 futures = "0.1"
 libp2p = { version = "0.6.0", default-features = false }
+linked-hash-map = "0.5"
 log = "0.4"
-parking_lot = "0.7"
-rand = "0.6"
-serde = "1.0.70"
-serde_derive = "1.0.70"
+lru-cache = "0.1.2"
 serde_json = "1.0.24"
-tokio-io = "0.1"

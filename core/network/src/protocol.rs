@@ -24,7 +24,7 @@ use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberF
 use consensus::import_queue::ImportQueue;
 use crate::message::{self, Message};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
-use crate::consensus_gossip::ConsensusGossip;
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::OnDemandService;
 use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
@@ -50,9 +50,9 @@ const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 2;
+pub(crate) const CURRENT_VERSION: u32 = 3;
 /// Lowest version we support
-const MIN_VERSION: u32 = 2;
+pub(crate) const MIN_VERSION: u32 = 2;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -187,25 +187,25 @@ struct ContextData<B: BlockT, H: ExHashT> {
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>>  {
-    fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
+pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>> {
+	fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
-    fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
-        (*self)(spec, context)
-    }
+	fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
+		(*self)(spec, context)
+	}
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait GossipTask<B: BlockT>  {
-    fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
+pub trait GossipTask<B: BlockT> {
+	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
 }
 
 impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
-    fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
-        (*self)(gossip, context)
-    }
+	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
+		(*self)(gossip, context)
+	}
 }
 
 /// Messages sent to Protocol from elsewhere inside the system.
@@ -237,7 +237,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, bool),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	/// Tell protocol to abort sync (does not stop protocol).
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -246,6 +246,9 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	Stop,
 	/// Tell protocol to perform regular maintenance.
 	Tick,
+	/// Synchronization request.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
 }
 
 /// Messages sent to Protocol from Network-libp2p.
@@ -258,6 +261,9 @@ pub enum FromNetworkMsg<B: BlockT> {
 	CustomMessage(PeerId, Message<B>),
 	/// Let protocol know a peer is currenlty clogged.
 	PeerClogged(PeerId, Option<Message<B>>),
+	/// Synchronization request.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
 }
 
 enum Incoming<B: BlockT, S: NetworkSpecialization<B>> {
@@ -377,8 +383,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, force) => {
-				self.gossip_consensus_message(topic, engine_id, message, force)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) => {
+				self.gossip_consensus_message(topic, engine_id, message, recipient)
 			}
 			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
 				self.sync.blocks_processed(hashes, has_error);
@@ -408,6 +414,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.stop();
 				return false;
 			},
+			#[cfg(any(test, feature = "test-helpers"))]
+			ProtocolMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
 		}
 		true
 	}
@@ -420,6 +428,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			FromNetworkMsg::CustomMessage(who, message) => {
 				self.on_custom_message(who, message)
 			},
+			#[cfg(any(test, feature = "test-helpers"))]
+			FromNetworkMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
 		}
 		true
 	}
@@ -495,11 +505,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
 			GenericMessage::Consensus(msg) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
-					who,
-					msg,
-				);
+				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
+					self.consensus_gossip.on_incoming(
+						&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+						who,
+						msg,
+					);
+				}
 			}
 			other => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
@@ -523,14 +535,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
 		message: Vec<u8>,
-		force: bool,
+		recipient: GossipMessageRecipient,
 	) {
-		self.consensus_gossip.multicast(
-			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
-			topic,
-			ConsensusMessage{ data: message, engine_id },
-			force,
-		);
+		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		let message = ConsensusMessage { data: message, engine_id };
+		match recipient {
+			GossipMessageRecipient::BroadcastToAll =>
+				self.consensus_gossip.multicast(&mut context, topic, message, true),
+			GossipMessageRecipient::BroadcastNew =>
+				self.consensus_gossip.multicast(&mut context, topic, message, false),
+			GossipMessageRecipient::Peer(who) =>
+				self.send_message(who, GenericMessage::Consensus(message)),
+		}
 	}
 
 	/// Called when a new peer is connected
@@ -547,11 +563,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let removed = {
 			self.handshaking_peers.remove(&peer);
 			self.connected_peers.write().remove(&peer);
-			self.context_data.peers.remove(&peer).is_some()
+			self.context_data.peers.remove(&peer)
 		};
-		if removed {
+		if let Some(peer_data) = removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
-			self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
+			if peer_data.info.protocol_version > 2 {
+				self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
+			}
 			self.sync.peer_disconnected(&mut context, peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
@@ -669,7 +687,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	fn tick(&mut self) {
-		self.consensus_gossip.collect_garbage();
+		self.consensus_gossip.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand
@@ -707,7 +725,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called by peer to report status
 	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
-		{
+		let protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
 				debug!("Unexpected status packet from {}", who);
 				return;
@@ -787,15 +805,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			self.context_data.peers.insert(who.clone(), peer);
 
 			debug!(target: "sync", "Connected {}", who);
-		}
+			status.version
+		};
 
 		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
 		self.on_demand
 			.as_ref()
 			.map(|s| s.on_connect(who.clone(), status.roles, status.best_number));
 		self.sync.new_peer(&mut context, who.clone());
-		self.consensus_gossip
-			.new_peer(&mut context, who.clone(), status.roles);
+		if protocol_version > 2 {
+			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
+		}
 		self.specialization.on_connect(&mut context, who, status);
 	}
 
