@@ -62,7 +62,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, DigestItemFor, DigestItem,
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
@@ -393,7 +393,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
+	// DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 {
 	let is_voter = local_key
 		.map(|pair| voters.contains_key(&pair.public().into()))
@@ -465,7 +465,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
+	// DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};

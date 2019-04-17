@@ -43,7 +43,7 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{ed25519, sr25519, OpaqueMetadata};
+use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -143,9 +143,9 @@ impl Extrinsic {
 }
 
 // The identity type used by authorities.
-pub type AuthorityId = ed25519::Public;
+pub type AuthorityId = sr25519::Public;
 // The signature type used by authorities.
-pub type AuthoritySignature = ed25519::Signature;
+pub type AuthoritySignature = sr25519::Signature;
 /// An identifier for an account on this system.
 pub type AccountId = sr25519::Public;
 // The signature type used by accounts/transactions.

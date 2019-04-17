@@ -31,7 +31,7 @@ pub use client::backend;
 pub use executor::NativeExecutor;
 pub use runtime;
 pub use consensus;
-pub use keyring::{AuthorityKeyring, AccountKeyring};
+pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 
 use std::sync::Arc;
 use futures::future::FutureResult;

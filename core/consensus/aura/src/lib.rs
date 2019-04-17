@@ -813,8 +813,8 @@ mod tests {
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
-	use keyring::ed25519::Keyring;
-	use primitives::ed25519;
+	use keyring::sr25519::Keyring;
+	use primitives::sr25519;
 	use client::BlockchainEvents;
 	use test_client;
 
@@ -829,7 +829,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId<ed25519::Pair>])
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId<sr25519::Pair>])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -855,7 +855,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersClient, NothingExtra, ed25519::Pair>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra, sr25519::Pair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -942,7 +942,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, ed25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),

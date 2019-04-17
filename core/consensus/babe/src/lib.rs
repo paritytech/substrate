@@ -41,7 +41,7 @@ use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use schnorrkel::{
-	SecretKey as Secret,
+	//SecretKey as Secret,
 	context::SigningTranscript,
 	keys::Keypair,
 	vrf::{
@@ -70,7 +70,6 @@ use client::{
 	backend::AuxStore,
 };
 use slots::CheckedHeader;
-
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
@@ -160,7 +159,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<BabeSeal>;
 }
 
-impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, Secret> {
+impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, primitives::sr25519::Signature> {
 	/// Construct a digest item which is aaAASSAAAAAASDC   a slot number and a signature on the
 	/// hash.
 	fn babe_seal(signature: BabeSeal) -> Self {
@@ -579,6 +578,116 @@ impl<C, E> BabeVerifier<C, E> {
 	}
 }
 
+/// No-op extra verification.
+#[derive(Debug, Clone, Copy)]
+pub struct NothingExtra;
+
+impl<B: Block> ExtraVerification<B> for NothingExtra {
+	type Verified = Result<(), String>;
+
+	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
+		Ok(())
+	}
+}
+
+impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
+	C: ProvideRuntimeApi + Send + Sync,
+	C::Api: BlockBuilderApi<B>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
+	E: ExtraVerification<B>,
+	Self: Authorities<B>,
+{
+	fn verify(
+		&self,
+		origin: BlockOrigin,
+		header: B::Header,
+		justification: Option<Justification>,
+		mut body: Option<Vec<B::Extrinsic>>,
+	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
+		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
+		let (timestamp_now, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
+			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
+		let hash = header.hash();
+		let parent_hash = *header.parent_hash();
+		let authorities = self.authorities(&BlockId::Hash(parent_hash))
+			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
+
+		let extra_verification = self.extra.verify(
+			&header,
+			body.as_ref().map(|x| &x[..]),
+		);
+
+		// we add one to allow for some small drift.
+		// FIXME #1019 in the future, alter this queue to allow deferring of headers
+		let checked_header = check_header::<B>(
+			slot_now + 1,
+			header,
+			hash,
+			&authorities[..],
+		)?;
+		match checked_header {
+			CheckedHeader::Checked(pre_header, seal) => {
+				let BabeSeal { slot_num, .. } = seal.as_babe_seal()
+					.expect("check_header always returns a seal digest item; qed");
+
+				// if the body is passed through, we need to use the runtime
+				// to check that the internally-set timestamp in the inherents
+				// actually matches the slot set in the seal.
+				if let Some(inner_body) = body.take() {
+					inherent_data.babe_replace_inherent_data(BabeInherent {
+						slot_num,
+						slot_duration: 0,
+					});
+					let block = B::new(pre_header.clone(), inner_body);
+
+					// skip the inherents verification if the runtime API is old.
+					if self.client
+						.runtime_api()
+						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
+						.map_err(|e| format!("{:?}", e))?
+					{
+						self.check_inherents(
+							block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							timestamp_now,
+						)?;
+					}
+
+					let (_, inner_body) = block.deconstruct();
+					body = Some(inner_body);
+				}
+
+				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
+				telemetry!(CONSENSUS_TRACE; "babe.checked_and_importing"; "pre_header" => ?pre_header);
+
+				extra_verification.into_future().wait()?;
+
+				let import_block = ImportBlock {
+					origin,
+					header: pre_header,
+					post_digests: vec![seal],
+					body,
+					finalized: false,
+					justification,
+					auxiliary: Vec::new(),
+					fork_choice: ForkChoiceStrategy::LongestChain,
+				};
+
+				// FIXME #1019 extract authorities
+				Ok((import_block, None))
+			}
+			CheckedHeader::Deferred(a, b) => {
+				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
+				Err(format!("Header {:?} rejected: too far in the future", hash))
+			}
+		}
+	}
+}
+
 impl<B, C, E> Authorities<B> for BabeVerifier<C, E> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
@@ -684,105 +793,6 @@ fn author_block(
 		None
 	}
 }
-
-impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
-	C: ProvideRuntimeApi + Send + Sync,
-	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	E: ExtraVerification<B>,
-	Self: Authorities<B>,
-{
-	fn verify(
-		&self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justification: Option<Justification>,
-		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
-		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
-		let (timestamp_now, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
-			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
-		let hash = header.hash();
-		let parent_hash = *header.parent_hash();
-		let authorities = self.authorities(&BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
-
-		let extra_verification = self.extra.verify(
-			&header,
-			body.as_ref().map(|x| &x[..]),
-		);
-
-		// we add one to allow for some small drift.
-		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B>(
-			slot_now + 1,
-			header,
-			hash,
-			&authorities[..],
-		)?;
-		match checked_header {
-			CheckedHeader::Checked(pre_header, seal) => {
-				let BabeSeal { slot_num, .. } = seal.as_babe_seal()
-					.expect("check_header always returns a seal digest item; qed");
-
-				// if the body is passed through, we need to use the runtime
-				// to check that the internally-set timestamp in the inherents
-				// actually matches the slot set in the seal.
-				if let Some(inner_body) = body.take() {
-					inherent_data.babe_replace_inherent_data(BabeInherent {
-						slot_num,
-						slot_duration: 0,
-					});
-					let block = B::new(pre_header.clone(), inner_body);
-
-					// skip the inherents verification if the runtime API is old.
-					if self.client
-						.runtime_api()
-						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
-						.map_err(|e| format!("{:?}", e))?
-					{
-						self.check_inherents(
-							block.clone(),
-							BlockId::Hash(parent_hash),
-							inherent_data,
-							timestamp_now,
-						)?;
-					}
-
-					let (_, inner_body) = block.deconstruct();
-					body = Some(inner_body);
-				}
-
-				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
-				telemetry!(CONSENSUS_TRACE; "babe.checked_and_importing"; "pre_header" => ?pre_header);
-
-				extra_verification.into_future().wait()?;
-
-				let import_block = ImportBlock {
-					origin,
-					header: pre_header,
-					post_digests: vec![seal],
-					body,
-					finalized: false,
-					justification,
-					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::LongestChain,
-				};
-
-				// FIXME #1019 extract authorities
-				Ok((import_block, None))
-			}
-			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
-					"hash" => ?hash, "a" => ?a, "b" => ?b
-				);
-				Err(format!("Header {:?} rejected: too far in the future", hash))
-			}
-		}
-	}
-}
-
 /// Start an import queue for the Babe consensus algorithm.
 pub fn import_queue<B, C, E, P>(
 	slot_duration: SlotDuration,
@@ -811,4 +821,13 @@ pub fn import_queue<B, C, E, P>(
 		}
 	);
 	Ok(BasicQueue::new(verifier, block_import, justification_import))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn can_searialize_block() {
+		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
+	}
 }

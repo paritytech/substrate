@@ -19,18 +19,24 @@ use client;
 use crate::rpc;
 use crate::errors;
 
-error_chain! {
-	foreign_links {
-		Client(client::error::Error) #[doc = "Client error"];
-	}
-	errors {
-		/// Not implemented yet
-		Unimplemented {
-			description("not yet implemented"),
-			display("Method Not Implemented"),
+#[allow(deprecated)]
+mod internal_errors {
+	use super::*;
+	error_chain! {
+		foreign_links {
+			Client(client::error::Error) #[doc = "Client error"];
+		}
+		errors {
+			/// Not implemented yet
+			Unimplemented {
+				description("not yet implemented"),
+				display("Method Not Implemented"),
+			}
 		}
 	}
 }
+
+pub use internal_errors::*;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {

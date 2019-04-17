@@ -22,7 +22,7 @@ use super::AccountId;
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use runtime_primitives::traits::Block;
-use primitives::ed25519::Public as AuthorityId;
+use primitives::sr25519::Public as AuthorityId;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {

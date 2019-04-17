@@ -41,7 +41,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, ed25519::Public as AuthorityId};
+use primitives::{H256, sr25519::Public as AuthorityId};
 use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
