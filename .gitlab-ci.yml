@@ -38,6 +38,44 @@ variables:
     name: parity-build
 
 
+.build-only:                      &build-only
+  only:
+    - master
+    - tags
+    - web
+
+.test-only:                        &test-only
+  only:
+    - /^[0-9]+$/
+
+
+
+.build-script:                     &build-script
+  <<:                              *collect-artifacts
+  tags:
+    - linux-docker
+  before_script:
+    - sccache -s
+    - ./scripts/build.sh
+  script:
+    - time cargo build --release --verbose
+    - mkdir -p ./artifacts
+    - mv ./target/release/substrate ./artifacts/.
+    - echo -n "Substrate version = "
+    - if [ "${CI_COMMIT_TAG}" ]; then
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/VERSION;
+      else
+        ./artifacts/substrate --version |
+        sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+        tee ./artifacts/VERSION;
+      fi
+    - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
+    - printf '\n# building node-template\n\n'
+    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
+    - cp -r scripts/docker/* ./artifacts
+    - sccache -s
+
+
 #### stage:                        test
 
 check-runtime:
@@ -51,6 +89,9 @@ check-runtime:
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
     - ./scripts/gitlab/check_runtime.sh
+
+
+
 
 test-linux-stable:                 &test
   stage:                           test
@@ -78,43 +119,55 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
-.build-only:                      &build-only
-  only:
-    - master
-    - tags
-    - web
 
 #### stage:                        build
 
+
+# for pull requests the build should be triggered manually
+test-build-and-deploy:
+  stage:                           build
+  <<:                              *test-only
+  <<:                              *build-script
+  variables:
+    GITLAB_API:                    "https://gitlab.parity.io/api/v4"
+    HELPER_PROJECT:                "parity%2Finfrastructure%2Fscripts"
+  when:                            manual
+  after_script:
+    - echo "trigger polkasync pipeline in scripts repo"
+    - curl -sS -X POST
+      -F "token=${CI_JOB_TOKEN}"
+      -F "ref=master"
+      -F "variables[PROJECT]=\"substrate\""
+      -F "variables[POLKASYNC]=\"substrate\""
+      -F "variables[PRNO]=\"${CI_COMMIT_REF_NAME}\""
+      -F "variables[JOB_ID]=\"${CI_JOB_ID}\""
+      ${GITLAB_API}/projects/${HELPER_PROJECT}/trigger/pipeline
+      | jq -r .web_url
+
+
+test-destroy:
+  stage:                           deploy
+  <<:                              *test-only
+  variables:
+    PROJECT: substrate
+    POLKASYNC: stop
+    PRNO: ${CI_COMMIT_REF_NAME}
+  trigger: parity/infrastructure/scripts
+
+
+
+# for master branch builds will always be wanted
 build-linux-release:               &build
   stage:                           build
-  <<:                              *collect-artifacts
   <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
-  tags:
-    - linux-docker
-  before_script:
-    - sccache -s
-    - ./scripts/build.sh
-  script:
-    - time cargo build --release --verbose
-    - mkdir -p ./artifacts
-    - mv ./target/release/substrate ./artifacts/.
-    - echo -n "Substrate version = "
-    - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/VERSION;
-      else
-        ./artifacts/substrate --version |
-        sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-        tee ./artifacts/VERSION;
-      fi
-    - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
-    - printf '\n# building node-template\n\n'
-    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
-    - cp -r scripts/docker/* ./artifacts
-    - sccache -s
+  <<:                              *build-script
+
+
+
+
 
 build-rust-doc-release:            &build
   stage:                           build
