@@ -67,9 +67,22 @@
 //!
 //! Import the Session module and types and derive your runtime's configuration traits from the Session module trait.
 //!
-//! ### Simple Code Snippet
+//! ### Example from the SRML
 //!
-//! See the tests contained in files in this module's directory for simple code snippets that may make this module's functionalities clearer.
+//! The [Sudo module](../srml_sudo/index.html) uses the Session module for changing the sudo key.
+//!
+//! ```
+//! pub trait Trait: session::Trait { }
+//!
+//! fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
+//!   let sender = ensure_signed(origin)?;
+//!   ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
+//!   let new = T::Lookup::lookup(new)?;
+//!   Self::deposit_event(RawEvent::KeyChanged(Self::key()));
+//!   <Key<T>>::put(new);
+//! }
+//! # fn main(){}
+//! ```
 //!
 //! ## Related Modules
 //!
