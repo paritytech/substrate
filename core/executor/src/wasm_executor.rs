@@ -174,8 +174,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				HexDisplay::from(&key)
 			);
 		}
-		this.ext.set_child_storage(storage_key, key, value);
-		Ok(())
+		if this.ext.set_child_storage(storage_key, key, value) {
+			Ok(())
+		} else {
+			Err(UserError("ext_set_child_storage: storage_key is invalid"))
+		}
 	},
 	ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
 		let storage_key = this.memory.get(
@@ -189,9 +192,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
-			}, HexDisplay::from(&key));
-		this.ext.clear_child_storage(&storage_key, &key);
-		Ok(())
+			}, HexDisplay::from(&key)
+		);
+		if this.ext.clear_child_storage(&storage_key, &key) {
+			Ok(())
+		} else {
+			Err(UserError("ext_clear_child_storage: storage_key is invalid"))
+		}
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
