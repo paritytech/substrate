@@ -57,21 +57,24 @@
 //!
 //! ### Get current timestamp
 //!
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
+//! ```
+//! # extern crate srml_support;
+//! use srml_support::{decl_module, dispatch::Result};
+//! # use srml_timestamp::{self as timestamp};
 //! use system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
-//! 			Ok(())
+//! 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 				pub fn get_time(origin) -> Result {
+//! 						let _sender = ensure_signed(origin)?;
+//! 						let _now = <timestamp::Module<T>>::get();
+//! 						Ok(())
+//! 				}
 //! 		}
-//! 	}
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! ### Example from the SRML
