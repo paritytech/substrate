@@ -122,12 +122,22 @@
 //!
 //! The [Council module](../srml_council/index.html) uses the Democracy module for voting.
 //!
-//! ```ignore
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
+//! # use srml_democracy as democracy;
+//! # use system::ensure_signed;
+//! # type VoteIndex = u64;
 //! pub trait Trait: democracy::Trait { }
 //!
-//! fn proxy_set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex) -> Result {
-//! 	let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
-//! 	Self::do_set_approvals(who, votes, index)
+//! decl_module! {
+//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!
+//! 		fn proxy_set_approvals(origin, votes: Vec<bool>, index: VoteIndex) -> Result {
+//! 			let who = <democracy::Module<T>>::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
+//! 			// set approvals
+//! 			Ok(())
+//! 		}
+//! 	}
 //! }
 //! # fn main(){}
 //! ```
