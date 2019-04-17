@@ -96,7 +96,6 @@
 //! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
 //! ```
-//! # extern crate srml_support;
 //! use srml_support::traits::Currency;
 //! # pub trait Trait: system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
