@@ -117,6 +117,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			min_stakable_balance_bits: 32,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 10 * MINUTES,    // 1 day per public referendum
@@ -289,6 +290,7 @@ pub fn testnet_genesis(
 			offline_slash_grace: 0,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			min_stakable_balance_bits: 32,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,

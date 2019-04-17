@@ -93,6 +93,7 @@ impl Trait for Test {
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
+	min_staked_balance_bits: u32,
 	session_length: u64,
 	sessions_per_era: u64,
 	current_era: u64,
@@ -108,6 +109,7 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
+			min_staked_balance_bits: 0,
 			session_length: 1,
 			sessions_per_era: 1,
 			current_era: 0,
@@ -122,8 +124,12 @@ impl Default for ExtBuilder {
 }
 
 impl ExtBuilder {
-	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
-		self.existential_deposit = existential_deposit;
+	pub fn existential_deposit(mut self, balance: u64) -> Self {
+		self.existential_deposit = balance;
+		self
+	}
+	pub fn min_staked_balance_bits(mut self, bits: u32) -> Self {
+		self.min_staked_balance_bits = bits;
 		self
 	}
 	pub fn session_length(mut self, session_length: u64) -> Self {
@@ -228,6 +234,7 @@ impl ExtBuilder {
 			current_session_reward: self.reward,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
+			min_stakable_balance_bits: self.min_staked_balance_bits,
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = timestamp::GenesisConfig::<Test>{
 			minimum_period: 5,

@@ -540,17 +540,24 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+		config(min_stakable_balance_bits): u32;
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
+				let min_staked_balance = if config.min_stakable_balance_bits > 0 {
+					2u64.pow(config.min_stakable_balance_bits)
+				} else { 0 };
 				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
-					assert!(T::Currency::free_balance(&stash) >= balance);
+					assert!(
+						T::Currency::free_balance(&stash) >= balance,
+						"Stash account must have sufficient funds to stake the claimed amount."
+					);
 					// TODO: #2301
 					// The notation of minimum valuable balance in staking is currently not properly demonstrated in any
 					// parameter in the system. It should be declared, the assertion should change accordingly and it should
 					// influence the value of shift in Staking's `CurrencyToVote`.
 					assert!(
-						balance > BalanceOf::<T>::sa(u32::max_value() as u64),
-						"Any balance used in Staking's context must be larger than 2^32"
+						balance > BalanceOf::<T>::sa(min_staked_balance),
+						"Any staked balance must be larger than 2^\\{config.min_stakable_balance_bits\\}"
 					);
 					let _ = <Module<T>>::bond(
 						T::Origin::from(Some(stash.clone()).into()),

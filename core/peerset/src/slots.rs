@@ -221,6 +221,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn test_slots_debug() {
 		let reserved_peer = PeerId::random();
 		let reserved_peer2 = PeerId::random();
