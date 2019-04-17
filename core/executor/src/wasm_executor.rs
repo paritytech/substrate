@@ -25,7 +25,7 @@ use wasmi::{
 };
 use wasmi::RuntimeValue::{I32, I64, self};
 use wasmi::memory_units::{Pages};
-use state_machine::Externalities;
+use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
@@ -174,11 +174,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				HexDisplay::from(&key)
 			);
 		}
-		let storage_key = ChildStorageKey::new(storage_key)
+		let storage_key = ChildStorageKey::from_vec(storage_key)
 			.ok_or_else(||
 				UserError("ext_set_child_storage: child storage key is invalid")
 			)?;
-		this.ext.set_child_storage(storage_key, key, value)
+		this.ext.set_child_storage(storage_key, key, value);
 		Ok(())
 	},
 	ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
@@ -195,7 +195,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			}, HexDisplay::from(&key)
 		);
-		let storage_key = ChildStorageKey::new(storage_key)
+		let storage_key = ChildStorageKey::from_vec(storage_key)
 			.ok_or_else(||
 				UserError("ext_clear_child_storage: child storage key is not valid")
 			)?;
@@ -223,11 +223,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
-		let storage_key = ChildStorageKey::new(storage_key)
+		let storage_key = ChildStorageKey::from_vec(storage_key)
 			.ok_or_else(||
 				UserError("ext_exists_child_storage: child storage key is not valid")
 			)?;
-		Ok(if this.ext.exists_child_storage(&storage_key, &key) { 1 } else { 0 })
+		Ok(if this.ext.exists_child_storage(storage_key, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
@@ -239,7 +239,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
-		let storage_key = ChildStorageKey::new(storage_key)
+		let storage_key = ChildStorageKey::from_vec(storage_key)
 			.ok_or_else(||
 				UserError("ext_exists_child_storage: child storage key is not valid")
 			)?;
@@ -292,8 +292,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
 
 		let maybe_value = {
-			// TODO: Deal with this clone or will it be elided?
-			let storage_key = ChildStorageKey::new(storage_key.clone())
+			let storage_key = ChildStorageKey::from_slice(&storage_key)
 				.ok_or_else(||
 					UserError("ext_get_allocated_child_storage: child storage key is not valid")
 				)?;
@@ -366,7 +365,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		).map_err(|_| UserError("Invalid attempt to get key in ext_get_child_storage_into"))?;
 
 		let maybe_value = {
-			let storage_key = ChildStorageKey::new(storage_key.clone())
+			let storage_key = ChildStorageKey::from_slice(&*storage_key)
 				.ok_or_else(||
 					UserError("ext_get_child_storage_into: child storage key is not valid")
 				)?;
@@ -403,7 +402,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
-		let storage_key = ChildStorageKey::new(storage_key.clone())
+		let storage_key = ChildStorageKey::from_slice(&*storage_key)
 				.ok_or_else(||
 					UserError("ext_get_child_storage_into: child storage key is not valid")
 				)?;

@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
+use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
@@ -55,23 +56,19 @@ pub use proving_backend::{create_proof_check_backend, create_proof_check_backend
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 
-pub struct ChildStorageKey<H: Hasher> {
-	// For simplicity reasons, this uses `Vec` since for the most of use cases
-	// users of this struct already own it.
-	//
-	// However, if it isn't the case anymore, feel free to change it to `Cow`.
-	storage_key: Vec<u8>,
+pub struct ChildStorageKey<'a, H: Hasher> {
+	storage_key: Cow<'a, [u8]>,
 	_hasher: PhantomData<H>,
 }
 
-impl<H: Hasher> ChildStorageKey<H> {
+impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 	/// Create a new `ChildStorageKey` which can be used to refer child storages.
 	///
 	/// `storage_key` has should start with `:child_storage:`
 	/// (see `well_known_keys::CHILD_STORAGE_KEY_PREFIX`). In the future there might be
 	/// added additional constraints.
 	/// TODO: ^^^ update about :default:
-	pub fn new(storage_key: Vec<u8>) -> Option<Self> {
+	pub fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
 		if !well_known_keys::is_child_storage_key(&storage_key) || !trie::is_child_trie_key_valid::<H>(&storage_key) {
 			return None;
 		}
@@ -82,15 +79,23 @@ impl<H: Hasher> ChildStorageKey<H> {
 		})
 	}
 
+	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
+		Self::new(Cow::Owned(key))
+	}
+
+	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
+		Self::new(Cow::Borrowed(key))
+	}
+
 	pub fn as_ref(&self) -> &[u8] {
 		&*self.storage_key
 	}
 }
 
 // TODO: Remove this implementation.
-impl<H: Hasher> From<&[u8]> for ChildStorageKey<H> {
-	fn from(o: &[u8]) -> Self {
-		ChildStorageKey::new(o.to_vec()).unwrap()
+impl<'a, H: Hasher> From<&'a [u8]> for ChildStorageKey<'a, H> {
+	fn from(o: &'a [u8]) -> Self {
+		ChildStorageKey::new(Cow::Borrowed(o)).unwrap()
 	}
 }
 
