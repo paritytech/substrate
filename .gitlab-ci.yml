@@ -137,12 +137,11 @@ test-build-and-deploy:
     - curl -sS -X POST
       -F "token=${CI_JOB_TOKEN}"
       -F "ref=master"
-      -F "variables[PROJECT]=\"substrate\""
-      -F "variables[POLKASYNC]=\"substrate\""
-      -F "variables[PRNO]=\"${CI_COMMIT_REF_NAME}\""
-      -F "variables[JOB_ID]=\"${CI_JOB_ID}\""
+      -F "variables[PROJECT]=substrate"
+      -F "variables[POLKASYNC]=start"
+      -F "variables[PRNO]=${CI_COMMIT_REF_NAME}"
+      -F "variables[JOB_ID]=${CI_JOB_ID}"
       ${GITLAB_API}/projects/${HELPER_PROJECT}/trigger/pipeline
-      | jq -r .web_url
 
 
 test-destroy:
@@ -152,6 +151,7 @@ test-destroy:
     PROJECT: substrate
     POLKASYNC: stop
     PRNO: ${CI_COMMIT_REF_NAME}
+  when:                            manual
   trigger: parity/infrastructure/scripts
 
 
