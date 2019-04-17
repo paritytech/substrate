@@ -37,23 +37,6 @@
 //!
 //! ## Usage
 //!
-//! ### Prerequisites
-//!
-//! To use the Sudo module in your runtime, you must implement the following trait in your runtime:
-//!
-//! ```ignore
-//! impl sudo::Trait for Runtime {
-//! 	type Event = Event;
-//! 	type Proposal = Call;
-//! }
-//! ```
-//!
-//! You can then import the Sudo module in your `construct_runtime!` macro with:
-//!
-//! ```ignore
-//! Sudo: sudo,
-//! ```
-//!
 //! ### Executing Privileged Functions
 //!
 //! The Sudo module itself is not intended to be used within other modules.
@@ -67,8 +50,9 @@
 //!
 //! This is an example of a module that exposes a privileged function:
 //!
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
+//! ```
+//! # extern crate srml_support;
+//! use srml_support::{decl_module, dispatch::Result};
 //! use system::ensure_root;
 //!
 //! pub trait Trait: system::Trait {}
@@ -84,32 +68,13 @@
 //!         }
 //!     }
 //! }
-//! ```
-//!
-//! ### Example from SRML
-//!
-//! The Consensus module exposes a `set_code` privileged function
-//! that allows you to set the on-chain Wasm runtime code:
-//!
-//! ```ignore
-//! /// Set the new code.
-//! pub fn set_code(new: Vec<u8>) {
-//!     storage::unhashed::put_raw(well_known_keys::CODE, &new);
-//! }
+//! # fn main() {}
 //! ```
 //!
 //! ## Genesis Config
 //!
 //! The Sudo module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 //! You need to set an initial superuser account as the sudo `key`.
-//!
-//! ```ignore
-//! GenesisConfig {
-//!     sudo: Some(SudoConfig {
-//!         key: AccountId,
-//!     })
-//! }
-//! ```
 //!
 //! ## Related Modules
 //!

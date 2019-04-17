@@ -97,17 +97,24 @@
 //!
 //! [(lib.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/lib.rs):
 //!
-//! ```rust,ignore
-//! use srml_support::traits::Currency
+//! ```ignore
+//! # extern crate srml_support;
+//! use srml_support::traits::Currency;
+//! # pub trait Trait: balances::Trait {
+//! # 	type Currency: Currency<Self::AccountId>;
+//! # }
 //!
 //! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 //! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+//!
+//! # fn main() {}
 //!```
 //!
 //! [(gas.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/gas.rs):
 //!
-//! ```rust,ignore
-//! use srml_support::traits::Currency
+//! ```ignore
+//! use srml_support::traits::Currency;
+//! # pub trait Trait: system::Trait {}
 //!
 //! pub fn refund_unused_gas<T: Trait>(
 //! 	transactor: &T::AccountId,
@@ -127,6 +134,7 @@
 //! 		T::GasPayment::on_unbalanced(imbalance);
 //! 	}
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! ## Genesis config
