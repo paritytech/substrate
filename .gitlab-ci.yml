@@ -133,7 +133,7 @@ test-build-and-deploy:
     HELPER_PROJECT:                "parity%2Finfrastructure%2Fscripts"
   when:                            manual
   after_script:
-    - echo "trigger polkasync pipeline in scripts repo"
+    - echo "trigger polkasync pipeline in scripts repo to start the deployment"
     - curl -sS -X POST
       -F "token=${CI_JOB_TOKEN}"
       -F "ref=master"
@@ -152,7 +152,19 @@ test-destroy:
     POLKASYNC: stop
     PRNO: ${CI_COMMIT_REF_NAME}
   when:                            manual
-  trigger: parity/infrastructure/scripts
+  # nice idea but doesn't work with manual trigger
+  # trigger: parity/infrastructure/scripts
+  script:
+    - echo "trigger polkasync pipeline in scripts repo to destroy the deployment"
+    - curl -sS -X POST
+      -F "token=${CI_JOB_TOKEN}"
+      -F "ref=master"
+      -F "variables[PROJECT]=substrate"
+      -F "variables[POLKASYNC]=stop"
+      -F "variables[PRNO]=${CI_COMMIT_REF_NAME}"
+      -F "variables[JOB_ID]=${CI_JOB_ID}"
+      ${GITLAB_API}/projects/${HELPER_PROJECT}/trigger/pipeline
+
 
 
 
