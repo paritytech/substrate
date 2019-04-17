@@ -17,6 +17,7 @@
 //! Rust implementation of the Phragmén election algorithm.
 
 use rstd::prelude::*;
+use rstd::collections::btree_map::BTreeMap;
 use primitives::PerU128;
 use primitives::traits::{Zero, Saturating, Convert};
 use parity_codec::{HasCompact, Encode, Decode};
@@ -142,11 +143,25 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
+	// Caching the index is needed to prevent complexity exploitation.
+	let mut c_idx_cache = BTreeMap::<T::AccountId, usize>::new();
 	nominators.extend(nominator_iter.map(|(who, nominees)| {
 		let nominator_stake = stash_of(&who);
 		let mut edges: Vec<Edge<T::AccountId>> = Vec::with_capacity(nominees.len());
 		for n in &nominees {
-			if let Some(idx) = candidates.iter_mut().position(|i| i.who == *n) {
+			let mut c_idx: Option<usize> = None;
+			if let Some(idx) = c_idx_cache.get(n) {
+				// This candidate is already checked.
+				c_idx = Some(*idx);
+			} else {
+				// New candidate. Must do a linear search for it.
+				if let Some(idx) = candidates.iter_mut().position(|i| i.who == *n) {
+					c_idx_cache.insert(n.clone(), idx);
+					c_idx = Some(idx);
+				}
+				// else {} would be wrong votes. We don't really care about that.
+			}
+			if let Some(idx) = c_idx {
 				candidates[idx].approval_stake = candidates[idx].approval_stake
 					.saturating_add(into_currency(nominator_stake));
 				edges.push(Edge { who: n.clone(), candidate_index: idx, ..Default::default() });
