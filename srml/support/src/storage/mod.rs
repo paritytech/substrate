@@ -19,7 +19,8 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
-use runtime_io::{twox_128, blake2_128};
+use hashed::generator::{HashedStorage, StorageHasher};
+use unhashed::generator::UnhashedStorage;
 
 #[macro_use]
 pub mod storage_items;
@@ -58,59 +59,33 @@ impl<'a> Input for IncrementalChildInput<'a> {
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
 
-impl hashed::generator::Twox128Storage for RuntimeStorage {
+impl<H: 'static + StorageHasher> HashedStorage<H> for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		hashed::exists(&twox_128, key)
+		hashed::exists(&H::hash, key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::get(&twox_128, key)
+		hashed::get(&H::hash, key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		hashed::put(&twox_128, key, val)
+		hashed::put(&H::hash, key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		hashed::kill(&twox_128, key)
+		hashed::kill(&H::hash, key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::take(&twox_128, key)
+		hashed::take(&H::hash, key)
 	}
 }
 
-impl hashed::generator::Blake2_128Storage for RuntimeStorage {
-	fn exists(&self, key: &[u8]) -> bool {
-		hashed::exists(&blake2_128, key)
-	}
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::get(&blake2_128, key)
-	}
-
-	/// Put a value in under a key.
-	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		hashed::put(&blake2_128, key, val)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&self, key: &[u8]) {
-		hashed::kill(&blake2_128, key)
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::take(&blake2_128, key)
-	}
-}
-
-impl unhashed::generator::UnhashedStorage for RuntimeStorage {
+impl UnhashedStorage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
 		unhashed::exists(key)
 	}

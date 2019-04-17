@@ -192,17 +192,17 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value from the provided storage instance.
-			fn get<S: $crate::Twox128Storage>(storage: &S) -> Self::Query {
+			fn get<S: $crate::HashedStorage<$crate::Twox>>(storage: &S) -> Self::Query {
 				storage.$getter($key)
 			}
 
 			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::Twox128Storage>(storage: &S) -> Self::Query {
+			fn take<S: $crate::HashedStorage<$crate::Twox>>(storage: &S) -> Self::Query {
 				storage.$taker($key)
 			}
 
 			/// Mutate this value.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::Twox128Storage>(f: F, storage: &S) -> R {
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Twox>>(f: F, storage: &S) -> R {
 				let mut val = <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::get(storage);
 
 				let ret = f(&mut val);
@@ -248,19 +248,19 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::Blake2_128Storage>(key: &$kty, storage: &S) -> Self::Query {
+			fn get<S: $crate::HashedStorage<$crate::Blake2>>(key: &$kty, storage: &S) -> Self::Query {
 				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$getter(&key[..])
 			}
 
 			/// Take the value, reading and removing it.
-			fn take<S: $crate::Blake2_128Storage>(key: &$kty, storage: &S) -> Self::Query {
+			fn take<S: $crate::HashedStorage<$crate::Blake2>>(key: &$kty, storage: &S) -> Self::Query {
 				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
 
 			/// Mutate the value under a key.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::Blake2_128Storage>(key: &$kty, f: F, storage: &S) -> R {
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Blake2>>(key: &$kty, f: F, storage: &S) -> R {
 				let mut val = <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
@@ -285,13 +285,13 @@ macro_rules! __storage_items_internal {
 		$($vis)* struct $name;
 
 		impl $name {
-			fn clear_item<S: $crate::Twox128Storage>(index: u32, storage: &S) {
+			fn clear_item<S: $crate::HashedStorage<$crate::Twox>>(index: u32, storage: &S) {
 				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
-			fn set_len<S: $crate::Twox128Storage>(count: u32, storage: &S) {
+			fn set_len<S: $crate::HashedStorage<$crate::Twox>>(count: u32, storage: &S) {
 				(count..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
 				storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key(), &count);
 			}
@@ -318,38 +318,38 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Read out all the items.
-			fn items<S: $crate::Twox128Storage>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
+			fn items<S: $crate::HashedStorage<$crate::Twox>>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
 				(0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage))
 					.map(|i| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
 					.collect()
 			}
 
 			/// Set the current set of items.
-			fn set_items<S: $crate::Twox128Storage>(items: &[$ty], storage: &S) {
+			fn set_items<S: $crate::HashedStorage<$crate::Twox>>(items: &[$ty], storage: &S) {
 				$name::set_len(items.len() as u32, storage);
 				items.iter()
 					.enumerate()
 					.for_each(|(i, item)| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
-			fn set_item<S: $crate::Twox128Storage>(index: u32, item: &$ty, storage: &S) {
+			fn set_item<S: $crate::HashedStorage<$crate::Twox>>(index: u32, item: &$ty, storage: &S) {
 				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-			fn get<S: $crate::Twox128Storage>(index: u32, storage: &S) -> Option<$ty> {
+			fn get<S: $crate::HashedStorage<$crate::Twox>>(index: u32, storage: &S) -> Option<$ty> {
 				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..])
 			}
 
 			/// Load the length of the list.
-			fn len<S: $crate::Twox128Storage>(storage: &S) -> u32 {
+			fn len<S: $crate::HashedStorage<$crate::Twox>>(storage: &S) -> u32 {
 				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
 			}
 
 			/// Clear the list.
-			fn clear<S: $crate::Twox128Storage>(storage: &S) {
+			fn clear<S: $crate::HashedStorage<$crate::Twox>>(storage: &S) {
 				for i in 0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					$name::clear_item(i, storage);
 				}

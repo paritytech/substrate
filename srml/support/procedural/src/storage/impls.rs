@@ -110,19 +110,19 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Load the value from the provided storage instance.
-				fn get<S: #scrate::Twox128Storage>(storage: &S) -> Self::Query {
+				fn get<S: #scrate::HashedStorage<#scrate::Twox>>(storage: &S) -> Self::Query {
 					storage.get(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take a value from storage, removing it afterwards.
-				fn take<S: #scrate::Twox128Storage>(storage: &S) -> Self::Query {
+				fn take<S: #scrate::HashedStorage<#scrate::Twox>>(storage: &S) -> Self::Query {
 					storage.take(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key.
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Twox128Storage>(f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::Twox>>(f: F, storage: &S) -> R {
 					let mut val = <Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::get(storage);
 
 					let ret = f(&mut val);
@@ -204,19 +204,19 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Load the value associated with the given key from the map.
-				fn get<S: #scrate::Blake2_128Storage>(key: &#kty, storage: &S) -> Self::Query {
+				fn get<S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, storage: &S) -> Self::Query {
 					let key = #as_map::key_for(key);
 					storage.get(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take the value, reading and removing it.
-				fn take<S: #scrate::Blake2_128Storage>(key: &#kty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, storage: &S) -> Self::Query {
 					let key = #as_map::key_for(key);
 					storage.take(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Blake2_128Storage>(key: &#kty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, f: F, storage: &S) -> R {
 					let mut val = #as_map::get(key, storage);
 
 					let ret = f(&mut val);
@@ -324,7 +324,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					pub _data: #phantom_data<V>,
 				}
 
-				impl<'a, S: #scrate::Blake2_128Storage, #traitinstance: #traittype, #instance #bound_instantiable>
+				impl<'a, S: #scrate::HashedStorage<#scrate::Blake2>, #traitinstance: #traittype, #instance #bound_instantiable>
 					Iterator for Enumerator<'a, S, #kty, (#typ, #traitinstance, #instance)>
 					where #traitinstance: 'a
 				{
@@ -347,26 +347,26 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					///
 					/// Takes care of updating previous and next elements points
 					/// as well as updates head if the element is first or last.
-					fn remove_linkage<S: #scrate::Blake2_128Storage>(linkage: Linkage<#kty>, storage: &S);
+					fn remove_linkage<S: #scrate::HashedStorage<#scrate::Blake2>>(linkage: Linkage<#kty>, storage: &S);
 
 					/// Read the contained data and it's linkage.
-					fn read_with_linkage<S: #scrate::Blake2_128Storage>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>;
+					fn read_with_linkage<S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>;
 
 					/// Generate linkage for newly inserted element.
 					///
 					/// Takes care of updating head and previous head's pointer.
-					fn new_head_linkage<S: #scrate::Blake2_128Storage>(
+					fn new_head_linkage<S: #scrate::HashedStorage<#scrate::Blake2>>(
 						storage: &S,
 						key: &#kty,
 					) -> Linkage<#kty>;
 
 					/// Read current head pointer.
-					fn read_head<S: #scrate::Blake2_128Storage>(storage: &S) -> Option<#kty>;
+					fn read_head<S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &S) -> Option<#kty>;
 
 					/// Overwrite current head pointer.
 					///
 					/// If `None` is given head is removed from storage.
-					fn write_head<S: #scrate::Blake2_128Storage>(storage: &S, head: Option<&#kty>);
+					fn write_head<S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &S, head: Option<&#kty>);
 				}
 			}
 		};
@@ -376,7 +376,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#phantom_data<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> self::#inner_module::Utils<#traitinstance, #instance> for #name<#traitinstance, #instance> {
-				fn remove_linkage<S: #scrate::Blake2_128Storage>(
+				fn remove_linkage<S: #scrate::HashedStorage<#scrate::Blake2>>(
 					linkage: self::#inner_module::Linkage<#kty>,
 					storage: &S,
 				) {
@@ -405,14 +405,14 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					}
 				}
 
-				fn read_with_linkage<S: #scrate::Blake2_128Storage>(
+				fn read_with_linkage<S: #scrate::HashedStorage<#scrate::Blake2>>(
 					storage: &S,
 					key: &[u8],
 				) -> Option<(#value_type, self::#inner_module::Linkage<#kty>)> {
 					storage.get(key)
 				}
 
-				fn new_head_linkage<S: #scrate::Blake2_128Storage>(
+				fn new_head_linkage<S: #scrate::HashedStorage<#scrate::Blake2>>(
 					storage: &S,
 					key: &#kty,
 				) -> self::#inner_module::Linkage<#kty> {
@@ -444,11 +444,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					}
 				}
 
-				fn read_head<S: #scrate::Blake2_128Storage>(storage: &S) -> Option<#kty> {
+				fn read_head<S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &S) -> Option<#kty> {
 					storage.get(#final_head_key)
 				}
 
-				fn write_head<S: #scrate::Blake2_128Storage>(storage: &S, head: Option<&#kty>) {
+				fn write_head<S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &S, head: Option<&#kty>) {
 					match head {
 						Some(head) => storage.put(#final_head_key, head),
 						None => storage.kill(#final_head_key),
@@ -480,12 +480,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Load the value associated with the given key from the map.
-				fn get<S: #scrate::Blake2_128Storage>(key: &#kty, storage: &S) -> Self::Query {
+				fn get<S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, storage: &S) -> Self::Query {
 					storage.get(&*#as_map::key_for(key)).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take the value, reading and removing it.
-				fn take<S: #scrate::Blake2_128Storage>(key: &#kty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, storage: &S) -> Self::Query {
 					use self::#inner_module::Utils;
 
 					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
@@ -499,12 +499,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Remove the value under a key.
-				fn remove<S: #scrate::Blake2_128Storage>(key: &#kty, storage: &S) {
+				fn remove<S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, storage: &S) {
 					#as_map::take(key, storage);
 				}
 
 				/// Store a value to be associated with the given key from the map.
-				fn insert<S: #scrate::Blake2_128Storage>(key: &#kty, val: &#typ, storage: &S) {
+				fn insert<S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, val: &#typ, storage: &S) {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -518,7 +518,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::Blake2_128Storage>(key: &#kty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::Blake2>>(key: &#kty, f: F, storage: &S) -> R {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -535,13 +535,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
 				#scrate::storage::hashed::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance, #instance>
 			{
-				fn head<S: #scrate::Blake2_128Storage>(storage: &S) -> Option<#kty> {
+				fn head<S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &S) -> Option<#kty> {
 					use self::#inner_module::Utils;
 
 					Self::read_head(storage)
 				}
 
-				fn enumerate<'a, S: #scrate::Blake2_128Storage>(storage: &'a S) -> #scrate::rstd::boxed::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
+				fn enumerate<'a, S: #scrate::HashedStorage<#scrate::Blake2>>(storage: &'a S) -> #scrate::rstd::boxed::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
 					#kty: 'a,
 					#typ: 'a,
 				{

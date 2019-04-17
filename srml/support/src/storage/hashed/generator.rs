@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Abstract storage to use on Twox128Storage trait
+//! Abstract storage to use on HashedStorage trait
 
 use crate::codec;
 use crate::rstd::prelude::{Vec, Box};
@@ -23,8 +23,28 @@ use crate::storage::unhashed::generator::UnhashedStorage;
 #[cfg(feature = "std")]
 use runtime_io::{twox_128, blake2_128};
 
+pub trait StorageHasher {
+	fn hash(x: &[u8]) -> [u8; 16];
+}
+
+/// Hash storage keys with blake2 128
+pub struct Blake2;
+impl StorageHasher for Blake2 {
+	fn hash(x: &[u8]) -> [u8; 16] {
+		blake2_128(x)
+	}
+}
+
+/// Hash storage keys with twox 128
+pub struct Twox;
+impl StorageHasher for Twox {
+	fn hash(x: &[u8]) -> [u8; 16] {
+		twox_128(x)
+	}
+}
+
 /// Abstraction around storage.
-pub trait Twox128Storage {
+pub trait HashedStorage<H: StorageHasher> {
 	/// true if the key exists in storage.
 	fn exists(&self, key: &[u8]) -> bool;
 
@@ -61,77 +81,21 @@ pub trait Twox128Storage {
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl Twox128Storage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
+impl<H: StorageHasher> HashedStorage<H> for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
 	fn exists(&self, key: &[u8]) -> bool {
-		UnhashedStorage::exists(self, &twox_128(key))
+		UnhashedStorage::exists(self, &H::hash(key))
 	}
 
 	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		UnhashedStorage::get(self, &twox_128(key))
+		UnhashedStorage::get(self, &H::hash(key))
 	}
 
 	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		UnhashedStorage::put(self, &twox_128(key), val)
+		UnhashedStorage::put(self, &H::hash(key), val)
 	}
 
 	fn kill(&self, key: &[u8]) {
-		UnhashedStorage::kill(self, &twox_128(key))
-	}
-}
-
-/// Abstraction around storage.
-pub trait Blake2_128Storage {
-	/// true if the key exists in storage.
-	fn exists(&self, key: &[u8]) -> bool;
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T>;
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
-	/// it's not there.
-	fn require<T: codec::Decode>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
-	/// default is returned if it's not there.
-	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
-
-	/// Put a value in under a key.
-	fn put<T: codec::Encode>(&self, key: &[u8], val: &T);
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&self, key: &[u8]);
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		let value = self.get(key);
-		self.kill(key);
-		value
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Decode>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
-
-	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
-}
-
-// We use a construct like this during when genesis storage is being built.
-#[cfg(feature = "std")]
-impl Blake2_128Storage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
-	fn exists(&self, key: &[u8]) -> bool {
-		UnhashedStorage::exists(self, &blake2_128(key))
-	}
-
-	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		UnhashedStorage::get(self, &blake2_128(key))
-	}
-
-	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		UnhashedStorage::put(self, &blake2_128(key), val)
-	}
-
-	fn kill(&self, key: &[u8]) {
-		UnhashedStorage::kill(self, &blake2_128(key))
+		UnhashedStorage::kill(self, &H::hash(key))
 	}
 }
 
@@ -144,26 +108,26 @@ pub trait StorageValue<T: codec::Codec> {
 	fn key() -> &'static [u8];
 
 	/// true if the value is defined in storage.
-	fn exists<S: Twox128Storage>(storage: &S) -> bool {
+	fn exists<S: HashedStorage<Twox>>(storage: &S) -> bool {
 		storage.exists(Self::key())
 	}
 
 	/// Load the value from the provided storage instance.
-	fn get<S: Twox128Storage>(storage: &S) -> Self::Query;
+	fn get<S: HashedStorage<Twox>>(storage: &S) -> Self::Query;
 
 	/// Take a value from storage, removing it afterwards.
-	fn take<S: Twox128Storage>(storage: &S) -> Self::Query;
+	fn take<S: HashedStorage<Twox>>(storage: &S) -> Self::Query;
 
 	/// Store a value under this key into the provided storage instance.
-	fn put<S: Twox128Storage>(val: &T, storage: &S) {
+	fn put<S: HashedStorage<Twox>>(val: &T, storage: &S) {
 		storage.put(Self::key(), val)
 	}
 
 	/// Mutate this value
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Twox128Storage>(f: F, storage: &S) -> R;
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: HashedStorage<Twox>>(f: F, storage: &S) -> R;
 
 	/// Clear the storage value.
-	fn kill<S: Twox128Storage>(storage: &S) {
+	fn kill<S: HashedStorage<Twox>>(storage: &S) {
 		storage.kill(Self::key())
 	}
 }
@@ -180,22 +144,22 @@ pub trait StorageList<T: codec::Codec> {
 	fn key_for(index: u32) -> Vec<u8>;
 
 	/// Read out all the items.
-	fn items<S: Twox128Storage>(storage: &S) -> Vec<T>;
+	fn items<S: HashedStorage<Twox>>(storage: &S) -> Vec<T>;
 
 	/// Set the current set of items.
-	fn set_items<S: Twox128Storage>(items: &[T], storage: &S);
+	fn set_items<S: HashedStorage<Twox>>(items: &[T], storage: &S);
 
 	/// Set the item at the given index.
-	fn set_item<S: Twox128Storage>(index: u32, item: &T, storage: &S);
+	fn set_item<S: HashedStorage<Twox>>(index: u32, item: &T, storage: &S);
 
 	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-	fn get<S: Twox128Storage>(index: u32, storage: &S) -> Option<T>;
+	fn get<S: HashedStorage<Twox>>(index: u32, storage: &S) -> Option<T>;
 
 	/// Load the length of the list
-	fn len<S: Twox128Storage>(storage: &S) -> u32;
+	fn len<S: HashedStorage<Twox>>(storage: &S) -> u32;
 
 	/// Clear the list.
-	fn clear<S: Twox128Storage>(storage: &S);
+	fn clear<S: HashedStorage<Twox>>(storage: &S);
 }
 
 /// A strongly-typed map in storage.
@@ -210,35 +174,35 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	fn key_for(x: &K) -> Vec<u8>;
 
 	/// true if the value is defined in storage.
-	fn exists<S: Blake2_128Storage>(key: &K, storage: &S) -> bool {
+	fn exists<S: HashedStorage<Blake2>>(key: &K, storage: &S) -> bool {
 		storage.exists(&Self::key_for(key)[..])
 	}
 
 	/// Load the value associated with the given key from the map.
-	fn get<S: Blake2_128Storage>(key: &K, storage: &S) -> Self::Query;
+	fn get<S: HashedStorage<Blake2>>(key: &K, storage: &S) -> Self::Query;
 
 	/// Take the value under a key.
-	fn take<S: Blake2_128Storage>(key: &K, storage: &S) -> Self::Query;
+	fn take<S: HashedStorage<Blake2>>(key: &K, storage: &S) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<S: Blake2_128Storage>(key: &K, val: &V, storage: &S) {
+	fn insert<S: HashedStorage<Blake2>>(key: &K, val: &V, storage: &S) {
 		storage.put(&Self::key_for(key)[..], val);
 	}
 
 	/// Remove the value under a key.
-	fn remove<S: Blake2_128Storage>(key: &K, storage: &S) {
+	fn remove<S: HashedStorage<Blake2>>(key: &K, storage: &S) {
 		storage.kill(&Self::key_for(key)[..]);
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Blake2_128Storage>(key: &K, f: F, storage: &S) -> R;
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: HashedStorage<Blake2>>(key: &K, f: F, storage: &S) -> R;
 }
 
 /// A `StorageMap` with enumerable entries.
 pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
 	/// Return current head element.
-	fn head<S: Blake2_128Storage>(storage: &S) -> Option<K>;
+	fn head<S: HashedStorage<Blake2>>(storage: &S) -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate<'a, S: Blake2_128Storage>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
+	fn enumerate<'a, S: HashedStorage<Blake2>>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }
