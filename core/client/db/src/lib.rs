@@ -1163,6 +1163,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		&self.blockchain
 	}
 
+	fn used_state_cache_size(&self) -> Option<usize> {
+		let used = (*&self.shared_cache).lock().used_storage_cache_size();
+		Some(used)
+	}
+
 	fn state_at(&self, block: BlockId<Block>) -> Result<Self::State, client::error::Error> {
 		use client::blockchain::HeaderBackend as BcHeaderBackend;
 

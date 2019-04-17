@@ -183,6 +183,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 		&self.blockchain
 	}
 
+	fn used_state_cache_size(&self) -> Option<usize> {
+		None
+	}
+
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		None
 	}
