@@ -74,7 +74,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// ```rust
 /// # #[macro_use]
 /// # extern crate srml_support;
-/// use srml_support::dispatch::Result;
+/// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
 /// 
 /// decl_module! {
@@ -90,7 +90,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 		}
 ///		}
 ///	}
-/// fn main() {}
+/// # fn main() {}
 /// ```
 /// 
 /// The declaration is set with the header where:
@@ -104,7 +104,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///	```rust
 /// # #[macro_use]
 /// # extern crate srml_support;
-/// use srml_support::dispatch::Result;
+/// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
 /// 
 /// decl_module! {
@@ -114,7 +114,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 		}
 ///		}
 /// }
-/// fn main() {}
+/// # fn main() {}
 /// ```
 /// 
 /// The macro automatically expands a shorthand function declaration to return the `Result` type.
@@ -124,7 +124,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// ```rust
 /// # #[macro_use]
 /// # extern crate srml_support;
-/// use srml_support::dispatch::Result;
+/// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
 ///
 /// decl_module! {
@@ -135,7 +135,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 		}
 ///		}
 /// }
-/// fn main() {}
+/// # fn main() {}
 /// ```
 /// 
 /// If the `origin` param is omitted, the macro assumes the `origin` to be `Root`.
@@ -145,20 +145,20 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// ```rust
 /// # #[macro_use]
 /// # extern crate srml_support;
-/// use srml_support::dispatch::Result;
+/// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, ensure_signed};
 ///
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
 /// # impl Instance for DefaultInstance {}
-/// # pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
+/// pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
 /// 
 /// decl_module! {
 /// 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 /// 		// Your implementation
 /// 	}
 /// }
-/// fn main() {}
+/// # fn main() {}
 /// ```
 /// 
 /// This macro supports modules with multiple instances. See [balances](https://crates.parity.io/srml_balances/index.html) example. 
