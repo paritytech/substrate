@@ -147,10 +147,10 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, ensure_signed};
-///
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
 /// # impl Instance for DefaultInstance {}
+/// 
 /// pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
 /// 
 /// decl_module! {
@@ -174,8 +174,6 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// * `on_initialize`: Executes at the beginning of a block.
 /// * `on_finalize`: Executes at the end of a block.
 /// * `offchain_worker`: Executes at the beginning of a block and produces extrinsics for a future block upon completion.
-///
-
 #[macro_export]
 macro_rules! decl_module {
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
