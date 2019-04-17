@@ -187,7 +187,7 @@ pub fn storage_root() -> H256 {
 pub fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
 	ext::with(|ext| {
 		let storage_key = child_storage_key_or_panic(storage_key);
-		ext.child_storage_root(storage_key).unwrap()
+		ext.child_storage_root(storage_key)
 	}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 }
 

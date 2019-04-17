@@ -308,13 +308,17 @@ where
 		root
 	}
 
-	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Option<Vec<u8>> {
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		if self.storage_transaction.is_some() {
-			return Some(self.storage(storage_key.as_ref()).unwrap_or(default_child_trie_root::<H>(storage_key.as_ref())));
+			return self
+				.storage(storage_key.as_ref())
+				.unwrap_or(
+					default_child_trie_root::<H>(storage_key.as_ref())
+				);
 		}
 
-		Some(self.child_storage_root_transaction(storage_key.as_ref()).0)
+		self.child_storage_root_transaction(storage_key.as_ref()).0
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {

@@ -404,20 +404,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let storage_key = ChildStorageKey::from_slice(&*storage_key)
 				.ok_or_else(||
-					UserError("ext_get_child_storage_into: child storage key is not valid")
+					UserError("ext_child_storage_root: child storage key is not valid")
 				)?;
-		let r = this.ext.child_storage_root(storage_key);
-		if let Some(value) = r {
-			let offset = this.heap.allocate(value.len() as u32)? as u32;
-			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
-			this.memory.write_primitive(written_out, value.len() as u32)
-				.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
-			Ok(offset)
-		} else {
-			this.memory.write_primitive(written_out, u32::max_value())
-				.map_err(|_| UserError("Invalid attempt to write failed written_out in ext_child_storage_root"))?;
-			Ok(0)
-		}
+		let value = this.ext.child_storage_root(storage_key);
+
+		let offset = this.heap.allocate(value.len() as u32)? as u32;
+		this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
+		this.memory.write_primitive(written_out, value.len() as u32)
+			.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
+		Ok(offset)
 	},
 	ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_number: u64, result: *mut u8) -> u32 => {
 		let mut parent_hash = H256::default();
