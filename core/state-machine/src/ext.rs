@@ -23,7 +23,7 @@ use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_
 use crate::{Externalities, OverlayedChanges, OffchainExt, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
+use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
 use heapsize::HeapSizeOf;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";

@@ -115,7 +115,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, _storage_key: ChildStorageKey<H>, _key: &[u8]) -> Option<Vec<u8>> {
 		None
 	}
 
