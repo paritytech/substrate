@@ -106,7 +106,7 @@ pub fn read_child_storage(
 				value.len()
 			})
 	})
-	.expect("read_storage cannot be called outside of an Externalities-provided environment.")
+	.expect("read_child_storage cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Set the storage of a key to some value.
@@ -183,13 +183,12 @@ pub fn storage_root() -> H256 {
 	).unwrap_or(H256::zero())
 }
 
-/// TODO: This shouldn't be returning `Option`.
 /// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+pub fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
 	ext::with(|ext| {
 		let storage_key = child_storage_key_or_panic(storage_key);
-		ext.child_storage_root(storage_key)
-	}).unwrap_or(None)
+		ext.child_storage_root(storage_key).unwrap()
+	}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 }
 
 /// "Commit" all existing operations and get the resultant storage change root.
