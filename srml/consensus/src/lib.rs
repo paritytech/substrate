@@ -16,6 +16,10 @@
 
 //! # Consensus Module
 //!
+//! - [`consensus::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
+//!
 //! ## Overview
 //!
 //! The consensus module manages the authority set for the native code. It provides support for reporting offline
@@ -33,11 +37,12 @@
 //! - `set_code` - Set the new code.
 //! - `set_storage` - Set some items of storage.
 //!
-//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
-//!
 //! ### Public Functions
 //!
-//! See the [module](./struct.Module.html) for details on publicly available functions.
+//! - `authorities` - Get the current set of authorities. These are the session keys.
+//! - `set_authorities` - Set the current set of authorities' session keys.
+//! - `set_authority_count` - Set the total number of authorities.
+//! - `set_authority` - Set a single authority by index.
 //!
 //! ## Usage
 //!
@@ -101,11 +106,11 @@
 //!
 //! ## Related Modules
 //!
-//! - [`staking`](../srml_staking/index.html): This module uses `srml-consensus` to monitor offline
+//! - [Staking](../srml_staking/index.html): This module uses `srml-consensus` to monitor offline
 //! reporting among validators.
-//! - [`aura`](../srml_aura/index.html): This module does not relate directly to `srml-consensus`,
+//! - [Aura](../srml_aura/index.html): This module does not relate directly to `srml-consensus`,
 //! but serves to manage offline reporting for the Aura consensus algorithm with its own `handle_report` method.
-//! - [`grandpa`](../srml_grandpa/index.html): Although GRANDPA does its own voter-set management,
+//! - [Grandpa](../srml_grandpa/index.html): Although GRANDPA does its own voter-set management,
 //!  it has a mode where it can track `consensus`, if desired.
 //!
 //! ## References
@@ -339,7 +344,8 @@ impl<T: Trait> Module<T> {
 		AuthorityStorageVec::<T::SessionKey>::items()
 	}
 
-	/// Set the current set of authorities' session keys.
+	/// Set the current set of authorities' session keys. Will not exceed the current
+	/// authorities count, even if the given `authorities` is longer.
 	///
 	/// Called by `rotate_session` only.
 	pub fn set_authorities(authorities: &[T::SessionKey]) {
@@ -350,7 +356,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Set a single authority by index.
+	/// Set the total number of authorities.
 	pub fn set_authority_count(count: u32) {
 		Self::save_original_authorities(None);
 		AuthorityStorageVec::<T::SessionKey>::set_count(count);

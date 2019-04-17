@@ -16,9 +16,8 @@
 
 //! Substrate CLI library.
 
-#![warn(missing_docs)]
-#![warn(unused_extern_crates)]
-
+#![forbid(warnings)]
+#![deny(unused_extern_crates, missing_docs)]
 #[macro_use]
 mod traits;
 mod params;
@@ -475,11 +474,18 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
-	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| Some(vec![
-		"http://localhost:*".into(),
-		"https://localhost:*".into(),
-		"https://polkadot.js.org".into()
-	]));
+	let is_dev = cli.shared_params.dev;
+	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
+		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+		None
+	} else {
+		Some(vec![
+			"http://localhost:*".into(),
+			"https://localhost:*".into(),
+			"https://polkadot.js.org".into(),
+			"https://substrate-ui.parity.io".into(),
+		])
+	});
 
 	// Override telemetry
 	if cli.no_telemetry {
@@ -735,10 +741,10 @@ fn init_logger(pattern: &str) {
 	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse(&lvl);
+		builder.parse_filters(&lvl);
 	}
 
-	builder.parse(pattern);
+	builder.parse_filters(pattern);
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 

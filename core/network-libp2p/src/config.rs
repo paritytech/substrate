@@ -61,7 +61,7 @@ impl Default for NetworkConfiguration {
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
-			node_key: NodeKeyConfig::Secp256k1(Secret::New),
+			node_key: NodeKeyConfig::Ed25519(Secret::New),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),

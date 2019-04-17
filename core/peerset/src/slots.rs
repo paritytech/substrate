@@ -17,6 +17,7 @@
 use std::{fmt, mem};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
+use serde_json::json;
 
 /// Describes the nature of connection with a given peer.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -161,14 +162,14 @@ impl Slots {
 
 	/// Marks given peer as a reserved one.
 	pub fn mark_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.common.remove(peer_id) {
+		if self.common.remove(peer_id).is_some() {
 			self.reserved.insert(peer_id.clone(), ());
 		}
 	}
 
 	/// Marks given peer as not reserved one.
 	pub fn mark_not_reserved(&mut self, peer_id: &PeerId) {
-		if let Some(_) = self.reserved.remove(peer_id) {
+		if self.reserved.remove(peer_id).is_some() {
 			self.common.insert(peer_id.clone(), ());
 		}
 	}
@@ -182,15 +183,25 @@ impl Slots {
 	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
 		self.reserved.contains_key(peer_id)
 	}
+
+	/// Produces a JSON object containing the state of slots, for debugging purposes.
+	pub fn debug_info(&self) -> serde_json::Value {
+		json!({
+			"max_slots": self.max_slots,
+			"reserved": self.reserved.keys().map(|peer_id| peer_id.to_base58()).collect::<Vec<_>>(),
+			"common": self.common.keys().map(|peer_id| peer_id.to_base58()).collect::<Vec<_>>()
+		})
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use libp2p::PeerId;
+	use serde_json::json;
 	use super::{Slots, SlotType};
 
 	#[test]
-	fn test_slots_debug() {
+	fn test_slots_debug_info() {
 		let reserved_peer = PeerId::random();
 		let reserved_peer2 = PeerId::random();
 		let common_peer = PeerId::random();
@@ -200,24 +211,12 @@ mod tests {
 		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
 		slots.add_peer(common_peer.clone(), SlotType::Common);
 
-		let expected = format!("Slots {{
-    max_slots: 10,
-    reserved: [
-        PeerId(
-            {:?}
-        ),
-        PeerId(
-            {:?}
-        )
-    ],
-    common: [
-        PeerId(
-            {:?}
-        )
-    ]
-}}", reserved_peer.to_base58(), reserved_peer2.to_base58(), common_peer.to_base58());
+		let expected = json!({
+			"max_slots": 10,
+			"reserved": vec![reserved_peer.to_base58(), reserved_peer2.to_base58()],
+			"common": vec![common_peer.to_base58()],
+		});
 
-		let s = format!("{:#?}", slots);
-		assert_eq!(expected, s);
+		assert_eq!(expected, slots.debug_info());
 	}
 }
