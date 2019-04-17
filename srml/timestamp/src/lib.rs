@@ -60,7 +60,7 @@
 //! ```
 //! # extern crate srml_support;
 //! use srml_support::{decl_module, dispatch::Result};
-//! use srml_timestamp::{self as timestamp};
+//! # use srml_timestamp::{self as timestamp};
 //! use system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
