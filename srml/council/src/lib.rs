@@ -51,8 +51,7 @@
 //! * **Council proposal vote storage** A council proposal vote that occurs after council proposal creation is stored as follows:
 //!   * `ProposalVoters` storage vector (containing account ids that have voted for the proposal's hash) is updated with the councillor's new vote.
 //!   * Councillor's vote storage tuple `CouncilVoteOf` is updated with a mapping between a tuple containing the proposal's hash, the councillor's account id, and their new vote.
-//!	  * `Voting` storage mapping is updated with the councillor's vote.
-//! 	* Note that `Voting` maps the proposal's hash to a tuple containing the corresponding proposal's index, vote threshold, and vectors containing both yay and nay voter account ids. 
+//!	  * `Voting` storage mapping is updated with the councillor's vote. Note that `Voting` maps the proposal's hash to a tuple containing the corresponding proposal's index, vote threshold, and vectors containing both yay and nay voter account ids. 
 //! * **Council proposal voting rules** Duplicate votes from the same councillor are ignored. Councillors may swap their vote from yay to nay and vice versa.
 //! * **Council proposal vote threshold** A council proposal that is created with a threshold level of one is voted upon and approved by the councillor that created it, and then executed. Whereas a council proposal with a threshold level of more than one is added to the `Voting` storage mapping.
 //! * **Council proposal voting veto rules** A councillor may veto a proposal if it's stored in the `ProposalVoters` mapping, on condition that they have not vetoed it previously. Once a councillor vetoes a council proposal they cannot propose the proposal again until after a cooling off period that's measured in blocks.
