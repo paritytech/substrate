@@ -120,6 +120,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// The macro automatically expands a shorthand function declaration to return the `Result` type.
 /// 
 /// ## Priviledged Function Example
+///
 /// ```rust
 /// # #[macro_use]
 /// # extern crate srml_support;
@@ -141,7 +142,17 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 
 /// ## Multiple Module Instances Example
 /// 
-/// ```rust,ignore
+/// ```rust
+/// # #[macro_use]
+/// # extern crate srml_support;
+/// use srml_support::dispatch::Result;
+/// # use srml_system::{self as system, ensure_signed};
+///
+/// # pub struct DefaultInstance;
+/// # pub trait Instance {}
+/// # impl Instance for DefaultInstance {}
+/// # pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
+/// 
 /// decl_module! {
 /// 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 /// 		// Your implementation
