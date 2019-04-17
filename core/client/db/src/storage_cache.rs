@@ -45,14 +45,31 @@ pub struct Cache<B: Block, H: Hasher> {
 	storage_used_size: usize,
 }
 
+impl<B: Block, H: Hasher> Cache<B, H> {
+	/// Returns the used memory size of the storage cache in bytes.
+	pub fn used_storage_cache_size(&self) -> usize {
+		self.storage_used_size
+	}
+}
+
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
 /// Create new shared cache instance with given max memory usage.
 pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> SharedCache<B, H> {
-	let cache_items = shared_cache_size / 100; // Guestimate, potentially inaccurate
+	// we need to supply a max capacity to `LruCache`, but since
+	// we don't have any idea how large the size of each item
+	// that is stored will be we can't calculate the max amount
+	// of items properly from `shared_cache_size`.
+	//
+	// what we do instead is to supply `shared_cache_size` as the
+	// max upper bound capacity (this would only be reached if each
+	// item would be one byte).
+	// each time we store to the storage cache we verify the memory
+	// constraint and pop the lru item if space needs to be freed.
+
 	Arc::new(Mutex::new(Cache {
-		storage: LruCache::new(cache_items),
-		hashes: LruCache::new(cache_items),
+		storage: LruCache::new(shared_cache_size),
+		hashes: LruCache::new(shared_cache_size),
 		modifications: VecDeque::new(),
 		shared_cache_size: shared_cache_size,
 		storage_used_size: 0,
@@ -117,6 +134,15 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 
 	fn storage_insert(&self, cache: &mut Cache<B, H>, k: StorageValue, v: Option<StorageValue>) {
 		if let Some(v_) = &v {
+			while cache.storage_used_size + v_.len() > cache.shared_cache_size {
+				// pop until space constraint satisfied
+				match cache.storage.remove_lru() {
+					Some((_, Some(popped_v))) =>
+						cache.storage_used_size = cache.storage_used_size - popped_v.len(),
+					Some((_, None)) => continue,
+					None => break,
+				};
+			}
 			cache.storage_used_size = cache.storage_used_size + v_.len();
 		}
 		cache.storage.insert(k, v);
@@ -458,5 +484,22 @@ mod tests {
 		let key = H256::random()[..].to_vec();
 		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2]))], Some(h0.clone()), Some(0), || true);
 		assert_eq!(shared.lock().used_storage_cache_size(), 5 /* bytes */);
+	}
+
+	#[test]
+	fn should_remove_lru_items_based_on_tracking_used_size() {
+		let root_parent = H256::random();
+		let shared = new_shared_cache::<Block, Blake2Hasher>(5);
+		let h0 = H256::random();
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2, 3, 4]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 4 /* bytes */);
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 2 /* bytes */);
 	}
 }
