@@ -14,59 +14,52 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # Session Manager Module
+//! # Session Module
 //!
 //! ## Overview
 //! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! The Session manager is provided with the validator set and allows them to manage their session keys for the consensus module.
+//! The Session module is provided with the validator set and allows them to manage their session keys for the Consensus module.
 //!
-//! To use it in your runtime, you need to implement the session [`Trait`](./trait.Trait.html).
-//!
-//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+//! - [`session::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! * **Set the Session Key of a Validator** A Session Key is set for a Validator using `set_key` so that they may use it in their next Session. It uses `NextKeyFor` to store a mapping between their `AccountID` and the Session Key that each of them provide. `set_key` is a public call (since it uses `ensure_signed` that checks that the origin is a signed account) since we want to allow users to set their Session Key prior to becoming a Validator, hence the Account ID of the origin that we are storing in `NextKeyFor` may not necessarily be associated with a block author or a validator. The Session module ensures that the Session Key of reaped (deleted) accounts are removed by removing the key once the account balance is zero.
-//! * **Set the Session Keys of a Validator Set** Each Session we iterate through the current set of Validator Account IDs by index and check if a Session Key was created for it with `set_key` in the previous session. If it was then we call `set_authority` of the Consensus SRML and pass it a set of Session Keys (which it generates from the provided list of Account IDs corresponding to each of the new validators that are to be set) to set the Session Keys for the new Validator Set. We check if the Session Key of the current authority index matches the Session Key (if any) stored under their Validator Index in the `AuthorityStorageVec` mapping. Otherwise we update the mapping with their Session Key and update the saved list of original authorities if necessary (see https://github.com/paritytech/substrate/issues/1290). Note: Authorities are stored in the Consensus SRML. They are represented by an Index of the Validator Account ID from the Session SRML and allocated with a Session Key for the length of the Session.
-//! * **Session Length** The Session Length is measured in block numbers and is set with `set_length` during a session. It is used in subsequent sessions. At the start of the next session we allocated a Session Index and record the timestamp when the session started. If a next Session Length was recorded in the previous session we record it as the new Session Length, and if its length does not correspond to the last block of the next session then we record it as the Last Length Change for the New Session.
-//! * **Session Rotation** The Session is changed at the end of the final block of the current Session Length using the `on_finalise` method. It may be called by either an origin or internally from another SRML at the end of each block. The Session Rotation may be configured to be a Normal Session Rotation or an Exceptional Session Rotation.
-//! * **Normal Session Rotation** A rewardable session wherer rewards are applied.
-//! * **Exceptional Session Rotation** A slashable session.
+//! * **'Validator' session key configuration process** A validator's session sey is using `set_key` for use in their next session. It stores in `NextKeyFor` a mapping between their `AccountID` and the session key that they provide. `set_key` allows users to set their session key prior to becoming a validator. It is a public call since it uses `ensure_signed` that checks that the origin is a signed account). As such, the account id of the origin stored in in `NextKeyFor` may not necessarily be associated with a block author or a validator. The session keys of reaped (deleted) accounts are removed once their account balance is zero.
+//! * **'Validator set' session key configuration process** Each session we iterate through the current set of validator account ids to check if a session key was created for it in the previous session using `set_key`. If it was then we call `set_authority` of the Consensus module and pass it a set of session keys (each associated with an account id) to set as the session keys for the new validator set. Lastly, if the session key of the current authority index does not match any session keys stored under their validator index in the `AuthorityStorageVec` mapping, then we update the mapping with their session key and update the saved list of original authorities if necessary (see https://github.com/paritytech/substrate/issues/1290). Note: Authorities are stored in the Consensus module. They are represented by a validator account id index from the Session module and allocated with a session key for the length of the session.
+//! * **Session length change process** Measured in block numbers and set with `set_length` during a session for use in subsequent sessions. At the start of the next session we allocate a session index and record the timestamp when the session started. If a next session length was recorded in the previous session we record it as the new session length. Additionally, if the next session length differs from the block length of the next session then we record a `LastLengthChange`.
+//! * **Session rotation configuration** Configure as either a 'normal' (rewardable session where rewards are applied) or 'exceptional' (slashable) session rotation.
+//! * **Session rotation process** The session is changed at the end of the final block of the current session Length using the `on_finalise` method. It may be called by either an origin or internally from another runtime module at the end of each block.
 //!
 //! ### Goals
 //!
-//! The session system in Substrate is designed to make the following possible:
+//! The Session module in Substrate is designed to make the following possible:
 //!
-//! * Set the Session Keys of a Validator Set for the next Session.
-//! * Configure and switch between either Normal or Exceptional Sessions Rotations.
+//! * Set session keys of the validator set for the next session.
+//! * Configure and switch between either normal or exceptional sessions rotations.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! * `set_key` - TODO.
-//! * `set_length` - TODO.
-//! * `force_new_session` - TODO.
-//! * `on_finalize` - TODO.
-//!
-//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//! * `set_key` - Set a validator's session key for the next session..
+//! * `set_length` - Set a new session length to be applied upon the next session change.
+//! * `force_new_session` - Force a new session that should be considered either a normal (rewardable) or exceptional (slashable) rotation.
+//! * `on_finalize` - Called when a block is finalized.
 //!
 //! ### Public Functions
 //!
-//! * `validator_count` - TODO.
-//! * `last_length_change` - TODO.
-//! * `apply_force_new_session` - TODO.
-//! * `set_validators` - TODO.
-//! * `check_rotate_session` - TODO.
-//! * `rotate_session` - TODO.
-//! * `ideal_session_duration` - TODO.
-//! * `blocks_remaining` - TODO.
-//!
-//! Please refer to the [`Module`](https://crates.parity.io/srml_session/struct.Module.html) struct for details on publicly available functions.
-//!
-//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! * `validator_count` - Get the current number of validators.
+//! * `last_length_change` - Get the block number when the session length last changed.
+//! * `apply_force_new_session` - Force a new session. Can be called by other runtime modules.
+//! * `set_validators` - Set the current set of validators. Can only be called by the Staking module.
+//! * `check_rotate_session` - Rotate the session and apply rewards if necessary. Called after the Staking module updates the authorities to the new validator set.
+//! * `rotate_session` - Change to the next session. Register the new authority set. Update session keys. Enact session length change.
+//! * `ideal_session_duration` - Get the time that should have elapsed over in an ideal session.
+//! * `blocks_remaining` - Get the number of blocks remaining in the current session, excluding the counting this block.
 //!
 //! ## Usage
 //!
