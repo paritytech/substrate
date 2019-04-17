@@ -57,7 +57,7 @@ use log::{debug, info, warn};
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
-	error::Error as ClientError,
+	error::Error as ClientError, transaction_builder::api::TransactionBuilder as TransactionBuilderApi,
 };
 use client::blockchain::HeaderBackend;
 use client::runtime_api::ConstructRuntimeApi;
@@ -432,7 +432,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, A>(
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>,
-	<RA as ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>>::RuntimeApi: fg_primitives::GrandpaApi<Block>,
+	<RA as ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>>::RuntimeApi: fg_primitives::GrandpaApi<Block> + TransactionBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block> + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};

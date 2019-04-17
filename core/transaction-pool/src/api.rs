@@ -81,8 +81,4 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 			(Blake2Hasher::hash(x), x.len())
 		})
 	}
-
-	fn get_account_nonce(&self, at: &BlockId<Self::Block>, account: &sr25519::Public) -> error::Result<u64> {
-		Ok(self.client.runtime_api().get_account_nonce(at, account)?)
-	}
 }

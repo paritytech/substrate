@@ -281,10 +281,6 @@ impl_runtime_apis! {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
-
-		fn get_account_nonce(account: &sr25519::Public) -> u64 {
-			System::get_account_nonce(account)
-		}
 	}
 
 	impl consensus_aura::AuraApi<Block> for Runtime {

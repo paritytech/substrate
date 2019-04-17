@@ -27,6 +27,8 @@ runtime-version = { package = "sr-version", path = "../sr-version", default-feat
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
 sr-api-macros = { path = "../sr-api-macros" }
+# transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool", default-features = false }
+# node-runtime = { path = "../../node/runtime" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-client", path = "../test-client" }

@@ -139,7 +139,6 @@ decl_runtime_apis! {
 	pub trait TaggedTransactionQueue {
 		/// Validate the given transaction.
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
-		fn get_account_nonce(account_id: &sr25519::Public) -> u64;
 	}
 }
 

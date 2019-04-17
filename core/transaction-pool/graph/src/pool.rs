@@ -74,8 +74,6 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
-
-	fn get_account_nonce(&self, at: &BlockId<Self::Block>, account: &sr25519::Public) -> Result<u64, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -418,10 +416,6 @@ impl<B: ChainApi> Pool<B> {
 		self.pool.read().status()
 	}
 
-	pub fn get_account_nonce(&self, at: &BlockId<B::Block>, account: &sr25519::Public) -> Result<u64, B::Error> {
-		self.api.get_account_nonce(at, account)
-	}
-
 	/// Returns transaction hash
 	#[cfg(test)]
 	fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
@@ -476,7 +470,6 @@ mod tests {
 
 		/// Verify extrinsic at given block.
 		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
-			println!("pool test validate");
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
 

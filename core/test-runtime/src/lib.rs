@@ -351,10 +351,6 @@ cfg_if! {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					system::validate_transaction(utx)
 				}
-
-				fn get_account_nonce(account: &sr25519::Public) -> u64 {
-					system::get_account_nonce(account)
-				}
 			}
 
 			impl block_builder_api::BlockBuilder<Block> for Runtime {
@@ -470,10 +466,6 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					system::validate_transaction(utx)
-				}
-
-				fn get_account_nonce(account: &sr25519::Public) -> u64 {
-					system::get_account_nonce(account)
 				}
 			}
 

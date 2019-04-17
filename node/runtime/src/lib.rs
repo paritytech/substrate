@@ -29,13 +29,13 @@ use node_primitives::{
 use grandpa::fg_primitives::{self, ScheduledChange, EquivocationProof};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
-	runtime_api as client_api, impl_runtime_apis
+	runtime_api as client_api, impl_runtime_apis, transaction_builder::api as transaction_builder_api,
 };
-use runtime_primitives::{ApplyResult, generic, create_runtime_str};
+use runtime_primitives::{ApplyResult, generic, create_runtime_str, AnySignature, generic::Era};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
-	AuthorityIdFor,
+	AuthorityIdFor, BlockNumberToHash,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -44,7 +44,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::{OpaqueMetadata, sr25519, ed25519};
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Compact};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -290,13 +290,33 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl transaction_builder_api::TransactionBuilder<Block> for Runtime {
+		fn signing_payload(encoded_call: Vec<u8>) -> Vec<u8> {
+			let public = Default::default();
+			let context = Context::default();
+			let genesis_hash = context.genesis_hash();
+			let next_index = System::get_account_nonce(&public);
+			let call: Call = Decode::decode(&mut encoded_call.as_slice()).expect("Valid encoded call");
+			let payload = (
+				Compact::from(next_index),
+				call,
+				Era::immortal(),
+				genesis_hash,
+			).encode();
+			payload
+			// blake2_256(&payload.encode())
+		}
+
+		fn build_transaction(signing_payload: Vec<u8>, signature: AnySignature) -> Vec<u8> {
+			// let next_index = 1000u64;
+			// let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), signature, Era::Immortal);
+			Vec::new()
+		}
+	}
+
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
-		}
-
-		fn get_account_nonce(account: &sr25519::Public) -> u64 {
-			System::get_account_nonce(account)
 		}
 	}
 

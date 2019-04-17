@@ -27,7 +27,8 @@ use parking_lot::RwLock;
 use fg_primitives::{GrandpaApi, EquivocationProof};
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
+	transaction_builder::api::TransactionBuilder as TransactionBuilderApi,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet, Message,
@@ -219,7 +220,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block> + TransactionBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
@@ -384,6 +385,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 	}
 }
 
+
 /// TODO: move to a place where can be used by other consensus engines.
 pub fn sign_and_dispatch<B, E, RA, Block: BlockT<Hash=H256>, A>(
 	client: Arc<Client<B, E, Block, RA>>,
@@ -394,23 +396,31 @@ pub fn sign_and_dispatch<B, E, RA, Block: BlockT<Hash=H256>, A>(
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
 	A: txpool::ChainApi<Block=Block>,
+	Client<B, E, Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: TransactionBuilderApi<Block>,
 {
 	let public = AccountKeyring::Alice.into();
 	let block_id = BlockId::number(client.info().unwrap().chain.best_number);
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
-	let next_index = transaction_pool.get_account_nonce(&block_id, &public).unwrap();
-	let call: Call = Decode::decode(&mut report_call.as_slice()).expect("Valid encoded call");
-	let payload = (
-		Compact::from(next_index),
-		call.clone(),
-		Era::immortal(),
-		genesis_hash,
-	);
-	let payload_hash = blake2_256(&payload.encode());
+
+	/// this goes inside the API functions
+	// let next_index = transaction_pool.get_account_nonce(&block_id, &public).unwrap();
+	let payload_hash = client.runtime_api().signing_payload(&block_id, report_call).unwrap();
+	// let next_index = 0u64;
+	/// signing_payload(report_call.as_slice())
+	
+	/// -> payload_hash[..]
+	
 	let signature: sr25519::Signature = AccountKeyring::from_public(&public).unwrap().sign(&payload_hash[..]).into();
-	let any_signature = AnySignature::from(signature);
-	let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), any_signature, Era::Immortal);
-	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+	let encoded_extrinsic = client.runtime_api().build_transaction(&block_id, payload_hash, AnySignature::from(signature)).unwrap();
+	
+	/// build_transaction(payload_hash[..], signature)
+	// let any_signature = AnySignature::from(signature);
+	// let extrinsic = UncheckedExtrinsic::new_signed(next_index, call, Address::from(public), any_signature, Era::Immortal);
+	/// -> extrinsic.encode().as_slice()
+	let uxt = Decode::decode(&mut encoded_extrinsic.as_slice()).expect("Encoded extrinsic is valid");
+
+	
 	match transaction_pool.submit_one(&block_id, uxt) {
 		Err(e) => warn!("Error importing misbehavior report: {:?}", e),
 		Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
