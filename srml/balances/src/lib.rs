@@ -134,7 +134,7 @@
 //! 		T::BlockNumber::max_value(),
 //! 		WithdrawReasons::all()
 //! 	);
-//! 	// <Ledger<T>>::insert(controller, ledger); // Commented out as we don't have acces to Staking's storage here.
+//! 	// <Ledger<T>>::insert(controller, ledger); // Commented out as we don't have access to Staking's storage here.
 //! }
 //! # fn main() {}
 //! ```
