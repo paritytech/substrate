@@ -25,7 +25,7 @@ use libp2p::PeerId;
 use log::trace;
 use lru_cache::LruCache;
 use slots::{SlotType, SlotState, Slots};
-pub use serde_json::Value;
+use serde_json::json;
 
 const PEERSET_SCORES_CACHE_SIZE: usize = 1000;
 const DISCOVERED_NODES_LIMIT: u32 = 1000;
@@ -407,7 +407,16 @@ impl Peerset {
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
 	pub fn debug_info(&self) -> serde_json::Value {
-		serde_json::Value::Null
+		json!({
+			"data": {
+				// add scores
+				"discovered": self.data.discovered.debug_info(),
+				"reserved_only": self.data.reserved_only,
+				"out_slots": self.data.out_slots.debug_info(),
+				"in_slots": self.data.in_slots.debug_info()
+			},
+			"message_queue": self.message_queue.len(),
+		})
 	}
 }
 

@@ -25,7 +25,8 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-#![deny(deprecated)]
+#![deny(warnings)]
+#![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
@@ -34,10 +35,14 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 };
 use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
-use client::ChainHead;
-use client::block_builder::api::BlockBuilder as BlockBuilderApi;
-use client::blockchain::ProvideCache;
-use client::runtime_api::{ApiExt, Core as CoreApi};
+use client::{
+	ChainHead,
+	block_builder::api::BlockBuilder as BlockBuilderApi,
+	blockchain::ProvideCache,
+	runtime_api::{ApiExt, Core as CoreApi},
+	error::Result as CResult,
+	backend::AuxStore,
+};
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
@@ -47,7 +52,7 @@ use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use authorities::AuthoritiesApi;
 
-use futures::{Stream, Future, IntoFuture, future};
+use futures::{Future, IntoFuture, future, stream::Stream};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
 
@@ -57,9 +62,8 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use aura_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 
-pub use aura_slots::SlotDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
@@ -70,12 +74,35 @@ type Signature<P> = <P as Pair>::Signature;
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
+#[deprecated(
+	since = "1.0.1",
+	note = "This is dead code and will be removed in a future release",
+)]
 pub trait Network: Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
 	/// Send a message at a specific round out.
 	fn send_message(&self, slot: u64, message: Vec<u8>);
+}
+
+/// A slot duration. Create with `get_or_compute`.
+pub struct SlotDuration(slots::SlotDuration<u64>);
+
+impl SlotDuration {
+	/// Either fetch the slot duration from disk or compute it from the genesis
+	/// state.
+	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
+	where
+		C: AuxStore, C: ProvideRuntimeApi, C::Api: AuraApi<B>,
+	{
+		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
+	}
+
+	/// Get the slot duration in milliseconds.
+	pub fn get(&self) -> u64 {
+		self.0.get()
+	}
 }
 
 /// Get slot author for given block along with authorities.
@@ -153,6 +180,7 @@ impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P
 	}
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct AuraSlotCompatible;
 
 impl SlotCompatible for AuraSlotCompatible {
@@ -203,8 +231,8 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 		force_authoring,
 	};
 
-	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
-		slot_duration,
+	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, u64, _>(
+		slot_duration.0,
 		client,
 		Arc::new(worker),
 		sync_oracle,
@@ -249,8 +277,8 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 	};
-	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
-		slot_duration,
+	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+		slot_duration.0,
 		client,
 		Arc::new(worker),
 		sync_oracle,
@@ -803,9 +831,9 @@ mod tests {
 	use client::BlockchainEvents;
 	use test_client;
 
-	type Error = ::client::error::Error;
+	type Error = client::error::Error;
 
-	type TestClient = ::client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);

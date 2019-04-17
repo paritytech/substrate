@@ -34,7 +34,7 @@ use grandpa::{
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -642,7 +642,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
-		let res = finalize_block(
+		finalize_block(
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
@@ -650,13 +650,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			hash,
 			number,
 			(round, commit).into(),
-		);
-
-		if let Ok(_) = res {
-			self.network.note_commit_finalized(number);
-		}
-
-		res
+		)
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -886,8 +880,6 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 {
-	use runtime_primitives::traits::{One, Zero, BlockNumberToHash};
-
 	if height > base.1 {
 		return Ok(None);
 	}

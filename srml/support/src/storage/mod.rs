@@ -19,7 +19,7 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
-use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
+use crate::codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
 
 #[macro_use]
 pub mod generator;
@@ -153,6 +153,14 @@ impl crate::GenericStorage for RuntimeStorage {
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
 		take(key)
 	}
+
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+		get_raw(key)
+	}
+
+	fn put_raw(&self, key: &[u8], value: &[u8]) {
+		put_raw(key, value)
+	}
 }
 
 impl crate::GenericUnhashedStorage for RuntimeStorage {
@@ -184,6 +192,14 @@ impl crate::GenericUnhashedStorage for RuntimeStorage {
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
 		unhashed::take(key)
 	}
+
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+		unhashed::get_raw(key)
+	}
+
+	fn put_raw(&self, key: &[u8], value: &[u8]) {
+		unhashed::put_raw(key, value)
+	}
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
@@ -211,6 +227,12 @@ pub trait StorageValue<T: Codec> {
 
 	/// Take a value from storage, removing it afterwards.
 	fn take() -> Self::Query;
+
+	/// Append the given item to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
+		where T: EncodeAppend<Item=I>;
 }
 
 impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
@@ -236,6 +258,11 @@ impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	}
 	fn take() -> Self::Query {
 		U::take(&RuntimeStorage)
+	}
+	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
+		where T: EncodeAppend<Item=I>
+	{
+		U::append(items, &RuntimeStorage)
 	}
 }
 
@@ -560,7 +587,7 @@ pub trait StorageVec {
 /// child storage NOTE could replace unhashed by having only one kind of storage (root being null storage
 /// key (storage_key can become Option<&[u8]>).
 /// This module is a currently only a variant of unhashed with additional `storage_key`.
-/// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to 
+/// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
 	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput};
@@ -632,7 +659,7 @@ pub mod child {
 		runtime_io::read_child_storage(storage_key, key, &mut [0;0][..], 0).is_some()
 	}
 
-	/// Remove all `storage_key` key/values 
+	/// Remove all `storage_key` key/values
 	pub fn kill_storage(storage_key: &[u8]) {
 		runtime_io::kill_child_storage(storage_key)
 	}
