@@ -51,7 +51,6 @@
 //! This is an example of a module that exposes a privileged function:
 //!
 //! ```
-//! # extern crate srml_support;
 //! use srml_support::{decl_module, dispatch::Result};
 //! use system::ensure_root;
 //!

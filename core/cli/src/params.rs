@@ -189,7 +189,7 @@ pub struct NodeKeyParams {
 		raw(
 			possible_values = "&NodeKeyType::variants()",
 			case_insensitive = "true",
-			default_value = r#""Secp256k1""#
+			default_value = r#""Ed25519""#
 		)
 	)]
 	pub node_key_type: NodeKeyType,
