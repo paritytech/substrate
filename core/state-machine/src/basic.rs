@@ -149,8 +149,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 	}
 
 	fn child_storage_root(&mut self, _storage_key: ChildStorageKey<H>) -> Vec<u8> {
-		// TODO: Or unimplemented!() ?
-		Vec::new()
+		vec![42]
 	}
 
 	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
