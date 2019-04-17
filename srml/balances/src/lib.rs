@@ -111,7 +111,6 @@
 //!
 //! ```
 //! use srml_support::traits::{WithdrawReasons, LockableCurrency};
-//! use system;
 //! use primitives::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
