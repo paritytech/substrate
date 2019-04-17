@@ -20,7 +20,6 @@ use crate::codec;
 use crate::rstd::prelude::{Vec, Box};
 #[cfg(feature = "std")]
 use crate::storage::unhashed::generator::UnhashedStorage;
-#[cfg(feature = "std")]
 use runtime_io::{twox_128, blake2_128};
 
 pub trait StorageHasher {
