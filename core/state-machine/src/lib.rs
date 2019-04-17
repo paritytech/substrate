@@ -950,12 +950,35 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+		let mut ext = Ext::new(
+			&mut overlay,
+			&backend,
+			Some(&changes_trie_storage),
+			NeverOffchainExt::new()
+		);
 
-		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
-		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
-		ext.kill_child_storage(b":child_storage:testchild");
-		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), None);
+		ext.set_child_storage(
+			ChildStorageKey::from_slice(b":child_storage:testchild").unwrap(),
+			b"abc".to_vec(),
+			b"def".to_vec()
+		);
+		assert_eq!(
+			ext.child_storage(
+				ChildStorageKey::from_slice(b":child_storage:testchild").unwrap(),
+				b"abc"
+			),
+			Some(b"def".to_vec())
+		);
+		ext.kill_child_storage(
+			ChildStorageKey::from_slice(b":child_storage:testchild").unwrap()
+		);
+		assert_eq!(
+			ext.child_storage(
+				ChildStorageKey::from_slice(b":child_storage:testchild").unwrap(),
+				b"abc"
+			),
+			None
+		);
 	}
 
 	#[test]
