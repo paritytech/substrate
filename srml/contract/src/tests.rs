@@ -513,3 +513,180 @@ fn dispatch_call() {
 		},
 	);
 }
+
+/// Call function is compiled with https://webassembly.studio/
+/// ```C
+/// #define WASM_EXPORT __attribute__((visibility("default")))
+///
+/// extern void input_copy(int *ptr, int offset, int len);
+/// extern void set_storage(int *key, int r, int *v, int len);
+///
+/// extern int a;
+/// WASM_EXPORT
+/// int main() {
+///   int do_set_storage, key, value_non_null, value_len;
+///   input_copy(&do_set_storage, 0, 4);
+///   input_copy(&key, 4, 4);
+///   input_copy(&value_non_null, 8, 4);
+///   input_copy(&value_len, 12, 4);
+///
+///   if (do_set_storage) {
+///     set_storage(&key, value_non_null, 0, value_len);
+///   }
+/// }
+/// ```
+const CODE_SET_RENT: &str = r#"
+(module
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
+	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
+	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(start $start)
+	(func $start
+		(local $input_size i32)
+		(call $ext_set_storage
+			(i32.const 0)
+			(i32.const 1)
+			(i32.const 0)
+			(i32.const 4)
+		)
+		(set_local $input_size
+			(call $ext_input_size)
+		)
+		(call $ext_input_copy
+			(i32.const 0)
+			(i32.const 0)
+			(get_local $input_size)
+		)
+		(call $ext_set_rent_allowance
+			(i32.const 0)
+			(get_local $input_size)
+		)
+	)
+	(func (export "call")
+		(call $ext_input_copy
+			(i32.const 0)
+			(i32.const 0)
+			(i32.const 16)
+		)
+		(call $ext_set_storage
+			(i32.const 0)
+			(i32.load (i32.const 4))
+			($p2)
+			($p3)
+		)
+	)
+	(func (export "deploy"))
+	(data (i32.const 0) "\00\01\02\03\04\05\06\07")
+)
+"#;
+const HASH_SET_RENT: [u8; 32] = hex!("2bf4122e304b9bcc98dd691561149b9840de11b3557900829c9d1c9b6ae505d7");
+
+#[test]
+fn rent() {
+	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+
+			assert_ok!(Contract::put_code(
+				Origin::signed(ALICE),
+				100_000,
+				wasm,
+			));
+
+			// Let's keep this assert even though it's redundant. If you ever need to update the
+			// wasm source this test will fail and will show you the actual hash.
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+				},
+			]);
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000,
+				HASH_SET_RENT.into(),
+				10u64.to_le_bytes().to_vec(),
+			));
+
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap()
+				.get_alive().unwrap();
+
+			assert_eq!(bob_contract.rent_allowance, 10);
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+
+			// assert_ok!(Contract::call(
+			// 	Origin::signed(ALICE),
+			// 	BOB, // newly created account
+			// 	0,
+			// 	100_000,
+			// 	vec![],
+			// ));
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::NewAccount(BOB, 100)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+				},
+
+				// // Dispatching the call.
+				// EventRecord {
+				// 	phase: Phase::ApplyExtrinsic(0),
+				// 	event: MetaEvent::balances(
+				// 		balances::RawEvent::NewAccount(CHARLIE, 50)
+				// 	)
+				// },
+				// EventRecord {
+				// 	phase: Phase::ApplyExtrinsic(0),
+				// 	event: MetaEvent::balances(
+				// 		balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
+				// 	)
+				// },
+
+				// // Event emited as a result of dispatch.
+				// EventRecord {
+				// 	phase: Phase::ApplyExtrinsic(0),
+				// 	event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
+				// }
+			]);
+		},
+	);
+}
