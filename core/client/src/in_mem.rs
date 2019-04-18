@@ -625,7 +625,7 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(header.number(), changes_trie_root, changes_trie_update);
 				}
 			}
 

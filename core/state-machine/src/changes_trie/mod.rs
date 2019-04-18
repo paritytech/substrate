@@ -68,10 +68,10 @@ pub struct AnchorBlockId<Hash: ::std::fmt::Debug> {
 }
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
-pub trait RootsStorage<H: Hasher>: Send + Sync {
+pub trait RootsStorage<H: Hasher, BlockNumber>: Send + Sync {
 	/// Get changes trie root for the block with given number which is an ancestor (or the block
 	/// itself) of the anchor_block (i.e. anchor_block.number >= block).
-	fn root(&self, anchor: &AnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String>;
+	fn root(&self, anchor: &AnchorBlockId<H::Out>, block: BlockNumber) -> Result<Option<H::Out>, String>;
 }
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.

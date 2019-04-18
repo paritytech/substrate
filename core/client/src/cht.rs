@@ -44,7 +44,7 @@ pub const SIZE: u64 = 2048;
 /// Returns Some(cht_number) if CHT is need to be built when the block with given number is canonized.
 pub fn is_build_required<N>(cht_size: u64, block_num: N) -> Option<N>
 	where
-		N: Clone + SimpleArithmetic,
+		N: Clone + SimpleArithmetic + From<u64>,
 {
 	let block_cht_num = block_to_cht_number(cht_size, block_num.clone())?;
 	let two = N::one() + N::one();
@@ -184,7 +184,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	let mut current_cht_num = None;
 	let mut current_cht_blocks = Vec::new();
 	for block in blocks {
-		let new_cht_num = match block_to_cht_number(cht_size, block.as_()) {
+		let new_cht_num = match block_to_cht_number(cht_size, block) {
 			Some(new_cht_num) => new_cht_num,
 			None => return Err(ClientError::Backend(format!(
 				"Cannot compute CHT root for the block #{}", block)).into()
@@ -199,7 +199,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 
 			functor_param = functor(
 				functor_param,
-				As::sa(current_cht_num),
+				current_cht_num,
 				::std::mem::replace(&mut current_cht_blocks, Vec::new()),
 			)?;
 		}
@@ -211,7 +211,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	if let Some(current_cht_num) = current_cht_num {
 		functor(
 			functor_param,
-			As::sa(current_cht_num),
+			current_cht_num,
 			::std::mem::replace(&mut current_cht_blocks, Vec::new()),
 		)?;
 	}
@@ -234,7 +234,8 @@ fn build_pairs<Header, I>(
 	let mut hash_number = start_num;
 	for hash in hashes.into_iter().take(cht_size as usize) {
 		let hash = hash?.ok_or_else(|| ClientError::from(
-			ClientError::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_())
+				// TODO TODO: make error generic
+			ClientError::MissingHashRequiredForCHT(0, 0)//cht_num, hash_number)
 		))?;
 		pairs.push((
 			encode_cht_key(hash_number).to_vec(),
@@ -246,7 +247,8 @@ fn build_pairs<Header, I>(
 	if pairs.len() as u64 == cht_size {
 		Ok(pairs)
 	} else {
-		Err(ClientError::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()))
+				// TODO TODO: make error generic
+		Err(ClientError::MissingHashRequiredForCHT(0, 0))//cht_num.as_(), hash_number.as_()))
 	}
 }
 
@@ -256,38 +258,41 @@ fn build_pairs<Header, I>(
 /// More generally: CHT N includes block (1 + N*SIZE)...((N+1)*SIZE).
 /// This is because the genesis hash is assumed to be known
 /// and including it would be redundant.
-pub fn start_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N {
-	(cht_num * As::sa(cht_size)) + N::one()
+pub fn start_number<N: SimpleArithmetic + From<u64>>(cht_size: u64, cht_num: N) -> N {
+	cht_num * cht_size.into() + N::one()
 }
 
 /// Get the ending block of a given CHT.
-pub fn end_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N {
-	(cht_num + N::one()) * As::sa(cht_size)
+// TODO TODO: we can convert cht_size to balance or overwise bound Mul<u64> that could make sense
+// actually but at the end probably both would be implmeented same way
+pub fn end_number<N: SimpleArithmetic + From<u64>>(cht_size: u64, cht_num: N) -> N {
+	(cht_num + N::one()) * cht_size.into()
 }
 
 /// Convert a block number to a CHT number.
 /// Returns `None` for `block_num` == 0, `Some` otherwise.
-pub fn block_to_cht_number<N: SimpleArithmetic>(cht_size: u64, block_num: N) -> Option<N> {
+pub fn block_to_cht_number<N: SimpleArithmetic + From<u64>>(cht_size: u64, block_num: N) -> Option<N> {
 	if block_num == N::zero() {
 		None
 	} else {
-		Some((block_num - N::one()) / As::sa(cht_size))
+		Some((block_num - N::one()) / cht_size.into())
 	}
 }
 
 /// Convert header number into CHT key.
-pub fn encode_cht_key<N: As<u64>>(number: N) -> Vec<u8> {
-	let number: u64 = number.as_();
-	vec![
-		(number >> 56) as u8,
-		((number >> 48) & 0xff) as u8,
-		((number >> 40) & 0xff) as u8,
-		((number >> 32) & 0xff) as u8,
-		((number >> 24) & 0xff) as u8,
-		((number >> 16) & 0xff) as u8,
-		((number >> 8) & 0xff) as u8,
-		(number & 0xff) as u8
-	]
+pub fn encode_cht_key<N>(number: N) -> Vec<u8> {
+	unimplemented!();
+	// let number: u64 = number.as_();
+	// vec![
+	// 	(number >> 56) as u8,
+	// 	((number >> 48) & 0xff) as u8,
+	// 	((number >> 40) & 0xff) as u8,
+	// 	((number >> 32) & 0xff) as u8,
+	// 	((number >> 24) & 0xff) as u8,
+	// 	((number >> 16) & 0xff) as u8,
+	// 	((number >> 8) & 0xff) as u8,
+	// 	(number & 0xff) as u8
+	// ]
 }
 
 /// Convert header hash into CHT value.

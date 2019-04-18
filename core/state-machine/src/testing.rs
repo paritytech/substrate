@@ -28,14 +28,14 @@ use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
+pub struct TestExternalities<H: Hasher, BlockNumber> where H::Out: HeapSizeOf {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
-	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
+	changes_trie_storage: ChangesTrieInMemoryStorage<H, BlockNumber>,
 	changes: OverlayedChanges,
 	code: Option<Vec<u8>>,
 }
 
-impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber> TestExternalities<H, BlockNumber> where H::Out: HeapSizeOf {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::new_with_code(&[], inner)
@@ -66,19 +66,19 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 	}
 }
 
-impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber> ::std::fmt::Debug for TestExternalities<H, BlockNumber> where H::Out: HeapSizeOf {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{:?}", self.inner)
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf {
-	fn eq(&self, other: &TestExternalities<H>) -> bool {
+impl<H: Hasher, BlockNumber> PartialEq for TestExternalities<H, BlockNumber> where H::Out: HeapSizeOf {
+	fn eq(&self, other: &TestExternalities<H, BlockNumber>) -> bool {
 		self.inner.eq(&other.inner)
 	}
 }
 
-impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H, BlockNumber> where H::Out: HeapSizeOf {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
 		t.inner.extend(iter);
@@ -86,17 +86,17 @@ impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where 
 	}
 }
 
-impl<H: Hasher> Default for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber> Default for TestExternalities<H, BlockNumber> where H::Out: HeapSizeOf {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf {
-	fn from(tex: TestExternalities<H>) -> Self {
+impl<H: Hasher, BlockNumber> From<TestExternalities<H, BlockNumber>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf {
+	fn from(tex: TestExternalities<H, BlockNumber>) -> Self {
 		tex.inner.into()
 	}
 }
 
-impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H, BlockNumber> where H::Out: HeapSizeOf {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		TestExternalities {
 			inner: hashmap,
@@ -110,7 +110,7 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 // TODO child test primitives are currently limited to `changes` (for non child the way
 // things are defined seems utterly odd to (put changes in changes but never make them
 // available for read through inner)
-impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher, BlockNumber> Externalities<H> for TestExternalities<H, BlockNumber> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
 			CODE => self.code.clone(),

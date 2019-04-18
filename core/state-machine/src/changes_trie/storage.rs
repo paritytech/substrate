@@ -33,8 +33,8 @@ use crate::backend::insert_into_memory_db;
 use crate::changes_trie::input::InputPair;
 
 /// In-memory implementation of changes trie storage.
-pub struct InMemoryStorage<H: Hasher> where H::Out: HeapSizeOf {
-	data: RwLock<InMemoryStorageData<H>>,
+pub struct InMemoryStorage<H: Hasher, BlockNumber> where H::Out: HeapSizeOf {
+	data: RwLock<InMemoryStorageData<H, BlockNumber>>,
 }
 
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
@@ -43,12 +43,12 @@ pub struct TrieBackendAdapter<'a, H: Hasher, S: 'a + Storage<H>> {
 	_hasher: ::std::marker::PhantomData<H>,
 }
 
-struct InMemoryStorageData<H: Hasher> where H::Out: HeapSizeOf {
-	roots: HashMap<u64, H::Out>,
+struct InMemoryStorageData<H: Hasher, BlockNumber> where H::Out: HeapSizeOf {
+	roots: HashMap<BlockNumber, H::Out>,
 	mdb: MemoryDB<H>,
 }
 
-impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber> InMemoryStorage<H, BlockNumber> where H::Out: HeapSizeOf {
 	/// Create the storage from given in-memory database.
 	pub fn with_db(mdb: MemoryDB<H>) -> Self {
 		Self {
@@ -102,20 +102,20 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	}
 
 	/// Insert changes trie for given block.
-	pub fn insert(&self, block: u64, changes_trie_root: H::Out, trie: MemoryDB<H>) {
+	pub fn insert(&self, block: BlockNumber, changes_trie_root: H::Out, trie: MemoryDB<H>) {
 		let mut data = self.data.write();
 		data.roots.insert(block, changes_trie_root);
 		data.mdb.consolidate(trie);
 	}
 }
 
-impl<H: Hasher> RootsStorage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
-	fn root(&self, _anchor_block: &AnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+impl<H: Hasher, BlockNumber: Send + Sync> RootsStorage<H> for InMemoryStorage<H, BlockNumber> where H::Out: HeapSizeOf {
+	fn root(&self, _anchor_block: &AnchorBlockId<H::Out>, block: BlockNumber) -> Result<Option<H::Out>, String> {
 		Ok(self.data.read().roots.get(&block).cloned())
 	}
 }
 
-impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher, BlockNumber: Send + Sync> Storage<H> for InMemoryStorage<H, BlockNumber> where H::Out: HeapSizeOf {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
