@@ -110,19 +110,33 @@ construct_service_factory! {
 					local_key
 				};
 
-				executor.spawn(grandpa::run_grandpa(
-					grandpa::Config {
-						local_key,
-						// FIXME #1578 make this available through chainspec
-						gossip_duration: Duration::from_millis(333),
-						justification_period: 4096,
-						name: Some(service.config.name.clone())
+				let config = grandpa::Config {
+					local_key,
+					// FIXME #1578 make this available through chainspec
+					gossip_duration: Duration::from_millis(333),
+					justification_period: 4096,
+					name: Some(service.config.name.clone())
+				};
+
+				match config.local_key {
+					None => {
+						executor.spawn(grandpa::run_grandpa_observer(
+							config,
+							link_half,
+							service.network(),
+							service.on_exit(),
+						)?);
 					},
-					link_half,
-					service.network(),
-					service.config.custom.inherent_data_providers.clone(),
-					service.on_exit(),
-				)?);
+					Some(_) => {
+						executor.spawn(grandpa::run_grandpa_voter(
+							config,
+							link_half,
+							service.network(),
+							service.config.custom.inherent_data_providers.clone(),
+							service.on_exit(),
+						)?);
+					},
+				}
 
 				Ok(service)
 			}
