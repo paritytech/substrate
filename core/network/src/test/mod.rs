@@ -166,6 +166,7 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 		self.link.restart();
 	}
 
+	#[cfg(test)]
 	fn synchronized(&self) {
 		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize);
 	}
@@ -369,6 +370,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Synchronize with import queue.
+	#[cfg(test)]
 	fn import_queue_sync(&self) {
 		self.import_queue.synchronize();
 		let _ = self.net_proto_channel.wait_sync();
