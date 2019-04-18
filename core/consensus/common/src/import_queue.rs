@@ -154,7 +154,12 @@ impl<B: BlockT> BasicQueue<B> {
 		finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
 	) -> Self {
 		let (result_sender, result_port) = channel::unbounded();
-		let worker_sender = BlockImportWorker::new(result_sender, verifier.clone(), block_import);
+		let worker_sender = BlockImportWorker::new(
+			result_sender,
+			verifier.clone(),
+			block_import,
+			finality_proof_import.clone(),
+		);
 		let importer_sender = BlockImporter::new(
 			result_port,
 			worker_sender,
@@ -234,14 +239,17 @@ pub enum BlockImportMsg<B: BlockT> {
 	Synchronize,
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum BlockImportWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
-	Imported(
+	ImportedBlocks(
 		Vec<(
 			Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 			B::Hash,
 		)>,
 	),
+	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	ImportedFinalityProof(Origin, B::Hash, NumberFor<B>, bool),
 	#[cfg(any(test, feature = "test-helpers"))]
 	Synchronize,
 }
@@ -360,13 +368,19 @@ impl<B: BlockT> BlockImporter<B> {
 		};
 
 		let results = match msg {
-			BlockImportWorkerMsg::Imported(results) => (results),
+			BlockImportWorkerMsg::ImportedBlocks(results) => (results),
+			BlockImportWorkerMsg::ImportedFinalityProof(who, hash, number, success) => {
+				link.finality_proof_imported(who, &hash, number, success);
+				return true;
+			},
 			#[cfg(any(test, feature = "test-helpers"))]
 			BlockImportWorkerMsg::Synchronize => {
 				link.synchronized();
 				return true;
 			},
-			_ => unreachable!("Import Worker does not send ImportBlocks message; qed"),
+			BlockImportWorkerMsg::ImportBlocks(_, _)
+				| BlockImportWorkerMsg::ImportFinalityProof(_, _, _, _)
+					=> unreachable!("Import Worker does not send Import* message; qed"),
 		};
 		let mut has_error = false;
 		let mut hashes = vec![];
@@ -448,16 +462,10 @@ impl<B: BlockT> BlockImporter<B> {
 	}
 
 	fn handle_import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
-		let success = self.finality_proof_import.as_ref().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier)
-				.map_err(|e| {
-					debug!("Finality proof import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}", e, hash, number, who);
-					e
-				}).is_ok()
-		}).unwrap_or(false);
-		if let Some(link) = self.link.as_ref() {
-			link.finality_proof_imported(who, &hash, number, success);
-		}
+		trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
+		self.worker_sender
+			.send(BlockImportWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof))
+			.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
 	}
 
 	fn handle_import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
@@ -471,6 +479,7 @@ impl<B: BlockT> BlockImporter<B> {
 struct BlockImportWorker<B: BlockT, V: Verifier<B>> {
 	result_sender: Sender<BlockImportWorkerMsg<B>>,
 	block_import: SharedBlockImport<B>,
+	finality_proof_import: Option<SharedFinalityProofImport<B>>,
 	verifier: Arc<V>,
 }
 
@@ -479,6 +488,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		result_sender: Sender<BlockImportWorkerMsg<B>>,
 		verifier: Arc<V>,
 		block_import: SharedBlockImport<B>,
+		finality_proof_import: Option<SharedFinalityProofImport<B>>,
 	) -> Sender<BlockImportWorkerMsg<B>> {
 		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
@@ -488,6 +498,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 					result_sender,
 					verifier,
 					block_import,
+					finality_proof_import,
 				};
 				for msg in port.iter() {
 					// Working until all senders have been dropped...
@@ -495,11 +506,16 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 						BlockImportWorkerMsg::ImportBlocks(origin, blocks) => {
 							worker.import_a_batch_of_blocks(origin, blocks);
 						},
+						BlockImportWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
+							worker.import_finality_proof(who, hash, number, proof);
+						},
 						#[cfg(any(test, feature = "test-helpers"))]
 						BlockImportWorkerMsg::Synchronize => {
 							let _ = worker.result_sender.send(BlockImportWorkerMsg::Synchronize);
 						},
-						_ => unreachable!("Import Worker does not receive the Imported message; qed"),
+						BlockImportWorkerMsg::ImportedBlocks(_)
+							| BlockImportWorkerMsg::ImportedFinalityProof(_, _, _, _)
+								=> unreachable!("Import Worker does not receive the Imported* messages; qed"),
 					}
 				}
 			})
@@ -549,9 +565,31 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 
 		let _ = self
 			.result_sender
-			.send(BlockImportWorkerMsg::Imported(results));
+			.send(BlockImportWorkerMsg::ImportedBlocks(results));
 
 		trace!(target: "sync", "Imported {} of {}", imported, count);
+	}
+
+	fn import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
+		let success = self.finality_proof_import.as_ref().map(|finality_proof_import| {
+			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier)
+				.map_err(|e| {
+					debug!(
+						"Finality proof import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}",
+						e,
+						hash,
+						number,
+						who,
+					);
+					e
+				}).is_ok()
+		}).unwrap_or(false);
+
+		let _ = self
+			.result_sender
+			.send(BlockImportWorkerMsg::ImportedFinalityProof(who, hash, number, success));
+
+		trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
 	}
 }
 
@@ -689,6 +727,7 @@ mod tests {
 	#[derive(Debug, PartialEq)]
 	enum LinkMsg {
 		BlockImported,
+		FinalityProofImported,
 		Disconnected,
 		Restarted,
 	}
@@ -709,6 +748,9 @@ mod tests {
 	impl Link<Block> for TestLink {
 		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
 			let _ = self.sender.send(LinkMsg::BlockImported);
+		}
+		fn finality_proof_imported(&self, _: Origin, _: &Hash, _: NumberFor<Block>, _: bool) {
+			let _ = self.sender.send(LinkMsg::FinalityProofImported);
 		}
 		fn useless_peer(&self, _: Origin, _: &str) {
 			let _ = self.sender.send(LinkMsg::Disconnected);
@@ -758,17 +800,17 @@ mod tests {
 
 		// Send a known
 		let results = vec![(Ok(BlockImportResult::ImportedKnown(Default::default())), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send a second known
 		let results = vec![(Ok(BlockImportResult::ImportedKnown(Default::default())), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown
 		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(), Default::default(), None)), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown with peer and bad justification
@@ -781,31 +823,76 @@ mod tests {
 				needs_finality_proof: false,
 			},
 			Some(peer_id.clone()))), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 
 		// Send an incomplete header
 		let results = vec![(Err(BlockImportError::IncompleteHeader(Some(peer_id.clone()))), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
 
 		// Send an unknown parent
 		let results = vec![(Err(BlockImportError::UnknownParent), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
 
 		// Send a verification failed
 		let results = vec![(Err(BlockImportError::VerificationFailed(Some(peer_id.clone()), String::new())), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Disconnected));
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
 
 		// Send an error
 		let results = vec![(Err(BlockImportError::Error), Default::default())];
-		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
+		let _ = result_sender.send(BlockImportWorkerMsg::ImportedBlocks(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::Restarted));
+
+		// Drop the importer sender first, ensuring graceful shutdown.
+		drop(importer_sender);
+	}
+
+	#[test]
+	fn process_finality_proof_import_result_works() {
+		let (result_sender, result_port) = channel::unbounded();
+		let (worker_sender, worker_receiver) = channel::unbounded();
+		let (link_sender, link_port) = channel::unbounded();
+		let importer_sender = BlockImporter::<Block>::new(result_port, worker_sender, Arc::new(()), None, None, None);
+		let link = TestLink::new(link_sender);
+		let (ack_sender, start_ack_port) = channel::bounded(4);
+		let _ = importer_sender.send(BlockImportMsg::Start(Box::new(link.clone()), ack_sender));
+		let who = Origin::random();
+
+		// Ensure the importer handles Start before any result messages.
+		start_ack_port.recv().unwrap().unwrap();
+
+		// Send finality proof import request to BlockImporter
+		importer_sender.send(BlockImportMsg::ImportFinalityProof(
+			who.clone(),
+			Default::default(),
+			1,
+			vec![42],
+		)).unwrap();
+
+		// Wait until this request is redirected to the BlockImportWorker
+		assert_eq!(worker_receiver.recv(), Ok(BlockImportWorkerMsg::ImportFinalityProof(
+			who.clone(),
+			Default::default(),
+			1,
+			vec![42],
+		)));
+
+		// Send ack of proof import from BlockImportWorker to BlockImporter
+		result_sender.send(BlockImportWorkerMsg::ImportedFinalityProof(
+			who.clone(),
+			Default::default(),
+			1,
+			true,
+		)).unwrap();
+
+		// Wait for finality proof import result
+		assert_eq!(link_port.recv(), Ok(LinkMsg::FinalityProofImported));
 
 		// Drop the importer sender first, ensuring graceful shutdown.
 		drop(importer_sender);
