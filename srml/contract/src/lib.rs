@@ -161,7 +161,9 @@ where
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
+		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		CHILD_STORAGE_KEY_PREFIX.iter()
+			.chain(b"default:")
 			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
 			.cloned()
 			.collect()
