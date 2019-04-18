@@ -26,11 +26,14 @@
 //!
 //! ### Terminology
 //!
-//! - **Proposal:** A spending proposal in which the proposer proposes to send funds to a beneficiary account.
-//! The proposer must attach a bond with the proposal, which will be taken if it is rejected.
+//! - **Proposal:** A proposal can take several forms. In a spending proposal, a proposer proposes to send funds to a
+//! beneficiary account (which may be a normal account or a smart contract). A proposal may include `set_code`, which
+//! would upgrade the runtime. The proposer must attach a bond with the proposal, which will be taken if it is rejected.
 //! - **Referendum:** A mechanism for voting on proposals. A referendum includes a proposal, as well as a block
 //! number when voting will end, a threshold mechanism, and a delay (in blocks) to wait before deploying a
-//! proposal (if successfully passed).
+//! proposal (if successfully passed). Referenda can be started in three ways: from the public, from a unanimous
+//! [Council](../srml_council/index.html) vote, or a majority Council vote. Each method of starting a referendum
+//! comes with a different default vote threshold mechanism.
 //! - **Vote threshold mechanisms:** Different criteria for passing or rejecting a referendum (e.g. supermajority for,
 //! supermajority against, simple majority).
 //! - **Table of Referenda:** A set of referenda that are currently open for voting.
