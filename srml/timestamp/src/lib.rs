@@ -66,11 +66,11 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 			pub fn get_time(origin) -> Result {
-//! 					let _sender = ensure_signed(origin)?;
-//! 					let _now = <timestamp::Module<T>>::get();
-//! 					Ok(())
-//! 			}
+//! 		pub fn get_time(origin) -> Result {
+//! 			let _sender = ensure_signed(origin)?;
+//! 			let _now = <timestamp::Module<T>>::get();
+//! 			Ok(())
+//! 		}
 //! 	}
 //! }
 //! # fn main() {}
