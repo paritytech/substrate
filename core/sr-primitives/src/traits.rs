@@ -153,9 +153,7 @@ impl<A, B: Default> Convert<A, B> for () {
 }
 
 /// A structure that converts the currency type into a lossy u64
-/// And back from u128
 pub struct CurrencyToVoteHandler;
-
 impl Convert<u128, u64> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u64 {
 		if x >> 96 == 0 {

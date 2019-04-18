@@ -274,7 +274,7 @@
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
-use rstd::{prelude::*, result};
+use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
@@ -293,7 +293,7 @@ mod mock;
 mod tests;
 mod phragmen;
 
-use phragmen::{elect, ElectionConfig};
+use phragmen::{elect, ElectionConfig, ACCURACY};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -437,6 +437,8 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
+	/// TODO: #https://github.com/paritytech/substrate/pull/2205#issuecomment-483551470
+	/// The backward convert should be removed. It is currently not even used anymore.
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
 	/// Some tokens minted.
@@ -962,7 +964,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value.
 	fn select_validators() -> BalanceOf<T> {
-		let maybe_elected_candidates = elect::<T, _, _, _>(
+		let maybe_elected_set = elect::<T, _, _, _>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			<Validators<T>>::enumerate(),
@@ -975,7 +977,10 @@ impl<T: Trait> Module<T> {
 			}
 		);
 
-		if let Some(elected_candidates) = maybe_elected_candidates {
+		if let Some(elected_set) = maybe_elected_set {
+			let elected_stashes = elected_set.0;
+			let assignments = elected_set.1;
+
 			// Clear Stakers and reduce their slash_count.
 			for v in Self::current_elected().iter() {
 				<Stakers<T>>::remove(v);
@@ -985,18 +990,47 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			// Populate Stakers and figure out the minimum stake behind a slot.
-			let mut slot_stake = elected_candidates[0].exposure.total;
-			for c in &elected_candidates {
-				if c.exposure.total < slot_stake {
-					slot_stake = c.exposure.total;
+			// update elected candidate exposures.
+			let mut exposures = BTreeMap::<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>::new();
+			elected_stashes
+				.iter()
+				.map(|e| (e, Self::slashable_balance_of(e)))
+				.for_each(|(e, s)| { exposures.insert(e.clone(), Exposure { own: s, total: s, others: vec![] }); });
+
+			// helper closure.
+			let to_balance = |b| BalanceOf::<T>::sa(b);
+			let extend_balance = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as u128;
+
+			// This is a safe u128 to u64 conversion.
+			// The original balance, b is within the scope of u64. It is just extended to u128
+			// to be properly multiplied by a ratio, which will lead to another value
+			// less than u64 for sure. To result can the be safely passed to `to_balance`.
+			let percent_of = |b, p| ((p as u128) * extend_balance(b) / ACCURACY) as u64;
+
+			for (n, assignment) in &assignments {
+				for (c, w) in assignment {
+					let n_stake = to_balance(percent_of(Self::slashable_balance_of(n), *w as u64));
+					if let Some(expo) = exposures.get_mut(c) {
+						// NOTE: simple example where this saturates:
+						// candidate with max_value stake. 1 nominator with max_value stake.
+						// Nuked. Sadly there is not much that we can do about this.
+						expo.total = expo.total.saturating_add(n_stake);
+						expo.others.push( IndividualExposure { who: n.clone(), value: n_stake } );
+					}
 				}
-				<Stakers<T>>::insert(c.who.clone(), c.exposure.clone());
+			}
+
+			// Populate Stakers and figure out the minimum stake behind a slot.
+			let mut slot_stake = BalanceOf::<T>::max_value();
+			for (c, e) in exposures.iter() {
+				if e.total < slot_stake {
+					slot_stake = e.total;
+				}
+				<Stakers<T>>::insert(c.clone(), e.clone());
 			}
 			<SlotStake<T>>::put(&slot_stake);
 
 			// Set the new validator set.
-			let elected_stashes = elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>();
 			<CurrentElected<T>>::put(&elected_stashes);
 			<session::Module<T>>::set_validators(
 				&elected_stashes.into_iter().map(|s| Self::bonded(s).unwrap_or_default()).collect::<Vec<_>>()
