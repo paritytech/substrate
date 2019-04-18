@@ -29,7 +29,7 @@
 //! - **Proposal:** A proposal can take several forms. In a spending proposal, a proposer proposes to send funds to a
 //! beneficiary account (which may be a normal account or a smart contract). A proposal may include `set_code`, which
 //! would upgrade the runtime. The proposer must attach a bond with the proposal, which will be taken if it is rejected.
-//! - **Referendum:** A mechanism for voting on proposals. A referendum includes a proposal, as well as a block
+//! - **Referendum:** A mechanism for voting on proposals. A referendum includes a single proposal, as well as a block
 //! number when voting will end, a threshold mechanism, and a delay (in blocks) to wait before deploying the associated
 //! proposal (if successfully passed). Referenda can be started in three ways: from the public, from a unanimous
 //! [Council](../srml_council/index.html) vote, or a majority Council vote. Each method of starting a referendum
@@ -44,7 +44,7 @@
 //!  have sufficient account balance to transfer it into a reserve.
 //! - **Sponsorship:** Sponsor (second) a public proposal using the `second` call that anyone may
 //!  execute by signing and submitting an extrinsic.
-//! - **Sponsorship validity:** For a second to be valid, the sponsored proposal must exist and a
+//! - **Sponsorship validity:** For a sponsorship to be valid, the sponsored proposal must exist and a
 //!  deposit from its proposer must have been reserved. The sponsor must have sufficient account balance
 //!  to reserve a matching deposit.
 //! - **Elevation process:** If checking the configured `LaunchPeriod` indicates that a new public referendum
