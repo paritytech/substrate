@@ -967,23 +967,23 @@ mod tests {
 		);
 
 		ext.set_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:testchild").unwrap(),
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
-				ChildStorageKey::from_slice(b":child_storage:testchild").unwrap(),
+				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:testchild").unwrap()
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap()
 		);
 		assert_eq!(
 			ext.child_storage(
-				ChildStorageKey::from_slice(b":child_storage:testchild").unwrap(),
+				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 				b"abc"
 			),
 			None
