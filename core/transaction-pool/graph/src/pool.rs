@@ -34,7 +34,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
-	traits::{self, As},
+	traits::{self, As, Saturating},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
@@ -52,7 +52,7 @@ pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Block number type for the ChainApi
 pub type NumberFor<A> = traits::NumberFor<<A as ChainApi>::Block>;
 /// A type of transaction stored in the pool
-pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, ExtrinsicFor<A>>>;
+pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, ExtrinsicFor<A>, NumberFor<A>>>;
 
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
@@ -108,6 +108,7 @@ pub struct Pool<B: ChainApi> {
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		ExtrinsicFor<B>,
+		NumberFor<B>,
 	>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
 	rotator: PoolRotator<ExHash<B>>,
@@ -138,7 +139,7 @@ impl<B: ChainApi> Pool<B> {
 							priority,
 							requires,
 							provides,
-							valid_till: block_number.into().saturating_add(longevity),
+							valid_till: block_number.saturating_add(longevity.into()),
 						})
 					},
 					TransactionValidity::Invalid(e) => {
@@ -336,8 +337,7 @@ impl<B: ChainApi> Pool<B> {
 	/// See `prune_tags` ifyou want this.
 	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
 		let block_number = self.api.block_id_to_number(at)?
-				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?
-				.as_();
+				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 		let now = time::Instant::now();
 		let to_remove = {
 			self.ready()
@@ -424,9 +424,9 @@ impl<B: ChainApi> Pool<B> {
 	}
 }
 
-fn fire_events<H, H2, Ex>(
+fn fire_events<H, H2, Ex, BlockNumber>(
 	listener: &mut Listener<H, H2>,
-	imported: &base::Imported<H, Ex>,
+	imported: &base::Imported<H, Ex, BlockNumber>,
 ) where
 	H: hash::Hash + Eq + traits::Member + Serialize,
 	H2: Clone,

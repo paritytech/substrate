@@ -276,7 +276,7 @@ pub fn block_to_cht_number<N: SimpleArithmetic>(cht_size: u64, block_num: N) -> 
 }
 
 /// Convert header number into CHT key.
-pub fn encode_cht_key<N: As<u64>>(number: N) -> Vec<u8> {
+pub fn encode_cht_key<N: From<u64>>(number: N) -> Vec<u8> {
 	let number: u64 = number.as_();
 	vec![
 		(number >> 56) as u8,

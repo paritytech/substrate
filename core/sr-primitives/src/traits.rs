@@ -575,7 +575,7 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u64>;
+	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + From<u64>;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm

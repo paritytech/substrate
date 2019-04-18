@@ -72,8 +72,9 @@ pub fn evaluate_initial<Block: BlockT>(
 		));
 	}
 
-	if parent_number.as_() + 1 != proposal.header().number().as_() {
-		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header().number().as_()));
+	if parent_number + 1.into() != *proposal.header().number() {
+		// TODO TODO: make error generic
+		bail!(ErrorKind::WrongNumber(0, 0));// parent_number + 1.into(), proposal.header().number()));
 	}
 
 	Ok(())

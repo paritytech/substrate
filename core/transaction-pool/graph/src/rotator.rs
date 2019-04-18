@@ -79,7 +79,7 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.
-	pub fn ban_if_stale<Ex>(&self, now: &Instant, current_block: u64, xt: &Transaction<Hash, Ex>) -> bool {
+	pub fn ban_if_stale<Ex, BlockNumber: Ord>(&self, now: &Instant, current_block: BlockNumber, xt: &Transaction<Hash, Ex, BlockNumber>) -> bool {
 		if xt.valid_till > current_block {
 			return false;
 		}

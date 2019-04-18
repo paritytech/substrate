@@ -135,7 +135,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The block number type used by the runtime.
 	type BlockNumber:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
-		+ rstd::hash::Hash;
+		+ rstd::hash::Hash + From<u64>;
 
 	/// The output of the `Hashing` function.
 	type Hash:

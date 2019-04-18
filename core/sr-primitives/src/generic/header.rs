@@ -84,7 +84,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128> + From<u64>,
 	Hash: HashT,
 	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,

@@ -42,7 +42,7 @@ use crate::ready::ReadyTransactions;
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Imported<Hash, Ex> {
+pub enum Imported<Hash, Ex, BlockNumber> {
 	/// Transaction was successfuly imported to Ready queue.
 	Ready {
 		/// Hash of transaction that was successfuly imported.
@@ -52,7 +52,7 @@ pub enum Imported<Hash, Ex> {
 		/// Transactions that failed to be promoted from the Future queue and are now discarded.
 		failed: Vec<Hash>,
 		/// Transactions removed from the Ready pool (replaced).
-		removed: Vec<Arc<Transaction<Hash, Ex>>>,
+		removed: Vec<Arc<Transaction<Hash, Ex, BlockNumber>>>,
 	},
 	/// Transaction was successfuly imported to Future queue.
 	Future {
@@ -61,7 +61,7 @@ pub enum Imported<Hash, Ex> {
 	}
 }
 
-impl<Hash, Ex> Imported<Hash, Ex> {
+impl<Hash, Ex, BlockNumber> Imported<Hash, Ex, BlockNumber> {
 	/// Returns the hash of imported transaction.
 	pub fn hash(&self) -> &Hash {
 		use self::Imported::*;
@@ -74,19 +74,19 @@ impl<Hash, Ex> Imported<Hash, Ex> {
 
 /// Status of pruning the queue.
 #[derive(Debug)]
-pub struct PruneStatus<Hash, Ex> {
+pub struct PruneStatus<Hash, Ex, BlockNumber> {
 	/// A list of imports that satisfying the tag triggered.
-	pub promoted: Vec<Imported<Hash, Ex>>,
+	pub promoted: Vec<Imported<Hash, Ex, BlockNumber>>,
 	/// A list of transactions that failed to be promoted and now are discarded.
 	pub failed: Vec<Hash>,
 	/// A list of transactions that got pruned from the ready queue.
-	pub pruned: Vec<Arc<Transaction<Hash, Ex>>>,
+	pub pruned: Vec<Arc<Transaction<Hash, Ex, BlockNumber>>>,
 }
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
 #[derive(PartialEq, Eq)]
-pub struct Transaction<Hash, Extrinsic> {
+pub struct Transaction<Hash, Extrinsic, BlockNumber> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
 	/// Number of bytes encoding of the transaction requires.
@@ -96,16 +96,17 @@ pub struct Transaction<Hash, Extrinsic> {
 	/// Transaction priority (higher = better)
 	pub priority: Priority,
 	/// At which block the transaction becomes invalid?
-	pub valid_till: Longevity,
+	pub valid_till: BlockNumber,
 	/// Tags required by the transaction.
 	pub requires: Vec<Tag>,
 	/// Tags that this transaction provides.
 	pub provides: Vec<Tag>,
 }
 
-impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
+impl<Hash, Extrinsic, BlockNumber> fmt::Debug for Transaction<Hash, Extrinsic, BlockNumber> where
 	Hash: fmt::Debug,
 	Extrinsic: fmt::Debug,
+	BlockNumber: fmt::Debug,
 {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		fn print_tags(fmt: &mut fmt::Formatter, tags: &[Tag]) -> fmt::Result {
@@ -149,9 +150,9 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
 #[derive(Debug)]
-pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
-	future: FutureTransactions<Hash, Ex>,
-	ready: ReadyTransactions<Hash, Ex>,
+pub struct BasePool<Hash: hash::Hash + Eq, Ex, BlockNumber> {
+	future: FutureTransactions<Hash, Ex, BlockNumber>,
+	ready: ReadyTransactions<Hash, Ex, BlockNumber>,
 	/// Store recently pruned tags (for last two invocations).
 	///
 	/// This is used to make sure we don't accidentally put
@@ -160,7 +161,7 @@ pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	recently_pruned_index: usize,
 }
 
-impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Eq, Ex, BlockNumber: Ord> Default for BasePool<Hash, Ex, BlockNumber> {
 	fn default() -> Self {
 		BasePool {
 			future: Default::default(),
@@ -171,7 +172,7 @@ impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
 	}
 }
 
-impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug, BlockNumber: std::fmt::Debug + Ord> BasePool<Hash, Ex, BlockNumber> {
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -181,8 +182,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	/// ready to be included in the block.
 	pub fn import(
 		&mut self,
-		tx: Transaction<Hash, Ex>,
-	) -> error::Result<Imported<Hash, Ex>> {
+		tx: Transaction<Hash, Ex, BlockNumber>,
+	) -> error::Result<Imported<Hash, Ex, BlockNumber>> {
 		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
 			bail!(error::ErrorKind::AlreadyImported(Box::new(tx.hash.clone())))
 		}
@@ -208,7 +209,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	/// Imports transaction to ready queue.
 	///
 	/// NOTE the transaction has to have all requirements satisfied.
-	fn import_to_ready(&mut self, tx: WaitingTransaction<Hash, Ex>) -> error::Result<Imported<Hash, Ex>> {
+	fn import_to_ready(&mut self, tx: WaitingTransaction<Hash, Ex, BlockNumber>) -> error::Result<Imported<Hash, Ex, BlockNumber>> {
 		let hash = tx.transaction.hash.clone();
 		let mut promoted = vec![];
 		let mut failed = vec![];
@@ -271,12 +272,12 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> {
+	pub fn ready(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex, BlockNumber>>> {
 		self.ready.get()
 	}
 
 	/// Returns an iterator over future transactions in the pool.
-	pub fn futures(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
+	pub fn futures(&self) -> impl Iterator<Item=&Transaction<Hash, Ex, BlockNumber>> {
 		self.future.all()
 	}
 
@@ -284,7 +285,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	///
 	/// Includes both ready and future pool. For every hash in the `hashes`
 	/// iterator an `Option` is produced (so the resulting `Vec` always have the same length).
-	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex, BlockNumber>>>> {
 		let ready = self.ready.by_hash(hashes);
 		let future = self.future.by_hash(hashes);
 
@@ -300,7 +301,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	/// Removes and returns worst transactions from the queues and all transactions that depend on them.
 	/// Technically the worst transaction should be evaluated by computing the entire pending set.
 	/// We use a simplified approach to remove the transaction that occupies the pool for the longest time.
-	pub fn enforce_limits(&mut self, ready: &Limit, future: &Limit) -> Vec<Arc<Transaction<Hash, Ex>>> {
+	pub fn enforce_limits(&mut self, ready: &Limit, future: &Limit) -> Vec<Arc<Transaction<Hash, Ex, BlockNumber>>> {
 		let mut removed = vec![];
 
 		while ready.is_exceeded(self.ready.len(), self.ready.bytes()) {
@@ -355,7 +356,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	/// they were part of a chain, you may attempt to re-import them later.
 	/// NOTE If you want to remove ready transactions that were already used
 	/// and you don't want them to be stored in the pool use `prune_tags` method.
-	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
+	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex, BlockNumber>>> {
 		let mut removed = self.ready.remove_invalid(hashes);
 		removed.extend(self.future.remove(hashes));
 		removed
@@ -367,7 +368,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	/// but unlike `remove_invalid`, dependent transactions are not touched.
 	/// Additional transactions from future queue might be promoted to ready if you satisfy tags
 	/// that the pool didn't previously know about.
-	pub fn prune_tags(&mut self, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash, Ex> {
+	pub fn prune_tags(&mut self, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash, Ex, BlockNumber> {
 		let mut to_import = vec![];
 		let mut pruned = vec![];
 		let recently_pruned = &mut self.recently_pruned[self.recently_pruned_index];
