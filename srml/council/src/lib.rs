@@ -54,22 +54,22 @@
 //! cooling off period that's measured in blocks. The vetoer cannot propose the proposal again until the veto expires.
 //! - **Council proposal vote cancellation** At the end of a given block we cancel all referenda that have been
 //! elevated to the table of referenda whose voting period ends at that block and where the outcome of their voting
-//! tally result is was a unanimous (i.e. no nays, no abstainers) vote to cancel the referendum.
+//! tally result was a unanimous (i.e. no nays, no abstainers) vote to cancel the referendum.
 //! - **Council voting process to elevate a proposal to the table of referenda** At the end of a given block we
-//! determine a list of referenda that haven't already been elevated to the table of referenda (i.e. those that aren't
+//! establish a list of referenda that haven't already been elevated to the table of referenda (i.e. those that aren't
 //! cancellable) and whose voting period ends at that block, then we check the voting tally for each referendum in the
 //! resulting list to determine what action to take. If the outcome of its voting tally council was unanimous then
 //! it starts a referendum (elevating the proposal to the table of referenda) with a vote threshold of
 //! `SuperMajorityAgainst`. Otherwise if it wasn't unanimous (if there were any nay voters or abstainers) then it
-//! still starts a referendum (elevating the proposal to the table of referendum) but applies a vote threshold of
-//! `SimplyMajority` instead. Lastly, if the voting tally has more yay votes than the combination of all nay votes
+//! still starts a referendum (elevating the proposal to the table of referendum) but instead applies a vote threshold
+//! of `SimplyMajority`. Lastly, if the voting tally has more yay votes than the combination of all nay votes
 //! and abstainers, then it removes any veto imposed upon the council proposal (since the proposal voting period
 //! is expiring).
 //! - **Council proposal voting approval (simply majority / majority agreement)** Upon the voting tally of yay
-//! votes for a council proposal reaching its threshold level for approval during its voting period and where a
+//! votes for a council proposal reaching its threshold level for approval during its voting period, and where a
 //! majority council agreement occurs, whereby its tally from majority voting results in a simple majority
 //! (i.e. more explicit yay than nay votes, which signals a sensible and uncontroversial proposal), then the council
-//! proposal is approved. When executed it is elevated to the table of active referenda on the next block,
+//! proposal is approved. When executed, it is elevated to the table of active referenda on the next block,
 //! and a vote threshold of 'simple majority' is applied to the referendum.
 //! - **Council proposal voting approval (unanimous / super majority against)** If a unanimous voting tally for the
 //! council proposal occurs and results in a unanimous council agreement (i.e. only yay votes), then it is approved.
@@ -95,15 +95,15 @@
 //! `reserve` function of the Balances module, as it may result in a major alteration of storage. The bond amount
 //! should be sufficient to cover any costs of the substantial execution in case the operation cannot proceed.
 //! The bond is a mitigation measure against the classical blockchain attack scenario since we cannot be certain
-//! that the operation will not require substantial computation. The voters account id is added to the list `Voters`
+//! that the operation will not require substantial computation. The voters' account id is added to the list `Voters`
 //! of present voters.
 //! - **Candidate voters' subsequent votes (after their first vote)** If the voter makes a subsequent vote that's
 //! valid, then their vote is recorded in `LastActiveOf`, which maps their account id to the last cleared vote index
 //! that they were active at, and the votes (i.e. yay or nay) for each candidate with a vote index are added to the
 //! `ApprovalsOf` mapping.
-//! - **Candidate voter inactivity reaping process** After determining the claims' validity we call `remove_voter`
+//! - **Candidate voter inactivity reaping process** After determining the claims' validity, we call `remove_voter`
 //! as follows depending on the claim validity: if the claim was valid delete the inactive voter, otherwise delete
-//! the reporter. Lastly perform reaping as follows, depending on the claim validity: if the claim is valid call
+//! the reporter. Lastly we perform reaping as follows, depending on the claim validity: if the claim is valid call
 //! `repatriate_reserved` to slash the target account of their voter bond and move that value from the targets'
 //! reserved account balance to the free balance of the reporter (beneficiary) and emit a `VoterReaped` event,
 //! otherwise if the claim was invalid call `slash_reserved` to slash the reporter for their bad behaviour in making a
@@ -117,7 +117,7 @@
 //! - Creation of council proposals by councillors using the council motion mechanism.
 //! - Validation of council proposals.
 //! - Tallying votes of council proposals by councillors during the proposals' voting period.
-//! - Vetoing (postponement) of council proposals through abstainment by councillors for a cooldown period.
+//! - Vetoing (postponement) of council proposals for a cooldown period through abstention by councillors.
 //! - Elevation of council proposals to start an associated referenda on the table of referenda.
 //! - Applying vote thresholds to referenda depending on their associated council proposal voting approval tally.
 //! - Instant autonomous execution of referenda once their vote tally reaches the vote threshold level of approval.
@@ -186,9 +186,9 @@
 //!
 //! - `is_vetoed` - Check if a council proposal has been vetoed.
 //! - `will_still_be_councillor_at` - Check each account id of the active council to determine what block number
-//! they will still be active.
+//! they will still be active at.
 //! - `is_councillor` - Check if a given account id is a councillor.
-//! - `tally` - Tally's council votes.
+//! - `tally` - The count of the yay and nay votes associated with voting on a council proposal.
 //!
 //! ## Related Modules
 //!
