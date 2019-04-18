@@ -27,8 +27,8 @@
 //! means that the `set_id` is the same at blocks B and F.
 //!
 //! Let U be the last finalized block known to caller. If authorities set has changed several
-//! times in the (U; F] interval, multiple finality proof fragments are returned && each should
-//! be verified separately.
+//! times in the (U; F] interval, multiple finality proof fragments are returned (one for each
+//! authority set change) and they must be verified in-order.
 
 use std::sync::Arc;
 use log::{trace, warn};
@@ -397,8 +397,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 /// Check GRANDPA proof-of-finality for the given block.
 ///
 /// Returns the vector of headers that MUST be validated + imported
-/// AND. If at least one of those headers
-/// is invalid, all other MUST be considered invalid.
+/// AND if at least one of those headers is invalid, all other MUST be considered invalid.
 pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 	blockchain: &B,
 	current_set_id: u64,
@@ -418,11 +417,6 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 		remote_proof)
 }
 
-/// Check proof-of-finality for the given block.
-///
-/// Returns the vector of headers that MUST be validated + imported
-/// AND. If at least one of those headers
-/// is invalid, all other MUST be considered invalid.
 fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 	blockchain: &B,
 	current_set_id: u64,

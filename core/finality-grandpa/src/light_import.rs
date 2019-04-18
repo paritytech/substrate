@@ -445,7 +445,7 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 	Ok(ImportResult::imported())
 }
 
-/// Load light impoty aux data from the store.
+/// Load light import aux data from the store.
 fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
 	last_finalized: Block::Hash,
 	aux_store: &B,
@@ -520,7 +520,6 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 	warn!(target: "finality", "Node is in a potentially inconsistent state.");
 	ConsensusError::from(ConsensusErrorKind::ClientImport(error.to_string()))
 }
-
 
 #[cfg(test)]
 pub mod tests {
