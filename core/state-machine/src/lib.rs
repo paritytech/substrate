@@ -56,18 +56,17 @@ pub use proving_backend::{create_proof_check_backend, create_proof_check_backend
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 
+/// A wrapper around a child storage key.
+///
+/// This wrapper ensures that the child storage key is correct and properly used. I.e. it is
+/// impossible to create an instance of this struct without providing a correct `storage_key`.
 pub struct ChildStorageKey<'a, H: Hasher> {
 	storage_key: Cow<'a, [u8]>,
 	_hasher: PhantomData<H>,
 }
 
 impl<'a, H: Hasher> ChildStorageKey<'a, H> {
-	/// Create a new `ChildStorageKey` which can be used to refer child storages.
-	///
-	/// `storage_key` has should start with `:child_storage:`
-	/// (see `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
-	///
-	pub fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
+	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
 		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
 			return None;
 		}
@@ -78,27 +77,34 @@ impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 		})
 	}
 
+	/// Create a new `ChildStorageKey` from a vector.
+	///
+	/// `storage_key` has should start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
 	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
 		Self::new(Cow::Owned(key))
 	}
 
+	/// Create a new `ChildStorageKey` from a slice.
+	///
+	/// `storage_key` has should start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
 	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
 		Self::new(Cow::Borrowed(key))
 	}
 
+	/// Get access to the byte representation of the storage key.
+	///
+	/// This key is guaranteed to be correct.
 	pub fn as_ref(&self) -> &[u8] {
 		&*self.storage_key
 	}
 
+	/// Destruct this instance into an owned vector that represents the storage key.
+	///
+	/// This key is guaranteed to be correct.
 	pub fn into_owned(self) -> Vec<u8> {
 		self.storage_key.into_owned()
-	}
-}
-
-// TODO: Remove this implementation.
-impl<'a, H: Hasher> From<&'a [u8]> for ChildStorageKey<'a, H> {
-	fn from(o: &'a [u8]) -> Self {
-		ChildStorageKey::new(Cow::Borrowed(o)).unwrap()
 	}
 }
 
