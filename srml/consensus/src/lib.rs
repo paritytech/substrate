@@ -46,36 +46,28 @@
 //!
 //! ## Usage
 //!
-//! ### Prerequisites
-//!
-//! To use functionality from the consensus module, implement the specific Trait or function that you are invoking
-//! from the module:
-//!
-//! ```rust,ignore
-//! impl<T> for consensus::SomeTrait for Module<T> {
-//! 	/// required functions and types for trait included here
-//! 	/// more comprehensive example included below
-//! }
-//! ```
-//!
-//! Alternatively, to set the authorities:
-//!
-//! ```rust,ignore
-//! consensus::set_authorities(&[<authorities>]) // example included below
-//! ```
-//!
 //! ### Simple Code Snippet
 //!
 //! Set authorities:
 //!
-//! ```rust,ignore
-//! <consensus::Module<T>>::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)])
+//! ```
+//! # use srml_consensus as consensus;
+//! # fn not_executed<T: consensus::Trait>() {
+//! # let authority1 = T::SessionKey::default();
+//! # let authority2 = T::SessionKey::default();
+//! <consensus::Module<T>>::set_authorities(&[authority1, authority2])
+//! # }
 //! ```
 //!
 //! Log changes in the authorities set:
 //!
-//! ```rust,ignore
-//! <consensus::Module<T>>::on_finalize(5); // finalize UintAuthorityId(5)
+//! ```
+//! # use srml_consensus as consensus;
+//! # use primitives::traits::Zero;
+//! # use primitives::traits::OnFinalize;
+//! # fn not_executed<T: consensus::Trait>() {
+//! <consensus::Module<T>>::on_finalize(T::BlockNumber::zero());
+//! # }
 //! ```
 //!
 //! ### Example from SRML
@@ -83,12 +75,21 @@
 //! In the staking module, the `consensus::OnOfflineReport` is implemented to monitor offline
 //! reporting among validators:
 //!
-//! ```rust,ignore
+//! ```
+//! # use srml_consensus as consensus;
+//! # trait Trait: consensus::Trait {
+//! # }
+//! #
+//! # srml_support::decl_module! {
+//! #     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! #     }
+//! # }
+//! #
 //! impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
 //! 	fn handle_report(reported_indices: Vec<u32>) {
 //! 		for validator_index in reported_indices {
-//! 			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
-//! 			Self::on_offline_validator(v, 1);
+//! 			// Get validator from session module
+//! 			// Process validator
 //! 		}
 //! 	}
 //! }
@@ -97,11 +98,15 @@
 //! In the GRANDPA module, we use `srml-consensus` to get the set of `next_authorities` before changing
 //! this set according to the consensus algorithm (which does not rotate sessions in the *normal* way):
 //!
-//! ```rust,ignore
+//! ```
+//! # use srml_consensus as consensus;
+//! # use consensus::Trait;
+//! # fn not_executed<T: consensus::Trait>() {
 //! let next_authorities = <consensus::Module<T>>::authorities()
 //! 			.into_iter()
 //! 			.map(|key| (key, 1)) // evenly-weighted.
 //! 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
+//! # }
 //! ```
 //!
 //! ## Related Modules
