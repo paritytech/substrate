@@ -24,9 +24,9 @@ use rstd::prelude::*;
 use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature,
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
 };
-use grandpa::fg_primitives::{self, ScheduledChange, EquivocationProof};
+use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEvidence};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis, transaction_builder::api as transaction_builder_api,
@@ -35,7 +35,7 @@ use runtime_primitives::{ApplyResult, generic, create_runtime_str, AnySignature,
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, CurrencyToVoteHandler,
-	AuthorityIdFor, BlockNumberToHash,
+	AuthorityIdFor,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -43,16 +43,14 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::{OpaqueMetadata, sr25519, ed25519};
-use parity_codec::{Encode, Decode, Compact};
+use substrate_primitives::OpaqueMetadata;
+use consensus_aura::AuraEvidence;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
-pub use grandpa::Call as GrandpaCall;
-pub use system::Call as SystemCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
@@ -224,8 +222,6 @@ construct_runtime!(
 	}
 );
 
-/// The type used as a helper for interpreting the sender of transactions.
-pub type Context = system::ChainContext<Runtime>;
 /// The address format for describing accounts.
 pub type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
@@ -345,9 +341,8 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn construct_report_call(equivocation_proof: EquivocationProof<(Vec<u8>, ed25519::Signature), AuthorityId>) -> Option<Vec<u8>> {
-			let function = Call::Grandpa(GrandpaCall::report_misbehavior(equivocation_proof));
-			Some(function.encode().as_slice().to_vec())
+		fn construct_report_call(evidence: GrandpaEvidence) -> Option<Vec<u8>> {
+			None
 		}
 	}
 
@@ -356,9 +351,9 @@ impl_runtime_apis! {
 			Aura::slot_duration()
 		}
 
-		// fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-		// 	Some(Vec::new())
-		// }
+		fn construct_report_call(evidence: AuraEvidence) -> Option<Vec<u8>> {
+			None
+		}
 	}
 
 	impl consensus_authorities::AuthoritiesApi<Block> for Runtime {

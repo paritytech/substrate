@@ -16,11 +16,8 @@
 
 //! The runtime api for building transactions.
 
-use runtime_primitives::{traits::Block as BlockT, ApplyResult, AnySignature};
 use rstd::vec::Vec;
 use sr_api_macros::decl_runtime_apis;
-use primitives::ed25519;
-pub use inherents::{InherentData, CheckInherentsResult};
 
 decl_runtime_apis! {
 	/// The `TransactionBuilder` api trait that provides required functions for building a transaction for a runtime.

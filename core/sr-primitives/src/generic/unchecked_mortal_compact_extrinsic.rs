@@ -86,7 +86,6 @@ where
 			Some((signed, signature, index, era)) => {
 				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.current_height().as_())))
 					.ok_or("transaction birth block ancient")?;
-				
 				let signed = context.lookup(signed)?;
 				let raw_payload = (index, self.function, era, h);
 				if !raw_payload.using_encoded(|payload| {

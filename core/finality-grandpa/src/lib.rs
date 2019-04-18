@@ -57,10 +57,9 @@ use log::{debug, info, warn};
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
-	error::Error as ClientError, transaction_builder::api::TransactionBuilder as TransactionBuilderApi,
+	error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
-use client::runtime_api::ConstructRuntimeApi;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, DigestItemFor, DigestItem,
@@ -70,7 +69,7 @@ use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
@@ -415,25 +414,22 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, A>(
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
 	inherent_data_providers: InherentDataProviders,
 	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
-	transaction_pool: Arc<TransactionPool<A>>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
-	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>,
-	<RA as ConstructRuntimeApi<Block, client::Client<B, E, Block, RA>>>::RuntimeApi: fg_primitives::GrandpaApi<Block> + TransactionBuilderApi<Block>,
-	A: txpool::ChainApi<Block=Block> + 'static,
+	RA: Send + Sync + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};
 
@@ -458,7 +454,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, A>(
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
 		last_completed: environment::LastCompletedRound::new(set_state.round()),
-		transaction_pool: transaction_pool.clone(),
 	});
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
@@ -512,7 +507,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, A>(
 		let client = client.clone();
 		let config = config.clone();
 		let network = network.clone();
-		let transaction_pool = transaction_pool.clone();
 		let authority_set = authority_set.clone();
 		let consensus_changes = consensus_changes.clone();
 
@@ -543,7 +537,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, A>(
 						last_completed: environment::LastCompletedRound::new(
 							(0, genesis_state.clone())
 						),
-						transaction_pool,
 					});
 
 

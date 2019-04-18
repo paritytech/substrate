@@ -254,6 +254,7 @@ impl<
 		const INVALID_INDEX: i8 = -10;
 
 		let encoded_len = uxt.encode().len();
+
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -264,6 +265,7 @@ impl<
 			Err(primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
+
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {
@@ -292,13 +294,11 @@ impl<
 				longevity: TransactionLongevity::max_value(),
 			}
 		} else {
-			return TransactionValidity::Invalid(
-				if xt.sender().is_none() {
-					MISSING_SENDER
-				} else {
-					INVALID_INDEX
-				}
-			)
+			return TransactionValidity::Invalid(if xt.sender().is_none() {
+				MISSING_SENDER
+			} else {
+				INVALID_INDEX
+			})
 		}
 	}
 

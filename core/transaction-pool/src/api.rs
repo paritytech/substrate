@@ -27,7 +27,6 @@ use substrate_primitives::{
 	H256,
 	Blake2Hasher,
 	Hasher,
-	sr25519,
 };
 use sr_primitives::{
 	generic::BlockId,

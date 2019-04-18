@@ -40,8 +40,6 @@ impl txpool::ChainApi for TestApi {
 	type Error = error::Error;
 
 	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		panic("or maybe here?");
-		println!("validate transaction tests");
 		let expected = index(at);
 		let requires = if expected == uxt.transfer().nonce {
 			vec![]

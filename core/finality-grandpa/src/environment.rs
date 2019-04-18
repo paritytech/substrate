@@ -14,49 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::communication::localized_payload;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use log::{debug, warn, info};
-use parity_codec::{Decode, Encode, Compact};
+use parity_codec::Encode;
 use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
 
-use fg_primitives::{GrandpaApi, EquivocationProof};
-
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
-	transaction_builder::api::TransactionBuilder as TransactionBuilderApi,
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet, Message,
+	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState, voter, VoterSet,
 };
-use runtime_primitives::AnySignature;
-use runtime_primitives::OpaqueExtrinsic;
-use runtime_primitives::generic::{BlockId, Era};
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi,
-	Verify,
+	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair, sr25519, hashing::blake2_256};
+use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use srml_indices::address::Address;
-use node_runtime::{Call, SystemCall, GrandpaCall, UncheckedExtrinsic, Context};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,
 	CommandOrError, NewAuthoritySet, VoterCommand,
 };
 
-use transaction_pool::txpool::{self, Pool as TransactionPool};
-
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use keyring::{AccountKeyring, AuthorityKeyring};
+
 use ed25519::Public as AuthorityId;
 
 /// Data about a completed round.
@@ -87,7 +76,7 @@ impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, A: txpool::ChainApi> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -96,17 +85,15 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, A: txp
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
-	pub(crate) transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, A> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA, A> where
+impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	N: Network<Block> + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
-	A: txpool::ChainApi,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		if base == block { return Err(GrandpaError::NotDescendent) }
@@ -211,7 +198,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA, A> grandpa::Chain<Block::Hash, Numbe
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA, A> where
+impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
@@ -219,9 +206,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
-	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block> + TransactionBuilderApi<Block>,
-	A: txpool::ChainApi<Block=Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -340,13 +324,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		).map_err(|e| Error::Timer(e).into()))
 	}
 
-	
 	fn prevote_equivocation(
 		&self,
-		round: u64,
+		_round: u64,
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
+		// nothing yet; this could craft misbehavior reports of some kind.
 	}
 
 	fn precommit_equivocation(
@@ -355,6 +339,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, A> voter::Environment<Block::Hash, N
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
+		// nothing yet
 	}
 }
 

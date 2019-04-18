@@ -35,7 +35,7 @@ use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode};
-use fg_primitives::{ScheduledChange, EquivocationProof};
+use fg_primitives::ScheduledChange;
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
@@ -43,7 +43,7 @@ use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::CurrentHeight;
 use substrate_primitives::ed25519;
 use system::ensure_signed;
-use primitives::traits::{MaybeSerializeDebug, Verify};
+use primitives::traits::MaybeSerializeDebug;
 use ed25519::Public as AuthorityId;
 
 mod mock;
@@ -216,20 +216,8 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Report some misbehavior.
-		fn report_misbehavior(origin, equivocation_proof: EquivocationProof<(Vec<u8>, ed25519::Signature), AuthorityId>) {
+		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
-			
-			let (fst_msg_encoded, fst_signature) = equivocation_proof.first;
-			let (snd_msg_encoded, snd_signature) = equivocation_proof.second;
-			let identity = equivocation_proof.identity;
-
-			let r1 = fst_signature.verify(&fst_msg_encoded[..], &identity);
-			let r2 = snd_signature.verify(&snd_msg_encoded[..], &identity);
-			
-			if r1 && r2 && fst_msg_encoded != snd_msg_encoded {
-				// slash the bad guys (check the decoded msgs first)
-			}
-
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 

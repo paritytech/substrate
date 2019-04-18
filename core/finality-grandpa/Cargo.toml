@@ -21,14 +21,8 @@ inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
-srml-grandpa = { path = "../../srml/grandpa" }
-srml-indices = { path = "../../srml/indices" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
-# grandpa = { package = "finality-grandpa", version = "0.6.0", features = ["derive-codec"] }
-grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
-node-runtime = { path = "../../node/runtime" }
-keyring = { package = "substrate-keyring", path = "../keyring" }
+grandpa = { package = "finality-grandpa", version = "0.6.0", features = ["derive-codec"] }
 
 [dev-dependencies]
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }

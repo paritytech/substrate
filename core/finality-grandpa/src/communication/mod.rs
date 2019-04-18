@@ -333,7 +333,7 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
+fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
@@ -433,7 +433,6 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 			let target_hash = msg.target().0.clone();
 			let signed = SignedMessage::<Block> {
-				encoded: encoded,
 				message: msg,
 				signature,
 				id: local_id.clone(),

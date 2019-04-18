@@ -2287,6 +2287,7 @@ dependencies = [
 name = "substrate-consensus-aura-primitives"
 version = "1.0.0"
 dependencies = [
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
  "substrate-client 1.0.0",

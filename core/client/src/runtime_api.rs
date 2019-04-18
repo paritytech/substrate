@@ -40,7 +40,7 @@ pub use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
 use sr_api_macros::decl_runtime_apis;
-use primitives::{OpaqueMetadata, sr25519};
+use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::panic::UnwindSafe;
 use rstd::vec::Vec;

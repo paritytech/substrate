@@ -48,6 +48,7 @@ use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+use consensus_aura::AuraEvidence;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -544,9 +545,9 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
-				// fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-				// 	Some(Vec::new())
-				// }
+				fn construct_report_call(evidence: AuraEvidence) -> Option<Vec<u8>> {
+					None
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

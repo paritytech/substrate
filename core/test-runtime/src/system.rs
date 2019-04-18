@@ -183,10 +183,6 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	}
 }
 
-pub fn get_account_nonce(account: &AccountId) -> u64 {
-	0
-}
-
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {

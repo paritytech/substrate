@@ -14,7 +14,7 @@ use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify},
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -23,6 +23,7 @@ use client::{
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
+use consensus_aura::AuraEvidence;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
@@ -30,8 +31,6 @@ pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
-pub use grandpa::Call as GrandpaCall;
-pub use system::Call as SystemCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
@@ -288,9 +287,9 @@ impl_runtime_apis! {
 			Aura::slot_duration()
 		}
 		
-		// fn construct_report_call(evidence: EquivocationProof) -> Option<Vec<u8>> {
-		// 	Some(Vec::new())
-		// }
+		fn construct_report_call(evidence: AuraEvidence) -> Option<Vec<u8>> {
+			None
+		}
 	}
 
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {

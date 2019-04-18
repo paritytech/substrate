@@ -753,6 +753,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2024,7 +2025,6 @@ dependencies = [
  "srml-balances 1.0.0",
  "srml-consensus 1.0.0",
  "srml-executive 1.0.0",
- "srml-grandpa 1.0.0",
  "srml-indices 1.0.0",
  "srml-sudo 1.0.0",
  "srml-support 1.0.0",
@@ -3099,6 +3099,7 @@ dependencies = [
  "srml-support 1.0.0",
  "srml-system 1.0.0",
  "srml-timestamp 1.0.0",
+ "substrate-consensus-aura-primitives 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-primitives 1.0.0",
 ]
@@ -3756,6 +3757,7 @@ dependencies = [
 name = "substrate-consensus-aura-primitives"
 version = "1.0.0"
 dependencies = [
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
  "substrate-client 1.0.0",
@@ -3868,18 +3870,15 @@ name = "substrate-finality-grandpa"
 version = "1.0.0"
 dependencies = [
  "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "finality-grandpa 0.6.0",
+ "finality-grandpa 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fork-tree 1.0.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-runtime 1.0.0",
  "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "srml-finality-tracker 1.0.0",
- "srml-grandpa 1.0.0",
- "srml-indices 1.0.0",
  "substrate-client 1.0.0",
  "substrate-consensus-common 1.0.0",
  "substrate-finality-grandpa-primitives 1.0.0",
@@ -3890,7 +3889,6 @@ dependencies = [
  "substrate-service 1.0.0",
  "substrate-telemetry 1.0.0",
  "substrate-test-client 1.0.0",
- "substrate-transaction-pool 1.0.0",
  "tokio 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -5180,6 +5178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "ea1063915fd7ef4309e222a5a07cf9c319fb9c7836b1f89b85458672dbb127e1"
 "checksum fake-simd 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 "checksum fdlimit 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b1ee15a7050e5580b3712877157068ea713b245b080ff302ae2ca973cfcd9baa"
+"checksum finality-grandpa 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d415e902db2b87bd5a7df7a2b2de97a4566727a23b95ff39e1bfec25a66d4d1c"
 "checksum fixed-hash 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a557e80084b05c32b455963ff565a9de6f2866da023d6671705c6aff6f65e01c"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
 "checksum foreign-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"

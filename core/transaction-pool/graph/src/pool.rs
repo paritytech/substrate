@@ -37,7 +37,7 @@ use sr_primitives::{
 	traits::{self, As},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
-use substrate_primitives::sr25519;
+
 pub use crate::base_pool::Limit;
 
 /// Modification notification event stream type;
@@ -120,6 +120,7 @@ impl<B: ChainApi> Pool<B> {
 	{
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+
 		let results = xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
@@ -127,8 +128,7 @@ impl<B: ChainApi> Pool<B> {
 				if self.rotator.is_banned(&hash) {
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
-				let r = self.api.validate_transaction(at, xt.clone());
-				match r? {
+				match self.api.validate_transaction(at, xt.clone())? {
 					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
 							data: xt,
@@ -470,6 +470,7 @@ mod tests {
 
 		/// Verify extrinsic at given block.
 		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
 

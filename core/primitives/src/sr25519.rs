@@ -452,8 +452,7 @@ impl TraitPair for Pair {
 
 	fn sign(&self, message: &[u8]) -> Signature {
 		let context = signing_context(SIGNING_CTX);
-		let full_message = context.bytes(message);
-		self.0.sign(full_message).into()
+		self.0.sign(context.bytes(message)).into()
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -474,20 +473,13 @@ impl TraitPair for Pair {
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
 		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(sig) {
 			Ok(some_signature) => some_signature,
-			Err(_) => {
-				return false
-			}
+			Err(_) => return false
 		};
 		match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => {
-				let full_message = signing_context(SIGNING_CTX).bytes(message.as_ref());
-				pk.verify(
-					full_message, &signature
-				)
-			},
-			Err(_) => {
-				false
-			}
+			Ok(pk) => pk.verify(
+				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
+			),
+			Err(_) => false,
 		}
 	}
 }
