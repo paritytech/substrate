@@ -29,6 +29,10 @@
 //! Let U be the last finalized block known to caller. If authorities set has changed several
 //! times in the (U; F] interval, multiple finality proof fragments are returned (one for each
 //! authority set change) and they must be verified in-order.
+//!
+//! Finality proof provider can choose how to provide finality proof on its own. The incomplete
+//! finality proof (that finalizes some block C that is ancestor of the B and descendant
+//! of the U) could be returned.
 
 use std::sync::Arc;
 use log::{trace, warn};
@@ -50,6 +54,9 @@ use ed25519::Public as AuthorityId;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::justification::GrandpaJustification;
+
+/// Maximum number of fragments that we want to return in a single prove_finality call.
+const MAX_FRAGMENTS_IN_PROOF: usize = 8;
 
 /// GRANDPA authority set related methods for the finality proof provider.
 pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
@@ -290,6 +297,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	}
 
 	// iterate justifications && try to prove finality
+	let mut fragment_index = 0;
 	let mut current_authorities = authorities_provider.authorities(&begin_id)?;
 	let mut current_number = begin_number + One::one();
 	let mut finality_proof = Vec::new();
@@ -365,6 +373,11 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 			// the end block, we try to generate it for the latest possible block
 			if let Some(latest_proof_fragment) = latest_proof_fragment.take() {
 				finality_proof.push(latest_proof_fragment);
+
+				fragment_index += 1;
+				if fragment_index == MAX_FRAGMENTS_IN_PROOF {
+					break;
+				}
 			}
 			break;
 		}
