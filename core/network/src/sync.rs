@@ -563,7 +563,13 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
-		self.extra_requests.justifications().on_import_result(hash, number, success);
+		let finalization_result = if success { Ok((hash, number)) } else { Err(()) };
+		if !self.extra_requests.justifications().on_import_result((hash, number), finalization_result) {
+			debug!(target: "sync", "Got justification import result for unknown justification {:?} {:?} request.",
+				hash,
+				number,
+			);
+		}
 	}
 
 	/// Request a finality proof for the given block.
@@ -578,8 +584,12 @@ impl<B: BlockT> ChainSync<B> {
 		self.extra_requests.finality_proofs().dispatch(&mut self.peers, protocol);
 	}
 
-	pub fn finality_proof_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
-		self.extra_requests.finality_proofs().on_import_result(hash, number, success);
+	pub fn finality_proof_import_result(
+		&mut self,
+		request_block: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) {
+		self.extra_requests.finality_proofs().on_import_result(request_block, finalization_result);
 	}
 
 	pub fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {

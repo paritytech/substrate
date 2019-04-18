@@ -118,10 +118,19 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		));
 	}
 
-	fn finality_proof_imported(&self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
-		let _ = self.protocol_sender.send(ProtocolMsg::FinalityProofImportResult(hash.clone(), number, success));
+	fn finality_proof_imported(
+		&self,
+		who: PeerId,
+		request_block: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) {
+		let success = finalization_result.is_ok();
+		let _ = self.protocol_sender.send(ProtocolMsg::FinalityProofImportResult(
+			request_block,
+			finalization_result,
+		));
 		if !success {
-			let reason = Severity::Bad(format!("Invalid finality proof provided for #{}", hash).to_string());
+			let reason = Severity::Bad(format!("Invalid finality proof provided for #{}", request_block.0));
 			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
 		}
 	}

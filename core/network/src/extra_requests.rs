@@ -16,7 +16,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
-use log::{trace, warn, debug};
+use log::{trace, warn};
 use client::error::Error as ClientError;
 use consensus::import_queue::{ImportQueue, SharedFinalityProofRequestBuilder};
 use fork_tree::ForkTree;
@@ -266,39 +266,13 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 
 	/// Process the import result of an extra.
 	/// Queues a retry in case the import failed.
-	pub(crate) fn on_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
-		let request = (hash, number);
-
-		if !self.importing_requests.remove(&request) {
-			debug!(target: "sync", "Got {} import result for unknown {} {:?} {:?} request.",
-				self.essence.type_name(),
-				self.essence.type_name(),
-				request.0,
-				request.1,
-			);
-
- 			return;
-		}
-
-		if success {
-			if self.tree.finalize_root(&request.0).is_none() {
-				warn!(target: "sync", "Imported {} for {:?} {:?} which isn't a root in the tree: {:?}",
-					self.essence.type_name(),
-					request.0,
-					request.1,
-					self.tree.roots().collect::<Vec<_>>(),
-				);
-				return;
-			};
-
-			self.previous_requests.clear();
-			self.peer_requests.clear();
-			self.pending_requests =
-				self.tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
-
-			return;
-		}
-		self.pending_requests.push_front(request);
+	/// Returns true if import has been queued.
+	pub(crate) fn on_import_result(
+		&mut self,
+		request: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) -> bool {
+		self.try_finalize_root(request, finalization_result, true)
 	}
 
 	/// Processes the response for the request previously sent to the given
@@ -338,9 +312,12 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 	) -> Result<(), fork_tree::Error<ClientError>>
 		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
 	{
-		if self.importing_requests.contains(&(*best_finalized_hash, best_finalized_number)) {
-			// we imported this extra data ourselves, so we should get back a response
-			// from the import queue through `on_import_result`
+		let is_scheduled_root = self.try_finalize_root(
+			(*best_finalized_hash, best_finalized_number),
+			Ok((*best_finalized_hash, best_finalized_number)),
+			false,
+		);
+		if is_scheduled_root {
 			return Ok(());
 		}
 
@@ -363,6 +340,46 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		self.pending_requests.clear();
 		self.peer_requests.clear();
 		self.previous_requests.clear();
+	}
+
+	/// Try to finalize pending root.
+	/// Returns true if import of this request has been scheduled.
+	fn try_finalize_root(
+		&mut self,
+		request: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+		reschedule_on_failure: bool,
+	) -> bool {
+		if !self.importing_requests.remove(&request) {
+			return false;
+		}
+
+		let (finalized_hash, finalized_number) = match finalization_result {
+			Ok((finalized_hash, finalized_number)) => (finalized_hash, finalized_number),
+			Err(_) => {
+				if reschedule_on_failure {
+					self.pending_requests.push_front(request);
+				}
+				return true;
+			},
+		};
+
+		if self.tree.finalize_root(&finalized_hash).is_none() {
+			warn!(target: "sync", "Imported {} for {:?} {:?} which isn't a root in the tree: {:?}",
+				self.essence.type_name(),
+				finalized_hash,
+				finalized_number,
+				self.tree.roots().collect::<Vec<_>>(),
+			);
+			return true;
+		};
+
+		self.previous_requests.clear();
+		self.peer_requests.clear();
+		self.pending_requests =
+			self.tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
+
+		true
 	}
 }
 
@@ -420,5 +437,58 @@ impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence<B> {
 
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B> {
 		PeerSyncState::DownloadingFinalityProof(block)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use client::error::Error as ClientError;
+	use test_client::runtime::{Block, Hash};
+	use super::ExtraRequestsAggregator;
+
+	#[test]
+	fn request_is_rescheduled_when_earlier_block_is_finalized() {
+		let _ = ::env_logger::try_init();
+
+		let mut extra_requests = ExtraRequestsAggregator::<Block>::new();
+
+		let hash4 = [4; 32].into();
+		let hash5 = [5; 32].into();
+		let hash6 = [6; 32].into();
+		let hash7 = [7; 32].into();
+
+		fn is_descendent_of(base: &Hash, target: &Hash) -> Result<bool, ClientError> {
+			Ok(target[0] >= base[0])
+		}
+
+		// make #4 last finalized block
+		extra_requests.finality_proofs().tree.import(hash4, 4, (), &is_descendent_of).unwrap();
+		extra_requests.finality_proofs().tree.finalize_root(&hash4);
+
+		// schedule request for #6
+		extra_requests.finality_proofs().queue_request((hash6, 6), is_descendent_of);
+
+		// receive finality proof for #5
+		extra_requests.finality_proofs().importing_requests.insert((hash6, 6));
+		extra_requests.finality_proofs().on_block_finalized(&hash5, 5, is_descendent_of).unwrap();
+		extra_requests.finality_proofs().on_import_result((hash6, 6), Ok((hash5, 5)));
+
+		// ensure that request for #6 is still pending
+		assert_eq!(
+			extra_requests.finality_proofs().pending_requests.iter().collect::<Vec<_>>(),
+			vec![&(hash6, 6)],
+		);
+
+		// receive finality proof for #7
+		extra_requests.finality_proofs().importing_requests.insert((hash6, 6));
+		extra_requests.finality_proofs().on_block_finalized(&hash6, 6, is_descendent_of).unwrap();
+		extra_requests.finality_proofs().on_block_finalized(&hash7, 7, is_descendent_of).unwrap();
+		extra_requests.finality_proofs().on_import_result((hash6, 6), Ok((hash7, 7)));
+
+		// ensure that there's no request for #6
+		assert_eq!(
+			extra_requests.finality_proofs().pending_requests.iter().collect::<Vec<_>>(),
+			Vec::<&(Hash, u64)>::new(),
+		);
 	}
 }

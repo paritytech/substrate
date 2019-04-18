@@ -231,8 +231,13 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 		self.link.request_justification(hash, number);
 	}
 
-	fn finality_proof_imported(&self, who: PeerId, hash: &Hash, number:NumberFor<Block>, success: bool) {
-		self.link.finality_proof_imported(who, hash, number, success);
+	fn finality_proof_imported(
+		&self,
+		who: PeerId,
+		request_block: (Hash, NumberFor<Block>),
+		finalization_result: Result<(Hash, NumberFor<Block>), ()>,
+	) {
+		self.link.finality_proof_imported(who, request_block, finalization_result);
 	}
 
 	fn request_finality_proof(&self, hash: &Hash, number: NumberFor<Block>) {

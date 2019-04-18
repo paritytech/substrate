@@ -164,7 +164,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		number: NumberFor<Block>,
 		finality_proof: Vec<u8>,
 		verifier: &Verifier<Block>,
-	) -> Result<(), Self::Error> {
+	) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 		do_import_finality_proof::<_, _, _, _, GrandpaJustification<Block>>(
 			&*self.client,
 			&*self.authority_set_provider,
@@ -281,7 +281,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	_number: NumberFor<Block>,
 	finality_proof: Vec<u8>,
 	verifier: &Verifier<Block>,
-) -> Result<(), ConsensusError>
+) -> Result<(Block::Hash, NumberFor<Block>), ConsensusError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -333,7 +333,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		finality_effects.new_authorities,
 	);
 
-	Ok(())
+	Ok((finalized_block_hash, finalized_block_number))
 }
 
 /// Try to import justification.
@@ -585,7 +585,7 @@ pub mod tests {
 			number: NumberFor<Block>,
 			finality_proof: Vec<u8>,
 			verifier: &Verifier<Block>,
-		) -> Result<(), Self::Error> {
+		) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 			self.0.import_finality_proof(hash, number, finality_proof, verifier)
 		}
 	}

@@ -215,14 +215,14 @@ pub trait FinalityProofImport<B: BlockT> {
 	/// Called by the import queue when it is started.
 	fn on_start(&self, _link: &crate::import_queue::Link<B>) { }
 
-	/// Import a Block justification and finalize the given block.
+	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(
 		&self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,
 		verifier: &Verifier<B>,
-	) -> Result<(), Self::Error>;
+	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
 }
 
 /// Finality proof request builder.

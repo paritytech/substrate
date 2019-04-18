@@ -249,7 +249,7 @@ pub enum BlockImportWorkerMsg<B: BlockT> {
 		)>,
 	),
 	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	ImportedFinalityProof(Origin, B::Hash, NumberFor<B>, bool),
+	ImportedFinalityProof(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	#[cfg(any(test, feature = "test-helpers"))]
 	Synchronize,
 }
@@ -369,8 +369,8 @@ impl<B: BlockT> BlockImporter<B> {
 
 		let results = match msg {
 			BlockImportWorkerMsg::ImportedBlocks(results) => (results),
-			BlockImportWorkerMsg::ImportedFinalityProof(who, hash, number, success) => {
-				link.finality_proof_imported(who, &hash, number, success);
+			BlockImportWorkerMsg::ImportedFinalityProof(who, request_block, finalization_result) => {
+				link.finality_proof_imported(who, request_block, finalization_result);
 				return true;
 			},
 			#[cfg(any(test, feature = "test-helpers"))]
@@ -514,7 +514,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 							let _ = worker.result_sender.send(BlockImportWorkerMsg::Synchronize);
 						},
 						BlockImportWorkerMsg::ImportedBlocks(_)
-							| BlockImportWorkerMsg::ImportedFinalityProof(_, _, _, _)
+							| BlockImportWorkerMsg::ImportedFinalityProof(_, _, _)
 								=> unreachable!("Import Worker does not receive the Imported* messages; qed"),
 					}
 				}
@@ -571,7 +571,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 	}
 
 	fn import_finality_proof(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) {
-		let success = self.finality_proof_import.as_ref().map(|finality_proof_import| {
+		let result = self.finality_proof_import.as_ref().map(|finality_proof_import| {
 			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier)
 				.map_err(|e| {
 					debug!(
@@ -581,13 +581,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 						number,
 						who,
 					);
-					e
-				}).is_ok()
-		}).unwrap_or(false);
+				})
+		}).unwrap_or(Err(()));
 
 		let _ = self
 			.result_sender
-			.send(BlockImportWorkerMsg::ImportedFinalityProof(who, hash, number, success));
+			.send(BlockImportWorkerMsg::ImportedFinalityProof(who, (hash, number), result));
 
 		trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
 	}
@@ -607,7 +606,16 @@ pub trait Link<B: BlockT>: Send {
 	/// Request a justification for the given block.
 	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Finality proof import result.
-	fn finality_proof_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
+	///
+	/// Even though we have asked for finality proof of block A, provider could return proof of
+	/// some earlier block B, if the proof for A was too large. The sync module should continue
+	/// asking for proof of A in this case.
+	fn finality_proof_imported(
+		&self,
+		_who: Origin,
+		_request_block: (B::Hash, NumberFor<B>),
+		_finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) {}
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Remember finality proof request builder on start.
@@ -749,7 +757,12 @@ mod tests {
 		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
 			let _ = self.sender.send(LinkMsg::BlockImported);
 		}
-		fn finality_proof_imported(&self, _: Origin, _: &Hash, _: NumberFor<Block>, _: bool) {
+		fn finality_proof_imported(
+			&self,
+			_: Origin,
+			_: (Hash, NumberFor<Block>),
+			_: Result<(Hash, NumberFor<Block>), ()>,
+		) {
 			let _ = self.sender.send(LinkMsg::FinalityProofImported);
 		}
 		fn useless_peer(&self, _: Origin, _: &str) {
@@ -886,9 +899,8 @@ mod tests {
 		// Send ack of proof import from BlockImportWorker to BlockImporter
 		result_sender.send(BlockImportWorkerMsg::ImportedFinalityProof(
 			who.clone(),
-			Default::default(),
-			1,
-			true,
+			(Default::default(), 0),
+			Ok((Default::default(), 0)),
 		)).unwrap();
 
 		// Wait for finality proof import result

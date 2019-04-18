@@ -232,7 +232,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Tell protocol to request finality proof for a block.
 	RequestFinalityProof(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a finality proof was successfully imported.
-	FinalityProofImportResult(B::Hash, NumberFor<B>, bool),
+	FinalityProofImportResult((B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	/// Propagate a block to peers.
 	AnnounceBlock(B::Hash),
 	/// A block has been imported (sent by the client).
@@ -421,7 +421,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				self.sync.request_finality_proof(&hash, number, &mut context);
 			},
-			ProtocolMsg::FinalityProofImportResult(hash, number, success) => self.sync.finality_proof_import_result(hash, number, success),
+			ProtocolMsg::FinalityProofImportResult(
+				requested_block,
+				finalziation_result,
+			) => self.sync.finality_proof_import_result(requested_block, finalziation_result),
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
 			ProtocolMsg::Tick => self.tick(),
 			#[cfg(any(test, feature = "test-helpers"))]
