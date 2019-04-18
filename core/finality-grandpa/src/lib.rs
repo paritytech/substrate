@@ -90,6 +90,7 @@ mod finality_proof;
 mod import;
 mod justification;
 mod light_import;
+mod observer;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
@@ -99,6 +100,7 @@ pub use service_integration::{LinkHalfForService, BlockImportForService, BlockIm
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;
+pub use observer::run_grandpa_observer;
 
 use aux_schema::PersistentData;
 use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
@@ -435,7 +437,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
@@ -657,4 +659,25 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let voter_work = network_startup.and_then(move |()| voter_work);
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
+}
+
+#[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
+	config: Config,
+	link: LinkHalf<B, E, Block, RA>,
+	network: N,
+	inherent_data_providers: InherentDataProviders,
+	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+	Block::Hash: Ord,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
+	N::In: Send + 'static,
+	NumberFor<Block>: BlockNumberOps,
+	DigestFor<Block>: Encode,
+	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
+	RA: Send + Sync + 'static,
+{
+	run_grandpa_voter(config, link, network, inherent_data_providers, on_exit)
 }

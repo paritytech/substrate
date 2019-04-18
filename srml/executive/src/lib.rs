@@ -49,7 +49,16 @@
 //!
 //! `Executive` type declaration from the node template.
 //!
-//! ```ignore
+//! ```
+//! # use primitives::generic;
+//! # use srml_executive as executive;
+//! # pub struct UncheckedExtrinsic {};
+//! # pub struct Header {};
+//! # type Context = system::ChainContext<Runtime>;
+//! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+//! # pub type Balances = u64;
+//! # pub type AllModules = u64;
+//! # pub enum Runtime {};
 //! /// Executive: handles dispatch to the various modules.
 //! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
 //! ```
