@@ -65,11 +65,10 @@ impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 	/// Create a new `ChildStorageKey` which can be used to refer child storages.
 	///
 	/// `storage_key` has should start with `:child_storage:`
-	/// (see `well_known_keys::CHILD_STORAGE_KEY_PREFIX`). In the future there might be
-	/// added additional constraints.
-	/// TODO: ^^^ update about :default:
+	/// (see `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
+	///
 	pub fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if !well_known_keys::is_child_storage_key(&storage_key) || !trie::is_child_trie_key_valid::<H>(&storage_key) {
+		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
 			return None;
 		}
 

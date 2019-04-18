@@ -83,8 +83,11 @@ pub mod well_known_keys {
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
 	/// Whether a key is a child storage key.
+	///
+	/// This is convenience function which basically checks if the given `key` starts
+	/// with `CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
 	pub fn is_child_storage_key(key: &[u8]) -> bool {
+		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
-
 }

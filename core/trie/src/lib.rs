@@ -137,9 +137,19 @@ where
 	)
 }
 
-/// Determine whether a child trie key is valid. `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
-pub fn is_child_trie_key_valid<H: Hasher>(_storage_key: &[u8]) -> bool {
-	true
+/// Determine whether a child trie key is valid.
+///
+/// For now, the only valid child trie key is `:child_storage:default:`.
+///
+/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
+pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
+	use substrate_primitives::storage::well_known_keys;
+	debug_assert!(
+		well_known_keys::is_child_storage_key(&storage_key),
+		"`is_child_trie_key_valid` is a subset of `is_child_storage_key`",
+	);
+
+	storage_key.starts_with(b":child_storage:default:")
 }
 
 /// Determine the default child trie root.
