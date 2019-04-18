@@ -20,6 +20,7 @@
 use serde_derive::{Serialize, Deserialize};
 
 use crate::codec::{Decode, Encode, Input, Output};
+use crate::traits::SimpleArithmetic;
 
 pub type Period = u64;
 pub type Phase = u64;
@@ -79,18 +80,20 @@ impl Era {
 
 	/// Get the block number of the start of the era whose properties this object
 	/// describes that `current` belongs to.
-	pub fn birth(self, current: u64) -> u64 {
+	pub fn birth<T: SimpleArithmetic + From<u64>>(self, current: T) -> T {
 		match self {
-			Era::Immortal => 0,
-			Era::Mortal(period, phase) => (current.max(phase) - phase) / period * period + phase,
+			Era::Immortal => T::zero(),
+			Era::Mortal(period, phase) => {
+				(current.max(phase.into()) - phase.into()) / period.into() * period.into() + phase.into()
+			}
 		}
 	}
 
 	/// Get the block number of the first block at which the era has ended.
-	pub fn death(self, current: u64) -> u64 {
+	pub fn death<T: SimpleArithmetic + From<u64>>(self, current: T) -> T {
 		match self {
-			Era::Immortal => u64::max_value(),
-			Era::Mortal(period, _) => self.birth(current) + period,
+			Era::Immortal => T::max_value(),
+			Era::Mortal(period, _) => self.birth(current) + period.into(),
 		}
 	}
 }

@@ -216,7 +216,7 @@ impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
 /// A meta trait for arithmetic.
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -234,7 +234,7 @@ pub trait SimpleArithmetic:
 	HasCompact
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -575,7 +575,7 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u64>;
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm

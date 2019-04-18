@@ -138,7 +138,7 @@ impl<B: ChainApi> Pool<B> {
 							priority,
 							requires,
 							provides,
-							valid_till: block_number.as_().saturating_add(longevity),
+							valid_till: block_number.into().saturating_add(longevity),
 						})
 					},
 					TransactionValidity::Invalid(e) => {
