@@ -40,7 +40,14 @@ impl<Number: traits::As<u64>> NumberOrHex<Number> {
 	/// Fails in case hex number is too big.
 	pub fn to_number(self) -> Result<Number, String> {
 		match self {
-			NumberOrHex::Number(n) => Ok(n),
+			NumberOrHex::Number(n) => {
+				let num: u64 = n.as_();
+				if num > 0xffffffff {
+					Err(format!("`{}` > 0xffffffff, the max block number is 0xffffffff.", num))
+				} else {
+					Ok(traits::As::sa(num))
+				}
+			},
 			NumberOrHex::Hex(h) => {
 				// FIXME #1377 this only supports `u64` since `BlockNumber`
 				// is `As<u64>` we could possibly go with `u128`.
