@@ -371,18 +371,24 @@ fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
 
 // run the voters to completion. provide a closure to be invoked after
 // the voters are spawned but before blocking on them.
-fn run_to_completion_with<F: FnOnce()>(
+fn run_to_completion_with<F>(
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
 	peers: &[AuthorityKeyring],
-	before_waiting: F,
-) -> u64 {
+	with: F,
+) -> u64 where
+	F: FnOnce(current_thread::Handle) -> Option<Box<Future<Item=(),Error=()>>>
+{
 	use parking_lot::RwLock;
 
-	let mut finality_notifications = Vec::new();
+	let mut wait_for = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	let highest_finalized = Arc::new(RwLock::new(0));
+
+	if let Some(f) = (with)(runtime.handle()) {
+		wait_for.push(f);
+	};
 
 	for (peer_id, key) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
@@ -395,20 +401,25 @@ fn run_to_completion_with<F: FnOnce()>(
 				link,
 			)
 		};
-		finality_notifications.push(
-			client.finality_notification_stream()
-				.take_while(move |n| {
-					let mut highest_finalized = highest_finalized.write();
-					if *n.header.number() > *highest_finalized {
-						*highest_finalized = *n.header.number();
-					}
-					Ok(n.header.number() < &blocks)
-				})
-				.for_each(|_| Ok(()))
+
+		wait_for.push(
+			Box::new(
+				client.finality_notification_stream()
+					.take_while(move |n| {
+						let mut highest_finalized = highest_finalized.write();
+						if *n.header.number() > *highest_finalized {
+							*highest_finalized = *n.header.number();
+						}
+						Ok(n.header.number() < &blocks)
+					})
+					.collect()
+					.map(|_| ())
+			)
 		);
+
 		fn assert_send<T: Send>(_: &T) { }
 
-		let voter = run_grandpa(
+		let voter = run_grandpa_voter(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
@@ -427,7 +438,7 @@ fn run_to_completion_with<F: FnOnce()>(
 	}
 
 	// wait for all finalized on each.
-	let wait_for = ::futures::future::join_all(finality_notifications)
+	let wait_for = ::futures::future::join_all(wait_for)
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -441,17 +452,14 @@ fn run_to_completion_with<F: FnOnce()>(
 		.map(|_| ())
 		.map_err(|_| ());
 
-	(before_waiting)();
-
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 
 	let highest_finalized = *highest_finalized.read();
-
 	highest_finalized
 }
 
 fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[AuthorityKeyring]) -> u64 {
-	run_to_completion_with(blocks, net, peers, || {})
+	run_to_completion_with(blocks, net, peers, |_| None)
 }
 
 #[test]
@@ -478,7 +486,7 @@ fn finalize_3_voters_no_observers() {
 }
 
 #[test]
-fn finalize_3_voters_1_observer() {
+fn finalize_3_voters_1_full_observer() {
 	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let voters = make_ids(peers);
 
@@ -509,7 +517,7 @@ fn finalize_3_voters_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let voter = run_grandpa(
+		let voter = run_grandpa_voter(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
@@ -539,7 +547,7 @@ fn finalize_3_voters_1_observer() {
 }
 
 #[test]
-fn transition_3_voters_twice_1_observer() {
+fn transition_3_voters_twice_1_full_observer() {
 	let _ = env_logger::try_init();
 	let peers_a = &[
 		AuthorityKeyring::Alice,
@@ -671,7 +679,7 @@ fn transition_3_voters_twice_1_observer() {
 					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
-		let voter = run_grandpa(
+		let voter = run_grandpa_voter(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
@@ -906,7 +914,7 @@ fn force_change_to_new_set() {
 	let net = Arc::new(Mutex::new(net));
 
 	let runner_net = net.clone();
-	let add_blocks = move || {
+	let add_blocks = move |_| {
 		net.lock().peer(0).push_blocks(1, false);
 
 		{
@@ -938,6 +946,8 @@ fn force_change_to_new_set() {
 			assert_eq!(set.current(), (1, voters.as_slice()));
 			assert_eq!(set.pending_changes().count(), 0);
 		}
+
+		None
 	};
 
 	// it will only finalize if the forced transition happens.
@@ -1071,7 +1081,7 @@ fn voter_persists_its_votes() {
 			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
-			let mut voter = run_grandpa(
+			let mut voter = run_grandpa_voter(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
@@ -1224,4 +1234,45 @@ fn voter_persists_its_votes() {
 	let exit = exit_rx.into_future().map(|_| ()).map_err(|_| ());
 
 	runtime.block_on(drive_to_completion.select(exit).map(|_| ()).map_err(|_| ())).unwrap();
+}
+
+#[test]
+fn finalize_3_voters_1_light_observer() {
+	let _ = env_logger::try_init();
+	let authorities = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let voters = make_ids(authorities);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	for i in 0..4 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 20,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	let link = net.lock().peer(3).data.lock().take().expect("link initialized on startup; qed");
+
+	let finality_notifications = net.lock().peer(3).client().finality_notification_stream()
+		.take_while(|n| Ok(n.header.number() < &20))
+		.collect();
+
+	run_to_completion_with(20, net.clone(), authorities, |executor| {
+		executor.spawn(
+			run_grandpa_observer(
+				Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					justification_period: 32,
+					local_key: None,
+					name: Some("observer".to_string()),
+				},
+				link,
+				MessageRouting::new(net.clone(), 3),
+				Exit,
+			).unwrap()
+		).unwrap();
+
+		Some(Box::new(finality_notifications.map(|_| ())))
+	});
 }

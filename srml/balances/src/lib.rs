@@ -17,8 +17,10 @@
 //! # Balances Module
 //!
 //! The Balances module provides functionality for handling accounts and balances.
-//! To use it in your runtime, you need to implement the [`balances::Trait`](./trait.Trait.html).
-//! Dispatchable functions are documented as part of the [`Call`](./enum.Call.html) enum.
+//!
+//! - [`balances::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //! ## Overview
 //!
@@ -81,65 +83,64 @@
 //! - `transfer` - Transfer some liquid free balance to another account.
 //! - `set_balance` - Set the balances of a given account. The origin of this call must be root.
 //!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
-//!
 //! ### Public Functions
 //!
 //! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
-//!
-//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
 //! ## Usage
 //!
 //! The following examples show how to use the Balances module in your custom module.
 //!
-//! ### Example from the SRML
+//! ### Examples from the SRML
 //!
-//! The Contract module uses the `Currency` trait to handle gas.
+//! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
-//! [(lib.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/lib.rs):
-//!
-//! ```rust,ignore
-//! use srml_support::traits::Currency
+//! ```
+//! use srml_support::traits::Currency;
+//! # pub trait Trait: system::Trait {
+//! # 	type Currency: Currency<Self::AccountId>;
+//! # }
 //!
 //! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 //! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+//!
+//! # fn main() {}
 //!```
 //!
-//! [(gas.rs)](https://github.com/paritytech/substrate/blob/master/srml/contract/src/gas.rs):
+//! The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
 //!
-//! ```rust,ignore
-//! use srml_support::traits::Currency
-//!
-//! pub fn refund_unused_gas<T: Trait>(
-//! 	transactor: &T::AccountId,
-//! 	gas_meter: GasMeter<T>,
-//! 	imbalance: NegativeImbalanceOf<T>,
-//! ) {
-//! 	let gas_spent = gas_meter.spent();
-//! 	let gas_left = gas_meter.gas_left();
-//!
-//! 	// Increase total spent gas.
-//! 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
-//!
-//! 	// Refund gas left by the price it was bought at.
-//! 	let refund = <T::Gas as As<BalanceOf<T>>>::as_(gas_left) * gas_meter.gas_price;
-//! 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
-//! 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
-//! 		T::GasPayment::on_unbalanced(imbalance);
-//! 	}
+//! ```
+//! use srml_support::traits::{WithdrawReasons, LockableCurrency};
+//! use primitives::traits::Bounded;
+//! pub trait Trait: system::Trait {
+//! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
+//! # struct StakingLedger<T: Trait> {
+//! # 	stash: <T as system::Trait>::AccountId,
+//! # 	total: <<T as Trait>::Currency as srml_support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
+//! # 	phantom: std::marker::PhantomData<T>,
+//! # }
+//! # const STAKING_ID: [u8; 8] = *b"staking ";
+//!
+//! fn update_ledger<T: Trait>(
+//! 	controller: &T::AccountId,
+//! 	ledger: &StakingLedger<T>
+//! ) {
+//! 	T::Currency::set_lock(
+//! 		STAKING_ID,
+//! 		&ledger.stash,
+//! 		ledger.total,
+//! 		T::BlockNumber::max_value(),
+//! 		WithdrawReasons::all()
+//! 	);
+//! 	// <Ledger<T>>::insert(controller, ledger); // Commented out as we don't have access to Staking's storage here.
+//! }
+//! # fn main() {}
 //! ```
 //!
 //! ## Genesis config
 //!
-//! The Balances module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
-//! struct for a list of attributes that can be provided.
-//!
-//! ## Related Modules
-//!
-//! - [`system`](../srml_system/index.html)
-//! - [`srml_support`](../srml_support/index.html)
+//! The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
