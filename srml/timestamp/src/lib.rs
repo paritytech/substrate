@@ -57,8 +57,9 @@
 //!
 //! ### Get current timestamp
 //!
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
+//! # use srml_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
@@ -72,6 +73,7 @@
 //! 		}
 //! 	}
 //! }
+//! # fn main() {}
 //! ```
 //!
 //! ### Example from the SRML
