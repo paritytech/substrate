@@ -30,7 +30,7 @@
 //! beneficiary account (which may be a normal account or a smart contract). A proposal may include `set_code`, which
 //! would upgrade the runtime. The proposer must attach a bond with the proposal, which will be taken if it is rejected.
 //! - **Referendum:** A mechanism for voting on proposals. A referendum includes a proposal, as well as a block
-//! number when voting will end, a threshold mechanism, and a delay (in blocks) to wait before deploying a
+//! number when voting will end, a threshold mechanism, and a delay (in blocks) to wait before deploying the associated
 //! proposal (if successfully passed). Referenda can be started in three ways: from the public, from a unanimous
 //! [Council](../srml_council/index.html) vote, or a majority Council vote. Each method of starting a referendum
 //! comes with a different default vote threshold mechanism.
