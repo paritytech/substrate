@@ -252,7 +252,7 @@ where
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		self.mark_dirty();
-		self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key, value);
+		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {

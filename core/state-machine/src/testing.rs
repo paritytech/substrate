@@ -140,7 +140,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 	}
 
 	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>) {
-		self.changes.set_child_storage(storage_key.as_ref().to_vec(), key, value);
+		self.changes.set_child_storage(storage_key.into_owned(), key, value);
 		// TODO place_child_storage and set_child_storage should always be valid (create child on set)?
 	}
 

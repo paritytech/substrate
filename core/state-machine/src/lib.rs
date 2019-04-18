@@ -89,6 +89,10 @@ impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 	pub fn as_ref(&self) -> &[u8] {
 		&*self.storage_key
 	}
+
+	pub fn into_owned(self) -> Vec<u8> {
+		self.storage_key.into_owned()
+	}
 }
 
 // TODO: Remove this implementation.
