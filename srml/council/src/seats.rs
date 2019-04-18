@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Council system: Handles the voting in and maintenance of council members.
+//! Council member seat candidacy, voting, approval and maintenance.
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup};
