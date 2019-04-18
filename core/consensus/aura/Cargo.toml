@@ -1,23 +1,22 @@
 [package]
 name = "substrate-consensus-aura"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.3"
-client = { package = "substrate-client", path = "../../client" }
+parity-codec = "3.4"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
-aura_slots = { package = "substrate-consensus-aura-slots", path = "slots" }
+slots = { package = "substrate-consensus-slots", path = "../slots" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
 srml-aura = { path = "../../../srml/aura" }
+client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 futures = "0.1.17"
 tokio = "0.1.7"
@@ -26,6 +25,7 @@ error-chain = "0.12"
 log = "0.4"
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }

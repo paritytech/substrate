@@ -72,7 +72,10 @@ pub enum DigestItem<Hash, AuthorityId, SealSignature> {
 	/// trie creation.
 	ChangesTrieRoot(Hash),
 	/// The old way to put a Seal on it.  Deprecated.
-	#[deprecated]
+	#[deprecated(
+		since = "1.0",
+		note = "New versions of Substrate will never generate this, and it will be rejected on new blockchains.",
+	)]
 	Seal(u64, SealSignature),
 	/// Put a Seal on it
 	Consensus(ConsensusEngineId, Vec<u8>),

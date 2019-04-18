@@ -35,10 +35,12 @@ use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
 	Trait, ComputeDispatchFee, TrieIdGenerator, TrieId,
 	ContractInfoOf, ContractInfo, RawAliveContractInfo,
+	TrieIdFromParentCounter,
 };
 use substrate_primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode, KeyedVec};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::account_db::{DirectAccountDb, OverlayAccountDb, AccountDb};
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -244,35 +246,43 @@ fn refunds_unused_gas() {
 
 #[test]
 fn account_removal_removes_storage() {
-	let unique_id1 = b"unique_id1";
-	let unique_id2 = b"unique_id2";
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
+			let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
+			let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
+			let key1 = &[1; 32];
+			let key2 = &[2; 32];
+
 			// Set up two accounts with free balance above the existential threshold.
 			{
 				Balances::deposit_creating(&1, 110);
 				ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
-					trie_id: unique_id1.to_vec(),
+					trie_id: trie_id1.clone(),
 					storage_size: Contract::storage_size_offset(),
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(1),
 					rent_allowance: 40,
 				}));
-				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
-				assert_eq!(child::get(&unique_id1[..], &b"foo".to_vec()), Some(b"1".to_vec()));
-				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
+
+				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+				overlay.set_storage(&1, key1.clone(), Some(b"1".to_vec()));
+				overlay.set_storage(&1, key2.clone(), Some(b"2".to_vec()));
+				DirectAccountDb.commit(overlay.into_change_set());
 
 				Balances::deposit_creating(&2, 110);
 				ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
-					trie_id: unique_id2.to_vec(),
+					trie_id: trie_id2.clone(),
 					storage_size: Contract::storage_size_offset(),
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(2),
 					rent_allowance: 40,
 				}));
-				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
-				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
+
+				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+				overlay.set_storage(&2, key1.clone(), Some(b"3".to_vec()));
+				overlay.set_storage(&2, key2.clone(), Some(b"4".to_vec()));
+				DirectAccountDb.commit(overlay.into_change_set());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
@@ -284,15 +294,16 @@ fn account_removal_removes_storage() {
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
 			{
-				assert_eq!(child::get_raw(&unique_id1[..], &b"foo".to_vec()), None);
-				assert_eq!(child::get_raw(&unique_id1[..], &b"bar".to_vec()), None);
+				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
+				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
 
+				// TODO TODO: check size
 				assert_eq!(
-					child::get(&unique_id2[..], &b"hello".to_vec()),
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					child::get(&unique_id2[..], &b"world".to_vec()),
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key2),
 					Some(b"4".to_vec())
 				);
 			}
@@ -498,183 +509,6 @@ fn dispatch_call() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
 				}
-			]);
-		},
-	);
-}
-
-/// Call function is compiled with https://webassembly.studio/:
-/// ```C
-/// #define WASM_EXPORT __attribute__((visibility("default")))
-///
-/// extern void input_copy(int *ptr, int offset, int len);
-/// extern void set_storage(int *key, int r, int *v, int len);
-///
-/// extern int a;
-/// WASM_EXPORT
-/// int main() {
-///   int do_set_storage, key, value_non_null, value_len;
-///   input_copy(&do_set_storage, 0, 4);
-///   input_copy(&key, 4, 4);
-///   input_copy(&value_non_null, 8, 4);
-///   input_copy(&value_len, 12, 4);
-///
-///   if (do_set_storage) {
-///     set_storage(&key, value_non_null, 0, value_len);
-///   }
-/// }
-/// ```
-const CODE_SET_RENT: &str = r#"
-(module
-	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
-	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
-	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
-	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
-
-	(start $start)
-	(func $start
-		(local $input_size i32)
-		(call $ext_set_storage
-			(i32.const 0)
-			(i32.const 1)
-			(i32.const 0)
-			(i32.const 4)
-		)
-		(set_local $input_size
-			(call $ext_input_size)
-		)
-		(call $ext_input_copy
-			(i32.const 0)
-			(i32.const 0)
-			(get_local $input_size)
-		)
-		(call $ext_set_rent_allowance
-			(i32.const 0)
-			(get_local $input_size)
-		)
-	)
-	(func (export "call")
-		(call $ext_input_copy
-			(i32.const 0)
-			(i32.const 0)
-			(i32.const 16)
-		)
-		(call $ext_set_storage
-			(i32.const 0)
-			(i32.load (4)
-			($p2)
-			($p3)
-		)
-	)
-	(func (export "deploy"))
-	(data (i32.const 0) "\00\01\02\03\04\05\06\07")
-)
-"#;
-const HASH_SET_RENT: [u8; 32] = hex!("2bf4122e304b9bcc98dd691561149b9840de11b3557900829c9d1c9b6ae505d7");
-
-#[test]
-fn rent() {
-	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
-
-	with_externalities(
-		&mut ExtBuilder::default().existential_deposit(50).build(),
-		|| {
-			Balances::deposit_creating(&ALICE, 1_000_000);
-
-			assert_ok!(Contract::put_code(
-				Origin::signed(ALICE),
-				100_000,
-				wasm,
-			));
-
-			// Let's keep this assert even though it's redundant. If you ever need to update the
-			// wasm source this test will fail and will show you the actual hash.
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
-				},
-			]);
-
-			assert_ok!(Contract::create(
-				Origin::signed(ALICE),
-				100,
-				100_000,
-				HASH_SET_RENT.into(),
-				10u64.to_le_bytes().to_vec(),
-			));
-
-			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap()
-				.get_alive().unwrap();
-
-			assert_eq!(bob_contract.rent_allowance, 10);
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
-
-			// assert_ok!(Contract::call(
-			// 	Origin::signed(ALICE),
-			// 	BOB, // newly created account
-			// 	0,
-			// 	100_000,
-			// 	vec![],
-			// ));
-
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(
-						balances::RawEvent::NewAccount(BOB, 100)
-					)
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
-				},
-
-				// // Dispatching the call.
-				// EventRecord {
-				// 	phase: Phase::ApplyExtrinsic(0),
-				// 	event: MetaEvent::balances(
-				// 		balances::RawEvent::NewAccount(CHARLIE, 50)
-				// 	)
-				// },
-				// EventRecord {
-				// 	phase: Phase::ApplyExtrinsic(0),
-				// 	event: MetaEvent::balances(
-				// 		balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
-				// 	)
-				// },
-
-				// // Event emited as a result of dispatch.
-				// EventRecord {
-				// 	phase: Phase::ApplyExtrinsic(0),
-				// 	event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
-				// }
 			]);
 		},
 	);
