@@ -26,9 +26,9 @@ use libp2p::kad::{Kademlia, KademliaOut};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::ping::{Ping, PingEvent};
 use log::{debug, trace, warn};
-use std::{cmp, io, fmt, time::Duration, time::Instant};
+use std::{cmp, io, fmt, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::Delay;
+use tokio_timer::{Delay, clock::Clock};
 use void;
 
 /// General behaviour of the network.
@@ -73,14 +73,16 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 			kademlia.add_connected_address(peer_id, addr.clone());
 		}
 
+		let clock = Clock::new();
 		Behaviour {
 			ping: Ping::new(),
 			custom_protocols,
 			discovery: DiscoveryBehaviour {
 				user_defined: known_addresses,
 				kademlia,
-				next_kad_random_query: Delay::new(Instant::now()),
+				next_kad_random_query: Delay::new(clock.now()),
 				duration_to_next_kad: Duration::from_secs(1),
+				clock,
 			},
 			identify,
 			mdns: if enable_mdns {
@@ -331,6 +333,8 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
+	/// `Clock` instance that uses the current execution context's source of time.
+	clock: Clock,
 }
 
 impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>
@@ -408,7 +412,7 @@ where
 					self.kademlia.find_node(random_peer_id);
 
 					// Reset the `Delay` to the next random.
-					self.next_kad_random_query.reset(Instant::now() + self.duration_to_next_kad);
+					self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
 					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
 						Duration::from_secs(60));
 				},
