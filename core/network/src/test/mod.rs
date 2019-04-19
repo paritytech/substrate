@@ -118,22 +118,34 @@ pub type PeersClient = client::Client<test_client::Backend, test_client::Executo
 /// A Link that can wait for a block to have been imported.
 pub struct TestLink<S: NetworkSpecialization<Block>> {
 	link: NetworkLink<Block, S>,
+
+	#[cfg(test)]
 	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 }
 
 impl<S: NetworkSpecialization<Block>> TestLink<S> {
 	fn new(
 		protocol_sender: Sender<ProtocolMsg<Block, S>>,
-		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+		_network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 		network_sender: NetworkChan<Block>
 	) -> TestLink<S> {
 		TestLink {
-			network_to_protocol_sender,
+			#[cfg(test)]
+			_network_to_protocol_sender,
 			link: NetworkLink {
 				protocol_sender,
 				network_sender,
 			}
 		}
+	}
+
+	/// Send synchronization request to the block import channel.
+	///
+	/// The caller should wait for Link::synchronized() call to ensure that it has synchronized
+	/// with ImportQueue.
+	#[cfg(test)]
+	fn synchronized(&self) {
+		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize);
 	}
 }
 
@@ -164,10 +176,6 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 
 	fn restart(&self) {
 		self.link.restart();
-	}
-
-	fn synchronized(&self) {
-		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize);
 	}
 }
 
@@ -369,6 +377,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Synchronize with import queue.
+	#[cfg(any(test, feature = "test-helpers"))]
 	fn import_queue_sync(&self) {
 		self.import_queue.synchronize();
 		let _ = self.net_proto_channel.wait_sync();
@@ -579,7 +588,7 @@ impl SpecializationFactory for DummySpecialization {
 		DummySpecialization
 	}
 }
-
+use log::error;
 pub trait TestNetFactory: Sized {
 	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
@@ -681,6 +690,7 @@ pub trait TestNetFactory: Sized {
 		}
 
 		loop {
+			error!("loop iteration");
 			// we only deliver Status messages during start
 			let need_continue = self.route_single(true, None, &|msg| match *msg {
 				NetworkMsg::Outgoing(_, crate::message::generic::Message::Status(_)) => true,

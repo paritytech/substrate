@@ -40,4 +40,4 @@ consensus = { package = "substrate-consensus-common", path = "../../core/consens
 
 [features]
 default = []
-test-helpers = ["keyring", "test_client"]
+test-helpers = ["keyring", "test_client", "consensus/test-helpers"]

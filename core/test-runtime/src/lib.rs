@@ -423,6 +423,15 @@ cfg_if! {
 				fn slot_duration() -> u64 { 1 }
 			}
 
+			impl consensus_babe::BabeApi<Block> for Runtime {
+				fn startup_data() -> consensus_babe::BabeConfiguration {
+					consensus_babe::BabeConfiguration {
+						slot_duration: 1,
+						expected_block_time: 1,
+					}
+				}
+			}
+
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
@@ -539,10 +548,15 @@ cfg_if! {
 				}
 			}
 
-
-
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+			}
+
+			impl consensus_babe::BabeApi<Block> for Runtime {
+				fn startup_data() -> consensus_babe::BabeConfiguration {
+					slot_duration: 1,
+					expected_block_time: 1,
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
