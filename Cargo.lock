@@ -4386,6 +4386,7 @@ dependencies = [
  "substrate-client 1.0.0",
  "substrate-consensus-aura-primitives 1.0.0",
  "substrate-consensus-authorities 1.0.0",
+ "substrate-consensus-babe-primitives 1.0.0",
  "substrate-executor 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keyring 1.0.0",

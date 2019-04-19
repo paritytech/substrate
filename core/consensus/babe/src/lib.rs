@@ -17,7 +17,8 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
 //!
 //! Note that 1 second slot time is optimal.
-#![forbid(warnings, unsafe_code, missing_docs)]
+#![forbid(unsafe_code, missing_docs)]
+#![deny(warnings)]
 extern crate core;
 pub use babe_primitives::*;
 use runtime_primitives::{generic, generic::BlockId, Justification};
@@ -824,10 +825,194 @@ pub fn import_queue<B, C, E, P>(
 }
 
 #[cfg(test)]
+#[allow(dead_code, unused_imports)]
 mod tests {
 	use super::*;
 	#[test]
 	fn can_searialize_block() {
 		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
+	}
+
+	use consensus_common::NoNetwork as DummyOracle;
+	use network::test::*;
+	use network::test::{Block as TestBlock, PeersClient};
+	use runtime_primitives::traits::Block as BlockT;
+	use network::config::ProtocolConfig;
+	use parking_lot::Mutex;
+	use tokio::runtime::current_thread;
+	use keyring::sr25519::Keyring;
+	use client::BlockchainEvents;
+	use test_client;
+	use futures::stream::Stream;
+	use log::error;
+
+	type Error = client::error::Error;
+
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
+
+	struct DummyFactory(Arc<TestClient>);
+	struct DummyProposer(u64, Arc<TestClient>);
+
+	impl Environment<TestBlock> for DummyFactory {
+		type Proposer = DummyProposer;
+		type Error = Error;
+
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Public])
+			-> Result<DummyProposer, Error>
+		{
+			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
+		}
+	}
+
+	impl Proposer<TestBlock> for DummyProposer {
+		type Error = Error;
+		type Create = Result<TestBlock, Error>;
+
+		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
+			self.1.new_block().unwrap().bake().map_err(|e| e.into())
+		}
+	}
+
+	const SLOT_DURATION: u64 = 1;
+	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
+
+	pub struct BabeTestNet {
+		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
+		started: bool,
+	}
+
+	impl TestNetFactory for BabeTestNet {
+		type Specialization = DummySpecialization;
+		type Verifier = BabeVerifier<PeersClient, NothingExtra>;
+		type PeerData = ();
+
+		/// Create new test network with peers and given config.
+		fn from_config(_config: &ProtocolConfig) -> Self {
+			BabeTestNet {
+				peers: Vec::new(),
+				started: false,
+			}
+		}
+
+		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
+			-> Arc<Self::Verifier>
+		{
+			let slot_duration = SlotDuration::get_or_compute(&*client)
+				.expect("slot duration available");
+			let inherent_data_providers = InherentDataProviders::new();
+			register_babe_inherent_data_provider(
+				&inherent_data_providers,
+				slot_duration.get()
+			).expect("Registers babe inherent data provider");
+
+			assert_eq!(slot_duration.get(), SLOT_DURATION);
+			Arc::new(BabeVerifier {
+				client,
+				extra: NothingExtra,
+				inherent_data_providers,
+			})
+		}
+
+		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
+			&self.peers[i]
+		}
+
+		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+			&self.peers
+		}
+
+		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
+			closure(&mut self.peers);
+		}
+
+		fn started(&self) -> bool {
+			self.started
+		}
+
+		fn set_started(&mut self, new: bool) {
+			self.started = new;
+		}
+	}
+
+	#[test]
+	fn authoring_blocks() {
+		let _ = ::env_logger::try_init();
+		error!("checkpoint 1");
+		let mut net = BabeTestNet::new(3);
+		error!("checkpoint 1");
+
+		net.start();
+		error!("checkpoint 1");
+
+		let peers = &[
+			(0, Keyring::Alice),
+			(1, Keyring::Bob),
+			(2, Keyring::Charlie),
+		];
+
+		let net = Arc::new(Mutex::new(net));
+		let mut import_notifications = Vec::new();
+		error!("checkpoint 1");
+		let mut runtime = current_thread::Runtime::new().unwrap();
+		for (peer_id, key) in peers {
+			let client = net.lock().peer(*peer_id).client().clone();
+			let environ = Arc::new(DummyFactory(client.clone()));
+			import_notifications.push(
+				client.import_notification_stream()
+					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+					.for_each(move |_| Ok(()))
+			);
+
+			let slot_duration = SlotDuration::get_or_compute(&*client)
+				.expect("slot duration available");
+
+			let inherent_data_providers = InherentDataProviders::new();
+			register_babe_inherent_data_provider(
+				&inherent_data_providers, slot_duration.get()
+			).expect("Registers babe inherent data provider");
+
+			let babe = start_babe(
+				slot_duration,
+				Arc::new(key.clone().into()),
+				client.clone(),
+				client,
+				environ.clone(),
+				DummyOracle,
+				futures::empty(),
+				inherent_data_providers,
+				false,
+			).expect("Starts babe");
+
+			runtime.spawn(babe);
+		}
+		error!("checkpoint 2");
+
+		// wait for all finalized on each.
+		let wait_for = ::futures::future::join_all(import_notifications)
+			.map(drop)
+			.map_err(drop);
+
+		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+			.for_each(move |_| {
+				net.lock().send_import_notifications();
+				net.lock().sync_without_disconnects();
+				Ok(())
+			})
+			.map(drop)
+			.map_err(drop);
+
+		runtime.block_on(wait_for.select(drive_to_completion).map_err(drop)).unwrap();
+	}
+
+	#[test]
+	fn authorities_call_works() {
+		let client = test_client::new();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 0);
+		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
+			Keyring::Alice.into(),
+			Keyring::Bob.into(),
+			Keyring::Charlie.into()
+		]);
 	}
 }
