@@ -32,7 +32,6 @@ consensus_authorities = { package = "substrate-consensus-authorities", path = ".
 default = ["std"]
 std = [
 	"parity-codec/std",
-	"primitives/std",
 	"client/std",
 	"rstd/std",
 	"runtime-io/std",
@@ -42,6 +41,7 @@ std = [
 	"aura/std",
 	"indices/std",
 	"primitives/std",
+	"runtime-primitives/std",
 	"system/std",
 	"timestamp/std",
 	"sudo/std",
@@ -51,4 +51,5 @@ std = [
 	"safe-mix/std",
 	"consensus-aura/std",
 	"offchain-primitives/std",
+	"consensus_authorities/std",
 ]

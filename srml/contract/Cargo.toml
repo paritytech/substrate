@@ -10,7 +10,7 @@ serde_derive = { version = "1.0", optional = true }
 pwasm-utils = { version = "0.6.1", default-features = false }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 parity-wasm = { version = "0.31", default-features = false }
-wasmi-validation = { path = "/Users/pepyakin/dev/parity/wasmi/validation", default-features = false }
+wasmi-validation = { version = "0.1", default-features = false }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
 runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
