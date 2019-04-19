@@ -52,7 +52,7 @@ impl<Number: traits::As<u64>> NumberOrHex<Number> {
 				}
 			},
 		};
-		// FIXME <issuenumber>: Database seems to limit the block number to u32 for no reason
+		// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 		if num > u32::max_value() as u64 {
 			Err(format!("`{}` > u32::max_value(), the max block number is u32.", num))
 		} else {
