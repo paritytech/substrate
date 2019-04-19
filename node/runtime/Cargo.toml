@@ -41,6 +41,9 @@ consensus_authorities = { package = "substrate-consensus-authorities", path = ".
 
 [features]
 default = ["std"]
+core = [
+	"contract/core",
+]
 std = [
 	"parity-codec/std",
 	"substrate-primitives/std",
