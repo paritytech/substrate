@@ -30,18 +30,25 @@
 //!
 //! #### Council Proposals
 //!
-//! - **Council** Defined in the
-//! [Substrate Developer Hub Glossary](https://docs.substrate.dev/docs/glossary#section-council).
+//! - **Council** Defined in the [Substrate Developer Hub Glossary](https://docs.substrate.dev/docs/glossary#section-council).
+//!
 //! - **Councils' role** The councils' role is to: propose sensible referenda, cancel potentially dangerous or
+//!
 //! malicious referenda, and to represent passive stakeholders.
+//!
 //! - **Council members** Each council member (councillor) is a countable stakeholder represented by an on-chain
 //! account. They may vote on council proposals from other councillors during the voting period.
+//!
 //! - **Council motion** A mechanism used to enact a proposal from a council origin.
+//!
 //! - **Council origin** The council (not root) that contains the council motion mechanism.
+//!
 //! - **Council proposal** A submission by a councillor. An initial vote of yay from that councillor is applied
 //! to `CouncilVoteOf`.
+//!
 //! - **Council proposals' validity** A council proposal is valid when it's unique, hasn't yet been vetoed, and
 //! when the council term doesn't expire before block number when the proposals' voting period ends.
+//!
 //! - **Council proposal postponement** Councillors that abstain from voting may postpone a council proposal from
 //! being approved or disapproved. Postponement is equivalent to a veto, which only lasts for the cooldown period.
 //!
@@ -49,12 +56,15 @@
 //!
 //! - **Council proposal vote** A vote of yay or nay from a councillor on a single proposal that is stored in the
 //! `ProposalVoters`, `CouncilVoteOf`, and `Voting` mappings. Councillors may change their vote.
+//!
 //! - **Council proposal veto** A council member may veto any council proposal that is stored in `ProposalVoters` only
 //! once. A valid veto cancels a proposal, but a veto is not considered a vote. It is stored in `VetoedProposal` for a
 //! cooling off period that's measured in blocks. The vetoer cannot propose the proposal again until the veto expires.
+//!
 //! - **Council proposal vote cancellation** At the end of a given block we cancel all referenda that have been
 //! elevated to the table of referenda whose voting period ends at that block and where the outcome of their voting
 //! tally result was a unanimous (i.e. no nays, no abstainers) vote to cancel the referendum.
+//!
 //! - **Council voting process to elevate a proposal to the table of referenda** At the end of a given block we
 //! establish a list of referenda that haven't already been elevated to the table of referenda (i.e. those that aren't
 //! cancellable) and whose voting period ends at that block, then we check the voting tally for each referendum in the
@@ -65,12 +75,14 @@
 //! of `SimplyMajority`. Lastly, if the voting tally has more yay votes than the combination of all nay votes
 //! and abstainers, then it removes any veto imposed upon the council proposal (since the proposal voting period
 //! is expiring).
+//!
 //! - **Council proposal voting approval (simply majority / majority agreement)** Upon the voting tally of yay
 //! votes for a council proposal reaching its threshold level for approval during its voting period, and where a
 //! majority council agreement occurs, whereby its tally from majority voting results in a simple majority
 //! (i.e. more explicit yay than nay votes, which signals a sensible and uncontroversial proposal), then the council
 //! proposal is approved. When executed, it is elevated to the table of active referenda on the next block,
 //! and a vote threshold of 'simple majority' is applied to the referendum.
+//!
 //! - **Council proposal voting approval (unanimous / super majority against)** If a unanimous voting tally for the
 //! council proposal occurs and results in a unanimous council agreement (i.e. only yay votes), then it is approved.
 //! When executed it is elevated to the table of active referenda on the next block, and a vote threshold of
@@ -79,6 +91,7 @@
 //! councillors from abstaining. A single veto from a councillor cancels the proposal and prevents the agreement.
 //! Council proposals submitted this way must have over 50% approval since abstention votes will be biased in favour
 //! of the proposal (alongside any nay votes).
+//!
 //! - **Referenda** Each council or public proposal that is elevated as referenda to the table of referenda is
 //! instantly executed autonomously once its vote count reaches its threshold level for approval.
 //!
@@ -86,21 +99,24 @@
 //!
 //! - **Candidate approval voting call** Express candidate approval voting is a public call that anyone may execute
 //! by signing and submitting an extrinsic. We ensure that information about the `origin` where the dispatch initiated
-//! is a signed account using `ensure_signed`. It performs an `O(1)` operation that involves one extra database entry
-//! and one database change.
+//! is a signed account using `ensure_signed`.
+//!
 //! - **Candidate registration and vote index** Candidate approval votes are only considered before the presentation
 //! period and for candidates that have a registered list slot with an approved candidate index `VoteIndex`.
-//! - **Candidate voters security bond (for the first vote)** If it's the voter's first vote and their vote is valid,
+//!
+//!  - **Candidate voters security bond (for the first vote)** If it's the voter's first vote and their vote is valid,
 //! then before enacting any operation and changing the storage, a security bond is deducted from them using the
 //! `reserve` function of the Balances module, as it may result in a major alteration of storage. The bond amount
 //! should be sufficient to cover any costs of the substantial execution in case the operation cannot proceed.
 //! The bond is a mitigation measure against the classical blockchain attack scenario since we cannot be certain
 //! that the operation will not require substantial computation. The voters' account id is added to the list `Voters`
 //! of present voters.
+//!
 //! - **Candidate voters' subsequent votes (after their first vote)** If the voter makes a subsequent vote that's
 //! valid, then their vote is recorded in `LastActiveOf`, which maps their account id to the last cleared vote index
 //! that they were active at, and the votes (i.e. yay or nay) for each candidate with a vote index are added to the
 //! `ApprovalsOf` mapping.
+//!
 //! - **Candidate voter inactivity reaping process** After determining the claims' validity, we call `remove_voter`
 //! as follows depending on the claim validity: if the claim was valid delete the inactive voter, otherwise delete
 //! the reporter. Lastly we perform reaping as follows, depending on the claim validity: if the claim is valid call
@@ -147,8 +163,8 @@
 //! registered.
 //! - `proxy_set_approvals` - Set candidate approvals from a proxy. Approval slots stay valid as long as candidates
 //! in those slots are registered.
-//! - `reap_inactive_voter` - Remove a voter. Can be called by anyone. Returns the voter deposit to the `signed`
-//! origin.
+//! - `reap_inactive_voter` - Remove a voter. Can be called by anyone who is a voter. At the end of this call,
+//! either the reported or the reportee will get removed.
 //! - `retract_voter` - Remove a voter. All votes are cancelled and the voter deposit is returned.
 //! - `submit_candidacy` - Submit oneself for candidacy. Account must have enough transferrable funds in it to pay
 //! the bond.
@@ -189,6 +205,50 @@
 //! they will still be active at.
 //! - `is_councillor` - Check if a given account id is a councillor.
 //! - `tally` - The count of the yay and nay votes associated with voting on a council proposal.
+//!
+//!
+//! ### Snippet: Get the next seats tally block number.
+//!
+//!	The next tally of the seats voting will be scheduled based on the condition of needing
+//! more councilors or not. If no councilor is needed, the associated function to get the next tally,
+//! namely `next_tally()` will return `None`. Else, it will return an `Option` containing
+//! the next scheduled tally's block number.
+//!
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//! use srml_council::seats::{self as seats};
+//!
+//! pub trait Trait: seats::Trait {}
+//!
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!
+//! 		/// approves all candidates. The correct voting index must be provided.
+//! 		pub fn approve_all(origin, index: u32) -> Result {
+//! 			let _origin = ensure_signed(origin)?;
+//!
+//! 			// get the number of wanted seats
+//! 			let desired = <seats::Module<T>>::desired_seats() as usize;
+//!
+//! 			// get the number of occupied seats.
+//! 			let occupied  = <seats::Module<T>>::active_council().len();
+//!
+//! 			// get next tally.
+//! 			let maybe_next_tally = <seats::Module<T>>::next_tally();
+//!
+//! 			if (desired == occupied) {
+//! 				assert_eq!(maybe_next_tally, None);
+//! 			} else {
+//!					assert!(maybe_next_tally.is_some());
+//! 			}
+//!
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! # fn main() { }
+//! ```
 //!
 //! ## Related Modules
 //!
