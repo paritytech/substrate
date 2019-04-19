@@ -38,7 +38,7 @@ use runtime_primitives::{
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
+		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -142,14 +142,14 @@ impl Extrinsic {
 	}
 }
 
-// The identity type used by authorities.
-pub type AuthorityId = ed25519::Public;
-// The signature type used by authorities.
+/// The signature type used by authorities.
 pub type AuthoritySignature = ed25519::Signature;
-/// An identifier for an account on this system.
-pub type AccountId = sr25519::Public;
-// The signature type used by accounts/transactions.
+/// The identity type used by authorities.
+pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
+/// The signature type used by accounts/transactions.
 pub type AccountSignature = sr25519::Signature;
+/// An identifier for an account on this system.
+pub type AccountId = <AccountSignature as Verify>::Signer;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
 /// The block number type used in this runtime.
