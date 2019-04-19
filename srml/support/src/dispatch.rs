@@ -139,7 +139,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # fn main() {}
 /// ```
 ///
-/// If the `origin` param is omitted, the macro assumes the `origin` to be `Root`.
+/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root(origin)` as the first line of the function.
 ///
 /// ## Multiple Module Instances Example
 ///
