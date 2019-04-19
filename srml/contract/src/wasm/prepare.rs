@@ -50,10 +50,10 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 		use wasmi_validation::{validate_module, PlainValidator};
 
 		let module =
-			elements::deserialize_buffer(original_code).map_err(|_| "can't decode wasm code")?;
+			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
 
 		// Make sure that the module is valid.
-		validate_module::<PlainValidator>(&module).map_err(|_| "module is not valid")?;
+		validate_module::<PlainValidator>(&module).map_err(|_| "Module is not valid")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.
@@ -453,7 +453,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Requested initial number of pages should not exceed the requested maximum")
+			Err("Module is not valid")
 		);
 
 		prepare_test!(no_maximum,
@@ -502,7 +502,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Multiple memory imports defined")
+			Err("Module is not valid")
 		);
 
 		prepare_test!(table_import,
@@ -520,7 +520,7 @@ mod tests {
 		prepare_test!(global_import,
 			r#"
 			(module
-				(global $g (import "env" "global") (mut i32))
+				(global $g (import "env" "global") i32)
 				(func (export "call"))
 				(func (export "deploy"))
 			)
