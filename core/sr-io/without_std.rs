@@ -15,14 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use parity_codec as codec;
-#[doc(hidden)]
 pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
-use hash_db::Hasher;
 use primitives::Blake2Hasher;
 
 #[panic_handler]
@@ -359,13 +356,17 @@ extern_functions! {
 }
 
 /// Ensures we use the right crypto when calling into native
-pub trait ExternTrieCrypto {
-	fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32];
+pub trait ExternTrieCrypto: Hasher {
+	/// Calculate enumerated trie root.
+	fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out;
 }
+
+pub trait HasherBounds: ExternTrieCrypto {}
+impl<T: ExternTrieCrypto + Hasher> HasherBounds for T {}
 
 // Ensures we use a Blake2_256-flavored Hasher when calling into native
 impl ExternTrieCrypto for Blake2Hasher {
-	fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32] {
+	fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out {
 		let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
 		let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
 		let mut result: [u8; 32] = Default::default();
@@ -377,295 +378,289 @@ impl ExternTrieCrypto for Blake2Hasher {
 				result.as_mut_ptr()
 			);
 		}
+		result.into()
+	}
+}
+
+impl StorageApi for () {
+	fn storage(key: &[u8]) -> Option<Vec<u8>> {
+		let mut length: u32 = 0;
+		unsafe {
+			let ptr = ext_get_allocated_storage.get()(key.as_ptr(), key.len() as u32, &mut length);
+			if length == u32::max_value() {
+				None
+			} else {
+				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+				// See #300 for more details.
+				Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
+			}
+		}
+	}
+
+	fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		let mut length: u32 = 0;
+		unsafe {
+			let ptr = ext_get_allocated_child_storage.get()(
+				storage_key.as_ptr(),
+				storage_key.len() as u32,
+				key.as_ptr(),
+				key.len() as u32,
+				&mut length
+			);
+			if length == u32::max_value() {
+				None
+			} else {
+				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+				// See #300 for more details.
+				Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
+			}
+		}
+	}
+
+	fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+		unsafe {
+			match ext_get_storage_into.get()(
+				key.as_ptr(),
+				key.len() as u32,
+				value_out.as_mut_ptr(),
+				value_out.len() as u32,
+				value_offset as u32,
+			) {
+				none if none == u32::max_value() => None,
+				length => Some(length as usize),
+			}
+		}
+	}
+
+	fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+		unsafe {
+			match ext_get_child_storage_into.get()(
+				storage_key.as_ptr(), storage_key.len() as u32,
+				key.as_ptr(), key.len() as u32,
+				value_out.as_mut_ptr(), value_out.len() as u32,
+				value_offset as u32
+			) {
+				none if none == u32::max_value() => None,
+				length => Some(length as usize),
+			}
+		}
+	}
+
+	fn set_storage(key: &[u8], value: &[u8]) {
+		unsafe {
+			ext_set_storage.get()(
+				key.as_ptr(), key.len() as u32,
+				value.as_ptr(), value.len() as u32
+			);
+		}
+	}
+
+	fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+		unsafe {
+			ext_set_child_storage.get()(
+				storage_key.as_ptr(), key.len() as u32,
+				key.as_ptr(), key.len() as u32,
+				value.as_ptr(), value.len() as u32
+			);
+		}
+	}
+
+	fn clear_storage(key: &[u8]) {
+		unsafe {
+			ext_clear_storage.get()(
+				key.as_ptr(), key.len() as u32
+			);
+		}
+	}
+
+	fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+		unsafe {
+			ext_clear_child_storage.get()(
+				storage_key.as_ptr(), storage_key.len() as u32,
+				key.as_ptr(), key.len() as u32
+			);
+		}
+	}
+
+	fn exists_storage(key: &[u8]) -> bool {
+		unsafe {
+			ext_exists_storage.get()(
+				key.as_ptr(), key.len() as u32
+			) != 0
+		}
+	}
+
+	fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
+		unsafe {
+			ext_exists_child_storage.get()(
+				storage_key.as_ptr(), storage_key.len() as u32,
+				key.as_ptr(), key.len() as u32
+			) != 0
+		}
+	}
+
+	fn clear_prefix(prefix: &[u8]) {
+		unsafe {
+			ext_clear_prefix.get()(
+				prefix.as_ptr(),
+				prefix.len() as u32
+			);
+		}
+	}
+
+	fn kill_child_storage(storage_key: &[u8]) {
+		unsafe {
+			ext_kill_child_storage.get()(
+				storage_key.as_ptr(),
+				storage_key.len() as u32
+			);
+		}
+	}
+
+	fn storage_root() -> [u8; 32] {
+		let mut result: [u8; 32] = Default::default();
+		unsafe {
+			ext_storage_root.get()(result.as_mut_ptr());
+		}
+		result
+	}
+
+	fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+		let mut length: u32 = 0;
+		unsafe {
+			let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
+			if length == u32::max_value() {
+				None
+			} else {
+				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+				// See #300 for more details.
+				Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
+			}
+		}
+	}
+
+	fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]> {
+		let mut result: [u8; 32] = Default::default();
+		let is_set = unsafe {
+			ext_storage_changes_root.get()(parent_hash.as_ptr(), parent_hash.len() as u32, parent_num, result.as_mut_ptr())
+		};
+
+		if is_set != 0 {
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	fn enumerated_trie_root<H: Hasher + ExternTrieCrypto>(values: &[&[u8]]) -> H::Out {
+		H::enumerated_trie_root(values)
+	}
+
+	fn trie_root<
+		H: Hasher + ExternTrieCrypto,
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
+	>(_input: I) -> H::Out {
+		unimplemented!()
+	}
+
+	fn ordered_trie_root<
+		H: Hasher + ExternTrieCrypto,
+		I: IntoIterator<Item = A>,
+		A: AsRef<[u8]>
+	>(_input: I) -> H::Out {
+		unimplemented!()
+	}
+}
+
+impl OtherApi for () {
+	fn chain_id() -> u64 {
+		unsafe {
+			ext_chain_id.get()()
+		}
+	}
+
+	fn print<T: Printable + Sized>(value: T) {
+		value.print()
+	}
+
+}
+
+impl HashingApi for () {
+	fn blake2_256(data: &[u8]) -> [u8; 32] {
+		let mut result: [u8; 32] = Default::default();
+		unsafe {
+			ext_blake2_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		}
+		result
+	}
+
+	fn keccak_256(data: &[u8]) -> [u8; 32] {
+		let mut result: [u8; 32] = Default::default();
+		unsafe {
+			ext_keccak_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		}
+		result
+	}
+
+	fn twox_256(data: &[u8]) -> [u8; 32] {
+		let mut result: [u8; 32] = Default::default();
+		unsafe {
+			ext_twox_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		}
+		result
+	}
+
+	fn twox_128(data: &[u8]) -> [u8; 16] {
+		let mut result: [u8; 16] = Default::default();
+		unsafe {
+			ext_twox_128.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+		}
 		result
 	}
 }
 
-/// Get `key` from storage and return a `Vec`, empty if there's a problem.
-pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
-	let mut length: u32 = 0;
-	unsafe {
-		let ptr = ext_get_allocated_storage.get()(key.as_ptr(), key.len() as u32, &mut length);
-		if length == u32::max_value() {
-			None
-		} else {
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
+impl CryptoApi for () {
+	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+		unsafe {
+			ext_ed25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+		}
+	}
+
+	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+		unsafe {
+			ext_sr25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+		}
+	}
+
+	fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
+		let mut pubkey = [0u8; 64];
+		match unsafe {
+			ext_secp256k1_ecdsa_recover.get()(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
+		} {
+			0 => Ok(pubkey),
+			1 => Err(EcdsaVerifyError::BadRS),
+			2 => Err(EcdsaVerifyError::BadV),
+			3 => Err(EcdsaVerifyError::BadSignature),
+			_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
 		}
 	}
 }
 
-/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
-pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-	let mut length: u32 = 0;
-	unsafe {
-		let ptr = ext_get_allocated_child_storage.get()(
-			storage_key.as_ptr(),
-			storage_key.len() as u32,
-			key.as_ptr(),
-			key.len() as u32,
-			&mut length
-		);
-		if length == u32::max_value() {
-			None
-		} else {
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
+impl OffchainApi for () {
+	fn submit_extrinsic<T: codec::Encode>(data: &T) {
+		let encoded_data = codec::Encode::encode(data);
+		unsafe {
+			ext_submit_extrinsic.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
 		}
 	}
 }
 
-/// Set the storage of some particular key to Some value.
-pub fn set_storage(key: &[u8], value: &[u8]) {
-	unsafe {
-		ext_set_storage.get()(
-			key.as_ptr(), key.len() as u32,
-			value.as_ptr(), value.len() as u32
-		);
-	}
-}
-
-/// Set the child storage of some particular key to Some value.
-pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
-	unsafe {
-		ext_set_child_storage.get()(
-			storage_key.as_ptr(), key.len() as u32,
-			key.as_ptr(), key.len() as u32,
-			value.as_ptr(), value.len() as u32
-		);
-	}
-}
-
-/// Clear the storage of some particular key.
-pub fn clear_storage(key: &[u8]) {
-	unsafe {
-		ext_clear_storage.get()(
-			key.as_ptr(), key.len() as u32
-		);
-	}
-}
-
-/// Clear the storage of some particular key.
-pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
-	unsafe {
-		ext_clear_child_storage.get()(
-			storage_key.as_ptr(), storage_key.len() as u32,
-			key.as_ptr(), key.len() as u32
-		);
-	}
-}
-
-/// Determine whether a particular key exists in storage.
-pub fn exists_storage(key: &[u8]) -> bool {
-	unsafe {
-		ext_exists_storage.get()(
-			key.as_ptr(), key.len() as u32
-		) != 0
-	}
-}
-
-/// Determine whether a particular key exists in storage.
-pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
-	unsafe {
-		ext_exists_child_storage.get()(
-			storage_key.as_ptr(), storage_key.len() as u32,
-			key.as_ptr(), key.len() as u32
-		) != 0
-	}
-}
-
-/// Clear the storage entries key of which starts with the given prefix.
-pub fn clear_prefix(prefix: &[u8]) {
-	unsafe {
-		ext_clear_prefix.get()(
-			prefix.as_ptr(),
-			prefix.len() as u32
-		);
-	}
-}
-
-/// Clear an entire child storage.
-pub fn kill_child_storage(storage_key: &[u8]) {
-	unsafe {
-		ext_kill_child_storage.get()(
-			storage_key.as_ptr(),
-			storage_key.len() as u32
-		);
-	}
-}
-
-/// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was beyond the offset.
-pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-	unsafe {
-		match ext_get_storage_into.get()(
-			key.as_ptr(),
-			key.len() as u32,
-			value_out.as_mut_ptr(),
-			value_out.len() as u32,
-			value_offset as u32,
-		) {
-			none if none == u32::max_value() => None,
-			length => Some(length as usize),
-		}
-	}
-}
-
-/// Get `key` from child storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was beyond the offset.
-pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-	unsafe {
-		match ext_get_child_storage_into.get()(
-			storage_key.as_ptr(), storage_key.len() as u32,
-			key.as_ptr(), key.len() as u32,
-			value_out.as_mut_ptr(), value_out.len() as u32,
-			value_offset as u32
-		) {
-			none if none == u32::max_value() => None,
-			length => Some(length as usize),
-		}
-	}
-}
-
-/// The current storage's root.
-pub fn storage_root() -> [u8; 32] {
-	let mut result: [u8; 32] = Default::default();
-	unsafe {
-		ext_storage_root.get()(result.as_mut_ptr());
-	}
-	result
-}
-
-/// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
-	let mut length: u32 = 0;
-	unsafe {
-		let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
-		if length == u32::max_value() {
-			None
-		} else {
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
-		}
-	}
-}
-
-/// The current storage' changes root.
-pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]> {
-	let mut result: [u8; 32] = Default::default();
-	let is_set = unsafe {
-		ext_storage_changes_root.get()(parent_hash.as_ptr(), parent_hash.len() as u32, parent_num, result.as_mut_ptr())
-	};
-
-	if is_set != 0 {
-		Some(result)
-	} else {
-		None
-	}
-}
-
-/// A trie root calculated from enumerated values.
-pub fn enumerated_trie_root<H: Hasher + ExternTrieCrypto>(values: &[&[u8]]) -> [u8; 32] {
-	H::enumerated_trie_root(values)
-}
-
-/// A trie root formed from the iterated items.
-pub fn trie_root<
-	H: Hasher + ExternTrieCrypto,
-	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
->(_input: I) -> [u8; 32] {
-	unimplemented!()
-}
-
-/// A trie root formed from the enumerated items.
-pub fn ordered_trie_root<
-	H: Hasher + ExternTrieCrypto,
-	I: IntoIterator<Item = A>,
-	A: AsRef<[u8]>
->(_input: I) -> [u8; 32] {
-	unimplemented!()
-}
-
-/// The current relay chain identifier.
-pub fn chain_id() -> u64 {
-	unsafe {
-		ext_chain_id.get()()
-	}
-}
-
-/// Conduct a 256-bit Blake2 hash.
-pub fn blake2_256(data: &[u8]) -> [u8; 32] {
-	let mut result: [u8; 32] = Default::default();
-	unsafe {
-		ext_blake2_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
-	}
-	result
-}
-
-/// Conduct a 256-bit Keccak hash.
-pub fn keccak_256(data: &[u8]) -> [u8; 32] {
-	let mut result: [u8; 32] = Default::default();
-	unsafe {
-		ext_keccak_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
-	}
-	result
-}
-
-/// Conduct four XX hashes to give a 256-bit result.
-pub fn twox_256(data: &[u8]) -> [u8; 32] {
-	let mut result: [u8; 32] = Default::default();
-	unsafe {
-		ext_twox_256.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
-	}
-	result
-}
-
-/// Conduct two XX hashes to give a 128-bit result.
-pub fn twox_128(data: &[u8]) -> [u8; 16] {
-	let mut result: [u8; 16] = Default::default();
-	unsafe {
-		ext_twox_128.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
-	}
-	result
-}
-
-/// Verify a ed25519 signature.
-pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-	unsafe {
-		ext_ed25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
-	}
-}
-
-/// Verify a sr25519 signature.
-pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-	unsafe {
-		ext_sr25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
-	}
-}
-
-/// Verify and recover a SECP256k1 ECDSA signature.
-/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-/// - returns `None` if the signature is bad, the 64-byte pubkey (doesn't include the 0x04 prefix).
-pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
-	let mut pubkey = [0u8; 64];
-	match unsafe {
-		ext_secp256k1_ecdsa_recover.get()(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
-	} {
-		0 => Ok(pubkey),
-		1 => Err(EcdsaVerifyError::BadRS),
-		2 => Err(EcdsaVerifyError::BadV),
-		3 => Err(EcdsaVerifyError::BadSignature),
-		_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
-	}
-}
+impl Api for () {}
 
 /// Functions available for offchain workers.
 ///
@@ -673,46 +668,6 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 /// will fail.
 pub mod offchain {
 	use super::*;
-
-	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-	pub struct Timestamp(u64);
-
-	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-	pub struct Duration(u64);
-
-	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-	#[derive(codec::Encode, codec::Decode)]
-	pub enum RequestStatus {
-		Unknown,
-		Finished(u16),
-	}
-
-	impl Default for RequestStatus {
-		fn default() -> Self {
-			RequestStatus::Unknown
-		}
-	}
-
-	impl RequestStatus {
-		pub fn from_u16(status: u16) -> Option<Self> {
-			match status {
-				0 => Some(RequestStatus::Unknown),
-				100...999 => Some(RequestStatus::Finished(status)),
-				_ => None,
-			}
-		}
-	}
-
-	impl Timestamp {
-		// TODO [ToDr] More ops
-		pub fn add(&self, duration: Duration) -> Timestamp {
-			Timestamp(self.0.saturating_add(duration.0))
-		}
-	}
-
-	/// Opaque type for offchain http requests.
-	#[derive(Clone, Copy)]
-	pub struct RequestId(u16);
 
 	/// Submit extrinsic from the runtime.
 	///
@@ -867,11 +822,6 @@ pub mod offchain {
 	}
 }
 
-/// Trait for things which can be printed.
-pub trait Printable {
-	fn print(self);
-}
-
 impl<'a> Printable for &'a [u8] {
 	fn print(self) {
 		unsafe {
@@ -892,9 +842,4 @@ impl Printable for u64 {
 	fn print(self) {
 		unsafe { ext_print_num.get()(self); }
 	}
-}
-
-/// Print a printable value.
-pub fn print<T: Printable + Sized>(value: T) {
-	value.print();
 }
