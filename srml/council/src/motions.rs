@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Council voting system.
+//! Council motion proposals, voting, approval, execution, and maintenance.
 
 use rstd::prelude::*;
 use rstd::result;

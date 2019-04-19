@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Council voting system.
+//! Council proposal voting, tallying and vetoing.
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
