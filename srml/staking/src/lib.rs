@@ -470,7 +470,7 @@ decl_storage! {
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 		/// The length of the bonding duration in eras.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1);
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(12);
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialize
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
