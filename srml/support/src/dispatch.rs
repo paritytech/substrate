@@ -84,12 +84,12 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///				Ok(())
 /// 		}
 ///
-///			// Public functions are easily accessible to other modules
-///			pub fn my_public_function(origin) -> Result {
-///				Ok(())
+///		// Public functions are easily accessible to other modules
+///		pub fn my_public_function(origin) -> Result {
+///			Ok(())
 /// 		}
-///		}
 ///	}
+///}
 /// # fn main() {}
 /// ```
 ///
@@ -111,9 +111,9 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn my_function(origin) {
-///				// Your implementation
+///			// Your implementation
 /// 		}
-///		}
+///	}
 /// }
 /// # fn main() {}
 /// ```
@@ -130,11 +130,11 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-///			fn my_function() -> Result {
-///				// Your implementation
+///		fn my_function() -> Result {
+///			// Your implementation
 /// 			Ok(())
 /// 		}
-///		}
+///	}
 /// }
 /// # fn main() {}
 /// ```
