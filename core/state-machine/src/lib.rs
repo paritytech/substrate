@@ -58,7 +58,7 @@ pub use trie_backend::TrieBackend;
 
 /// A wrapper around a child storage key.
 ///
-/// This wrapper ensures that the child storage key is correct and properly used. I.e. it is
+/// This wrapper ensures that the child storage key is correct and properly used.  It is
 /// impossible to create an instance of this struct without providing a correct `storage_key`.
 pub struct ChildStorageKey<'a, H: Hasher> {
 	storage_key: Cow<'a, [u8]>,
@@ -210,7 +210,7 @@ pub trait Externalities<H: Hasher> {
 
 	/// Get the trie root of a child storage map. This will also update the value of the child
 	/// storage keys in the top-level storage map.
-	/// If the storage root equals default hash as defined by trie, the key in top-level
+	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
 	/// storage map will be removed.
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8>;
 

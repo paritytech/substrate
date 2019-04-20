@@ -137,7 +137,7 @@ pub trait TrieIdGenerator<AccountId> {
 	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
 	///
-	/// Also the implementation is responsible to ensure that `TrieId` starts with
+	/// Also, the implementation is responsible for ensuring that `TrieId` starts with
 	/// `:child_storage:`.
 	/// TODO: We want to change this, see https://github.com/paritytech/substrate/issues/2325
 	fn trie_id(account_id: &AccountId) -> TrieId;
