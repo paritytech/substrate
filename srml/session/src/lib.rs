@@ -28,7 +28,7 @@
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! - **Session key:** 
+//! - **Session key:**
 //! - **Validator session key configuration process:** A validator's session key is set using `set_key` for
 //! use in their next session. It stores in `NextKeyFor` a mapping between their `AccountID` and the session
 //! key that they provide. `set_key` allows users to set their session key prior to becoming a validator.
@@ -92,25 +92,22 @@
 //!
 //! ### Example from the SRML
 //!
-//! The [Sudo module](../srml_sudo/index.html) uses the Session module for changing the sudo key.
+//! The [Staking module](../srml_staking/index.html) uses the Session module to get the validator set.
 //!
 //! ```
-//! pub trait Trait: session::Trait { }
+//! use srml_session as session;
+//! # fn not_executed<T: session::Trait>() {
 //!
-//! fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
-//!   let sender = ensure_signed(origin)?;
-//!   ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
-//!   let new = T::Lookup::lookup(new)?;
-//!   Self::deposit_event(RawEvent::KeyChanged(Self::key()));
-//!   //<Key<T>>::put(new);
-//! }
+//! let validators = <session::Module<T>>::validators();
+//! # }
 //! # fn main(){}
 //! ```
 //!
 //! ## Related Modules
 //!
-//! - [`Consensus`](../srml_consensus/index.html)
-//! - [`Timestamp`](../srml_timestamp/index.html)
+//! - [Consensus](../srml_consensus/index.html)
+//! - [Staking](../srml_staking/index.html)
+//! - [Timestamp](../srml_timestamp/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
