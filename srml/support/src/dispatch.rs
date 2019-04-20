@@ -71,7 +71,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ## Declaration
 ///
-/// ```rust
+/// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
@@ -102,7 +102,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ## Shorthand Example
 ///
-///	```rust
+/// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
@@ -122,7 +122,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ## Priviledged Function Example
 ///
-/// ```rust
+/// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
@@ -143,7 +143,12 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ## Multiple Module Instances Example
 ///
-/// ```rust
+/// A Substrate module can be built such that multiple instances of the same module can be used within a single runtime.
+/// For example, the [Balances module](../srml_balances/index.html) can be added multiple times to your runtime
+/// in order to support multiple, independent currencies for your blockchain. Here is an example of how you would declare
+/// such a module using the `decl_module!` macro:
+///
+/// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
@@ -161,8 +166,6 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// }
 /// # fn main() {}
 /// ```
-///
-/// This macro supports modules with multiple instances. See [balances](../srml_balances/index.html) example.
 ///
 /// ## Reserved Functions
 ///
