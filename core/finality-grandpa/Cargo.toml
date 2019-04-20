@@ -22,7 +22,7 @@ network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
-grandpa = { package = "finality-grandpa", version = "0.7.1", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.7.2", features = ["derive-codec"] }
 
 [dev-dependencies]
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common", features = ["test-helpers"] }

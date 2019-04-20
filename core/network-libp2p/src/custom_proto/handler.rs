@@ -28,7 +28,7 @@ use log::{debug, error, warn};
 use smallvec::{smallvec, SmallVec};
 use std::{error, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::Delay;
+use tokio_timer::{Delay, clock::Clock};
 use void::Void;
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -119,15 +119,17 @@ where
 	type Handler = CustomProtoHandler<TMessage, TSubstream>;
 
 	fn into_handler(self, remote_peer_id: &PeerId) -> Self::Handler {
+		let clock = Clock::new();
 		CustomProtoHandler {
 			protocol: self.protocol,
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
-				init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
+				init_deadline: Delay::new(clock.now() + Duration::from_secs(5))
 			},
 			events_queue: SmallVec::new(),
-			warm_up_end: Instant::now() + Duration::from_secs(5),
+			warm_up_end: clock.now() + Duration::from_secs(5),
+			clock,
 		}
 	}
 }
@@ -153,6 +155,10 @@ pub struct CustomProtoHandler<TMessage, TSubstream> {
 	/// We have a warm-up period after creating the handler during which we don't shut down the
 	/// connection.
 	warm_up_end: Instant,
+
+	/// `Clock` instance that uses the current execution context's source of time.
+	clock: Clock,
+
 }
 
 /// State of the handler.
@@ -404,7 +410,7 @@ where
 						});
 					}
 					ProtocolState::Opening {
-						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
+						deadline: Delay::new(self.clock.now() + Duration::from_secs(60))
 					}
 
 				} else if incoming.iter().any(|s| s.is_multiplex()) {
@@ -514,7 +520,7 @@ where
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match init_deadline.poll() {
 					Ok(Async::Ready(())) => {
-						init_deadline.reset(Instant::now() + Duration::from_secs(60));
+						init_deadline.reset(self.clock.now() + Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
@@ -529,7 +535,7 @@ where
 			ProtocolState::Opening { mut deadline } => {
 				match deadline.poll() {
 					Ok(Async::Ready(())) => {
-						deadline.reset(Instant::now() + Duration::from_secs(60));
+						deadline.reset(self.clock.now() + Duration::from_secs(60));
 						let event = CustomProtoHandlerOut::ProtocolError {
 							is_severe: true,
 							error: "Timeout when opening protocol".to_string().into(),
@@ -543,7 +549,7 @@ where
 					},
 					Err(_) => {
 						error!(target: "sub-libp2p", "Tokio timer has errored");
-						deadline.reset(Instant::now() + Duration::from_secs(60));
+						deadline.reset(self.clock.now() + Duration::from_secs(60));
 						return_value = None;
 						ProtocolState::Opening { deadline }
 					},
@@ -613,7 +619,7 @@ where
 						info: (),
 					});
 					ProtocolState::Opening {
-						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
+						deadline: Delay::new(self.clock.now() + Duration::from_secs(60))
 					}
 				} else {
 					return_value = None;
@@ -829,7 +835,7 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
-		if self.warm_up_end >= Instant::now() {
+		if self.warm_up_end >= self.clock.now() {
 			return KeepAlive::Until(self.warm_up_end)
 		}
 
