@@ -16,7 +16,7 @@ Install required tools:
 ./scripts/init.sh
 ```
 
-Build the WebAssembly binary
+Build the WebAssembly binary:
 
 ```bash
 ./scripts/build.sh
