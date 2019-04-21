@@ -16,8 +16,8 @@
 
 //! # Session Module
 //!
-//! The Session module allows validators to manage their session keys for the
-//! [Consensus module](../srml_consensus/index.html).
+//! The Session module allows validators to manage their session keys, provides a function for changing
+//! the session length, and handles session rotation.
 //!
 //! - [`session::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
@@ -28,33 +28,38 @@
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
 //!
-//! - **Session key:**
-//! - **Validator session key configuration process:** A validator's session key is set using `set_key` for
-//! use in their next session. It stores in `NextKeyFor` a mapping between their `AccountID` and the session
-//! key that they provide. `set_key` allows users to set their session key prior to becoming a validator.
-//! It is a public call since it uses `ensure_signed` that checks that the origin is a signed account.
+//! - **Session:** A session is a period of time that has a constant set of validators. Validators can only join
+//! or exit the validator set at a session change. It is measured in block numbers and set with `set_length`
+//! during a session for use in subsequent sessions.
+//! - **Session key:** A session key is actually several keys kept together that provide the various signing
+//! functions required by validators. In addition to providing signing functions, it allows validators and
+//! nominators to keep their staked funds in a cold wallet, while using the session key to sign messages
+//! related to their network responsibilities.
+//! - **Session key configuration process:** A session key is set using `set_key` for use in the
+//! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountID` and the session
+//! key provided. `set_key` allows users to set their session key prior to becoming a validator.
+//! It is a public call since it uses `ensure_signed`, which checks that the origin is a signed account.
 //! As such, the account ID of the origin stored in in `NextKeyFor` may not necessarily be associated with
 //! a block author or a validator. The session keys of reaped (deleted) accounts are removed once their
 //! account balance is zero.
 //! - **Validator set session key configuration process:** Each session we iterate through the current
 //! set of validator account IDs to check if a session key was created for it in the previous session
-//! using `set_key`. If it was then we call `set_authority` from the Consensus module and pass it a set of
-//! session keys (each associated with an account ID) to set as the session keys for the new validator set.
-//! Lastly, if the session key of the current authority index does not match any session keys stored under
-//! their validator index in the `AuthorityStorageVec` mapping, then we update the mapping with their session
+//! using `set_key`. If it was then we call `set_authority` from the [Consensus module](../srml_consensus/index.html)
+//! and pass it a set of session keys (each associated with an account ID) as the session keys for the new
+//! validator set. Lastly, if the session key of the current authority does not match any session keys stored under
+//! its validator index in the `AuthorityStorageVec` mapping, then we update the mapping with its session
 //! key and update the saved list of original authorities if necessary
 //! (see https://github.com/paritytech/substrate/issues/1290). Note: Authorities are stored in the Consensus module.
 //! They are represented by a validator account ID index from the Session module and allocated with a session
 //! key for the length of the session.
-//! - **Session length change process:** Measured in block numbers and set with `set_length` during a session
-//! for use in subsequent sessions. At the start of the next session we allocate a session index and record the
-//! timestamp when the session started. If a next session length was recorded in the previous session we record
-//! it as the new session length. Additionally, if the next session length differs from the block length of the
+//! - **Session length change process:** At the start of the next session we allocate a session index and record the
+//! timestamp when the session started. If a `NextSessionLength` was recorded in the previous session, we record
+//! it as the new session length. Additionally, if the new session length differs from the length of the
 //! next session then we record a `LastLengthChange`.
 //! - **Session rotation configuration:** Configure as either a 'normal' (rewardable session where rewards are
 //! applied) or 'exceptional' (slashable) session rotation.
 //! - **Session rotation process:** The session is changed at the end of the final block of the current session
-//! Length using the `on_finalize` method. It may be called by either an origin or internally from another runtime
+//! using the `on_finalize` method. It may be called by either an origin or internally from another runtime
 //! module at the end of each block.
 //!
 //! ### Goals
@@ -62,17 +67,19 @@
 //! The Session module in Substrate is designed to make the following possible:
 //!
 //! - Set session keys of the validator set for the next session.
+//! - Set the length of a session.
 //! - Configure and switch between either normal or exceptional session rotations.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! - `set_key` - Set a validator's session key for the next session..
+//! - `set_key` - Set a validator's session key for the next session.
 //! - `set_length` - Set a new session length to be applied upon the next session change.
 //! - `force_new_session` - Force a new session that should be considered either a normal (rewardable)
 //! or exceptional (slashable) rotation.
-//! - `on_finalize` - Called when a block is finalized.
+//! - `on_finalize` - Called when a block is finalized. Will rotate session if it is the last
+//! block of the current session.
 //!
 //! ### Public Functions
 //!
@@ -83,10 +90,10 @@
 //! - `check_rotate_session` - Rotate the session and apply rewards if necessary. Called after the Staking
 //! module updates the authorities to the new validator set.
 //! - `rotate_session` - Change to the next session. Register the new authority set. Update session keys.
-//! Enact session length change.
-//! - `ideal_session_duration` - Get the time that should have elapsed over in an ideal session.
+//! Enact session length change if applicable.
+//! - `ideal_session_duration` - Get the time of an ideal session.
 //! - `blocks_remaining` - Get the number of blocks remaining in the current session,
-//! excluding the counting this block.
+//! excluding the current block.
 //!
 //! ## Usage
 //!
@@ -143,8 +150,13 @@ macro_rules! impl_session_change {
 for_each_tuple!(impl_session_change);
 
 pub trait Trait: timestamp::Trait + consensus::Trait {
+	/// Create a session key from an account key.
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Option<Self::SessionKey>>;
+
+	/// Handler when a session changes.
 	type OnSessionChange: OnSessionChange<Self::Moment>;
+
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -170,6 +182,8 @@ decl_module! {
 			Self::apply_force_new_session(apply_rewards)
 		}
 
+		/// Called when a block is finalized. Will rotate session if it is the last
+		/// block of the current session.
 		fn on_finalize(n: T::BlockNumber) {
 			Self::check_rotate_session(n);
 		}
@@ -195,8 +209,9 @@ decl_storage! {
 		/// Timestamp when current session started.
 		pub CurrentStart get(current_start) build(|_| T::Moment::zero()): T::Moment;
 
-		/// New session is being forced if this entry exists; in which case, the boolean value is whether
-		/// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+		/// New session is being forced if this entry exists; in which case, the boolean value is true if
+		/// the new session should be considered a normal rotation (rewardable) and false if the new session
+		/// should be considered exceptional (slashable).
 		pub ForcingNewSession get(forcing_new_session): Option<bool>;
 		/// Block at which the session length last changed.
 		LastLengthChange: Option<T::BlockNumber>;
@@ -290,7 +305,7 @@ impl<T: Trait> Module<T> {
 		};
 	}
 
-	/// Get the time that should have elapsed over a session if everything was working perfectly.
+	/// Get the time that should elapse over a session if everything is working perfectly.
 	pub fn ideal_session_duration() -> T::Moment {
 		let block_period: T::Moment = <timestamp::Module<T>>::minimum_period();
 		let session_length: T::BlockNumber = Self::length();
