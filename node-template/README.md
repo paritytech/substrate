@@ -43,7 +43,7 @@ If you want to see the multi-node consensus algorithm in action locally, then yo
 We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The bootnode ID of her node is `QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN`, which is generated from the `--node-key` value that we specify below:
 
 ```bash
-cargo run --release -- \
+cargo run -- \
   --base-path /tmp/alice \
   --chain=local \
   --alice \
@@ -55,7 +55,7 @@ cargo run --release -- \
 In the second terminal, we'll start Bob's substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's bootnode ID on TCP port 30333:
 
 ```bash
-cargo run --release -- \
+cargo run -- \
   --base-path /tmp/bob \
   --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN \
   --chain=local \
