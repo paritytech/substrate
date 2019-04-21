@@ -238,6 +238,7 @@ impl<B: BlockT> BlockImporter<B> {
 		worker_sender: Sender<BlockImportWorkerMsg<B>>,
 		justification_import: Option<SharedJustificationImport<B>>,
 	) -> Sender<BlockImportMsg<B>> {
+		trace!("Creating new!");
 		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
 			.name("ImportQueue".into())
@@ -258,6 +259,7 @@ impl<B: BlockT> BlockImporter<B> {
 	}
 
 	fn run(&mut self) -> bool {
+		trace!("Running");
 		let msg = select! {
 			recv(self.port) -> msg => {
 				match msg {
@@ -280,6 +282,7 @@ impl<B: BlockT> BlockImporter<B> {
 	}
 
 	fn handle_network_msg(&mut self, msg: BlockImportMsg<B>) -> bool {
+		trace!("Received network message");
 		match msg {
 			BlockImportMsg::ImportBlocks(origin, incoming_blocks) => {
 				self.handle_import_blocks(origin, incoming_blocks)
@@ -297,6 +300,7 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportMsg::Stop => return false,
 			#[cfg(any(test, feature = "test-helpers"))]
 			BlockImportMsg::Synchronize => {
+				trace!("Received synchronization message");
 				self.worker_sender
 					.send(BlockImportWorkerMsg::Synchronize)
 					.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
@@ -318,6 +322,7 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportWorkerMsg::Imported(results) => (results),
 			#[cfg(any(test, feature = "test-helpers"))]
 			BlockImportWorkerMsg::Synchronize => {
+				trace!("Synchronizing link");
 				link.synchronized();
 				return true;
 			},
@@ -434,6 +439,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 						},
 						#[cfg(any(test, feature = "test-helpers"))]
 						BlockImportWorkerMsg::Synchronize => {
+							trace!("Sending sync message");
 							let _ = worker.result_sender.send(BlockImportWorkerMsg::Synchronize);
 						},
 						_ => unreachable!("Import Worker does not receive the Imported message; qed"),
