@@ -36,7 +36,7 @@
 //!
 //! malicious referenda, and to represent passive stakeholders.
 //!
-//! - **Council members** (councilor) - a countable stakeholder represented by an on-chain
+//! - **Council member** (councillor) - A countable stakeholder represented by an on-chain
 //! account. They may vote on council proposals from other councillors during the voting period.
 //!
 //! - **Council motion** A mechanism used to enact a proposal from a council origin.
