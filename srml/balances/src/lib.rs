@@ -46,7 +46,7 @@
 //! for most operations. When this balance falls below the existential deposit, most functionality of the account is
 //! removed. When both it and the reserved balance are deleted, then the account is said to be dead.
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
-//! can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the
+//! can still be slashed, but only after all the free balance has been slashed. If the reserved balance falls below the
 //! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
 //! deleted, then the account is said to be dead.
 //! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
@@ -483,7 +483,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-// wrapping these imbalanes in a private module is necessary to ensure absolute privacy
+// wrapping these imbalances in a private module is necessary to ensure absolute privacy
 // of the inner member.
 mod imbalances {
 	use super::{
@@ -787,7 +787,7 @@ where
 		Self::set_free_balance(who, free_balance - free_slash);
 		let remaining_slash = value - free_slash;
 		// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
-		// from in extreme circumstances. `can_slash()` should be used prior to `slash()` is avoid having
+		// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
 		// to draw from reserved funds, however we err on the side of punishment if things are inconsistent
 		// or `can_slash` wasn't used appropriately.
 		if !remaining_slash.is_zero() {
@@ -1029,4 +1029,3 @@ where
 		Self::total_balance(who).is_zero()
 	}
 }
-

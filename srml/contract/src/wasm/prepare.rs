@@ -29,20 +29,34 @@ use rstd::prelude::*;
 use runtime_primitives::traits::As;
 
 struct ContractModule<'a, Gas: 'a> {
-	// An `Option` is used here for loaning (`take()`-ing) the module.
-	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
-	// the value *must* be `Some`).
+	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
+	///
+	/// An `Option` is used here for loaning (`take()`-ing) the module.
+	/// Invariant: Can't be `None` (i.e. on enter and on exit from the function
+	/// the value *must* be `Some`).
 	module: Option<elements::Module>,
 	schedule: &'a Schedule<Gas>,
 }
 
 impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
+	/// Creates a new instance of `ContractModule`.
+	///
+	/// Returns `Err` if the `original_code` couldn't be decoded or
+	/// if it contains an invalid module.
 	fn new(
 		original_code: &[u8],
 		schedule: &'a Schedule<Gas>,
 	) -> Result<ContractModule<'a, Gas>, &'static str> {
+		use wasmi_validation::{validate_module, PlainValidator};
+
 		let module =
-			elements::deserialize_buffer(original_code).map_err(|_| "can't decode wasm code")?;
+			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
+
+		// Make sure that the module is valid.
+		validate_module::<PlainValidator>(&module).map_err(|_| "Module is not valid")?;
+
+		// Return a `ContractModule` instance with
+		// __valid__ module.
 		Ok(ContractModule {
 			module: Some(module),
 			schedule,
@@ -270,7 +284,8 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 ///
 /// The checks are:
 ///
-/// - module doesn't define an internal memory instance,
+/// - provided code is a valid wasm module.
+/// - the module doesn't define an internal memory instance,
 /// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`,
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
@@ -438,7 +453,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Requested initial number of pages should not exceed the requested maximum")
+			Err("Module is not valid")
 		);
 
 		prepare_test!(no_maximum,
@@ -487,7 +502,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Multiple memory imports defined")
+			Err("Module is not valid")
 		);
 
 		prepare_test!(table_import,
@@ -505,7 +520,7 @@ mod tests {
 		prepare_test!(global_import,
 			r#"
 			(module
-				(global $g (import "env" "global") (mut i32))
+				(global $g (import "env" "global") i32)
 				(func (export "call"))
 				(func (export "deploy"))
 			)
