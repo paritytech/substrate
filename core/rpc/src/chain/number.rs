@@ -39,18 +39,24 @@ impl<Number: traits::As<u64>> NumberOrHex<Number> {
 	///
 	/// Fails in case hex number is too big.
 	pub fn to_number(self) -> Result<Number, String> {
-		match self {
-			NumberOrHex::Number(n) => Ok(n),
+		let num: u64 = match self {
+			NumberOrHex::Number(n) => n.as_(),
 			NumberOrHex::Hex(h) => {
 				// FIXME #1377 this only supports `u64` since `BlockNumber`
 				// is `As<u64>` we could possibly go with `u128`.
 				let l = h.low_u64();
 				if U256::from(l) != h {
-					Err(format!("`{}` does not fit into the block number type.", h))
+					return Err(format!("`{}` does not fit into the block number type.", h));
 				} else {
-					Ok(traits::As::sa(l))
+					l
 				}
 			},
+		};
+		// FIXME <2329>: Database seems to limit the block number to u32 for no reason
+		if num > u32::max_value() as u64 {
+			Err(format!("`{}` > u32::max_value(), the max block number is u32.", num))
+		} else {
+			Ok(traits::As::sa(num))
 		}
 	}
 }
