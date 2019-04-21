@@ -30,8 +30,6 @@
 //!
 //! #### Council Proposals
 //!
-//! - **Council** Defined in the [Substrate Developer Hub Glossary](https://docs.substrate.dev/docs/glossary#section-council).
-//!
 //! - **Councils' role** The councils' role is to: propose sensible referenda, cancel potentially dangerous or
 //!
 //! malicious referenda, and to represent passive stakeholders.
