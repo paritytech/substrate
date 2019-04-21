@@ -76,7 +76,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
-/// 
+///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn my_function(origin, var: u64) -> Result {
@@ -84,12 +84,12 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///				Ok(())
 /// 		}
 ///
-///		// Public functions are easily accessible to other modules
-///		pub fn my_public_function(origin) -> Result {
-///			Ok(())
+///			// Public functions are easily accessible to other modules
+///			pub fn my_public_function(origin) -> Result {
+///				Ok(())
 /// 		}
-///	}
-///}
+///		}
+/// }
 /// # fn main() {}
 /// ```
 ///
@@ -107,13 +107,13 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
-/// 
+///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn my_function(origin) {
-///			// Your implementation
+///				// Your implementation
 /// 		}
-///	}
+///		}
 /// }
 /// # fn main() {}
 /// ```
@@ -130,11 +130,11 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-///		fn my_function() -> Result {
-///			// Your implementation
+///			fn my_function() -> Result {
+///				// Your implementation
 /// 			Ok(())
 /// 		}
-///	}
+///		}
 /// }
 /// # fn main() {}
 /// ```
@@ -156,9 +156,9 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
 /// # impl Instance for DefaultInstance {}
-/// 
+///
 /// pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
-/// 
+///
 /// decl_module! {
 /// 	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 /// 		// Your implementation
@@ -169,11 +169,13 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ## Reserved Functions
 ///
-/// The following are reserved function signatures.
+/// The following are reserved function signatures:
 ///
-/// * `deposit_event`: Emits [events](https://docs.substrate.dev/docs/event-enum) for the module.
+/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
+/// If set to default, it will call `deposit_event` from the [System module](../srml_system/index.html).
+/// However, you can write your own implementation for events in your runtime.
 ///
-/// The following reserved functions also take an optional input `n: T::BlockNumber`:
+/// The following reserved functions also take the block number (with type `T::BlockNumber`) as an optional input:
 ///
 /// * `on_initialize`: Executes at the beginning of a block.
 /// * `on_finalize`: Executes at the end of a block.
