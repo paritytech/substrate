@@ -22,7 +22,7 @@ Build the WebAssembly binary:
 ./scripts/build.sh
 ```
 
-Build all native code
+Build all native code:
 
 ```bash
 cargo build
