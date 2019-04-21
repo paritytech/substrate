@@ -172,7 +172,6 @@
 //! presentation period) to fill the seat if removal means that the desired members are not met.
 //! - `set_presentation_duration` - Set the presentation duration.
 //! - `set_term_duration` - Set the term duration.
-//! - `on_finalize` - Signature declaration that runs anything that needs to be done at the end of the block.
 //!
 //! #### Council Voting
 //!
