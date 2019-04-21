@@ -19,7 +19,7 @@ Install required tools:
 Build the WebAssembly binary
 
 ```bash
-./scripts/init.sh
+./scripts/build.sh
 ```
 
 Build all native code
