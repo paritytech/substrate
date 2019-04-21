@@ -55,9 +55,9 @@
 //! - **Council proposal vote** A vote of yay or nay from a councillor on a single proposal that is stored in the
 //! `ProposalVoters`, `CouncilVoteOf`, and `Voting` mappings. Councillors may change their vote.
 //!
-//! - **Council proposal veto** A council member may veto any council proposal that is stored in `ProposalVoters` only
-//! once. A valid veto cancels a proposal, but a veto is not considered a vote. It is stored in `VetoedProposal` for a
-//! cooling off period that's measured in blocks. The vetoer cannot propose the proposal again until the veto expires.
+//! - **Council proposal veto** A council member may veto any council proposal that exists and is stored in
+//! `ProposalVoters` only once. A vetoed proposal that's valid is stored in `VetoedProposal` for a cooling off period
+//! that's measured in blocks. The vetoer cannot propose the proposal again until the veto expires.
 //!
 //! - **Council proposal vote cancellation** At the end of a given block we cancel all referenda that have been
 //! elevated to the table of referenda whose voting period ends at that block and where the outcome of their voting
