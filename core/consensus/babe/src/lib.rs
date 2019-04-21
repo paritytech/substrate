@@ -29,8 +29,6 @@ use std::{
 	sync::Arc,
 	time::Duration,
 	thread,
-	hash::Hash,
-	fmt::Debug,
 	u64,
 };
 use parity_codec::{Decode, Encode, Input};
@@ -61,7 +59,7 @@ use srml_babe::{
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
 use consensus_common::well_known_cache_keys;
-use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
+use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	ChainHead,
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -73,7 +71,7 @@ use client::{
 use slots::CheckedHeader;
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
-use log::{warn, debug, info, trace};
+use log::{error, warn, debug, info, trace};
 
 use slots::{SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 use rand::Rng;
@@ -137,7 +135,14 @@ impl SlotDuration {
 	where
 		C: AuxStore, C: ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
-		slots::SlotDuration::get_or_compute(client, |a, b| a.startup_data(b)).map(Self)
+		trace!(target: "babe", "Getting slot duration");
+		match slots::SlotDuration::get_or_compute(client, |a, b| a.startup_data(b)).map(Self) {
+			Ok(s) => Ok(s),
+			Err(s) => {
+				warn!(target: "babe", "Failed to get slot duration");
+				Err(s)
+			}
+		}
 	}
 
 	/// Get the slot duration in milliseconds.
@@ -160,7 +165,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<BabeSeal>;
 }
 
-impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, primitives::sr25519::Signature> {
+impl<Hash: core::fmt::Debug> CompatibleDigestItem for generic::DigestItem<Hash, Public, primitives::sr25519::Signature> {
 	/// Construct a digest item which is aaAASSAAAAAASDC   a slot number and a signature on the
 	/// hash.
 	fn babe_seal(signature: BabeSeal) -> Self {
@@ -170,8 +175,19 @@ impl<Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, primitives
 	/// If this item is an BABE seal, return the slot number and signature.
 	fn as_babe_seal(&self) -> Option<BabeSeal> {
 		match self {
-			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-			_ => None,
+			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => {
+				match Decode::decode(&mut &seal[..]) {
+					s@Some(_) => s,
+					s@None => {
+						warn!(target: "babe", "Failed to decode {:?}", seal);
+						s
+					}
+				}
+			}
+			_ => {
+				warn!(target: "babe", "Invalid consensus: {:?}!", self);
+				None
+			}
 		}
 	}
 }
@@ -182,55 +198,11 @@ impl SlotCompatible for BabeSlotCompatible {
 	fn extract_timestamp_and_slot(
 		data: &InherentData
 	) -> Result<(TimestampInherent, u64), consensus_common::Error> {
+		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a.slot_duration)))
 			.map_err(slots::inherent_to_common_error)
 	}
-}
-
-/// Start the babe worker in a separate thread.
-pub fn start_babe_thread<B, C, E, I, SO, Error, OnExit>(
-	slot_duration: SlotDuration,
-	local_key: Arc<sr25519::Pair>,
-	client: Arc<C>,
-	block_import: Arc<I>,
-	env: Arc<E>,
-	sync_oracle: SO,
-	on_exit: OnExit,
-	inherent_data_providers: InherentDataProviders,
-	force_authoring: bool,
-) -> Result<(), consensus_common::Error> where
-	B: Block + 'static,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
-	C::Api: AuthoritiesApi<B>,
-	E: Environment<B, Error=Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
-	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<I::Error> + 'static,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
-	OnExit: Future<Item=(), Error=()> + Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public> + 'static,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
-{
-	let worker = BabeWorker {
-		client: client.clone(),
-		block_import,
-		env,
-		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
-		sync_oracle: sync_oracle.clone(),
-		force_authoring,
-	};
-
-	slots::start_slot_worker_thread::<_, _, _, _, BabeSlotCompatible, BabeConfiguration, _>(
-		slot_duration.0,
-		client,
-		Arc::new(worker),
-		sync_oracle,
-		on_exit,
-		inherent_data_providers
-	)
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
@@ -319,11 +291,15 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
+		if true {
+			panic!("impossible")
+		}
 
 		let authorities = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
 			Err(e) => {
-				warn!(
+				error!(
+					target: "babe",
 					"Unable to fetch authorities at block {:?}: {:?}",
 					chain_head.hash(),
 					e
@@ -345,7 +321,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 
 		// FIXME replace the dummy empty slices with real data
 		let (proposal_work, vrf_output, proof) = if let Some((inout, proof, _batchable_proof)) = author_block(
-			&[0u8; 0], slot_info.number, &[0u8; 0],	0, &authorities, &pair, u64::MAX / 4) {
+			&[0u8; 0], slot_info.number, &[0u8; 0],	0, &authorities, &pair, u64::MAX) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
 				slot_num,
@@ -359,7 +335,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 			let proposer = match env.init(&chain_head, &authorities) {
 				Ok(p) => p,
 				Err(e) => {
-					warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
+					warn!(target: "babe", "Unable to author block in slot {:?}: {:?}", slot_num, e);
 					telemetry!(CONSENSUS_WARN; "babe.unable_authoring_block";
 						"slot" => slot_num, "err" => ?e
 					);
@@ -386,6 +362,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 					let slot_after_building = slot_now(slot_duration);
 					if slot_after_building != Some(slot_num) {
 						info!(
+							target: "babe",
 							"Discarding proposal for slot {}; block production took too long",
 							slot_num
 						);
@@ -425,7 +402,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 						fork_choice: ForkChoiceStrategy::LongestChain,
 					};
 
-					info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+					info!(target: "babe",
+						  "Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 						  header_num,
 						  import_block.post_header().hash(),
 						  pre_hash
@@ -444,7 +422,10 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 						);
 					}
 				})
-				.map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into())
+				.map_err(|e| {
+					warn!("Client import failed: {:?}", e);
+					consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()
+				})
 		)
 	}
 }
@@ -464,21 +445,23 @@ fn check_header<B: Block + Sized>(
 ) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
+	trace!("Checking header");
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
 
 	let BabeSeal { slot_num, signature: LocalizedSignature { signer, signature }, proof, vrf_output } = digest_item.as_babe_seal().ok_or_else(|| {
-		debug!(target: "babe", "Header {:?} is unsealed", hash);
+		error!(target: "babe", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
 	// FIXME!!
-	let threshold = u64::MAX / 4;
+	let threshold = u64::MAX;
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
 		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else if !authorities.contains(&signer) {
+		error!(target: "babe", "Slot Author not found");
 		Err("Slot Author not found".to_string())
 	} else {
 		let pre_hash = header.hash();
@@ -493,7 +476,7 @@ fn check_header<B: Block + Sized>(
 					0,
 				);
 				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| p.vrf_verify(transcript, &vrf_output, &proof)).map_err(|s| {
-					debug!(target: "babe", "VRF verification failed: {:?}", s);
+					warn!(target: "babe", "VRF verification failed: {:?}", s);
 					format!("VRF verification failed")
 				})?
 			};
@@ -501,9 +484,11 @@ fn check_header<B: Block + Sized>(
 			if r < threshold {
 				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
+				error!(target: "babe", "VRF verification failed: threshold {} but VRF produced {}", r, threshold);
 				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
 			}
 		} else {
+			error!(target: "babe", "Bad signature on {:?}", hash);
 			Err(format!("Bad signature on {:?}", hash))
 		}
 	}
@@ -605,6 +590,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
+		trace!(target: "babe", "Verifying something");
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
 		let (timestamp_now, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
@@ -727,6 +713,7 @@ fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
+	debug!(target: "babe", "Registering");
 	if !inherent_data_providers.has_provider(&srml_babe::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_babe::InherentDataProvider::new(slot_duration))
@@ -794,35 +781,6 @@ fn author_block(
 		None
 	}
 }
-/// Start an import queue for the Babe consensus algorithm.
-pub fn import_queue<B, C, E, P>(
-	slot_duration: SlotDuration,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	client: Arc<C>,
-	extra: E,
-	inherent_data_providers: InherentDataProviders,
-) -> Result<BabeImportQueue<B>, consensus_common::Error> where
-	B: Block,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
-	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	E: 'static + ExtraVerification<B>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
-	P::Signature: Encode + Decode,
-{
-	register_babe_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
-
-	let verifier = Arc::new(
-		BabeVerifier {
-			client: client.clone(),
-			extra,
-			inherent_data_providers,
-		}
-	);
-	Ok(BasicQueue::new(verifier, block_import, justification_import))
-}
 
 #[cfg(test)]
 #[allow(dead_code, unused_imports)]
@@ -830,6 +788,7 @@ mod tests {
 	use super::*;
 	#[test]
 	fn can_searialize_block() {
+		drop(env_logger::try_init());
 		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
 	}
 
@@ -845,6 +804,7 @@ mod tests {
 	use test_client;
 	use futures::stream::Stream;
 	use log::error;
+	use std::u64;
 
 	type Error = client::error::Error;
 
@@ -888,6 +848,7 @@ mod tests {
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
+			debug!(target: "babe", "Creating test network from config");
 			BabeTestNet {
 				peers: Vec::new(),
 				started: false,
@@ -897,6 +858,7 @@ mod tests {
 		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
 			-> Arc<Self::Verifier>
 		{
+			trace!(target: "babe", "Creating a verifier");
 			let slot_duration = SlotDuration::get_or_compute(&*client)
 				.expect("slot duration available");
 			let inherent_data_providers = InherentDataProviders::new();
@@ -904,6 +866,7 @@ mod tests {
 				&inherent_data_providers,
 				slot_duration.get()
 			).expect("Registers babe inherent data provider");
+			trace!(target: "babe", "Provider registered");
 
 			assert_eq!(slot_duration.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
@@ -914,13 +877,16 @@ mod tests {
 		}
 
 		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
+			trace!(target: "babe", "Retreiving a peer");
 			&self.peers[i]
 		}
 
 		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+			trace!(target: "babe", "Retreiving peers");
 			&self.peers
 		}
 
+		// IS CALLED
 		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
@@ -936,13 +902,13 @@ mod tests {
 
 	#[test]
 	fn authoring_blocks() {
-		let _ = ::env_logger::try_init();
-		error!("checkpoint 1");
+		drop(env_logger::try_init());
+		debug!(target: "babe", "checkpoint 1");
 		let mut net = BabeTestNet::new(3);
-		error!("checkpoint 1");
+		debug!(target: "babe", "checkpoint 2");
 
 		net.start();
-		error!("checkpoint 1");
+		debug!(target: "babe", "checkpoint 3");
 
 		let peers = &[
 			(0, Keyring::Alice),
@@ -952,7 +918,7 @@ mod tests {
 
 		let net = Arc::new(Mutex::new(net));
 		let mut import_notifications = Vec::new();
-		error!("checkpoint 1");
+		debug!(target: "babe", "checkpoint 4");
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
 			let client = net.lock().peer(*peer_id).client().clone();
@@ -985,7 +951,7 @@ mod tests {
 
 			runtime.spawn(babe);
 		}
-		error!("checkpoint 2");
+		debug!(target: "babe", "checkpoint 5");
 
 		// wait for all finalized on each.
 		let wait_for = ::futures::future::join_all(import_notifications)
@@ -1005,7 +971,47 @@ mod tests {
 	}
 
 	#[test]
+	#[allow(deprecated)]
+	#[should_panic]
+	fn old_seals_rejected() {
+		drop(env_logger::try_init());
+		generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Seal(0, Signature([0; 64])).as_babe_seal().unwrap();
+	}
+
+	#[test]
+	fn wrong_number_rejected() {
+		drop(env_logger::try_init());
+		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus([0; 4], Signature([0; 64]).encode());
+		assert!(bad_seal.as_babe_seal().is_none())
+	}
+
+	#[test]
+	fn correct_number_accepted() {
+		drop(env_logger::try_init());
+		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus(BABE_ENGINE_ID, Signature([0; 64]).encode());
+		assert!(bad_seal.as_babe_seal().is_some())
+	}
+
+	#[test]
+	fn can_author_block() {
+		drop(env_logger::try_init());
+		let randomness = &[];
+		let pair = sr25519::Pair::generate();
+		let mut i = 0;
+		loop {
+			match author_block(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
+				None => i += 1,
+				Some(s) => {
+					debug!(target: "babe", "Authored block {:?}", s);
+					break
+				}
+			}
+		}
+	}
+
+	#[test]
 	fn authorities_call_works() {
+		drop(env_logger::try_init());
 		let client = test_client::new();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
