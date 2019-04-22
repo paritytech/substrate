@@ -554,8 +554,10 @@ cfg_if! {
 
 			impl consensus_babe::BabeApi<Block> for Runtime {
 				fn startup_data() -> consensus_babe::BabeConfiguration {
-					slot_duration: 1,
-					expected_block_time: 1,
+					consensus_babe::BabeConfiguration {
+						slot_duration: 1,
+						expected_block_time: 1,
+					}
 				}
 			}
 
