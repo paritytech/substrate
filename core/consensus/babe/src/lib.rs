@@ -122,7 +122,7 @@ impl Encode for BabeSeal {
 			self.slot_num,
 		);
 		let encoded = parity_codec::Encode::encode(&tmp);
-		if cfg!(debug_assertions) {
+		if cfg!(any(test, debug_assertions)) {
 			debug!(target: "babe", "Checking if encoding was correct");
 			let decoded_version = Self::decode(&mut &encoded[..]).expect("we just encoded this ourselves, so it is correct; qed");
 			babe_assert_eq!(decoded_version.proof, self.proof);
