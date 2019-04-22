@@ -31,7 +31,8 @@ pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
 pub use libp2p::{identity, PeerId, core::PublicKey};
 
 use libp2p::core::nodes::ConnectedPoint;
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
+use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
 
 /// Protocol / handler id
@@ -92,7 +93,7 @@ impl From<multiaddr::Error> for ParseErr {
 /// Meant for general diagnostic purposes.
 ///
 /// **Warning**: This API is not stable.
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, SerdeValue)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkState {
 	/// PeerId of the local node.
@@ -113,7 +114,7 @@ pub struct NetworkState {
 	pub peerset: serde_json::Value,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStatePeer {
 	/// How we are connected to the node.
@@ -132,14 +133,14 @@ pub struct NetworkStatePeer {
 	pub known_addresses: HashSet<Multiaddr>,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStateNotConnectedPeer {
 	/// List of addresses known for this node.
 	pub known_addresses: HashSet<Multiaddr>,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkStatePeerEndpoint {
 	/// We are dialing the given address.
