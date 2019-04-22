@@ -45,7 +45,7 @@ use schnorrkel::{
 	keys::Keypair,
 	vrf::{
 		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
-		VRF_OUTPUT_LENGTH,
+		VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 	},
 	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
@@ -55,7 +55,7 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
-	InherentType as BabeInherent, BabeInherentData,
+	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
 use consensus_common::well_known_cache_keys;
@@ -84,33 +84,61 @@ use rand::Rng;
 /// * The slot number
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BabeSeal {
-	proof: VRFProof,
 	vrf_output: VRFOutput,
+	proof: VRFProof,
 	signature: LocalizedSignature,
 	slot_num: u64,
 }
 
+macro_rules! babe_assert_eq {
+	($a: expr, $b: expr) => {
+		({
+			let ref a = $a;
+			let ref b = $b;
+			if a != b {
+				error!(target: "babe", "Expected {:?} to equal {:?}, but they were not", stringify!($a), stringify!($b));
+				eprintln!("ERROR: Expected {:?} to equal {:?}, but they were not", stringify!($a), stringify!($b));
+				assert_eq!(a, b);
+			}
+		})
+	};
+}
+
+type TmpDecode = (
+	[u8; VRF_OUTPUT_LENGTH],
+	[u8; VRF_PROOF_LENGTH],
+	[u8; SIGNATURE_LENGTH],
+	[u8; PUBLIC_KEY_LENGTH],
+	u64,
+);
+
 impl Encode for BabeSeal {
 	fn encode(&self) -> Vec<u8> {
-		parity_codec::Encode::encode(&(
+		let tmp: TmpDecode = (
+			*self.vrf_output.as_bytes(),
 			self.proof.to_bytes(),
-			self.vrf_output.as_bytes(),
 			self.signature.signature.0,
 			self.signature.signer.0,
 			self.slot_num,
-		))
+		);
+		let encoded = parity_codec::Encode::encode(&tmp);
+		if cfg!(debug_assertions) {
+			debug!(target: "babe", "Checking if encoding was correct");
+			let decoded_version = Self::decode(&mut &encoded[..]).expect("we just encoded this ourselves, so it is correct; qed");
+			babe_assert_eq!(decoded_version.proof, self.proof);
+			babe_assert_eq!(decoded_version.vrf_output, self.vrf_output);
+			babe_assert_eq!(decoded_version.signature.signature, self.signature.signature);
+			babe_assert_eq!(decoded_version.signature.signer, self.signature.signer);
+			babe_assert_eq!(decoded_version.slot_num, self.slot_num);
+			debug!(target: "babe", "Encoding was correct")
+		}
+		encoded
 	}
 }
 
 impl Decode for BabeSeal {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (public_key, proof, output, sig, slot_num): (
-			[u8; PUBLIC_KEY_LENGTH],
-			[u8; PUBLIC_KEY_LENGTH],
-			[u8; VRF_OUTPUT_LENGTH],
-			[u8; SIGNATURE_LENGTH],
-			u64,
-		) = Decode::decode(i)?;
+		let (output, proof, sig, public_key, slot_num): TmpDecode = Decode::decode(i)?;
 		Some(BabeSeal {
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
@@ -200,7 +228,7 @@ impl SlotCompatible for BabeSlotCompatible {
 	) -> Result<(TimestampInherent, u64), consensus_common::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
-			.and_then(|t| data.babe_inherent_data().map(|a| (t, a.slot_duration)))
+			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
 			.map_err(slots::inherent_to_common_error)
 	}
 }
@@ -291,9 +319,6 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
-		if true {
-			panic!("impossible")
-		}
 
 		let authorities = match authorities(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
 			Ok(authorities) => authorities,
@@ -465,7 +490,7 @@ fn check_header<B: Block + Sized>(
 		Err("Slot Author not found".to_string())
 	} else {
 		let pre_hash = header.hash();
-		let to_sign = (slot_num, pre_hash).encode();
+		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
 
 		if sr25519::Pair::verify(&signature, &to_sign[..], &signer) {
 			let (inout, _batchable_proof) = {
@@ -621,10 +646,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.babe_replace_inherent_data(BabeInherent {
-						slot_num,
-						slot_duration: 0,
-					});
+					inherent_data.babe_replace_inherent_data(slot_num);
 					let block = B::new(pre_header.clone(), inner_body);
 
 					// skip the inherents verification if the runtime API is old.
@@ -986,10 +1008,11 @@ mod tests {
 	}
 
 	#[test]
-	fn correct_number_accepted() {
+	#[should_panic]
+	fn bad_seal_rejected() {
 		drop(env_logger::try_init());
 		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus(BABE_ENGINE_ID, Signature([0; 64]).encode());
-		assert!(bad_seal.as_babe_seal().is_some())
+		bad_seal.as_babe_seal().expect("we should not decode this successfully");
 	}
 
 	#[test]

@@ -31,7 +31,7 @@ use std::thread;
 use std::fmt::Debug;
 use futures::prelude::*;
 use futures::{Future, IntoFuture, future::{self, Either}};
-use log::{warn, debug, info};
+use log::{error, warn, debug, info};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ProvideRuntimeApi, Block, ApiRef};
 use consensus_common::SyncOracle;
@@ -95,7 +95,7 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
 		let mut runtime = match Runtime::new() {
 			Ok(r) => r,
 			Err(e) => {
-				warn!("Unable to start authorship: {:?}", e);
+				warn!(target: "slots", "Unable to start authorship: {:?}", e);
 				return;
 			}
 		};
@@ -156,7 +156,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 
 		// rather than use a timer interval, we schedule our waits ourselves
 		Slots::<SC>::new(slot_duration.slot_duration(), inherent_data_providers)
-			.map_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
+			.map_err(|e| error!(target: "slots", "Faulty timer: {:?}", e))
 			.for_each(move |slot_info| {
 				let client = client.clone();
 				let worker = worker.clone();
@@ -180,7 +180,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 
 				Either::A(
 					worker.on_slot(chain_head, slot_info).into_future()
-						.map_err(|e| debug!(target: "slots", "Encountered consensus error: {:?}", e))
+						.map_err(|e| warn!(target: "slots", "Encountered consensus error: {:?}", e))
 				)
 			})
 	};
@@ -193,10 +193,10 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 				Ok(Err(())) => warn!(target: "slots", "Authorship task terminated unexpectedly. Restarting"),
 				Err(e) => {
 					if let Some(s) = e.downcast_ref::<&'static str>() {
-						warn!(target: "slots", "Authorship task panicked at {:?}", s);
+						error!(target: "slots", "Authorship task panicked at {:?}", s);
 					}
 
-					warn!(target: "slots", "Restarting authorship task");
+					error!(target: "slots", "Restarting authorship task");
 				}
 			}
 
@@ -265,9 +265,10 @@ impl<T: Clone> SlotDuration<T> {
 		match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
-				.ok_or_else(|| ::client::error::Error::Backend(
-					format!("slot duration kept in invalid format"),
-				).into()),
+				.ok_or_else(|| ::client::error::Error::Backend({
+					error!(target: "slots", "slot duration kept in invalid format");
+					format!("slot duration kept in invalid format")
+				}).into()),
 			None => {
 				use runtime_primitives::traits::Zero;
 				let genesis_slot_duration = cb(
