@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use log::{error, trace};
+use log::trace;
 use client;
 use client::block_builder::BlockBuilder;
 use crate::config::ProtocolConfig;
