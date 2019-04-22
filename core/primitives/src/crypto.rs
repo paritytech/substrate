@@ -24,8 +24,8 @@ use parity_codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
-
-use core::{hash::Hash, fmt::Debug};
+#[cfg(feature = "std")]
+use std::{hash::Hash, fmt::Debug};
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
