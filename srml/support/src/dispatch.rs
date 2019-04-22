@@ -76,7 +76,6 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
-///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		fn my_function(origin, var: u64) -> Result {
@@ -84,7 +83,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///				Ok(())
 /// 		}
 ///
-///			// Public functions are easily accessible to other modules
+///			// Public functions are easily accessible to other modules.
 ///			pub fn my_public_function(origin) -> Result {
 ///				Ok(())
 /// 		}
@@ -100,16 +99,19 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// * `origin`: Alias of `T::Origin`, declared by the [`impl_outer_origin!`](./macro.impl_outer_origin.html) macro.
 /// * `Result`: The expected return type from module functions.
 ///
-/// ## Shorthand Example
+/// ### Shorthand Example
+///
+/// The macro automatically expands a shorthand function declaration to return the `Result` type.
 ///
 /// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
-///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+///
+/// 		// Shorthand declaration: this will return `Result`.
 /// 		fn my_function(origin) {
 ///				// Your implementation
 /// 		}
@@ -118,18 +120,21 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # fn main() {}
 /// ```
 ///
-/// The macro automatically expands a shorthand function declaration to return the `Result` type.
+/// ### Privileged Function Example
 ///
-/// ## Priviledged Function Example
+/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root(origin)`
+/// as the first line of the function.
 ///
 /// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
-///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+///
+/// 		// Privileged function: the macro will add the `origin` param
+/// 		// and call `ensure_root(origin)`.
 ///			fn my_function() -> Result {
 ///				// Your implementation
 /// 			Ok(())
@@ -139,14 +144,12 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # fn main() {}
 /// ```
 ///
-/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root(origin)` as the first line of the function.
-///
 /// ## Multiple Module Instances Example
 ///
-/// A Substrate module can be built such that multiple instances of the same module can be used within a single runtime.
-/// For example, the [Balances module](../srml_balances/index.html) can be added multiple times to your runtime
-/// in order to support multiple, independent currencies for your blockchain. Here is an example of how you would declare
-/// such a module using the `decl_module!` macro:
+/// A Substrate module can be built such that multiple instances of the same module can be used within a single
+/// runtime. For example, the [Balances module](../srml_balances/index.html) can be added multiple times to your
+/// runtime in order to support multiple, independent currencies for your blockchain. Here is an example of how
+/// you would declare such a module using the `decl_module!` macro:
 ///
 /// ```
 /// # #[macro_use]
@@ -156,7 +159,6 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
 /// # impl Instance for DefaultInstance {}
-///
 /// pub trait Trait<I: Instance=DefaultInstance>: system::Trait {}
 ///
 /// decl_module! {
@@ -179,7 +181,8 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// * `on_initialize`: Executes at the beginning of a block.
 /// * `on_finalize`: Executes at the end of a block.
-/// * `offchain_worker`: Executes at the beginning of a block and produces extrinsics for a future block upon completion.
+/// * `offchain_worker`: Executes at the beginning of a block and produces extrinsics for a future block
+/// upon completion.
 #[macro_export]
 macro_rules! decl_module {
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
