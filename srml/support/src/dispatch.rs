@@ -78,13 +78,18 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # use srml_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+///
+/// 		// Private functions are dispatchable, but not available to other
+/// 		// SRML modules.
 /// 		fn my_function(origin, var: u64) -> Result {
 ///				// Your implementation
 ///				Ok(())
 /// 		}
 ///
-///			// Public functions are easily accessible to other modules.
+///			// Public functions are both dispatchable and available to other
+/// 		// SRML modules.
 ///			pub fn my_public_function(origin) -> Result {
+/// 			// Your implementation
 ///				Ok(())
 /// 		}
 ///		}
