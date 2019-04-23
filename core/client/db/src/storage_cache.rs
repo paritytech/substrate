@@ -132,7 +132,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		}
 	}
 
-	fn storage_insert(&self, cache: &mut Cache<B, H>, k: StorageValue, v: Option<StorageValue>) {
+	fn storage_insert(cache: &mut Cache<B, H>, k: StorageValue, v: Option<StorageValue>) {
 		if let Some(v_) = &v {
 			while cache.storage_used_size + v_.len() > cache.shared_cache_size {
 				// pop until space constraint satisfied
@@ -148,7 +148,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		cache.storage.insert(k, v);
 	}
 
-	fn storage_remove(&self,
+	fn storage_remove(
 		storage: &mut LruCache<StorageKey, Option<StorageValue>>,
 		k: &StorageKey,
 		storage_used_size: &mut usize,
@@ -189,7 +189,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = true;
 					for a in &m.storage {
 						trace!("Reverting enacted key {:?}", a);
-						self.storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
+						CachingState::<H, S, B>::storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
 					}
 					false
 				} else {
@@ -205,7 +205,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = false;
 					for a in &m.storage {
 						trace!("Retracted key {:?}", a);
-						self.storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
+						CachingState::<H, S, B>::storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
 					}
 					false
 				} else {
@@ -228,7 +228,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			if is_best {
 				trace!("Committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 				for (k, v) in local_cache.storage.drain() {
-					self.storage_insert(cache, k, v);
+					CachingState::<H, S, B>::storage_insert(cache, k, v);
 				}
 				for (k, v) in local_cache.hashes.drain() {
 					cache.hashes.insert(k, v);
@@ -248,7 +248,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				modifications.insert(k.clone());
 				if is_best {
 					cache.hashes.remove(&k);
-					self.storage_insert(cache, k, v);
+					CachingState::<H, S, B>::storage_insert(cache, k, v);
 				}
 			}
 			// Save modified storage. These are ordered by the block number.
