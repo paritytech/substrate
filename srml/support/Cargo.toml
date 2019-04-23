@@ -20,6 +20,7 @@ bitmask = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
+srml-system = { path = "../system", default-features = false }
 
 [features]
 default = ["std"]

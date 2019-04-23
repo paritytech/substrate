@@ -3511,6 +3511,7 @@ dependencies = [
  "sr-std 1.0.0",
  "srml-metadata 1.0.0",
  "srml-support-procedural 1.0.0",
+ "srml-system 1.0.0",
  "substrate-inherents 1.0.0",
 ]
 
