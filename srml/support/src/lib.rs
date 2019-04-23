@@ -354,7 +354,7 @@ mod tests {
 				name: DecodeDifferent::Encode("Data"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -366,7 +366,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -378,7 +378,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData2"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -390,7 +390,7 @@ mod tests {
 				name: DecodeDifferent::Encode("DataDM"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("u64"),
@@ -405,7 +405,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericDataDM"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
@@ -420,7 +420,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData2DM"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
