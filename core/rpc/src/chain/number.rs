@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use primitives::U256;
 use runtime_primitives::traits;
 
