@@ -170,7 +170,6 @@ mod tests {
 			true,
 			None,
 		).0;
-		println!("{:?}", r);
 		assert!(r.is_ok());
 		let v = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
