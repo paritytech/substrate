@@ -55,6 +55,23 @@ pub fn blake2_128(data: &[u8]) -> [u8; 16] {
 	r
 }
 
+/// Do a XX 64-bit hash and place result in `dest`.
+pub fn twox_64_into(data: &[u8], dest: &mut [u8; 8]) {
+	use ::core::hash::Hasher;
+	let mut h0 = twox_hash::XxHash::with_seed(0);
+	h0.write(data);
+	let r0 = h0.finish();
+	use byteorder::{ByteOrder, LittleEndian};
+	LittleEndian::write_u64(&mut dest[0..8], r0);
+}
+
+/// Do a XX 64-bit hash and return result.
+pub fn twox_64(data: &[u8]) -> [u8; 8] {
+	let mut r: [u8; 8] = [0; 8];
+	twox_64_into(data, &mut r);
+	r
+}
+
 /// Do a XX 128-bit hash and place result in `dest`.
 pub fn twox_128_into(data: &[u8], dest: &mut [u8; 16]) {
 	use ::core::hash::Hasher;

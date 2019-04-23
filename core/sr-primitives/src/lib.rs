@@ -88,14 +88,6 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
-	/// Hash given slice.
-	///
-	/// Default to xx128 hashing.
-	fn hash(data: &[u8]) -> [u8; 16] {
-		let r = runtime_io::twox_128(data);
-		log::trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
-		r
-	}
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		let mut storage = Default::default();
