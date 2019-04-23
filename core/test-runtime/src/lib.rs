@@ -428,6 +428,7 @@ cfg_if! {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
 						expected_block_time: 1,
+						threshold: std::u64::MAX,
 					}
 				}
 			}
@@ -441,7 +442,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}
@@ -557,6 +558,7 @@ cfg_if! {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
 						expected_block_time: 1,
+						threshold: core::u64::MAX,
 					}
 				}
 			}
@@ -570,7 +572,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}

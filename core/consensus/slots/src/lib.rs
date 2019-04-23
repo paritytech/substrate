@@ -29,6 +29,7 @@ pub use slots::{Slots, SlotInfo, slot_now};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::fmt::Debug;
+use std::ops::Deref;
 use futures::prelude::*;
 use futures::{Future, IntoFuture, future::{self, Either}};
 use log::{error, warn, debug, info};
@@ -237,7 +238,14 @@ impl SlotData for u64 {
 /// A slot duration. Create with `get_or_compute`.
 // The internal member should stay private here.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub struct SlotDuration<T: Clone>(T);
+pub struct SlotDuration<T>(T);
+
+impl<T> Deref for SlotDuration<T> {
+	type Target = T;
+    fn deref(&self) -> &T {
+		&self.0
+	}
+}
 
 impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
 	/// Get the slot duration in milliseconds

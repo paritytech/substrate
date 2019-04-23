@@ -31,10 +31,7 @@ use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
 };
-use std::{
-	sync::Arc,
-	u64,
-};
+use std::sync::Arc;
 use parity_codec::{Decode, Encode, Input};
 use primitives::{
 	crypto::Pair,
@@ -160,10 +157,10 @@ impl Decode for BabeSeal {
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::babe::SlotDuration` can be eliminated.
-pub struct SlotDuration(slots::SlotDuration<BabeConfiguration>);
+// and `super::babe::Config` can be eliminated.
+pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
-impl SlotDuration {
+impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: Block, C>(client: &C) -> CResult<Self>
@@ -183,6 +180,11 @@ impl SlotDuration {
 	/// Get the slot duration in milliseconds.
 	pub fn get(&self) -> u64 {
 		self.0.slot_duration()
+	}
+
+	/// Retrieve the threshold for BABE
+	pub fn threshold(&self) -> u64 {
+		self.0.threshold()
 	}
 }
 
@@ -240,18 +242,50 @@ impl SlotCompatible for BabeSlotCompatible {
 	}
 }
 
+/// Parameters for BABE.
+pub struct BabeParams<C, E, I, SO, OnExit> {
+
+	/// The configuration for BABE.  Includes the slot duration, threshold, and
+	/// other parameters.
+	pub config: Config,
+
+	/// The key of the node we are running on.
+	pub local_key: Arc<sr25519::Pair>,
+
+	/// The client to use
+	pub client: Arc<C>,
+
+	/// A block importer
+	pub block_import: Arc<I>,
+
+	/// The environment
+	pub env: Arc<E>,
+
+	/// A sync oracle
+	pub sync_oracle: SO,
+
+	/// Exit callback.
+	pub on_exit: OnExit,
+
+	/// Providers for inherent data.
+	pub inherent_data_providers: InherentDataProviders,
+
+	/// Force authoring of blocks even if we are offline
+	pub force_authoring: bool,
+}
+
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, E, I, SO, Error, OnExit>(
-	slot_duration: SlotDuration,
-	local_key: Arc<sr25519::Pair>,
-	client: Arc<C>,
-	block_import: Arc<I>,
-	env: Arc<E>,
-	sync_oracle: SO,
-	on_exit: OnExit,
-	inherent_data_providers: InherentDataProviders,
-	force_authoring: bool,
-) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
+pub fn start_babe<B, C, E, I, SO, Error, OnExit>(BabeParams {
+	config,
+	local_key,
+	client,
+	block_import,
+	env,
+	sync_oracle,
+	on_exit,
+	inherent_data_providers,
+	force_authoring,
+}: BabeParams<C, E, I, SO, OnExit>) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
 	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -272,9 +306,10 @@ pub fn start_babe<B, C, E, I, SO, Error, OnExit>(
 		inherent_data_providers: inherent_data_providers.clone(),
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
+		threshold: config.threshold(),
 	};
 	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
-		slot_duration.0,
+		config.0,
 		client,
 		Arc::new(worker),
 		sync_oracle,
@@ -291,6 +326,7 @@ struct BabeWorker<C, E, I, SO> {
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
+	threshold: u64,
 }
 
 impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
@@ -359,12 +395,12 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 			0,
 			&authorities,
 			&pair,
-			u64::MAX,
+			self.threshold,
 		) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
 				slot_num,
-				timestamp
+				timestamp,
 			);
 			telemetry!(CONSENSUS_DEBUG; "babe.starting_authorship";
 				"slot_num" => slot_num, "timestamp" => timestamp
@@ -486,6 +522,7 @@ fn check_header<B: Block + Sized>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[Public],
+	threshold: u64,
 ) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
@@ -499,8 +536,7 @@ fn check_header<B: Block + Sized>(
 		error!(target: "babe", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
-	// FIXME!!
-	let threshold = u64::MAX;
+
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
 		Ok(CheckedHeader::Deferred(header, slot_num))
@@ -556,6 +592,7 @@ pub struct BabeVerifier<C, E> {
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: inherents::InherentDataProviders,
+	threshold: u64,
 }
 
 impl<C, E> BabeVerifier<C, E> {
@@ -630,6 +667,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			header,
 			hash,
 			&authorities[..],
+			self.threshold,
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, seal) => {
@@ -862,20 +900,21 @@ mod tests {
 			-> Arc<Self::Verifier>
 		{
 			trace!(target: "babe", "Creating a verifier");
-			let slot_duration = SlotDuration::get_or_compute(&*client)
+			let config = Config::get_or_compute(&*client)
 				.expect("slot duration available");
 			let inherent_data_providers = InherentDataProviders::new();
 			register_babe_inherent_data_provider(
 				&inherent_data_providers,
-				slot_duration.get()
+				config.get()
 			).expect("Registers babe inherent data provider");
 			trace!(target: "babe", "Provider registered");
 
-			assert_eq!(slot_duration.get(), SLOT_DURATION);
+			assert_eq!(config.get(), SLOT_DURATION);
 			Arc::new(BabeVerifier {
 				client,
 				extra: NothingExtra,
 				inherent_data_providers,
+				threshold: config.threshold(),
 			})
 		}
 
@@ -889,7 +928,6 @@ mod tests {
 			&self.peers
 		}
 
-		// IS CALLED
 		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
@@ -938,25 +976,25 @@ mod tests {
 					.for_each(move |_| Ok(()))
 			);
 
-			let slot_duration = SlotDuration::get_or_compute(&*client)
+			let config = Config::get_or_compute(&*client)
 				.expect("slot duration available");
 
 			let inherent_data_providers = InherentDataProviders::new();
 			register_babe_inherent_data_provider(
-				&inherent_data_providers, slot_duration.get()
+				&inherent_data_providers, config.get()
 			).expect("Registers babe inherent data provider");
 
-			let babe = start_babe(
-				slot_duration,
-				Arc::new(key.clone().into()),
-				client.clone(),
+			let babe = start_babe(BabeParams {
+				config,
+				local_key: Arc::new(key.clone().into()),
+				block_import: client.clone(),
 				client,
-				environ.clone(),
-				DummyOracle,
-				futures::empty(),
+				env: environ.clone(),
+				sync_oracle: DummyOracle,
+				on_exit: futures::empty(),
 				inherent_data_providers,
-				false,
-			).expect("Starts babe");
+				force_authoring: false,
+			}).expect("Starts babe");
 
 			runtime.spawn(babe);
 		}
