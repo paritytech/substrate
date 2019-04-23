@@ -386,6 +386,7 @@ mod tests {
 	use std::cell::RefCell;
 	use super::*;
 	use crate::metadata::*;
+	use crate::metadata::StorageHasher;
 	use crate::rstd::marker::PhantomData;
 	use crate::storage::hashed::generator::*;
 
@@ -628,6 +629,7 @@ mod tests {
 				name: DecodeDifferent::Encode("MAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -641,6 +643,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBMAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -654,6 +657,7 @@ mod tests {
 				name: DecodeDifferent::Encode("MAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -667,6 +671,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -680,6 +685,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -693,6 +699,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -706,6 +713,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -719,6 +727,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -732,6 +741,7 @@ mod tests {
 				name: DecodeDifferent::Encode("LINKEDMAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -745,6 +755,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBLINKEDMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -758,6 +769,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETLINKEDMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -771,6 +783,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETLINKEDMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_128,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
