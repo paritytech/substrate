@@ -127,7 +127,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ### Privileged Function Example
 ///
-/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root!(origin)`
+/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root(origin)`
 /// as the first line of the function. These functions are the same:
 ///
 /// ```
