@@ -235,7 +235,7 @@ macro_rules! __storage_items_internal {
 		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
 
-			type Hasher = $crate::Twox128;
+			type Hasher = $crate::Blake2_256;
 
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
@@ -629,7 +629,7 @@ mod tests {
 				name: DecodeDifferent::Encode("MAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -643,7 +643,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBMAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -657,7 +657,7 @@ mod tests {
 				name: DecodeDifferent::Encode("MAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -671,7 +671,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -685,7 +685,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -699,7 +699,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -713,7 +713,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -727,7 +727,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -741,7 +741,7 @@ mod tests {
 				name: DecodeDifferent::Encode("LINKEDMAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -755,7 +755,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBLINKEDMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -769,7 +769,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETLINKEDMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -783,7 +783,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETLINKEDMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
-					hasher: StorageHasher::Blake2_128,
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
