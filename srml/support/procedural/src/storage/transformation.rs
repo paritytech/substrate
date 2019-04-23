@@ -877,17 +877,17 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 	let (value_type, kind) = match storage_type {
 		DeclStorageType::Simple(ref st) => (st, DeclStorageTypeInfosKind::Simple),
 		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| HasherKind::from_set_hasher(h)).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key_type: &map.key,
 			is_linked: false,
 		}),
 		DeclStorageType::LinkedMap(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| HasherKind::from_set_hasher(h)).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key_type: &map.key,
 			is_linked: true,
 		}),
 		DeclStorageType::DoubleMap(ref map) => (&map.value, DeclStorageTypeInfosKind::DoubleMap {
-			hasher: map.hasher.as_ref().map(|h| HasherKind::from_set_hasher(h)).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key1_type: &map.key1,
 			key2_type: &map.key2.content,
 			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },

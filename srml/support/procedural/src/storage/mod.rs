@@ -197,8 +197,8 @@ enum HasherKind {
 	Twox128Concat,
 }
 
-impl HasherKind {
-	fn from_set_hasher(set_hasher: &SetHasher) -> Self {
+impl From<&SetHasher> for HasherKind {
+	fn from(set_hasher: &SetHasher) -> Self {
 		match set_hasher.inner.content {
 			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
@@ -207,7 +207,8 @@ impl HasherKind {
 			Hasher::Twox128Concat(_) => HasherKind::Twox128Concat,
 		}
 	}
-
+}
+impl HasherKind {
 	fn into_storage_hasher_struct(&self) -> TokenStream2 {
 		match self {
 			HasherKind::Blake2_256 => quote!( Blake2_256 ),
