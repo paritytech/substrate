@@ -28,7 +28,7 @@ use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
-use primitives::{blake2_128, blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
+use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -417,6 +417,30 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_chain_id() -> u64 => {
 		Ok(this.ext.chain_id())
+	},
+	ext_twox_64(data: *const u8, len: u32, out: *mut u8) => {
+		let result: [u8; 8] = if len == 0 {
+			let hashed = twox_64(&[0u8; 0]);
+			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
+			this.hash_lookup.insert(hashed.to_vec(), vec![]);
+			hashed
+		} else {
+			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_64"))?;
+			let hashed_key = twox_64(&key);
+			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
+				if let Ok(_skey) = ::std::str::from_utf8(&key) {
+					_skey
+				} else {
+					&format!("{}", HexDisplay::from(&key))
+				},
+				HexDisplay::from(&hashed_key)
+			);
+			this.hash_lookup.insert(hashed_key.to_vec(), key);
+			hashed_key
+		};
+
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_64"))?;
+		Ok(())
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result: [u8; 16] = if len == 0 {

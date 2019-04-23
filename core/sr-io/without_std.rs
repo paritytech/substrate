@@ -275,6 +275,7 @@ extern_functions! {
 	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_blake2_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_twox_64(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
@@ -577,6 +578,15 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 	let mut result: [u8; 16] = Default::default();
 	unsafe {
 		ext_twox_128.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+	}
+	result
+}
+
+/// Conduct two XX hashes to give a 64-bit result.
+pub fn twox_64(data: &[u8]) -> [u8; 8] {
+	let mut result: [u8; 8] = Default::default();
+	unsafe {
+		ext_twox_64.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }

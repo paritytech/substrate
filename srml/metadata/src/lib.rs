@@ -261,7 +261,7 @@ pub enum StorageHasher {
 	Blake2_256,
 	Twox128,
 	Twox256,
-	Twox128Concat,
+	Twox64Concat,
 }
 
 /// A storage function type.

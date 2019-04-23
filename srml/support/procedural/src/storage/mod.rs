@@ -173,7 +173,7 @@ enum Hasher {
 	Blake2_128(ext::CustomToken<Blake2_128Keyword>),
 	Twox256(ext::CustomToken<Twox256Keyword>),
 	Twox128(ext::CustomToken<Twox128Keyword>),
-	Twox128Concat(ext::CustomToken<Twox128ConcatKeyword>),
+	Twox64Concat(ext::CustomToken<Twox64ConcatKeyword>),
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -194,7 +194,7 @@ enum HasherKind {
 	Blake2_128,
 	Twox256,
 	Twox128,
-	Twox128Concat,
+	Twox64Concat,
 }
 
 impl From<&SetHasher> for HasherKind {
@@ -204,7 +204,7 @@ impl From<&SetHasher> for HasherKind {
 			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
 			Hasher::Twox256(_) => HasherKind::Twox256,
 			Hasher::Twox128(_) => HasherKind::Twox128,
-			Hasher::Twox128Concat(_) => HasherKind::Twox128Concat,
+			Hasher::Twox64Concat(_) => HasherKind::Twox64Concat,
 		}
 	}
 }
@@ -215,7 +215,7 @@ impl HasherKind {
 			HasherKind::Blake2_128 => quote!( Blake2_128 ),
 			HasherKind::Twox256 => quote!( Twox256 ),
 			HasherKind::Twox128 => quote!( Twox128 ),
-			HasherKind::Twox128Concat => quote!( Twox128Concat ),
+			HasherKind::Twox64Concat => quote!( Twox64Concat ),
 		}
 	}
 
@@ -225,7 +225,7 @@ impl HasherKind {
 			HasherKind::Blake2_128 => quote!( blake2_128 ),
 			HasherKind::Twox256 => quote!( twox_256 ),
 			HasherKind::Twox128 => quote!( twox_128 ),
-			HasherKind::Twox128Concat => quote!( twox_128_concat),
+			HasherKind::Twox64Concat => quote!( twox_64_concat),
 		}
 	}
 
@@ -235,7 +235,7 @@ impl HasherKind {
 			HasherKind::Blake2_128 => quote!( StorageHasher::Blake2_128 ),
 			HasherKind::Twox256 => quote!( StorageHasher::Twox256 ),
 			HasherKind::Twox128 => quote!( StorageHasher::Twox128 ),
-			HasherKind::Twox128Concat => quote!( StorageHasher::Twox128Concat ),
+			HasherKind::Twox64Concat => quote!( StorageHasher::Twox64Concat ),
 		}
 	}
 }
@@ -254,6 +254,6 @@ custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
 custom_keyword!(Blake2_128Keyword, "blake2_128", "Blake2_128 as keyword");
 custom_keyword!(Twox256Keyword, "twox_256", "Twox256 as keyword");
 custom_keyword!(Twox128Keyword, "twox_128", "Twox128 as keyword");
-custom_keyword!(Twox128ConcatKeyword, "twox_128_concat", "Twox128Concat as keyword");
+custom_keyword!(Twox64ConcatKeyword, "twox_64_concat", "Twox64Concat as keyword");
 custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
 custom_keyword_impl!(SetHasher, "hasher", "storage hasher");

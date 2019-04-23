@@ -20,7 +20,7 @@ use crate::codec;
 use crate::rstd::prelude::{Vec, Box};
 #[cfg(feature = "std")]
 use crate::storage::unhashed::generator::UnhashedStorage;
-use runtime_io::{twox_128, blake2_128, twox_256, blake2_256};
+use runtime_io::{twox_64, twox_128, blake2_128, twox_256, blake2_256};
 
 pub trait StorageHasher: 'static {
 	type Output: AsRef<[u8]>;
@@ -28,11 +28,11 @@ pub trait StorageHasher: 'static {
 }
 
 /// Hash storage keys with `concat(twox128(key), key)`
-pub struct Twox128Concat;
-impl StorageHasher for Twox128Concat {
+pub struct Twox64Concat;
+impl StorageHasher for Twox64Concat {
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
-		twox_128(x)
+		twox_64(x)
 			.into_iter()
 			.chain(x.into_iter())
 			.cloned()
@@ -41,9 +41,9 @@ impl StorageHasher for Twox128Concat {
 }
 
 #[test]
-fn test_twox_128_concat() {
-	let r = Twox128Concat::hash(b"foo");
-	assert_eq!(r.split_at(16), (&twox_128(b"foo")[..], &b"foo"[..]))
+fn test_twox_64_concat() {
+	let r = Twox64Concat::hash(b"foo");
+	assert_eq!(r.split_at(16), (&twox_128(b"foo")[..8], &b"foo"[..]))
 }
 
 /// Hash storage keys with blake2 128
