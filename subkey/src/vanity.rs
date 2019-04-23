@@ -105,7 +105,7 @@ pub(super) fn generate_key<C: Crypto<Seed=[u8; 32]>>(desired: &str) -> Result<Ke
 mod tests {
 	use super::*;
 	use super::super::Ed25519;
-	use substrate_primitives::Pair;
+	use substrate_primitives::{Pair, crypto::Ss58Codec};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 

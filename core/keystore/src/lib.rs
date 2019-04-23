@@ -138,6 +138,7 @@ impl Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
+	use substrate_primitives::crypto::Ss58Codec;
 
 	#[test]
 	fn basic_store() {
