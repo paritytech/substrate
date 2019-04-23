@@ -124,10 +124,8 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			c.approval_stake += into_currency(c.exposure.total);
 			use runtime_io::print;
 			if c.approval_stake.is_zero() {
-				print("++++++ An Account was dropped due to not having enough staked value");
 				None
 			} else {
-				print("++++++ An Account was passed the staking minimum funds.");
 				Some(c)
 			}
 		})

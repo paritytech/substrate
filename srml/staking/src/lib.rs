@@ -519,7 +519,7 @@ decl_storage! {
 					// parameter in the system. It should be declared, the assertion should change accordingly and it should
 					// influence the value of shift in Staking's `CurrencyToVote`.
 					assert!(
-						balance > BalanceOf::<T>::sa(min_staked_balance),
+						balance >= BalanceOf::<T>::sa(min_staked_balance),
 						"Any staked balance must be larger than 2^\\{config.min_stakable_balance_bits\\}"
 					);
 					let _ = <Module<T>>::bond(
