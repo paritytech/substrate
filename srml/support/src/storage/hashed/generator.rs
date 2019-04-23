@@ -34,7 +34,6 @@ impl StorageHasher for Twox128Concat {
 	fn hash(x: &[u8]) -> Vec<u8> {
 		twox_128(x)
 			.into_iter()
-			.cloned()
 			.chain(x.iter().cloned())
 			.collect::<Vec<_>>()
 	}
