@@ -22,7 +22,7 @@ use parity_codec::{Encode, Decode};
 use primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
 
-/// A means of determining if a vote is passed its pass threshold.
+/// A means of determining if a vote is past its pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum VoteThreshold {
