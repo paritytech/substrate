@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Assets Module
-//! <!-- Original author of paragraph: @gavofyork -->
 //!
 //! A simple, secure module for dealing with fungible assets.
 //!
