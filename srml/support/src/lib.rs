@@ -159,7 +159,7 @@ pub enum Void {}
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use serde_derive::*;
+pub use serde::{Serialize, Deserialize};
 
 /// Programatically create derivations for tuples of up to 19 elements. You provide a second macro
 /// which is called once per tuple size, along with a number of identifiers, one for each element

@@ -34,7 +34,7 @@ pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
 pub use libp2p::{identity, PeerId, core::PublicKey};
 
 use libp2p::core::nodes::ConnectedPoint;
-use serde_derive::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.

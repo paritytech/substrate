@@ -17,7 +17,7 @@
 //! Generic implementation of a digest.
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 
 use rstd::prelude::*;
 
