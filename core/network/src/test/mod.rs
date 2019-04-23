@@ -700,7 +700,7 @@ pub trait TestNetFactory: Sized {
 		}
 
 		loop {
-			debug!(target: "babe", "loop iteration");
+			debug!(target: "test_network", "loop iteration");
 			// we only deliver Status messages during start
 			let need_continue = self.route_single(true, None, &|msg| match *msg {
 				NetworkMsg::Outgoing(_, crate::message::generic::Message::Status(_)) => true,
@@ -726,7 +726,7 @@ pub trait TestNetFactory: Sized {
 		let mut to_disconnect = HashSet::new();
 		let peers = self.peers();
 		for peer in peers {
-			debug!(target: "babe", "checking peer");
+			debug!(target: "test_network", "checking peer");
 			if let Some(message) = peer.pending_message(message_filter) {
 				match message {
 					NetworkMsg::Outgoing(recipient_id, packet) => {
@@ -765,12 +765,12 @@ pub trait TestNetFactory: Sized {
 				}
 			}
 		}
-		debug!(target: "babe", "syncing queues");
+		debug!(target: "test_network", "syncing queues");
 
 		// make sure that the protocol(s) has processed all messages that have been queued
 		self.peers().iter().for_each(|peer| peer.import_queue_sync());
 
-		debug!(target: "babe", "queues synced");
+		debug!(target: "test_network", "queues synced");
 
 		had_messages
 	}

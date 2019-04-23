@@ -440,7 +440,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>) -> Option<message::BlockRequest<B>> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			if let Some(_) = peer.obsolete_requests.remove(&response.id) {
-				warn!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id,);
+				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id,);
 				return None;
 			}
 			// Clear the request. If the response is invalid peer will be disconnected anyway.
@@ -448,7 +448,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			if request.as_ref().map_or(false, |(_, r)| r.id == response.id) {
 				return request.map(|(_, r)| r)
 			}
-			warn!(target: "sync", "Unexpected response packet from {} ({})", who, response.id,);
+			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id,);
 			let severity = Severity::Bad("Unexpected response packet received from peer".to_string());
 			self.network_chan.send(NetworkMsg::ReportPeer(who, severity))
 		}
@@ -738,7 +738,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
-				warn!(
+				trace!(
+					target: "protocol",
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
@@ -750,7 +751,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
 				let reason = format!("Peer using unsupported protocol version {}", status.version);
-				warn!("Peer {:?} using unsupported protocol version {}", who, status.version);
+				trace!(target: "protocol", "Peer {:?} using unsupported protocol version {}", who, status.version);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
 					Severity::Bad(reason),

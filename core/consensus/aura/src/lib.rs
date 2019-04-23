@@ -451,7 +451,6 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
-#[forbid(warnings)]
 fn check_header<B: Block, P: Pair>(
 	slot_now: u64,
 	mut header: B::Header,

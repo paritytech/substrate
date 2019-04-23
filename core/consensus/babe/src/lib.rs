@@ -14,9 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! # BABE consensus
+//!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
 //!
-//! Note that 1 second slot time is optimal.
+//! # Stability
+//!
+//! This crate is highly unstable and experimental.  Breaking changes may
+//! happen at any point.  This crate is also missing features, such as banning
+//! of malicious validators, that are essential for a production network.
 #![forbid(unsafe_code, missing_docs)]
 #![deny(warnings)]
 extern crate core;
@@ -27,8 +33,6 @@ use runtime_primitives::traits::{
 };
 use std::{
 	sync::Arc,
-	time::Duration,
-	thread,
 	u64,
 };
 use parity_codec::{Decode, Encode, Input};
@@ -56,7 +60,7 @@ use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 };
 use srml_babe::{
 	BabeInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
+	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
 use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue};
@@ -77,7 +81,7 @@ use slots::{SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 use rand::Rng;
 
 /// A BABE seal.  It includes:
-/// 
+///
 /// * The public key
 /// * The VRF proof
 /// * The signature
@@ -89,6 +93,9 @@ pub struct BabeSeal {
 	signature: LocalizedSignature,
 	slot_num: u64,
 }
+
+/// The prefix used by BABE for its VRF keys.
+pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
 macro_rules! babe_assert_eq {
 	($a: expr, $b: expr) => {
@@ -185,17 +192,17 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 
 /// A digest item which is usable with BABE consensus.
 pub trait CompatibleDigestItem: Sized {
-	/// Construct a digest item which contains a slot number and a signature on the
-	/// hash.
+	/// Construct a digest item which contains a slot number and a signature
+	/// on the hash.
 	fn babe_seal(signature: BabeSeal) -> Self;
 
 	/// If this item is an Babe seal, return the slot number and signature.
 	fn as_babe_seal(&self) -> Option<BabeSeal>;
 }
 
-impl<Hash: core::fmt::Debug> CompatibleDigestItem for generic::DigestItem<Hash, Public, primitives::sr25519::Signature> {
-	/// Construct a digest item which is aaAASSAAAAAASDC   a slot number and a signature on the
-	/// hash.
+impl<T: core::fmt::Debug, Hash: core::fmt::Debug> CompatibleDigestItem for generic::DigestItem<Hash, Public, T> {
+	/// Construct a digest item which contains a slot number and a signature
+	/// on the hash.
 	fn babe_seal(signature: BabeSeal) -> Self {
 		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
 	}
@@ -205,15 +212,15 @@ impl<Hash: core::fmt::Debug> CompatibleDigestItem for generic::DigestItem<Hash, 
 		match self {
 			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => {
 				match Decode::decode(&mut &seal[..]) {
-					s@Some(_) => s,
-					s@None => {
-						warn!(target: "babe", "Failed to decode {:?}", seal);
+					s @ Some(_) => s,
+					s @ None => {
+						info!(target: "babe", "Failed to decode {:?}", seal);
 						s
 					}
 				}
 			}
 			_ => {
-				warn!(target: "babe", "Invalid consensus: {:?}!", self);
+				info!(target: "babe", "Invalid consensus: {:?}!", self);
 				None
 			}
 		}
@@ -346,7 +353,14 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 
 		// FIXME replace the dummy empty slices with real data
 		let (proposal_work, vrf_output, proof) = if let Some((inout, proof, _batchable_proof)) = author_block(
-			&[0u8; 0], slot_info.number, &[0u8; 0],	0, &authorities, &pair, u64::MAX) {
+			&[0u8; 0],
+			slot_info.number,
+			&[0u8; 0],
+			0,
+			&authorities,
+			&pair,
+			u64::MAX,
+		) {
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
 				slot_num,
@@ -372,9 +386,14 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 			// deadline our production to approx. the end of the
 			// slot
 			(Timeout::new(
-				proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
+				proposer.propose(
+					slot_info.inherent_data,
+					remaining_duration,
+				).into_future(),
 				remaining_duration,
-			), inout.to_output(), proof)
+			),
+			inout.to_output(),
+			proof)
 		} else {
 			return Box::new(future::ok(()));
 		};
@@ -470,7 +489,7 @@ fn check_header<B: Block + Sized>(
 ) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
-	trace!("Checking header");
+	trace!(target: "babe", "Checking header");
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
@@ -505,7 +524,7 @@ fn check_header<B: Block + Sized>(
 					format!("VRF verification failed")
 				})?
 			};
-			let r: u64 = inout.make_chacharng(b"substrate-babe-vrf").gen();
+			let r: u64 = inout.make_chacharng(BABE_VRF_PREFIX).gen();
 			if r < threshold {
 				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
@@ -545,12 +564,9 @@ impl<C, E> BabeVerifier<C, E> {
 		block: B,
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
-		timestamp_now: u64,
 	) -> Result<(), String>
 		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
 	{
-		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
-
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -560,29 +576,7 @@ impl<C, E> BabeVerifier<C, E> {
 		if !inherent_res.ok() {
 			inherent_res
 				.into_errors()
-				.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
-					Some(TIError::ValidAtTimestamp(timestamp)) => {
-						// halt import until timestamp is valid.
-						// reject when too far ahead.
-						if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-							return Err("Rejecting block too far in future".into());
-						}
-
-						let diff = timestamp.saturating_sub(timestamp_now);
-						info!(
-							target: "babe",
-							"halting for block {} seconds in the future",
-							diff
-						);
-						telemetry!(CONSENSUS_INFO; "babe.halting_for_future_block";
-							"diff" => ?diff
-						);
-						thread::sleep(Duration::from_secs(diff));
-						Ok(())
-					},
-					Some(TIError::Other(e)) => Err(e.into()),
-					None => Err(self.inherent_data_providers.error_to_string(&i, &e)),
-				})
+				.try_for_each(|(i, e)| Err(self.inherent_data_providers.error_to_string(&i, &e)))
 		} else {
 			Ok(())
 		}
@@ -617,7 +611,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
 		trace!(target: "babe", "Verifying something");
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
-		let (timestamp_now, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
+		let (_, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
@@ -649,19 +643,11 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 					inherent_data.babe_replace_inherent_data(slot_num);
 					let block = B::new(pre_header.clone(), inner_body);
 
-					// skip the inherents verification if the runtime API is old.
-					if self.client
-						.runtime_api()
-						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
-						.map_err(|e| format!("{:?}", e))?
-					{
-						self.check_inherents(
-							block.clone(),
-							BlockId::Hash(parent_hash),
-							inherent_data,
-							timestamp_now,
-						)?;
-					}
+					self.check_inherents(
+						block.clone(),
+						BlockId::Hash(parent_hash),
+						inherent_data,
+					)?;
 
 					let (_, inner_body) = block.deconstruct();
 					body = Some(inner_body);
@@ -750,7 +736,7 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 }
 
 /// Pieces:
-/// 
+///
 /// 1. VRF winnership
 /// 2. * VRF randomness
 ///    * relative time
@@ -771,7 +757,7 @@ fn make_transcript(
 }
 
 /// Hash into chain:
-/// 
+///
 /// * slot number
 /// * epoch
 /// * genesis hash
@@ -796,7 +782,7 @@ fn author_block(
 		);
 		get_keypair(key).vrf_sign(transcript)
 	};
-	let r: u64 = inout.make_chacharng(b"substrate-babe-vrf").gen();
+	let r: u64 = inout.make_chacharng(BABE_VRF_PREFIX).gen();
 	if r < threshold {
 		Some((inout, proof, batchable_proof))
 	} else {
@@ -808,11 +794,6 @@ fn author_block(
 #[allow(dead_code, unused_imports)]
 mod tests {
 	use super::*;
-	#[test]
-	fn can_searialize_block() {
-		drop(env_logger::try_init());
-		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
-	}
 
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
@@ -826,7 +807,7 @@ mod tests {
 	use test_client;
 	use futures::stream::Stream;
 	use log::error;
-	use std::u64;
+	use std::{u64, time::Duration};
 
 	type Error = client::error::Error;
 
@@ -920,6 +901,12 @@ mod tests {
 		fn set_started(&mut self, new: bool) {
 			self.started = new;
 		}
+	}
+
+	#[test]
+	fn can_serialize_block() {
+		drop(env_logger::try_init());
+		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
 	}
 
 	#[test]

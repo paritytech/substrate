@@ -14,20 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for Babe consensus. This manages offline reporting.
+//! Consensus extension module for Babe consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code, warnings)]
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{As, Zero};
-use timestamp::OnTimestampSet;
+use primitives::traits::As;
+use timestamp::{OnTimestampSet, Trait};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use parity_codec::Decode;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -104,20 +103,6 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-/// Something which can handle Babe consensus reports.
-pub trait HandleReport {
-	fn handle_report(report: BabeReport);
-}
-
-impl HandleReport for () {
-	fn handle_report(_report: BabeReport) { }
-}
-
-pub trait Trait: timestamp::Trait {
-	/// The logic for handling reports.
-	type HandleReport: HandleReport;
-}
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		// The last timestamp.
@@ -129,34 +114,6 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
 }
 
-/// A report of skipped authorities in babe.
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct BabeReport {
-	// The first skipped slot.
-	start_slot: usize,
-	// The number of times authorities were skipped.
-	skipped: usize,
-}
-
-impl BabeReport {
-	/// Call the closure with (validator_indices, punishment_count) for each
-	/// validator to punish.
-	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
-		where F: FnMut(usize, usize)
-	{
-		// If all validators have been skipped, then it implies some sort of 
-		// systematic problem common to all rather than a minority of validators
-		// unfulfilling their specific duties. In this case, it doesn't make
-		// sense to punish anyone, so we guard against it.
-		if self.skipped < validator_count {
-			for index in 0..self.skipped {
-				punish_with((self.start_slot + index) % validator_count, 1);
-			}
-		}
-	}
-}
-
 impl<T: Trait> Module<T> {
 	/// Determine the Babe slot-duration based on the timestamp module configuration.
 	pub fn slot_duration() -> u64 {
@@ -164,56 +121,10 @@ impl<T: Trait> Module<T> {
 		// the majority of their slot.
 		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
 	}
-
-	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
-		let last = Self::last();
-		<Self as Store>::LastTimestamp::put(now.clone());
-
-		if last == T::Moment::zero() {
-			return;
-		}
-
-		assert!(slot_duration > T::Moment::zero(), "Babe slot duration cannot be zero.");
-
-		let last_slot = last / slot_duration.clone();
-		let first_skipped = last_slot.clone() + T::Moment::sa(1);
-		let cur_slot = now / slot_duration;
-
-		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
-		if cur_slot == first_skipped { return }
-
-		let slot_to_usize = |slot: T::Moment| { slot.as_() as usize };
-
-		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
-
-		H::handle_report(BabeReport {
-			start_slot: slot_to_usize(first_skipped),
-			skipped: slot_to_usize(skipped_slots),
-		})
-	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set::<T::HandleReport>(moment, T::Moment::sa(Self::slot_duration()))
-	}
-}
-
-/// A type for performing slashing based on babe reports.
-pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
-
-impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
-	fn handle_report(report: BabeReport) {
-		let validators = session::Module::<T>::validators();
-
-		report.punish(
-			validators.len(),
-			|idx, slash_count| {
-				let v = validators[idx].clone();
-				staking::Module::<T>::on_offline_validator(v, slash_count);
-			}
-		);
-	}
+	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
@@ -235,7 +146,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let seal_slot = data.babe_inherent_data()?;
 
-		if timestamp_based_slot == seal_slot || true {
+		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
 			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())

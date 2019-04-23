@@ -388,7 +388,7 @@ pub struct RunCmd {
 	#[structopt(flatten)]
 	pub keyring: Keyring,
 
-	#[allow(missing_docs)]
+	/// Enable authoring even when offline
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 }
