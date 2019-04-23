@@ -35,7 +35,7 @@ pub use once_cell;
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::hashed::generator::{HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128};
+pub use self::storage::hashed::generator::{HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox128Concat};
 pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]
@@ -209,11 +209,11 @@ mod tests {
 
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
-			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
-			pub GenericData get(generic_data): linked_map T::BlockNumber => T::BlockNumber;
+			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map hasher(twox_128_concat) u32 => u64;
+			pub GenericData get(generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
 
-			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map u32, blake2_256(u32) => u64;
+			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map hasher(twox_128_concat) u32, blake2_256(u32) => u64;
 			pub GenericDataDM: double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
 			pub GenericData2DM: double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
 		}
@@ -354,7 +354,7 @@ mod tests {
 				name: DecodeDifferent::Encode("Data"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Blake2_256,
+					hasher: StorageHasher::Twox128Concat,
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -366,7 +366,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Blake2_256,
+					hasher: StorageHasher::Twox128,
 					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -390,7 +390,7 @@ mod tests {
 				name: DecodeDifferent::Encode("DataDM"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_256,
+					hasher: StorageHasher::Twox128Concat,
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("u64"),
