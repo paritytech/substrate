@@ -106,6 +106,7 @@ use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
+use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
@@ -159,7 +160,11 @@ where
 		let mut buf = Vec::new();
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
-		T::Hashing::hash(&buf[..]).as_ref().into()
+
+		CHILD_STORAGE_KEY_PREFIX.iter()
+			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
+			.cloned()
+			.collect()
 	}
 }
 
