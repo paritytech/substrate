@@ -235,6 +235,8 @@ macro_rules! __storage_items_internal {
 		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
 
+			type Hasher = $crate::Twox128;
+
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
 				$prefix

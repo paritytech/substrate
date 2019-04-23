@@ -162,7 +162,6 @@ pub trait StorageValue<T: codec::Codec> {
 
 /// A strongly-typed list in storage.
 pub trait StorageList<T: codec::Codec> {
-	type Hasher: StorageHasher;
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
