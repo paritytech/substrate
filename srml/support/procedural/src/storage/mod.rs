@@ -187,13 +187,48 @@ struct SetHasher {
 	pub inner: ext::Parens<Hasher>,
 }
 
-impl SetHasher {
-	fn into_storage_hasher(&self) -> TokenStream2 {
-		match self.inner.content {
-			Hasher::Blake2_256(_) => quote!( Blake2_256 ),
-			Hasher::Blake2_128(_) => quote!( Blake2_128 ),
-			Hasher::Twox256(_) => quote!( Twox256 ),
-			Hasher::Twox128(_) => quote!( Twox128 ),
+#[derive(Debug, Clone)]
+enum HasherKind {
+	Blake2_256,
+	Blake2_128,
+	Twox256,
+	Twox128,
+}
+
+impl HasherKind {
+	fn from_set_hasher(set_hasher: &SetHasher) -> Self {
+		match set_hasher.inner.content {
+			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
+			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
+			Hasher::Twox256(_) => HasherKind::Twox256,
+			Hasher::Twox128(_) => HasherKind::Twox128,
+		}
+	}
+
+	fn into_storage_hasher_struct(&self) -> TokenStream2 {
+		match self {
+			HasherKind::Blake2_256 => quote!( Blake2_256 ),
+			HasherKind::Blake2_128 => quote!( Blake2_128 ),
+			HasherKind::Twox256 => quote!( Twox256 ),
+			HasherKind::Twox128 => quote!( Twox128 ),
+		}
+	}
+
+	fn into_hashable_fn(&self) -> TokenStream2 {
+		match self {
+			HasherKind::Blake2_256 => quote!( blake2_256 ),
+			HasherKind::Blake2_128 => quote!( blake2_128 ),
+			HasherKind::Twox256 => quote!( twox_256 ),
+			HasherKind::Twox128 => quote!( twox_128 ),
+		}
+	}
+
+	fn into_metadata(&self) -> TokenStream2 {
+		match self {
+			HasherKind::Blake2_256 => quote!( StorageHasher::Blake2_256 ),
+			HasherKind::Blake2_128 => quote!( StorageHasher::Blake2_128 ),
+			HasherKind::Twox256 => quote!( StorageHasher::Twox256 ),
+			HasherKind::Twox128 => quote!( StorageHasher::Twox128 ),
 		}
 	}
 }

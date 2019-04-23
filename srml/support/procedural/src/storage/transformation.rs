@@ -590,13 +590,13 @@ fn decl_storage_items(
 				i.simple_value()
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked: false, hasher } => {
-				i.map(hasher, key_type)
+				i.map(hasher.into_storage_hasher_struct(), key_type)
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked: true, hasher } => {
-				i.linked_map(hasher, key_type)
+				i.linked_map(hasher.into_storage_hasher_struct(), key_type)
 			},
 			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher, hasher } => {
-				i.double_map(hasher, key1_type, key2_type, key2_hasher)
+				i.double_map(hasher.into_hashable_fn(), key1_type, key2_type, key2_hasher)
 			},
 		};
 		impls.extend(implementation)
@@ -733,9 +733,11 @@ fn store_functions_to_metadata (
 				}
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked, hasher } => {
+				let hasher = hasher.into_metadata();
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
 					#scrate::metadata::StorageFunctionType::Map {
+						hasher: #scrate::metadata::#hasher,
 						key: #scrate::metadata::DecodeDifferent::Encode(#kty),
 						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
 						is_linked: #is_linked,
@@ -743,11 +745,13 @@ fn store_functions_to_metadata (
 				}
 			},
 			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher, hasher } => {
+				let hasher = hasher.into_metadata();
 				let k1ty = clean_type_string(&quote!(#key1_type).to_string());
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
 				let k2_hasher = clean_type_string(&key2_hasher.to_string());
 				quote!{
 					#scrate::metadata::StorageFunctionType::DoubleMap {
+						hasher: #scrate::metadata::#hasher,
 						key1: #scrate::metadata::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::metadata::DecodeDifferent::Encode(#k2ty),
 						value: #scrate::metadata::DecodeDifferent::Encode(#styp),
@@ -848,12 +852,12 @@ pub(crate) struct DeclStorageTypeInfos<'a> {
 enum DeclStorageTypeInfosKind<'a> {
 	Simple,
 	Map {
-		hasher: TokenStream2,
+		hasher: HasherKind,
 		key_type: &'a syn::Type,
 		is_linked: bool,
 	},
 	DoubleMap {
-		hasher: TokenStream2,
+		hasher: HasherKind,
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
 		key2_hasher: TokenStream2,
@@ -873,17 +877,17 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 	let (value_type, kind) = match storage_type {
 		DeclStorageType::Simple(ref st) => (st, DeclStorageTypeInfosKind::Simple),
 		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| h.into_storage_hasher()).unwrap_or_else(|| quote! (Blake2_128)),
+			hasher: map.hasher.as_ref().map(|h| HasherKind::from_set_hasher(h)).unwrap_or(HasherKind::Blake2_128),
 			key_type: &map.key,
 			is_linked: false,
 		}),
 		DeclStorageType::LinkedMap(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| h.into_storage_hasher()).unwrap_or_else(|| quote! (Blake2_128)),
+			hasher: map.hasher.as_ref().map(|h| HasherKind::from_set_hasher(h)).unwrap_or(HasherKind::Blake2_128),
 			key_type: &map.key,
 			is_linked: true,
 		}),
 		DeclStorageType::DoubleMap(ref map) => (&map.value, DeclStorageTypeInfosKind::DoubleMap {
-			hasher: map.hasher.as_ref().map(|h| quote! ( #h )).unwrap_or_else(|| quote! ( blake2_128 )),
+			hasher: map.hasher.as_ref().map(|h| HasherKind::from_set_hasher(h)).unwrap_or(HasherKind::Blake2_128),
 			key1_type: &map.key1,
 			key2_type: &map.key2.content,
 			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },
