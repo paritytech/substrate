@@ -17,7 +17,7 @@
 #![recursion_limit="128"]
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::rstd::prelude::*;
 use srml_support::rstd as rstd;
@@ -168,7 +168,7 @@ mod module1 {
 	>;
 
 	/// A logs in this module.
-	#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
 	pub enum RawLog<T, I> {
 		_Phantom(rstd::marker::PhantomData<(T, I)>),
@@ -242,7 +242,7 @@ mod module2 {
 	>;
 
 	/// A logs in this module.
-	#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(serde::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
 	pub enum RawLog<T, I=DefaultInstance> {
 		_Phantom(rstd::marker::PhantomData<(T, I)>),
