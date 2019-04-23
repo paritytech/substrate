@@ -17,28 +17,34 @@
 use futures::{future, stream, prelude::*, try_ready};
 use rand::seq::SliceRandom;
 use std::io;
-use substrate_network_libp2p::{CustomMessage, multiaddr::Protocol, ServiceEvent, build_multiaddr};
+use substrate_network_libp2p::{CustomMessage, Multiaddr, multiaddr::Protocol, ServiceEvent, build_multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
+fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p::Service<TMsg>>
 	where TMsg: CustomMessage + Send + 'static
 {
 	let mut result: Vec<substrate_network_libp2p::Service<_>> = Vec::with_capacity(num);
+	let mut first_addr = None::<Multiaddr>;
 
-	for _ in 0 .. num {
+	for index in 0 .. num {
 		let mut boot_nodes = Vec::new();
-		if !result.is_empty() {
-			let mut bootnode = result[0].listeners().next().unwrap().clone();
-			bootnode.append(Protocol::P2p(result[0].peer_id().clone().into()));
-			boot_nodes.push(bootnode.to_string());
+
+		if let Some(first_addr) = first_addr.as_ref() {
+			boot_nodes.push(first_addr.clone()
+				.with(Protocol::P2p(result[0].peer_id().clone().into()))
+				.to_string());
 		}
 
 		let config = substrate_network_libp2p::NetworkConfiguration {
-			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0u16)]],
+			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(base_port + index as u16)]],
 			boot_nodes,
 			..substrate_network_libp2p::NetworkConfiguration::default()
 		};
+
+		if first_addr.is_none() {
+			first_addr = Some(config.listen_addresses.iter().next().unwrap().clone());
+		}
 
 		let proto = substrate_network_libp2p::RegisteredProtocol::new(&b"tst"[..], &[1]);
 		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
@@ -50,7 +56,7 @@ fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
 #[test]
 fn basic_two_nodes_connectivity() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2, 50400).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -90,7 +96,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	const NUM_PACKETS: u32 = 5000;
 
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2, 50450).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -138,7 +144,7 @@ fn many_nodes_connectivity() {
 	// increased in the `NetworkConfiguration`.
 	const NUM_NODES: usize = 25;
 
-	let mut futures = build_nodes::<Vec<u8>>(NUM_NODES)
+	let mut futures = build_nodes::<Vec<u8>>(NUM_NODES, 50500)
 		.into_iter()
 		.map(move |mut node| {
 			let mut num_connecs = 0;
@@ -194,7 +200,7 @@ fn many_nodes_connectivity() {
 #[test]
 fn basic_two_nodes_requests_in_parallel() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<(Option<u64>, Vec<u8>)>(2).into_iter();
+		let mut l = build_nodes::<(Option<u64>, Vec<u8>)>(2, 50550).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
