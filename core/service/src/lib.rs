@@ -293,6 +293,8 @@ impl<Components: components::Components> Service<Components> {
 
 
 		// RPC
+		let is_authority = config.roles == Roles::AUTHORITY;
+
 		let system_info = rpc::apis::system::SystemInfo {
 			chain_name: config.chain_spec.name().into(),
 			impl_name: config.impl_name.into(),
@@ -301,12 +303,12 @@ impl<Components: components::Components> Service<Components> {
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(),
+			transaction_pool.clone(), if is_authority { Some(inherents_pool.clone()) } else { None },
 		)?;
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
 			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();

@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use log::warn;
 use client::{self, Client};
+use inherents::pool::InherentsPool;
 use parity_codec::{Encode, Decode};
 use transaction_pool::{
 	txpool::{
@@ -68,12 +69,16 @@ pub trait AuthorApi<Hash, BlockHash> {
 	fn unwatch_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
+type Extrinsic<P> = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic;
+
 /// Authoring API
 pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Substrate client
 	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
-	/// Extrinsic pool
-	pool: Arc<Pool<P>>,
+	/// Transactions (Signed Extrinsics) pool
+	transaction_pool: Arc<Pool<P>>,
+	/// Inherents (Unsigned Extrinsics) pool
+	inherent_pool: Option<Arc<InherentsPool<Extrinsic<P>>>>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
 }
@@ -82,12 +87,14 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 	/// Create new instance of Authoring API.
 	pub fn new(
 		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
-		pool: Arc<Pool<P>>,
+		transaction_pool: Arc<Pool<P>>,
+		inherent_pool: Option<Arc<InherentsPool<Extrinsic<P>>>>,
 		subscriptions: Subscriptions,
 	) -> Self {
 		Author {
 			client,
-			pool,
+			transaction_pool,
+			inherent_pool,
 			subscriptions,
 		}
 	}
@@ -104,25 +111,36 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	type Metadata = crate::metadata::Metadata;
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
-		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
+		let xt = <Extrinsic<P>>::decode(&mut &ext[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
 		let best_block_hash = self.client.info()?.chain.best_hash;
-		self.pool
-			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
-			.map_err(|e| e.into_pool_error()
-				.map(Into::into)
-				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
-			)
+		let res = self.transaction_pool
+			.submit_one(&generic::BlockId::hash(best_block_hash), xt.clone())
+			.map_err(|e| e.into_pool_error());
+
+		match res {
+			Ok(hash) => Ok(hash),
+			Err(Ok(pool_error)) => match (&self.inherent_pool, pool_error.kind()) {
+				(&Some(ref inherent_pool), &transaction_pool::txpool::error::ErrorKind::InvalidTransaction(_)) => {
+					warn!("Submitted extrinsic doesn't look like a valid transaction ({:?}). Assuming it's inherent.", pool_error);
+					let hash = self.transaction_pool.hash_of(&xt);
+					inherent_pool.add(xt);
+					Ok(hash)
+				},
+				_ => Err(pool_error.into()),
+			},
+			Err(Err(e)) => Err(error::ErrorKind::Verification(Box::new(e)).into()),
+		}
 	}
 
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {
-		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
+		Ok(self.transaction_pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
-			self.pool
+			self.transaction_pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
 				.map_err(|e| e.into_pool_error()
 					.map(Into::into)

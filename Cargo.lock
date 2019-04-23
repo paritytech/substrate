@@ -4240,6 +4240,7 @@ dependencies = [
  "substrate-client 1.0.0",
  "substrate-consensus-common 1.0.0",
  "substrate-executor 1.0.0",
+ "substrate-inherents 1.0.0",
  "substrate-network 0.1.0",
  "substrate-primitives 1.0.0",
  "substrate-state-machine 1.0.0",

@@ -24,6 +24,7 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service, maybe_start_server};
 use consensus_common::import_queue::ImportQueue;
+use inherents::pool::InherentsPool;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
@@ -146,6 +147,7 @@ pub trait StartRPC<C: Components> {
 		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		inherents_pool: Option<Arc<InherentsPool<ComponentExtrinsic<C>>>>,
 	) -> error::Result<Self::ServersHandle>;
 }
 
@@ -165,6 +167,7 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		inherents_pool: Option<Arc<InherentsPool<ComponentExtrinsic<C>>>>,
 	) -> error::Result<Self::ServersHandle> {
 		let handler = || {
 			let client = client.clone();
@@ -172,7 +175,7 @@ impl<C: Components> StartRPC<Self> for C where
 			let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 			let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
 			let author = rpc::apis::author::Author::new(
-				client.clone(), transaction_pool.clone(), subscriptions
+				client.clone(), transaction_pool.clone(), inherents_pool.clone(), subscriptions
 			);
 			let system = rpc::apis::system::System::new(
 				rpc_system_info.clone(), network.clone(), should_have_peers
