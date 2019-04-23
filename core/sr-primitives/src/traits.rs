@@ -299,9 +299,9 @@ impl<N> OnInitialize<N> for () {}
 
 /// Off-chain computation trait.
 ///
-/// Implementing this trait on a module allows you to perform a long-running tasks
+/// Implementing this trait on a module allows you to perform long-running tasks
 /// that make validators generate extrinsics (either transactions or inherents)
-/// with results of those long-running computations.
+/// with the results of those long-running computations.
 ///
 /// NOTE: This function runs off-chain, so it can access the block state,
 /// but cannot preform any alterations.
