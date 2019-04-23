@@ -475,18 +475,18 @@ pub fn storage_root() -> [u8; 32] {
 }
 
 /// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+pub fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
 	let mut length: u32 = 0;
 	unsafe {
-		let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
-		if length == u32::max_value() {
-			None
-		} else {
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
-		}
+		let ptr = ext_child_storage_root.get()(
+			storage_key.as_ptr(),
+			storage_key.len() as u32,
+			&mut length
+		);
+		// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+		// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+		// See #300 for more details.
+		<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize)
 	}
 }
 
