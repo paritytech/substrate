@@ -76,6 +76,12 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				TransferRateFormat(bandwidth_upload),
 			);
 
+			let backend = (*client).backend();
+			let used_state_cache_size = match backend.used_state_cache_size(){
+				Some(size) => size,
+				None => 0,
+			};
+
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
 				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
@@ -99,6 +105,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
 			);
 		} else {
 			warn!("Error getting best block information");

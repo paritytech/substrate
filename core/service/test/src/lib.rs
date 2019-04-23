@@ -112,6 +112,7 @@ fn node_config<F: ServiceFactory> (
 		keystore_path: root.join("key").to_str().unwrap().into(),
 		database_path: root.join("db").to_str().unwrap().into(),
 		database_cache_size: None,
+		state_cache_size: 16777216,
 		pruning: Default::default(),
 		keys: keys,
 		chain_spec: (*spec).clone(),
