@@ -109,7 +109,7 @@ pub trait HashedStorage<H: StorageHasher> {
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl<H: StorageHasher> HashedStorage<H> for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
+impl<H: StorageHasher> HashedStorage<H> for std::cell::RefCell<&mut sr_primitives::StorageOverlay> {
 	fn exists(&self, key: &[u8]) -> bool {
 		UnhashedStorage::exists(self, &H::hash(key).as_ref())
 	}

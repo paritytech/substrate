@@ -203,7 +203,6 @@ mod tests {
 			let x = b"Hello world".to_vec();
 			let y = get::<Vec<u8>, _, _>(&twox_128, b":test").unwrap();
 			assert_eq!(x, y);
-
 		});
 	}
 

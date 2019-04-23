@@ -58,7 +58,7 @@ pub trait UnhashedStorage {
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl UnhashedStorage for crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay> {
+impl UnhashedStorage for std::cell::RefCell<&mut sr_primitives::StorageOverlay> {
 	fn exists(&self, key: &[u8]) -> bool {
 		self.borrow().contains_key(key)
 	}
