@@ -91,7 +91,7 @@ use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
 
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;

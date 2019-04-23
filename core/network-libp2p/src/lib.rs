@@ -34,7 +34,7 @@ pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
 pub use libp2p::{identity, PeerId, core::PublicKey};
 
 use libp2p::core::nodes::ConnectedPoint;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
 
