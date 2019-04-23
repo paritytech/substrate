@@ -620,11 +620,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			{
 				type Query = #value_type;
 
-				fn prefix_for(k1: &K1) -> Vec<u8> {
+				fn prefix_for(k1: &#k1ty) -> Vec<u8> {
 					let mut key = Self::prefix().to_vec();
-					codec::Encode::encode_to(k1, &mut key);
-					key.extend(&#scrate::Hashable::#k2_hasher(k2));
-					#scrate::Hashable::#k2_hasher(&key).to_vec()
+					#scrate::codec::Encode::encode_to(k1, &mut key);
+					#scrate::Hashable::#hasher(&key).to_vec()
 				}
 
 				fn prefix() -> &'static [u8] {
