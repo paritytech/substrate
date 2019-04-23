@@ -49,8 +49,9 @@ use proc_macro::TokenStream;
 /// * storage value: `Foo: type`: implements [StorageValue](https://crates.parity.io/srml_support/storage/trait.StorageValue.html)
 /// * storage map: `Foo: map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html)
 /// * storage linked map: `Foo: linked_map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html) and [EnumarableStorageMap](https://crates.parity.io/srml_support/storage/trait.EnumerableStorageMap.html)
-/// * storage double map: Foo: double_map u32, $hash(u32) => u32;` implements `StorageDoubleMap` with hasher $hash one available in `Hashable` trait
-/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
+/// * storage double map: `Foo: double_map u32, $hash(u32) => u32;` implements `StorageDoubleMap` with hasher $hash one available in `Hashable` trait
+///
+///   /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
 ///
 /// And it can be extended as such:
 ///
