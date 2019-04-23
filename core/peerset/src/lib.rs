@@ -22,6 +22,7 @@ mod slots;
 use std::collections::VecDeque;
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
+use linked_hash_map::LinkedHashMap;
 use log::trace;
 use lru_cache::LruCache;
 use slots::{SlotType, SlotState, Slots};

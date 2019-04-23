@@ -15,6 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Networking layer of Substrate.
+//! 
+//! **Important**: This crate is unstable and the API and usage may change.
+//!
 
 mod behaviour;
 mod config;

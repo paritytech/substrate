@@ -128,8 +128,10 @@ build-rust-doc-release:            &build
   <<:                              *build-only
   tags:
     - linux-docker
-  script:
+  before_script:
     - sccache -s
+    - ./scripts/build.sh
+  script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --verbose
     - cp -R ./target/doc ./crate-docs
