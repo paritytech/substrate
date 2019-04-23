@@ -80,7 +80,6 @@
 //! Import the Assets module and types and derive your runtime's configuration traits from the Assets module trait.
 //!
 //! ### Simple Code Snippet
-//! <!-- Original author of example approach: @gautamdhameja, @shawntabrizi. See documentation for other SRML modules -->
 //!
 //! ```rust,ignore
 //! use support::{decl_module, dispatch::Result};
@@ -90,12 +89,6 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
-//! 			Ok(())
-//! 		}
-//!
 //! 		pub fn issue_token_airdrop(origin) -> Result {
 //! 			const ACCOUNT_ALICE: u64 = 1;
 //! 			const ACCOUNT_BOB: u64 = 2;
@@ -104,25 +97,15 @@
 //!
 //! 			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), "Divide by zero error.");
 //!
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _asset_id = Self::next_asset_id();
+//! 			let sender = ensure_signed(origin)?;
+//! 			let asset_id = Self::next_asset_id();
 //!
-//! 			<NextAssetId<T>>::mutate(|_asset_id| *_asset_id += 1);
-//! 			<Balances<T>>::insert((_asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//! 			<Balances<T>>::insert((_asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-//! 			<TotalSupply<T>>::insert(_asset_id, TOKENS_FIXED_SUPPLY);
+//! 			<NextAssetId<T>>::mutate(|asset_id| *asset_id += 1);
+//! 			<Balances<T>>::insert((asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+//! 			<Balances<T>>::insert((asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
+//! 			<TotalSupply<T>>::insert(asset_id, TOKENS_FIXED_SUPPLY);
 //!
-//! 			Self::deposit_event(RawEvent::Issued(_asset_id, origin, TOKENS_FIXED_SUPPLY));
-//! 			Ok(())
-//! 		}
-//!
-//! 		pub fn get_balance(asset_id, who) -> Result {
-//! 			let _balance = <assets::Module<T>>::balance::get(asset_id, who);
-//! 			Ok(())
-//! 		}
-//!
-//! 		pub fn get_total_supply(asset_id) -> Result {
-//! 			let _total_supply = <assets::Module<T>>::total_supply::get(asset_id);
+//! 			Self::deposit_event(RawEvent::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
 //! 			Ok(())
 //! 		}
 //! 	}
