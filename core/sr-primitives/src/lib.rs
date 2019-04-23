@@ -83,9 +83,7 @@ macro_rules! create_runtime_str {
 }
 
 #[cfg(feature = "std")]
-pub use serde::{Serialize, de::DeserializeOwned};
-#[cfg(feature = "std")]
-pub use serde::{Serialize, Deserialize};
+pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
