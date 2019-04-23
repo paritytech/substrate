@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
+use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
@@ -54,6 +55,58 @@ pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
+
+/// A wrapper around a child storage key.
+///
+/// This wrapper ensures that the child storage key is correct and properly used.  It is
+/// impossible to create an instance of this struct without providing a correct `storage_key`.
+pub struct ChildStorageKey<'a, H: Hasher> {
+	storage_key: Cow<'a, [u8]>,
+	_hasher: PhantomData<H>,
+}
+
+impl<'a, H: Hasher> ChildStorageKey<'a, H> {
+	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
+		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
+			return None;
+		}
+
+		Some(ChildStorageKey {
+			storage_key,
+			_hasher: PhantomData,
+		})
+	}
+
+	/// Create a new `ChildStorageKey` from a vector.
+	///
+	/// `storage_key` has should start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
+	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
+		Self::new(Cow::Owned(key))
+	}
+
+	/// Create a new `ChildStorageKey` from a slice.
+	///
+	/// `storage_key` has should start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
+	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
+		Self::new(Cow::Borrowed(key))
+	}
+
+	/// Get access to the byte representation of the storage key.
+	///
+	/// This key is guaranteed to be correct.
+	pub fn as_ref(&self) -> &[u8] {
+		&*self.storage_key
+	}
+
+	/// Destruct this instance into an owned vector that represents the storage key.
+	///
+	/// This key is guaranteed to be correct.
+	pub fn into_owned(self) -> Vec<u8> {
+		self.storage_key.into_owned()
+	}
+}
 
 /// State Machine Error bound.
 ///
@@ -105,7 +158,7 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Read child runtime storage.
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -113,7 +166,7 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Set child storage entry `key` of current contract being called (effective immediately).
-	fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) -> bool {
+	fn set_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Vec<u8>) {
 		self.place_child_storage(storage_key, key, Some(value))
 	}
 
@@ -123,8 +176,8 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
-	fn clear_child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> bool {
-		self.place_child_storage(storage_key.to_vec(), key.to_vec(), None)
+	fn clear_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: &[u8]) {
+		self.place_child_storage(storage_key, key.to_vec(), None)
 	}
 
 	/// Whether a storage entry exists.
@@ -133,12 +186,12 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Whether a child storage entry exists.
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> bool {
+	fn exists_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> bool {
 		self.child_storage(storage_key, key).is_some()
 	}
 
 	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, storage_key: &[u8]);
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -147,7 +200,7 @@ pub trait Externalities<H: Hasher> {
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
-	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool;
+	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
@@ -155,10 +208,11 @@ pub trait Externalities<H: Hasher> {
 	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
 
-	/// Get the trie root of a child storage map. This will also update the value of the child storage keys in the top-level storage map. If the storage root equals default hash as defined by trie, the key in top-level storage map will be removed.
-	///
-	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
-	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>>;
+	/// Get the trie root of a child storage map. This will also update the value of the child
+	/// storage keys in the top-level storage map.
+	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
+	/// storage map will be removed.
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
@@ -905,12 +959,35 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+		let mut ext = Ext::new(
+			&mut overlay,
+			&backend,
+			Some(&changes_trie_storage),
+			NeverOffchainExt::new()
+		);
 
-		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
-		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
-		ext.kill_child_storage(b":child_storage:testchild");
-		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), None);
+		ext.set_child_storage(
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			b"abc".to_vec(),
+			b"def".to_vec()
+		);
+		assert_eq!(
+			ext.child_storage(
+				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				b"abc"
+			),
+			Some(b"def".to_vec())
+		);
+		ext.kill_child_storage(
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap()
+		);
+		assert_eq!(
+			ext.child_storage(
+				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				b"abc"
+			),
+			None
+		);
 	}
 
 	#[test]

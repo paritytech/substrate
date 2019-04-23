@@ -17,9 +17,9 @@ hash-db = { version = "0.12", default-features = false }
 trie-db = { version = "0.12", optional = true }
 trie-root = { version = "0.12", default-features = false }
 memory-db = { version = "0.12", optional = true }
+substrate-primitives = { path = "../primitives", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../primitives" }
 trie-bench = { version = "0.12" }
 trie-standardmap = { version = "0.12" }
 keccak-hasher = { version = "0.12" }
@@ -32,5 +32,6 @@ std = [
 	"hash-db/std",
 	"memory-db",
 	"trie-db",
-	"trie-root/std"
+	"trie-root/std",
+	"substrate-primitives/std",
 ]
