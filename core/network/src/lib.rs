@@ -19,6 +19,9 @@
 
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
+//! 
+//! **Important**: This crate is unstable and the API and usage may change.
+//!
 
 mod service;
 mod sync;
