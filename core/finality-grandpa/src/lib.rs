@@ -439,7 +439,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, X> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
-	/// A GRANDPA worker linked together with a block import object.
+	/// A link to the block import worker.
 	pub link: LinkHalf<B, E, Block, RA>,
 	/// The Network instance.
 	pub network: N,
