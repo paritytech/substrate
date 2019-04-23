@@ -22,6 +22,7 @@ use libp2p::core::{
 	protocols_handler::IntoProtocolsHandler,
 	protocols_handler::KeepAlive,
 	protocols_handler::ProtocolsHandlerUpgrErr,
+	protocols_handler::SubstreamProtocol,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
 };
 use log::{debug, error, warn};
@@ -405,7 +406,7 @@ where
 				if incoming.is_empty() {
 					if let Endpoint::Dialer = endpoint {
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							upgrade: self.protocol.clone(),
+							protocol: SubstreamProtocol::new(self.protocol.clone()),
 							info: (),
 						});
 					}
@@ -615,7 +616,7 @@ where
 				// after all the substreams are closed.
 				if reenable && shutdown.is_empty() {
 					return_value = Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						upgrade: self.protocol.clone(),
+						protocol: SubstreamProtocol::new(self.protocol.clone()),
 						info: (),
 					});
 					ProtocolState::Opening {
@@ -746,7 +747,7 @@ where
 						}
 						state.pending_messages.push(message);
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							upgrade: self.protocol.clone(),
+							protocol: SubstreamProtocol::new(self.protocol.clone()),
 							info: ()
 						});
 					}
@@ -771,7 +772,7 @@ where
 					}
 					state.pending_messages.push(message);
 					self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						upgrade: self.protocol.clone(),
+						protocol: SubstreamProtocol::new(self.protocol.clone()),
 						info: ()
 					});
 				}
@@ -793,8 +794,8 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	type OutboundProtocol = RegisteredProtocol<TMessage>;
 	type OutboundOpenInfo = ();
 
-	fn listen_protocol(&self) -> Self::InboundProtocol {
-		self.protocol.clone()
+	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
+		SubstreamProtocol::new(self.protocol.clone())
 	}
 
 	fn inject_fully_negotiated_inbound(
@@ -845,13 +846,13 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			ProtocolState::Init { .. } | ProtocolState::Opening { .. } => {}
 			ProtocolState::BackCompat { .. } | ProtocolState::Normal { .. } =>
 				keep_forever = true,
-			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::Now,
+			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::No,
 		}
 
 		if keep_forever {
-			KeepAlive::Forever
+			KeepAlive::Yes
 		} else {
-			KeepAlive::Now
+			KeepAlive::No
 		}
 	}
 
