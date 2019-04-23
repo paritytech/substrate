@@ -35,7 +35,7 @@ pub use once_cell;
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::hashed::generator::{HashedStorage, Twox, Blake2};
+pub use self::storage::hashed::generator::{HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128};
 pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]

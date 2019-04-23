@@ -253,6 +253,16 @@ impl std::fmt::Debug for DefaultByteGetter {
 	}
 }
 
+/// Hasher used by storage maps
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub enum StorageHasher {
+	Blake2_128,
+	Blake2_256,
+	Twox128,
+	Twox256,
+}
+
 /// A storage function type.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]

@@ -59,7 +59,7 @@ impl<'a> Input for IncrementalChildInput<'a> {
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
 
-impl<H: 'static + StorageHasher> HashedStorage<H> for RuntimeStorage {
+impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
 		hashed::exists(&H::hash, key)
 	}

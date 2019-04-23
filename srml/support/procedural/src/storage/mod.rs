@@ -23,6 +23,8 @@ use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyw
 
 use syn::{Ident, Token};
 use syn::token::CustomKeyword;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 
 mod impls;
 
@@ -138,6 +140,7 @@ enum DeclStorageType {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: ext::CustomToken<MapKeyword>,
+	pub hasher: Option<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -146,6 +149,7 @@ struct DeclStorageMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLinkedMap {
 	pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
+	pub hasher: Option<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -154,17 +158,19 @@ struct DeclStorageLinkedMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDoubleMap {
 	pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
+	pub hasher: Option<SetHasher>,
 	pub key1: syn::Type,
 	pub comma_keyword: Token![,],
-	pub key2_hasher: DeclStorageDoubleMapHasher,
+	pub key2_hasher: Hasher,
 	pub key2: ext::Parens<syn::Type>,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
 }
 
 #[derive(Parse, ToTokens, Debug)]
-enum DeclStorageDoubleMapHasher {
+enum Hasher {
 	Blake2_256(ext::CustomToken<Blake2_256Keyword>),
+	Blake2_128(ext::CustomToken<Blake2_128Keyword>),
 	Twox256(ext::CustomToken<Twox256Keyword>),
 	Twox128(ext::CustomToken<Twox128Keyword>),
 }
@@ -173,6 +179,23 @@ enum DeclStorageDoubleMapHasher {
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct SetHasher {
+	pub hasher_keyword: ext::CustomToken<SetHasher>,
+	pub inner: ext::Parens<Hasher>,
+}
+
+impl SetHasher {
+	fn into_storage_hasher(&self) -> TokenStream2 {
+		match self.inner.content {
+			Hasher::Blake2_256(_) => quote!( Blake2_256 ),
+			Hasher::Blake2_128(_) => quote!( Blake2_128 ),
+			Hasher::Twox256(_) => quote!( Twox256 ),
+			Hasher::Twox128(_) => quote!( Twox128 ),
+		}
+	}
 }
 
 custom_keyword_impl!(SpecificHiddenCrate, "hiddencrate", "hiddencrate as keyword");
@@ -186,6 +209,8 @@ custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
 custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
 custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
+custom_keyword!(Blake2_128Keyword, "blake2_128", "Blake2_128 as keyword");
 custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
 custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");
 custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
+custom_keyword_impl!(SetHasher, "hasher", "storage hasher");
