@@ -14,7 +14,48 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Treasury: Keeps account of the taxed cash and handles its deployment.
+//! # Treasury Module
+//! 
+//! The `treasury` module keeps account of currency in a `pot` and manages the subsequent
+//! deployment of these funds.
+//! 
+//! ## Overview
+//! 
+//! Funds for treasury are raised in two ways:
+//! 1. By minting new tokens, leading to inflation, and
+//! 2. By channeling tokens from transaction fees and slashing.
+//! 
+//! Treasury funds can be used to pay for developers who provide software updates,
+//! any changes decided by referenda, and to generally keep the system running smoothly. 
+//! 
+//! Treasury can be used with other modules, such as to tax validator rewards in the `staking` module.
+//! 
+//! ### Implementations 
+//! 
+//! The treasury module provides an implementation for the following trait:
+//! - `OnDilution` - Mint extra funds upon dilution; maintain the ratio of `portion` diluted to `total_issuance`.
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable Functions
+//! 
+//! - `propose_spend` - Propose a spending proposal and stake a proposal deposit.
+//! - `set_pot` - Set the spendable balance of funds.
+//! - `configure` - Configure the module's proposal requirements.
+//! - `reject_proposal` - Reject a proposal and slash the deposit.
+//! - `approve_proposal` - Accept the proposal and return the deposit.
+//! 
+//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//! 
+//! ### Public Functions
+//! 
+//! See the [module](./struct.Module.html) for details on publicly available functions.
+//! 
+//! ## Related Modules
+//! 
+//! The treasury module depends on the `system` and `srml_support` modules as well as
+//! Substrate Core libraries and the Rust standard library.
+//! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
