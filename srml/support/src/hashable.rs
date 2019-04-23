@@ -18,12 +18,16 @@
 
 use crate::codec::Codec;
 use runtime_io::{blake2_128, blake2_256, twox_128, twox_256};
+use crate::storage::hashed::generator::StorageHasher;
+use crate::Twox128Concat;
+use crate::rstd::prelude::Vec;
 
 pub trait Hashable: Sized {
 	fn blake2_128(&self) -> [u8; 16];
 	fn blake2_256(&self) -> [u8; 32];
 	fn twox_128(&self) -> [u8; 16];
 	fn twox_256(&self) -> [u8; 32];
+	fn twox_128_concat(&self) -> Vec<u8>;
 }
 
 impl<T: Codec> Hashable for T {
@@ -38,5 +42,8 @@ impl<T: Codec> Hashable for T {
 	}
 	fn twox_256(&self) -> [u8; 32] {
 		self.using_encoded(twox_256)
+	}
+	fn twox_128_concat(&self) -> Vec<u8> {
+		self.using_encoded(Twox128Concat::hash)
 	}
 }

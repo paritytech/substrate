@@ -27,6 +27,25 @@ pub trait StorageHasher: 'static {
 	fn hash(x: &[u8]) -> Self::Output;
 }
 
+/// Hash storage keys with `concat(twox128(key), key)`
+pub struct Twox128Concat;
+impl StorageHasher for Twox128Concat {
+	type Output = Vec<u8>;
+	fn hash(x: &[u8]) -> Vec<u8> {
+		twox_128(x)
+			.iter()
+			.cloned()
+			.chain(x.iter().cloned())
+			.collect::<Vec<_>>()
+	}
+}
+
+#[test]
+fn test_twox_128_concat() {
+	let r = Twox128Concat::hash(b"foo");
+	assert_eq!(r.split_at(16), (&twox_128(b"foo")[..], &b"foo"[..]))
+}
+
 /// Hash storage keys with blake2 128
 pub struct Blake2_128;
 impl StorageHasher for Blake2_128 {
