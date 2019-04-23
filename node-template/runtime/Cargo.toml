@@ -5,8 +5,7 @@ authors = ["Anonymous"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true }
-serde_derive = { version = "1.0", optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0", default-features = false }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default_features = false }
@@ -46,7 +45,6 @@ std = [
 	"timestamp/std",
 	"sudo/std",
 	"version/std",
-	"serde_derive",
 	"serde",
 	"safe-mix/std",
 	"consensus-aura/std",

@@ -17,7 +17,7 @@
 //! Substrate changes trie configuration.
 
 #[cfg(any(feature = "std", test))]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use parity_codec::{Encode, Decode};
 
 /// Substrate changes trie configuration.

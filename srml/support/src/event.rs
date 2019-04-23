@@ -28,8 +28,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// extern crate srml_support;
 /// #[macro_use]
 /// extern crate parity_codec as codec;
-/// #[macro_use]
-/// extern crate serde_derive;
 ///
 /// decl_event!(
 ///	   pub enum Event {
@@ -48,8 +46,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// extern crate parity_codec as codec;
 /// #[macro_use]
 /// extern crate parity_codec;
-/// #[macro_use]
-/// extern crate serde_derive;
 ///
 /// trait Trait {
 ///     type Balance;
@@ -97,8 +93,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// extern crate parity_codec as codec;
 /// #[macro_use]
 /// extern crate parity_codec;
-/// #[macro_use]
-/// extern crate serde_derive;
 ///
 ///# struct DefaultInstance;
 ///# trait Instance {}
@@ -509,7 +503,7 @@ macro_rules! __impl_outer_event_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use serde_derive::Serialize;
+	use serde::Serialize;
 	use parity_codec::{Encode, Decode};
 
 	mod system {
