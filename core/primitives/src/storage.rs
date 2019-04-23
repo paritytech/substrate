@@ -17,7 +17,7 @@
 //! Contract execution data.
 
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 use crate::bytes;
 use rstd::vec::Vec;

@@ -24,7 +24,7 @@
 pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use serde_derive;
+pub use serde;
 
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
@@ -83,9 +83,7 @@ macro_rules! create_runtime_str {
 }
 
 #[cfg(feature = "std")]
-pub use serde::{Serialize, de::DeserializeOwned};
-#[cfg(feature = "std")]
-pub use serde_derive::{Serialize, Deserialize};
+pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -528,7 +526,7 @@ macro_rules! impl_outer_config {
 	) => {
 		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
 		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde_derive::Serialize, $crate::serde_derive::Deserialize)]
+		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		pub struct $main {
@@ -576,7 +574,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -584,7 +582,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -728,7 +726,7 @@ mod tests {
 	mod a {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
-		use serde_derive::Serialize;
+		use serde::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -738,7 +736,7 @@ mod tests {
 	mod b {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
-		use serde_derive::Serialize;
+		use serde::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
