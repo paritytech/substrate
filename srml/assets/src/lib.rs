@@ -40,8 +40,6 @@
 //! * **Non-fungible asset:** An asset for which each unit has unique characteristics.
 //!
 //! ### Goals
-//! <!-- Original inspiration of paragraph: @gavofyork / Staking module documentation -->
-//! <!-- FIXME - assumptions only. require an expert to peer review (or re-write) -->
 //!
 //! The assets system in Substrate is designed to make the following possible:
 //!
