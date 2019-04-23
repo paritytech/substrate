@@ -432,8 +432,8 @@ decl_storage! {
 		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000); // Perbill::from_fraction() is only for std, so use from_millionths().
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
-		/// The length of the bonding duration in blocks.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// The length of the bonding duration in eras.
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(12);
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialize
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
