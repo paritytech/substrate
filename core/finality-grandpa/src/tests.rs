@@ -432,7 +432,7 @@ fn run_to_completion_with<F>(
 			on_exit: Exit,
 			telemetry_on_connect: None,
 		};
-		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 		assert_send(&voter);
 
@@ -533,7 +533,7 @@ fn finalize_3_voters_1_full_observer() {
 			on_exit: Exit,
 			telemetry_on_connect: None,
 		};
-		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 		runtime.spawn(voter);
 	}
@@ -697,7 +697,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			on_exit: Exit,
 			telemetry_on_connect: None,
 		};
-		let voter = run_grandpa(grandpa_params).expect("all in order with client and network");
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 		runtime.spawn(voter);
 	}
@@ -1101,7 +1101,7 @@ fn voter_persists_its_votes() {
 				on_exit: Exit,
 				telemetry_on_connect: None,
 			};
-			let mut voter = run_grandpa(grandpa_params).expect("all in order with client and network");
+			let mut voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 			let voter = future::poll_fn(move || {
 				// we need to keep the block_import alive since it owns the
