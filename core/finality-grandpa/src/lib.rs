@@ -69,6 +69,7 @@ use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use serde_json;
 
 use srml_finality_tracker;
 
@@ -105,6 +106,7 @@ use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, Shared
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
 use communication::NetworkBridge;
+use service::TelemetryOnConnect;
 
 use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
@@ -433,14 +435,26 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	}
 }
 
+/// Parameters used to run Grandpa.
+pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, X> {
+	/// Configuration for the GRANDPA service.
+	pub config: Config,
+	/// A link to the block import worker.
+	pub link: LinkHalf<B, E, Block, RA>,
+	/// The Network instance.
+	pub network: N,
+	/// The inherent data providers.
+	pub inherent_data_providers: InherentDataProviders,
+	/// Handle to a future that will resolve on exit.
+	pub on_exit: X,
+	/// If supplied, can be used to hook on telemetry connection established events.
+	pub telemetry_on_connect: Option<TelemetryOnConnect<'a>>,
+}
+
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA>(
-	config: Config,
-	link: LinkHalf<B, E, Block, RA>,
-	network: N,
-	inherent_data_providers: InherentDataProviders,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -451,7 +465,17 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
+	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
+	let GrandpaParams {
+		config,
+		link,
+		network,
+		inherent_data_providers,
+		on_exit,
+		telemetry_on_connect,
+	} = grandpa_params;
+
 	use futures::future::{self, Loop as FutureLoop};
 
 	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
@@ -464,6 +488,28 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
+
+	if let Some(telemetry_on_connect) = telemetry_on_connect {
+		let authorities = authority_set.clone();
+		let events = telemetry_on_connect.telemetry_connection_sinks
+			.for_each(move |_| {
+				telemetry!(CONSENSUS_INFO; "afg.authority_set";
+					 "authority_set_id" => ?authorities.set_id(),
+					 "authorities" => {
+						let curr = authorities.current_authorities();
+						let voters = curr.voters();
+						let authorities: Vec<String> =
+							voters.iter().map(|(id, _)| id.to_string()).collect();
+						serde_json::to_string(&authorities)
+							.expect("authorities is always at least an empty vector; elements are always of type string")
+					 }
+				);
+				Ok(())
+			})
+			.then(|_| Ok(()));
+		let events = events.select(telemetry_on_connect.on_exit).then(|_| Ok(()));
+		telemetry_on_connect.executor.spawn(events);
+	}
 
 	let voters = authority_set.current_authorities();
 	let initial_environment = Arc::new(Environment {
@@ -660,12 +706,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA>(
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
-	config: Config,
-	link: LinkHalf<B, E, Block, RA>,
-	network: N,
-	inherent_data_providers: InherentDataProviders,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -676,6 +718,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
+	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
-	run_grandpa_voter(config, link, network, inherent_data_providers, on_exit)
+	run_grandpa_voter(grandpa_params)
 }

@@ -12,6 +12,7 @@ log = "0.4"
 rand = "0.6"
 serde = "1.0.81"
 serde_derive = "1.0"
+serde_json = "1.0"
 slog = { version = "^2", features = ["nested-values"] }
 slog-json = { version = "^2", features = ["nested-values"] }
 slog-async = { version = "^2", features = ["nested-values"] }

@@ -133,8 +133,13 @@ pub struct AccountInfo {
 pub trait TrieIdGenerator<AccountId> {
 	/// Get a trie id for an account, using reference to parent account trie id to ensure
 	/// uniqueness of trie id.
+	///
 	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
+	///
+	/// Also, the implementation is responsible for ensuring that `TrieId` starts with
+	/// `:child_storage:`.
+	/// TODO: We want to change this, see https://github.com/paritytech/substrate/issues/2325
 	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
@@ -156,7 +161,9 @@ where
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
+		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		CHILD_STORAGE_KEY_PREFIX.iter()
+			.chain(b"default:")
 			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
 			.cloned()
 			.collect()

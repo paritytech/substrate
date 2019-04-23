@@ -46,7 +46,7 @@ fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p
 			first_addr = Some(config.listen_addresses.iter().next().unwrap().clone());
 		}
 
-		let proto = substrate_network_libp2p::RegisteredProtocol::new(*b"tst", &[1]);
+		let proto = substrate_network_libp2p::RegisteredProtocol::new(&b"tst"[..], &[1]);
 		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
 	}
 

@@ -24,7 +24,12 @@ pub use primitives::{
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
-pub use substrate_state_machine::{Externalities, BasicExternalities, TestExternalities};
+pub use substrate_state_machine::{
+	Externalities,
+	BasicExternalities,
+	TestExternalities,
+	ChildStorageKey
+};
 
 use environmental::environmental;
 use primitives::{hexdisplay::HexDisplay, H256};
@@ -41,6 +46,18 @@ pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 /// A set of key value pairs for children storage;
 pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
+/// Returns a `ChildStorageKey` if the given `storage_key` slice is a valid storage
+/// key or panics otherwise.
+///
+/// Panicking here is aligned with what the `without_std` environment would do
+/// in the case of an invalid child storage key.
+fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey<Blake2Hasher> {
+	match ChildStorageKey::from_slice(storage_key) {
+		Some(storage_key) => storage_key,
+		None => panic!("child storage key is invalid"),
+	}
+}
+
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
@@ -49,8 +66,11 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 
 /// Get `key` from child storage and return a `Vec`, empty if there's a problem.
 pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-	ext::with(|ext| ext.child_storage(storage_key, key).map(|s| s.to_vec()))
-		.expect("storage cannot be called outside of an Externalities-provided environment.")
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
+		ext.child_storage(storage_key, key).map(|s| s.to_vec())
+	})
+	.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
@@ -70,13 +90,23 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 /// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 /// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
 /// number of bytes is not equal to the number of bytes written to the `value_out`.
-pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-	ext::with(|ext| ext.child_storage(storage_key, key).map(|value| {
-		let value = &value[value_offset..];
-		let written = ::std::cmp::min(value.len(), value_out.len());
-		value_out[..written].copy_from_slice(&value[..written]);
-		value.len()
-	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
+pub fn read_child_storage(
+	storage_key: &[u8],
+	key: &[u8],
+	value_out: &mut [u8],
+	value_offset: usize,
+) -> Option<usize> {
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
+		ext.child_storage(storage_key, key)
+			.map(|value| {
+				let value = &value[value_offset..];
+				let written = ::std::cmp::min(value.len(), value_out.len());
+				value_out[..written].copy_from_slice(&value[..written]);
+				value.len()
+			})
+	})
+	.expect("read_child_storage cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Set the storage of a key to some value.
@@ -88,9 +118,10 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 
 /// Set the child storage of a key to some value.
 pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
-	ext::with(|ext|
-		ext.set_child_storage(storage_key.to_vec(), key.to_vec(), value.to_vec())
-	);
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
+		ext.set_child_storage(storage_key, key.to_vec(), value.to_vec())
+	});
 }
 
 /// Clear the storage of a key.
@@ -102,9 +133,10 @@ pub fn clear_storage(key: &[u8]) {
 
 /// Clear the storage of a key.
 pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
-	ext::with(|ext|
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
 		ext.clear_child_storage(storage_key, key)
-	);
+	});
 }
 
 /// Check whether a given `key` exists in storage.
@@ -116,9 +148,10 @@ pub fn exists_storage(key: &[u8]) -> bool {
 
 /// Check whether a given `key` exists in storage.
 pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
-	ext::with(|ext|
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
 		ext.exists_child_storage(storage_key, key)
-	).unwrap_or(false)
+	}).unwrap_or(false)
 }
 
 /// Clear the storage entries with a key that starts with the given prefix.
@@ -130,9 +163,10 @@ pub fn clear_prefix(prefix: &[u8]) {
 
 /// Clear an entire child storage.
 pub fn kill_child_storage(storage_key: &[u8]) {
-	ext::with(|ext|
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
 		ext.kill_child_storage(storage_key)
-	);
+	});
 }
 
 /// The current relay chain identifier.
@@ -150,10 +184,11 @@ pub fn storage_root() -> H256 {
 }
 
 /// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
-	ext::with(|ext|
+pub fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
+	ext::with(|ext| {
+		let storage_key = child_storage_key_or_panic(storage_key);
 		ext.child_storage_root(storage_key)
-	).unwrap_or(None)
+	}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 }
 
 /// "Commit" all existing operations and get the resultant storage change root.

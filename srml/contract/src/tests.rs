@@ -123,7 +123,13 @@ static KEY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub struct DummyTrieIdGenerator;
 impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
-		let mut res = KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes().to_vec();
+		use substrate_primitives::storage::well_known_keys;
+
+		// TODO: see https://github.com/paritytech/substrate/issues/2325
+		let mut res = vec![];
+		res.extend_from_slice(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
+		res.extend_from_slice(b"default:");
+		res.extend_from_slice(&KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes());
 		res.extend_from_slice(&account_id.to_le_bytes());
 		res
 	}
