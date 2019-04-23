@@ -144,7 +144,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// 		}
 ///
 ///			fn my_function(origin) -> Result {
-/// 			ensure_root!(origin);
+/// 			ensure_root(origin);
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
