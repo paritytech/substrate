@@ -33,12 +33,6 @@ environmental!(ext: trait Externalities<Blake2Hasher>);
 pub trait HasherBounds {}
 impl<T: Hasher> HasherBounds for T {}
 
-/// A set of key value pairs for storage.
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// A set of key value pairs for children storage;
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
-
 impl StorageApi for () {
 	fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
@@ -155,7 +149,7 @@ impl StorageApi for () {
 
 	fn ordered_trie_root<H, I, A>(input: I) -> H::Out
 	where
-		I: IntoIterator<Item = A> + Iterator<Item = A>,
+		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>,
 		H: Hasher,
 		H::Out: Ord,
@@ -220,6 +214,55 @@ impl OffchainApi for () {
 			.expect("submit_extrinsic can be called only in offchain worker context")
 		).expect("submit_extrinsic cannot be called outside of an Externalities-provided environment.")
 	}
+
+	fn timestamp() -> offchain::Timestamp {
+		unimplemented!()
+	}
+
+	fn http_request_start(
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> offchain::http::RequestId {
+		unimplemented!()
+	}
+
+	fn http_request_add_header(
+		_request_id: offchain::http::RequestId,
+		_name: &str,
+		_value: &str
+	) {
+		unimplemented!()
+	}
+
+	fn http_request_write_body(
+		_request_id: offchain::http::RequestId,
+		_chunk: &[u8],
+		_deadline: Option<offchain::Timestamp>
+	) {
+		unimplemented!()
+	}
+
+	fn http_response_wait(
+		_ids: &[offchain::http::RequestId],
+		_deadline: Option<offchain::Timestamp>
+	) -> Vec<offchain::http::RequestStatus> {
+		unimplemented!()
+	}
+
+	fn http_response_headers(
+		_request_id: offchain::http::RequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unimplemented!()
+	}
+
+	fn http_response_read_body(
+		_request_id: offchain::http::RequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> usize {
+		unimplemented!()
+	}
 }
 
 impl Api for () {}
@@ -230,6 +273,12 @@ impl Api for () {}
 pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
 }
+
+/// A set of key value pairs for storage.
+pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Execute the given closure with global functions available whose functionality routes into
 /// externalities that draw from and populate `storage`. Forwards the value that the closure returns.
