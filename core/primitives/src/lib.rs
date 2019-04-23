@@ -38,7 +38,7 @@ use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
