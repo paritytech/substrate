@@ -404,8 +404,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let storage_key = ChildStorageKey::from_slice(&*storage_key)
 			.ok_or_else(||
-					UserError("ext_child_storage_root: child storage key is not valid")
-				)?;
+				UserError("ext_child_storage_root: child storage key is not valid")
+			)?;
 		let value = this.ext.child_storage_root(storage_key);
 
 		let offset = this.heap.allocate(value.len() as u32)? as u32;
