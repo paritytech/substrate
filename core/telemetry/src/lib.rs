@@ -24,14 +24,12 @@
 use std::{io, time, thread};
 use std::sync::Arc;
 use parking_lot::Mutex;
-use slog::{Drain, o};
+use slog::{Drain, o, OwnedKVList, Record};
 use log::trace;
 use rand::{thread_rng, Rng};
 pub use slog_scope::with_logger;
 pub use slog;
 use serde_derive::{Serialize, Deserialize};
-use slog::OwnedKVList;
-use slog::Record;
 use core::result;
 
 /// Configuration for telemetry.
@@ -56,7 +54,7 @@ pub const SUBSTRATE_INFO: &str = "0";
 pub const CONSENSUS_TRACE: &str = "9";
 pub const CONSENSUS_DEBUG: &str = "5";
 pub const CONSENSUS_WARN: &str = "4";
-pub const CONSENSUS_INFO: &str = "3";
+pub const CONSENSUS_INFO: &str = "0";
 
 /// Multiply logging to all drains. This is similar to `slog::Duplicate`, which is
 /// limited to two drains though and doesn't support dynamic nesting at runtime.
@@ -166,7 +164,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 macro_rules! telemetry {
 	 ( $a:expr; $b:expr; $( $t:tt )* ) => {
 		$crate::with_logger(|l| {
-			$crate::slog::slog_info!(l, #$a, $b; "verbosity" => stringify!($a), $($t)* )
+			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
 		})
     }
 }
