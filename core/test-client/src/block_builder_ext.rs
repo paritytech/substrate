@@ -17,7 +17,6 @@
 //! Block Builder extensions for tests.
 
 use client;
-use super::AccountKeyring;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
 use client::block_builder::api::BlockBuilder;
@@ -33,13 +32,6 @@ impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime:
 	A::Api: BlockBuilder<runtime::Block>
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
-		self.push(sign_tx(transfer))
+		self.push(transfer.into_signed_tx())
 	}
-}
-
-fn sign_tx(transfer: runtime::Transfer) -> runtime::Extrinsic {
-	let signature = AccountKeyring::from_public(&transfer.from)
-		.unwrap()
-		.sign(&parity_codec::Encode::encode(&transfer));
-	runtime::Extrinsic::Transfer(transfer, signature)
 }

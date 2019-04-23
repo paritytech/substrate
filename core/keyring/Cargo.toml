@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 substrate-primitives = { path = "../primitives" }
+sr-primitives = { path = "../sr-primitives" }
 hex-literal = { version = "0.1.0" }
 lazy_static = { version = "1.0" }
 strum = "0.14.0"
