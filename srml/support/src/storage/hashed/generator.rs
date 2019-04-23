@@ -43,7 +43,7 @@ impl StorageHasher for Twox64Concat {
 #[test]
 fn test_twox_64_concat() {
 	let r = Twox64Concat::hash(b"foo");
-	assert_eq!(r.split_at(16), (&twox_128(b"foo")[..8], &b"foo"[..]))
+	assert_eq!(r.split_at(8), (&twox_128(b"foo")[..8], &b"foo"[..]))
 }
 
 /// Hash storage keys with blake2 128
