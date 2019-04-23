@@ -53,336 +53,350 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	}
 }
 
-/// The state of an exchangeable function.
-#[derive(Clone, Copy)]
-enum ExchangeableFunctionState {
-	/// Original function is present
-	Original,
-	/// The function has been replaced.
-	Replaced,
-}
+/// External (Host) APIs
+pub mod ext {
+	use super::*;
 
-/// A function which implementation can be exchanged.
-///
-/// Internally this works by swapping function pointers.
-pub struct ExchangeableFunction<T>(Cell<(T, ExchangeableFunctionState)>);
-
-impl<T> ExchangeableFunction<T> {
-	/// Create a new instance of `ExchangeableFunction`.
-	pub const fn new(impl_: T) -> Self {
-		Self(Cell::new((impl_, ExchangeableFunctionState::Original)))
+	/// The state of an exchangeable function.
+	#[derive(Clone, Copy)]
+	enum ExchangeableFunctionState {
+		/// Original function is present
+		Original,
+		/// The function has been replaced.
+		Replaced,
 	}
-}
 
-impl<T: Copy> ExchangeableFunction<T> {
-	/// Replace the implementation with `new_impl`.
+	/// A function which implementation can be exchanged.
 	///
-	/// # Panics
-	///
-	/// Panics when trying to replace an already replaced implementation.
-	///
-	/// # Returns
-	///
-	/// Returns the original implementation wrapped in [`RestoreImplementation`].
-	pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
-		if let ExchangeableFunctionState::Replaced = self.0.get().1 {
-			panic!("Trying to replace an already replaced implementation!")
+	/// Internally this works by swapping function pointers.
+	pub struct ExchangeableFunction<T>(Cell<(T, ExchangeableFunctionState)>);
+
+	impl<T> ExchangeableFunction<T> {
+		/// Create a new instance of `ExchangeableFunction`.
+		pub const fn new(impl_: T) -> Self {
+			Self(Cell::new((impl_, ExchangeableFunctionState::Original)))
+		}
+	}
+
+	impl<T: Copy> ExchangeableFunction<T> {
+		/// Replace the implementation with `new_impl`.
+		///
+		/// # Panics
+		///
+		/// Panics when trying to replace an already replaced implementation.
+		///
+		/// # Returns
+		///
+		/// Returns the original implementation wrapped in [`RestoreImplementation`].
+		pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
+			if let ExchangeableFunctionState::Replaced = self.0.get().1 {
+				panic!("Trying to replace an already replaced implementation!")
+			}
+
+			let old = self.0.replace((new_impl, ExchangeableFunctionState::Replaced));
+
+			RestoreImplementation(self, Some(old.0))
 		}
 
-		let old = self.0.replace((new_impl, ExchangeableFunctionState::Replaced));
+		/// Restore the original implementation.
+		fn restore_orig_implementation(&self, orig: T) {
+			self.0.set((orig, ExchangeableFunctionState::Original));
+		}
 
-		RestoreImplementation(self, Some(old.0))
+		/// Returns the internal function pointer.
+		pub fn get(&self) -> T {
+			self.0.get().0
+		}
 	}
 
-	/// Restore the original implementation.
-	fn restore_orig_implementation(&self, orig: T) {
-		self.0.set((orig, ExchangeableFunctionState::Original));
+	// WASM does not support threads, so this is safe; qed.
+	unsafe impl<T> Sync for ExchangeableFunction<T> {}
+
+	/// Restores a function implementation on drop.
+	///
+	/// Stores a static reference to the function object and the original implementation.
+	pub struct RestoreImplementation<T: 'static + Copy>(&'static ExchangeableFunction<T>, Option<T>);
+
+	impl<T: Copy> Drop for RestoreImplementation<T> {
+		fn drop(&mut self) {
+			self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
+		}
 	}
 
-	/// Returns the internal function pointer.
-	pub fn get(&self) -> T {
-		self.0.get().0
+	/// Ensures we use the right crypto when calling into native
+	pub trait ExternTrieCrypto: Hasher {
+		/// Calculate enumerated trie root.
+		fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out;
 	}
-}
 
-// WASM does not support threads, so this is safe; qed.
-unsafe impl<T> Sync for ExchangeableFunction<T> {}
+	/// Additional bounds for Hasher trait for without_std.
+	pub trait HasherBounds: ExternTrieCrypto {}
+	impl<T: ExternTrieCrypto + Hasher> HasherBounds for T {}
 
-/// Restores a function implementation on drop.
-///
-/// Stores a static reference to the function object and the original implementation.
-pub struct RestoreImplementation<T: 'static + Copy>(&'static ExchangeableFunction<T>, Option<T>);
-
-impl<T: Copy> Drop for RestoreImplementation<T> {
-	fn drop(&mut self) {
-		self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
+	// Ensures we use a Blake2_256-flavored Hasher when calling into native
+	impl ExternTrieCrypto for Blake2Hasher {
+		fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out {
+			let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
+			let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
+			let mut result: [u8; 32] = Default::default();
+			unsafe {
+				ext_blake2_256_enumerated_trie_root.get()(
+					values.as_ptr(),
+					lengths.as_ptr(),
+					lengths.len() as u32,
+					result.as_mut_ptr()
+				);
+			}
+			result.into()
+		}
 	}
-}
 
-/// Declare extern functions
-macro_rules! extern_functions {
-	(
-		$(
-			$( #[$attr:meta] )*
-			fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
-		)*
-	) => {
-		$(
-			$( #[$attr] )*
-			#[allow(non_upper_case_globals)]
-			pub static $name: ExchangeableFunction<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> =
-				ExchangeableFunction::new(extern_functions_host_impl::$name);
-		)*
-
-		/// The exchangeable extern functions host implementations.
-		mod extern_functions_host_impl {
+	/// Declare extern functions
+	macro_rules! extern_functions {
+		(
 			$(
-				pub unsafe fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )? {
-					implementation::$name ( $( $arg ),* )
-				}
+				$( #[$attr:meta] )*
+				fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
+			)*
+		) => {
+			$(
+				$( #[$attr] )*
+				#[allow(non_upper_case_globals)]
+				pub static $name: ExchangeableFunction<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> =
+					ExchangeableFunction::new(extern_functions_host_impl::$name);
 			)*
 
-			mod implementation {
-				extern "C" {
-					$(
-						pub fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )?;
-					)*
+			/// The exchangeable extern functions host implementations.
+			pub(crate) mod extern_functions_host_impl {
+				$(
+					pub unsafe fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )? {
+						implementation::$name ( $( $arg ),* )
+					}
+				)*
+
+				mod implementation {
+					extern "C" {
+						$(
+							pub fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )?;
+						)*
+					}
 				}
 			}
-		}
-	};
-}
+		};
+	}
 
-/// Host functions, provided by the executor.
-/// A WebAssembly runtime module would "import" these to access the execution environment
-/// (most importantly, storage) or perform heavy hash calculations.
-/// See also "ext_" functions in sr-sandbox and sr-std
-extern_functions! {
-	/// Host functions for printing, useful for debugging.
-	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
-	fn ext_print_hex(data: *const u8, len: u32);
-	fn ext_print_num(value: u64);
+	/// Host functions, provided by the executor.
+	/// A WebAssembly runtime module would "import" these to access the execution environment
+	/// (most importantly, storage) or perform heavy hash calculations.
+	/// See also "ext_" functions in sr-sandbox and sr-std
+	extern_functions! {
+		/// Host functions for printing, useful for debugging.
+		fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
+		/// Print data as hex.
+		fn ext_print_hex(data: *const u8, len: u32);
+		/// Print a number
+		fn ext_print_num(value: u64);
 
-	/// Set value for key in storage.
-	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
-	/// Remove key and value from storage.
-	fn ext_clear_storage(key_data: *const u8, key_len: u32);
-	/// Checks if the given key exists in the storage.
-	///
-	/// # Returns
-	///
-	/// - `1` if the value exists.
-	/// - `0` if the value does not exists.
-	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
-	/// Remove storage entries which key starts with given prefix.
-	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
-	/// Gets the value of the given key from storage.
-	///
-	/// The host allocates the memory for storing the value.
-	///
-	/// # Returns
-	///
-	/// - `0` if no value exists to the given key. `written_out` is set to `u32::max_value()`.
-	///
-	/// - Otherwise, pointer to the value in memory. `written_out` contains the length of the value.
-	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
-	/// Gets the value of the given key from storage.
-	///
-	/// The value is written into `value` starting at `value_offset`.
-	///
-	/// If the value length is greater than `value_len - value_offset`, the value is written partially.
-	///
-	/// # Returns
-	///
-	/// - `u32::max_value()` if the value does not exists.
-	///
-	/// - Otherwise, the number of bytes written for value.
-	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
-	/// Gets the trie root of the storage.
-	fn ext_storage_root(result: *mut u8);
-	/// Get the change trie root of the current storage overlay at a block with given parent.
-	///
-	/// # Returns
-	///
-	/// - `1` if the change trie root was found.
-	/// - `0` if the change trie root was not found.
-	fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
+		/// Set value for key in storage.
+		fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+		/// Remove key and value from storage.
+		fn ext_clear_storage(key_data: *const u8, key_len: u32);
+		/// Checks if the given key exists in the storage.
+		///
+		/// # Returns
+		///
+		/// - `1` if the value exists.
+		/// - `0` if the value does not exists.
+		fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
+		/// Remove storage entries which key starts with given prefix.
+		fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+		/// Gets the value of the given key from storage.
+		///
+		/// The host allocates the memory for storing the value.
+		///
+		/// # Returns
+		///
+		/// - `0` if no value exists to the given key. `written_out` is set to `u32::max_value()`.
+		///
+		/// - Otherwise, pointer to the value in memory. `written_out` contains the length of the value.
+		fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+		/// Gets the value of the given key from storage.
+		///
+		/// The value is written into `value` starting at `value_offset`.
+		///
+		/// If the value length is greater than `value_len - value_offset`, the value is written partially.
+		///
+		/// # Returns
+		///
+		/// - `u32::max_value()` if the value does not exists.
+		///
+		/// - Otherwise, the number of bytes written for value.
+		fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+		/// Gets the trie root of the storage.
+		fn ext_storage_root(result: *mut u8);
+		/// Get the change trie root of the current storage overlay at a block with given parent.
+		///
+		/// # Returns
+		///
+		/// - `1` if the change trie root was found.
+		/// - `0` if the change trie root was not found.
+		fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
 
-	/// A child storage function.
-	///
-	/// See [`ext_set_storage`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
-	/// A child storage function.
-	///
-	/// See [`ext_clear_storage`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
-	/// A child storage function.
-	///
-	/// See [`ext_exists_storage`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
-	/// A child storage function.
-	///
-	/// See [`ext_kill_storage`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
-	/// A child storage function.
-	///
-	/// See [`ext_get_allocated_storage`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_get_allocated_child_storage(
-		storage_key_data: *const u8,
-		storage_key_len: u32,
-		key_data: *const u8,
-		key_len: u32,
-		written_out: *mut u32
-	) -> *mut u8;
-	/// A child storage function.
-	///
-	/// See [`ext_get_storage_into`] for details.
-	///
-	/// A child storage is used e.g. by a contract.
-	fn ext_get_child_storage_into(
-		storage_key_data: *const u8,
-		storage_key_len: u32,
-		key_data: *const u8,
-		key_len: u32,
-		value_data: *mut u8,
-		value_len: u32,
-		value_offset: u32
-	) -> u32;
-	/// Commits all changes and calculates the child-storage root.
-	///
-	/// A child storage is used e.g. by a contract.
-	///
-	/// # Returns
-	///
-	/// - The pointer to the result vector and `written_out` contains its length.
-	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
+		/// A child storage function.
+		///
+		/// See [`ext_set_storage`] for details.
+		///
+		/// A child storage is used e.g. by a contract.
+		fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+		/// A child storage function.
+		///
+		/// See [`ext_clear_storage`] for details.
+		///
+		/// A child storage is used e.g. by a contract.
+		fn ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
+		/// A child storage function.
+		///
+		/// See [`ext_exists_storage`] for details.
+		///
+		/// A child storage is used e.g. by a contract.
+		fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
+		/// A child storage function.
+		///
+		/// See [`ext_kill_storage`] for details.
+		///
+		/// A child storage is used e.g. by a contract.
+		fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
+		/// A child storage function.
+		///
+		/// See [`ext_get_allocated_storage`] for details.
+		///
+		/// A child storage is used e.g. by a contract.
+		fn ext_get_allocated_child_storage(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32,
+			written_out: *mut u32
+		) -> *mut u8;
+		/// A child storage function.
+		///
+		/// See [`ext_get_storage_into`] for details.
+		///
+		/// A child storage is used e.g. by a contract.
+		fn ext_get_child_storage_into(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32,
+			value_data: *mut u8,
+			value_len: u32,
+			value_offset: u32
+		) -> u32;
+		/// Commits all changes and calculates the child-storage root.
+		///
+		/// A child storage is used e.g. by a contract.
+		///
+		/// # Returns
+		///
+		/// - The pointer to the result vector and `written_out` contains its length.
+		fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 
-	/// The current relay chain identifier.
-	fn ext_chain_id() -> u64;
+		/// The current relay chain identifier.
+		fn ext_chain_id() -> u64;
 
-	/// Hash calculation and verification
-	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
-	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
-	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
-	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
-	fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
-	/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
-	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
-	/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
-	fn ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
-	/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
-	fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
+		/// Calculate a blake2_256 merkle trie root.
+		fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
+		/// BLAKE2_256 hash
+		fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
+		/// XX128 hash
+		fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
+		/// XX256 hash
+		fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
+		/// Keccak256 hash
+		fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
+		/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
+		fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+		/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
+		fn ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
+		fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
 
-	//================================
-	// Offchain-worker Context
-	//================================
+		//================================
+		// Offchain-worker Context
+		//================================
 
-	/// Submit extrinsic.
-	fn ext_submit_extrinsic(data: *const u8, len: u32);
+		/// Submit extrinsic.
+		fn ext_submit_extrinsic(data: *const u8, len: u32);
 
-	/// Returns current UNIX timestamp (milliseconds)
-	fn ext_timestamp() -> u64;
+		/// Returns current UNIX timestamp (milliseconds)
+		fn ext_timestamp() -> u64;
 
-	/// Initiaties a http request.
-	fn ext_http_request_start(
-		method: *const u8,
-		method_len: u8,
-		url: *const u8,
-		url_len: u32,
-		meta: *const u8,
-		meta_len: u32
-	) -> u16;
+		/// Initiaties a http request.
+		fn ext_http_request_start(
+			method: *const u8,
+			method_len: u8,
+			url: *const u8,
+			url_len: u32,
+			meta: *const u8,
+			meta_len: u32
+		) -> u16;
 
-	/// Add a header to the request.
-	fn ext_http_request_add_header(
-		request_id: u16,
-		name: *const u8,
-		name_len: u32,
-		value: *const u8,
-		value_len: u32
-	);
+		/// Add a header to the request.
+		fn ext_http_request_add_header(
+			request_id: u16,
+			name: *const u8,
+			name_len: u32,
+			value: *const u8,
+			value_len: u32
+		);
 
-	/// Write a chunk of request body.
-	///
-	/// Writing an empty chunks finalises the request.
-	/// Passing `0` as deadline blocks forever.
-	fn ext_http_request_write_body(
-		request_id: u16,
-		chunk: *const u8,
-		chunk_len: u32,
-		deadline: u64
-	);
+		/// Write a chunk of request body.
+		///
+		/// Writing an empty chunks finalises the request.
+		/// Passing `0` as deadline blocks forever.
+		fn ext_http_request_write_body(
+			request_id: u16,
+			chunk: *const u8,
+			chunk_len: u32,
+			deadline: u64
+		);
 
-	/// Block and wait for the responses for given requests.
-	///
-	/// Note that if deadline is not provided the method will block indefinitely,
-	/// otherwise unready responses will produce `WaitTimeout` status.
-	///
-	/// Make sure that `statuses` have the same length as ids.
-	/// Passing `0` as deadline blocks forever.
-	fn ext_http_response_wait(
-		ids: *const u16,
-		ids_len: u32,
-		statuses: *mut u16,
-		deadline: u64
-	);
+		/// Block and wait for the responses for given requests.
+		///
+		/// Note that if deadline is not provided the method will block indefinitely,
+		/// otherwise unready responses will produce `WaitTimeout` status.
+		///
+		/// Make sure that `statuses` have the same length as ids.
+		/// Passing `0` as deadline blocks forever.
+		fn ext_http_response_wait(
+			ids: *const u16,
+			ids_len: u32,
+			statuses: *mut u16,
+			deadline: u64
+		);
 
-	/// Read all response headers.
-	///
-	/// Resturns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
-	fn ext_http_response_headers(
-		id: u16,
-		written_out: *mut u32
-	) -> *mut u8;
+		/// Read all response headers.
+		///
+		/// Resturns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		fn ext_http_response_headers(
+			id: u16,
+			written_out: *mut u32
+		) -> *mut u8;
 
-	/// Read a chunk of body response to given buffer.
-	///
-	/// Returns the number of bytes written.
-	/// Passing `0` as deadline blocks forever.
-	fn ext_http_response_read_body(
-		id: u16,
-		buffer: *mut u8,
-		buffer_len: u32,
-		deadline: u64
-	) -> u32;
-}
-
-/// Ensures we use the right crypto when calling into native
-pub trait ExternTrieCrypto: Hasher {
-	/// Calculate enumerated trie root.
-	fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out;
-}
-
-pub trait HasherBounds: ExternTrieCrypto {}
-impl<T: ExternTrieCrypto + Hasher> HasherBounds for T {}
-
-// Ensures we use a Blake2_256-flavored Hasher when calling into native
-impl ExternTrieCrypto for Blake2Hasher {
-	fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out {
-		let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
-		let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
-		let mut result: [u8; 32] = Default::default();
-		unsafe {
-			ext_blake2_256_enumerated_trie_root.get()(
-				values.as_ptr(),
-				lengths.as_ptr(),
-				lengths.len() as u32,
-				result.as_mut_ptr()
-			);
-		}
-		result.into()
+		/// Read a chunk of body response to given buffer.
+		///
+		/// Returns the number of bytes written.
+		/// Passing `0` as deadline blocks forever.
+		fn ext_http_response_read_body(
+			id: u16,
+			buffer: *mut u8,
+			buffer_len: u32,
+			deadline: u64
+		) -> u32;
 	}
 }
+
+pub use self::ext::*;
 
 impl StorageApi for () {
 	fn storage(key: &[u8]) -> Option<Vec<u8>> {

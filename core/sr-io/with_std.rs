@@ -30,6 +30,7 @@ use std::collections::HashMap;
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
+/// Additional bounds for `Hasher` trait for with_std.
 pub trait HasherBounds {}
 impl<T: Hasher> HasherBounds for T {}
 
