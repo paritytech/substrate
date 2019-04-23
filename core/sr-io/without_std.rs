@@ -460,7 +460,7 @@ impl StorageApi for () {
 	fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
 		unsafe {
 			ext_set_child_storage.get()(
-				storage_key.as_ptr(), key.len() as u32,
+				storage_key.as_ptr(), storage_key.len() as u32,
 				key.as_ptr(), key.len() as u32,
 				value.as_ptr(), value.len() as u32
 			);

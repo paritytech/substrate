@@ -49,7 +49,16 @@
 //!
 //! `Executive` type declaration from the node template.
 //!
-//! ```ignore
+//! ```
+//! # use primitives::generic;
+//! # use srml_executive as executive;
+//! # pub struct UncheckedExtrinsic {};
+//! # pub struct Header {};
+//! # type Context = system::ChainContext<Runtime>;
+//! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+//! # pub type Balances = u64;
+//! # pub type AllModules = u64;
+//! # pub enum Runtime {};
 //! /// Executive: handles dispatch to the various modules.
 //! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
 //! ```
@@ -61,7 +70,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, As, Digest, NumberFor, Block as BlockT, OffchainWorker
+	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -311,24 +320,23 @@ impl<
 			}
 
 			// check index
-			let mut expected_index = <system::Module<System>>::account_nonce(sender);
+			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if index < &expected_index {
 				return TransactionValidity::Invalid(ApplyError::Stale as i8)
 			}
-			if *index > expected_index + As::sa(256) {
-				return TransactionValidity::Unknown(ApplyError::Future as i8)
-			}
 
-			let mut deps = Vec::new();
-			while expected_index < *index {
-				deps.push((sender, expected_index).encode());
-				expected_index = expected_index + One::one();
-			}
+			let index = *index;
+			let provides = vec![(sender, index).encode()];
+			let requires = if expected_index < index {
+				vec![(sender, index - One::one()).encode()]
+			} else {
+				vec![]
+			};
 
 			TransactionValidity::Valid {
 				priority: encoded_len as TransactionPriority,
-				requires: deps,
-				provides: vec![(sender, *index).encode()],
+				requires,
+				provides,
 				longevity: TransactionLongevity::max_value(),
 			}
 		} else {

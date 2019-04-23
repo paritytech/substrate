@@ -82,7 +82,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				(proc.cpu_usage(), proc.memory())
 			} else { (0.0, 0) };
 
-			let network_state = serde_json::to_string(&network.network_state()).unwrap_or_default();
+			let network_state = network.network_state();
 
 			telemetry!(
 				SUBSTRATE_INFO;

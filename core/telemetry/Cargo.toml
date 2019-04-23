@@ -12,8 +12,8 @@ log = "0.4"
 rand = "0.6"
 serde = "1.0.81"
 serde_derive = "1.0"
-slog = "^2"
-slog-json = "^2"
-slog-async = "^2"
+slog = { version = "^2", features = ["nested-values"] }
+slog-json = { version = "^2", features = ["nested-values"] }
+slog-async = { version = "^2", features = ["nested-values"] }
 slog-scope = "^4"
 ws = { version = "^0.7", features = ["ssl"] }

@@ -416,7 +416,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		if let Some((topic, keep)) = validation_result {
 			if let Some(ref mut peer) = self.peers.get_mut(&who) {
-				use std::collections::hash_map::Entry;
 				peer.known_messages.insert(message_hash);
 				if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
 					debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);

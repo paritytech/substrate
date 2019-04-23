@@ -319,7 +319,6 @@ fn code_using_trie() -> u64 {
 	iter_pairs.len() as u64
 }
 
-
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
