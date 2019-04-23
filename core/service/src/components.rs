@@ -457,6 +457,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	{
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: config.database_cache_size.map(|u| u as usize),
+			state_cache_size: config.state_cache_size,
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -532,6 +533,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	{
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
+			state_cache_size: config.state_cache_size,
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -561,9 +563,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::Encode;
 	use consensus_common::BlockOrigin;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::{Extrinsic, Transfer}};
+	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
@@ -576,8 +577,7 @@ mod tests {
 				from: AccountKeyring::Alice.into(),
 				to: Default::default(),
 			};
-			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
-			Extrinsic::Transfer(transfer, signature)
+			transfer.into_signed_tx()
 		};
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();

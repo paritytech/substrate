@@ -956,6 +956,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
 
+			telemetry!(SUBSTRATE_INFO; "notify.finalized";
+				"height" => format!("{}", header.number()),
+				"best" => ?finalized_hash,
+			);
+
 			let notification = FinalityNotification {
 				header,
 				hash: finalized_hash,

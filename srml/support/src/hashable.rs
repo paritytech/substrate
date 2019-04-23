@@ -19,6 +19,7 @@
 use crate::codec::Codec;
 use runtime_io::{blake2_256, twox_128, twox_256};
 
+/// Trait for available hash functions.
 pub trait Hashable: Sized {
 	fn blake2_256(&self) -> [u8; 32];
 	fn twox_128(&self) -> [u8; 16];

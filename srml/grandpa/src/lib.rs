@@ -31,7 +31,7 @@
 pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::{Encode, Decode};

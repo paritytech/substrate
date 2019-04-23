@@ -141,6 +141,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
+	/// Returns the used state cache, if existent.
+	fn used_state_cache_size(&self) -> Option<usize>;
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns true if state for given block is available.
