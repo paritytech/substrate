@@ -32,16 +32,13 @@
 //! or exit the validator set at a session change. It is measured in block numbers and set with `set_length`
 //! during a session for use in subsequent sessions.
 //! - **Session key:** A session key is actually several keys kept together that provide the various signing
-//! functions required by validators. In addition to providing signing functions, it allows validators and
-//! nominators to keep their staked funds in a cold wallet, while using the session key to sign messages
-//! related to their network responsibilities.
+//! functions required by network authorities/validators in pursuit of their duties.
 //! - **Session key configuration process:** A session key is set using `set_key` for use in the
 //! next session. It is stored in `NextKeyFor`, a mapping between the caller's `AccountID` and the session
 //! key provided. `set_key` allows users to set their session key prior to becoming a validator.
 //! It is a public call since it uses `ensure_signed`, which checks that the origin is a signed account.
 //! As such, the account ID of the origin stored in in `NextKeyFor` may not necessarily be associated with
-//! a block author or a validator. The session keys of reaped (deleted) accounts are removed once their
-//! account balance is zero.
+//! a block author or a validator. The session keys of accounts are removed once their account balance is zero.
 //! - **Validator set session key configuration process:** Each session we iterate through the current
 //! set of validator account IDs to check if a session key was created for it in the previous session
 //! using `set_key`. If it was then we call `set_authority` from the [Consensus module](../srml_consensus/index.html)
@@ -77,7 +74,7 @@
 //! - `set_key` - Set a validator's session key for the next session.
 //! - `set_length` - Set a new session length to be applied upon the next session change.
 //! - `force_new_session` - Force a new session that should be considered either a normal (rewardable)
-//! or exceptional (slashable) rotation.
+//! or exceptional rotation.
 //! - `on_finalize` - Called when a block is finalized. Will rotate session if it is the last
 //! block of the current session.
 //!
