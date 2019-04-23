@@ -187,7 +187,6 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 	}
 
 	fn block_hash(&self, number: Option<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
-		let number: Option<number::NumberOrHex<NumberFor<Block>>> = number.into();
 		Ok(match number {
 			None => Some(self.client.info()?.chain.best_hash),
 			Some(num_or_hex) => self.client.header(&BlockId::number(num_or_hex.to_number()?))?.map(|h| h.hash()),
