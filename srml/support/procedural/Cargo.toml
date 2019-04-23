@@ -13,4 +13,6 @@ sr-api-macros = { path = "../../../core/sr-api-macros" }
 
 proc-macro2 = "0.4.27"
 quote = { version = "0.6.12" }
-syn = { version = "0.15.30", features = ["full"] }
+# FIXME: https://github.com/paritytech/substrate/issues/2326
+# Remove this restriction once the dependency on erstwhile CustomKeyword trait is removed
+syn = { version = ">= 0.15.30, < 0.15.32", features = ["full"] }

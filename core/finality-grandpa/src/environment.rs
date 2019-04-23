@@ -298,31 +298,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-		if base == block { return Err(GrandpaError::NotDescendent) }
-
-		let tree_route_res = ::client::blockchain::tree_route(
-			self.inner.backend().blockchain(),
-			BlockId::Hash(block),
-			BlockId::Hash(base),
-		);
-
-		let tree_route = match tree_route_res {
-			Ok(tree_route) => tree_route,
-			Err(e) => {
-				debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
-					block, base, e);
-
-				return Err(GrandpaError::NotDescendent);
-			}
-		};
-
-		if tree_route.common_block().hash != base {
-			return Err(GrandpaError::NotDescendent);
-		}
-
-		// skip one because our ancestry is meant to start from the parent of `block`,
-		// and `tree_route` includes it.
-		Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
+		ancestry(&self.inner, base, block)
 	}
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -398,6 +374,41 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 			}
 		}
 	}
+}
+
+pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
+	client: &Client<B, E, Block, RA>,
+	base: Block::Hash,
+	block: Block::Hash,
+) -> Result<Vec<Block::Hash>, GrandpaError> where
+	B: Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+{
+	if base == block { return Err(GrandpaError::NotDescendent) }
+
+	let tree_route_res = ::client::blockchain::tree_route(
+		client.backend().blockchain(),
+		BlockId::Hash(block),
+		BlockId::Hash(base),
+	);
+
+	let tree_route = match tree_route_res {
+		Ok(tree_route) => tree_route,
+		Err(e) => {
+			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
+				   block, base, e);
+
+			return Err(GrandpaError::NotDescendent);
+		}
+	};
+
+	if tree_route.common_block().hash != base {
+		return Err(GrandpaError::NotDescendent);
+	}
+
+	// skip one because our ancestry is meant to start from the parent of `block`,
+	// and `tree_route` includes it.
+	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
