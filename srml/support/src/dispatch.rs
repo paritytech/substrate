@@ -102,6 +102,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// ### Shorthand Example
 ///
 /// The macro automatically expands a shorthand function declaration to return the `Result` type.
+/// These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
@@ -111,8 +112,12 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
-/// 		// Shorthand declaration: this will return `Result`.
-/// 		fn my_function(origin) {
+/// 		fn my_long_function(origin) -> Result {
+///				// Your implementation
+/// 			Ok(())
+/// 		}
+///
+/// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
 ///		}
@@ -122,20 +127,24 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ### Privileged Function Example
 ///
-/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root(origin)`
-/// as the first line of the function.
+/// If the `origin` param is omitted, the macro adds it as the first parameter and adds `ensure_root!(origin)`
+/// as the first line of the function. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
 /// # extern crate srml_support;
 /// # use srml_support::dispatch::Result;
-/// # use srml_system::{self as system, Trait, ensure_signed};
+/// # use srml_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
-/// 		// Privileged function: the macro will add the `origin` param
-/// 		// and call `ensure_root(origin)`.
-///			fn my_function() -> Result {
+///			fn my_privileged_function() -> Result {
+///				// Your implementation
+/// 			Ok(())
+/// 		}
+///
+///			fn my_function(origin) -> Result {
+/// 			ensure_root!(origin);
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
@@ -174,15 +183,19 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// The following are reserved function signatures:
 ///
 /// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
-/// If set to default, it will call `deposit_event` from the [System module](../srml_system/index.html).
-/// However, you can write your own implementation for events in your runtime.
+/// The default behavior is to call `deposit_event` from the [System module](../srml_system/index.html).
+/// However, you can write your own implementation for events in your runtime. To use the default behavior,
+/// add `fn deposit_event<T>() = default;` to your `Module`.
 ///
 /// The following reserved functions also take the block number (with type `T::BlockNumber`) as an optional input:
 ///
-/// * `on_initialize`: Executes at the beginning of a block.
-/// * `on_finalize`: Executes at the end of a block.
+/// * `on_initialize`: Executes at the beginning of a block. Using this function will
+/// implement the [`OnInitialize`](../sr_primitives/traits/trait.OnInitialize.html) trait.
+/// * `on_finalize`: Executes at the end of a block. Using this function will
+/// implement the [`OnFinalize`](../sr_primitives/traits/trait.OnFinalize.html) trait.
 /// * `offchain_worker`: Executes at the beginning of a block and produces extrinsics for a future block
-/// upon completion.
+/// upon completion. Using this function will implement the
+/// [`OffchainWorker`](../sr_primitives/traits/trait.OffchainWorker.html) trait.
 #[macro_export]
 macro_rules! decl_module {
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
