@@ -69,7 +69,7 @@ use proc_macro::TokenStream;
 /// * `#type`: Storage type.
 /// * [optional] `#default`: Value returned when none.
 ///
-/// Storage items are accessible in multiples ways:
+/// Storage items are accessible in multiple ways:
 ///
 /// * The structure: `Foo::<T>`
 /// * The `Store` trait structure: `<Module<T> as Store>::Foo`
