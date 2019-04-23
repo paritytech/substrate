@@ -453,7 +453,7 @@ pub struct GrandpaParams<'a, B, E, Block: BlockT<Hash=H256>, N, RA, X> {
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
@@ -706,12 +706,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
-	config: Config,
-	link: LinkHalf<B, E, Block, RA>,
-	network: N,
-	inherent_data_providers: InherentDataProviders,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -722,6 +718,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	DigestFor<Block>: Encode,
 	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
+	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
-	run_grandpa_voter(config, link, network, inherent_data_providers, on_exit)
+	run_grandpa_voter(grandpa_params)
 }
