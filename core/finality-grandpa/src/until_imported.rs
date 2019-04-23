@@ -258,13 +258,13 @@ pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block,
 ///
 /// This is used for compact commits which have already been checked for
 /// structural soundness.
-pub(crate) struct BlockCommitMessage<Block: BlockT> {
-	inner: Arc<(AtomicUsize, Mutex<Option<(u64, CompactCommit<Block>)>>)>,
+pub(crate) struct BlockCommitMessage<Block: BlockT, U> {
+	inner: Arc<(AtomicUsize, Mutex<Option<(u64, CompactCommit<Block>, U)>>)>,
 	target_number: NumberFor<Block>,
 }
 
-impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
-	type Blocked = (u64, CompactCommit<Block>);
+impl<Block: BlockT, U> BlockUntilImported<Block> for BlockCommitMessage<Block, U> {
+	type Blocked = (u64, CompactCommit<Block>, U);
 
 	fn schedule_wait<S, Wait, Ready>(
 		input: Self::Blocked,
@@ -400,11 +400,11 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 
 /// A stream which gates off incoming commit messages until all referenced
 /// block hashes have been imported.
-pub(crate) type UntilCommitBlocksImported<Block, Status, I> = UntilImported<
+pub(crate) type UntilCommitBlocksImported<Block, Status, I, U> = UntilImported<
 	Block,
 	Status,
 	I,
-	BlockCommitMessage<Block>,
+	BlockCommitMessage<Block, U>,
 >;
 
 #[cfg(test)]
@@ -507,7 +507,7 @@ mod tests {
 			commit_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send((0, unknown_commit.clone())).unwrap();
+		commit_tx.unbounded_send((0, unknown_commit.clone(), ())).unwrap();
 
 		let inner_chain_state = chain_state.clone();
 		let work = until_imported
@@ -527,7 +527,7 @@ mod tests {
 			});
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, unknown_commit)));
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, unknown_commit, ())));
 	}
 
 	#[test]
@@ -567,11 +567,11 @@ mod tests {
 			commit_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send((0, known_commit.clone())).unwrap();
+		commit_tx.unbounded_send((0, known_commit.clone(), ())).unwrap();
 
 		let work = until_imported.into_future();
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, known_commit)));
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, known_commit, ())));
 	}
 }

@@ -48,6 +48,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub database_path: String,
 	/// Cache Size for internal database in MiB
 	pub database_cache_size: Option<u32>,
+	/// Size of internal state cache in Bytes
+	pub state_cache_size: usize,
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Additional key seeds.
@@ -64,6 +66,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
+	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
+	pub rpc_cors: Option<Vec<String>>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// The default number of 64KB pages to allocate for Wasm execution
@@ -91,12 +95,14 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			database_cache_size: Default::default(),
+			state_cache_size: Default::default(),
 			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
+			rpc_cors: Some(vec![]),
 			telemetry_endpoints: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),

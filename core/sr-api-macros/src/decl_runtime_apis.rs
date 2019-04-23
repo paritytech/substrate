@@ -389,7 +389,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				#(
 					// Check if we need to call the function by an old name.
 					if version.apis.iter().any(|(s, v)| {
-						s == &ID && #versions < *v
+						s == &ID && *v < #versions
 					}) {
 						return call_runtime_at.call_api_at::<R, fn() -> _>(
 							at,
@@ -637,7 +637,7 @@ impl<'a> ToClientSideDecl<'a> {
 								#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
 									<#ret_type as #crate_::runtime_api::Decode>::decode(&mut &r[..])
 										.ok_or_else(||
-											#crate_::error::ErrorKind::CallResultDecode(
+											#crate_::error::Error::CallResultDecode(
 												#function_name
 											).into()
 										)

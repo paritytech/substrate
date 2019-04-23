@@ -34,8 +34,7 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 		from: sender.into(),
 		to: Default::default(),
 	};
-	let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
-	Extrinsic::Transfer(tx, signature)
+	tx.into_signed_tx()
 }
 
 #[test]
@@ -106,8 +105,7 @@ fn should_watch_extrinsic() {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
-		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
-		Extrinsic::Transfer(tx, signature)
+		tx.into_signed_tx()
 	};
 	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).unwrap();
 	let (res, data) = runtime.block_on(data.into_future()).unwrap();

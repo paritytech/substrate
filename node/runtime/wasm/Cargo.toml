@@ -12,7 +12,10 @@ crate-type = ["cdylib"]
 node-runtime = { path = "..", default-features = false }
 
 [features]
-default = []
+default = ["core"]
+core = [
+	"node-runtime/core",
+]
 std = [
 	"node-runtime/std",
 ]

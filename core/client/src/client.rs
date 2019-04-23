@@ -57,7 +57,7 @@ use executor::{RuntimeVersion, RuntimeInfo};
 use crate::notifications::{StorageNotifications, StorageEventStream};
 use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
 use crate::cht;
-use crate::error::{self, ErrorKind};
+use crate::error;
 use crate::in_mem;
 use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
@@ -65,7 +65,6 @@ use consensus;
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
-use error_chain::bail;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -383,7 +382,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
 	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
-		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
+		let proof_error = || error::Error::Backend(format!("Failed to generate header proof for {:?}", id));
 		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
@@ -409,7 +408,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
  		let first = first.as_();
 		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
 		if first > last_num {
-			return Err(error::ErrorKind::ChangesTrieAccessFailed("Invalid changes trie range".into()).into());
+			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
  		let finalized_number = self.backend.blockchain().info()?.finalized_number;
 		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.as_());
@@ -440,7 +439,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.backend.blockchain().info()?.best_number.as_(),
 			&key.0)
 		.and_then(|r| r.map(|r| r.map(|(block, tx)| (As::sa(block), tx))).collect::<Result<_, _>>())
-		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
+		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
@@ -532,7 +531,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			max_number.as_(),
 			&key.0
 		)
-		.map_err(|err| error::Error::from(error::ErrorKind::ChangesTrieAccessFailed(err)))?;
+		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
 
 		// now gather proofs for all changes tries roots that were touched during key_changes_proof
 		// execution AND are unknown (i.e. replaced with CHT) to the requester
@@ -586,7 +585,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let storage = self.backend.changes_trie_storage();
 		match (config, storage) {
 			(Some(config), Some(storage)) => Ok((config, storage)),
-			_ => Err(error::ErrorKind::ChangesTriesNotSupported.into()),
+			_ => Err(error::Error::ChangesTriesNotSupported.into()),
 		}
 	}
 
@@ -676,8 +675,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
-		use runtime_primitives::traits::Digest;
-
 		let ImportBlock {
 			origin,
 			header,
@@ -910,7 +907,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			warn!("Safety violation: attempted to revert finalized block {:?} which is not in the \
 				same chain as last finalized {:?}", retracted, last_finalized);
 
-			bail!(error::ErrorKind::NotInFinalizedChain);
+			return Err(error::Error::NotInFinalizedChain);
 		}
 
 		let route_from_best = crate::blockchain::tree_route(
@@ -958,6 +955,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		for finalized_hash in notify_finalized {
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
+
+			telemetry!(SUBSTRATE_INFO; "notify.finalized";
+				"height" => format!("{}", header.number()),
+				"best" => ?finalized_hash,
+			);
 
 			let notification = FinalityNotification {
 				header,
@@ -1241,7 +1243,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
 			match self.backend.blockchain().header(BlockId::Hash(id))? {
 				Some(hdr) => Ok(hdr),
-				None => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
+				None => Err(Error::UnknownBlock(format!("Unknown block {:?}", id))),
 			}
 		};
 
