@@ -151,7 +151,7 @@ pub trait Convert<A, B> {
 impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B { Default::default() }
 }
-
+/*
 /// A structure that converts the currency type into a lossy u64
 /// And back from u128
 pub struct CurrencyToVoteHandler;
@@ -180,7 +180,7 @@ impl Convert<u128, u128> for CurrencyToVoteHandler {
 		}
 	}
 }
-
+*/
 /// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
