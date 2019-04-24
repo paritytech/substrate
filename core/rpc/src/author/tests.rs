@@ -39,12 +39,34 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 }
 
 #[test]
+fn submit_inherent_should_go_to_the_inherents_pool() {
+	let runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let inherent_pool = Arc::new(InherentsPool::default());
+	let p = Author {
+		client: client.clone(),
+		transaction_pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		inherent_pool: Some(inherent_pool.clone()),
+		subscriptions: Subscriptions::new(runtime.executor()),
+	};
+	let xt = Extrinsic::UnsignedData(vec![1, 2, 3, 4]).encode();
+	let h: H256 = blake2_256(&xt).into();
+
+	assert_matches!(
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
+		Ok(h2) if h == h2
+	);
+	assert_eq!(inherent_pool.drain().len(), 1);
+}
+
+#[test]
 fn submit_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		transaction_pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		inherent_pool: None,
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 	let xt = uxt(AccountKeyring::Alice, 1).encode();
@@ -65,7 +87,8 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let client = Arc::new(test_client::new());
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
+		transaction_pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
+		inherent_pool: None,
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 	let xt = uxt(AccountKeyring::Alice, 0).encode();
@@ -88,7 +111,8 @@ fn should_watch_extrinsic() {
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
 	let p = Author {
 		client,
-		pool: pool.clone(),
+		transaction_pool: pool.clone(),
+		inherent_pool: None,
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
@@ -129,7 +153,8 @@ fn should_return_pending_extrinsics() {
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
 	let p = Author {
 		client,
-		pool: pool.clone(),
+		transaction_pool: pool.clone(),
+		inherent_pool: None,
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);

@@ -99,6 +99,7 @@ pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
+	UnsignedData(Vec<u8>),
 }
 
 #[cfg(feature = "std")]
@@ -123,6 +124,7 @@ impl BlindCheckable for Extrinsic {
 				}
 			},
 			Extrinsic::IncludeData(data) => Ok(Extrinsic::IncludeData(data)),
+			Extrinsic::UnsignedData(_) => Err("bad signature"),
 		}
 	}
 }
