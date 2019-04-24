@@ -490,7 +490,7 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 	use crate::crypto::DEV_PHRASE;
 
 	#[test]

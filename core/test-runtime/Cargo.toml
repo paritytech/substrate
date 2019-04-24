@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 log = { version = "0.4", optional = true }
-hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", optional = true, features = ["derive"] }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
@@ -35,7 +34,6 @@ substrate-test-client = { path = "../test-client" }
 default = ["std"]
 std = [
 	"log",
-	"hex-literal",
 	"serde",
 	"substrate-client/std",
 	"keyring",

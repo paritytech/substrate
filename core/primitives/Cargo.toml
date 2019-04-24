@@ -18,7 +18,6 @@ hash-db = { version = "0.12", default-features = false }
 hash256-std-hasher = { version = "0.12", default-features = false }
 ring = { version = "0.14", optional = true }
 untrusted = { version = "0.6", optional = true }
-hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
 schnorrkel = { version = "0.1", optional = true }
@@ -33,7 +32,7 @@ regex = {version = "1.1", optional = true }
 substrate-serializer = { path = "../serializer" }
 pretty_assertions = "0.6"
 heapsize = "0.4"
-hex-literal = "0.1"
+hex-literal = "0.2"
 rand = "0.6"
 
 [features]
@@ -57,7 +56,6 @@ std = [
 	"blake2-rfc",
 	"ring",
 	"untrusted",
-	"hex-literal",
 	"hex",
 	"base58",
 	"substrate-bip39",

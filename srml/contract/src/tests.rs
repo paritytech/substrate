@@ -29,7 +29,7 @@ use srml_support::{storage::child, StorageMap, assert_ok, impl_outer_event, impl
 use substrate_primitives::Blake2Hasher;
 use system::{self, Phase, EventRecord};
 use {wabt, balances, consensus};
-use hex_literal::*;
+use hex_literal::hex;
 use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
