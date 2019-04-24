@@ -90,9 +90,9 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 			},
 		};
 
-		// if the commit we've received targets a block lower than the last
+		// if the commit we've received targets a block lower or equal to the last
 		// finalized, ignore it and continue with the current state
-		if commit.target_number < last_finalized_number {
+		if commit.target_number <= last_finalized_number {
 			return future::ok(last_finalized_number);
 		}
 
