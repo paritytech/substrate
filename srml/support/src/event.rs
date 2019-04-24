@@ -24,33 +24,19 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// # Simple Event Example:
 ///
 /// ```rust
-/// #[macro_use]
-/// extern crate srml_support;
-/// #[macro_use]
-/// extern crate parity_codec as codec;
-/// #[macro_use]
-/// extern crate serde_derive;
-///
-/// decl_event!(
-///	   pub enum Event {
+/// srml_support::decl_event!(
+///    pub enum Event {
 ///       Success,
 ///       Failure(String),
 ///    }
 /// );
+///
 ///# fn main() {}
 /// ```
 ///
 /// # Generic Event Example:
 ///
 /// ```rust
-/// #[macro_use]
-/// extern crate srml_support;
-/// extern crate parity_codec as codec;
-/// #[macro_use]
-/// extern crate parity_codec;
-/// #[macro_use]
-/// extern crate serde_derive;
-///
 /// trait Trait {
 ///     type Balance;
 ///     type Token;
@@ -58,8 +44,8 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///
 /// mod event1 {
 ///     // Event that specifies the generic parameter explicitly (`Balance`).
-///     decl_event!(
-///	       pub enum Event<T> where Balance = <T as super::Trait>::Balance {
+///     srml_support::decl_event!(
+///        pub enum Event<T> where Balance = <T as super::Trait>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -69,8 +55,8 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///     // Event that uses the generic parameter `Balance`.
 ///     // If no name for the generic parameter is specified explicitly,
 ///     // the name will be taken from the type name of the trait.
-///     decl_event!(
-///	       pub enum Event<T> where <T as super::Trait>::Balance {
+///     srml_support::decl_event!(
+///        pub enum Event<T> where <T as super::Trait>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -78,12 +64,13 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///
 /// mod event3 {
 ///     // And we even support declaring multiple generic parameters!
-///     decl_event!(
-///	       pub enum Event<T> where <T as super::Trait>::Balance, <T as super::Trait>::Token {
+///     srml_support::decl_event!(
+///        pub enum Event<T> where <T as super::Trait>::Balance, <T as super::Trait>::Token {
 ///           Message(Balance, Token),
 ///        }
 ///     );
 /// }
+///
 ///# fn main() {}
 /// ```
 ///
@@ -92,14 +79,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// # Generic Event with Instance Example:
 ///
 /// ```rust
-/// #[macro_use]
-/// extern crate srml_support;
-/// extern crate parity_codec as codec;
-/// #[macro_use]
-/// extern crate parity_codec;
-/// #[macro_use]
-/// extern crate serde_derive;
-///
 ///# struct DefaultInstance;
 ///# trait Instance {}
 ///# impl Instance for DefaultInstance {}
@@ -109,7 +88,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// }
 ///
 /// // For module with instances, DefaultInstance is optionnal
-/// decl_event!(
+/// srml_support::decl_event!(
 ///    pub enum Event<T, I: Instance = DefaultInstance> where
 ///       <T as Trait>::Balance,
 ///       <T as Trait>::Token
@@ -509,8 +488,8 @@ macro_rules! __impl_outer_event_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use serde_derive::Serialize;
-	use parity_codec::{Encode, Decode};
+	use serde::Serialize;
+	use codec::{Encode, Decode};
 
 	mod system {
 		pub trait Trait {

@@ -20,9 +20,7 @@ use rstd::prelude::*;
 use rstd::{self, result, marker::PhantomData};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
-#[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
-#[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+#[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
@@ -301,9 +299,9 @@ impl<N> OnInitialize<N> for () {}
 
 /// Off-chain computation trait.
 ///
-/// Implementing this trait on a module allows you to perform a long-running tasks
+/// Implementing this trait on a module allows you to perform long-running tasks
 /// that make validators generate extrinsics (either transactions or inherents)
-/// with results of those long-running computations.
+/// with the results of those long-running computations.
 ///
 /// NOTE: This function runs off-chain, so it can access the block state,
 /// but cannot preform any alterations.

@@ -23,7 +23,7 @@ mod sync;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 
 use log::trace;
 use client;
@@ -39,7 +39,6 @@ use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use crate::message::Message;
 use network_libp2p::PeerId;
-use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, ed25519::Public as AuthorityId};
 use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
@@ -333,14 +332,16 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.net_proto_channel.send_from_client(ProtocolMsg::BlockImported(hash, header.clone()));
 	}
 
-	// SyncOracle: are we connected to any peer?
+	/// SyncOracle: are we connected to any peer?
+	#[cfg(test)]
 	pub fn is_offline(&self) -> bool {
-		self.is_offline.load(Ordering::Relaxed)
+		self.is_offline.load(std::sync::atomic::Ordering::Relaxed)
 	}
 
-	// SyncOracle: are we in the process of catching-up with the chain?
+	/// SyncOracle: are we in the process of catching-up with the chain?
+	#[cfg(test)]
 	pub fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
+		self.is_major_syncing.load(std::sync::atomic::Ordering::Relaxed)
 	}
 
 	/// Called on connection to other indicated peer.
@@ -533,8 +534,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 					amount: 1,
 					nonce,
 				};
-				let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
-				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
+				builder.push(transfer.into_signed_tx()).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
 			})

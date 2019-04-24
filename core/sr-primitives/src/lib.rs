@@ -24,13 +24,13 @@
 pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use serde_derive;
+pub use serde;
 
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
-use substrate_primitives::{ed25519, sr25519, hash::H512};
+use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -83,21 +83,11 @@ macro_rules! create_runtime_str {
 }
 
 #[cfg(feature = "std")]
-pub use serde::{Serialize, de::DeserializeOwned};
-#[cfg(feature = "std")]
-pub use serde_derive::{Serialize, Deserialize};
+pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
-	/// Hash given slice.
-	///
-	/// Default to xx128 hashing.
-	fn hash(data: &[u8]) -> [u8; 16] {
-		let r = runtime_io::twox_128(data);
-		log::trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
-		r
-	}
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		let mut storage = Default::default();
@@ -310,6 +300,18 @@ pub enum MultiSignature {
 	Sr25519(sr25519::Signature),
 }
 
+impl From<ed25519::Signature> for MultiSignature {
+	fn from(x: ed25519::Signature) -> Self {
+		MultiSignature::Ed25519(x)
+	}
+}
+
+impl From<sr25519::Signature> for MultiSignature {
+	fn from(x: sr25519::Signature) -> Self {
+		MultiSignature::Sr25519(x)
+	}
+}
+
 impl Default for MultiSignature {
 	fn default() -> Self {
 		MultiSignature::Ed25519(Default::default())
@@ -329,6 +331,45 @@ pub enum MultiSigner {
 impl Default for MultiSigner {
 	fn default() -> Self {
 		MultiSigner::Ed25519(Default::default())
+	}
+}
+
+/// NOTE: This implementations is required by `SimpleAddressDeterminator`,
+/// we convert the hash into some AccountId, it's fine to use any scheme.
+impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
+	fn unchecked_from(x: T) -> Self {
+		ed25519::Public::unchecked_from(x.into()).into()
+	}
+}
+
+impl AsRef<[u8]> for MultiSigner {
+	fn as_ref(&self) -> &[u8] {
+		match *self {
+			MultiSigner::Ed25519(ref who) => who.as_ref(),
+			MultiSigner::Sr25519(ref who) => who.as_ref(),
+		}
+	}
+}
+
+impl From<ed25519::Public> for MultiSigner {
+	fn from(x: ed25519::Public) -> Self {
+		MultiSigner::Ed25519(x)
+	}
+}
+
+impl From<sr25519::Public> for MultiSigner {
+	fn from(x: sr25519::Public) -> Self {
+		MultiSigner::Sr25519(x)
+	}
+}
+
+ #[cfg(feature = "std")]
+impl std::fmt::Display for MultiSigner {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		match *self {
+			MultiSigner::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
+			MultiSigner::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
+		}
 	}
 }
 
@@ -357,8 +398,14 @@ impl Verify for AnySignature {
 }
 
 impl From<sr25519::Signature> for AnySignature {
-	fn from(s: sr25519::Signature) -> AnySignature {
-		AnySignature(s.0.into())
+	fn from(s: sr25519::Signature) -> Self {
+		AnySignature(s.into())
+	}
+}
+
+impl From<ed25519::Signature> for AnySignature {
+	fn from(s: ed25519::Signature) -> Self {
+		AnySignature(s.into())
 	}
 }
 
@@ -471,7 +518,7 @@ macro_rules! impl_outer_config {
 	) => {
 		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
 		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde_derive::Serialize, $crate::serde_derive::Deserialize)]
+		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		pub struct $main {
@@ -519,7 +566,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -527,7 +574,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -671,7 +718,7 @@ mod tests {
 	mod a {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
-		use serde_derive::Serialize;
+		use serde::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -681,7 +728,7 @@ mod tests {
 	mod b {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
-		use serde_derive::Serialize;
+		use serde::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]

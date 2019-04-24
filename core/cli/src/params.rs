@@ -313,6 +313,10 @@ pub struct RunCmd {
 	#[structopt(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<u32>,
 
+	/// Specify the state cache size
+	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	pub state_cache_size: usize,
+
 	/// Listen to all RPC interfaces (default is local)
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
