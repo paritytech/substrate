@@ -1,7 +1,7 @@
 [package]
 name = "srml-support-test"
 version = "0.1.0"
-authors = ["thiolliere <gui.thiolliere@gmail.com>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dev-dependencies]

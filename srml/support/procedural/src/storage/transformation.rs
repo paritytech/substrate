@@ -19,7 +19,9 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
+use srml_support_procedural_tools::{
+	generate_crate_access, generate_hidden_includes, clean_type_string
+};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -65,11 +67,14 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		crate_ident: cratename,
 		content: ext::Braces { content: storage_lines, ..},
 		extra_genesis,
-		extra_genesis_skip_phantom_data_field,
 		..
 	} = def;
 
-	let instance_opts = match get_instance_opts(mod_instance, mod_instantiable, mod_default_instance) {
+	let instance_opts = match get_instance_opts(
+		mod_instance,
+		mod_instantiable,
+		mod_default_instance
+	) {
 		Ok(opts) => opts,
 		Err(err) => return err.to_compile_error().into(),
 	};
@@ -104,7 +109,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts,
 		&storage_lines,
 		&extra_genesis,
-		extra_genesis_skip_phantom_data_field.is_some(),
 	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
@@ -114,6 +118,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&cratename,
 		&storage_lines,
 	);
+
 	let decl_store_items = decl_store_items(
 		&storage_lines,
 	);
@@ -185,7 +190,6 @@ fn decl_store_extra_genesis(
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	extra_genesis: &Option<AddExtraGenesis>,
-	extra_genesis_skip_phantom_data_field: bool,
 ) -> Result<TokenStream2> {
 
 	let InstanceOpts {
@@ -202,8 +206,9 @@ fn decl_store_extra_genesis(
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
-	for sline in storage_lines.inner.iter() {
+	let mut assimilate_require_generic = false;
 
+	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			attrs,
 			name,
@@ -234,7 +239,9 @@ fn decl_store_extra_genesis(
 					)
 				);
 			};
-			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
+
+			if type_infos.kind.is_simple()
+				&& ext::type_contains_ident(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
 				has_trait_field = true;
 			}
@@ -259,8 +266,18 @@ fn decl_store_extra_genesis(
 					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
 				},
 			});
-			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
-				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance, #instance>| config.#ident.clone()) )));
+			opt_build = Some(
+				build
+					.as_ref()
+					.map(|b| {
+						assimilate_require_generic = ext::expr_contains_ident(&b.expr, traitinstance);
+						&b.expr.content
+					})
+					.map(|b| quote!( #b ))
+					.unwrap_or_else(||
+						quote!( (|config: &Self| config.#ident.clone()) )
+					)
+			);
 
 			let fielddefault = default_value.inner.as_ref().map(|d| &d.expr).map(|d|
 				if type_infos.is_option {
@@ -276,42 +293,40 @@ fn decl_store_extra_genesis(
 
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
-			is_trait_needed = true;
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						use #scrate::codec::{Encode, Decode};
-
 						let v = (#builder)(&self);
-						<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&v, &storage);
+						<
+							#name<#traitinstance, #instance> as
+							#scrate::storage::hashed::generator::StorageValue<#typ>
+						>::put(&v, &storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						use #scrate::codec::{Encode, Decode};
-
 						let data = (#builder)(&self);
-						for (k, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
-						}
+						data.into_iter().for_each(|(k, v)| {
+							<
+								#name<#traitinstance, #instance> as
+								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
+							>::insert(&k, &v, &storage);
+						});
 					}}
 				},
 				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
 					quote!{{
-						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
-						use #scrate::codec::{Encode, Decode};
-
 						let data = (#builder)(&self);
-						for (k1, k2, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
-						}
+						data.into_iter().for_each(|(k1, k2, v)| {
+							<
+								#name<#traitinstance, #instance> as
+								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::insert(&k1, &k2, &v, &storage);
+						});
 					}}
 				},
 			});
 		}
-
 	}
 
 	let mut has_scall = false;
@@ -330,7 +345,7 @@ fn decl_store_extra_genesis(
 					default_value,
 					..
 				}) => {
-					if ext::has_parametric_type(&extra_type, traitinstance) {
+					if ext::type_contains_ident(&extra_type, traitinstance) {
 						is_trait_needed = true;
 						has_trait_field = true;
 					}
@@ -351,6 +366,7 @@ fn decl_store_extra_genesis(
 					if has_scall {
 						return Err(Error::new(expr.span(), "Only one build expression allowed for extra genesis"));
 					}
+					assimilate_require_generic = ext::expr_contains_ident(&expr, traitinstance);
 					let content = &expr.content;
 					scall = quote!( ( #content ) );
 					has_scall = true;
@@ -363,7 +379,7 @@ fn decl_store_extra_genesis(
 	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
 		let mut b_dser = String::new();
-		// panic!("{:#?}", serde_complete_bound);
+
 		serde_complete_bound.into_iter().for_each(|bound| {
 			let stype = quote!(#bound);
 			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", stype, scrate));
@@ -382,46 +398,31 @@ fn decl_store_extra_genesis(
 		|| !config_field.is_empty()
 		|| !genesis_extrafields.is_empty()
 		|| !builders.is_empty();
-	Ok(if is_extra_genesis_needed {
-		let (fparam_struct, fparam_impl, sparam, ph_field, ph_default) = if is_trait_needed {
-			if (has_trait_field && instance.is_none()) || extra_genesis_skip_phantom_data_field {
-				// no phantom data required
-				(
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
-					quote!(<#traitinstance, #instance>),
-					quote!(),
-					quote!(),
-				)
-			} else {
-				// need phantom data
-				(
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
-					quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
-					quote!(<#traitinstance, #instance>),
-
-					quote!{
-						#[serde(skip)]
-						pub _genesis_phantom_data: #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>,
-					},
-					quote!{
-						_genesis_phantom_data: Default::default(),
-					},
-				)
-			}
+	if is_extra_genesis_needed {
+		let (fparam_struct, fparam_impl, sparam, build_storage_impl) = if is_trait_needed {
+			(
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable>),
+				quote!(<#traitinstance, #instance>),
+				quote!(<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>),
+			)
 		} else {
 			// do not even need type parameter
-			(quote!(), quote!(), quote!(), quote!(), quote!())
+			(
+				quote!(),
+				quote!(),
+				quote!(),
+				quote!(<#traitinstance: #traittype>),
+			)
 		};
-		quote!{
 
+		Ok(quote!{
 			#[derive(#scrate::Serialize, #scrate::Deserialize)]
 			#[cfg(feature = "std")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
 			#serde_bug_bound
 			pub struct GenesisConfig#fparam_struct {
-				#ph_field
 				#config_field
 				#genesis_extrafields
 			}
@@ -430,7 +431,6 @@ fn decl_store_extra_genesis(
 			impl#fparam_impl Default for GenesisConfig#sparam {
 				fn default() -> Self {
 					GenesisConfig {
-						#ph_default
 						#config_field_default
 						#genesis_extrafields_default
 					}
@@ -438,10 +438,28 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#fparam_impl #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
-				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
-					use #scrate::rstd::cell::RefCell;
-					let storage = RefCell::new(r);
+			impl#build_storage_impl GenesisConfig#sparam {
+				fn build_storage(self) -> std::result::Result<
+					(
+						#scrate::runtime_primitives::StorageOverlay,
+						#scrate::runtime_primitives::ChildrenStorageOverlay,
+					),
+					String
+				> {
+					let mut storage = Default::default();
+					let mut child_storage = Default::default();
+					self.assimilate_storage(&mut storage, &mut child_storage)?;
+					Ok((storage, child_storage))
+				}
+
+				/// Assimilate the storage for this module into pre-existing overlays.
+				fn assimilate_storage(
+					self,
+					storage: &mut #scrate::runtime_primitives::StorageOverlay,
+					child_storage: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
+				) -> std::result::Result<(), String> {
+					use std::{cell::RefCell, marker::PhantomData};
+					let storage = (RefCell::new(r), PhantomData::<Self>::default(), PhantomData::<#traitinstance>::default());
 
 					#builders
 
@@ -452,10 +470,20 @@ fn decl_store_extra_genesis(
 					Ok(())
 				}
 			}
-		}
+
+			#[cfg(feature = "std")]
+			impl#build_storage_impl #scrate::runtime_primitives::CreateModuleGenesisStorage<#traitinstance> for GenesisConfig#sparam {
+				fn create_module_genesis_storage(
+					self,
+					r: &mut #scrate::runtime_primitives::StorageOverlay,
+					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
+				) -> std::result::Result<(), String> {
+				}
+			}
+		})
 	} else {
-		quote!()
-	})
+		Ok(quote!())
+	}
 }
 
 fn decl_storage_items(
@@ -515,7 +543,7 @@ fn decl_storage_items(
 
 			impls.extend(quote! {
 				/// Tag a type as an instance of a module.
-				/// 
+				///
 				/// Defines storage prefixes, they must be unique.
 				pub trait #instantiable: 'static {
 					#const_impls

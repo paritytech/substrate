@@ -100,6 +100,12 @@ pub trait BuildStorage: Sized {
 }
 
 #[cfg(feature = "std")]
+pub trait CreateModuleGenesisStorage<T>: Sized {
+	/// Create the module genesis storage into the given `storage` and `child_storage`.
+	fn create_module_genesis_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
+}
+
+#[cfg(feature = "std")]
 impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))

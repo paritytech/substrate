@@ -145,7 +145,6 @@ mod module2 {
 			pub LinkedMap config(linked_map): linked_map u64 => u64;
 			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
 		}
-		extra_genesis_skip_phantom_data_field;
 	}
 
 	srml_support::decl_event! {

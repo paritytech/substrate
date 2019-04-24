@@ -18,23 +18,20 @@
 //! Extension to syn types, mainly for parsing
 // end::description[]
 
-use syn::parse::{
-	Parse,
-	ParseStream,
-	Result,
+use syn::{
+	visit::{Visit, self}, parse::{Parse, ParseStream, Result},
+	token::CustomKeyword, Ident,
 };
-use syn::token::CustomKeyword;
-use proc_macro2::TokenStream as T2;
+use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use std::iter::once;
-use syn::Ident;
 use srml_support_procedural_tools_derive::{ToTokens, Parse};
 
 /// stop parsing here getting remaining token as content
 /// Warn duplicate stream (part of)
 #[derive(Parse, ToTokens, Debug)]
 pub struct StopParse {
-	pub inner: T2,
+	pub inner: TokenStream,
 }
 
 // inner macro really dependant on syn naming convention, do not export
@@ -56,8 +53,8 @@ macro_rules! groups_impl {
 		}
 
 		impl<P: ToTokens> ToTokens for $name<P> {
-			fn to_tokens(&self, tokens: &mut T2) {
-				let mut inner_stream = T2::new();
+			fn to_tokens(&self, tokens: &mut TokenStream) {
+				let mut inner_stream = TokenStream::new();
 				self.content.to_tokens(&mut inner_stream);
 				let token_tree: proc_macro2::TokenTree =
 					proc_macro2::Group::new(proc_macro2::Delimiter::$deli, inner_stream).into();
@@ -87,9 +84,9 @@ impl<T: CustomKeyword> Parse for CustomToken<T> {
 }
 
 impl<T: CustomKeyword> ToTokens for CustomToken<T> {
-	fn to_tokens(&self, tokens: &mut T2) {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		use std::str::FromStr;
-		tokens.extend(T2::from_str(T::ident()).expect("custom keyword should parse to ident"));
+		tokens.extend(TokenStream::from_str(T::ident()).expect("custom keyword should parse to ident"));
 	}
 }
 
@@ -134,7 +131,7 @@ impl<P: Parse, T: Parse> Parse for PunctuatedInner<P,T,NoTrailing> {
 }
 
 impl<P: ToTokens, T: ToTokens, V> ToTokens for PunctuatedInner<P,T,V> {
-	fn to_tokens(&self, tokens: &mut T2) {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		self.inner.to_tokens(tokens)
 	}
 }
@@ -154,7 +151,7 @@ impl Parse for Meta {
 }
 
 impl ToTokens for Meta {
-	fn to_tokens(&self, tokens: &mut T2) {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		match self.inner {
 			syn::Meta::Word(ref ident) => {
 				let ident = ident.clone();
@@ -184,7 +181,7 @@ impl Parse for OuterAttributes {
 }
 
 impl ToTokens for OuterAttributes {
-	fn to_tokens(&self, tokens: &mut T2) {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		for att in self.inner.iter() {
 			att.to_tokens(tokens);
 		}
@@ -209,121 +206,59 @@ impl<P: Parse> Parse for Opt<P> {
 }
 
 impl<P: ToTokens> ToTokens for Opt<P> {
-	fn to_tokens(&self, tokens: &mut T2) {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		if let Some(ref p) = self.inner {
 			p.to_tokens(tokens);
 		}
 	}
 }
 
-pub fn extract_type_option(typ: &syn::Type) -> Option<T2> {
+pub fn extract_type_option(typ: &syn::Type) -> Option<TokenStream> {
 	if let syn::Type::Path(ref path) = typ {
-		path.path.segments.last().and_then(|v| {
-			if v.value().ident == "Option" {
-				if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
-					let args = &a.args;
-					Some(quote!{ #args })
-				} else {
-					None
-				}
-			} else {
-				None
+		let v = path.path.segments.last()?;
+		if v.value().ident == "Option" {
+			if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
+				let args = &a.args;
+				return Some(quote!{ #args })
 			}
-		})
-	} else {
-		None
-	}
-}
-
-pub fn is_parametric_type_def(typ: &syn::Type, default: bool) -> bool {
-	match *typ {
-		syn::Type::Path(ref path) => {
-			path.path.segments.iter().any(|v| {
-				if let syn::PathArguments::AngleBracketed(..) = v.arguments {
-					true
-				} else {
-					false
-				}
-			})
-		},
-		syn::Type::Slice(ref inner) => is_parametric_type_def(&inner.elem, default),
-		syn::Type::Array(ref inner) => is_parametric_type_def(&inner.elem, default),
-		syn::Type::Ptr(ref inner) => is_parametric_type_def(&inner.elem, default),
-		syn::Type::Reference(ref inner) => is_parametric_type_def(&inner.elem, default),
-		syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
-		syn::Type::Never(..) => false,
-		syn::Type::Tuple(ref inner) =>
-			inner.elems.iter().any(|t| is_parametric_type_def(t, default)),
-		syn::Type::TraitObject(..) => true,
-		syn::Type::ImplTrait(..) => true,
-		syn::Type::Paren(ref inner) => is_parametric_type_def(&inner.elem, default),
-		syn::Type::Group(ref inner) => is_parametric_type_def(&inner.elem, default),
-		syn::Type::Infer(..) => true,
-		syn::Type::Macro(..) => default,
-		syn::Type::Verbatim(..) => default,
-	}
-}
-
-/// check if type has any type parameter, defaults to true for some cases.
-pub fn is_parametric_type(typ: &syn::Type) -> bool {
-	is_parametric_type_def(typ, true)
-}
-
-fn has_parametric_type_def_in_path(path: &syn::Path, ident: &Ident, default: bool) -> bool {
-	path.segments.iter().any(|v| {
-		if ident == &v.ident {
-			return true;
 		}
-		if let syn::PathArguments::AngleBracketed(ref a) = v.arguments {
-			for arg in a.args.iter() {
-				if let syn::GenericArgument::Type(ref typ) = arg {
-					if has_parametric_type_def(typ, ident, default) {
-						return true;
-					}
-				}
-				// potentially missing matches here
-			}
-			false
-		} else {
-			false
-		}
-	})
+	}
 
+	None
 }
-pub fn has_parametric_type_def(typ: &syn::Type, ident: &Ident, default: bool) -> bool {
-	match *typ {
-		syn::Type::Path(ref path) => has_parametric_type_def_in_path(&path.path, ident, default),
-		syn::Type::Slice(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
-		syn::Type::Array(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
-		syn::Type::Ptr(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
-		syn::Type::Reference(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
-		syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
-		syn::Type::Never(..) => false,
-		syn::Type::Tuple(ref inner) =>
-			inner.elems.iter().any(|t| has_parametric_type_def(t, ident, default)),
-		syn::Type::TraitObject(ref to) => {
-			to.bounds.iter().any(|bound| {
-				if let syn::TypeParamBound::Trait(ref t) = bound {
-					has_parametric_type_def_in_path(&t.path, ident, default)
-				} else { false }
-			})
-		},
-		syn::Type::ImplTrait(ref it) => {
-			it.bounds.iter().any(|bound| {
-				if let syn::TypeParamBound::Trait(ref t) = bound {
-					has_parametric_type_def_in_path(&t.path, ident, default)
-				} else { false }
-			})
-		},
-		syn::Type::Paren(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
-		syn::Type::Group(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
-		syn::Type::Infer(..) => default,
-		syn::Type::Macro(..) => default,
-		syn::Type::Verbatim(..) => default,
+
+/// Auxialary structure to check if a given `Ident` is contained in an ast.
+struct ContainsIdent<'a> {
+	ident: &'a Ident,
+	result: bool,
+}
+
+impl<'ast> Visit<'ast> for ContainsIdent<'ast> {
+	fn visit_ident(&mut self, input: &'ast Ident) {
+		if input == self.ident {
+			self.result = true;
+		}
 	}
 }
 
-/// check if type has a type parameter, defaults to true for some cases.
-pub fn has_parametric_type(typ: &syn::Type, ident: &Ident) -> bool {
-	has_parametric_type_def(typ, ident, true)
+/// Check if a `Type` contains the given `Ident`.
+pub fn type_contains_ident(typ: &syn::Type, ident: &Ident) -> bool {
+	let mut visit = ContainsIdent {
+		result: false,
+		ident,
+	};
+
+	visit::visit_type(&mut visit, typ);
+	visit.result
+}
+
+/// Check if a `Expr` contains the given `Ident`.
+pub fn expr_contains_ident(expr: &syn::Expr, ident: &Ident) -> bool {
+	let mut visit = ContainsIdent {
+		result: false,
+		ident,
+	};
+
+	visit::visit_expr(&mut visit, expr);
+	visit.result
 }

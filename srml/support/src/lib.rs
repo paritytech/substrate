@@ -181,7 +181,7 @@ mod tests {
 	use super::*;
 	use codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
-	use runtime_primitives::BuildStorage;
+	use runtime_primitives::BuildStorageGen;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 		StorageFunctionType, StorageFunctionModifier,
@@ -226,7 +226,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage().unwrap().0.into()
 	}
 
 	type Map = Data<Test>;

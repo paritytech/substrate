@@ -52,7 +52,6 @@ struct StorageDefinition {
 	pub crate_ident: Ident,
 	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: Option<AddExtraGenesis>,
-	pub extra_genesis_skip_phantom_data_field: Option<ExtraGenesisSkipPhantomDataField>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -65,12 +64,6 @@ struct SpecificHiddenCrate {
 struct AddExtraGenesis {
 	pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
 	pub content: ext::Braces<AddExtraGenesisContent>,
-}
-
-#[derive(Parse, ToTokens, Debug)]
-struct ExtraGenesisSkipPhantomDataField {
-	pub genesis_phantom_keyword: ext::CustomToken<ExtraGenesisSkipPhantomDataField>,
-	pub token: Token![;],
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -255,5 +248,4 @@ custom_keyword!(Blake2_128Keyword, "blake2_128", "Blake2_128 as keyword");
 custom_keyword!(Twox256Keyword, "twox_256", "Twox256 as keyword");
 custom_keyword!(Twox128Keyword, "twox_128", "Twox128 as keyword");
 custom_keyword!(Twox64ConcatKeyword, "twox_64_concat", "Twox64Concat as keyword");
-custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
 custom_keyword_impl!(SetHasher, "hasher", "storage hasher");
