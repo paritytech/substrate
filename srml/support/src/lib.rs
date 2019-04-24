@@ -27,7 +27,7 @@ pub use serde;
 #[doc(hidden)]
 pub use sr_std as rstd;
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -179,7 +179,7 @@ macro_rules! for_each_tuple {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::Codec;
+	use codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	pub use srml_metadata::{

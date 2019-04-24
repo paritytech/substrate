@@ -195,7 +195,7 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<S: Storage, I: codec::Encode>(
+	fn append<S: HashedStorage<Twox128>, I: codec::Encode>(
 		items: &[I], storage: &S
 	) -> Result<(), &'static str> where T: codec::EncodeAppend<Item=I> {
 		let new_val = <T as codec::EncodeAppend>::append(

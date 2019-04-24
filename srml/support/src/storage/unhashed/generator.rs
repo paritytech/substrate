@@ -89,11 +89,11 @@ impl UnhashedStorage for std::cell::RefCell<&mut sr_primitives::StorageOverlay> 
 	}
 
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.0.borrow().get(key).cloned()
+		self.borrow().get(key).cloned()
 	}
 
 	fn put_raw(&self, key: &[u8], value: &[u8]) {
-		self.0.borrow_mut().insert(key.to_vec(), value.to_vec());
+		self.borrow_mut().insert(key.to_vec(), value.to_vec());
 	}
 }
 

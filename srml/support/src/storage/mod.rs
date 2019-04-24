@@ -85,11 +85,11 @@ impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
 	}
 
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		get_raw(key)
+		hashed::get_raw(&H::hash, key)
 	}
 
 	fn put_raw(&self, key: &[u8], value: &[u8]) {
-		put_raw(key, value)
+		hashed::put_raw(&H::hash, key, value)
 	}
 }
 
