@@ -270,3 +270,21 @@ fn print_usage(matches: &clap::ArgMatches) {
 	println!("{}", matches.usage());
 }
 
+#[cfg(test)]
+mod tests {
+	use super::{Hash, Decode};
+	#[test]
+	fn should_work() {
+		let s = "0123456789012345678901234567890123456789012345678901234567890123";
+
+		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+
+		let d2: Hash = {
+			let mut gh: [u8; 32] = Default::default();
+			gh.copy_from_slice(hex::decode(s).unwrap().as_ref());
+			Hash::from(gh)
+		};
+
+		assert_eq!(d1, d2);
+	}
+}
