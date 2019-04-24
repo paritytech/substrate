@@ -364,10 +364,6 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get_account_nonce(account: &T::AccountId) -> T::Index {
-		<AccountNonce<T>>::get(account)
-	}
-
 	/// Gets the index of extrinsic that is currenty executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
