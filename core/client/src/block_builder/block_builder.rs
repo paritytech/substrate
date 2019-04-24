@@ -79,7 +79,7 @@ where
 
 	/// Enables proof recording.
 	///
-	/// While proof recording is enabled, all accessed trie nodes are safed.
+	/// While proof recording is enabled, all accessed trie nodes are saved.
 	/// These recorded trie nodes can be used by a third party to proof the
 	/// output of this block builder without having access to the full storage.
 	pub fn record_proof(&mut self) {
