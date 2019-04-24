@@ -17,7 +17,7 @@
 //! Operation on unhashed runtime storage
 
 use crate::rstd::borrow::Borrow;
-use super::{runtime_io, Codec, Encode, Decode, KeyedVec, Vec, IncrementalInput};
+use super::{Codec, Encode, Decode, KeyedVec, Vec, IncrementalInput};
 
 pub mod generator;
 

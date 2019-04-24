@@ -72,7 +72,7 @@ groups_impl!(Braces, Brace, Brace, parse_braces);
 groups_impl!(Brackets, Bracket, Bracket, parse_brackets);
 groups_impl!(Parens, Paren, Parenthesis, parse_parens);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CustomToken<T>(std::marker::PhantomData<T>);
 
 impl<T: CustomKeyword> Parse for CustomToken<T> {

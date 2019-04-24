@@ -24,6 +24,7 @@ use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
 use std::{collections::hash_map::Entry, cmp, error, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_timer::clock::Clock;
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
 ///
@@ -78,6 +79,9 @@ pub struct CustomProto<TMessage, TSubstream> {
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
+
+	/// `Clock` instance that uses the current execution context's source of time.
+	clock: Clock,
 }
 
 /// State of a peer we're connected to.
@@ -214,6 +218,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			next_incoming_index: substrate_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
 			marker: PhantomData,
+			clock: Clock::new(),
 		}
 	}
 
@@ -244,7 +249,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
 				let banned_until = Some(if let Some(ban) = ban {
-					cmp::max(timer.deadline(), Instant::now() + ban)
+					cmp::max(timer.deadline(), self.clock.now() + ban)
 				} else {
 					timer.deadline()
 				});
@@ -260,7 +265,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 					peer_id: peer_id.clone(),
 					event: CustomProtoHandlerIn::Disable,
 				});
-				let banned_until = ban.map(|dur| Instant::now() + dur);
+				let clock = &self.clock;
+				let banned_until = ban.map(|dur| clock.now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open, connected_point, banned_until }
 			},
 
@@ -281,7 +287,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 					peer_id: peer_id.clone(),
 					event: CustomProtoHandlerIn::Disable,
 				});
-				let banned_until = ban.map(|dur| Instant::now() + dur);
+				let clock = &self.clock;
+				let banned_until = ban.map(|dur| clock.now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open: false, connected_point, banned_until }
 			},
 
@@ -369,7 +376,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		};
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			PeerState::Banned { ref until } if *until > Instant::now() => {
+			PeerState::Banned { ref until } if *until > self.clock.now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
@@ -385,7 +392,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			},
 
 			PeerState::Disabled { open, ref connected_point, banned_until: Some(ref banned) }
-				if *banned > Instant::now() => {
+				if *banned > self.clock.now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
 					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
@@ -758,7 +765,7 @@ where
 				PeerState::Requested | PeerState::PendingRequest { .. } => {
 					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 					*entry.into_mut() = PeerState::Banned {
-						until: Instant::now() + Duration::from_secs(5)
+						until: self.clock.now() + Duration::from_secs(5)
 					};
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 					self.peerset.dropped(peer_id.clone())

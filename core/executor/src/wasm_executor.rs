@@ -25,10 +25,10 @@ use wasmi::{
 };
 use wasmi::RuntimeValue::{I32, I64, self};
 use wasmi::memory_units::{Pages};
-use state_machine::Externalities;
+use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
+use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -174,6 +174,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				HexDisplay::from(&key)
 			);
 		}
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(||
+				UserError("ext_set_child_storage: child storage key is invalid")
+			)?;
 		this.ext.set_child_storage(storage_key, key, value);
 		Ok(())
 	},
@@ -189,8 +193,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
-			}, HexDisplay::from(&key));
-		this.ext.clear_child_storage(&storage_key, &key);
+			}, HexDisplay::from(&key)
+		);
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(||
+				UserError("ext_clear_child_storage: child storage key is not valid")
+			)?;
+		this.ext.clear_child_storage(storage_key, &key);
 		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
@@ -214,7 +223,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
-		Ok(if this.ext.exists_child_storage(&storage_key, &key) { 1 } else { 0 })
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(||
+				UserError("ext_exists_child_storage: child storage key is not valid")
+			)?;
+		Ok(if this.ext.exists_child_storage(storage_key, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
@@ -226,7 +239,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
-		this.ext.kill_child_storage(&storage_key);
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(||
+				UserError("ext_exists_child_storage: child storage key is not valid")
+			)?;
+		this.ext.kill_child_storage(storage_key);
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
@@ -273,7 +290,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
-		let maybe_value = this.ext.child_storage(&storage_key, &key);
+
+		let maybe_value = {
+			let storage_key = ChildStorageKey::from_slice(&storage_key)
+				.ok_or_else(||
+					UserError("ext_get_allocated_child_storage: child storage key is not valid")
+				)?;
+			this.ext.child_storage(storage_key, &key)
+		};
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
@@ -339,7 +363,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to get key in ext_get_child_storage_into"))?;
-		let maybe_value = this.ext.child_storage(&storage_key, &key);
+
+		let maybe_value = {
+			let storage_key = ChildStorageKey::from_slice(&*storage_key)
+				.ok_or_else(||
+					UserError("ext_get_child_storage_into: child storage key is not valid")
+				)?;
+			this.ext.child_storage(storage_key, &key)
+		};
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
@@ -371,18 +402,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
-		let r = this.ext.child_storage_root(&storage_key);
-		if let Some(value) = r {
-			let offset = this.heap.allocate(value.len() as u32)? as u32;
-			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
-			this.memory.write_primitive(written_out, value.len() as u32)
-				.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
-			Ok(offset)
-		} else {
-			this.memory.write_primitive(written_out, u32::max_value())
-				.map_err(|_| UserError("Invalid attempt to write failed written_out in ext_child_storage_root"))?;
-			Ok(0)
-		}
+		let storage_key = ChildStorageKey::from_slice(&*storage_key)
+			.ok_or_else(||
+				UserError("ext_child_storage_root: child storage key is not valid")
+			)?;
+		let value = this.ext.child_storage_root(storage_key);
+
+		let offset = this.heap.allocate(value.len() as u32)? as u32;
+		this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
+		this.memory.write_primitive(written_out, value.len() as u32)
+			.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
+		Ok(offset)
 	},
 	ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_number: u64, result: *mut u8) -> u32 => {
 		let mut parent_hash = H256::default();
@@ -418,6 +448,30 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_chain_id() -> u64 => {
 		Ok(this.ext.chain_id())
 	},
+	ext_twox_64(data: *const u8, len: u32, out: *mut u8) => {
+		let result: [u8; 8] = if len == 0 {
+			let hashed = twox_64(&[0u8; 0]);
+			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
+			this.hash_lookup.insert(hashed.to_vec(), vec![]);
+			hashed
+		} else {
+			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_64"))?;
+			let hashed_key = twox_64(&key);
+			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
+				if let Ok(_skey) = ::std::str::from_utf8(&key) {
+					_skey
+				} else {
+					&format!("{}", HexDisplay::from(&key))
+				},
+				HexDisplay::from(&hashed_key)
+			);
+			this.hash_lookup.insert(hashed_key.to_vec(), key);
+			hashed_key
+		};
+
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_64"))?;
+		Ok(())
+	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result: [u8; 16] = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
@@ -449,6 +503,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_twox_256"))?;
+		Ok(())
+	},
+	ext_blake2_128(data: *const u8, len: u32, out: *mut u8) => {
+		let result: [u8; 16] = if len == 0 {
+			let hashed = blake2_128(&[0u8; 0]);
+			this.hash_lookup.insert(hashed.to_vec(), vec![]);
+			hashed
+		} else {
+			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_blake2_128"))?;
+			let hashed_key = blake2_128(&key);
+			this.hash_lookup.insert(hashed_key.to_vec(), key);
+			hashed_key
+		};
+
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_128"))?;
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
@@ -907,6 +976,20 @@ mod tests {
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
+		);
+	}
+
+	#[test]
+	fn blake2_128_should_work() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
+			blake2_128(&b""[..]).encode()
+		);
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", b"Hello world!").unwrap(),
+			blake2_128(&b"Hello world!"[..]).encode()
 		);
 	}
 
