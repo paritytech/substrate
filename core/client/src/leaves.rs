@@ -85,11 +85,11 @@ impl<H, N> LeafSet<H, N> where
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {
 				Some(hash) => hash,
-				None => return Err(error::ErrorKind::Backend("Error decoding hash".into()).into()),
+				None => return Err(error::Error::Backend("Error decoding hash".into())),
 			};
 			let number = match Decode::decode(&mut &value[..]) {
 				Some(number) => number,
-				None => return Err(error::ErrorKind::Backend("Error decoding number".into()).into()),
+				None => return Err(error::Error::Backend("Error decoding number".into())),
 			};
 			storage.entry(Reverse(number)).or_insert_with(Vec::new).push(hash);
 		}

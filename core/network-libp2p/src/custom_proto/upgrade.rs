@@ -44,10 +44,11 @@ pub struct RegisteredProtocol<TMessage> {
 impl<TMessage> RegisteredProtocol<TMessage> {
 	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
 	/// passed inside the `RegisteredProtocolOutput`.
-	pub fn new(protocol: ProtocolId, versions: &[u8])
+	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8])
 		-> Self {
+		let protocol = protocol.into();
 		let mut base_name = Bytes::from_static(b"/substrate/");
-		base_name.extend_from_slice(&protocol);
+		base_name.extend_from_slice(protocol.as_bytes());
 		base_name.extend_from_slice(b"/");
 
 		RegisteredProtocol {
@@ -63,16 +64,15 @@ impl<TMessage> RegisteredProtocol<TMessage> {
 	}
 
 	/// Returns the ID of the protocol.
-	#[inline]
-	pub fn id(&self) -> ProtocolId {
-		self.id
+	pub fn id(&self) -> &ProtocolId {
+		&self.id
 	}
 }
 
 impl<TMessage> Clone for RegisteredProtocol<TMessage> {
 	fn clone(&self) -> Self {
 		RegisteredProtocol {
-			id: self.id,
+			id: self.id.clone(),
 			base_name: self.base_name.clone(),
 			supported_versions: self.supported_versions.clone(),
 			marker: PhantomData,
@@ -110,8 +110,8 @@ pub struct RegisteredProtocolSubstream<TMessage, TSubstream> {
 impl<TMessage, TSubstream> RegisteredProtocolSubstream<TMessage, TSubstream> {
 	/// Returns the protocol id.
 	#[inline]
-	pub fn protocol_id(&self) -> ProtocolId {
-		self.protocol_id
+	pub fn protocol_id(&self) -> &ProtocolId {
+		&self.protocol_id
 	}
 
 	/// Returns the version of the protocol that was negotiated.

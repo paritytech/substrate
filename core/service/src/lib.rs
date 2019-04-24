@@ -28,6 +28,8 @@ pub mod chain_ops;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use futures::sync::mpsc;
+use parking_lot::Mutex;
 
 use client::BlockchainEvents;
 use exit_future::Signal;
@@ -82,6 +84,7 @@ pub struct Service<Components: components::Components> {
 	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
 
 /// Creates bare client without any networking.
@@ -96,7 +99,27 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 	Ok(client)
 }
 
+/// Stream of events for connection established to a telemetry server.
+pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
+
+/// Used to hook on telemetry connection established events.
+pub struct TelemetryOnConnect<'a> {
+	/// Handle to a future that will resolve on exit.
+	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	/// Event stream.
+	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
+	/// Executor to which the hook is spawned.
+	pub executor: &'a TaskExecutor,
+}
+
 impl<Components: components::Components> Service<Components> {
+	/// Get event stream for telemetry connection established events.
+	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+		let (sink, stream) = mpsc::unbounded();
+		self._telemetry_on_connect_sinks.lock().push(sink);
+		stream
+	}
+
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
@@ -154,14 +177,16 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let protocol_id = {
-			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
-			let mut protocol_id = network::ProtocolId::default();
-			if protocol_id_full.len() > protocol_id.len() {
-				warn!("Protocol ID truncated to {} chars", protocol_id.len());
-			}
-			let id_len = protocol_id_full.len().min(protocol_id.len());
-			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
-			protocol_id
+			let protocol_id_full = match config.chain_spec.protocol_id() {
+				Some(pid) => pid,
+				None => {
+					warn!("Using default protocol ID {:?} because none is configured in the \
+						chain specs", DEFAULT_PROTOCOL_ID
+					);
+					DEFAULT_PROTOCOL_ID
+				}
+			}.as_bytes();
+			network::ProtocolId::from(protocol_id_full)
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
@@ -293,8 +318,10 @@ impl<Components: components::Components> Service<Components> {
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
+			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
 		)?;
+
+		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
@@ -305,6 +332,7 @@ impl<Components: components::Components> Service<Components> {
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
+			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
 				on_connect: Box::new(move || {
@@ -318,6 +346,10 @@ impl<Components: components::Components> Service<Components> {
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
+
+					telemetry_connection_sinks_.lock().retain(|sink| {
+						sink.unbounded_send(()).is_ok()
+					});
 				}),
 			}))
 		});
@@ -334,6 +366,7 @@ impl<Components: components::Components> Service<Components> {
 			_rpc: Box::new(rpc),
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
+			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
 	}
 
@@ -350,7 +383,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
-	/// return a shared instance of Telemtry (if enabled)
+	/// return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}

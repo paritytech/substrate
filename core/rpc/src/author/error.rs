@@ -24,9 +24,11 @@ use crate::rpc;
 use crate::errors;
 
 error_chain! {
+	foreign_links {
+		Client(client::error::Error) #[doc = "Client error"];
+	}
 	links {
 		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 	errors {
 		/// Not implemented yet
