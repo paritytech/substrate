@@ -361,7 +361,12 @@ pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'stati
 	}
 }
 
-/// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
+/// Ensure that the origin `o` represents an unsigned extrinsic.
+///
+/// Returns `Ok` or an `Err` otherwise.
+/// Use this method to verify extrinsics added by block producers.
+/// If you runtime uses unsigned transactions that are propagated in the network
+/// rather use `ensure_unsigned`.
 pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
 	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
 {
@@ -369,6 +374,17 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 		Some(RawOrigin::Inherent) => Ok(()),
 		_ => Err("bad origin: expected to be an inherent origin"),
 	}
+}
+
+/// An alias of ensure_inherent. Ensure that the origin `o` represents an unsigned extrinsic.
+///
+/// Returns `Ok` or an `Err` otherwise.
+/// This method is preferred in contexts where we have unsigned transactions being propagated
+/// in the network. The validity of the unsigned transactions should be ensured by the runtime.
+pub fn ensure_unsigned<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+{
+	ensure_inherent(o)
 }
 
 impl<T: Trait> Module<T> {
