@@ -993,7 +993,6 @@ mod tests {
 		);
 	}
 
-
 	#[test]
 	fn twox_256_should_work() {
 		let mut ext = TestExternalities::default();
