@@ -23,6 +23,8 @@ use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyw
 
 use syn::{Ident, Token};
 use syn::token::CustomKeyword;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 
 mod impls;
 
@@ -138,6 +140,7 @@ enum DeclStorageType {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: ext::CustomToken<MapKeyword>,
+	pub hasher: Option<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -146,6 +149,7 @@ struct DeclStorageMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLinkedMap {
 	pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
+	pub hasher: Option<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -154,25 +158,86 @@ struct DeclStorageLinkedMap {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDoubleMap {
 	pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
+	pub hasher: Option<SetHasher>,
 	pub key1: syn::Type,
 	pub comma_keyword: Token![,],
-	pub key2_hasher: DeclStorageDoubleMapHasher,
+	pub key2_hasher: Hasher,
 	pub key2: ext::Parens<syn::Type>,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
 }
 
 #[derive(Parse, ToTokens, Debug)]
-enum DeclStorageDoubleMapHasher {
+enum Hasher {
 	Blake2_256(ext::CustomToken<Blake2_256Keyword>),
+	Blake2_128(ext::CustomToken<Blake2_128Keyword>),
 	Twox256(ext::CustomToken<Twox256Keyword>),
 	Twox128(ext::CustomToken<Twox128Keyword>),
+	Twox64Concat(ext::CustomToken<Twox64ConcatKeyword>),
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct SetHasher {
+	pub hasher_keyword: ext::CustomToken<SetHasher>,
+	pub inner: ext::Parens<Hasher>,
+}
+
+#[derive(Debug, Clone)]
+enum HasherKind {
+	Blake2_256,
+	Blake2_128,
+	Twox256,
+	Twox128,
+	Twox64Concat,
+}
+
+impl From<&SetHasher> for HasherKind {
+	fn from(set_hasher: &SetHasher) -> Self {
+		match set_hasher.inner.content {
+			Hasher::Blake2_256(_) => HasherKind::Blake2_256,
+			Hasher::Blake2_128(_) => HasherKind::Blake2_128,
+			Hasher::Twox256(_) => HasherKind::Twox256,
+			Hasher::Twox128(_) => HasherKind::Twox128,
+			Hasher::Twox64Concat(_) => HasherKind::Twox64Concat,
+		}
+	}
+}
+impl HasherKind {
+	fn into_storage_hasher_struct(&self) -> TokenStream2 {
+		match self {
+			HasherKind::Blake2_256 => quote!( Blake2_256 ),
+			HasherKind::Blake2_128 => quote!( Blake2_128 ),
+			HasherKind::Twox256 => quote!( Twox256 ),
+			HasherKind::Twox128 => quote!( Twox128 ),
+			HasherKind::Twox64Concat => quote!( Twox64Concat ),
+		}
+	}
+
+	fn into_hashable_fn(&self) -> TokenStream2 {
+		match self {
+			HasherKind::Blake2_256 => quote!( blake2_256 ),
+			HasherKind::Blake2_128 => quote!( blake2_128 ),
+			HasherKind::Twox256 => quote!( twox_256 ),
+			HasherKind::Twox128 => quote!( twox_128 ),
+			HasherKind::Twox64Concat => quote!( twox_64_concat),
+		}
+	}
+
+	fn into_metadata(&self) -> TokenStream2 {
+		match self {
+			HasherKind::Blake2_256 => quote!( StorageHasher::Blake2_256 ),
+			HasherKind::Blake2_128 => quote!( StorageHasher::Blake2_128 ),
+			HasherKind::Twox256 => quote!( StorageHasher::Twox256 ),
+			HasherKind::Twox128 => quote!( StorageHasher::Twox128 ),
+			HasherKind::Twox64Concat => quote!( StorageHasher::Twox64Concat ),
+		}
+	}
 }
 
 custom_keyword_impl!(SpecificHiddenCrate, "hiddencrate", "hiddencrate as keyword");
@@ -186,6 +251,9 @@ custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
 custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
 custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
-custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
-custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");
+custom_keyword!(Blake2_128Keyword, "blake2_128", "Blake2_128 as keyword");
+custom_keyword!(Twox256Keyword, "twox_256", "Twox256 as keyword");
+custom_keyword!(Twox128Keyword, "twox_128", "Twox128 as keyword");
+custom_keyword!(Twox64ConcatKeyword, "twox_64_concat", "Twox64Concat as keyword");
 custom_keyword_impl!(ExtraGenesisSkipPhantomDataField, "extra_genesis_skip_phantom_data_field", "extra_genesis_skip_phantom_data_field as keyword");
+custom_keyword_impl!(SetHasher, "hasher", "storage hasher");
