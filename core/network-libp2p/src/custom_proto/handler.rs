@@ -690,7 +690,7 @@ where
 			}
 
 			ProtocolState::BackCompat { substream: existing, mut shutdown } => {
-				warn!(target: "sub-libp2p", "Received extra substream after having already one \
+				debug!(target: "sub-libp2p", "Received extra substream after having already one \
 					open in backwards-compatibility mode with {:?}", self.remote_peer_id);
 				substream.shutdown();
 				shutdown.push(substream);
