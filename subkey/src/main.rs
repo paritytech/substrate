@@ -207,12 +207,14 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..])).expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
+			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
+
 			let era = Era::immortal();
 			let raw_payload = (Compact(index), function, era, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
-				println!("signing {}", HexDisplay::from(&payload));
+				println!("Signing {}", HexDisplay::from(&payload));
 				signer.sign(payload)
 			});
 			let extrinsic = UncheckedExtrinsic::new_signed(
