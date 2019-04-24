@@ -404,7 +404,7 @@ pub mod tests {
 	use crate::light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use primitives::{twox_128, Blake2Hasher};
+	use primitives::{blake2_256, Blake2Hasher};
 	use primitives::storage::{StorageKey, well_known_keys};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
@@ -587,7 +587,7 @@ pub mod tests {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
-		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
@@ -699,7 +699,7 @@ pub mod tests {
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
-		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:

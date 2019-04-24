@@ -31,8 +31,10 @@ regex = {version = "1.1", optional = true }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
-pretty_assertions = "0.6.1"
-heapsize = "0.4.2"
+pretty_assertions = "0.6"
+heapsize = "0.4"
+hex-literal = "0.1"
+rand = "0.6"
 
 [features]
 default = ["std"]
