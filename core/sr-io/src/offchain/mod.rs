@@ -16,14 +16,16 @@
 
 //! A collection of higher lever helpers for offchain workers.
 
-use parity_codec as codec;
+pub mod http;
 
 /// Opaque timestamp type
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Timestamp(pub(crate) u64);
 
 /// Duration type
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Duration(pub(crate) u64);
 
 impl Duration {
@@ -60,53 +62,9 @@ impl Timestamp {
 	}
 }
 
-/// HTTP utilities
-pub mod http {
-	use super::*;
-
-	/// Status of the HTTP request
-	#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-	#[derive(codec::Encode, codec::Decode)]
-	pub enum RequestStatus {
-		/// Request status of this ID is not known.
-		Unknown,
-		/// The request is finished with given status code.
-		Finished(u16),
-	}
-
-	impl Default for RequestStatus {
-		fn default() -> Self {
-			RequestStatus::Unknown
-		}
-	}
-
-	impl RequestStatus {
-		/// Parse u16 as `RequestStatus`.
-		///
-		/// The first hundred of codes indicate internal states.
-		/// The rest are http response status codes.
-		pub fn from_u16(status: u16) -> Option<Self> {
-			match status {
-				0 => Some(RequestStatus::Unknown),
-				100...999 => Some(RequestStatus::Finished(status)),
-				_ => None,
-			}
-		}
-	}
-
-	/// Opaque type for offchain http requests.
-	#[derive(Clone, Copy)]
-	pub struct RequestId(pub(crate) u16);
-
-	/// An HTTP request builder.
-	#[derive(Default)]
-	pub struct Request {
-
-	}
-}
-
 #[cfg(test)]
 mod tests {
+	use super::*;
 
 	#[test]
 	fn timestamp_ops() {

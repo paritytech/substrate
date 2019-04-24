@@ -240,7 +240,7 @@ impl OffchainApi for () {
 		_request_id: offchain::http::RequestId,
 		_chunk: &[u8],
 		_deadline: Option<offchain::Timestamp>
-	) {
+	) -> Result<(), ()> {
 		unimplemented!()
 	}
 
@@ -261,7 +261,7 @@ impl OffchainApi for () {
 		_request_id: offchain::http::RequestId,
 		_buffer: &mut [u8],
 		_deadline: Option<offchain::Timestamp>
-	) -> usize {
+	) -> Result<usize, ()> {
 		unimplemented!()
 	}
 }

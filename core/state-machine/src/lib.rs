@@ -167,8 +167,6 @@ pub trait Externalities<H: Hasher> {
 	///
 	/// Returns an error in case the API is not available.
 	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
-
-	// TODO [ToDr] Add http methods.
 }
 
 /// An implementation of offchain extensions that should never be triggered.

@@ -359,7 +359,7 @@ pub mod ext {
 			chunk: *const u8,
 			chunk_len: u32,
 			deadline: u64
-		);
+		) -> bool;
 
 		/// Block and wait for the responses for given requests.
 		///
@@ -716,15 +716,17 @@ impl OffchainApi for () {
 		request_id: offchain::http::RequestId,
 		chunk: &[u8],
 		deadline: Option<offchain::Timestamp>
-	) {
-		unsafe {
+	) -> Result<(), ()> {
+		let res = unsafe {
 			ext_http_request_write_body.get()(
 				request_id.0,
 				chunk.as_ptr(),
 				chunk.len() as u32,
 				deadline.map_or(0, |x| x.0),
 			)
-		}
+		};
+
+		if res { Ok(()) } else { Err(()) }
 	}
 
 	fn http_response_wait(
@@ -772,7 +774,7 @@ impl OffchainApi for () {
 		request_id: offchain::http::RequestId,
 		buffer: &mut [u8],
 		deadline: Option<offchain::Timestamp>,
-	) -> usize {
+	) -> Result<usize, ()> {
 		unsafe {
 			ext_http_response_read_body.get()(
 				request_id.0,

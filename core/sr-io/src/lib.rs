@@ -28,8 +28,6 @@
 #![cfg_attr(not(feature = "std"), doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
 use hash_db::Hasher;
-
-#[cfg(not(feature = "std"))]
 use rstd::vec::Vec;
 
 #[doc(hidden)]
@@ -256,11 +254,13 @@ export_api! {
 		///
 		/// Writing an empty chunks finalises the request.
 		/// Passing `None` as deadline blocks forever.
+		///
+		/// Returns an error in case deadline is reached or the chunk couldn't be written.
 		fn http_request_write_body(
 			request_id: offchain::http::RequestId,
 			chunk: &[u8],
 			deadline: Option<offchain::Timestamp>
-		);
+		) -> Result<(), ()>;
 
 		/// Block and wait for the responses for given requests.
 		///
@@ -283,13 +283,14 @@ export_api! {
 
 		/// Read a chunk of body response to given buffer.
 		///
-		/// Returns the number of bytes written.
-		/// Passing `None` as deadline blocks forever.
+		/// Returns the number of bytes written or an error in case a deadline
+		/// is reached or server closed the connection.
+		/// Passing `None` as a deadline blocks forever.
 		fn http_response_read_body(
 			request_id: offchain::http::RequestId,
 			buffer: &mut [u8],
 			deadline: Option<offchain::Timestamp>
-		) -> usize;
+		) -> Result<usize, ()>;
 	}
 }
 
