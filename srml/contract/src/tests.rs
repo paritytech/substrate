@@ -21,7 +21,7 @@
 
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorityId};
-use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
+use runtime_primitives::traits::{BlakeTwo256, IdentityLookup, As};
 use runtime_primitives::BuildStorage;
 use runtime_io;
 use srml_support::{storage::child, StorageMap, assert_ok, impl_outer_event, impl_outer_dispatch,
@@ -203,12 +203,12 @@ impl ExtBuilder {
 			GenesisConfig::<Test> {
 				signed_claim_handicap: 2,
 				rent_byte_price: 4,
-				rent_deposit_offset: 1000,
+				rent_deposit_offset: 10_000,
 				storage_size_offset: 8,
 				surcharge_reward: 150,
 				tombstone_deposit: 16,
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
+				transaction_base_fee: 2,
+				transaction_byte_fee: 6,
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				contract_fee: 21,
@@ -297,7 +297,6 @@ fn account_removal_removes_storage() {
 				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
 				assert!(<AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
 
-				// TODO TODO: check size
 				assert_eq!(
 					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
 					Some(b"3".to_vec())
@@ -514,34 +513,48 @@ fn dispatch_call() {
 	);
 }
 
-/// Call function is compiled with https://webassembly.studio/
-/// ```C
-/// #define WASM_EXPORT __attribute__((visibility("default")))
-///
-/// extern void input_copy(int *ptr, int offset, int len);
-/// extern void set_storage(int *key, int r, int *v, int len);
-///
-/// extern int a;
-/// WASM_EXPORT
-/// int main() {
-///   int do_set_storage, key, value_non_null, value_len;
-///   input_copy(&do_set_storage, 0, 4);
-///   input_copy(&key, 4, 4);
-///   input_copy(&value_non_null, 8, 4);
-///   input_copy(&value_len, 12, 4);
-///
-///   if (do_set_storage) {
-///     set_storage(&key, value_non_null, 0, value_len);
-///   }
-/// }
-/// ```
 const CODE_SET_RENT: &str = r#"
 (module
+	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
 	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
 	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	(func $call_0
+		(call $ext_set_rent_allowance
+			(i32.const 0)
+			(i32.const 1)
+		)
+	)
+
+	(func $call_1
+		(call $ext_set_storage
+			(i32.const 1)
+			(i32.const 1)
+			(i32.const 0)
+			(i32.const 4)
+		)
+	)
+
+	(func $call_2
+		(call $ext_set_storage
+			(i32.const 1)
+			(i32.const 0)
+			(i32.const 0)
+			(i32.const 0)
+		)
+	)
+
+	(func $call_3
+		(call $ext_dispatch_call
+			(i32.const 8)
+			(i32.const 11)
+		)
+	)
+
+	(func $call_else)
 
 	(func $assert (param i32)
 		(block $ok
@@ -552,8 +565,58 @@ const CODE_SET_RENT: &str = r#"
 		)
 	)
 
-	(start $start)
-	(func $start
+	(func (export "call")
+		(local $input_size i32)
+		(set_local $input_size
+			(call $ext_input_size)
+		)
+		(block $IF_3
+			(block $IF_2
+				(block $IF_1
+					(block $IF_0
+						(br_if $IF_0
+							(i32.eq
+								(get_local $input_size)
+								(i32.const 0)
+							)
+						)
+						(br_if $IF_1
+							(i32.eq
+								(get_local $input_size)
+								(i32.const 1)
+							)
+						)
+						(br_if $IF_2
+							(i32.eq
+								(get_local $input_size)
+								(i32.const 2)
+							)
+						)
+						(br_if $IF_3
+							(i32.eq
+								(get_local $input_size)
+								(i32.const 3)
+							)
+						)
+						(call $call_else)
+						return
+						(unreachable)
+					)
+					(call $call_0)
+					return
+					(unreachable)
+				)
+				(call $call_1)
+				return
+				(unreachable)
+			)
+			(call $call_2)
+			return
+			(unreachable)
+		)
+		(call $call_3)
+	)
+	(func (export "deploy")
 		(local $input_size i32)
 		(call $ext_set_storage
 			(i32.const 0)
@@ -574,119 +637,230 @@ const CODE_SET_RENT: &str = r#"
 			(get_local $input_size)
 		)
 	)
-	(func (export "call")
-		(call $ext_input_copy
-			(i32.const 0)
-			(i32.const 0)
-			(i32.const 16)
-		)
-		(call $ext_set_storage
-			(i32.const 0)
-			(i32.load (i32.const 4))
-			($p2)
-			($p3)
-		)
-	)
-	(func (export "deploy"))
-	(data (i32.const 0) "\00\01\02\03\04\05\06\07")
+	(data (i32.const 0) "\28\01\02\03\04\05\06\07")
+	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
-const HASH_SET_RENT: [u8; 32] = hex!("2bf4122e304b9bcc98dd691561149b9840de11b3557900829c9d1c9b6ae505d7");
+const HASH_SET_RENT: [u8; 32] = hex!("88d2f5e0adae6f4e70e456e6509970325511c9933ae79165fd3faa50096db124");
+
+fn call_set_rent_allowance_to_10() -> Vec<u8> { vec![] }
+fn call_set_storage_4_byte() -> Vec<u8> { vec![0] }
+fn call_remove_storage_4_byte() -> Vec<u8> { vec![0, 0] }
+fn call_transfer() -> Vec<u8> { vec![0, 0, 0] }
+fn call_null() -> Vec<u8> { vec![0, 0, 0, 0] }
 
 #[test]
 fn rent() {
+	// This test can fail due to the encoding changes. In case it becomes too annoying
+	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+	let encoded = parity_codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
+
+	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+
+	// Let's keep this assert even though it's redundant. If you ever need to update the
+	// wasm source this test will fail and will show you the actual hash.
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+				},
+			]);
+		}
+	);
+
+	// Storage size
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+			));
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call_set_storage_4_byte()));
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4 + 4);
+
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call_remove_storage_4_byte()));
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+		}
+	);
+
+	// Deducts between blocks
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+			));
+
+			// Check creation
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			// assert_eq!(bob_contract.rent_allowance, 1000);
+			// assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+
+			// Advance 4 blocks
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call_null()));
+
+			// Check result
+			let rent = (8 + 4 - 3) // storage size = size_offset + deploy_set_storage - deposit_offset
+				* 4 // rent byte price
+				* 4; // blocks to rent
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent);
+			assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
+		}
+	);
+
+	// Test all kind of removals for each way.
+	removals(|| Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call_null()).is_ok());
+	removals(|| Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok());
+	removals(|| Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok());
+
+	// Test surcharge malus for inherent
+	claim_surcharge(4, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(3, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(2, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(1, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), false);
+
+	// Test surcharge malus for signed
+	claim_surcharge(4, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);
+	claim_surcharge(3, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
+	claim_surcharge(2, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
+	claim_surcharge(1, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), false);
+}
+
+fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
 	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
+			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
-
-			assert_ok!(Contract::put_code(
-				Origin::signed(ALICE),
-				100_000,
-				wasm,
-			));
-
-			// Let's keep this assert even though it's redundant. If you ever need to update the
-			// wasm source this test will fail and will show you the actual hash.
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
-				},
-			]);
-
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				100,
-				100_000,
-				HASH_SET_RENT.into(),
-				10u64.to_le_bytes().to_vec(),
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
 			));
 
-			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap()
-				.get_alive().unwrap();
+			// Advance blocks
+			System::initialize(&blocks, &[0u8; 32].into(), &[0u8; 32].into());
 
-			assert_eq!(bob_contract.rent_allowance, 10);
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+			// Trigger rent through call
+			assert!(trigger_call());
 
-			// assert_ok!(Contract::call(
-			// 	Origin::signed(ALICE),
-			// 	BOB, // newly created account
-			// 	0,
-			// 	100_000,
-			// 	vec![],
-			// ));
+			if removes {
+				assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			} else {
+				assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().is_some());
+			}
+		}
+	);
+}
 
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::balances(
-						balances::RawEvent::NewAccount(BOB, 100)
-					)
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
-				},
+fn removals(trigger_call: impl Fn() -> bool) {
+	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
 
-				// // Dispatching the call.
-				// EventRecord {
-				// 	phase: Phase::ApplyExtrinsic(0),
-				// 	event: MetaEvent::balances(
-				// 		balances::RawEvent::NewAccount(CHARLIE, 50)
-				// 	)
-				// },
-				// EventRecord {
-				// 	phase: Phase::ApplyExtrinsic(0),
-				// 	event: MetaEvent::balances(
-				// 		balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
-				// 	)
-				// },
+	// Remove if balance reached
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+			));
 
-				// // Event emited as a result of dispatch.
-				// EventRecord {
-				// 	phase: Phase::ApplyExtrinsic(0),
-				// 	event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
-				// }
-			]);
-		},
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert!(trigger_call());
+
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+		}
+	);
+
+	// Remove if allowance exceeded
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				1_000,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(100u64).encode() // rent allowance
+			));
+
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert!(trigger_call());
+
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+		}
+	);
+
+	// Remove without tombstone
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				50,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+			));
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call_transfer()));
+
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert!(trigger_call());
+
+			assert!(super::ContractInfoOf::<Test>::get(BOB).is_none());
+		}
 	);
 }

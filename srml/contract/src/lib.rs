@@ -151,6 +151,31 @@ impl<T: Trait> ContractInfo<T> {
 			None
 		}
 	}
+
+	/// If contract is tombstone then return some alive info
+	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+	/// If contract is tombstone then return some reference to tombstone info
+	pub fn as_tombstone(&self) -> Option<&TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(ref tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+	/// If contract is tombstone then return some mutable reference to tombstone info
+	pub fn as_tombstone_mut(&mut self) -> Option<&mut TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(ref mut tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
 }
 
 pub type AliveContractInfo<T> = RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
@@ -445,7 +470,7 @@ decl_module! {
 					(true, account)
 				},
 				Some(system::RawOrigin::Inherent) if aux_sender.is_some() => {
-					(true, aux_sender.as_ref().expect("checked above"))
+					(false, aux_sender.as_ref().expect("checked above"))
 				},
 				_ => return Err("Invalid surcharge claim: origin must be signed or \
 								inherent and auxiliary sender only provided on inherent")
