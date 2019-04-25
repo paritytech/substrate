@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -106,7 +106,7 @@ impl ProvideInherentData for InherentDataProvider {
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		// The last timestamp.
-		LastTimestamp get(last) build(|_| T::Moment::sa(0)): T::Moment;
+		LastTimestamp get(last): T::Moment;
 	}
 }
 
