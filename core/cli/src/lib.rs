@@ -483,7 +483,9 @@ where
 	} else {
 		Some(vec![
 			"http://localhost:*".into(),
+			"http://127.0.0.1:*".into(),
 			"https://localhost:*".into(),
+			"https://127.0.0.1:*".into(),
 			"https://polkadot.js.org".into(),
 			"https://substrate-ui.parity.io".into(),
 		])
