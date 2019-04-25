@@ -16,9 +16,8 @@
 #![feature(test)]
 
 extern crate test;
-use hex_literal::{hex, hex_impl};
+use hex_literal::hex;
 use substrate_primitives::hashing::{twox_128, blake2_128};
-
 
 const MAX_KEY_SIZE: u32 = 32;
 
