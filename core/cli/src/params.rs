@@ -392,7 +392,7 @@ pub struct RunCmd {
 	#[structopt(flatten)]
 	pub keyring: Keyring,
 
-	/// Enable authoring even when offline
+	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 }
