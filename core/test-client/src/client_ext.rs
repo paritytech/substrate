@@ -17,7 +17,14 @@
 //! Client extension for tests.
 
 use client::{self, Client};
-use consensus::{ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy};
+use consensus::{
+	ImportBlock,
+	BlockImport,
+	BlockOrigin,
+	Error as ConsensusError,
+	ForkChoiceStrategy,
+	PreDigest,
+};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
@@ -53,6 +60,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 		let import = ImportBlock {
 			origin,
 			header: block.header,
+			pre_digests: PreDigest::new(),
 			justification: None,
 			post_digests: vec![],
 			body: Some(block.extrinsics),
@@ -70,6 +78,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 		let import = ImportBlock {
 			origin,
 			header: block.header,
+			pre_digests: PreDigest::new(),
 			justification: Some(justification),
 			post_digests: vec![],
 			body: Some(block.extrinsics),

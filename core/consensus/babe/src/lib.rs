@@ -58,7 +58,7 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
-use consensus_common::well_known_cache_keys;
+use consensus_common::{well_known_cache_keys, PreDigest};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	ChainHead,
@@ -419,6 +419,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 					let import_block: ImportBlock<B> = ImportBlock {
 						origin: BlockOrigin::Own,
 						header,
+						pre_digests: PreDigest::new(),
 						justification: None,
 						post_digests: vec![item],
 						body: Some(body),
@@ -674,6 +675,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 
 				let import_block = ImportBlock {
 					origin,
+					pre_digests: PreDigest::new(),
 					header: pre_header,
 					post_digests: vec![seal],
 					body,

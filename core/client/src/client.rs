@@ -679,6 +679,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin,
 			header,
 			justification,
+			pre_digests: _,
 			post_digests,
 			body,
 			finalized,
@@ -686,7 +687,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		} = import_block;
 
-		assert!(justification.is_some() && finalized || justification.is_none());
+		assert!(justification.is_none() || finalized);
 
 		let parent_hash = header.parent_hash().clone();
 

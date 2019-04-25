@@ -31,7 +31,7 @@ use client::block_builder::BlockBuilder;
 use crate::config::ProtocolConfig;
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
+use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, PreDigest};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use crossbeam_channel::{Sender, RecvError};
@@ -76,6 +76,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			header,
 			body,
 			finalized: self.0,
+			pre_digests: PreDigest::new(),
 			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),

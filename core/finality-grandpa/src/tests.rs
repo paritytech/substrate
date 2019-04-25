@@ -30,7 +30,7 @@ use client::{
 	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
-use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
+use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, PreDigest};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -979,6 +979,7 @@ fn allows_reimporting_change_blocks() {
 		ImportBlock {
 			origin: BlockOrigin::File,
 			header: block.header,
+			pre_digests: PreDigest::new(),
 			justification: None,
 			post_digests: Vec::new(),
 			body: Some(block.extrinsics),
@@ -1022,6 +1023,7 @@ fn test_bad_justification() {
 		ImportBlock {
 			origin: BlockOrigin::File,
 			header: block.header,
+			pre_digests: PreDigest::new(),
 			justification: Some(Vec::new()),
 			post_digests: Vec::new(),
 			body: Some(block.extrinsics),

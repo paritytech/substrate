@@ -65,7 +65,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS
 use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
 pub use aura_primitives::*;
-pub use consensus_common::SyncOracle;
+pub use consensus_common::{SyncOracle, PreDigest};
 
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
@@ -413,6 +413,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 					let import_block: ImportBlock<B> = ImportBlock {
 						origin: BlockOrigin::Own,
 						header,
+						pre_digests: PreDigest::new(),
 						justification: None,
 						post_digests: vec![item],
 						body: Some(body),
@@ -664,6 +665,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 				let import_block = ImportBlock {
 					origin,
+					pre_digests: PreDigest::new(),
 					header: pre_header,
 					post_digests: vec![seal],
 					body,
