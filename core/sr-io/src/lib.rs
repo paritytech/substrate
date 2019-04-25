@@ -45,6 +45,8 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
+pub mod offchain;
+
 /// Trait for things which can be printed.
 pub trait Printable {
 	/// Print the object.
@@ -233,6 +235,68 @@ export_api! {
 		/// 1. scheduled to be included in the next produced block (inherent)
 		/// 2. added to the pool and propagated (transaction)
 		fn submit_extrinsic<T: codec::Encode>(data: &T);
+
+		/// Returns current UNIX timestamp (in millis)
+		fn timestamp() -> offchain::Timestamp;
+
+		/// Initiaties a http request given HTTP verb and the URL.
+		///
+		/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
+		/// Returns the id of newly started request.
+		fn http_request_start(
+			method: &str,
+			uri: &str,
+			meta: &[u8]
+		) -> offchain::http::RequestId;
+
+		/// Append header to the request.
+		fn http_request_add_header(
+			request_id: offchain::http::RequestId,
+			name: &str,
+			value: &str
+		);
+
+		/// Write a chunk of request body.
+		///
+		/// Writing an empty chunks finalises the request.
+		/// Passing `None` as deadline blocks forever.
+		///
+		/// Returns an error in case deadline is reached or the chunk couldn't be written.
+		fn http_request_write_body(
+			request_id: offchain::http::RequestId,
+			chunk: &[u8],
+			deadline: Option<offchain::Timestamp>
+		) -> Result<(), ()>;
+
+		/// Block and wait for the responses for given requests.
+		///
+		/// Returns a vector of request statuses (the len is the same as ids).
+		/// Note that if deadline is not provided the method will block indefinitely,
+		/// otherwise unready responses will produce `WaitTimeout` status.
+		///
+		/// Passing `None` as deadline blocks forever.
+		fn http_response_wait(
+			ids: &[offchain::http::RequestId],
+			deadline: Option<offchain::Timestamp>
+		) -> Vec<offchain::http::RequestStatus>;
+
+		/// Read all response headers.
+		///
+		/// Resturns a vector of pairs `(HeaderKey, HeaderValue)`.
+		fn http_response_headers(
+			request_id: offchain::http::RequestId
+		) -> Vec<(Vec<u8>, Vec<u8>)>;
+
+		/// Read a chunk of body response to given buffer.
+		///
+		/// Returns the number of bytes written or an error in case a deadline
+		/// is reached or server closed the connection.
+		/// Passing `None` as a deadline blocks forever.
+		fn http_response_read_body(
+			request_id: offchain::http::RequestId,
+			buffer: &mut [u8],
+			deadline: Option<offchain::Timestamp>
+		) -> Result<usize, ()>;
 	}
 }
 

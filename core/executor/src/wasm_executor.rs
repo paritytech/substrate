@@ -598,6 +598,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(())
 	},
+    // TODO [ToDr] http externalities.
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
 		wasm_ptr: *const u8,

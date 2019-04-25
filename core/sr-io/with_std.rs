@@ -258,6 +258,55 @@ impl OffchainApi for () {
 			.expect("submit_extrinsic can be called only in offchain worker context")
 		).expect("submit_extrinsic cannot be called outside of an Externalities-provided environment.")
 	}
+
+	fn timestamp() -> offchain::Timestamp {
+		unimplemented!()
+	}
+
+	fn http_request_start(
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> offchain::http::RequestId {
+		unimplemented!()
+	}
+
+	fn http_request_add_header(
+		_request_id: offchain::http::RequestId,
+		_name: &str,
+		_value: &str
+	) {
+		unimplemented!()
+	}
+
+	fn http_request_write_body(
+		_request_id: offchain::http::RequestId,
+		_chunk: &[u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<(), ()> {
+		unimplemented!()
+	}
+
+	fn http_response_wait(
+		_ids: &[offchain::http::RequestId],
+		_deadline: Option<offchain::Timestamp>
+	) -> Vec<offchain::http::RequestStatus> {
+		unimplemented!()
+	}
+
+	fn http_response_headers(
+		_request_id: offchain::http::RequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unimplemented!()
+	}
+
+	fn http_response_read_body(
+		_request_id: offchain::http::RequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<usize, ()> {
+		unimplemented!()
+	}
 }
 
 impl Api for () {}
