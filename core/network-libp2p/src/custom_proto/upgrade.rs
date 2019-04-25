@@ -19,7 +19,7 @@ use bytes::Bytes;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
 use log::warn;
-use std::{collections::VecDeque, io, iter, marker::PhantomData, vec::IntoIter as VecIntoIter};
+use std::{collections::VecDeque, io, marker::PhantomData, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
@@ -100,9 +100,6 @@ pub struct RegisteredProtocolSubstream<TMessage, TSubstream> {
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
 	/// unless the buffer empties then fills itself again.
 	clogged_fuse: bool,
-	/// If true, then this substream uses the "/multi/" version of the protocol. This is a hint
-	/// that the handler can behave differently.
-	is_multiplex: bool,
 	/// Marker to pin the generic.
 	marker: PhantomData<TMessage>,
 }
@@ -124,12 +121,6 @@ impl<TMessage, TSubstream> RegisteredProtocolSubstream<TMessage, TSubstream> {
 	/// substream from the remote (listener).
 	pub fn endpoint(&self) -> Endpoint {
 		self.endpoint
-	}
-
-	/// Returns true if we negotiated the "multiplexed" version. This means that the handler can
-	/// open multiple substreams instead of just one.
-	pub fn is_multiplex(&self) -> bool {
-		self.is_multiplex
 	}
 
 	/// Starts a graceful shutdown process on this substream.
@@ -328,33 +319,15 @@ impl<TMessage> UpgradeInfo for RegisteredProtocol<TMessage> {
 	#[inline]
 	fn protocol_info(&self) -> Self::InfoIter {
 		// Report each version as an individual protocol.
-		self.supported_versions.iter().flat_map(|&version| {
+		self.supported_versions.iter().map(|&version| {
 			let num = version.to_string();
 
-			// Note that `name1` is the multiplex version, as we priviledge it over the old one.
-			let mut name1 = self.base_name.clone();
-			name1.extend_from_slice(b"multi/");
-			name1.extend_from_slice(num.as_bytes());
-			let proto1 = RegisteredProtocolName {
-				name: name1,
+			let mut name = self.base_name.clone();
+			name.extend_from_slice(num.as_bytes());
+			RegisteredProtocolName {
+				name,
 				version,
-				is_multiplex: true,
-			};
-
-			let mut name2 = self.base_name.clone();
-			name2.extend_from_slice(num.as_bytes());
-			let proto2 = RegisteredProtocolName {
-				name: name2,
-				version,
-				is_multiplex: false,
-			};
-
-			// Important note: we prioritize the backwards compatible mode for now.
-			// After some intensive testing has been done, we should switch to the new mode by
-			// default.
-			// Then finally we can remove the old mode after everyone has switched.
-			// See https://github.com/paritytech/substrate/issues/1692
-			iter::once(proto2).chain(iter::once(proto1))
+			}
 		}).collect::<Vec<_>>().into_iter()
 	}
 }
@@ -366,8 +339,6 @@ pub struct RegisteredProtocolName {
 	name: Bytes,
 	/// Version number. Stored in string form in `name`, but duplicated here for easier retrieval.
 	version: u8,
-	/// If true, then this version is the one with the multiplexing.
-	is_multiplex: bool,
 }
 
 impl ProtocolName for RegisteredProtocolName {
@@ -403,7 +374,6 @@ where TSubstream: AsyncRead + AsyncWrite,
 			protocol_id: self.id,
 			protocol_version: info.version,
 			clogged_fuse: false,
-			is_multiplex: info.is_multiplex,
 			marker: PhantomData,
 		})
 	}
@@ -432,7 +402,6 @@ where TSubstream: AsyncRead + AsyncWrite,
 			protocol_id: self.id,
 			protocol_version: info.version,
 			clogged_fuse: false,
-			is_multiplex: info.is_multiplex,
 			marker: PhantomData,
 		})
 	}
