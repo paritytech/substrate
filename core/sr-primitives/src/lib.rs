@@ -34,9 +34,6 @@ use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
-use substrate_primitives::hexdisplay::ascii_format;
-
-#[cfg(feature = "std")]
 pub mod testing;
 
 pub mod traits;

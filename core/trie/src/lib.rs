@@ -339,7 +339,7 @@ mod tests {
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	fn check_equivalent(input: &Vec<(&[u8], &[u8])>) {
 		{

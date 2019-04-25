@@ -410,7 +410,7 @@ pub trait Pair: Sized {
 #[cfg(test)]
 mod tests {
 	use crate::DeriveJunction;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 	use super::*;
 
 	#[derive(Eq, PartialEq, Debug)]
