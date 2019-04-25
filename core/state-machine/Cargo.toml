@@ -6,7 +6,6 @@ description = "Substrate State Machine"
 edition = "2018"
 
 [dependencies]
-hex-literal = "0.1.0"
 log = "0.4"
 parking_lot = "0.7.1"
 heapsize = "0.4"
@@ -17,3 +16,6 @@ trie = { package = "substrate-trie", path = "../trie" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 parity-codec = "3.3"
+
+[dev-dependencies]
+hex-literal = "0.2.0"

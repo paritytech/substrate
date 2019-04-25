@@ -22,7 +22,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 [dev-dependencies]
 wabt = "~0.7.4"
 assert_matches = "1.1"
-hex-literal = "0.1.0"
+hex-literal = "0.2.0"
 consensus = { package = "srml-consensus", path = "../consensus" }
 balances = { package = "srml-balances", path = "../balances" }
 

@@ -166,7 +166,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, H256};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {

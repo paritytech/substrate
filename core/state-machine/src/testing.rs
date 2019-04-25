@@ -180,7 +180,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, H256};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {
