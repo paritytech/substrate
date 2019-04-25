@@ -1,5 +1,5 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
-use runtime_primitives::traits::{As, CheckedDiv, Saturating, Zero, Bounded, CheckedMul};
+use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating, Zero};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 
@@ -39,7 +39,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let effective_storage_size =
 		<BalanceOf<T>>::sa(contract.storage_size).saturating_sub(free_storage);
 
-	let fee_per_block = effective_storage_size.checked_mul(&<Module<T>>::rent_byte_price())
+	let fee_per_block = effective_storage_size
+		.checked_mul(&<Module<T>>::rent_byte_price())
 		.unwrap_or(<BalanceOf<T>>::max_value());
 
 	if fee_per_block.is_zero() {
@@ -49,7 +50,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	}
 
 	let blocks_to_rent = block_number.saturating_sub(contract.deduct_block);
-	let rent = fee_per_block.checked_mul(&<BalanceOf<T>>::sa(blocks_to_rent.as_()))
+	let rent = fee_per_block
+		.checked_mul(&<BalanceOf<T>>::sa(blocks_to_rent.as_()))
 		.unwrap_or(<BalanceOf<T>>::max_value());
 	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
 

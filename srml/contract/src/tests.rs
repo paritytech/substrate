@@ -19,28 +19,28 @@
 
 #![allow(unused)]
 
-use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorityId};
-use runtime_primitives::traits::{BlakeTwo256, IdentityLookup, As};
-use runtime_primitives::BuildStorage;
-use runtime_io;
-use srml_support::{storage::child, StorageMap, assert_ok, impl_outer_event, impl_outer_dispatch,
-	impl_outer_origin, traits::Currency};
-use substrate_primitives::Blake2Hasher;
-use system::{self, Phase, EventRecord};
-use {wabt, balances, consensus};
-use hex_literal::*;
-use assert_matches::assert_matches;
+use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
-	ContractAddressFor, GenesisConfig, Module, RawEvent,
-	Trait, ComputeDispatchFee, TrieIdGenerator, TrieId,
-	ContractInfoOf, ContractInfo, RawAliveContractInfo,
-	TrieIdFromParentCounter,
+	ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
+	RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, TrieIdGenerator,
 };
-use substrate_primitives::storage::well_known_keys;
-use parity_codec::{Encode, Decode, KeyedVec};
+use assert_matches::assert_matches;
+use hex_literal::*;
+use parity_codec::{Decode, Encode, KeyedVec};
+use runtime_io;
+use runtime_io::with_externalities;
+use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
+use runtime_primitives::traits::{As, BlakeTwo256, IdentityLookup};
+use runtime_primitives::BuildStorage;
+use srml_support::{
+	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
+	traits::Currency, StorageMap,
+};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use crate::account_db::{DirectAccountDb, OverlayAccountDb, AccountDb};
+use substrate_primitives::storage::well_known_keys;
+use substrate_primitives::Blake2Hasher;
+use system::{self, EventRecord, Phase};
+use {balances, consensus, wabt};
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -232,13 +232,7 @@ fn refunds_unused_gas() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::deposit_creating(&0, 100_000_000);
 
-		assert_ok!(Contract::call(
-			Origin::signed(0),
-			1,
-			0,
-			100_000,
-			Vec::new()
-		));
+		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
 
 		assert_eq!(Balances::free_balance(&0), 100_000_000 - (2 * 135));
 	});
@@ -348,11 +342,7 @@ fn instantiate_and_call_and_deposit_event() {
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
 
-			assert_ok!(Contract::put_code(
-				Origin::signed(ALICE),
-				100_000,
-				wasm,
-			));
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 			// Check at the end to get hash on error easily
 			let creation = Contract::create(
@@ -430,11 +420,7 @@ fn dispatch_call() {
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
 
-			assert_ok!(Contract::put_code(
-				Origin::signed(ALICE),
-				100_000,
-				wasm,
-			));
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 			// Let's keep this assert even though it's redundant. If you ever need to update the
 			// wasm source this test will fail and will show you the actual hash.
