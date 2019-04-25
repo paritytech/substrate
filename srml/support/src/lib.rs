@@ -27,7 +27,7 @@ pub use serde;
 #[doc(hidden)]
 pub use sr_std as rstd;
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -35,8 +35,8 @@ pub use once_cell;
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::generator::Storage as GenericStorage;
-pub use self::storage::unhashed::generator::UnhashedStorage as GenericUnhashedStorage;
+pub use self::storage::hashed::generator::{HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
+pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]
 pub mod dispatch;
@@ -56,7 +56,7 @@ pub mod inherent;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
+pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
@@ -179,13 +179,13 @@ macro_rules! for_each_tuple {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::Codec;
+	use codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 		StorageFunctionType, StorageFunctionModifier,
-		DefaultByte, DefaultByteGetter,
+		DefaultByte, DefaultByteGetter, StorageHasher
 	};
 	pub use rstd::marker::PhantomData;
 
@@ -209,11 +209,11 @@ mod tests {
 
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
-			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
-			pub GenericData get(generic_data): linked_map T::BlockNumber => T::BlockNumber;
+			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map hasher(twox_64_concat) u32 => u64;
+			pub GenericData get(generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
 
-			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map u32, blake2_256(u32) => u64;
+			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
 			pub GenericDataDM: double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
 			pub GenericData2DM: double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
 		}
@@ -354,6 +354,7 @@ mod tests {
 				name: DecodeDifferent::Encode("Data"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
+					hasher: StorageHasher::Twox64Concat,
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -365,6 +366,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
+					hasher: StorageHasher::Twox128,
 					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -376,6 +378,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData2"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map{
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber"), is_linked: true
 				},
 				default: DecodeDifferent::Encode(
@@ -387,6 +390,7 @@ mod tests {
 				name: DecodeDifferent::Encode("DataDM"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::DoubleMap{
+					hasher: StorageHasher::Twox64Concat,
 					key1: DecodeDifferent::Encode("u32"),
 					key2: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("u64"),
@@ -401,6 +405,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericDataDM"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::DoubleMap{
+					hasher: StorageHasher::Blake2_256,
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
@@ -415,6 +420,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GenericData2DM"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::DoubleMap{
+					hasher: StorageHasher::Blake2_256,
 					key1: DecodeDifferent::Encode("T::BlockNumber"),
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
