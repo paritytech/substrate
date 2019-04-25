@@ -125,7 +125,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use parity_codec::{Encode, Decode};
-	use network_libp2p::{CustomMessage, CustomMessageId};
+	use network_libp2p::CustomMessage;
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
@@ -212,26 +212,6 @@ pub mod generic {
 
 		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
 			Decode::decode(&mut &bytes[..]).ok_or(())
-		}
-
-		fn request_id(&self) -> CustomMessageId {
-			match *self {
-				Message::Status(_) => CustomMessageId::OneWay,
-				Message::BlockRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::BlockResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::BlockAnnounce(_) => CustomMessageId::OneWay,
-				Message::Transactions(_) => CustomMessageId::OneWay,
-				Message::Consensus(_) => CustomMessageId::OneWay,
-				Message::RemoteCallRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteCallResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::RemoteReadRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteReadResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::RemoteHeaderRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteHeaderResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::RemoteChangesRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteChangesResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::ChainSpecific(_) => CustomMessageId::OneWay,
-			}
 		}
 	}
 
