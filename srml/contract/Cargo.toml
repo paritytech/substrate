@@ -5,8 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true }
-serde_derive = { version = "1.0", optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 pwasm-utils = { version = "0.6.1", default-features = false }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 parity-wasm = { version = "0.31", default-features = false }
@@ -23,7 +22,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 [dev-dependencies]
 wabt = "~0.7.4"
 assert_matches = "1.1"
-hex-literal = "0.1.0"
+hex-literal = "0.2.0"
 consensus = { package = "srml-consensus", path = "../consensus" }
 balances = { package = "srml-balances", path = "../balances" }
 
@@ -34,7 +33,6 @@ core = [
 ]
 std = [
 	"serde",
-	"serde_derive",
 	"parity-codec/std",
 	"substrate-primitives/std",
 	"runtime-primitives/std",

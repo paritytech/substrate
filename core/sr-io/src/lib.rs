@@ -136,7 +136,7 @@ export_api! {
 		fn storage_root() -> [u8; 32];
 
 		/// "Commit" all existing operations and compute the resultant child storage root.
-		fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>>;
+		fn child_storage_root(storage_key: &[u8]) -> Vec<u8>;
 
 		/// "Commit" all existing operations and get the resultant storage change root.
 		fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]>;
@@ -208,6 +208,9 @@ export_api! {
 		/// Conduct a 256-bit Keccak hash.
 		fn keccak_256(data: &[u8]) -> [u8; 32] ;
 
+		/// Conduct a 128-bit Blake2 hash.
+		fn blake2_128(data: &[u8]) -> [u8; 16];
+
 		/// Conduct a 256-bit Blake2 hash.
 		fn blake2_256(data: &[u8]) -> [u8; 32];
 
@@ -216,6 +219,9 @@ export_api! {
 
 		/// Conduct two XX hashes to give a 128-bit result.
 		fn twox_128(data: &[u8]) -> [u8; 16];
+
+		/// Conduct two XX hashes to give a 64-bit result.
+		fn twox_64(data: &[u8]) -> [u8; 8];
 	}
 }
 

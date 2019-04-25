@@ -46,214 +46,12 @@
 //!# fn main() { }
 //! ```
 
-use crate::codec;
-use crate::rstd::vec::Vec;
-#[cfg(feature = "std")]
-use crate::storage::unhashed::generator::UnhashedStorage;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
 #[doc(hidden)]
 pub use crate::rstd::marker::PhantomData;
 #[doc(hidden)]
 pub use crate::rstd::boxed::Box;
-
-pub use srml_metadata::{
-	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
-	StorageFunctionType, StorageFunctionModifier,
-	DefaultByte, DefaultByteGetter,
-};
-
-/// Abstraction around storage.
-pub trait Storage {
-	/// true if the key exists in storage.
-	fn exists(&self, key: &[u8]) -> bool;
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T>;
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
-	/// it's not there.
-	fn require<T: codec::Decode>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
-	/// default is returned if it's not there.
-	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
-
-	/// Put a value in under a key.
-	fn put<T: codec::Encode>(&self, key: &[u8], val: &T);
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&self, key: &[u8]);
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		let value = self.get(key);
-		self.kill(key);
-		value
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Decode>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
-
-	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
-
-	/// Get a Vec of bytes from storage.
-	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Put a raw byte slice into storage.
-	fn put_raw(&self, key: &[u8], value: &[u8]);
-}
-
-// We use a construct like this during when genesis storage is being built.
-#[cfg(feature = "std")]
-impl<S: sr_primitives::BuildStorage> Storage for (crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {
-	fn exists(&self, key: &[u8]) -> bool {
-		UnhashedStorage::exists(self, &S::hash(key))
-	}
-
-	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		UnhashedStorage::get(self, &S::hash(key))
-	}
-
-	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		UnhashedStorage::put(self, &S::hash(key), val)
-	}
-
-	fn kill(&self, key: &[u8]) {
-		UnhashedStorage::kill(self, &S::hash(key))
-	}
-
-	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		UnhashedStorage::get_raw(self, key)
-	}
-
-	fn put_raw(&self, key: &[u8], value: &[u8]) {
-		UnhashedStorage::put_raw(self, key, value)
-	}
-}
-
-/// A strongly-typed value kept in storage.
-pub trait StorageValue<T: codec::Codec> {
-	/// The type that get/take returns.
-	type Query;
-
-	/// Get the storage key.
-	fn key() -> &'static [u8];
-
-	/// true if the value is defined in storage.
-	fn exists<S: Storage>(storage: &S) -> bool {
-		storage.exists(Self::key())
-	}
-
-	/// Load the value from the provided storage instance.
-	fn get<S: Storage>(storage: &S) -> Self::Query;
-
-	/// Take a value from storage, removing it afterwards.
-	fn take<S: Storage>(storage: &S) -> Self::Query;
-
-	/// Store a value under this key into the provided storage instance.
-	fn put<S: Storage>(val: &T, storage: &S) {
-		storage.put(Self::key(), val)
-	}
-
-	/// Mutate this value
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Storage>(f: F, storage: &S) -> R;
-
-	/// Clear the storage value.
-	fn kill<S: Storage>(storage: &S) {
-		storage.kill(Self::key())
-	}
-
-	/// Append the given items to the value in the storage.
-	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<S: Storage, I: codec::Encode>(
-		items: &[I], storage: &S
-	) -> Result<(), &'static str> where T: codec::EncodeAppend<Item=I> {
-		let new_val = <T as codec::EncodeAppend>::append(
-			storage.get_raw(Self::key()).unwrap_or_default(),
-			items,
-		).ok_or_else(|| "Could not append given item")?;
-		storage.put_raw(Self::key(), &new_val);
-		Ok(())
-	}
-}
-
-/// A strongly-typed list in storage.
-pub trait StorageList<T: codec::Codec> {
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
-
-	/// Get the key used to put the length field.
-	fn len_key() -> Vec<u8>;
-
-	/// Get the storage key used to fetch a value at a given index.
-	fn key_for(index: u32) -> Vec<u8>;
-
-	/// Read out all the items.
-	fn items<S: Storage>(storage: &S) -> Vec<T>;
-
-	/// Set the current set of items.
-	fn set_items<S: Storage>(items: &[T], storage: &S);
-
-	/// Set the item at the given index.
-	fn set_item<S: Storage>(index: u32, item: &T, storage: &S);
-
-	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-	fn get<S: Storage>(index: u32, storage: &S) -> Option<T>;
-
-	/// Load the length of the list
-	fn len<S: Storage>(storage: &S) -> u32;
-
-	/// Clear the list.
-	fn clear<S: Storage>(storage: &S);
-}
-
-/// A strongly-typed map in storage.
-pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
-	/// The type that get/take returns.
-	type Query;
-
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
-
-	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(x: &K) -> Vec<u8>;
-
-	/// true if the value is defined in storage.
-	fn exists<S: Storage>(key: &K, storage: &S) -> bool {
-		storage.exists(&Self::key_for(key)[..])
-	}
-
-	/// Load the value associated with the given key from the map.
-	fn get<S: Storage>(key: &K, storage: &S) -> Self::Query;
-
-	/// Take the value under a key.
-	fn take<S: Storage>(key: &K, storage: &S) -> Self::Query;
-
-	/// Store a value to be associated with the given key from the map.
-	fn insert<S: Storage>(key: &K, val: &V, storage: &S) {
-		storage.put(&Self::key_for(key)[..], val);
-	}
-
-	/// Remove the value under a key.
-	fn remove<S: Storage>(key: &K, storage: &S) {
-		storage.kill(&Self::key_for(key)[..]);
-	}
-
-	/// Mutate the value under a key.
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Storage>(key: &K, f: F, storage: &S) -> R;
-}
-
-/// A `StorageMap` with enumerable entries.
-pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
-	/// Return current head element.
-	fn head<S: Storage>(storage: &S) -> Option<K>;
-
-	/// Enumerate all elements in the map.
-	fn enumerate<'a, S: Storage>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
-}
 
 // FIXME #1466 Remove this in favor of `decl_storage` macro.
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -380,12 +178,12 @@ macro_rules! __storage_items_internal {
 	// generator for values.
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype { <$name as $crate::storage::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::generator::StorageValue<$ty> for $name {
+		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
 
 			/// Get the storage key.
@@ -394,29 +192,29 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value from the provided storage instance.
-			fn get<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
+			fn get<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> Self::Query {
 				storage.$getter($key)
 			}
 
 			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
+			fn take<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> Self::Query {
 				storage.$taker($key)
 			}
 
 			/// Mutate this value.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::GenericStorage>(f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Twox128>>(f: F, storage: &S) -> R {
+				let mut val = <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::get(storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage)
+					<Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
-						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::kill(storage),
 					}
 				});
 
@@ -428,14 +226,16 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
 		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			<$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+			<$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
+		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
+
+			type Hasher = $crate::Blake2_256;
 
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
@@ -450,31 +250,31 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+			fn get<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$getter(&key[..])
 			}
 
 			/// Take the value, reading and removing it.
-			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+			fn take<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
 
 			/// Mutate the value under a key.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, f: F, storage: &S) -> R {
+				let mut val = <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
+					<Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
 
@@ -487,19 +287,19 @@ macro_rules! __storage_items_internal {
 		$($vis)* struct $name;
 
 		impl $name {
-			fn clear_item<S: $crate::GenericStorage>(index: u32, storage: &S) {
-				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
-					storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index));
+			fn clear_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, storage: &S) {
+				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
+					storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
-			fn set_len<S: $crate::GenericStorage>(count: u32, storage: &S) {
-				(count..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
-				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key(), &count);
+			fn set_len<S: $crate::HashedStorage<$crate::Twox128>>(count: u32, storage: &S) {
+				(count..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
+				storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key(), &count);
 			}
 		}
 
-		impl $crate::storage::generator::StorageList<$ty> for $name {
+		impl $crate::storage::hashed::generator::StorageList<$ty> for $name {
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
 				$prefix
@@ -520,43 +320,43 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Read out all the items.
-			fn items<S: $crate::GenericStorage>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
-				(0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage))
-					.map(|i| <$name as $crate::storage::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
+			fn items<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
+				(0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage))
+					.map(|i| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
 					.collect()
 			}
 
 			/// Set the current set of items.
-			fn set_items<S: $crate::GenericStorage>(items: &[$ty], storage: &S) {
+			fn set_items<S: $crate::HashedStorage<$crate::Twox128>>(items: &[$ty], storage: &S) {
 				$name::set_len(items.len() as u32, storage);
 				items.iter()
 					.enumerate()
-					.for_each(|(i, item)| <$name as $crate::storage::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
+					.for_each(|(i, item)| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
-			fn set_item<S: $crate::GenericStorage>(index: u32, item: &$ty, storage: &S) {
-				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
-					storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
+			fn set_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, item: &$ty, storage: &S) {
+				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
+					storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-			fn get<S: $crate::GenericStorage>(index: u32, storage: &S) -> Option<$ty> {
-				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..])
+			fn get<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, storage: &S) -> Option<$ty> {
+				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..])
 			}
 
 			/// Load the length of the list.
-			fn len<S: $crate::GenericStorage>(storage: &S) -> u32 {
-				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
+			fn len<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> u32 {
+				storage.get(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
 			}
 
 			/// Clear the list.
-			fn clear<S: $crate::GenericStorage>(storage: &S) {
-				for i in 0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+			fn clear<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) {
+				for i in 0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					$name::clear_item(i, storage);
 				}
 
-				storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()[..])
+				storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key()[..])
 			}
 		}
 	};
@@ -584,35 +384,11 @@ macro_rules! __handle_wrap_internal {
 mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
-	use codec::{Decode, Encode};
 	use super::*;
+	use crate::metadata::*;
+	use crate::metadata::StorageHasher;
 	use crate::rstd::marker::PhantomData;
-
-	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
-		fn exists(&self, key: &[u8]) -> bool {
-			self.borrow_mut().get(key).is_some()
-		}
-
-		fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
-		}
-
-		fn put<T: Encode>(&self, key: &[u8], val: &T) {
-			self.borrow_mut().insert(key.to_owned(), val.encode());
-		}
-
-		fn kill(&self, key: &[u8]) {
-			self.borrow_mut().remove(key);
-		}
-
-		fn put_raw(&self, key: &[u8], value: &[u8]) {
-			self.borrow_mut().insert(key.to_owned(), value.to_owned());
-		}
-
-		fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-			self.borrow().get(key).cloned()
-		}
-	}
+	use crate::storage::hashed::generator::*;
 
 	storage_items! {
 		Value: b"a" => u32;
@@ -622,7 +398,8 @@ mod tests {
 
 	#[test]
 	fn value() {
-		let storage = RefCell::new(HashMap::new());
+		let mut overlay = HashMap::new();
+		let storage = RefCell::new(&mut overlay);
 		assert!(Value::get(&storage).is_none());
 		Value::put(&100_000, &storage);
 		assert_eq!(Value::get(&storage), Some(100_000));
@@ -632,7 +409,8 @@ mod tests {
 
 	#[test]
 	fn list() {
-		let storage = RefCell::new(HashMap::new());
+		let mut overlay = HashMap::new();
+		let storage = RefCell::new(&mut overlay);
 		assert_eq!(List::len(&storage), 0);
 		assert!(List::items(&storage).is_empty());
 
@@ -651,7 +429,8 @@ mod tests {
 
 	#[test]
 	fn map() {
-		let storage = RefCell::new(HashMap::new());
+		let mut overlay = HashMap::new();
+		let storage = RefCell::new(&mut overlay);
 		assert!(Map::get(&5, &storage).is_none());
 		Map::insert(&5, &[1; 32], &storage);
 		assert_eq!(Map::get(&5, &storage), Some([1; 32]));
@@ -661,7 +440,7 @@ mod tests {
 	}
 
 	pub trait Trait {
-		type Origin: codec::Encode + codec::Decode + ::std::default::Default;
+		type Origin: crate::codec::Encode + crate::codec::Decode + ::std::default::Default;
 		type BlockNumber;
 	}
 
@@ -850,6 +629,7 @@ mod tests {
 				name: DecodeDifferent::Encode("MAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -863,6 +643,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBMAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -876,6 +657,7 @@ mod tests {
 				name: DecodeDifferent::Encode("MAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -889,6 +671,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -902,6 +685,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -915,6 +699,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -928,6 +713,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -941,6 +727,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: false,
@@ -954,6 +741,7 @@ mod tests {
 				name: DecodeDifferent::Encode("LINKEDMAPU32"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -967,6 +755,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBLINKEDMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -980,6 +769,7 @@ mod tests {
 				name: DecodeDifferent::Encode("GETLINKEDMAPU32"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,
@@ -993,6 +783,7 @@ mod tests {
 				name: DecodeDifferent::Encode("PUBGETLINKEDMAPU32MYDEF"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map {
+					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u32"),
 					value: DecodeDifferent::Encode("String"),
 					is_linked: true,

@@ -17,7 +17,7 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 use crate::codec::{Decode, Encode, Input, Output};
 

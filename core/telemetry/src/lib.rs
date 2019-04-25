@@ -29,7 +29,7 @@ use log::trace;
 use rand::{thread_rng, Rng};
 pub use slog_scope::with_logger;
 pub use slog;
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use core::result;
 
 /// Configuration for telemetry.

@@ -291,7 +291,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 mod tests {
 	use super::*;
 
-	use codec::Encode;
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
 	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
@@ -303,8 +302,7 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
-		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
-		Extrinsic::Transfer(tx, signature)
+		tx.into_signed_tx()
 	}
 
 	#[test]
