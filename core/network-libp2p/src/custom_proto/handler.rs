@@ -443,7 +443,7 @@ where
 					}
 				}
 
-				// This code is reached is none of the substreams are in a ready state.
+				// This code is reached is none if and only if none of the substreams are in a ready state.
 				self.state = ProtocolState::Normal { substreams, shutdown };
 				None
 			}
