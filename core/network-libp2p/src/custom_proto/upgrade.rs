@@ -153,31 +153,9 @@ pub trait CustomMessage {
 	/// Tries to parse `bytes` received from the network into a message.
 	fn from_bytes(bytes: &[u8]) -> Result<Self, ()>
 		where Self: Sized;
-
-	/// Returns a unique ID that is used to match request and responses.
-	///
-	/// The networking layer employs multiplexing in order to have multiple parallel data streams.
-	/// Transmitting messages over the network uses two kinds of substreams:
-	///
-	/// - Undirectional substreams, where we send a single message then close the substream.
-	/// - Bidirectional substreams, where we send a message then wait for a response. Once the
-	///   response has arrived, we close the substream.
-	///
-	/// If `request_id()` returns `OneWay`, then this message will be sent or received over a
-	/// unidirectional substream. If instead it returns `Request` or `Response`, then we use the
-	/// value to match a request with its response.
-	fn request_id(&self) -> CustomMessageId;
 }
 
-/// See the documentation of `CustomMessage::request_id`.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum CustomMessageId {
-	OneWay,
-	Request(u64),
-	Response(u64),
-}
-
-// These trait implementations exist mostly for testing convenience. This should eventually be
+// This trait implementation exist mostly for testing convenience. This should eventually be
 // removed.
 
 impl CustomMessage for Vec<u8> {
@@ -187,45 +165,6 @@ impl CustomMessage for Vec<u8> {
 
 	fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
 		Ok(bytes.to_vec())
-	}
-
-	fn request_id(&self) -> CustomMessageId {
-		CustomMessageId::OneWay
-	}
-}
-
-impl CustomMessage for (Option<u64>, Vec<u8>) {
-	fn into_bytes(self) -> Vec<u8> {
-		use byteorder::WriteBytesExt;
-		use std::io::Write;
-		let mut out = Vec::new();
-		out.write_u64::<byteorder::BigEndian>(self.0.unwrap_or(u64::max_value()))
-			.expect("Writing to a Vec can never fail");
-		out.write_all(&self.1).expect("Writing to a Vec can never fail");
-		out
-	}
-
-	fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-		use byteorder::ReadBytesExt;
-		use std::io::Read;
-		let mut rdr = std::io::Cursor::new(bytes);
-		let id = rdr.read_u64::<byteorder::BigEndian>().map_err(|_| ())?;
-		let mut out = Vec::new();
-		rdr.read_to_end(&mut out).map_err(|_| ())?;
-		let id = if id == u64::max_value() {
-			None
-		} else {
-			Some(id)
-		};
-		Ok((id, out))
-	}
-
-	fn request_id(&self) -> CustomMessageId {
-		if let Some(id) = self.0 {
-			CustomMessageId::Request(id)
-		} else {
-			CustomMessageId::OneWay
-		}
 	}
 }
 
