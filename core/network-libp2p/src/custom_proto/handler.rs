@@ -171,7 +171,7 @@ enum ProtocolState<TMessage, TSubstream> {
 
 	/// Backwards-compatible mode. Contains the unique substream that is open.
 	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
-	BackCompat {
+	Normal {
 		/// The unique substream where bidirectional communications happen.
 		substream: RegisteredProtocolSubstream<TMessage, TSubstream>,
 		/// Contains substreams which are being shut down.
@@ -283,7 +283,7 @@ where
 						version: incoming[0].protocol_version()
 					};
 					self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
-					ProtocolState::BackCompat {
+					ProtocolState::Normal {
 						substream: incoming.into_iter().next()
 							.expect("We have a check above that incoming isn't empty; QED"),
 						shutdown: SmallVec::new()
@@ -292,7 +292,7 @@ where
 			}
 
 			st @ ProtocolState::Opening { .. } => st,
-			st @ ProtocolState::BackCompat { .. } => st,
+			st @ ProtocolState::Normal { .. } => st,
 			ProtocolState::Disabled { shutdown, .. } => {
 				ProtocolState::Disabled { shutdown, reenable: true }
 			}
@@ -319,7 +319,7 @@ where
 				ProtocolState::Disabled { shutdown: SmallVec::new(), reenable: false }
 			}
 
-			ProtocolState::BackCompat { mut substream, mut shutdown } => {
+			ProtocolState::Normal { mut substream, mut shutdown } => {
 				substream.shutdown();
 				shutdown.push(substream);
 				let event = CustomProtoHandlerOut::CustomProtocolClosed {
@@ -389,25 +389,25 @@ where
 				}
 			}
 
-			ProtocolState::BackCompat { mut substream, shutdown } => {
+			ProtocolState::Normal { mut substream, shutdown } => {
 				match substream.poll() {
 					Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message)))) => {
 						let event = CustomProtoHandlerOut::CustomMessage {
 							message
 						};
 						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						ProtocolState::BackCompat { substream, shutdown }
+						ProtocolState::Normal { substream, shutdown }
 					},
 					Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { messages }))) => {
 						let event = CustomProtoHandlerOut::Clogged {
 							messages,
 						};
 						return_value = Some(ProtocolsHandlerEvent::Custom(event));
-						ProtocolState::BackCompat { substream, shutdown }
+						ProtocolState::Normal { substream, shutdown }
 					}
 					Ok(Async::NotReady) => {
 						return_value = None;
-						ProtocolState::BackCompat { substream, shutdown }
+						ProtocolState::Normal { substream, shutdown }
 					}
 					Ok(Async::Ready(None)) => {
 						let event = CustomProtoHandlerOut::CustomProtocolClosed {
@@ -480,18 +480,18 @@ where
 					version: substream.protocol_version()
 				};
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
-				ProtocolState::BackCompat {
+				ProtocolState::Normal {
 					substream,
 					shutdown: SmallVec::new()
 				}
 			}
 
-			ProtocolState::BackCompat { substream: existing, mut shutdown } => {
+			ProtocolState::Normal { substream: existing, mut shutdown } => {
 				debug!(target: "sub-libp2p", "Received extra substream after having already one \
 					open in backwards-compatibility mode with {:?}", self.remote_peer_id);
 				substream.shutdown();
 				shutdown.push(substream);
-				ProtocolState::BackCompat { substream: existing, shutdown }
+				ProtocolState::Normal { substream: existing, shutdown }
 			}
 
 			ProtocolState::Disabled { mut shutdown, .. } => {
@@ -505,7 +505,7 @@ where
 	/// Sends a message to the remote.
 	fn send_message(&mut self, message: TMessage) {
 		match self.state {
-			ProtocolState::BackCompat { ref mut substream, .. } =>
+			ProtocolState::Normal { ref mut substream, .. } =>
 				substream.send_message(message),
 
 			_ => debug!(target: "sub-libp2p", "Tried to send message over closed protocol \
@@ -574,7 +574,7 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 
 		match self.state {
 			ProtocolState::Init { .. } | ProtocolState::Opening { .. } => {}
-			ProtocolState::BackCompat { .. } => keep_forever = true,
+			ProtocolState::Normal { .. } => keep_forever = true,
 			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::No,
 		}
 
