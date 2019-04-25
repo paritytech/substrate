@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Utility for substrate-based runtimes that want to check misbehavior reports.
 
 use codec::{Codec, Encode};

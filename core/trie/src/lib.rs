@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
 // FIXME: no_std - https://github.com/paritytech/substrate/issues/1574

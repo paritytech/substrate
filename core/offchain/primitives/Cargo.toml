@@ -2,7 +2,6 @@
 description = "Substrate offchain workers primitives"
 name = "substrate-offchain-primitives"
 version = "0.1.0"
-license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 

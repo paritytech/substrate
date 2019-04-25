@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Provides types and traits for creating and checking inherents.
 //!
 //! Each inherent is added to a produced block. Each runtime decides on which inherents its

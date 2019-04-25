@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! State database maintenance. Handles canonicalization and pruning in the database. The input to
 //! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Structures and functions required to build changes trie for given block.
 
 use std::collections::{BTreeMap, BTreeSet};

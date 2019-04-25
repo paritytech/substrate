@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! An u32 trait with "values" as impl'd types.
 
 /// A u32 value, wrapped in a trait because we don't yet have const generics.

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Strongly typed wrappers around values in storage.
 //!
 //! This crate exports a macro `storage_items!` and traits describing behavior of generated

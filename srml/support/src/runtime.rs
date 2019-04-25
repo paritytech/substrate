@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Macros to define a runtime. A runtime is basically all your logic running in Substrate,
 //! consisting of selected SRML modules and maybe some of your own modules.
 //! A lot of supporting logic is automatically generated for a runtime,

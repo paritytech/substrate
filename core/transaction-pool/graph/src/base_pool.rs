@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! A basic version of the dependency graph.
 //!
 //! For a more full-featured pool, have a look at the `pool` module.

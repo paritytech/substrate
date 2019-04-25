@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Helper stream for waiting until one or more blocks are imported before
 //! passing through inner items. This is done in a generic way to support
 //! many different kinds of items.

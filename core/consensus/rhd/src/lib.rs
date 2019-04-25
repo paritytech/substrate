@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! BFT Agreement based on a rotating proposer in different rounds.
 //!
 //! Where this crate refers to input stream, should never logically conclude.

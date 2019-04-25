@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Decodable variant of the RuntimeMetadata.
 //!
 //! This really doesn't belong here, but is necessary for the moment. In the future

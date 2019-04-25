@@ -4,7 +4,6 @@ version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-codec node format"
 repository = "https://github.com/paritytech/parity-common"
-license = "GPL-3.0"
 edition = "2018"
 
 [[bench]]
