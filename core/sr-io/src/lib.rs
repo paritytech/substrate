@@ -31,7 +31,7 @@ use hash_db::Hasher;
 use rstd::vec::Vec;
 
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 
 pub use primitives::Blake2Hasher;
 
