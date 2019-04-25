@@ -16,8 +16,9 @@
 
 //! Substrate CLI library.
 
-#![forbid(warnings)]
-#![deny(unused_extern_crates, missing_docs)]
+#![warn(missing_docs)]
+#![warn(unused_extern_crates)]
+
 #[macro_use]
 mod traits;
 mod params;

@@ -157,7 +157,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 
 		// rather than use a timer interval, we schedule our waits ourselves
 		Slots::<SC>::new(slot_duration.slot_duration(), inherent_data_providers)
-			.map_err(|e| error!(target: "slots", "Faulty timer: {:?}", e))
+			.map_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
 			.for_each(move |slot_info| {
 				let client = client.clone();
 				let worker = worker.clone();
@@ -194,10 +194,10 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 				Ok(Err(())) => warn!(target: "slots", "Authorship task terminated unexpectedly. Restarting"),
 				Err(e) => {
 					if let Some(s) = e.downcast_ref::<&'static str>() {
-						error!(target: "slots", "Authorship task panicked at {:?}", s);
+						warn!(target: "slots", "Authorship task panicked at {:?}", s);
 					}
 
-					error!(target: "slots", "Restarting authorship task");
+					warn!(target: "slots", "Restarting authorship task");
 				}
 			}
 
