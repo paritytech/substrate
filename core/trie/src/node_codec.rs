@@ -61,12 +61,18 @@ impl<H: Hasher> trie_db::NodeCodec<H> for NodeCodec<H> {
 				Ok(Node::Branch(children, value))
 			}
 			NodeHeader::Extension(nibble_count) => {
+				if nibble_count % 2 == 1 && input[0] & 0xf0 != 0x00 {
+					return Err(BadFormat);
+				}
 				let nibble_data = take(input, (nibble_count + 1) / 2).ok_or(BadFormat)?;
 				let nibble_slice = NibbleSlice::new_offset(nibble_data, nibble_count % 2);
 				let count = <Compact<u32>>::decode(input).ok_or(BadFormat)?.0 as usize;
 				Ok(Node::Extension(nibble_slice, take(input, count).ok_or(BadFormat)?))
 			}
 			NodeHeader::Leaf(nibble_count) => {
+				if nibble_count % 2 == 1 && input[0] & 0xf0 != 0x00 {
+					return Err(BadFormat);
+				}
 				let nibble_data = take(input, (nibble_count + 1) / 2).ok_or(BadFormat)?;
 				let nibble_slice = NibbleSlice::new_offset(nibble_data, nibble_count % 2);
 				let count = <Compact<u32>>::decode(input).ok_or(BadFormat)?.0 as usize;

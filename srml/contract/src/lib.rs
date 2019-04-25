@@ -92,7 +92,7 @@ use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
 
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
@@ -199,7 +199,7 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 pub struct TombstoneContractInfo<T: Trait>(T::Hash);
 
 impl<T: Trait> TombstoneContractInfo<T> {
-	fn new(storage_root: Option<Vec<u8>>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
+	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
 		let mut buf = Vec::new();
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		storage_size.using_encoded(|encoded| buf.extend_from_slice(encoded));
@@ -214,8 +214,13 @@ impl<T: Trait> TombstoneContractInfo<T> {
 pub trait TrieIdGenerator<AccountId> {
 	/// Get a trie id for an account, using reference to parent account trie id to ensure
 	/// uniqueness of trie id.
+	///
 	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
+	///
+	/// Also, the implementation is responsible for ensuring that `TrieId` starts with
+	/// `:child_storage:`.
+	/// TODO: We want to change this, see https://github.com/paritytech/substrate/issues/2325
 	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
@@ -237,7 +242,9 @@ where
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
+		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		CHILD_STORAGE_KEY_PREFIX.iter()
+			.chain(b"default:")
 			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
 			.cloned()
 			.collect()

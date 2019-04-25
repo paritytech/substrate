@@ -190,7 +190,7 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use serde_derive::{Serialize, Deserialize};
+	use serde::{Serialize, Deserialize};
 
 	struct TestContext;
 	impl Lookup for TestContext {

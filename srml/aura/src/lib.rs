@@ -29,26 +29,6 @@
 //!
 //! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
 //!
-//! ## Usage
-//!
-//! ### Prerequisites
-//!
-//! Use of this module implies selection of the Aura algorithm.
-//!
-//! ### Simple Code Snippet
-//!
-//! Instantiate a report of skipped authorities:
-//!
-//! ```rust,ignore
-//! let mut report = AuraReport {
-//! 	start_slot: 6, // The first skipped slot
-//! 	skipped: 3,   // The number of authorities skipped
-//! }
-//! ```
-//!
-//! See the `tests.rs` file in this module's directory for other simple code snippets that may make this module's
-//! functionalities clearer.
-//!
 //! ## Related Modules
 //!
 //! - [Staking](../srml_staking/index.html): The Staking module is called in Aura to enforce slashing

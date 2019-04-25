@@ -23,7 +23,7 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
-use hex_literal::{hex, hex_impl};
+use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -112,7 +112,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			current_session_reward: 0,
 			validator_count: 7,
 			sessions_per_era: 12,
-			bonding_duration: 60 * MINUTES,
+			bonding_duration: 12,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
@@ -294,7 +294,7 @@ pub fn testnet_genesis(
 			minimum_validator_count: 1,
 			validator_count: 2,
 			sessions_per_era: 5,
-			bonding_duration: 2 * 60 * 12,
+			bonding_duration: 12,
 			offline_slash: Perbill::zero(),
 			session_reward: Perbill::zero(),
 			current_session_reward: 0,

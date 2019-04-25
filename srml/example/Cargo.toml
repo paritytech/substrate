@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-hex-literal = "0.1.0"
 serde = { version = "1.0", optional = true }
 parity-codec = { version = "3.3", default-features = false }
 srml-support = { path = "../support", default-features = false }

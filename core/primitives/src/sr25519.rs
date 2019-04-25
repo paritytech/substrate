@@ -504,7 +504,7 @@ impl Pair {
 mod test {
 	use super::*;
 	use crate::crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	#[test]
 	fn default_phrase_should_be_used() {
