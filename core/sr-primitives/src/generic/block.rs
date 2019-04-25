@@ -20,7 +20,7 @@
 use std::fmt;
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 
 use rstd::prelude::*;
 use crate::codec::{Codec, Encode, Decode};

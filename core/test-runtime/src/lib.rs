@@ -38,7 +38,7 @@ use runtime_primitives::{
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor,
+		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -142,14 +142,14 @@ impl Extrinsic {
 	}
 }
 
-// The identity type used by authorities.
-pub type AuthorityId = sr25519::Public;
-// The signature type used by authorities.
+/// The signature type used by authorities.
 pub type AuthoritySignature = sr25519::Signature;
-/// An identifier for an account on this system.
-pub type AccountId = sr25519::Public;
-// The signature type used by accounts/transactions.
+/// The identity type used by authorities.
+pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
+/// The signature type used by accounts/transactions.
 pub type AccountSignature = sr25519::Signature;
+/// An identifier for an account on this system.
+pub type AccountId = <AccountSignature as Verify>::Signer;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
 /// The block number type used in this runtime.
@@ -428,6 +428,7 @@ cfg_if! {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
 						expected_block_time: 1,
+						threshold: std::u64::MAX,
 					}
 				}
 			}
@@ -441,7 +442,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}
@@ -557,6 +558,7 @@ cfg_if! {
 					consensus_babe::BabeConfiguration {
 						slot_duration: 1,
 						expected_block_time: 1,
+						threshold: core::u64::MAX,
 					}
 				}
 			}
@@ -570,7 +572,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}

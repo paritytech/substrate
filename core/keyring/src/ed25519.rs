@@ -100,6 +100,12 @@ impl From<Keyring> for &'static str {
 	}
 }
 
+impl From<Keyring> for sr_primitives::MultiSigner {
+	fn from(x: Keyring) -> Self {
+		sr_primitives::MultiSigner::Ed25519(x.into())
+	}
+}
+
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
 		Keyring::iter().map(|i| (i, i.pair())).collect()

@@ -6,6 +6,9 @@ edition = "2018"
 
 [dependencies]
 substrate-primitives = { version = "*", path = "../core/primitives" }
+node-runtime = { version = "*", path = "../node/runtime" }
+node-primitives = { version = "*", path = "../node/primitives" }
+sr-primitives = { version = "*", path = "../core/sr-primitives" }
 rand = "0.6"
 clap = { version = "~2.32", features = ["yaml"] }
 tiny-bip39 = "0.6.0"
@@ -13,6 +16,8 @@ rustc-hex = "2.0"
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39" }
 schnorrkel = "0.1"
 hex = "0.3"
+hex-literal = "0.1"
+parity-codec = "3.2"
 
 [features]
 bench = []

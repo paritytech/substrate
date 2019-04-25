@@ -17,7 +17,7 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use runtime_io::twox_128;
+use runtime_io::{blake2_256, twox_128};
 use super::AccountId;
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
@@ -47,7 +47,7 @@ impl GenesisConfig {
 		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm").to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
-			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
+			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(well_known_keys::CODE.into(), wasm_runtime),
 				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),

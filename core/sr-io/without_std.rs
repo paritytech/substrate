@@ -273,7 +273,9 @@ extern_functions! {
 
 	/// Hash calculation and verification
 	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
+	fn ext_blake2_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_twox_64(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
@@ -475,18 +477,18 @@ pub fn storage_root() -> [u8; 32] {
 }
 
 /// "Commit" all existing operations and compute the resultant child storage root.
-pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+pub fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
 	let mut length: u32 = 0;
 	unsafe {
-		let ptr = ext_child_storage_root.get()(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
-		if length == u32::max_value() {
-			None
-		} else {
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
-		}
+		let ptr = ext_child_storage_root.get()(
+			storage_key.as_ptr(),
+			storage_key.len() as u32,
+			&mut length
+		);
+		// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+		// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+		// See #300 for more details.
+		<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize)
 	}
 }
 
@@ -544,6 +546,15 @@ pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	result
 }
 
+/// Conduct a 128-bit Blake2 hash.
+pub fn blake2_128(data: &[u8]) -> [u8; 16] {
+	let mut result: [u8; 16] = Default::default();
+	unsafe {
+		ext_blake2_128.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+	}
+	result
+}
+
 /// Conduct a 256-bit Keccak hash.
 pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
@@ -567,6 +578,15 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 	let mut result: [u8; 16] = Default::default();
 	unsafe {
 		ext_twox_128.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+	}
+	result
+}
+
+/// Conduct two XX hashes to give a 64-bit result.
+pub fn twox_64(data: &[u8]) -> [u8; 8] {
+	let mut result: [u8; 8] = Default::default();
+	unsafe {
+		ext_twox_64.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }

@@ -38,7 +38,7 @@ use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -46,7 +46,7 @@ pub use impl_serde::serialize as bytes;
 #[cfg(feature = "std")]
 pub mod hashing;
 #[cfg(feature = "std")]
-pub use hashing::{blake2_256, twox_128, twox_256};
+pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;

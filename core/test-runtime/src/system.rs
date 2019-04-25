@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128};
+use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
@@ -45,11 +45,11 @@ pub fn balance_of_key(who: AccountId) -> Vec<u8> {
 }
 
 pub fn balance_of(who: AccountId) -> u64 {
-	storage::get_or(&balance_of_key(who), 0)
+	storage::hashed::get_or(&blake2_256, &balance_of_key(who), 0)
 }
 
 pub fn nonce_of(who: AccountId) -> u64 {
-	storage::get_or(&who.to_keyed_vec(NONCE_OF), 0)
+	storage::hashed::get_or(&blake2_256, &who.to_keyed_vec(NONCE_OF), 0)
 }
 
 /// Get authorities at given block.
@@ -152,7 +152,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
+	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
 		return TransactionValidity::Invalid(ApplyError::Stale as i8);
 	}
@@ -241,26 +241,26 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
-	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
+	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
 		return Err(ApplyError::Stale)
 	}
 
 	// increment nonce in storage
-	storage::put(&nonce_key, &(expected_nonce + 1));
+	storage::hashed::put(&blake2_256, &nonce_key, &(expected_nonce + 1));
 
 	// check sender balance
 	let from_balance_key = tx.from.to_keyed_vec(BALANCE_OF);
-	let from_balance: u64 = storage::get_or(&from_balance_key, 0);
+	let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
 		return Err(ApplyError::CantPay)
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
-	let to_balance: u64 = storage::get_or(&to_balance_key, 0);
-	storage::put(&from_balance_key, &(from_balance - tx.amount));
-	storage::put(&to_balance_key, &(to_balance + tx.amount));
+	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
+	storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
+	storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
 	Ok(ApplyOutcome::Success)
 }
 
@@ -295,7 +295,7 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, twox_128, TestExternalities};
+	use runtime_io::{with_externalities, twox_128, blake2_256, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
 	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
 	use crate::{Header, Transfer};
@@ -313,7 +313,7 @@ mod tests {
 			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Alice.to_raw_public().to_vec(),
 			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Bob.to_raw_public().to_vec(),
 			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => AuthorityKeyring::Charlie.to_raw_public().to_vec(),
-			twox_128(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		])
 	}
 

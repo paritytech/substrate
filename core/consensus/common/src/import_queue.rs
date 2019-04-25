@@ -322,7 +322,7 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportWorkerMsg::Imported(results) => (results),
 			#[cfg(any(test, feature = "test-helpers"))]
 			BlockImportWorkerMsg::Synchronize => {
-				trace!("Synchronizing link");
+				trace!(target: "sync", "Synchronizing link");
 				link.synchronized();
 				return true;
 			},
@@ -439,7 +439,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 						},
 						#[cfg(any(test, feature = "test-helpers"))]
 						BlockImportWorkerMsg::Synchronize => {
-							trace!("Sending sync message");
+							trace!(target: "sync", "Sending sync message");
 							let _ = worker.result_sender.send(BlockImportWorkerMsg::Synchronize);
 						},
 						_ => unreachable!("Import Worker does not receive the Imported message; qed"),

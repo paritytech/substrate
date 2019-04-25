@@ -40,6 +40,12 @@ pub struct BabeConfiguration {
 	///
 	/// Dynamic slot duration may be supported in the future.
 	pub expected_block_time: u64,
+
+	/// The maximum permitted VRF output, or *threshold*, for BABE.  Currently,
+	/// only the value provided by this type at genesis will be used.
+	///
+	/// Dynamic thresholds may be supported in the future.
+	pub threshold: u64,
 }
 
 impl BabeConfiguration {
@@ -57,6 +63,14 @@ impl BabeConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub fn slot_duration(&self) -> u64 {
 		self.slot_duration
+	}
+
+	/// The maximum permitted VRF output, or *threshold*, for BABE.  Currently,
+	/// only the value provided by this type at genesis will be used.
+	///
+	/// Dynamic thresholds may be supported in the future.
+	pub fn threshold(&self) -> u64 {
+		self.threshold
 	}
 }
 

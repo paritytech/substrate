@@ -29,13 +29,11 @@ use blake2_rfc;
 #[cfg(feature = "std")]
 use ring::{signature, signature::KeyPair, rand::{SecureRandom, SystemRandom}};
 #[cfg(feature = "std")]
-use base58::{ToBase58, FromBase58};
-#[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::UncheckedFrom;
@@ -323,36 +321,6 @@ impl Public {
 
 #[cfg(feature = "std")]
 impl Derive for Public {}
-
-#[cfg(feature = "std")]
-impl Public {
-	/// Some if the string is a properly encoded SS58Check address.
-	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?;	// failure here would be invalid encoding.
-		if d.len() != 35 {
-			// Invalid length.
-			return Err(PublicError::BadLength);
-		}
-		if d[0] != 42 {
-			// Invalid version.
-			return Err(PublicError::UnknownVersion);
-		}
-		if d[33..35] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..33]).as_bytes()[0..2] {
-			// Invalid checksum.
-			return Err(PublicError::InvalidChecksum);
-		}
-		Ok(Self::from_slice(&d[1..33]))
-	}
-
-	/// Return the ss58-check string for this key.
-	pub fn to_ss58check(&self) -> String {
-		let mut v = vec![42u8];
-		v.extend(self.as_slice());
-		let r = blake2_rfc::blake2b::blake2b(64, &[], &v);
-		v.extend(&r.as_bytes()[0..2]);
-		v.to_base58()
-	}
-}
 
 #[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
