@@ -589,7 +589,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 
 	match import_error(import_handle.check_block(hash, parent))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
-		r @ _ => return Ok(r), // Any other successfull result means that the block is already imported.
+		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
 	let (import_block, new_authorities) = verifier.verify(block_origin, header, justification, block.body)
