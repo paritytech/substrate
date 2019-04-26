@@ -58,7 +58,7 @@ pub use test_client::TestClient;
 pub struct PassThroughVerifier(pub bool);
 
 #[cfg(any(test, feature = "test-helpers"))]
-/// This Verifiyer accepts all data as valid
+/// This `Verifier` accepts all data as valid.
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	fn verify(
 		&self,

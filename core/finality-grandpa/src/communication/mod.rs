@@ -704,7 +704,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		let topic = global_topic::<Block>(self.set_id.0);
 
 		// the gossip validator needs to be made aware of the best commit-height we know of
-		// before gosipping
+		// before gossiping
 		self.gossip_validator.note_commit_finalized(
 			commit.target_number,
 			|to, neighbor| self.network.send_message(

@@ -71,8 +71,8 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream
 	}
 }
 
-// fn to remove white spaces arount string types
-// (basically whitespaces arount tokens)
+// fn to remove white spaces around string types
+// (basically whitespaces around tokens)
 pub fn clean_type_string(input: &str) -> String {
 	input
 		.replace(" ::", "::")

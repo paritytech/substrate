@@ -290,7 +290,6 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 #[cfg(feature = "std")]
 pub trait Pair: Sized + 'static {
 	/// TThe type which is used to encode a public key.
-	// type Public: Send + Sync + Hash + Eq + Clone + Debug + Encode + Decode + 'static;
 	type Public;
 
 	/// The type used to (minimally) encode the data required to securely create
@@ -299,7 +298,6 @@ pub trait Pair: Sized + 'static {
 
 	/// The type used to represent a signature. Can be created from a key pair and a message
 	/// and verified with the message and a public key.
-	// type Signature: Send + Sync + Hash + Eq + Clone + Debug + Encode + Decode + 'static;
 	type Signature;
 
 	/// Error returned from the `derive` function.
