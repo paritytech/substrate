@@ -171,8 +171,8 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 
 	/// Send synchronization request to the block import channel.
 	///
-	/// The caller should wait for Link::synchronized() call to ensure that it has synchronized
-	/// with ImportQueue.
+	/// The caller should wait for the `Link::synchronized` call to ensure that it has synchronized
+	/// with `ImportQueue`.
 	#[cfg(any(test, feature = "test-helpers"))]
 	fn synchronized(&self) {
 		trace!(target: "test_network", "Synchronizing");
