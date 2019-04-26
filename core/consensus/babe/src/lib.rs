@@ -74,7 +74,7 @@ use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
-use slots::{SlotData, SlotWorker, SlotInfo, SlotCompatible, slot_now};
+use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 use rand::Rng;
 
 /// A BABE seal.  It includes:
@@ -179,12 +179,12 @@ impl Config {
 
 	/// Get the slot duration in milliseconds.
 	pub fn get(&self) -> u64 {
-		self.0.slot_duration()
+		self.0.slot_duration
 	}
 
 	/// Retrieve the threshold for BABE
 	pub fn threshold(&self) -> u64 {
-		self.0.threshold()
+		self.0.threshold
 	}
 }
 
