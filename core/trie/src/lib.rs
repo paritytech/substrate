@@ -158,7 +158,7 @@ pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 
 /// Determine the default child trie root.
 pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
-	trie_root::<H, _, Vec<u8>, Vec<u8>>(std::iter::empty()).as_ref().iter().cloned().collect()
+	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
