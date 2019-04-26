@@ -897,7 +897,7 @@ mod tests {
 	use parity_codec::Encode;
 
 	use state_machine::TestExternalities;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 	use primitives::map;
 
 	#[test]

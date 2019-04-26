@@ -167,7 +167,7 @@ macro_rules! register_func {
 /// will panic if called with unexpected arguments.
 ///
 /// It's up to the user of this macro to check signatures of wasm code to be executed
-/// and reject the code if any imported function has a mismached signature.
+/// and reject the code if any imported function has a mismatched signature.
 macro_rules! define_env {
 	( $init_name:ident , < E: $ext_ty:tt > ,
 		$( $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )

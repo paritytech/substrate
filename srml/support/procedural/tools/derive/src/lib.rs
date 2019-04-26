@@ -58,7 +58,7 @@ pub(crate) fn fields_access(
 /// For enums:
 ///   variant are tested in order of definition.
 ///   Empty variant is always true.
-///   Please use carefully, this will fully parse successfull variant twice.
+///   Please use carefully, this will fully parse successful variant twice.
 #[proc_macro_derive(Parse)]
 pub fn derive_parse(input: TokenStream) -> TokenStream {
 	let item = parse_macro_input!(input as syn::Item);

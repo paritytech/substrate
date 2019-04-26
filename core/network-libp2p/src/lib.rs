@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Networking layer of Substrate.
-//! 
+//!
 //! **Important**: This crate is unstable and the API and usage may change.
 //!
 
@@ -27,7 +27,7 @@ mod transport;
 
 pub use crate::behaviour::Severity;
 pub use crate::config::*;
-pub use crate::custom_proto::{CustomMessage, CustomMessageId, RegisteredProtocol};
+pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 pub use crate::service_task::{start_service, Service, ServiceEvent};
 pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};

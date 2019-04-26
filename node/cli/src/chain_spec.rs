@@ -23,7 +23,7 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
-use hex_literal::{hex, hex_impl};
+use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";

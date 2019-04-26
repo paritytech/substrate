@@ -764,7 +764,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		Ok((*hash, number, false, true))
 	}
 
-	// performs forced canonicaliziation with a delay after importning a non-finalized block.
+	// performs forced canonicaliziation with a delay after importing a non-finalized block.
 	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut DBTransaction,

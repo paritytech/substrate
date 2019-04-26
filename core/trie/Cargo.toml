@@ -25,7 +25,7 @@ trie-bench = { version = "0.12" }
 trie-standardmap = { version = "0.12" }
 keccak-hasher = { version = "0.12" }
 criterion = "0.2"
-hex-literal = "0.1.0"
+hex-literal = "0.2.0"
 
 [features]
 default = ["std"]

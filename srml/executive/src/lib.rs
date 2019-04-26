@@ -365,7 +365,7 @@ mod tests {
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime {

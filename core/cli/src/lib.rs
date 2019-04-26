@@ -483,7 +483,9 @@ where
 	} else {
 		Some(vec![
 			"http://localhost:*".into(),
+			"http://127.0.0.1:*".into(),
 			"https://localhost:*".into(),
+			"https://127.0.0.1:*".into(),
 			"https://polkadot.js.org".into(),
 			"https://substrate-ui.parity.io".into(),
 		])
@@ -743,10 +745,10 @@ fn init_logger(pattern: &str) {
 	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse(&lvl);
+		builder.parse_filters(&lvl);
 	}
 
-	builder.parse(pattern);
+	builder.parse_filters(pattern);
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 

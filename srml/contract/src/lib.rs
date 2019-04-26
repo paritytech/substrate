@@ -308,7 +308,7 @@ decl_module! {
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistant storage.
+				// Commit all changes that made it thus far into the persistent storage.
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
@@ -362,7 +362,7 @@ decl_module! {
 			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistant storage.
+				// Commit all changes that made it thus far into the persistent storage.
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
