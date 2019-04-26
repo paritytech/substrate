@@ -248,7 +248,7 @@ impl<T> Deref for SlotDuration<T> {
 }
 
 impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
-	/// Get the slot duration in milliseconds
+	/// Get the slot duration in milliseconds.
 	fn slot_duration(&self) -> u64
 		where T: SlotData
 	{
