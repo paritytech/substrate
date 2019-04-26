@@ -52,11 +52,11 @@ use proc_macro::TokenStream;
 ///   with `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable` trait](../srml_support/trait.Hashable.html).
 ///
-///   `hasher($hash)` is optional and its default is blake2_256.
+///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
 ///   /!\ Be careful with each key in the map that is inserted in the trie `$hash(module_name ++ storage_name ++ key)`.
-///   For an untrusted key, a cryptographic hasher such as blake2_256 must be used.
-///   Otherwise, other values in storage can be compromised.
+///   If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
 ///   [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
@@ -65,7 +65,7 @@ use proc_macro::TokenStream;
 ///   `$hash` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable` trait](../srml_support/trait.Hashable.html).
 ///
-///   `hasher($hash)` is optional and its default is blake2_256.
+///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
 ///   /!\ Be careful with each key pair in the double map that is inserted in the trie.
 ///   The final key is calculated as follows:
@@ -74,11 +74,11 @@ use proc_macro::TokenStream;
 ///   $hash(module_name ++ storage_name ++ first_key) ++ $hash2(second_key)
 ///   ```
 ///
-///   If the first key is untrusted, a cryptographic hasher such as blake2_256 must be used.
+///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
 ///   Otherwise, other values of all storage items can be compromised.
 ///
-///   If the second key is untrusted, a cryptographic hasher such as blake2_256 must be used.
-///   Otherwise, malicious actors could craft second keys to lower the trie.
+///   If the second key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
+///   Otherwise, other items in storage with the same first key can be compromised.
 ///
 /// Basic storage can be extended as such:
 ///
