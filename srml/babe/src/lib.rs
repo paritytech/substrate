@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for Babe consensus.
+//! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code, warnings)]
@@ -31,24 +31,24 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 
-/// The babe inherent identifier.
+/// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
-/// The type of the babe inherent.
+/// The type of the BABE inherent.
 pub type InherentType = u64;
 
-/// Auxiliary trait to extract babe inherent data.
+/// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
-	/// Get babe inherent data.
+	/// Get BABE inherent data.
 	fn babe_inherent_data(&self) -> result::Result<InherentType, RuntimeString>;
-	/// Replace babe inherent data.
+	/// Replace BABE inherent data.
 	fn babe_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl BabeInherentData for InherentData {
 	fn babe_inherent_data(&self) -> result::Result<InherentType, RuntimeString> {
 		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Babe inherent data not found".into()))
+			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
 	}
 
 	fn babe_replace_inherent_data(&mut self, new: InherentType) {
@@ -56,7 +56,7 @@ impl BabeInherentData for InherentData {
 	}
 }
 
-/// Provides the slot duration inherent data for `Babe`.
+/// Provides the slot duration inherent data for BABE.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
 	slot_duration: u64,
@@ -115,7 +115,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Determine the Babe slot-duration based on the timestamp module configuration.
+	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> u64 {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
@@ -149,7 +149,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
-			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())
+			Err(RuntimeString::from("timestamp set in block doesn’t match slot in seal").into())
 		}
 	}
 }
