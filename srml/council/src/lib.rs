@@ -208,7 +208,7 @@
 //!
 //!	The next tally of the seats voting will be scheduled based on the condition of needing
 //! more councillors or not. If no councillor is needed, the associated function to get the next tally,
-//! namely `next_tally()` will return `None`. Else, it will return an `Option` containing
+//! namely `next_tally()`, will return `None`.  Else, it will return an `Option` containing
 //! the next scheduled tally's block number.
 //!
 //! ```
