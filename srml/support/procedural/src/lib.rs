@@ -48,13 +48,31 @@ use proc_macro::TokenStream;
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements [StorageValue](../srml_support/storage/trait.StorageValue.html).
-/// * Map: `Foo: map type => type`: implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
-/// * Linked map: `Foo: linked_map type => type`: Implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
-/// and [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
-/// * Double map: `Foo: double_map u32, $hash(u32) => u32;`: Implements `StorageDoubleMap` with `$hash` representing a
+/// * Map: `Foo: map hasher($hash) type => type`: implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
+///   with `$hash` representing a choice of hashing algorithms available in [`Hashable` trait](../srml_support/trait.Hashable.html).
+///
+///   `hasher($hash)` is optional and default to blake2_256
+///
+///   /!\ Be careful for each key in the map is inserted to the trie `$hash(module_name ++ storage_name ++ key)`
+///   For untrusted key cryptographic hasher such as blake2_256 must be used. Otherwise other value of all storages can be compromised
+///
+/// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
+///   [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
+///
+/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements `StorageDoubleMap` with `$hash` and `$hash_2` representing a
 /// choice of hashing algorithms available in [`Hashable` trait](../srml_support/trait.Hashable.html).
 ///
-///   /!\ Be careful when choosing the hash function, malicious actors could craft second keys to lower the trie.
+///   `hasher($hash)` is optional and default to blake2_256
+///
+///   /!\ Be careful for each key pair in the double map is inserted to the trie the following final key:
+///
+///   ```
+///   $hash(module_name ++ storage_name ++ first_key) ++ $hash_2(second_key)
+///   ````
+///
+///   For untrusted first key cryptographic hasher such as blake2_256 must be used. Otherwise other value of all storages can be compromised
+///
+///   For untrusted second keys cryptographic hasher such as blake2_256 must be used. Otherwise malicious actors could craft second keys to lower the trie.
 ///
 /// And it can be extended as such:
 ///
