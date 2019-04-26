@@ -318,7 +318,7 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 			(initial, Some(maximum)) => MemoryDefinition { initial, maximum },
 			(_, None) => {
 				// Maximum number of pages should be always declared.
-				// This isn't a hard requirement and can be treated as a maxiumum set
+				// This isn't a hard requirement and can be treated as a maximum set
 				// to configured maximum.
 				return Err("Maximum number of pages should be always declared.");
 			}

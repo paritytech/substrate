@@ -33,7 +33,7 @@ error_chain! {
 			description("Runtime check for the transaction failed."),
 			display("Invalid Transaction. Error Code: {}", e),
 		}
-		/// The transaction is temporarily baned
+		/// The transaction is temporarily banned
 		TemporarilyBanned {
 			description("Transaction is temporarily banned from importing to the pool."),
 			display("Temporarily Banned"),

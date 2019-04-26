@@ -372,7 +372,7 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
-	/// Gets the index of extrinsic that is currenty executing.
+	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
@@ -462,7 +462,7 @@ impl<T: Trait> Module<T> {
 		<Number<T>>::put(n);
 	}
 
-	/// Sets the index of extrinsic that is currenty executing.
+	/// Sets the index of extrinsic that is currently executing.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_extrinsic_index(extrinsic_index: u32) {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)

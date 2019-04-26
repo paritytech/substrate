@@ -229,8 +229,8 @@ Then build the code:
 
 [source, shell]
 ----
-./scripts/build.sh  		# Builds the WebAssembly binaries
-cargo build 				# Builds all native code
+./scripts/build.sh          # Builds the WebAssembly binaries
+cargo build                 # Builds all native code
 ----
 
 You can run all the tests if you like:

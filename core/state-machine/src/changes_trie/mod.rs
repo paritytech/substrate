@@ -33,7 +33,7 @@
 //! to the set of lower-level digest blocks.
 //!
 //! Changes trie only contains the top level storage changes. Sub-level changes
-//! are propogated through its storage root on the top level storage.
+//! are propagated through its storage root on the top level storage.
 
 mod build;
 mod build_iterator;
