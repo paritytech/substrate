@@ -70,9 +70,9 @@ use proc_macro::TokenStream;
 ///   /!\ Be careful with each key pair in the double map that is inserted in the trie.
 ///   The final key is calculated as follows:
 ///
-///   ```
+///   ```nocompile
 ///   $hash(module_name ++ storage_name ++ first_key) ++ $hash2(second_key)
-///   ````
+///   ```
 ///
 ///   If the first key is untrusted, a cryptographic hasher such as blake2_256 must be used.
 ///   Otherwise, other values of all storage items can be compromised.
