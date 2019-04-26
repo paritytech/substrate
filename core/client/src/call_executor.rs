@@ -16,8 +16,9 @@
 
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use parity_codec::{Encode, Decode};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::{
+	generic::BlockId, traits::Block as BlockT,
+};
 use state_machine::{
 	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
 	ExecutionStrategy, NeverOffchainExt, backend::Backend as _,
@@ -29,7 +30,7 @@ use primitives::{
 	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt
 };
 
-use crate::runtime_api::ProofRecorder;
+use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
 use crate::error;
 
@@ -63,6 +64,7 @@ where
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
 	fn contextual_call<
+		'a,
 		O: OffchainExt,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
@@ -73,16 +75,15 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
-		initialize_block: IB,
+		initialize_block_fn: IB,
 		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		initialized_block: &RefCell<Option<BlockId<B>>>,
+		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-		skip_initialize_block: bool,
 		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -209,6 +210,7 @@ where
 	}
 
 	fn contextual_call<
+		'a,
 		O: OffchainExt,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
@@ -219,21 +221,24 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
-		initialize_block: IB,
+		initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		initialized_block: &RefCell<Option<BlockId<Block>>>,
+		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-		skip_initialize_block: bool,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
-		if !skip_initialize_block
-			&& initialized_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) {
-			initialize_block()?;
+		match initialize_block {
+			InitializeBlock::Do(ref init_block)
+				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
+				initialize_block_fn()?;
+			},
+			// We don't need to initialize the runtime at a block.
+			_ => {},
 		}
 
 		let state = self.backend.state_at(*at)?;

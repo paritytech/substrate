@@ -107,12 +107,35 @@ pub trait ApiExt<Block: BlockT> {
 	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>>;
 }
 
+/// Before calling any runtime api function, the runtime need to be initialized
+/// at the requested block. However, some functions like `execute_block` or
+/// `initialize_block` itself don't require to have the runtime initialized
+/// at the requested block.
+///
+/// `call_api_at` is instructed by this enum to do the initialization or to skip
+/// it.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy)]
+pub enum InitializeBlock<'a, Block: BlockT> {
+	/// Skip initializing the runtime for a given block.
+	///
+	/// This is used by functions who do the initialization by themself or don't
+	/// require it.
+	Skip,
+	/// Initialize the runtime for a given block.
+	///
+	/// If the stored `BlockId` is `Some(_)`, the runtime is currently initialized
+	/// at this block.
+	Do(&'a RefCell<Option<BlockId<Block>>>),
+}
+
 /// Something that can call into the runtime at a given block.
 #[cfg(feature = "std")]
 pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
 	fn call_api_at<
+		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		C: Core<Block>,
@@ -123,10 +146,9 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &RefCell<OverlayedChanges>,
-		initialized_block: &RefCell<Option<BlockId<Block>>>,
+		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		skip_initialize_block: bool,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>>;
 

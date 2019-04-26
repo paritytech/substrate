@@ -34,7 +34,7 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use crate::runtime_api::ProofRecorder;
+use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend::RemoteBackend;
 use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
@@ -111,6 +111,7 @@ where
 	}
 
 	fn contextual_call<
+		'a,
 		O: OffchainExt,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
@@ -121,20 +122,26 @@ where
 		NC,
 	>(
 		&self,
-		_initialize_block: IB,
+		_initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		initialized_block: &RefCell<Option<BlockId<Block>>>,
+		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-		_skip_initialize_block: bool,
 		_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+		let block_initialized = match initialize_block {
+			InitializeBlock::Do(ref init_block) => {
+				init_block.borrow().is_some()
+			},
+			InitializeBlock::Skip => false,
+		};
+
 		// it is only possible to execute contextual call if changes are empty
-		if !changes.borrow().is_empty() || initialized_block.borrow().is_some() {
+		if !changes.borrow().is_empty() || block_initialized {
 			return Err(ClientError::NotAvailableOnLightClient.into());
 		}
 
@@ -240,6 +247,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	}
 
 	fn contextual_call<
+		'a,
 		O: OffchainExt,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
@@ -250,16 +258,15 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
-		initialize_block: IB,
+		initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		initialized_block: &RefCell<Option<BlockId<Block>>>,
+		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-		skip_initialize_block: bool,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
@@ -277,16 +284,15 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				NC
 			>(
 				&self.local,
-				initialize_block,
+				initialize_block_fn,
 				at,
 				method,
 				call_data,
 				changes,
-				initialized_block,
+				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-				skip_initialize_block,
 				recorder,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => CallExecutor::contextual_call::<
@@ -300,16 +306,15 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				NC
 			>(
 				&self.remote,
-				initialize_block,
+				initialize_block_fn,
 				at,
 				method,
 				call_data,
 				changes,
-				initialized_block,
+				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 				side_effects_handler,
-				skip_initialize_block,
 				recorder,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 		}

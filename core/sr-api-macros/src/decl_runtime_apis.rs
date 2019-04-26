@@ -414,7 +414,12 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				recorder: &Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<Block>>>>,
 			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
 				let version = call_runtime_at.runtime_version_at(at)?;
-				let skip_initialize_block = #skip_initialize_block;
+				use #crate_::runtime_api::InitializeBlock;
+				let initialize_block = if #skip_initialize_block {
+					InitializeBlock::Skip
+				} else {
+					InitializeBlock::Do(&initialized_block)
+				};
 				let update_initialized_block = #update_initialized_block;
 
 				#(
@@ -428,10 +433,9 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							#old_names,
 							args,
 							changes,
-							initialized_block,
+							initialize_block,
 							None,
 							context,
-							skip_initialize_block,
 							recorder,
 						)?;
 
@@ -446,10 +450,9 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					#trait_fn_name,
 					args,
 					changes,
-					initialized_block,
+					initialize_block,
 					native_call,
 					context,
-					skip_initialize_block,
 					recorder,
 				)?;
 

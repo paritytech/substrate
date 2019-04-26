@@ -40,6 +40,7 @@ use runtime_primitives::traits::{
 use runtime_primitives::BuildStorage;
 use crate::runtime_api::{
 	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
+	InitializeBlock,
 };
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
@@ -1368,6 +1369,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 {
 	fn call_api_at<
+		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		C: CoreApi<Block>,
@@ -1378,10 +1380,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &RefCell<OverlayedChanges>,
-		initialized_block: &RefCell<Option<BlockId<Block>>>,
+		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		skip_initialize_block: bool,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
@@ -1408,11 +1409,10 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			function,
 			&args,
 			changes,
-			initialized_block,
+			initialize_block,
 			manager,
 			native_call,
 			offchain_extensions.as_mut(),
-			skip_initialize_block,
 			recorder,
 		)
 	}
