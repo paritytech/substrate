@@ -619,7 +619,23 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self)
+		block_builder::BlockBuilder::at_block(parent, &self, false)
+	}
+
+	/// Create a new block, built on top of `parent` with proof recording enabled.
+	///
+	/// While proof recording is enabled, all accessed trie nodes are saved.
+	/// These recorded trie nodes can be used by a third party to proof the
+	/// output of this block builder without having access to the full storage.
+	pub fn new_block_at_with_proof_recording(
+		&self, parent: &BlockId<Block>
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+		E: Clone + Send + Sync,
+		RA: Send + Sync,
+		Self: ProvideRuntimeApi,
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+	{
+		block_builder::BlockBuilder::at_block(parent, &self, true)
 	}
 
 	/// Lock the import lock, and run operations inside.

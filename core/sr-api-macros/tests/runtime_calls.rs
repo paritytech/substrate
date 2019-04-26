@@ -16,14 +16,18 @@
 
 use test_client::{
 	AccountKeyring, runtime::{TestAPI, DecodeFails, Transfer, Header},
-	client::runtime_api::ApiExt, TestClient,
+	NativeExecutor, LocalExecutor,
 };
 use runtime_primitives::{
 	generic::BlockId,
-	traits::{ProvideRuntimeApi, Block as _, Header as HeaderT, Hash as HashT},
+	traits::{ProvideRuntimeApi, Header as HeaderT, Hash as HashT},
 };
-use state_machine::{ExecutionStrategy, create_proof_check_backend};
-use consensus_common::BlockOrigin;
+use state_machine::{
+	ExecutionStrategy, create_proof_check_backend,
+	execution_proof_check_on_trie_backend,
+};
+
+use codec::Encode;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = test_client::new_with_execution_strategy(strat);
@@ -150,43 +154,37 @@ fn initialize_block_is_skipped() {
 #[test]
 fn record_proof_works() {
 	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
-	let mut runtime_api = client.runtime_api();
+
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	let storage_root = client.best_block_header().unwrap().state_root().clone();
 
 	let transaction = Transfer {
-		amount: 500,
+		amount: 1000,
 		nonce: 0,
 		from: AccountKeyring::Alice.into(),
 		to: Default::default(),
 	}.into_signed_tx();
 
-	// Build the block
-	let mut builder = client.new_block().unwrap();
+	// Build the block and record proof
+	let mut builder = client
+		.new_block_at_with_proof_recording(&block_id)
+		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
-	let block = builder.bake().unwrap();
+	let (block, proof) = builder.bake_and_extract_proof().expect("Bake block");
 
-	// Extract some data for further usage
-	let storage_root = block.header().state_root().clone();
-	let block_id = BlockId::hash(block.header().hash());
-
-	// Import the generated block
-	client.import(BlockOrigin::Own, block).unwrap();
-
-	// Generate some proof
-	runtime_api.record_proof();
-
-	assert_eq!(
-		runtime_api.balance_of(
-			&block_id,
-			AccountKeyring::Alice.into()
-		).unwrap(),
-		500,
-	);
-
-	let proof = runtime_api.extract_proof().expect("Should have collected some proof.");
-	assert!(!proof.is_empty());
-
-	create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
+	let backend = create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
 		storage_root,
-		proof,
-	).expect("Proof contains the storage root of the build block.");
+		proof.expect("Proof was generated"),
+	).expect("Creates proof backend.");
+
+	// Use the proof backend to execute `execute_block`.
+	let mut overlay = Default::default();
+	let executor = NativeExecutor::<LocalExecutor>::new(None);
+	execution_proof_check_on_trie_backend(
+		&backend,
+		&mut overlay,
+		&executor,
+		"Core_execute_block",
+		&block.encode(),
+	).expect("Executes block while using the proof backend");
 }
