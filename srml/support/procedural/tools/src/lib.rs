@@ -27,30 +27,6 @@ use quote::quote;
 
 pub mod syn_ext;
 
-#[macro_export]
-macro_rules! custom_keyword_impl {
-	($name:ident, $keyident:expr, $keydisp:expr) => {
-
-		impl CustomKeyword for $name {
-			fn ident() -> &'static str { $keyident }
-			fn display() -> &'static str { $keydisp }
-		}
-
-	}
-}
-
-#[macro_export]
-macro_rules! custom_keyword {
-	($name:ident, $keyident:expr, $keydisp:expr) => {
-
-		#[derive(Debug)]
-		struct $name;
-
-		custom_keyword_impl!($name, $keyident, $keydisp);
-
-	}
-}
-
 // FIXME #1569, remove the following functions, which are copied from sr-api-macros
 use proc_macro2::{TokenStream, Span};
 use syn::Ident;

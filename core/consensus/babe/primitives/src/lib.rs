@@ -29,16 +29,16 @@ pub const BABE_ENGINE_ID: ConsensusEngineId = [b'b', b'a', b'b', b'e'];
 /// Configuration data used by the BABE consensus engine.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
 pub struct BabeConfiguration {
-	/// The expected block time in milliseconds for BABE.  Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic expected block time may be supported in the future.
-	pub slot_duration: u64,
-
 	/// The slot duration in milliseconds for BABE.  Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
 	/// Dynamic slot duration may be supported in the future.
+	pub slot_duration: u64,
+
+	/// The expected block time in milliseconds for BABE.  Currently,
+	/// only the value provided by this type at genesis will be used.
+	///
+	/// Dynamic expected block time may be supported in the future.
 	pub expected_block_time: u64,
 
 	/// The maximum permitted VRF output, or *threshold*, for BABE.  Currently,

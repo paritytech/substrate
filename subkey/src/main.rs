@@ -18,11 +18,8 @@
 #[cfg(feature = "bench")]
 extern crate test;
 
-extern crate substrate_bip39;
-extern crate rustc_hex;
-#[macro_use] extern crate hex_literal;
-
 use std::io::{stdin, Read};
+use hex_literal::hex;
 use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::mini_secret_from_entropy;

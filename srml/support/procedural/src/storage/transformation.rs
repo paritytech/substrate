@@ -74,7 +74,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		Err(err) => return err.to_compile_error().into(),
 	};
 
-	let hidden_crate_name = hidden_crate.map(|rc| rc.ident.content).map(|i| i.to_string())
+	let hidden_crate_name = hidden_crate.inner.map(|rc| rc.ident.content).map(|i| i.to_string())
 		.unwrap_or_else(|| "decl_storage".to_string());
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(
@@ -103,8 +103,8 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&traittype,
 		&instance_opts,
 		&storage_lines,
-		&extra_genesis,
-		extra_genesis_skip_phantom_data_field.is_some(),
+		&extra_genesis.inner,
+		extra_genesis_skip_phantom_data_field.inner.is_some(),
 	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
@@ -219,10 +219,10 @@ fn decl_store_extra_genesis(
 
 		let mut opt_build;
 		// need build line
-		if let Some(ref config) = config {
+		if let Some(ref config) = config.inner {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
-			} else if let Some(ref getter) = getter {
+			} else if let Some(ref getter) = getter.inner {
 				let ident = &getter.getfn.content;
 				quote!( #ident )
 			} else {
@@ -259,7 +259,7 @@ fn decl_store_extra_genesis(
 					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
 				},
 			});
-			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
+			opt_build = Some(build.inner.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
 				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance, #instance>| config.#ident.clone()) )));
 
 			let fielddefault = default_value.inner.as_ref().map(|d| &d.expr).map(|d|
@@ -271,7 +271,7 @@ fn decl_store_extra_genesis(
 
 			config_field_default.extend(quote!( #ident: #fielddefault, ));
 		} else {
-			opt_build = build.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
+			opt_build = build.inner.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
 		}
 
 		let typ = type_infos.typ;
@@ -647,7 +647,7 @@ fn impl_store_fns(
 			..
 		} = sline;
 
-		if let Some(getter) = getter {
+		if let Some(getter) = getter.inner.as_ref() {
 			let get_fn = &getter.getfn.content;
 
 			let type_infos = get_type_infos(storage_type);
@@ -877,17 +877,17 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 	let (value_type, kind) = match storage_type {
 		DeclStorageType::Simple(ref st) => (st, DeclStorageTypeInfosKind::Simple),
 		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key_type: &map.key,
 			is_linked: false,
 		}),
 		DeclStorageType::LinkedMap(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
-			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key_type: &map.key,
 			is_linked: true,
 		}),
 		DeclStorageType::DoubleMap(ref map) => (&map.value, DeclStorageTypeInfosKind::DoubleMap {
-			hasher: map.hasher.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
+			hasher: map.hasher.inner.as_ref().map(|h| h.into()).unwrap_or(HasherKind::Blake2_256),
 			key1_type: &map.key1,
 			key2_type: &map.key2.content,
 			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },

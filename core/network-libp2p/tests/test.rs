@@ -200,7 +200,7 @@ fn many_nodes_connectivity() {
 #[test]
 fn basic_two_nodes_requests_in_parallel() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<(Option<u64>, Vec<u8>)>(2, 50550).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2, 50550).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -209,17 +209,8 @@ fn basic_two_nodes_requests_in_parallel() {
 	// Generate random messages with or without a request id.
 	let mut to_send = {
 		let mut to_send = Vec::new();
-		let mut next_id = 0;
 		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
-			let id = if rand::random::<usize>() % 4 != 0 {
-				let i = next_id;
-				next_id += 1;
-				Some(i)
-			} else {
-				None
-			};
-
-			let msg = (id, (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>());
+			let msg = (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 			to_send.push(msg);
 		}
 		to_send
