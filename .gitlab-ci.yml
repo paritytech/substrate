@@ -200,6 +200,7 @@ publish-s3-release:
 
 publish-s3-doc:
   stage:                           publish
+  image:                           parity/awscli:latest
   allow_failure:                   true
   dependencies:
     - build-rust-doc-release
@@ -288,4 +289,24 @@ deploy-ue1-tag:
   <<:                              *deploy-tag
   environment:
     name: parity-prod-ue1
+
+.validator-deploy: &validator-deploy
+  stage: publish
+  dependencies:
+    - build-linux-release
+  image: parity/azure-ansible:v1
+  allow_failure: true
+  when: manual
+  tags:
+    - linux-docker
+
+validator1:
+  <<: *validator-deploy
+  script:
+    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator1
+
+validator2:
+  <<: *validator-deploy
+  script:
+    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator2
 
