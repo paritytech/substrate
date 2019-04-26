@@ -90,13 +90,13 @@ pub enum ForkChoiceStrategy {
 	Custom(bool),
 }
 
-/// The consensus pre-digests.  These are passed to the runtime, but are
-/// neither inherents nor transactions.  As such, the runtime must be able
-/// to recompute them without relying on secrets.  Therefore, signatures
+/// The consensus pre-digests. These are passed to the runtime, but are
+/// neither inherents nor transactions. As such, the runtime must be able
+/// to recompute them without relying on secrets. Therefore, signatures
 /// should not be included.
 ///
 /// This is backed by a `Vec<u8>` because runtimes may put anything here, and
-/// Substrate must handle it without needing to be recompiled.  SRML will
+/// Substrate must handle it without needing to be recompiled. SRML will
 /// provide a type-safe interface, but upgrades will still need to be handled
 /// carefully.
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
@@ -124,9 +124,9 @@ pub struct ImportBlock<Block: BlockT> {
 	/// re-executed in a runtime that checks digest equivalence -- the
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
-	/// The consensus pre-digests.  These are passed to the runtime, but are
-	/// neither inherents nor transactions.  As such, the runtime must be able
-	/// to recompute them without relying on secrets.  Therefore, signatures
+	/// The consensus pre-digests. These are passed to the runtime, but are
+	/// neither inherents nor transactions. As such, the runtime must be able
+	/// to recompute them without relying on secrets. Therefore, signatures
 	/// should not be included.
 	pub pre_digests: PreDigest,
 	/// Justification provided for this block from the outside.
