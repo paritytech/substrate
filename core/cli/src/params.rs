@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
-/// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
+/// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
 	( $type:ident ) => {
 		impl $crate::GetLogFilter for $type {
@@ -564,7 +564,7 @@ pub struct ImportBlocksCmd {
 
 impl_get_log_filter!(ImportBlocksCmd);
 
-/// The `revert` command used revert the chain to a previos state.
+/// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.

@@ -304,7 +304,7 @@ impl<B: ChainApi> Pool<B> {
 		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
 		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()))?;
 
-		// Collect the hashes of transactions that now became invalid (meaning that they are succesfuly pruned).
+		// Collect the hashes of transactions that now became invalid (meaning that they are succesfully pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
 			Err(Ok(err)) => match err.kind() {
 				error::ErrorKind::InvalidTransaction(_) => Some(hashes[idx].clone()),
@@ -333,7 +333,7 @@ impl<B: ChainApi> Pool<B> {
 	///
 	/// Stale transactions are transaction beyond their longevity period.
 	/// Note this function does not remove transactions that are already included in the chain.
-	/// See `prune_tags` ifyou want this.
+	/// See `prune_tags` if you want this.
 	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
 		let block_number = self.api.block_id_to_number(at)?
 				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?

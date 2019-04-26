@@ -194,7 +194,7 @@ enum ProtocolState<TMessage, TSubstream> {
 	},
 
 	/// We sometimes temporarily switch to this state during processing. If we are in this state
-	/// at the beginning of a method, that means something bad happend in the source code.
+	/// at the beginning of a method, that means something bad happened in the source code.
 	Poisoned,
 }
 
