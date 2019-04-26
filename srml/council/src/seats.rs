@@ -268,8 +268,8 @@ decl_module! {
 			}
 		}
 
-		/// Set the desired member count; if lower than the current count, then seats will not be up
-		/// election when they expire. If more, then a new vote will be started if one is not already
+		/// Set the desired member count; if less than or equal to the amount of seats to be retained, then seats will not
+		/// be up for election when they expire. If more, then a new vote will be started if one is not already
 		/// in progress.
 		fn set_desired_seats(#[compact] count: u32) {
 			<DesiredSeats<T>>::put(count);
@@ -293,7 +293,7 @@ decl_module! {
 			<PresentationDuration<T>>::put(count);
 		}
 
-		/// Set the presentation duration. If there is current a vote being presented for, will
+		/// Set the term duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
 		fn set_term_duration(#[compact] count: T::BlockNumber) {
 			<TermDuration<T>>::put(count);

@@ -221,17 +221,17 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!
-//! 		/// approves all candidates. The correct voting index must be provided.
-//! 		pub fn approve_all(origin, index: u32) -> Result {
+//! 		/// Approves all candidates.
+//! 		pub fn approve_all(origin) -> Result {
 //! 			let _origin = ensure_signed(origin)?;
 //!
-//! 			// get the number of wanted seats
+//! 			// Get the number of seats that we want the council to have
 //! 			let desired = <seats::Module<T>>::desired_seats() as usize;
 //!
-//! 			// get the number of occupied seats.
+//! 			// Get the number of seats occupied by the current council.
 //! 			let occupied  = <seats::Module<T>>::active_council().len();
 //!
-//! 			// get next tally.
+//! 			// Get the appropriate block number to schedule the next tally.
 //! 			let maybe_next_tally = <seats::Module<T>>::next_tally();
 //!
 //! 			if (desired == occupied) {
