@@ -48,32 +48,6 @@ pub struct BabeConfiguration {
 	pub threshold: u64,
 }
 
-impl BabeConfiguration {
-	/// Return the expected block time in milliseconds for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic expected block time may be supported in the future.
-	pub fn expected_block_time(&self) -> u64 {
-		self.expected_block_time
-	}
-
-	/// Return the slot duration in milliseconds for BABE. Currently, only
-	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
-	pub fn slot_duration(&self) -> u64 {
-		self.slot_duration
-	}
-
-	/// The maximum permitted VRF output, or *threshold*, for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic thresholds may be supported in the future.
-	pub fn threshold(&self) -> u64 {
-		self.threshold
-	}
-}
-
 #[cfg(feature = "std")]
 impl slots::SlotData for BabeConfiguration {
 	/// Return the slot duration in milliseconds for BABE. Currently, only
