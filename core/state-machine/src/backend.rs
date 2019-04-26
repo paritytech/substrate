@@ -71,10 +71,20 @@ pub trait Backend<H: Hasher> {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
+	/// Does not include child storage updates.
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
+
+	/// Calculate the storage root, with given delta over what is already stored in
+	/// the backend, and produce a "transaction" that can be used to commit.
+	/// Does include child storage updates.
+	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord;
+
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
@@ -239,6 +249,36 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
 	}
 
+	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		<H as Hasher>::Out: Ord,
+	{
+		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let transaction: Vec<_> = delta.into_iter().collect();
+		let mut map_input = existing_pairs.chain(transaction.iter().cloned())
+			.collect::<HashMap<_, _>>();
+
+		// first add child root to delta
+		for (storage_key, _existing_pairs) in self.inner.iter() {
+			if let Some(storage_key) = storage_key.as_ref() {
+				let child_root = self.child_storage_root(storage_key, ::std::iter::empty()).0;
+				map_input.insert(storage_key.clone(), Some(child_root));
+			}
+		}
+
+
+		let root = trie_root::<H, _, _, _>(map_input
+			.into_iter()
+			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		);
+
+		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+
+		(root, full_transaction)
+	}
+
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -294,12 +334,19 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;
+		let mut new_child_roots = Vec::new();
+    let mut root_map = None;
 		for (storage_key, map) in self.inner {
-			if storage_key != None {
-				let _ = insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?;
+			if let Some(storage_key) = storage_key.as_ref() {
+				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?;
+        new_child_roots.push((storage_key.clone(), ch.as_ref().into())); 
 			} else {
-				root = Some(insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?);
+				root_map = Some(map);
 			}
+		}
+    // root handling
+		if let Some(map) = root_map.take() {
+			root = Some(insert_into_memory_db::<H, _>(&mut mdb, map.into_iter().chain(new_child_roots.into_iter()))?);
 		}
 		let root = match root {
 			Some(root) => root,

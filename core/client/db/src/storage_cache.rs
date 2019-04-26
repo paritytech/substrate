@@ -377,6 +377,14 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.for_keys_in_child_storage(storage_key, f)
 	}
 
+	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+			H::Out: Ord
+	{
+		self.state.full_storage_root(delta)
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
