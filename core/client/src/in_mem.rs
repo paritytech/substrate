@@ -651,6 +651,10 @@ where
 		&self.blockchain
 	}
 
+	fn used_state_cache_size(&self) -> Option<usize> {
+		None
+	}
+
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		Some(&self.changes_trie_storage)
 	}

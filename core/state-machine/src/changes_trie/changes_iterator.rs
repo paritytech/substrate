@@ -228,7 +228,7 @@ impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEs
 					.ok_or_else(|| format!("Changes trie root for block {} is not found", block))?;
 
 				// only return extrinsics for blocks before self.max
-				// most of blocks will be filtered out beore pushing to `self.blocks`
+				// most of blocks will be filtered out before pushing to `self.blocks`
 				// here we just throwing away changes at digest blocks we're processing
 				debug_assert!(block >= self.begin, "We shall not touch digests earlier than a range' begin");
 				if block <= self.end.number {

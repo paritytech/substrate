@@ -17,7 +17,9 @@
 //! # Contract Module
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
-//! To use it in your runtime, you need to implement the [`contracts::Trait`](./trait.Trait.html).
+//!
+//! - [`contract::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
 //!
@@ -61,12 +63,6 @@
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
-//!
-//! ### Public functions
-//!
-//! See the [`Module`](./struct.Module.html) struct for details on publicly available functions.
-//!
 //! ## Usage
 //!
 //! The Contract module is a work in progress. The following examples show how this Contract module can be
@@ -77,7 +73,7 @@
 //!
 //! ## Related Modules
 //!
-//! * [`Balances`](../srml_balances/index.html)
+//! * [Balances](../srml_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -95,7 +91,7 @@ use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
 
 #[cfg(feature = "std")]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
@@ -137,8 +133,13 @@ pub struct AccountInfo {
 pub trait TrieIdGenerator<AccountId> {
 	/// Get a trie id for an account, using reference to parent account trie id to ensure
 	/// uniqueness of trie id.
+	///
 	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
 	/// same parameter needs to return different trie id values.
+	///
+	/// Also, the implementation is responsible for ensuring that `TrieId` starts with
+	/// `:child_storage:`.
+	/// TODO: We want to change this, see https://github.com/paritytech/substrate/issues/2325
 	fn trie_id(account_id: &AccountId) -> TrieId;
 }
 
@@ -160,7 +161,9 @@ where
 		buf.extend_from_slice(account_id.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
+		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		CHILD_STORAGE_KEY_PREFIX.iter()
+			.chain(b"default:")
 			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
 			.cloned()
 			.collect()
@@ -305,7 +308,7 @@ decl_module! {
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistant storage.
+				// Commit all changes that made it thus far into the persistent storage.
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
@@ -359,7 +362,7 @@ decl_module! {
 			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(_) = result {
-				// Commit all changes that made it thus far into the persistant storage.
+				// Commit all changes that made it thus far into the persistent storage.
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.

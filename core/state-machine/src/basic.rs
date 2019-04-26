@@ -152,7 +152,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
-	fn child_storage_root(&mut self, _subtrie: &SubTrie) -> Option<Vec<u8>> {
+	fn child_storage_root(&mut self, _subtrie: &SubTrie) -> Vec<u8> {
 		unreachable!("basic not used for child trie");
 	}
 
@@ -170,7 +170,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, H256};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {

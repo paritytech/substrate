@@ -40,6 +40,30 @@ subcommands:
             long: hex
             help: The message on STDIN is hex-encoded data
             takes_value: false
+  - transfer:
+      about: Author and sign a Node balances::Transfer transaction with a given (secret) key
+      args:
+        - from:
+            index: 1
+            required: true
+            help: The signing secret key URI.
+        - to:
+            index: 2
+            required: true
+            help: The destination account public key URI.
+        - amount:
+            index: 3
+            required: true
+            help: The number of units to transfer.
+        - index:
+            index: 4
+            required: true
+            help: The signing account's transaction index.
+        - genesis:
+            short: g
+            long: genesis
+            help: The genesis hash or a recognised chain identifier (dev, elm, alex).
+            takes_value: true
   - verify:
       about: Verify a signature for a message, provided on STDIN, with a given (public or secret) key
       args:

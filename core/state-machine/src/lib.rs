@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
+use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
@@ -55,6 +56,58 @@ pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
+
+/// A wrapper around a child storage key.
+///
+/// This wrapper ensures that the child storage key is correct and properly used.  It is
+/// impossible to create an instance of this struct without providing a correct `storage_key`.
+pub struct ChildStorageKey<'a, H: Hasher> {
+	storage_key: Cow<'a, [u8]>,
+	_hasher: PhantomData<H>,
+}
+
+impl<'a, H: Hasher> ChildStorageKey<'a, H> {
+	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
+		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
+			return None;
+		}
+
+		Some(ChildStorageKey {
+			storage_key,
+			_hasher: PhantomData,
+		})
+	}
+
+	/// Create a new `ChildStorageKey` from a vector.
+	///
+	/// `storage_key` has should start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
+	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
+		Self::new(Cow::Owned(key))
+	}
+
+	/// Create a new `ChildStorageKey` from a slice.
+	///
+	/// `storage_key` has should start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
+	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
+		Self::new(Cow::Borrowed(key))
+	}
+
+	/// Get access to the byte representation of the storage key.
+	///
+	/// This key is guaranteed to be correct.
+	pub fn as_ref(&self) -> &[u8] {
+		&*self.storage_key
+	}
+
+	/// Destruct this instance into an owned vector that represents the storage key.
+	///
+	/// This key is guaranteed to be correct.
+	pub fn into_owned(self) -> Vec<u8> {
+		self.storage_key.into_owned()
+	}
+}
 
 /// State Machine Error bound.
 ///
@@ -169,10 +222,11 @@ pub trait Externalities<H: Hasher> {
 	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
 
-	/// Get the trie root of a child storage map. This will also update the value of the child storage keys in the top-level storage map. If the storage root equals default hash as defined by trie, the key in top-level storage map will be removed.
-	///
-	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
-	fn child_storage_root(&mut self, subtrie: &SubTrie) -> Option<Vec<u8>>;
+	/// Get the trie root of a child storage map. This will also update the value of the child
+	/// storage keys in the top-level storage map.
+	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
+	/// storage map will be removed.
+	fn child_storage_root(&mut self, subtrie: &SubTrie) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
@@ -919,7 +973,12 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+		let mut ext = Ext::new(
+			&mut overlay,
+			&backend,
+			Some(&changes_trie_storage),
+			NeverOffchainExt::new()
+		);
 
 		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
 		ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild"));

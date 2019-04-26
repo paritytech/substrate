@@ -18,7 +18,8 @@
 //!
 //! The System module provides low-level access to core types and cross-cutting utilities.
 //! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
-//! To use it in your module, you need to implement the [`system::Trait`](./trait.Trait.html).
+//!
+//! - [`system::Trait`](./trait.Trait.html)
 //!
 //! ## Overview
 //!
@@ -71,7 +72,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
@@ -371,7 +372,7 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
-	/// Gets the index of extrinsic that is currenty executing.
+	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
@@ -461,7 +462,7 @@ impl<T: Trait> Module<T> {
 		<Number<T>>::put(n);
 	}
 
-	/// Sets the index of extrinsic that is currenty executing.
+	/// Sets the index of extrinsic that is currently executing.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_extrinsic_index(extrinsic_index: u32) {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)

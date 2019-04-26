@@ -21,11 +21,11 @@ use log::debug;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{Recorder, MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
+use trie::{Recorder, MemoryDB, PrefixedMemoryDB, TrieError, read_trie_value_with, read_child_trie_value_with, record_all_keys};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use primitives::subtrie::{KeySpace, SubTrie};
+use primitives::subtrie::SubTrie;
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -308,7 +308,7 @@ mod tests {
 
 		let proving = ProvingBackend::new(&trie);
 		let subtrie1 = proving.child_trie(b"sub1").unwrap().unwrap();
-		assert_eq!(proving.child_storage(&subtrie1, &[64]).unwrap().unwrap(), vec![64]);
+		assert_eq!(proving.child_storage(&subtrie1, &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
 		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();

@@ -24,7 +24,7 @@ use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
+use network_libp2p::{RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -370,8 +370,6 @@ pub trait ManageNetwork {
 	fn remove_reserved_peer(&self, peer: PeerId);
 	/// Add reserved peer
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
-	/// Returns a user-friendly identifier of our node.
-	fn node_id(&self) -> Option<String>;
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
@@ -392,19 +390,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 		self.peerset.add_reserved_peer(peer_id.clone());
 		self.network.lock().add_known_address(peer_id, addr);
 		Ok(())
-	}
-
-	fn node_id(&self) -> Option<String> {
-		let network = self.network.lock();
-		let ret = network
-			.listeners()
-			.next()
-			.map(|addr| {
-				let mut addr = addr.clone();
-				addr.append(multiaddr::Protocol::P2p(network.peer_id().clone().into()));
-				addr.to_string()
-			});
-		ret
 	}
 }
 

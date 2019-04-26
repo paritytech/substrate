@@ -15,16 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Staking Module
-//! <!-- Original author of paragraph: @gavofyork -->
+//!
+//! The Staking module is used to manage funds at stake by network maintainers.
+//!
+//! - [`staking::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
+//!
+//! ## Overview
 //!
 //! The Staking module is the means by which a set of network maintainers (known as _authorities_ in some contexts
 //! and _validators_ in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit,
 //! those funds are rewarded under normal operation but are held at pain of _slash_ (expropriation) should the
 //! staked maintainer be found not to be discharging its duties properly.
-//!
-//! To use the Staking module in your runtime, you need to implement the [`staking::Trait`](./trait.Trait.html).
-//!
-//! ## Overview
 //!
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
@@ -118,51 +121,13 @@
 //! The dispatchable functions of the Staking module enable the steps needed for entities to accept and change their
 //! role, alongside some helper functions to get/set the metadata of the module.
 //!
-//! See the [`Call`](./enum.Call.html) enum and its associated variants for details of each function.
-//!
 //! ### Public Functions
 //!
-//! The Staking module contains many public storage items and (im)mutable functions. Please refer to the
-//! [struct list](#structs) below and the [`Module`](./struct.Module.html) struct definition for more details.
+//! The Staking module contains many public storage items and (im)mutable functions.
 //!
 //! ## Usage
 //!
-//! ### Snippet: Bonding and Accepting Roles
-//!
-//! An arbitrary account pair, given that the associated stash has the required funds,
-//! can become stakers via the following call:
-//!
-//! ```rust,ignore
-//! // Bond account 3 as stash.
-//! // Account 4 as controller.
-//! // Stash value of 1500 units.
-//! // Rewards get transferred to the controller account.
-//! Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller);
-//! ```
-//!
-//! To state desire to become a validator:
-//!
-//! ```rust,ignore
-//! // Controller account 4 states desire for validation with the given preferences.
-//! Staking::validate(Origin::signed(4), ValidatorPrefs::default());
-//! ```
-//!
-//! Similarly, to state desire in nominating:
-//!
-//! ```rust,ignore
-//! // Controller account 4 nominates for accounts 10 and 20.
-//! Staking::nominate(Origin::signed(4), vec![20, 10]);
-//! ```
-//!
-//! Finally, account 4 can withdraw from any of the above roles via
-//!
-//! ```rust,ignore
-//! Staking::chill(Origin::signed(4));
-//! ```
-//!
-//! You can find the equivalent of the above calls in your [Substrate UI](https://substrate-ui.parity.io).
-//!
-//! ### Snippet: Reporting Misbehavior
+//! ### Example: Reporting Misbehavior
 //!
 //! ```
 //! use srml_support::{decl_module, dispatch::Result};
@@ -260,15 +225,13 @@
 //!
 //! ## GenesisConfig
 //!
-//! The Staking module depends on the genesis configuration. See the [`GenesisConfig`](./struct.GenesisConfig.html)
-//! struct for a list of attributes that can be provided.
+//! The Staking module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 //!
 //! ## Related Modules
 //!
-//! - [**Balances**](../srml_balances/index.html): Used to manage values at stake.
-//! - [**Session**](../srml_session/index.html): Used to manage sessions. Also, a list of new validators is
+//! - [Balances](../srml_balances/index.html): Used to manage values at stake.
+//! - [Session](../srml_session/index.html): Used to manage sessions. Also, a list of new validators is
 //! stored in the Session module's `Validators` at the end of each era.
-//! - [**System**](../srml_system/index.html): Used to obtain block number and time, among other details.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -469,8 +432,8 @@ decl_storage! {
 		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000); // Perbill::from_fraction() is only for std, so use from_millionths().
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
-		/// The length of the bonding duration in blocks.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// The length of the bonding duration in eras.
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(12);
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialize
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.

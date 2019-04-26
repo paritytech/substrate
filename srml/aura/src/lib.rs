@@ -16,6 +16,9 @@
 
 //! # Aura Module
 //!
+//! - [`aura::Trait`](./trait.Trait.html)
+//! - [`Module`](./struct.Module.html)
+//!
 //! ## Overview
 //!
 //! The Aura module extends Aura consensus by managing offline reporting.
@@ -24,36 +27,16 @@
 //!
 //! ### Public Functions
 //!
-//! See the [`Module`](./struct.Module.html) struct for details on publicly available functions.
-//!
-//! ## Usage
-//!
-//! ### Prerequisites
-//!
-//! Use of this module implies selection of the Aura algorithm.
-//!
-//! ### Simple Code Snippet
-//!
-//! Instantiate a report of skipped authorities:
-//!
-//! ```rust,ignore
-//! let mut report = AuraReport {
-//! 	start_slot: 6, // The first skipped slot
-//! 	skipped: 3,   // The number of authorities skipped
-//! }
-//! ```
-//!
-//! See the `tests.rs` file in this module's directory for other simple code snippets that may make this module's
-//! functionalities clearer.
+//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
 //!
 //! ## Related Modules
 //!
-//! - [`staking`](../srml_staking/index.html): The Staking module is called in Aura to enforce slashing
+//! - [Staking](../srml_staking/index.html): The Staking module is called in Aura to enforce slashing
 //!  if validators miss a certain number of slots (see the [`StakingSlasher`](./struct.StakingSlasher.html)
 //!  struct and associated method).
-//! - [`timestamp`](../srml_timestamp/index.html): The Timestamp module is used in Aura to track
+//! - [Timestamp](../srml_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//! - [`consensus`](../srml_consensus/index.html): The Consensus module does not relate directly to Aura,
+//! - [Consensus](../srml_consensus/index.html): The Consensus module does not relate directly to Aura,
 //!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References

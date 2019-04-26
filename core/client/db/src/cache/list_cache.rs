@@ -436,7 +436,7 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 		}
 	}
 
-	/// Try to append NEW block to the fork. This method willonly 'work' (return true) when block
+	/// Try to append NEW block to the fork. This method will only 'work' (return true) when block
 	/// is actually appended to the fork AND the best known block of the fork is known (i.e. some
 	/// block has been already appended to this fork after last restart).
 	pub fn try_append(&self, parent: &ComplexBlockId<Block>) -> bool {
@@ -932,7 +932,7 @@ pub mod tests {
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(3)] }));
 
-		// when inserting finalized entry AND there are no previous finalzed entries
+		// when inserting finalized entry AND there are no previous finalized entries
 		let cache = ListCache::new(DummyStorage::new(), 1024, correct_id(2));
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), true).unwrap(),
@@ -1031,7 +1031,7 @@ pub mod tests {
 		// when new block is appended to unfinalized fork
 		cache.on_transaction_commit(CommitOperation::AppendNewBlock(0, correct_id(6)));
 		assert_eq!(cache.unfinalized[0].best_block, Some(correct_id(6)));
-		// when new entry is appnded to unfinalized fork
+		// when new entry is appended to unfinalized fork
 		cache.on_transaction_commit(CommitOperation::AppendNewEntry(0, Entry { valid_from: correct_id(7), value: Some(7) }));
 		assert_eq!(cache.unfinalized[0].best_block, Some(correct_id(7)));
 		assert_eq!(cache.unfinalized[0].head, Entry { valid_from: correct_id(7), value: Some(7) });
