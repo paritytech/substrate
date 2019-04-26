@@ -256,7 +256,7 @@
 //! 			let _origin = ensure_signed(origin)?;
 //!
 //! 			// Get the current block number
-//!			let current_block_number = <system::Module<T>>::block_number();
+//!				let current_block_number = <system::Module<T>>::block_number();
 //!
 //! 			// Get the number of seats that we want the council to have
 //! 			let desired = <seats::Module<T>>::desired_seats() as usize;
@@ -270,11 +270,11 @@
 //! 			assert!(desired > occupied, "Unable to approval all candidates when there are no empty seats");
 //!
 //! 			if let Some(next_tally_block_number) = <seats::Module<T>>::next_tally() {
-//!         			if current_block_number <= next_tally_block_number {
-//!					assert!(maybe_next_tally.is_some(),
+//!         		if current_block_number <= next_tally_block_number {
+//!						assert!(maybe_next_tally.is_some(),
 //! 						"Unable to approval all candidates when the block number of the next tally has past");
+//!					}
 //!				}
-//!			}
 //!
 //! 			Ok(())
 //! 		}
