@@ -40,41 +40,47 @@ use proc_macro::TokenStream;
 /// }
 /// ```
 ///
-/// Declaration is set with this header `(pub) trait Store for Module<T: Trait> as Example`
-/// with `Store` a (pub) trait generated associating each storage to the `Module` and
-/// `as Example` setting the prefix used for storages of this module. `Example` must be unique:
-/// another module with same name and same inner storage item name will conflict.
+/// Declaration is set with the header `(pub) trait Store for Module<T: Trait> as Example`,
+/// with `Store` a (pub) trait generated associating each storage item to the `Module` and
+/// `as Example` setting the prefix used for storage items of this module. `Example` must be unique:
+/// another module with the same name and the same inner storage item name will conflict.
 ///
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements [StorageValue](../srml_support/storage/trait.StorageValue.html).
-/// * Map: `Foo: map hasher($hash) type => type`: implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
-///   with `$hash` representing a choice of hashing algorithms available in [`Hashable` trait](../srml_support/trait.Hashable.html).
+/// * Map: `Foo: map hasher($hash) type => type`: Implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
+///   with `$hash` representing a choice of hashing algorithms available in the
+///   [`Hashable` trait](../srml_support/trait.Hashable.html).
 ///
-///   `hasher($hash)` is optional and default to blake2_256
+///   `hasher($hash)` is optional and its default is blake2_256.
 ///
-///   /!\ Be careful for each key in the map is inserted to the trie `$hash(module_name ++ storage_name ++ key)`
-///   For untrusted key cryptographic hasher such as blake2_256 must be used. Otherwise other value of all storages can be compromised
+///   /!\ Be careful with each key in the map that is inserted in the trie `$hash(module_name ++ storage_name ++ key)`.
+///   For an untrusted key, a cryptographic hasher such as blake2_256 must be used.
+///   Otherwise, other values in storage can be compromised.
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
 ///   [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
 ///
-/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements `StorageDoubleMap` with `$hash` and `$hash_2` representing a
-/// choice of hashing algorithms available in [`Hashable` trait](../srml_support/trait.Hashable.html).
+/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements `StorageDoubleMap` with
+///   `$hash` and `$hash2` representing choices of hashing algorithms available in the
+///   [`Hashable` trait](../srml_support/trait.Hashable.html).
 ///
-///   `hasher($hash)` is optional and default to blake2_256
+///   `hasher($hash)` is optional and its default is blake2_256.
 ///
-///   /!\ Be careful for each key pair in the double map is inserted to the trie the following final key:
+///   /!\ Be careful with each key pair in the double map that is inserted in the trie.
+///   The final key is calculated as follows:
 ///
 ///   ```
-///   $hash(module_name ++ storage_name ++ first_key) ++ $hash_2(second_key)
+///   $hash(module_name ++ storage_name ++ first_key) ++ $hash2(second_key)
 ///   ````
 ///
-///   For untrusted first key cryptographic hasher such as blake2_256 must be used. Otherwise other value of all storages can be compromised
+///   If the first key is untrusted, a cryptographic hasher such as blake2_256 must be used.
+///   Otherwise, other values of all storage items can be compromised.
 ///
-///   For untrusted second keys cryptographic hasher such as blake2_256 must be used. Otherwise malicious actors could craft second keys to lower the trie.
+///   If the second key is untrusted, a cryptographic hasher such as blake2_256 must be used.
+///   Otherwise, malicious actors could craft second keys to lower the trie.
 ///
-/// And it can be extended as such:
+/// Basic storage can be extended as such:
 ///
 /// `#vis #name get(#getter) config(#field_name) build(#closure): #type = #default;`
 ///
