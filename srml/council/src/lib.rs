@@ -292,7 +292,7 @@ mod tests {
 		}
 	}
 
-	// Workaround for https://github.com/rust-lang/rust/issues/26925. Remove when sorted.
+	// Workaround for https://github.com/rust-lang/rust/issues/26925.  Remove when that issue is fixed.
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
 	impl system::Trait for Test {
