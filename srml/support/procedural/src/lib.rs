@@ -78,7 +78,7 @@ use proc_macro::TokenStream;
 ///   Otherwise, other values of all storage items can be compromised.
 ///
 ///   If the second key is untrusted, a cryptographic hasher such as blake2_256 must be used.
-///   Otherwise, malicious actors could craft second keys to lower the trie.
+///   Otherwise, other items in storage with the same first key can be compromised.
 ///
 /// Basic storage can be extended as such:
 ///
