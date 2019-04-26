@@ -124,18 +124,18 @@ use proc_macro::TokenStream;
 ///
 /// This struct can be exposed as `Config` by the `decl_runtime!` macro.
 ///
-/// ### Module with instances
+/// ### Module with Instances
 ///
-/// The `decl_storage!` macro supports building modules with instances with the following syntax:
-/// (`DefaultInstance` type is optional)
+/// The `decl_storage!` macro supports building modules with instances with the following syntax
+/// (`DefaultInstance` type is optional):
 ///
 /// ```nocompile
 /// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
 ///
-/// Then the genesis config is generated with two generic parameter `GenesisConfig<T, I>`
-/// and storage items are now accessible using two generic parameters, e.g.:
-/// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`
+/// Then the genesis config is generated with two generic parameters (i.e. `GenesisConfig<T, I>`)
+/// and storage items are accessible using two generic parameters, e.g.:
+/// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)
