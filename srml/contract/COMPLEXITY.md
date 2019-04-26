@@ -107,7 +107,7 @@ While these functions only modify the local `Map`, if changes made by them are c
 
 ## create_contract
 
-calls contract_exists and if not modify the local `Map` similarly to set_rent_allowance.
+Calls `contract_exists` and if it doesn't exist, do not modify the local `Map` similarly to `set_rent_allowance`.
 
 **complexity**: The computational complexity is proportional to the depth of the overlay cascade and the size of the value; the cost is dominated by the DB read though. No additional memory is required.
 

@@ -3,7 +3,7 @@ use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 
-/// Evict and optionnaly pay rent, at block number. Return if evicted
+/// Evict and optionally pay rent, at block number. Return if evicted
 ///
 /// Exempted from rent iff:
 /// * rent is offset completely by the `rent_deposit_offset`,
@@ -79,8 +79,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			)
 			.expect(
 				"Withdraw has been checked above;
-						go_below_subsistence is false and subsistence > existencial_deposit;
-						qed",
+				go_below_subsistence is false and subsistence > existencial_deposit;
+				qed",
 			);
 
 			<ContractInfoOf<T>>::mutate(account, |contract| {

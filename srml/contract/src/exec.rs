@@ -306,7 +306,7 @@ where
 
 		// Assumption: pay_rent doesn't collide with overlay because
 		// pay_rent will be done on first call and dest contract and balance
-		// cannot be change before first call
+		// cannot be changed before the first call
 		crate::rent::pay_rent::<T>(&dest);
 
 		let mut output_data = Vec::new();
