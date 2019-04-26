@@ -147,7 +147,9 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		let header = match self.header(id) {
 			Ok(Some(header)) => header,
-			_ => return Ok(None),
+			_ => {
+				return Ok(None)
+			}
 		};
 
 		self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
