@@ -137,7 +137,7 @@
 //! - Instant autonomous execution of referenda once their vote tally reaches the vote threshold level of approval.
 //! - Cancellation of council proposals that were elevated as associated referenda onto the table of referenda.
 //! - Candidate registration in list slots (necessary to receive candidate approval votes during the
-//! presentation period).
+//!   presentation period).
 //! - Deduction of security bonds from candidate voters.
 //! - Express council seat candidate approval voting.
 //! - Reaping of candidate voters due to valid claims of their inactivity by reporters.
