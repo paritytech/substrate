@@ -158,11 +158,7 @@ pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 
 /// Determine the default child trie root.
 pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
-	let mut db = MemoryDB::default();
-	let mut root = H::Out::default();
-	let mut empty = TrieDBMut::<H>::new(&mut db, &mut root);
-	empty.commit();
-	empty.root().as_ref().to_vec()
+	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
@@ -375,6 +371,18 @@ mod tests {
 				t.iter().unwrap().map(|x| x.map(|y| (y.0, y.1.to_vec())).unwrap()).collect::<Vec<_>>()
 			);
 		}
+	}
+
+	#[test]
+	fn default_trie_root() {
+		let mut db = MemoryDB::default();
+		let mut root = <Blake2Hasher as Hasher>::Out::default();
+		let mut empty = TrieDBMut::<Blake2Hasher>::new(&mut db, &mut root);
+		empty.commit();
+		let root1 = empty.root().as_ref().to_vec();
+		let root2: Vec<u8> = trie_root::<Blake2Hasher, _, Vec<u8>, Vec<u8>>(std::iter::empty()).as_ref().iter().cloned().collect();
+
+		assert_eq!(root1, root2);
 	}
 
 	#[test]
