@@ -18,12 +18,14 @@
 
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
-use runtime_io::{self, twox_128};
-use crate::codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
+use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
+use hashed::generator::{HashedStorage, StorageHasher};
+use unhashed::generator::UnhashedStorage;
 
 #[macro_use]
-pub mod generator;
+pub mod storage_items;
 pub mod unhashed;
+pub mod hashed;
 
 struct IncrementalInput<'a> {
 	key: &'a [u8],
@@ -54,116 +56,44 @@ impl<'a> Input for IncrementalChildInput<'a> {
 	}
 }
 
-
-/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	unhashed::get(&twox_128(key))
-}
-
-/// Return the value of the item in storage under `key`, or the type's default if there is no
-/// explicit entry.
-pub fn get_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	unhashed::get_or_default(&twox_128(key))
-}
-
-/// Return the value of the item in storage under `key`, or `default_value` if there is no
-/// explicit entry.
-pub fn get_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
-	unhashed::get_or(&twox_128(key), default_value)
-}
-
-/// Return the value of the item in storage under `key`, or `default_value()` if there is no
-/// explicit entry.
-pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-	unhashed::get_or_else(&twox_128(key), default_value)
-}
-
-/// Put `value` in storage under `key`.
-pub fn put<T: Encode>(key: &[u8], value: &T) {
-	unhashed::put(&twox_128(key), value)
-}
-
-/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-pub fn take<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	unhashed::take(&twox_128(key))
-}
-
-/// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
-/// the default for its type.
-pub fn take_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	unhashed::take_or_default(&twox_128(key))
-}
-
-/// Return the value of the item in storage under `key`, or `default_value` if there is no
-/// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
-	unhashed::take_or(&twox_128(key), default_value)
-}
-
-/// Return the value of the item in storage under `key`, or `default_value()` if there is no
-/// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-	unhashed::take_or_else(&twox_128(key), default_value)
-}
-
-/// Check to see if `key` has an explicit entry in storage.
-pub fn exists(key: &[u8]) -> bool {
-	unhashed::exists(&twox_128(key))
-}
-
-/// Ensure `key` has no explicit entry in storage.
-pub fn kill(key: &[u8]) {
-	unhashed::kill(&twox_128(key))
-}
-
-/// Get a Vec of bytes from storage.
-pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	unhashed::get_raw(&twox_128(key))
-}
-
-/// Put a raw byte slice into storage.
-pub fn put_raw(key: &[u8], value: &[u8]) {
-	unhashed::put_raw(&twox_128(key), value)
-}
-
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
 
-impl crate::GenericStorage for RuntimeStorage {
+impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		exists(key)
+		hashed::exists(&H::hash, key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		get(key)
+		hashed::get(&H::hash, key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		put(key, val)
+		hashed::put(&H::hash, key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		kill(key)
+		hashed::kill(&H::hash, key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		take(key)
+		hashed::take(&H::hash, key)
 	}
 
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		get_raw(key)
+		hashed::get_raw(&H::hash, key)
 	}
 
 	fn put_raw(&self, key: &[u8], value: &[u8]) {
-		put_raw(key, value)
+		hashed::put_raw(&H::hash, key, value)
 	}
 }
 
-impl crate::GenericUnhashedStorage for RuntimeStorage {
+impl UnhashedStorage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
 		unhashed::exists(key)
 	}
@@ -235,11 +165,11 @@ pub trait StorageValue<T: Codec> {
 		where T: EncodeAppend<Item=I>;
 }
 
-impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
+impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue<T> {
 	type Query = U::Query;
 
 	fn key() -> &'static [u8] {
-		<U as generator::StorageValue<T>>::key()
+		<U as hashed::generator::StorageValue<T>>::key()
 	}
 	fn exists() -> bool {
 		U::exists(&RuntimeStorage)
@@ -296,17 +226,17 @@ pub trait StorageList<T: Codec> {
 	fn clear();
 }
 
-impl<T: Codec, U> StorageList<T> for U where U: generator::StorageList<T> {
+impl<T: Codec, U> StorageList<T> for U where U: hashed::generator::StorageList<T> {
 	fn prefix() -> &'static [u8] {
-		<U as generator::StorageList<T>>::prefix()
+		<U as hashed::generator::StorageList<T>>::prefix()
 	}
 
 	fn len_key() -> Vec<u8> {
-		<U as generator::StorageList<T>>::len_key()
+		<U as hashed::generator::StorageList<T>>::len_key()
 	}
 
 	fn key_for(index: u32) -> Vec<u8> {
-		<U as generator::StorageList<T>>::key_for(index)
+		<U as hashed::generator::StorageList<T>>::key_for(index)
 	}
 
 	fn items() -> Vec<T> {
@@ -364,15 +294,15 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
-impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
+impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
 	type Query = U::Query;
 
 	fn prefix() -> &'static [u8] {
-		<U as generator::StorageMap<K, V>>::prefix()
+		<U as hashed::generator::StorageMap<K, V>>::prefix()
 	}
 
 	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
-		<U as generator::StorageMap<K, V>>::key_for(key.borrow())
+		<U as hashed::generator::StorageMap<K, V>>::key_for(key.borrow())
 	}
 
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
@@ -412,13 +342,13 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator::EnumerableStorageMap<K, V> {
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: hashed::generator::EnumerableStorageMap<K, V> {
 	fn head() -> Option<K> {
-		<U as generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
+		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
 
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
-		<U as generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
+		<U as hashed::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
 
@@ -525,72 +455,13 @@ where
 	}
 }
 
-/// A trait to conveniently store a vector of storable data.
-pub trait StorageVec {
-	type Item: Default + Sized + Codec;
-	const PREFIX: &'static [u8];
-
-	/// Get the current set of items.
-	fn items() -> Vec<Self::Item> {
-		(0..Self::count()).into_iter().map(Self::item).collect()
-	}
-
-	/// Set the current set of items.
-	fn set_items<I, T>(items: I)
-		where
-			I: IntoIterator<Item=T>,
-			T: Borrow<Self::Item>,
-	{
-		let mut count: u32 = 0;
-
-		for i in items.into_iter() {
-			put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
-			count = count.checked_add(1).expect("exceeded runtime storage capacity");
-		}
-
-		Self::set_count(count);
-	}
-
-	/// Push an item.
-	fn push(item: &Self::Item) {
-		let len = Self::count();
-		put(&len.to_keyed_vec(Self::PREFIX), item);
-		Self::set_count(len + 1);
-	}
-
-	fn set_item(index: u32, item: &Self::Item) {
-		if index < Self::count() {
-			put(&index.to_keyed_vec(Self::PREFIX), item);
-		}
-	}
-
-	fn clear_item(index: u32) {
-		if index < Self::count() {
-			kill(&index.to_keyed_vec(Self::PREFIX));
-		}
-	}
-
-	fn item(index: u32) -> Self::Item {
-		get_or_default(&index.to_keyed_vec(Self::PREFIX))
-	}
-
-	fn set_count(count: u32) {
-		(count..Self::count()).for_each(Self::clear_item);
-		put(&b"len".to_keyed_vec(Self::PREFIX), &count);
-	}
-
-	fn count() -> u32 {
-		get_or_default(&b"len".to_keyed_vec(Self::PREFIX))
-	}
-}
-
 /// child storage NOTE could replace unhashed by having only one kind of storage (root being null storage
 /// key (storage_key can become Option<&[u8]>).
 /// This module is a currently only a variant of unhashed with additional `storage_key`.
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput};
+	use super::{Codec, Decode, Vec, IncrementalChildInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Codec + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
@@ -680,72 +551,4 @@ pub mod child {
 	}
 
 	pub use super::unhashed::StorageVec;
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use runtime_io::{twox_128, TestExternalities, with_externalities};
-
-	#[test]
-	fn integers_can_be_stored() {
-		let mut t = TestExternalities::default();
-		with_externalities(&mut t, || {
-			let x = 69u32;
-			put(b":test", &x);
-			let y: u32 = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-		with_externalities(&mut t, || {
-			let x = 69426942i64;
-			put(b":test", &x);
-			let y: i64 = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-	}
-
-	#[test]
-	fn bools_can_be_stored() {
-		let mut t = TestExternalities::default();
-		with_externalities(&mut t, || {
-			let x = true;
-			put(b":test", &x);
-			let y: bool = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-
-		with_externalities(&mut t, || {
-			let x = false;
-			put(b":test", &x);
-			let y: bool = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-	}
-
-	#[test]
-	fn vecs_can_be_retrieved() {
-		let mut t = TestExternalities::default();
-		with_externalities(&mut t, || {
-			runtime_io::set_storage(&twox_128(b":test"), b"\x2cHello world");
-			let x = b"Hello world".to_vec();
-			let y = get::<Vec<u8>>(b":test").unwrap();
-			assert_eq!(x, y);
-
-		});
-	}
-
-	#[test]
-	fn vecs_can_be_stored() {
-		let mut t = TestExternalities::default();
-		let x = b"Hello world".to_vec();
-
-		with_externalities(&mut t, || {
-			put(b":test", &x);
-		});
-
-		with_externalities(&mut t, || {
-			let y: Vec<u8> = get(b":test").unwrap();
-			assert_eq!(x, y);
-		});
-	}
 }

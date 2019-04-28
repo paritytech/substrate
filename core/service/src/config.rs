@@ -48,6 +48,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub database_path: String,
 	/// Cache Size for internal database in MiB
 	pub database_cache_size: Option<u32>,
+	/// Size of internal state cache in Bytes
+	pub state_cache_size: usize,
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Additional key seeds.
@@ -93,6 +95,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			database_cache_size: Default::default(),
+			state_cache_size: Default::default(),
 			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),

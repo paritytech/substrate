@@ -681,7 +681,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		let (round, commit) = input;
 		let round = Round(round);
 
-		telemetry!(CONSENSUS_INFO; "afg.commit_issued";
+		telemetry!(CONSENSUS_DEBUG; "afg.commit_issued";
 			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
 		);
 		let (precommits, auth_data) = commit.precommits.into_iter()

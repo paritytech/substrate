@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 #[cfg(feature = "std")]
 use std::fmt;
 #[cfg(feature = "std")]

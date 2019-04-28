@@ -17,7 +17,7 @@ democracy = { package = "srml-democracy", path = "../democracy", default-feature
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-hex-literal = "0.1.0"
+hex-literal = "0.2.0"
 balances = { package = "srml-balances", path = "../balances" }
 
 [features]
