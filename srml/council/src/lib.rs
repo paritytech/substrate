@@ -206,37 +206,6 @@
 //!
 //! ### Snippet: Approve all candidates when additional empty seats are available
 //!
-//! #### Existing Council Module Functionality Related to this Code Snippet
-//!
-//! In the Council module at the end of each block in the `end_block` function it checks if we're ready to call
-//! `start_tally`, which ends the voting period, and starts tallying the approval votes that were submitted for
-//! the election of candidates to council seat(s).
-//!
-//! We know we're ready to call `start_tally` when the result from calling `voting_period` indicates that the
-//! current block number is when the council voting period ends, and when the result from calling `next_tally`
-//! indicates that the current block number is when a tally for the next election is scheduled to occur.
-//!
-//! `start_tally` starts a new presentation period from the current block number if it finds that there are any
-//! empty seats available. It only does this if the desired council member count is greater than the amount of seats
-//! to be retained (after excluding any seats that expire at the current block number).
-//!
-//! A snapshot of the final voting stake that was locked up from each voter's bond at the end of the voting period
-//! is recorded.
-//!
-//! It also initializes a leaderboard. The size of the leaderboard is the amount of empty seats available,
-//! plus the amount of the top runners-up that are already registered in a candidate slot by locking up a bond.
-//!
-//! During the presentation period the candidates that believe they obtained sufficient votes (based on the recorded
-//! snapshot of the final stake corresponding to their candidature) to be elected will present themselves for
-//! election on the council.
-//!
-//! Additionally in `end_block` we also call `next_finalize` to check if there are any accounts that currently
-//! hold a seat that will become free on the current block number. If there are, then we call `finalize_tally`,
-//! which elects the candidates with the most approval votes into council seats with a term duration and returns
-//! the bond that was staked by them and their voters.
-//!
-//! #### Purpose of the Code Snippet
-//!
 //! This code snippet includes an `approve_all` public function that could be called by a signed account to approve
 //! the eligibility of all candidates when there are empty council seats and when the tally for the next election
 //! occurs at the current or a future block number.
