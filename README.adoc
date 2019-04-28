@@ -218,7 +218,7 @@ If you are trying to set up Substrate on Windows, you should do the following:
         * Run the installation file: `rustup-init.exe`
         > Note that it should not prompt you to install vs_buildtools since you did it in step 1.
         * Choose "Default Installation."
-        * To get started you need Cargo's bin directory (%USERPROFILE%\.cargo\bin) in your PATH environment variable. Future applications will automatically have the correct environment, but you may need to restart your current shell.
+        * To get started, you need Cargo's bin directory (%USERPROFILE%\.cargo\bin) in your PATH environment variable. Future applications will automatically have the correct environment, but you may need to restart your current shell.
 
 3. Then, you will need to run some commands in CMD to set up your Wasm Build Environment:
 
