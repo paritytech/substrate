@@ -19,7 +19,7 @@ use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 
-/// Evict and optionally pay dues (or check he could pay them otherwise), at given block number.
+/// Evict and optionally pay dues (or check account can pay them otherwise), for given block number.
 /// Return true iff the account has been evicted.
 ///
 /// Exempted from rent iff:
@@ -32,6 +32,8 @@ use srml_support::StorageMap;
 /// * rent exceed rent allowance,
 /// * or can't withdraw the rent,
 /// * or go below subsistence threshold.
+///
+/// This function acts eagerly, all modification are committed into storages.
 fn try_evict_or_and_pay_rent<T: Trait>(
 	account: &T::AccountId,
 	block_number: T::BlockNumber,
@@ -42,7 +44,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
-	println!("rent : {} {}", contract.deduct_block, block_number);
 	// Rent has already been paid
 	if contract.deduct_block >= block_number {
 		return false;

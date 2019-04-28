@@ -489,7 +489,6 @@ decl_module! {
 			if signed {
 				check_block = check_block.saturating_sub(<Module<T>>::signed_claim_handicap());
 			}
-			println!("claim for: {}", check_block);
 
 			if rent::try_evict_at::<T>(&dest, check_block) {
 				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;

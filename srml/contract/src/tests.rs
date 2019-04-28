@@ -825,73 +825,73 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 fn removals(trigger_call: impl Fn() -> bool) {
 	let wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
 
-	// // Balance reached and superior to subsistence threshold
-	// with_externalities(
-	// 	&mut ExtBuilder::default().existential_deposit(50).build(),
-	// 	|| {
-	// 		// Create
-	// 		Balances::deposit_creating(&ALICE, 1_000_000);
-	// 		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-	// 		assert_ok!(Contract::create(
-	// 			Origin::signed(ALICE),
-	// 			100,
-	// 			100_000, HASH_SET_RENT.into(),
-	// 			<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
-	// 		));
+	// Balance reached and superior to subsistence threshold
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+			));
 
-	// 		// Trigger rent must have no effect
-	// 		assert!(trigger_call());
-	// 		assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
+			// Trigger rent must have no effect
+			assert!(trigger_call());
+			assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 
-	// 		// Advance blocks
-	// 		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
 
-	// 		// Trigger rent through call
-	// 		assert!(trigger_call());
-	// 		assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			// Trigger rent through call
+			assert!(trigger_call());
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
-	// 		// Advance blocks
-	// 		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into());
+			// Advance blocks
+			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into());
 
-	// 		// Trigger rent must have no effect
-	// 		assert!(trigger_call());
-	// 		assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-	// 	}
-	// );
+			// Trigger rent must have no effect
+			assert!(trigger_call());
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+		}
+	);
 
-	// // Allowance exceeded
-	// with_externalities(
-	// 	&mut ExtBuilder::default().existential_deposit(50).build(),
-	// 	|| {
-	// 		// Create
-	// 		Balances::deposit_creating(&ALICE, 1_000_000);
-	// 		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-	// 		assert_ok!(Contract::create(
-	// 			Origin::signed(ALICE),
-	// 			1_000,
-	// 			100_000, HASH_SET_RENT.into(),
-	// 			<Test as balances::Trait>::Balance::sa(100u64).encode() // rent allowance
-	// 		));
+	// Allowance exceeded
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				1_000,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(100u64).encode() // rent allowance
+			));
 
-	// 		// Trigger rent must have no effect
-	// 		assert!(trigger_call());
-	// 		assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
+			// Trigger rent must have no effect
+			assert!(trigger_call());
+			assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
 
-	// 		// Advance blocks
-	// 		System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
 
-	// 		// Trigger rent through call
-	// 		assert!(trigger_call());
-	// 		assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+			// Trigger rent through call
+			assert!(trigger_call());
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
-	// 		// Advance blocks
-	// 		System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into());
+			// Advance blocks
+			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into());
 
-	// 		// Trigger rent must have no effect
-	// 		assert!(trigger_call());
-	// 		assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-	// 	}
-	// );
+			// Trigger rent must have no effect
+			assert!(trigger_call());
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+		}
+	);
 
 	// Balance reached and inferior to subsistence threshold
 	with_externalities(
@@ -902,7 +902,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
-				50,
+				50+Balances::minimum_balance(),
 				100_000, HASH_SET_RENT.into(),
 				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
 			));
@@ -913,9 +913,10 @@ fn removals(trigger_call: impl Fn() -> bool) {
 
 			// Transfer funds
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::transfer()));
+			assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 
-			// TODO TODO: why this doesn't fails ?
-			// TODO TODO: weird ?????
+			// Advance blocks
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into());
 
 			// Trigger rent through call
 			assert!(trigger_call());
