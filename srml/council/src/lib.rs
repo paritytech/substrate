@@ -267,12 +267,12 @@
 //!				// Get the appropriate block number to schedule the next tally.
 //!				let maybe_next_tally = <seats::Module<T>>::next_tally();
 //!
-//!				assert!(desired > occupied, "Unable to approval all candidates when there are no empty seats");
+//!				assert!(desired > occupied, "Unable to approve all candidates when there are no empty seats");
 //!
 //!				if let Some(next_tally_block_number) = <seats::Module<T>>::next_tally() {
 //!					if current_block_number <= next_tally_block_number {
 //!						assert!(maybe_next_tally.is_some(),
-//!							"Unable to approval all candidates when the block number of the next tally has past");
+//!							"Unable to approve all candidates when the block number of the next tally has past");
 //!					}
 //!				}
 //!
