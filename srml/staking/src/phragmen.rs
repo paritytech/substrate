@@ -26,7 +26,6 @@ use crate::{BalanceOf, Assignment, RawAssignment, ExpoMap, Trait, ValidatorPrefs
 
 type Fraction = PerU128;
 pub type ExtendedBalance = u128;
-pub type Ratio = u128;
 
 // this is only used while creating the candidate score. Due to reasons explained below
 // The more accurate this is, the less likely we choose a wrong candidate.
@@ -34,7 +33,7 @@ const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 // These are used to expose a fixed accuracy to the caller function. The bigger they are,
 // the more accurate we get, but the more likely it is for us to overflow. The case of overflow
 // is handled but accuracy will be lost. 32 or 16 are reasonable values.
-pub const ACCURACY: Ratio = u32::max_value() as ExtendedBalance + 1;
+pub const ACCURACY: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 
 /// Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode, Default)]
@@ -178,7 +177,6 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			for c in &mut candidates {
 				if !c.elected {
 					c.score = Fraction::from_xth(c.approval_stake);
-					let t = u128::max_value()/c.approval_stake;
 				}
 			}
 			// Loop 2: increment score.
@@ -194,7 +192,6 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 						let temp =
 							n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
 							* (*n.load / SCALE_FACTOR);
-						let l = *n.load as f64 / u128::max_value() as f64;
 						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
 					}
 				}
@@ -249,14 +246,12 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			}
 
 			if assignment.1.len() > 0 {
-				// To ensure such an assertion, which translates to no stake from the nominator going to waste,
+				// To ensure an assertion indicating: no stake from the nominator going to waste,
 				// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-				let sum = assignment.1.iter().map(|a| a.1).sum::<Ratio>();
+				let sum = assignment.1.iter().map(|a| a.1).sum::<ExtendedBalance>();
 				let diff = ACCURACY.checked_sub(sum).unwrap_or(0) as usize;
 				let l = assignment.1.len();
-				// assert!(sum <= ACCURACY, "1) Bad phragmen division detected [{:?} => sum {}]", assignment, sum);
 				// TODO: rethink this approach + the limit value. There should indeed be a limit.
-				// assert!(ACCURACY - sum < 5 , "2) Bad phragmen division detected [{:?} => sum {} / Diff = {:?}]", assignment, sum, diff);
 				for i in 0..diff.min(1000) {
 					assignment.1[i%l].1 = assignment.1[i%l].1.saturating_add(1);
 				}
@@ -307,11 +302,11 @@ fn do_equalize<T: Trait + 'static>(
 	let to_balance = |v: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(v);
 	let budget = to_votes(budget_balance);
 
-	// Convert all stakes to extended.
+	// Convert all stakes to extended. Result is Vec<(Acc, Ratio, Balance)>
 	let mut elected_edges = elected_edges_balance
 		.into_iter()
 		.map(|e| (e.0.clone(), e.1, to_votes(e.2)))
-		.collect::<Vec<(T::AccountId, Ratio, ExtendedBalance)>>();
+		.collect::<Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>>();
 
 	let stake_used = elected_edges
 		.iter()

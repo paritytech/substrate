@@ -1799,10 +1799,10 @@ fn phragmen_linear_worse_case_equalize() {
 		assert_eq!(Staking::stakers(11).total, 3000);
 		assert_eq!(Staking::stakers(21).total, 2209);
 		assert_eq!(Staking::stakers(31).total, 2027);
-		assert_eq!(Staking::stakers(41).total, 2006);
-		assert_eq!(Staking::stakers(51).total, 2001);
-		assert_eq!(Staking::stakers(61).total, 2001);
-		assert_eq!(Staking::stakers(71).total, 1996);
+		assert_eq!(Staking::stakers(41).total, 2010);
+		assert_eq!(Staking::stakers(51).total, 2010);
+		assert_eq!(Staking::stakers(61).total, 1998);
+		assert_eq!(Staking::stakers(71).total, 1983);
 	})
 }
 

@@ -293,7 +293,7 @@ mod mock;
 mod tests;
 mod phragmen;
 
-use phragmen::{elect, ACCURACY, ExtendedBalance, Ratio};
+use phragmen::{elect, ACCURACY, ExtendedBalance};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -431,8 +431,8 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
-type RawAssignment<T> = (<T as system::Trait>::AccountId, Ratio);
-type Assignment<T> = (<T as system::Trait>::AccountId, Ratio, BalanceOf<T>);
+type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
+type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
 type ExpoMap<T> = BTreeMap::<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
 
 pub trait Trait: system::Trait + session::Trait {
@@ -989,6 +989,7 @@ impl<T: Trait> Module<T> {
 			// The original balance, `b` is within the scope of u64. It is just extended to u128
 			// to be properly multiplied by a ratio, which will lead to another value
 			// less than u64 for sure. The result can then be safely passed to `to_balance`.
+			// For now the backward convert is used. A simple `TryFrom<u64>` is also safe.
 			let ratio_of = |b, p| (p as ExtendedBalance) * to_votes(b) / ACCURACY;
 
 			// Compute the actual stake from nominator's ratio.
