@@ -24,14 +24,44 @@ use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
 use std::{collections::hash_map::Entry, cmp, error, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_timer::clock::Clock;
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
+///
+/// ## How it works
+///
+/// The role of the `CustomProto` is to synchronize the following components:
+///
+/// - The libp2p swarm that opens new connections and reports disconnects.
+/// - The connection handler (see `handler.rs`) that handles individual connections.
+/// - The peerset manager (PSM) that requests links to nodes to be established or broken.
+/// - The external API, that requires knowledge of the links that have been established.
+///
+/// Each connection handler can be in four different states: Enabled+Open, Enabled+Closed,
+/// Disabled+Open, or Disabled+Closed. The Enabled/Disabled component must be in sync with the
+/// peerset manager. For example, if the peerset manager requires a disconnection, we disable the
+/// existing handler. The Open/Closed component must be in sync with the external API.
+///
+/// However a connection handler only exists if we are actually connected to a node. What this
+/// means is that there are six possible states for each node: Disconnected, Dialing (trying to
+/// reach it), Enabled+Open, Enabled+Closed, Disabled+open, Disabled+Closed. Most notably, the
+/// Dialing state must correspond to a "link established" state in the peerset manager. In other
+/// words, the peerset manager doesn't differentiate whether we are dialing a node or connected
+/// to it.
+///
+/// Additionally, there also exists a "banning" system. If we fail to dial a node, we "ban" it for
+/// a few seconds. If the PSM requests a node that is in the "banned" state, then we delay the
+/// actual dialing attempt until after the ban expires, but the PSM will still consider the link
+/// to be established.
+/// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
+/// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
+///
 pub struct CustomProto<TMessage, TSubstream> {
 	/// List of protocols to open with peers. Never modified.
 	protocol: RegisteredProtocol<TMessage>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
-	peerset: substrate_peerset::PeersetMut,
+	peerset: substrate_peerset::Peerset,
 
 	/// List of peers in our state.
 	peers: FnvHashMap<PeerId, PeerState>,
@@ -49,6 +79,9 @@ pub struct CustomProto<TMessage, TSubstream> {
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
+
+	/// `Clock` instance that uses the current execution context's source of time.
+	clock: Clock,
 }
 
 /// State of a peer we're connected to.
@@ -175,7 +208,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: RegisteredProtocol<TMessage>,
-		peerset: substrate_peerset::PeersetMut,
+		peerset: substrate_peerset::Peerset,
 	) -> Self {
 		CustomProto {
 			protocol,
@@ -185,6 +218,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			next_incoming_index: substrate_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
 			marker: PhantomData,
+			clock: Clock::new(),
 		}
 	}
 
@@ -213,9 +247,9 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			// DisabledPendingEnable => Disabled.
 			PeerState::DisabledPendingEnable { open, connected_point, timer } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 				let banned_until = Some(if let Some(ban) = ban {
-					cmp::max(timer.deadline(), Instant::now() + ban)
+					cmp::max(timer.deadline(), self.clock.now() + ban)
 				} else {
 					timer.deadline()
 				});
@@ -225,13 +259,14 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			// Enabled => Disabled.
 			PeerState::Enabled { open, connected_point } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
 					event: CustomProtoHandlerIn::Disable,
 				});
-				let banned_until = ban.map(|dur| Instant::now() + dur);
+				let clock = &self.clock;
+				let banned_until = ban.map(|dur| clock.now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open, connected_point, banned_until }
 			},
 
@@ -252,7 +287,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 					peer_id: peer_id.clone(),
 					event: CustomProtoHandlerIn::Disable,
 				});
-				let banned_until = ban.map(|dur| Instant::now() + dur);
+				let clock = &self.clock;
+				let banned_until = ban.map(|dur| clock.now() + dur);
 				*entry.into_mut() = PeerState::Disabled { open: false, connected_point, banned_until }
 			},
 
@@ -313,9 +349,11 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 
 	/// Indicates to the peerset that we have discovered new addresses for a given node.
-	pub fn add_discovered_node(&mut self, peer_id: &PeerId) {
-		debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-		self.peerset.discovered(peer_id.clone())
+	pub fn add_discovered_nodes<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
@@ -338,7 +376,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		};
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			PeerState::Banned { ref until } if *until > Instant::now() => {
+			PeerState::Banned { ref until } if *until > self.clock.now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
@@ -354,7 +392,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			},
 
 			PeerState::Disabled { open, ref connected_point, banned_until: Some(ref banned) }
-				if *banned > Instant::now() => {
+				if *banned > self.clock.now() => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Has idle connection through \
 					{:?} but node is banned until {:?}", occ_entry.key(), connected_point, banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
@@ -484,7 +522,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming,
 				sending back dropped", index, incoming.peer_id);
 			debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
-			self.peerset.dropped(&incoming.peer_id);
+			self.peerset.dropped(incoming.peer_id.clone());
 			return
 		}
 
@@ -662,7 +700,7 @@ where
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was disabled \
 					(through {:?}) but pending enable", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer.deadline() });
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
@@ -679,7 +717,7 @@ where
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}): Was enabled \
 					(through {:?})", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-				self.peerset.dropped(peer_id);
+				self.peerset.dropped(peer_id.clone());
 
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
@@ -727,10 +765,10 @@ where
 				PeerState::Requested | PeerState::PendingRequest { .. } => {
 					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 					*entry.into_mut() = PeerState::Banned {
-						until: Instant::now() + Duration::from_secs(5)
+						until: self.clock.now() + Duration::from_secs(5)
 					};
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-					self.peerset.dropped(peer_id)
+					self.peerset.dropped(peer_id.clone())
 				},
 
 				// We can still get dial failures even if we are already connected to the node,
@@ -759,23 +797,50 @@ where
 		match event {
 			CustomProtoHandlerOut::CustomProtocolClosed { result } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Closed({:?})", source, result);
-				match self.peers.get_mut(&source) {
-					Some(PeerState::Enabled { ref mut open, .. }) if *open =>
-						*open = false,
-					Some(PeerState::Disabled { ref mut open, .. }) if *open =>
-						*open = false,
-					Some(PeerState::DisabledPendingEnable { ref mut open, .. }) if *open =>
-						*open = false,
-					_ => error!(target: "sub-libp2p", "State mismatch in the custom protos handler"),
-				}
+
+				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
+					entry
+				} else {
+					error!(target: "sub-libp2p", "State mismatch in the custom protos handler");
+					return
+				};
 
 				debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
 				let event = CustomProtoOut::CustomProtocolClosed {
 					result,
-					peer_id: source,
+					peer_id: source.clone(),
 				};
-
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+
+				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+					PeerState::Enabled { open, connected_point } => {
+						debug_assert!(open);
+
+						debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
+						self.peerset.dropped(source.clone());
+
+						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
+						self.events.push(NetworkBehaviourAction::SendEvent {
+							peer_id: source.clone(),
+							event: CustomProtoHandlerIn::Disable,
+						});
+
+						*entry.into_mut() = PeerState::Disabled {
+							open: false,
+							connected_point,
+							banned_until: None
+						};
+					},
+					PeerState::Disabled { open, connected_point, banned_until } => {
+						debug_assert!(open);
+						*entry.into_mut() = PeerState::Disabled { open: false, connected_point, banned_until };
+					},
+					PeerState::DisabledPendingEnable { open, connected_point, timer } => {
+						debug_assert!(open);
+						*entry.into_mut() = PeerState::DisabledPendingEnable { open: false, connected_point, timer };
+					},
+					_ => error!(target: "sub-libp2p", "State mismatch in the custom protos handler"),
+				}
 			}
 
 			CustomProtoHandlerOut::CustomProtocolOpen { version } => {

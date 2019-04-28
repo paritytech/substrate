@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use alloc::slice;
 
 use runtime_io::{
-	set_storage, storage, clear_prefix, print, blake2_256,
+	set_storage, storage, clear_prefix, print, blake2_128, blake2_256,
 	twox_128, twox_256, ed25519_verify, sr25519_verify, enumerated_trie_root
 };
 
@@ -68,6 +68,7 @@ impl_stubs!(
 		input.to_vec()
 	},
 	test_blake2_256 => |input| blake2_256(input).to_vec(),
+	test_blake2_128 => |input| blake2_128(input).to_vec(),
 	test_twox_256 => |input| twox_256(input).to_vec(),
 	test_twox_128 => |input| twox_128(input).to_vec(),
 	test_ed25519_verify => |input: &[u8]| {
@@ -91,7 +92,7 @@ impl_stubs!(
 		[sr25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
 	},
 	test_enumerated_trie_root => |_| {
-		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
+		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).as_ref().to_vec()
 	},
 	test_sandbox => |code: &[u8]| {
 		let ok = execute_sandboxed(code, &[]).is_ok();

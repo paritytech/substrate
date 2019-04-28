@@ -76,13 +76,19 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				TransferRateFormat(bandwidth_upload),
 			);
 
+			let backend = (*client).backend();
+			let used_state_cache_size = match backend.used_state_cache_size(){
+				Some(size) => size,
+				None => 0,
+			};
+
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
 				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
 				(proc.cpu_usage(), proc.memory())
 			} else { (0.0, 0) };
 
-			let network_state = serde_json::to_string(&network.network_state()).unwrap_or_default();
+			let network_state = network.network_state();
 
 			telemetry!(
 				SUBSTRATE_INFO;
@@ -99,6 +105,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
 			);
 		} else {
 			warn!("Error getting best block information");

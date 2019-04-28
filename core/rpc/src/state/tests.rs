@@ -17,7 +17,7 @@
 use super::*;
 use self::error::{Error, ErrorKind};
 
-use sr_io::twox_128;
+use sr_io::blake2_256;
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
 use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt};
@@ -44,7 +44,7 @@ fn should_call_contract() {
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
-		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
+		Err(Error(ErrorKind::Client(client::error::Error::Execution(_)), _))
 	)
 }
 
@@ -88,7 +88,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	{
 		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
-		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = blake2_256(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		api.subscribe_storage(Default::default(), subscriber, Some(vec![
 			StorageKey(alice_balance_key.to_vec()),
@@ -147,7 +147,7 @@ fn should_query_storage() {
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
 
-		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = blake2_256(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		let mut expected = vec![
 			StorageChangeSet {

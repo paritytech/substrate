@@ -22,7 +22,7 @@ use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{multiaddr::Protocol, Multiaddr, core::swarm::NetworkBehaviour, PeerId};
+use libp2p::{Multiaddr, core::swarm::NetworkBehaviour, PeerId};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
 use log::{debug, info, warn};
@@ -38,7 +38,7 @@ use std::time::Duration;
 pub fn start_service<TMessage>(
 	config: NetworkConfiguration,
 	registered_custom: RegisteredProtocol<TMessage>,
-) -> Result<(Service<TMessage>, Arc<substrate_peerset::Peerset>), IoError>
+) -> Result<(Service<TMessage>, substrate_peerset::PeersetHandle), IoError>
 where TMessage: CustomMessage + Send + 'static {
 
 	if let Some(ref path) = config.net_config_path {
@@ -72,7 +72,7 @@ where TMessage: CustomMessage + Send + 'static {
 	}
 
 	// Build the peerset.
-	let (peerset, peerset_receiver) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
+	let (peerset, peerset_handle) = substrate_peerset::Peerset::from_config(substrate_peerset::PeersetConfig {
 		in_peers: config.in_peers,
 		out_peers: config.out_peers,
 		bootnodes,
@@ -84,23 +84,20 @@ where TMessage: CustomMessage + Send + 'static {
 	let local_identity = config.node_key.clone().into_keypair()?;
 	let local_public = local_identity.public();
 	let local_peer_id = local_public.clone().into_peer_id();
+	info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
 
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset_receiver, config.enable_mdns);
+		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset, config.enable_mdns);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
 
 	// Listen on multiaddresses.
 	for addr in &config.listen_addresses {
-		match Swarm::listen_on(&mut swarm, addr.clone()) {
-			Ok(mut new_addr) => {
-				new_addr.append(Protocol::P2p(local_peer_id.clone().into()));
-				info!(target: "sub-libp2p", "Local node address is: {}", new_addr);
-			},
-			Err(err) => warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
+		if let Err(err) = Swarm::listen_on(&mut swarm, addr.clone()) {
+			warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 		}
 	}
 
@@ -116,7 +113,7 @@ where TMessage: CustomMessage + Send + 'static {
 		injected_events: Vec::new(),
 	};
 
-	Ok((service, peerset))
+	Ok((service, peerset_handle))
 }
 
 /// Event produced by the service.

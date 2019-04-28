@@ -14,7 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Executive: Handles all of the top-level stuff; essentially just executing blocks/extrinsics.
+//! # Executive Module
+//!
+//! The Executive module acts as the orchestration layer for the runtime. It dispatches incoming
+//! extrinsic calls to the respective modules in the runtime.
+//!
+//! ## Overview
+//!
+//! The executive module is not a typical SRML module providing functionality around a specific feature.
+//! It is a cross-cutting framework component for the SRML. It works in conjunction with the
+//! [SRML System module](../srml_system/index.html) to perform these cross-cutting functions.
+//!
+//! The Executive module provides functions to:
+//!
+//! - Check transaction validity.
+//! - Initialize a block.
+//! - Apply extrinsics.
+//! - Execute a block.
+//! - Finalize a block.
+//! - Start an off-chain worker.
+//!
+//! ### Implementations
+//!
+//! The Executive module provides the following implementations:
+//!
+//! - `ExecuteBlock`: Trait that can be used to execute a block.
+//! - `Executive`: Type that can be used to make the SRML available from the runtime.
+//!
+//! ## Usage
+//!
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+//!
+//! ### Example
+//!
+//! `Executive` type declaration from the node template.
+//!
+//! ```
+//! # use primitives::generic;
+//! # use srml_executive as executive;
+//! # pub struct UncheckedExtrinsic {};
+//! # pub struct Header {};
+//! # type Context = system::ChainContext<Runtime>;
+//! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+//! # pub type Balances = u64;
+//! # pub type AllModules = u64;
+//! # pub enum Runtime {};
+//! /// Executive: handles dispatch to the various modules.
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -23,7 +70,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, Hash, As, Digest, NumberFor, Block as BlockT, OffchainWorker
+	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -48,9 +95,9 @@ mod internal {
 	}
 }
 
-/// Something that can be used to execute a block.
+/// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
-	/// Actually execute all transitioning for `block`.
+	/// Actually execute all transitions for `block`.
 	fn execute_block(block: Block);
 }
 
@@ -100,20 +147,20 @@ impl<
 	fn initial_checks(block: &Block) {
 		let header = block.header();
 
-		// check parent_hash is correct.
+		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
 		assert!(
 			n > System::BlockNumber::zero() && <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
-		// check transaction trie root represents the transactions.
+		// Check that transaction trie root represents the transactions.
 		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
 		header.extrinsics_root().check_equal(&xts_root);
 		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
-	/// Actually execute all transitioning for `block`.
+	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		Self::initialize_block(block.header());
 
@@ -128,11 +175,11 @@ impl<
 		Self::final_checks(&header);
 	}
 
-	/// Execute given extrinsics and take care of post-extrinsics book-keeping
+	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
-		// post-extrinsics book-keeping.
+		// post-extrinsics book-keeping
 		<system::Module<System>>::note_finished_extrinsics();
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
@@ -143,7 +190,7 @@ impl<
 		<system::Module<System>>::note_finished_extrinsics();
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(<system::Module<System>>::block_number());
 
-		// setup extrinsics
+		// set up extrinsics
 		<system::Module<System>>::derive_extrinsics();
 		<system::Module<System>>::finalize()
 	}
@@ -180,7 +227,7 @@ impl<
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
-		// Verify the signature is good.
+		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the size of the block if that extrinsic is applied.
@@ -195,7 +242,7 @@ impl<
 				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 
-			// pay any fees.
+			// pay any fees
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
@@ -204,13 +251,13 @@ impl<
 			<system::Module<System>>::inc_account_nonce(sender);
 		}
 
-		// make sure to `note_extrinsic` only after we know it's going to be executed
+		// Make sure to `note_extrinsic` only after we know it's going to be executed
 		// to prevent it from leaking in storage.
 		if let Some(encoded) = to_note {
 			<system::Module<System>>::note_extrinsic(encoded);
 		}
 
-		// decode parameters and dispatch
+		// Decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -222,10 +269,10 @@ impl<
 	}
 
 	fn final_checks(header: &System::Header) {
-		// remove temporaries.
+		// remove temporaries
 		let new_header = <system::Module<System>>::finalize();
 
-		// check digest.
+		// check digest
 		assert_eq!(
 			header.digest().logs().len(),
 			new_header.digest().logs().len(),
@@ -238,15 +285,15 @@ impl<
 		}
 
 		// check storage root.
-		let storage_root = System::Hashing::storage_root();
+		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
-		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
+		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
 	/// Check a given transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	///
-	/// Changes made to the storage should be discarded.
+	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		// Note errors > 0 are from ApplyError
 		const UNKNOWN_ERROR: i8 = -127;
@@ -267,30 +314,29 @@ impl<
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
-			// pay any fees.
+			// pay any fees
 			if Payment::make_payment(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
 			// check index
-			let mut expected_index = <system::Module<System>>::account_nonce(sender);
+			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if index < &expected_index {
 				return TransactionValidity::Invalid(ApplyError::Stale as i8)
 			}
-			if *index > expected_index + As::sa(256) {
-				return TransactionValidity::Unknown(ApplyError::Future as i8)
-			}
 
-			let mut deps = Vec::new();
-			while expected_index < *index {
-				deps.push((sender, expected_index).encode());
-				expected_index = expected_index + One::one();
-			}
+			let index = *index;
+			let provides = vec![(sender, index).encode()];
+			let requires = if expected_index < index {
+				vec![(sender, index - One::one()).encode()]
+			} else {
+				vec![]
+			};
 
 			TransactionValidity::Valid {
 				priority: encoded_len as TransactionPriority,
-				requires: deps,
-				provides: vec![(sender, *index).encode()],
+				requires,
+				provides,
 				longevity: TransactionLongevity::max_value(),
 			}
 		} else {
@@ -319,7 +365,7 @@ mod tests {
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime {
@@ -397,7 +443,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+					state_root: hex!("4c10fddf15e63c91ff2aa13ab3a9b7f6b19938d533829489e72ba40278a08fac").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

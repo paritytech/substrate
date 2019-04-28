@@ -43,9 +43,9 @@ use crate::ready::ReadyTransactions;
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Imported<Hash, Ex> {
-	/// Transaction was successfuly imported to Ready queue.
+	/// Transaction was successfully imported to Ready queue.
 	Ready {
-		/// Hash of transaction that was successfuly imported.
+		/// Hash of transaction that was successfully imported.
 		hash: Hash,
 		/// Transactions that got promoted from the Future queue.
 		promoted: Vec<Hash>,
@@ -54,9 +54,9 @@ pub enum Imported<Hash, Ex> {
 		/// Transactions removed from the Ready pool (replaced).
 		removed: Vec<Arc<Transaction<Hash, Ex>>>,
 	},
-	/// Transaction was successfuly imported to Future queue.
+	/// Transaction was successfully imported to Future queue.
 	Future {
-		/// Hash of transaction that was successfuly imported.
+		/// Hash of transaction that was successfully imported.
 		hash: Hash,
 	}
 }

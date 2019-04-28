@@ -39,7 +39,7 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
+	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
 	path::{Path, PathBuf}, str::FromStr,
 };
 
@@ -404,6 +404,7 @@ where
 	config.database_path =
 		db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	config.database_cache_size = cli.database_cache_size;
+	config.state_cache_size = cli.state_cache_size;
 	config.pruning = match cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
@@ -475,6 +476,20 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
+	let is_dev = cli.shared_params.dev;
+	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
+		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+		None
+	} else {
+		Some(vec![
+			"http://localhost:*".into(),
+			"http://127.0.0.1:*".into(),
+			"https://localhost:*".into(),
+			"https://127.0.0.1:*".into(),
+			"https://polkadot.js.org".into(),
+			"https://substrate-ui.parity.io".into(),
+		])
+	});
 
 	// Override telemetry
 	if cli.no_telemetry {
@@ -668,10 +683,17 @@ where
 		}
 	}
 
-	fs::remove_dir_all(&db_path)?;
-	println!("{:?} removed.", &db_path);
-
-	Ok(())
+	match fs::remove_dir_all(&db_path) {
+		Result::Ok(_) => {
+			println!("{:?} removed.", &db_path);
+			Ok(())
+		},
+		Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+			println!("{:?} did not exist.", &db_path);
+			Ok(())
+		},
+		Result::Err(err) => Result::Err(err.into())
+	}
 }
 
 fn parse_address(
@@ -723,10 +745,10 @@ fn init_logger(pattern: &str) {
 	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse(&lvl);
+		builder.parse_filters(&lvl);
 	}
 
-	builder.parse(pattern);
+	builder.parse_filters(pattern);
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 

@@ -1,12 +1,12 @@
 [package]
 name = "node-template"
 version = "1.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Anonymous"]
 build = "build.rs"
 edition = "2018"
 
 [[bin]]
-name = "template-node"
+name = "node-template"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,7 +17,6 @@ log = "0.4"
 tokio = "0.1"
 exit-future = "0.1"
 parking_lot = "0.7.1"
-hex-literal = "0.1"
 parity-codec = "3.3"
 trie-root = "0.12.2"
 sr-io = { path = "../core/sr-io" }

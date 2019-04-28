@@ -204,8 +204,24 @@ impl Network<Block> for MessageRouting {
 		})
 	}
 
+	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
+
+	}
+
 	fn announce(&self, _block: Hash) {
 
+	}
+}
+
+#[derive(Clone)]
+struct Exit;
+
+impl Future for Exit {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<(), ()> {
+		Ok(Async::NotReady)
 	}
 }
 
@@ -355,18 +371,24 @@ fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
 
 // run the voters to completion. provide a closure to be invoked after
 // the voters are spawned but before blocking on them.
-fn run_to_completion_with<F: FnOnce()>(
+fn run_to_completion_with<F>(
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
 	peers: &[AuthorityKeyring],
-	before_waiting: F,
-) -> u64 {
+	with: F,
+) -> u64 where
+	F: FnOnce(current_thread::Handle) -> Option<Box<Future<Item=(),Error=()>>>
+{
 	use parking_lot::RwLock;
 
-	let mut finality_notifications = Vec::new();
+	let mut wait_for = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	let highest_finalized = Arc::new(RwLock::new(0));
+
+	if let Some(f) = (with)(runtime.handle()) {
+		wait_for.push(f);
+	};
 
 	for (peer_id, key) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
@@ -379,31 +401,38 @@ fn run_to_completion_with<F: FnOnce()>(
 				link,
 			)
 		};
-		finality_notifications.push(
-			client.finality_notification_stream()
-				.take_while(move |n| {
-					let mut highest_finalized = highest_finalized.write();
-					if *n.header.number() > *highest_finalized {
-						*highest_finalized = *n.header.number();
-					}
-					Ok(n.header.number() < &blocks)
-				})
-				.for_each(|_| Ok(()))
+
+		wait_for.push(
+			Box::new(
+				client.finality_notification_stream()
+					.take_while(move |n| {
+						let mut highest_finalized = highest_finalized.write();
+						if *n.header.number() > *highest_finalized {
+							*highest_finalized = *n.header.number();
+						}
+						Ok(n.header.number() < &blocks)
+					})
+					.collect()
+					.map(|_| ())
+			)
 		);
+
 		fn assert_send<T: Send>(_: &T) { }
 
-		let voter = run_grandpa(
-			Config {
+		let grandpa_params = GrandpaParams {
+			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
 				local_key: Some(Arc::new(key.clone().into())),
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link,
-			MessageRouting::new(net.clone(), peer_id),
-			InherentDataProviders::new(),
-			futures::empty(),
-		).expect("all in order with client and network");
+			link: link,
+			network: MessageRouting::new(net.clone(), peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: Exit,
+			telemetry_on_connect: None,
+		};
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 		assert_send(&voter);
 
@@ -411,7 +440,7 @@ fn run_to_completion_with<F: FnOnce()>(
 	}
 
 	// wait for all finalized on each.
-	let wait_for = ::futures::future::join_all(finality_notifications)
+	let wait_for = ::futures::future::join_all(wait_for)
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -419,23 +448,20 @@ fn run_to_completion_with<F: FnOnce()>(
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
 		.map_err(|_| ());
 
-	(before_waiting)();
-
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 
 	let highest_finalized = *highest_finalized.read();
-
 	highest_finalized
 }
 
 fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[AuthorityKeyring]) -> u64 {
-	run_to_completion_with(blocks, net, peers, || {})
+	run_to_completion_with(blocks, net, peers, |_| None)
 }
 
 #[test]
@@ -462,7 +488,7 @@ fn finalize_3_voters_no_observers() {
 }
 
 #[test]
-fn finalize_3_voters_1_observer() {
+fn finalize_3_voters_1_full_observer() {
 	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
 	let voters = make_ids(peers);
 
@@ -493,18 +519,21 @@ fn finalize_3_voters_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let voter = run_grandpa(
-			Config {
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link,
-			MessageRouting::new(net.clone(), peer_id),
-			InherentDataProviders::new(),
-			futures::empty(),
-		).expect("all in order with client and network");
+			link: link,
+			network: MessageRouting::new(net.clone(), peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: Exit,
+			telemetry_on_connect: None,
+		};
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 		runtime.spawn(voter);
 	}
@@ -515,7 +544,7 @@ fn finalize_3_voters_1_observer() {
 		.map_err(|_| ());
 
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().route_fast(); Ok(()) })
+		.for_each(move |_| { net.lock().sync_without_disconnects(); Ok(()) })
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -523,7 +552,7 @@ fn finalize_3_voters_1_observer() {
 }
 
 #[test]
-fn transition_3_voters_twice_1_observer() {
+fn transition_3_voters_twice_1_full_observer() {
 	let _ = env_logger::try_init();
 	let peers_a = &[
 		AuthorityKeyring::Alice,
@@ -655,18 +684,20 @@ fn transition_3_voters_twice_1_observer() {
 					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
-		let voter = run_grandpa(
-			Config {
+		let grandpa_params = GrandpaParams {
+			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link,
-			MessageRouting::new(net.clone(), peer_id),
-			InherentDataProviders::new(),
-			futures::empty(),
-		).expect("all in order with client and network");
+			link: link,
+			network: MessageRouting::new(net.clone(), peer_id),
+			inherent_data_providers: InherentDataProviders::new(),
+			on_exit: Exit,
+			telemetry_on_connect: None,
+		};
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
 		runtime.spawn(voter);
 	}
@@ -680,7 +711,7 @@ fn transition_3_voters_twice_1_observer() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().route_fast();
+			net.lock().sync_without_disconnects();
 			Ok(())
 		})
 		.map(|_| ())
@@ -789,7 +820,7 @@ fn sync_justifications_on_change_blocks() {
 
 	// the last peer should get the justification by syncing from other peers
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
-		net.lock().route_fast();
+		net.lock().sync_without_disconnects();
 	}
 }
 
@@ -890,7 +921,7 @@ fn force_change_to_new_set() {
 	let net = Arc::new(Mutex::new(net));
 
 	let runner_net = net.clone();
-	let add_blocks = move || {
+	let add_blocks = move |_| {
 		net.lock().peer(0).push_blocks(1, false);
 
 		{
@@ -922,6 +953,8 @@ fn force_change_to_new_set() {
 			assert_eq!(set.current(), (1, voters.as_slice()));
 			assert_eq!(set.pending_changes().count(), 0);
 		}
+
+		None
 	};
 
 	// it will only finalize if the forced transition happens.
@@ -1014,4 +1047,241 @@ fn test_bad_justification() {
 		block_import.import_block(block(), HashMap::new()).unwrap(),
 		ImportResult::AlreadyInChain
 	);
+}
+
+#[test]
+fn voter_persists_its_votes() {
+	use std::iter::FromIterator;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use futures::future;
+	use futures::sync::mpsc;
+
+	let _ = env_logger::try_init();
+
+	// we have two authorities but we'll only be running the voter for alice
+	// we are going to be listening for the prevotes it casts
+	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let voters = make_ids(peers);
+
+	// alice has a chain with 20 blocks
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 20,
+			   "Peer #{} failed to sync", 0);
+
+	let mut runtime = current_thread::Runtime::new().unwrap();
+
+	let client = net.peer(0).client().clone();
+	let net = Arc::new(Mutex::new(net));
+
+	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+
+	// startup a grandpa voter for alice but also listen for messages on a
+	// channel. whenever a message is received the voter is restarted. when the
+	// sender is dropped the voter is stopped.
+	{
+		let net = net.clone();
+
+		let voter = future::loop_fn(voter_rx, move |rx| {
+			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
+			let link = link.lock().take().unwrap();
+
+			let grandpa_params = GrandpaParams {
+				config: Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					justification_period: 32,
+					local_key: Some(Arc::new(peers[0].clone().into())),
+					name: Some(format!("peer#{}", 0)),
+				},
+				link: link,
+				network: MessageRouting::new(net.clone(), 0),
+				inherent_data_providers: InherentDataProviders::new(),
+				on_exit: Exit,
+				telemetry_on_connect: None,
+			};
+			let mut voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
+
+			let voter = future::poll_fn(move || {
+				// we need to keep the block_import alive since it owns the
+				// sender for the voter commands channel, if that gets dropped
+				// then the voter will stop
+				let _block_import = _block_import.clone();
+				voter.poll()
+			});
+
+			voter.select2(rx.into_future()).then(|res| match res {
+				Ok(future::Either::A(x)) => {
+					panic!("voter stopped unexpectedly: {:?}", x);
+				},
+				Ok(future::Either::B(((Some(()), rx), _))) => {
+					Ok(future::Loop::Continue(rx))
+				},
+				Ok(future::Either::B(((None, _), _))) => {
+					Ok(future::Loop::Break(()))
+				},
+				Err(future::Either::A(err)) => {
+					panic!("unexpected error: {:?}", err);
+				},
+				Err(future::Either::B(..)) => {
+					// voter_rx dropped, stop the voter.
+					Ok(future::Loop::Break(()))
+				},
+			})
+		});
+
+		runtime.spawn(voter);
+	}
+
+	let (exit_tx, exit_rx) = futures::sync::oneshot::channel::<()>();
+
+	// create the communication layer for bob, but don't start any
+	// voter. instead we'll listen for the prevote that alice casts
+	// and cast our own manually
+	{
+		let config = Config {
+			gossip_duration: TEST_GOSSIP_DURATION,
+			justification_period: 32,
+			local_key: Some(Arc::new(peers[1].clone().into())),
+			name: Some(format!("peer#{}", 1)),
+		};
+		let routing = MessageRouting::new(net.clone(), 1);
+		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone(), Exit);
+		runtime.block_on(routing_work).unwrap();
+
+		let (round_rx, round_tx) = network.round_communication(
+			communication::Round(1),
+			communication::SetId(0),
+			Arc::new(VoterSet::from_iter(voters)),
+			Some(config.local_key.unwrap()),
+			HasVoted::No,
+		);
+
+		let round_tx = Arc::new(Mutex::new(round_tx));
+		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
+
+		let net = net.clone();
+		let state = AtomicUsize::new(0);
+
+		runtime.spawn(round_rx.for_each(move |signed| {
+			if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+				// the first message we receive should be a prevote from alice.
+				let prevote = match signed.message {
+					grandpa::Message::Prevote(prevote) => prevote,
+					_ => panic!("voter should prevote."),
+				};
+
+				// its chain has 20 blocks and the voter targets 3/4 of the
+				// unfinalized chain, so the vote should be for block 15
+				assert!(prevote.target_number == 15);
+
+				// we push 20 more blocks to alice's chain
+				net.lock().peer(0).push_blocks(20, false);
+				net.lock().sync();
+
+				assert_eq!(net.lock().peer(0).client().info().unwrap().chain.best_number, 40,
+						   "Peer #{} failed to sync", 0);
+
+				let block_30_hash =
+					net.lock().peer(0).client().backend().blockchain().hash(30).unwrap().unwrap();
+
+				// we restart alice's voter
+				voter_tx.unbounded_send(()).unwrap();
+
+				// and we push our own prevote for block 30
+				let prevote = grandpa::Prevote {
+					target_number: 30,
+					target_hash: block_30_hash,
+				};
+
+				round_tx.lock().start_send(grandpa::Message::Prevote(prevote)).unwrap();
+
+			} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+				// the next message we receive should be our own prevote
+				let prevote = match signed.message {
+					grandpa::Message::Prevote(prevote) => prevote,
+					_ => panic!("We should receive our own prevote."),
+				};
+
+				// targeting block 30
+				assert!(prevote.target_number == 30);
+
+				// after alice restarts it should send its previous prevote
+				// therefore we won't ever receive it again since it will be a
+				// known message on the gossip layer
+
+			} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+				// we then receive a precommit from alice for block 15
+				// even though we casted a prevote for block 30
+				let precommit = match signed.message {
+					grandpa::Message::Precommit(precommit) => precommit,
+					_ => panic!("voter should precommit."),
+				};
+
+				assert!(precommit.target_number == 15);
+
+				// signal exit
+				exit_tx.clone().lock().take().unwrap().send(()).unwrap();
+			}
+
+			Ok(())
+		}).map_err(|_| ()));
+	}
+
+	let net = net.clone();
+	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		.for_each(move |_| {
+			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
+			net.lock().sync_without_disconnects();
+			Ok(())
+		})
+		.map(|_| ())
+		.map_err(|_| ());
+
+	let exit = exit_rx.into_future().map(|_| ()).map_err(|_| ());
+
+	runtime.block_on(drive_to_completion.select(exit).map(|_| ()).map_err(|_| ())).unwrap();
+}
+
+#[test]
+fn finalize_3_voters_1_light_observer() {
+	let _ = env_logger::try_init();
+	let authorities = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let voters = make_ids(authorities);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	for i in 0..4 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 20,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	let link = net.lock().peer(3).data.lock().take().expect("link initialized on startup; qed");
+
+	let finality_notifications = net.lock().peer(3).client().finality_notification_stream()
+		.take_while(|n| Ok(n.header.number() < &20))
+		.collect();
+
+	run_to_completion_with(20, net.clone(), authorities, |executor| {
+		executor.spawn(
+			run_grandpa_observer(
+				Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					justification_period: 32,
+					local_key: None,
+					name: Some("observer".to_string()),
+				},
+				link,
+				MessageRouting::new(net.clone(), 3),
+				Exit,
+			).unwrap()
+		).unwrap();
+
+		Some(Box::new(finality_notifications.map(|_| ())))
+	});
 }

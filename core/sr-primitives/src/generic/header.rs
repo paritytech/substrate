@@ -17,7 +17,7 @@
 //! Generic implementation of a block header.
 
 #[cfg(feature = "std")]
-use serde_derive::Serialize;
+use serde::Serialize;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
 use crate::traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
