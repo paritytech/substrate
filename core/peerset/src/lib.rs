@@ -19,12 +19,12 @@
 
 mod slots;
 
+use crate::slots::{PeerMut, SlotType, SlotState, Slots};
 use std::collections::VecDeque;
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
-use log::trace;
+use log::{error, trace};
 use lru_cache::LruCache;
-use slots::{SlotType, SlotState, Slots};
 use serde_json::json;
 
 const PEERSET_SCORES_CACHE_SIZE: usize = 1000;
@@ -176,11 +176,15 @@ impl Peerset {
 		};
 
 		for peer_id in config.reserved_nodes {
-			peerset.data.discovered.add_peer(peer_id, SlotType::Reserved);
+			if let PeerMut::Vacant(p) = peerset.data.discovered.peer_mut(&peer_id) {
+				let _ = p.insert(SlotType::Reserved);
+			}
 		}
 
 		for peer_id in config.bootnodes {
-			peerset.data.discovered.add_peer(peer_id, SlotType::Common);
+			if let PeerMut::Vacant(p) = peerset.data.discovered.peer_mut(&peer_id) {
+				let _ = p.insert(SlotType::Common);
+			}
 		}
 
 		peerset.alloc_slots();
@@ -188,55 +192,61 @@ impl Peerset {
 	}
 
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
-		// Nothing more to do if we're already connected.
-		if self.data.in_slots.contains(&peer_id) {
-			self.data.in_slots.mark_reserved(&peer_id);
-			return;
-		}
+		match (self.data.in_slots.peer_mut(&peer_id), self.data.out_slots.peer_mut(&peer_id),
+			self.data.discovered.peer_mut(&peer_id)) {
 
-		match self.data.out_slots.add_peer(peer_id, SlotType::Reserved) {
-			SlotState::Added(peer_id) => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&peer_id);
+			// If we already know about this node, mark it as reserved.
+			(PeerMut::Vacant(_), PeerMut::Occupied(mut entry), PeerMut::Vacant(_)) |
+			(PeerMut::Occupied(mut entry), PeerMut::Vacant(_), PeerMut::Vacant(_)) |
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), PeerMut::Occupied(mut entry)) =>
+				entry.mark_reserved(),
 
-				// notify that connection has been made
-				trace!(target: "peerset", "Connecting to new reserved peer {}", peer_id);
-				self.message_queue.push_back(Message::Connect(peer_id));
-				return;
+			// If we don't know about this node, insert it in discovered.
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), PeerMut::Vacant(entry)) => {
+				let _ = entry.insert(SlotType::Reserved);
 			},
-			SlotState::Swaped { removed, added } => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&added);
-				// let's add the peer we disconnected from to the discovered list again
-				self.data.discovered.add_peer(removed.clone(), SlotType::Common);
-				// swap connections
-				trace!(target: "peerset", "Connecting to new reserved peer {}, dropping {}", added, removed);
-				self.message_queue.push_back(Message::Drop(removed));
-				self.message_queue.push_back(Message::Connect(added));
-			}
-			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
-				return;
-			}
-			SlotState::MaxCapacity(peer_id) => {
-				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
-				return;
-			}
-		}
+
+			_ => error!(target: "peerset", "State mismatch: node {:?} in more than one list", peer_id)
+		};
+
+		// Now refresh the slots.
+		self.alloc_slots();
 	}
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
-		self.data.in_slots.mark_not_reserved(&peer_id);
-		self.data.out_slots.mark_not_reserved(&peer_id);
-		self.data.discovered.mark_not_reserved(&peer_id);
-		if self.data.reserved_only {
-			if self.data.in_slots.remove_peer(&peer_id) || self.data.out_slots.remove_peer(&peer_id) {
-				// insert peer back into discovered list
-				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
+		match (self.data.in_slots.peer_mut(&peer_id), self.data.out_slots.peer_mut(&peer_id),
+			self.data.reserved_only, self.data.discovered.peer_mut(&peer_id)) {
+
+			// If we are not in reserved-only mode, simply transition the node to not reserved.
+			(PeerMut::Vacant(_), PeerMut::Occupied(mut entry), false, PeerMut::Vacant(_)) |
+			(PeerMut::Occupied(mut entry), PeerMut::Vacant(_), false, PeerMut::Vacant(_)) =>
+				entry.mark_not_reserved(),
+
+			// If we know about the node without being connected to it, just transition.
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), _, PeerMut::Occupied(mut entry)) =>
+				entry.mark_not_reserved(),
+
+			// When we add a node as reserved, we add to the list. Theoretically, it never leaves
+			// the state.
+			// However it is possible that we reach a situation where we don't know about a
+			// reserved node in case the discovered list was completely full of reserved nodes when
+			// we tried to add the node as reserved.
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), _, PeerMut::Vacant(_)) => {},
+
+			// If we are connected to this peer and in reserved-only mode, disconnect.
+			(PeerMut::Vacant(_), PeerMut::Occupied(conn_entry), true, PeerMut::Vacant(disc_entry)) |
+			(PeerMut::Occupied(conn_entry), PeerMut::Vacant(_), true, PeerMut::Vacant(disc_entry)) => {
+				debug_assert!(conn_entry.is_reserved());
+				conn_entry.remove();
+				// Insert peer back into discovered list.
+				let _ = disc_entry.insert(SlotType::Common);
 				self.message_queue.push_back(Message::Drop(peer_id));
-				// call alloc_slots again, cause we may have some reserved peers in discovered list
-				// waiting for the slot that was just cleared
+				// Call alloc_slots again, cause we may have some reserved peers in discovered list
+				// waiting for the slot that was just cleared.
 				self.alloc_slots();
-			}
+			},
+
+			_ => error!(target: "peerset", "State mismatch: node {:?} in more than one list", peer_id)
 		}
 	}
 
@@ -244,9 +254,14 @@ impl Peerset {
 		// Disconnect non-reserved nodes.
 		self.data.reserved_only = reserved_only;
 		if self.data.reserved_only {
-			for peer_id in self.data.in_slots.clear_common_slots().into_iter().chain(self.data.out_slots.clear_common_slots().into_iter()) {
-				// insert peer back into discovered list
-				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
+			for peer_id in self.data.in_slots.clear_common_slots().chain(self.data.out_slots.clear_common_slots()) {
+				// Insert peer back into discovered list.
+				if let PeerMut::Vacant(disc_entry) = self.data.discovered.peer_mut(&peer_id) {
+					let _ = disc_entry.insert(SlotType::Common);
+				} else {
+					error!(target: "peerset", "State mismatch: connected node {:?} was also in \
+						discovered", peer_id);
+				}
 				self.message_queue.push_back(Message::Drop(peer_id));
 			}
 		} else {
@@ -267,36 +282,46 @@ impl Peerset {
 		};
 
 		if score < 0 {
-			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
-			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
-				self.data.in_slots.remove_peer(&peer_id);
-				self.data.out_slots.remove_peer(&peer_id);
-				self.message_queue.push_back(Message::Drop(peer_id));
+			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method.
+			match (self.data.in_slots.peer_mut(&peer_id), self.data.out_slots.peer_mut(&peer_id)) {
+				(PeerMut::Occupied(entry), PeerMut::Vacant(_)) |
+				(PeerMut::Vacant(_), PeerMut::Occupied(entry)) => {
+					entry.remove();
+					self.message_queue.push_back(Message::Drop(peer_id));
+				}
+				_ => {}
 			}
 		}
 	}
 
 	fn alloc_slots(&mut self) {
-		while let Some((peer_id, slot_type)) = self.data.discovered.pop_most_important_peer(self.data.reserved_only) {
-			match self.data.out_slots.add_peer(peer_id, slot_type) {
-				SlotState::Added(peer_id) => {
-					trace!(target: "peerset", "Connecting to new peer {}", peer_id);
-					self.message_queue.push_back(Message::Connect(peer_id));
+		while let Some(disc_entry) = self.data.discovered.most_important_peer(self.data.reserved_only) {
+			let out_entry = match self.data.out_slots.peer_mut(disc_entry.peer_id()) {
+				PeerMut::Vacant(e) => e,
+				PeerMut::Occupied(_) => {
+					error!(target: "peerset", "State mismatch: discovered node to alloc {:?} is \
+						already connected", disc_entry.peer_id());
+					return;
+				}
+			};
+
+			match out_entry.insert(disc_entry.slot_type()) {
+				SlotState::MaxCapacity(_) => break,
+				SlotState::Added(out_entry) => {
+					trace!(target: "peerset", "Connecting to new peer {}", out_entry.peer_id());
+					self.message_queue.push_back(Message::Connect(out_entry.peer_id().clone()));
+					disc_entry.remove();
 				},
 				SlotState::Swaped { removed, added } => {
 					// insert peer back into discovered list
-					trace!(target: "peerset", "Connecting to new peer {}, dropping {}", added, removed);
-					self.data.discovered.add_peer(removed.clone(), SlotType::Common);
-					self.message_queue.push_back(Message::Drop(removed));
-					self.message_queue.push_back(Message::Connect(added));
+					trace!(target: "peerset", "Connecting to new peer {}, dropping {}", added.peer_id(), removed);
+					self.message_queue.push_back(Message::Drop(removed.clone()));
+					self.message_queue.push_back(Message::Connect(added.peer_id().clone()));
+					disc_entry.remove();
+					if let PeerMut::Vacant(disc_entry) = self.data.discovered.peer_mut(&removed) {
+						let _ = disc_entry.insert(SlotType::Common);
+					}
 				}
-				SlotState::Upgraded(_) | SlotState::AlreadyExists(_) => {
-					// TODO: we should never reach this point
-				},
-				SlotState::MaxCapacity(peer_id) => {
-					self.data.discovered.add_peer(peer_id, slot_type);
-					break;
-				},
 			}
 		}
 	}
@@ -316,49 +341,68 @@ impl Peerset {
 			"Incoming {:?}\nin_slots={:?}\nout_slots={:?}",
 			peer_id, self.data.in_slots, self.data.out_slots
 		);
-		// if `reserved_only` is set, but this peer is not a part of our discovered list,
-		// a) it is not reserved, so we reject the connection
-		// b) we are already connected to it, so we reject the connection
-		if self.data.reserved_only && !self.data.discovered.is_reserved(&peer_id) {
-			self.message_queue.push_back(Message::Reject(index));
-			return;
-		}
 
-		// check if we are already connected to this peer
-		if self.data.out_slots.contains(&peer_id) {
-			// we are already connected. in this case we do not answer
-			return;
-		}
+		match (self.data.in_slots.peer_mut(&peer_id), self.data.out_slots.peer_mut(&peer_id),
+			self.data.reserved_only, self.data.discovered.peer_mut(&peer_id)) {
 
-		let slot_type = if self.data.reserved_only {
-			SlotType::Reserved
-		} else {
-			SlotType::Common
-		};
+			// If we are already connected to this peer, do not answer.
+			(PeerMut::Vacant(_), PeerMut::Occupied(_), _, PeerMut::Vacant(_)) |
+			(PeerMut::Occupied(_), PeerMut::Vacant(_), _, PeerMut::Vacant(_)) => {},
 
-		match self.data.in_slots.add_peer(peer_id, slot_type) {
-			SlotState::Added(peer_id) => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&peer_id);
-				self.message_queue.push_back(Message::Accept(index));
-				return;
-			},
-			SlotState::Swaped { removed, added } => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&added);
-				// swap connections.
-				self.message_queue.push_back(Message::Drop(removed));
-				self.message_queue.push_back(Message::Accept(index));
-			},
-			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
-				// we are already connected. in this case we do not answer
-				return;
-			},
-			SlotState::MaxCapacity(peer_id) => {
-				self.data.discovered.add_peer(peer_id, slot_type);
-				self.message_queue.push_back(Message::Reject(index));
-				return;
-			},
+			// If `reserved_only` is set, but this peer is not reserved in our discovered list,
+			// we reject it.
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), true, PeerMut::Occupied(ref disc_entry))
+				if !disc_entry.is_reserved() => self.message_queue.push_back(Message::Reject(index)),
+
+			// If `reserved_only` is set, but this peer is not known to us, we reject it.
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), true, PeerMut::Vacant(_)) =>
+				self.message_queue.push_back(Message::Reject(index)),
+
+			// Try insert in the incoming peers.
+			(PeerMut::Vacant(in_entry), PeerMut::Vacant(_), false, _) => {
+				match in_entry.insert(SlotType::Common) {
+					SlotState::Added(_) => self.message_queue.push_back(Message::Accept(index)),
+					SlotState::Swaped { removed, .. } => {
+						// Swap connections.
+						if let PeerMut::Vacant(disc_entry) = self.data.discovered.peer_mut(&removed) {
+							let _ = disc_entry.insert(SlotType::Common);
+						}
+						self.message_queue.push_back(Message::Drop(removed));
+						self.message_queue.push_back(Message::Accept(index));
+					},
+					SlotState::MaxCapacity(_) => {
+						// If we're full, add the identity to the discovered list, so that we
+						// may connect to it later.
+						if let PeerMut::Vacant(disc_entry) = self.data.discovered.peer_mut(&peer_id) {
+							let _ = disc_entry.insert(SlotType::Common);
+						}
+						self.message_queue.push_back(Message::Reject(index));
+					},
+				}
+			}
+
+			// Try insert in the incoming peers and remove from the discovery.
+			(PeerMut::Vacant(in_entry), PeerMut::Vacant(_), _, PeerMut::Occupied(disc_entry)) => {
+				match in_entry.insert(disc_entry.slot_type()) {
+					SlotState::Added(_) => {
+						disc_entry.remove();
+						self.message_queue.push_back(Message::Accept(index));
+					}
+					SlotState::Swaped { removed, .. } => {
+						disc_entry.remove();
+						if let PeerMut::Vacant(disc_entry) = self.data.discovered.peer_mut(&removed) {
+							let _ = disc_entry.insert(SlotType::Common);
+						}
+						self.message_queue.push_back(Message::Drop(removed));
+						self.message_queue.push_back(Message::Accept(index));
+					}
+					SlotState::MaxCapacity(_) =>
+						self.message_queue.push_back(Message::Reject(index))
+				}
+			}
+
+			_ => error!(target: "peerset", "State mismatch: peer {:?} in more than one \
+				list", peer_id)
 		}
 	}
 
@@ -372,20 +416,35 @@ impl Peerset {
 			"Dropping {:?}\nin_slots={:?}\nout_slots={:?}",
 			peer_id, self.data.in_slots, self.data.out_slots
 		);
-		// Automatically connect back if reserved.
-		if self.data.in_slots.is_reserved(&peer_id) || self.data.out_slots.is_reserved(&peer_id) {
-			self.message_queue.push_back(Message::Connect(peer_id));
-			return;
+
+		match (self.data.in_slots.peer_mut(&peer_id), self.data.out_slots.peer_mut(&peer_id),
+			self.data.discovered.peer_mut(&peer_id)) {
+
+			// Automatically connect back if reserved.
+			(PeerMut::Occupied(ref entry), PeerMut::Vacant(_), PeerMut::Vacant(_)) |
+			(PeerMut::Vacant(_), PeerMut::Occupied(ref entry), PeerMut::Vacant(_)) if entry.is_reserved() => {
+				self.message_queue.push_back(Message::Connect(peer_id));
+			}
+
+			// Otherwise, free the slot and insert into `discovered`.
+			(PeerMut::Vacant(_), PeerMut::Occupied(entry), PeerMut::Vacant(disc_entry)) |
+			(PeerMut::Occupied(entry), PeerMut::Vacant(_), PeerMut::Vacant(disc_entry)) => {
+				entry.remove();
+				let _ = disc_entry.insert(SlotType::Common);
+				self.alloc_slots();
+			}
+
+			(PeerMut::Vacant(_), PeerMut::Vacant(_), _) => {
+				error!(target: "peerset",
+					"State mismatch: reported dropped peer {:?} that we were not connected to", peer_id);
+			}
+			(PeerMut::Occupied(_), PeerMut::Occupied(_), _) |
+			(PeerMut::Occupied(_), _, PeerMut::Occupied(_)) |
+			(_, PeerMut::Occupied(_), PeerMut::Occupied(_)) => {
+				error!(target: "peerset",
+					"State mismatch: peer {:?} at the same time in multiple lists", peer_id);
+			}
 		}
-
-		// Otherwise, free the slot.
-		self.data.in_slots.remove_peer(&peer_id);
-		self.data.out_slots.remove_peer(&peer_id);
-
-		// Note: in this dummy implementation we consider that peers never expire. As soon as we
-		// are disconnected from a peer, we try again.
-		self.data.discovered.add_peer(peer_id, SlotType::Common);
-		self.alloc_slots();
 	}
 
 	/// Adds discovered peer ids to the PSM.
@@ -394,11 +453,18 @@ impl Peerset {
 	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
 	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
 		for peer_id in peer_ids {
-			if !self.data.in_slots.contains(&peer_id) && !self.data.out_slots.contains(&peer_id) && !self.data.discovered.contains(&peer_id) {
-				trace!(target: "peerset", "Discovered new peer: {:?}", peer_id);
-				self.data.discovered.add_peer(peer_id, SlotType::Common);
-			} else {
+			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
 				trace!(target: "peerset", "Discovered known peer: {:?}", peer_id);
+				continue;
+			}
+
+			match self.data.discovered.peer_mut(&peer_id) {
+				PeerMut::Vacant(entry) => {
+					trace!(target: "peerset", "Discovered new peer: {:?}", peer_id);
+					let _ = entry.insert(SlotType::Common);
+				}
+				PeerMut::Occupied(_) =>
+					trace!(target: "peerset", "Discovered known peer: {:?}", peer_id)
 			}
 		}
 

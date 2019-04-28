@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{fmt, mem};
+use std::{borrow::Cow, fmt, mem};
 use libp2p::PeerId;
 use linked_hash_map::LinkedHashMap;
 use serde_json::json;
@@ -29,24 +29,22 @@ pub enum SlotType {
 	Common,
 }
 
-/// Descibes the result of `add_peer` action.
-pub enum SlotState {
-	/// Returned when `add_peer` successfully adds a peer to the slot.
-	Added(PeerId),
-	/// Returned when we already have given peer in our list, but it is upgraded from
-	/// `Common` to `Reserved`.
-	Upgraded(PeerId),
+/// Descibes the result of the `insert` method.
+#[must_use]
+pub enum SlotState<'a> {
+	/// Returned when `insert` successfully adds a peer to the slot.
+	Added(OccupiedPeerMut<'a>),
+
 	/// Returned when we should removed a common peer to make space for a reserved peer.
 	Swaped {
 		/// Peer was removed from the list.
 		removed: PeerId,
 		/// Peer was added to the list.
-		added: PeerId,
+		added: OccupiedPeerMut<'a>,
 	},
-	/// Error returned when we are already know about given peer.
-	AlreadyExists(PeerId),
+
 	/// Error returned when list is full and no more peers can be added.
-	MaxCapacity(PeerId),
+	MaxCapacity(VacantPeerMut<'a>),
 }
 
 /// Contains all information about group of slots.
@@ -89,69 +87,62 @@ impl Slots {
 		}
 	}
 
+	/// Returns an object giving access to an entry in the `Slots`.
+	///
+	/// > **Note**: This API is similar to the `entry()` API of the standard `HashMap` container.
+	pub fn peer_mut<'a>(&'a mut self, peer_id: &'a PeerId) -> PeerMut<'a> {
+		if self.common.contains_key(peer_id) {
+			PeerMut::Occupied(OccupiedPeerMut {
+				container: self,
+				peer_id: Cow::Borrowed(peer_id),
+				reserved: false,
+			})
+
+		} else if self.reserved.contains_key(peer_id) {
+			PeerMut::Occupied(OccupiedPeerMut {
+				container: self,
+				peer_id: Cow::Borrowed(peer_id),
+				reserved: true,
+			})
+
+		} else {
+			PeerMut::Vacant(VacantPeerMut {
+				container: self,
+				peer_id: Cow::Borrowed(peer_id),
+			})
+		}
+	}
+
 	/// Returns true if one of the slots contains given peer.
 	pub fn contains(&self, peer_id: &PeerId) -> bool {
 		self.common.contains_key(peer_id) || self.reserved.contains_key(peer_id)
 	}
 
-	/// Tries to find a slot for a given peer and returns `SlotState`.
-	///
-	/// - If a peer is already inserted into reserved list or inserted or
-	/// inserted into common list and readded with the same `SlotType`,
-	/// the function returns `SlotState::AlreadyExists`
-	/// - If a peer is already inserted common list returns `SlotState::Upgraded`
-	/// - If there is no slot for a reserved peer, we try to drop one common peer
-	/// and it a new reserved one in it's place, function returns `SlotState::Swaped`
-	/// - If there is no place for a peer, function returns `SlotState::MaxCapacity`
-	/// - If the peer was simply added, `SlotState::Added` is returned
-	pub fn add_peer(&mut self, peer_id: PeerId, slot_type: SlotType) -> SlotState {
-		if self.reserved.contains_key(&peer_id) {
-			return SlotState::AlreadyExists(peer_id);
-		}
-
-		if self.common.contains_key(&peer_id) {
-			if slot_type == SlotType::Reserved {
-				self.common.remove(&peer_id);
-				self.reserved.insert(peer_id.clone(), ());
-				return SlotState::Upgraded(peer_id);
-			} else {
-				return SlotState::AlreadyExists(peer_id);
-			}
-		}
-
-		if self.max_slots == (self.common.len() + self.reserved.len()) {
-			if let SlotType::Reserved = slot_type {
-				if let Some((to_remove, _)) = self.common.pop_front() {
-					self.reserved.insert(peer_id.clone(), ());
-					return SlotState::Swaped {
-						removed: to_remove,
-						added: peer_id,
-					};
-				}
-			}
-			return SlotState::MaxCapacity(peer_id);
-		}
-
-		match slot_type {
-			SlotType::Common => self.common.insert(peer_id.clone(), ()),
-			SlotType::Reserved => self.reserved.insert(peer_id.clone(), ()),
-		};
-
-		SlotState::Added(peer_id)
-	}
-
-	/// Pops the oldest reserved peer. If none exists and `reserved_only = false` pops a common peer.
-	pub fn pop_most_important_peer(&mut self, reserved_only: bool) -> Option<(PeerId, SlotType)> {
-		if let Some((peer_id, _)) = self.reserved.pop_front() {
-			return Some((peer_id, SlotType::Reserved));
+	/// Returns the oldest reserved peer. If none exists and `reserved_only = false` pops a common peer.
+	pub fn most_important_peer(&mut self, reserved_only: bool) -> Option<OccupiedPeerMut> {
+		if let Some((peer_id, _)) = self.reserved.front() {
+			let peer_id = peer_id.clone();
+			return Some(OccupiedPeerMut {
+				container: self,
+				peer_id: Cow::Owned(peer_id),
+				reserved: true,
+			});
 		}
 
 		if reserved_only {
 			return None;
 		}
 
-		self.common.pop_front()
-			.map(|(peer_id, _)| (peer_id, SlotType::Common))
+		if let Some((peer_id, _)) = self.common.front() {
+			let peer_id = peer_id.clone();
+			return Some(OccupiedPeerMut {
+				container: self,
+				peer_id: Cow::Owned(peer_id),
+				reserved: false,
+			});
+		}
+
+		None
 	}
 
 	/// Removes all common peers from the list and returns an iterator over them.
@@ -160,36 +151,147 @@ impl Slots {
 		slots.into_iter().map(|(peer_id, _)| peer_id)
 	}
 
-	/// Marks given peer as a reserved one.
-	pub fn mark_reserved(&mut self, peer_id: &PeerId) {
-		if self.common.remove(peer_id).is_some() {
-			self.reserved.insert(peer_id.clone(), ());
-		}
-	}
-
-	/// Marks given peer as not reserved one.
-	pub fn mark_not_reserved(&mut self, peer_id: &PeerId) {
-		if self.reserved.remove(peer_id).is_some() {
-			self.common.insert(peer_id.clone(), ());
-		}
-	}
-
-	/// Removes a peer from a list and returns true if it existed.
-	pub fn remove_peer(&mut self, peer_id: &PeerId) -> bool {
-		self.common.remove(peer_id).is_some() || self.reserved.remove(peer_id).is_some()
-	}
-
-	/// Returns true if given peer is reserved.
-	pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
-		self.reserved.contains_key(peer_id)
-	}
-
 	/// Produces a JSON object containing the state of slots, for debugging purposes.
 	pub fn debug_info(&self) -> serde_json::Value {
 		json!({
 			"max_slots": self.max_slots,
 			"reserved": self.reserved.keys().map(|peer_id| peer_id.to_base58()).collect::<Vec<_>>(),
 			"common": self.common.keys().map(|peer_id| peer_id.to_base58()).collect::<Vec<_>>()
+		})
+	}
+}
+
+/// Represents an access to a `PeerId` that is either in the list or not.
+pub enum PeerMut<'a> {
+	/// `PeerId` is in the `Slots`.
+	Occupied(OccupiedPeerMut<'a>),
+	/// `PeerId` is not in the `Slots`.
+	Vacant(VacantPeerMut<'a>),
+}
+
+impl<'a> PeerMut<'a> {
+	/// If the variant is `Vacant`, returns `Some`, otherwise `None`.
+	// This method is only used in tests, but feel free to remove the `#[cfg(test)]` if you need it.
+	#[cfg(test)]
+	pub fn into_vacant(self) -> Option<VacantPeerMut<'a>> {
+		match self {
+			PeerMut::Occupied(_) => None,
+			PeerMut::Vacant(p) => Some(p),
+		}
+	}
+}
+
+/// Gives access to an existing entry in the `Slots`.
+pub struct OccupiedPeerMut<'a> {
+	container: &'a mut Slots,
+	peer_id: Cow<'a, PeerId>,
+	reserved: bool,
+}
+
+impl<'a> OccupiedPeerMut<'a> {
+	/// Returns the `PeerId` that was passed to the `peer_mut` method.
+	pub fn peer_id(&self) -> &PeerId {
+		&self.peer_id
+	}
+
+	/// Returns true if the peer is reserved.
+	pub fn is_reserved(&self) -> bool {
+		self.reserved
+	}
+
+	/// Returns the type of slot of this entry.
+	pub fn slot_type(&self) -> SlotType {
+		if self.reserved {
+			SlotType::Reserved
+		} else {
+			SlotType::Common
+		}
+	}
+
+	/// Marks the peer as a reserved one. Has no effect if it was already reserved.
+	pub fn mark_reserved(&mut self) {
+		if self.reserved {
+			return;
+		}
+
+		let was_in = self.container.common.remove(&self.peer_id);
+		debug_assert!(was_in.is_some());
+		self.container.reserved.insert(self.peer_id.as_ref().clone(), ());
+	}
+
+	/// Marks given peer as not reserved one.
+	pub fn mark_not_reserved(&mut self) {
+		if !self.reserved {
+			return;
+		}
+
+		let was_in = self.container.reserved.remove(&self.peer_id);
+		debug_assert!(was_in.is_some());
+		self.container.common.insert(self.peer_id.as_ref().clone(), ());
+	}
+
+	/// Removes the peer from the list
+	pub fn remove(self) -> VacantPeerMut<'a> {
+		if self.reserved {
+			let was_in = self.container.reserved.remove(&self.peer_id);
+			debug_assert!(was_in.is_some());
+		} else {
+			let was_in = self.container.common.remove(&self.peer_id);
+			debug_assert!(was_in.is_some());
+		}
+
+		VacantPeerMut {
+			container: self.container,
+			peer_id: self.peer_id,
+		}
+	}
+}
+
+/// Gives access to a vacant entry in the `Slots`.
+pub struct VacantPeerMut<'a> {
+	container: &'a mut Slots,
+	peer_id: Cow<'a, PeerId>,
+}
+
+impl<'a> VacantPeerMut<'a> {
+	/// Tries to find a slot for a given peer and returns `SlotState`.
+	///
+	/// - If there is no slot for a reserved peer, we try to drop one common peer
+	/// and it a new reserved one in it's place, function returns `SlotState::Swaped`.
+	/// - If there is no place for a peer, function returns `SlotState::MaxCapacity`.
+	/// - If the peer was simply added, `SlotState::Added` is returned.
+	///
+	pub fn insert(self, slot_type: SlotType) -> SlotState<'a> {
+		if self.container.max_slots == (self.container.common.len() + self.container.reserved.len()) {
+			if let SlotType::Reserved = slot_type {
+				if let Some((to_remove, _)) = self.container.common.pop_front() {
+					self.container.reserved.insert(self.peer_id.as_ref().clone(), ());
+					return SlotState::Swaped {
+						removed: to_remove,
+						added: OccupiedPeerMut {
+							container: self.container,
+							peer_id: self.peer_id,
+							reserved: true,
+						},
+					};
+				}
+			}
+
+			return SlotState::MaxCapacity(self);
+		}
+
+		match slot_type {
+			SlotType::Common => self.container.common.insert(self.peer_id.as_ref().clone(), ()),
+			SlotType::Reserved => self.container.reserved.insert(self.peer_id.as_ref().clone(), ()),
+		};
+
+		SlotState::Added(OccupiedPeerMut {
+			container: self.container,
+			peer_id: self.peer_id,
+			reserved: match slot_type {
+				SlotType::Common => false,
+				SlotType::Reserved => true,
+			},
 		})
 	}
 }
@@ -207,9 +309,9 @@ mod tests {
 		let common_peer = PeerId::random();
 		let mut slots = Slots::new(10);
 
-		slots.add_peer(reserved_peer.clone(), SlotType::Reserved);
-		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
-		slots.add_peer(common_peer.clone(), SlotType::Common);
+		let _ = slots.peer_mut(&reserved_peer).into_vacant().unwrap().insert(SlotType::Reserved);
+		let _ = slots.peer_mut(&reserved_peer2).into_vacant().unwrap().insert(SlotType::Reserved);
+		let _ = slots.peer_mut(&common_peer).into_vacant().unwrap().insert(SlotType::Common);
 
 		let expected = json!({
 			"max_slots": 10,
