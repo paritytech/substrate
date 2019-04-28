@@ -203,7 +203,7 @@ To finish installation of Substrate, jump down to <<shared-steps,shared steps>>.
 
 If you are trying to set up Substrate on Windows, you should do the following:
 
-1. First, you will need to download and install "Build Tools for Visual Studio"
+1. First, you will need to download and install "Build Tools for Visual Studio:"
 
     * You can get it at this link: https://aka.ms/buildtools
     * Run the installation file: `vs_buildtools.exe`
