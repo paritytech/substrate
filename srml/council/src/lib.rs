@@ -204,7 +204,7 @@
 //! - `tally` - The count of the yay and nay votes associated with voting on a council proposal.
 //!
 //!
-//! ### Snippet: Approve all candidates when additional empty seats are required
+//! ### Snippet: Approve all candidates when additional empty seats are available
 //!
 //! #### Existing Council Module Functionality Related to this Code Snippet
 //!
