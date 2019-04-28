@@ -293,7 +293,7 @@ mod mock;
 mod tests;
 mod phragmen;
 
-use phragmen::{elect, ElectionConfig, ACCURACY};
+use phragmen::{elect, ACCURACY, ExtendedBalance, Ratio};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -431,6 +431,10 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+type RawAssignment<T> = (<T as system::Trait>::AccountId, Ratio);
+type Assignment<T> = (<T as system::Trait>::AccountId, Ratio, BalanceOf<T>);
+type ExpoMap<T> = BTreeMap::<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
+
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
@@ -438,7 +442,8 @@ pub trait Trait: system::Trait + session::Trait {
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
 	/// TODO: #https://github.com/paritytech/substrate/pull/2205#issuecomment-483551470
-	/// The backward convert should be removed. It is currently not even used anymore.
+	/// The backward convert should be removed as the new Phragmen API returns ratio.
+	/// The post-processing needs it but will be moved to off-chain.
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
 	/// Some tokens minted.
@@ -970,16 +975,61 @@ impl<T: Trait> Module<T> {
 			<Validators<T>>::enumerate(),
 			<Nominators<T>>::enumerate(),
 			Self::slashable_balance_of,
-			ElectionConfig::<BalanceOf<T>> {
-				equalize: false,
-				tolerance: <BalanceOf<T>>::sa(10 as u64),
-				iterations: 10,
-			}
 		);
 
 		if let Some(elected_set) = maybe_elected_set {
 			let elected_stashes = elected_set.0;
 			let assignments = elected_set.1;
+
+			// helper closure.
+			let to_balance = |b: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
+			let to_votes = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
+
+			// The return value of this is safe to be converted to u64.
+			// The original balance, `b` is within the scope of u64. It is just extended to u128
+			// to be properly multiplied by a ratio, which will lead to another value
+			// less than u64 for sure. The result can then be safely passed to `to_balance`.
+			let ratio_of = |b, p| (p as ExtendedBalance) * to_votes(b) / ACCURACY;
+
+			// Compute the actual stake from nominator's ratio.
+			let mut assignments_with_stakes = assignments.iter().map(|(n, a)|(
+				n.clone(),
+				Self::slashable_balance_of(n),
+				a.iter().map(|(acc, r)| (
+					acc.clone(),
+					*r,
+					to_balance(ratio_of(Self::slashable_balance_of(n), *r)),
+				))
+				.collect::<Vec<Assignment<T>>>()
+			)).collect::<Vec<(T::AccountId, BalanceOf<T>, Vec<Assignment<T>>)>>();
+
+			// update elected candidate exposures.
+			let mut exposures = <ExpoMap<T>>::new();
+			elected_stashes
+				.iter()
+				.map(|e| (e, Self::slashable_balance_of(e)))
+				.for_each(|(e, s)| { exposures.insert(e.clone(), Exposure { own: s, total: s, others: vec![] }); });
+
+			for (n, _, assignment) in &assignments_with_stakes {
+				for (c, _, s) in assignment {
+					if let Some(expo) = exposures.get_mut(c) {
+						// NOTE: simple example where this saturates:
+						// candidate with max_value stake. 1 nominator with max_value stake.
+						// Nuked. Sadly there is not much that we can do about this.
+						// See this test: phragmen_should_not_overflow_xxx()
+						expo.total = expo.total.saturating_add(*s);
+						expo.others.push( IndividualExposure { who: n.clone(), value: *s } );
+					}
+				}
+			}
+
+			// This optimization will most likely be only applied off-chain.
+			let do_equalise = false;
+			if do_equalise {
+				let tolerance = 10 as u128;
+				let iterations = 10 as usize;
+				phragmen::equalize::<T>(&mut assignments_with_stakes, &mut exposures, tolerance, iterations);
+			}
 
 			// Clear Stakers and reduce their slash_count.
 			for v in Self::current_elected().iter() {
@@ -987,36 +1037,6 @@ impl<T: Trait> Module<T> {
 				let slash_count = <SlashCount<T>>::take(v);
 				if slash_count > 1 {
 					<SlashCount<T>>::insert(v, slash_count - 1);
-				}
-			}
-
-			// update elected candidate exposures.
-			let mut exposures = BTreeMap::<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>::new();
-			elected_stashes
-				.iter()
-				.map(|e| (e, Self::slashable_balance_of(e)))
-				.for_each(|(e, s)| { exposures.insert(e.clone(), Exposure { own: s, total: s, others: vec![] }); });
-
-			// helper closure.
-			let to_balance = |b| BalanceOf::<T>::sa(b);
-			let extend_balance = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as u128;
-
-			// This is a safe u128 to u64 conversion.
-			// The original balance, b is within the scope of u64. It is just extended to u128
-			// to be properly multiplied by a ratio, which will lead to another value
-			// less than u64 for sure. To result can the be safely passed to `to_balance`.
-			let percent_of = |b, p| ((p as u128) * extend_balance(b) / ACCURACY) as u64;
-
-			for (n, assignment) in &assignments {
-				for (c, w) in assignment {
-					let n_stake = to_balance(percent_of(Self::slashable_balance_of(n), *w as u64));
-					if let Some(expo) = exposures.get_mut(c) {
-						// NOTE: simple example where this saturates:
-						// candidate with max_value stake. 1 nominator with max_value stake.
-						// Nuked. Sadly there is not much that we can do about this.
-						expo.total = expo.total.saturating_add(n_stake);
-						expo.others.push( IndividualExposure { who: n.clone(), value: n_stake } );
-					}
 				}
 			}
 
