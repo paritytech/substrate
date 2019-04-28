@@ -16,8 +16,6 @@
 
 //! Rust implementation of the Phragmén election algorithm.
 
-// TODO: Check bond_validator closure + make them func + check exposure at the end of each test!
-
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use primitives::{PerU128};
 use primitives::traits::{Zero, Convert, Saturating};

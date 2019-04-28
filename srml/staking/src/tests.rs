@@ -1750,6 +1750,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq!(Balances::free_balance(&2), initial_balance_2 + reward.max(1));
 		// same for 10
 		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 10 + reward.max(1));
+		check_exposure_all();
 	});
 }
 
