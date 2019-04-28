@@ -14,7 +14,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-hex-literal = "0.1.0"
+hex-literal = "0.2.0"
 substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
 balances = { package = "srml-balances", path = "../balances" }

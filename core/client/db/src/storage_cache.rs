@@ -39,17 +39,40 @@ pub struct Cache<B: Block, H: Hasher> {
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
+	/// Maximum cache size available, in Bytes.
+	shared_cache_size: usize,
+	/// Used storage size, in Bytes.
+	storage_used_size: usize,
+}
+
+impl<B: Block, H: Hasher> Cache<B, H> {
+	/// Returns the used memory size of the storage cache in bytes.
+	pub fn used_storage_cache_size(&self) -> usize {
+		self.storage_used_size
+	}
 }
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
 /// Create new shared cache instance with given max memory usage.
 pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> SharedCache<B, H> {
-	let cache_items = shared_cache_size / 100; // Guestimate, potentially inaccurate
+	// we need to supply a max capacity to `LruCache`, but since
+	// we don't have any idea how large the size of each item
+	// that is stored will be we can't calculate the max amount
+	// of items properly from `shared_cache_size`.
+	//
+	// what we do instead is to supply `shared_cache_size` as the
+	// max upper bound capacity (this would only be reached if each
+	// item would be one byte).
+	// each time we store to the storage cache we verify the memory
+	// constraint and pop the lru item if space needs to be freed.
+
 	Arc::new(Mutex::new(Cache {
-		storage: LruCache::new(cache_items),
-		hashes: LruCache::new(cache_items),
+		storage: LruCache::new(shared_cache_size),
+		hashes: LruCache::new(shared_cache_size),
 		modifications: VecDeque::new(),
+		shared_cache_size: shared_cache_size,
+		storage_used_size: 0,
 	}))
 }
 
@@ -109,6 +132,33 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		}
 	}
 
+	fn storage_insert(cache: &mut Cache<B, H>, k: StorageValue, v: Option<StorageValue>) {
+		if let Some(v_) = &v {
+			while cache.storage_used_size + v_.len() > cache.shared_cache_size {
+				// pop until space constraint satisfied
+				match cache.storage.remove_lru() {
+					Some((_, Some(popped_v))) =>
+						cache.storage_used_size = cache.storage_used_size - popped_v.len(),
+					Some((_, None)) => continue,
+					None => break,
+				};
+			}
+			cache.storage_used_size = cache.storage_used_size + v_.len();
+		}
+		cache.storage.insert(k, v);
+	}
+
+	fn storage_remove(
+		storage: &mut LruCache<StorageKey, Option<StorageValue>>,
+		k: &StorageKey,
+		storage_used_size: &mut usize,
+	) {
+		let v = storage.remove(k);
+		if let Some(Some(v_)) = v {
+			*storage_used_size = *storage_used_size - v_.len();
+		}
+	}
+
 	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
@@ -139,7 +189,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = true;
 					for a in &m.storage {
 						trace!("Reverting enacted key {:?}", a);
-						cache.storage.remove(a);
+						CachingState::<H, S, B>::storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
 					}
 					false
 				} else {
@@ -155,7 +205,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = false;
 					for a in &m.storage {
 						trace!("Retracted key {:?}", a);
-						cache.storage.remove(a);
+						CachingState::<H, S, B>::storage_remove(&mut cache.storage, a, &mut cache.storage_used_size);
 					}
 					false
 				} else {
@@ -178,7 +228,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			if is_best {
 				trace!("Committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 				for (k, v) in local_cache.storage.drain() {
-					cache.storage.insert(k, v);
+					CachingState::<H, S, B>::storage_insert(cache, k, v);
 				}
 				for (k, v) in local_cache.hashes.drain() {
 					cache.hashes.insert(k, v);
@@ -198,7 +248,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				modifications.insert(k.clone());
 				if is_best {
 					cache.hashes.remove(&k);
-					cache.storage.insert(k, v);
+					CachingState::<H, S, B>::storage_insert(cache, k, v);
 				}
 			}
 			// Save modified storage. These are ordered by the block number.
@@ -417,5 +467,39 @@ mod tests {
 		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], vec![], Some(h3b.clone()), Some(3), || true);
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
 		assert!(s.storage(&key).unwrap().is_none());
+	}
+
+	#[test]
+	fn should_track_used_size_correctly() {
+		let root_parent = H256::random();
+		let shared = new_shared_cache::<Block, Blake2Hasher>(5);
+		let h0 = H256::random();
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2, 3]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 3 /* bytes */);
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 5 /* bytes */);
+	}
+
+	#[test]
+	fn should_remove_lru_items_based_on_tracking_used_size() {
+		let root_parent = H256::random();
+		let shared = new_shared_cache::<Block, Blake2Hasher>(5);
+		let h0 = H256::random();
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2, 3, 4]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 4 /* bytes */);
+
+		let key = H256::random()[..].to_vec();
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![1, 2]))], Some(h0.clone()), Some(0), || true);
+		assert_eq!(shared.lock().used_storage_cache_size(), 2 /* bytes */);
 	}
 }

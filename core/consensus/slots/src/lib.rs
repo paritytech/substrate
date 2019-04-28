@@ -41,7 +41,7 @@ use codec::{Encode, Decode};
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {
-	/// The type fo the future that will be returned when a new slot is
+	/// The type of the future that will be returned when a new slot is
 	/// triggered.
 	type OnSlot: IntoFuture<Item=(), Error=consensus_common::Error>;
 

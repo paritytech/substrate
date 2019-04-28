@@ -219,36 +219,4 @@ mod tests {
 
 		assert_eq!(expected, slots.debug_info());
 	}
-
-	#[test]
-	fn test_slots_debug() {
-		let reserved_peer = PeerId::random();
-		let reserved_peer2 = PeerId::random();
-		let common_peer = PeerId::random();
-		let mut slots = Slots::new(10);
-
-		slots.add_peer(reserved_peer.clone(), SlotType::Reserved);
-		slots.add_peer(reserved_peer2.clone(), SlotType::Reserved);
-		slots.add_peer(common_peer.clone(), SlotType::Common);
-
-		let expected = format!("Slots {{
-    max_slots: 10,
-    reserved: [
-        PeerId(
-            {:?}
-        ),
-        PeerId(
-            {:?}
-        )
-    ],
-    common: [
-        PeerId(
-            {:?}
-        )
-    ]
-}}", reserved_peer.to_base58(), reserved_peer2.to_base58(), common_peer.to_base58());
-
-		let s = format!("{:#?}", slots);
-		assert_eq!(expected, s);
-	}
 }

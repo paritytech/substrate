@@ -52,7 +52,7 @@ fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8>
 	v.resize(reserve, 0);
 	encoder(&mut v);
 
-	// need to prefix with the total length to ensure it's binary comptible with
+	// need to prefix with the total length to ensure it's binary compatible with
 	// Vec<u8>.
 	let mut length: Vec<()> = Vec::new();
 	length.resize(v.len() - reserve, ());

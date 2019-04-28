@@ -27,7 +27,7 @@ fn system_digest_item_encoding() {
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::AuthoritiesChange
 		1,
-		// number of items in athorities set
+		// number of items in authorities set
 		12,
 		// authorities
 		10, 0, 0, 0,

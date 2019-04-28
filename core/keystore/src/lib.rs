@@ -138,6 +138,7 @@ impl Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
+	use substrate_primitives::crypto::Ss58Codec;
 
 	#[test]
 	fn basic_store() {
@@ -162,6 +163,6 @@ mod tests {
 		let mut store = Store::open(temp_dir.path().to_owned()).unwrap();
 
 		let pair = store.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc").unwrap();
-		assert_eq!("5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HBL8", pair.public().to_ss58check());
+		assert_eq!("5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HJCA", pair.public().to_ss58check());
 	}
 }
