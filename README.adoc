@@ -175,7 +175,7 @@ build it. Ensure you have Rust and the support software installed:
 
 ==== Linux and Mac
 
-For Unix based operating systems, you should run the following commands:
+For Unix-based operating systems, you should run the following commands:
 
 [source, shell]
 ----
