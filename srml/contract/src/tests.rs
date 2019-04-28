@@ -568,47 +568,29 @@ const CODE_SET_RENT: &str = r#"
 		(set_local $input_size
 			(call $ext_input_size)
 		)
-		(block $IF_3
-			(block $IF_2
-				(block $IF_1
-					(block $IF_0
-						(br_if $IF_0
-							(i32.eq
+		(block $IF_ELSE
+			(block $IF_3
+				(block $IF_2
+					(block $IF_1
+						(block $IF_0
+							(br_table $IF_0 $IF_1 $IF_2 $IF_3 $IF_ELSE
 								(get_local $input_size)
-								(i32.const 0)
 							)
+							(unreachable)
 						)
-						(br_if $IF_1
-							(i32.eq
-								(get_local $input_size)
-								(i32.const 1)
-							)
-						)
-						(br_if $IF_2
-							(i32.eq
-								(get_local $input_size)
-								(i32.const 2)
-							)
-						)
-						(br_if $IF_3
-							(i32.eq
-								(get_local $input_size)
-								(i32.const 3)
-							)
-						)
-						(call $call_else)
+						(call $call_0)
 						return
 					)
-					(call $call_0)
+					(call $call_1)
 					return
 				)
-				(call $call_1)
+				(call $call_2)
 				return
 			)
-			(call $call_2)
+			(call $call_3)
 			return
 		)
-		(call $call_3)
+		(call $call_else)
 	)
 
 	;; Set into storage a 4 bytes value
@@ -642,7 +624,7 @@ const CODE_SET_RENT: &str = r#"
 	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
-const HASH_SET_RENT: [u8; 32] = hex!("01f2ed6bf3136470b7c92bd29f2227c67cd788d705b09de2eb7ba926cdafb1e3");
+const HASH_SET_RENT: [u8; 32] = hex!("12b5abdb10d268e47ba06e5ce4def55c5b6361360b4611cc9a1f3357a0395419");
 
 
 /// Input data for each call in set_rent code
