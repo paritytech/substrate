@@ -98,7 +98,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	FN: Iterator<Item=(T::AccountId, Vec<T::AccountId>)>,
 	for <'r> FS: Fn(&'r T::AccountId) -> BalanceOf<T>,
 {
-	let into_extended = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
+	let to_votes = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
 
 	// return structures
 	let mut elected_candidates: Vec<T::AccountId>;
@@ -112,7 +112,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			(Candidate { who, ..Default::default() }, stash_balance)
 		})
 		.filter_map(|(mut c, s)| {
-			c.approval_stake += into_extended(s);
+			c.approval_stake += to_votes(s);
 			if c.approval_stake.is_zero() {
 				None
 			} else {
@@ -124,7 +124,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			nominators.push(Nominator {
 				who: c.who.clone(),
 				edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
-				budget: into_extended(s),
+				budget: to_votes(s),
 				load: Fraction::zero(),
 			});
 			c
@@ -153,14 +153,14 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			}
 			if let Some(idx) = c_idx {
 				candidates[idx].approval_stake = candidates[idx].approval_stake
-					.saturating_add(into_extended(nominator_stake));
+					.saturating_add(to_votes(nominator_stake));
 				edges.push(Edge { who: n.clone(), candidate_index: idx, ..Default::default() });
 			}
 		}
 		Nominator {
 			who,
 			edges: edges,
-			budget: into_extended(nominator_stake),
+			budget: to_votes(nominator_stake),
 			load: Fraction::zero(),
 		}
 	}));
