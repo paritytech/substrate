@@ -514,16 +514,8 @@ const CODE_SET_RENT: &str = r#"
 	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; set rent_allowance to 10
-	(func $call_0
-		(call $ext_set_rent_allowance
-			(i32.const 0)
-			(i32.const 1)
-		)
-	)
-
 	;; insert a value of 4 bytes into storage
-	(func $call_1
+	(func $call_0
 		(call $ext_set_storage
 			(i32.const 1)
 			(i32.const 1)
@@ -533,7 +525,7 @@ const CODE_SET_RENT: &str = r#"
 	)
 
 	;; remove the value inserted by call_1
-	(func $call_2
+	(func $call_1
 		(call $ext_set_storage
 			(i32.const 1)
 			(i32.const 0)
@@ -543,7 +535,7 @@ const CODE_SET_RENT: &str = r#"
 	)
 
 	;; transfer 50 to ALICE
-	(func $call_3
+	(func $call_2
 		(call $ext_dispatch_call
 			(i32.const 8)
 			(i32.const 11)
@@ -569,25 +561,21 @@ const CODE_SET_RENT: &str = r#"
 			(call $ext_input_size)
 		)
 		(block $IF_ELSE
-			(block $IF_3
-				(block $IF_2
-					(block $IF_1
-						(block $IF_0
-							(br_table $IF_0 $IF_1 $IF_2 $IF_3 $IF_ELSE
-								(get_local $input_size)
-							)
-							(unreachable)
+			(block $IF_2
+				(block $IF_1
+					(block $IF_0
+						(br_table $IF_0 $IF_1 $IF_2 $IF_ELSE
+							(get_local $input_size)
 						)
-						(call $call_0)
-						return
+						(unreachable)
 					)
-					(call $call_1)
+					(call $call_0)
 					return
 				)
-				(call $call_2)
+				(call $call_1)
 				return
 			)
-			(call $call_3)
+			(call $call_2)
 			return
 		)
 		(call $call_else)
@@ -624,16 +612,15 @@ const CODE_SET_RENT: &str = r#"
 	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
-const HASH_SET_RENT: [u8; 32] = hex!("12b5abdb10d268e47ba06e5ce4def55c5b6361360b4611cc9a1f3357a0395419");
+const HASH_SET_RENT: [u8; 32] = hex!("a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef");
 
 
 /// Input data for each call in set_rent code
 mod call {
-	pub fn set_rent_allowance_to_10() -> Vec<u8> { vec![] }
-	pub fn set_storage_4_byte() -> Vec<u8> { vec![0] }
-	pub fn remove_storage_4_byte() -> Vec<u8> { vec![0, 0] }
-	pub fn transfer() -> Vec<u8> { vec![0, 0, 0] }
-	pub fn null() -> Vec<u8> { vec![0, 0, 0, 0] }
+	pub fn set_storage_4_byte() -> Vec<u8> { vec![] }
+	pub fn remove_storage_4_byte() -> Vec<u8> { vec![0] }
+	pub fn transfer() -> Vec<u8> { vec![0, 0] }
+	pub fn null() -> Vec<u8> { vec![0, 0, 0] }
 }
 
 /// Test correspondance of set_rent code and its hash.
