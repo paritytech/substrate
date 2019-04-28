@@ -1,9 +1,26 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
 use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating, Zero};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 
-/// Evict and optionally pay rent, at block number. Return if evicted
+/// Evict and optionally pay dues (or check he could pay them otherwise), at given block number.
+/// Return true iff the account has been evicted.
 ///
 /// Exempted from rent iff:
 /// * rent is offset completely by the `rent_deposit_offset`,
@@ -25,6 +42,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
+	println!("rent : {} {}", contract.deduct_block, block_number);
 	// Rent has already been paid
 	if contract.deduct_block >= block_number {
 		return false;
@@ -128,11 +146,16 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 }
 
 /// Make account paying the rent for the current block number
+///
+/// Call try_evict_or_and_pay_rent with setting pay rent to true
 pub fn pay_rent<T: Trait>(account: &T::AccountId) {
 	try_evict_or_and_pay_rent::<T>(account, <system::Module<T>>::block_number(), true);
 }
 
-/// Make account paying the rent for the current block number
+/// Evict the account if he should be evicted at the given block number.
+/// Return true iff the account has been evicted.
+///
+/// Call try_evict_or_and_pay_rent with setting pay rent to false
 pub fn try_evict_at<T: Trait>(account: &T::AccountId, block: T::BlockNumber) -> bool {
 	try_evict_or_and_pay_rent::<T>(account, block, false)
 }
