@@ -587,7 +587,7 @@ impl<T: Trait> Module<T> {
 			.take(coming as usize)
 			.map(|(_, a)| a)
 			.cloned()
-			.inspect(|a| { T::Currency::unreserve(a, candidacy_bond); })
+			.inspect(|a| {T::Currency::unreserve(a, candidacy_bond);})
 			.collect();
 
 		// Update last win index for anyone voted for any of the incomings.
