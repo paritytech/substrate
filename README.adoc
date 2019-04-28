@@ -213,7 +213,7 @@ If you are trying to set up Substrate on Windows, you should do the following:
 
 2. Next, you need to install Rust:
 
-    * Detailed instructions are provided by the https://doc.rust-lang.org/book/ch01-01-installation.html#installing-rustup-on-windows[Rust Book]
+    * Detailed instructions are provided by the https://doc.rust-lang.org/book/ch01-01-installation.html#installing-rustup-on-windows[Rust Book].
         * Download from: https://www.rust-lang.org/tools/install
         * Run the installation file: `rustup-init.exe`
         > Note that it should not prompt you to install vs_buildtools since you did it in step 1
