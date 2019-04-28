@@ -249,36 +249,36 @@
 //! pub trait Trait: seats::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!
-//!			// Approves all candidates.
-//!			pub fn approve_all(origin) -> Result {
-//!				let _origin = ensure_signed(origin)?;
+//!	        // Approves all candidates.
+//!	        pub fn approve_all(origin) -> Result {
+//!	            let _origin = ensure_signed(origin)?;
 //!
-//!				// Get the current block number
-//!				let current_block_number = <system::Module<T>>::block_number();
+//!	            // Get the current block number
+//!	            let current_block_number = <system::Module<T>>::block_number();
 //!
-//!				// Get the number of seats that we want the council to have
-//!				let desired = <seats::Module<T>>::desired_seats() as usize;
+//!	            // Get the number of seats that we want the council to have
+//!	            let desired = <seats::Module<T>>::desired_seats() as usize;
 //!
-//!				// Get the number of seats occupied by the current council.
-//!				let occupied = <seats::Module<T>>::active_council().len();
+//!	            // Get the number of seats occupied by the current council.
+//!	            let occupied = <seats::Module<T>>::active_council().len();
 //!
-//!				// Get the appropriate block number to schedule the next tally.
-//!				let maybe_next_tally = <seats::Module<T>>::next_tally();
+//!	            // Get the appropriate block number to schedule the next tally.
+//!	            let maybe_next_tally = <seats::Module<T>>::next_tally();
 //!
-//!				assert!(desired > occupied, "Unable to approve all candidates when there are no empty seats");
+//!	            assert!(desired > occupied, "Unable to approve all candidates when there are no empty seats");
 //!
-//!				if let Some(next_tally_block_number) = <seats::Module<T>>::next_tally() {
-//!					if current_block_number <= next_tally_block_number {
-//!						assert!(maybe_next_tally.is_some(),
-//!							"Unable to approve all candidates when the block number of the next tally has past");
-//!					}
-//!				}
+//!	            if let Some(next_tally_block_number) = <seats::Module<T>>::next_tally() {
+//!	                if current_block_number <= next_tally_block_number {
+//!	                    assert!(maybe_next_tally.is_some(),
+//!	                        "Unable to approve all candidates when the block number of the next tally has past");
+//!	                }
+//!             }
 //!
-//! 			Ok(())
-//! 		}
-//! 	}
+//!             Ok(())
+//!         }
+//!     }
 //! }
 //! # fn main() { }
 //! ```
