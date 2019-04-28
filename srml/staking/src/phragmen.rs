@@ -30,7 +30,7 @@ pub type Ratio = u128;
 
 // this is only used while creating the candidate score. Due to reasons explained below
 // The more accurate this is, the less likely we choose a wrong candidate.
-const SCALE_FACTOR_64: ExtendedBalance = u64::max_value() as ExtendedBalance + 1;
+const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 // These are used to expose a fixed accuracy to the caller function. The bigger they are,
 // the more accurate we get, but the more likely it is for us to overflow. The case of overflow
 // is handled but accuracy will be lost. 32 or 16 are reasonable values.
@@ -178,6 +178,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			for c in &mut candidates {
 				if !c.elected {
 					c.score = Fraction::from_xth(c.approval_stake);
+					let t = u128::max_value()/c.approval_stake;
 				}
 			}
 			// Loop 2: increment score.
@@ -185,12 +186,15 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for e in &n.edges {
 					let c = &mut candidates[e.candidate_index];
 					if !c.elected && !c.approval_stake.is_zero() {
-						// Basic fixed-point shifting by 64.
-						// This will never saturate since n.budget cannot exceed u64,despite being stored in u128.
+						// Basic fixed-point shifting by 32.
+						// `n.budget.saturating_mul(SCALE_FACTOR)` will never saturate
+						// since n.budget cannot exceed u64,despite being stored in u128. yet,
+						// `*n.load / SCALE_FACTOR` might collapse to zero. Hence, 32 or 16 bits are better scale factors.
 						// Note that left-associativity in operators precedence is crucially important here.
 						let temp =
-							n.budget.saturating_mul(SCALE_FACTOR_64) / c.approval_stake
-							* (*n.load / SCALE_FACTOR_64);
+							n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
+							* (*n.load / SCALE_FACTOR);
+						let l = *n.load as f64 / u128::max_value() as f64;
 						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
 					}
 				}

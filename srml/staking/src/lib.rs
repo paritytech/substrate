@@ -284,7 +284,7 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, Saturating, Bounded};
+use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -1072,8 +1072,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: This is called with the controller (not the stash) account id.
 	pub fn on_offline_validator(controller: T::AccountId, count: usize) {
-		use primitives::traits::CheckedShl;
-
 		if let Some(l) = Self::ledger(&controller) {
 			let stash = l.stash;
 

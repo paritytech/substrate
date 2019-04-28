@@ -1894,7 +1894,7 @@ fn phragmen_should_not_overflow_nominators() {
 		assert_eq_uvec!(Session::validators(), vec![4, 2]);
 
 		// Saturate.
-		assert_eq!(Staking::stakers(3).total, u64::max_value()/2); // Checked with phragmen. /2 is correct
+		assert_eq!(Staking::stakers(3).total, u64::max_value());
 		assert_eq!(Staking::stakers(5).total, u64::max_value());
 	})
 }
@@ -1933,31 +1933,23 @@ fn phragmen_large_scale_test() {
 	, || {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
+		let _ = Staking::chill(Origin::signed(30));
 		let prefix = 200;
 
 		bond_validator(prefix + 2,  1);
-		bond_validator(prefix + 4,  105);
-		bond_validator(prefix + 6,  3879248198);
+		bond_validator(prefix + 4,  100);
+		bond_validator(prefix + 6,  1000000);
 		bond_validator(prefix + 8,  100000000001000);
 		bond_validator(prefix + 10, 100000000002000);
-		bond_validator(prefix + 12, 150000000000000);
+		bond_validator(prefix + 12, 100000000003000);
 		bond_validator(prefix + 14, 400000000000000);
-		bond_validator(prefix + 16, 524611669156413);
-		bond_validator(prefix + 18, 700000000000000);
-		bond_validator(prefix + 20, 797663650978304);
-		bond_validator(prefix + 22, 900003879248198);
-		bond_validator(prefix + 24, 997530000000000);
-		bond_validator(prefix + 26, 1000000000010000);
-		bond_validator(prefix + 28, 1000000000020000);
-		bond_validator(prefix + 30, 1000003879248198);
-		bond_validator(prefix + 32, 1200000000000000);
-		bond_validator(prefix + 34, 7997659802817256);
-		bond_validator(prefix + 36, 18000000000000000);
-		bond_validator(prefix + 38, 20000033025753738);
-		bond_validator(prefix + 40, 500000000000100000);
-		bond_validator(prefix + 42, 500000000000200000);
+		bond_validator(prefix + 16, 400000000001000);
+		bond_validator(prefix + 18, 18000000000000000);
+		bond_validator(prefix + 20, 20000000000000000);
+		bond_validator(prefix + 22, 500000000000100000);
+		bond_validator(prefix + 24, 500000000000200000);
 
-		bond_nominator(50, 990000068998617227, vec![
+		bond_nominator(50, 990000000000000000, vec![
 			prefix + 3,
 			prefix + 5,
 			prefix + 7,
@@ -1969,16 +1961,7 @@ fn phragmen_large_scale_test() {
 			prefix + 19,
 			prefix + 21,
 			prefix + 23,
-			prefix + 25,
-			prefix + 27,
-			prefix + 29,
-			prefix + 31,
-			prefix + 33,
-			prefix + 35,
-			prefix + 37,
-			prefix + 39,
-			prefix + 41,
-			prefix + 43,]
+			prefix + 25]
 		);
 
 		System::set_block_number(1);
@@ -1989,7 +1972,7 @@ fn phragmen_large_scale_test() {
 		println!("Validators are {:#?}",
 			Session::validators()
 				.iter()
-				.map(|v| (v.clone(), Staking::stakers(v-1)))
+				.map(|v| (v.clone(), Staking::stakers(v+1)))
 				.collect::<Vec<(u64, Exposure<u64, u64>)>>()
 		);
 
@@ -1999,15 +1982,15 @@ fn phragmen_large_scale_test() {
 		// aside from some error, stake must be divided correctly
 		let individual_expo_sum: u128 = Session::validators()
 			.iter()
-			.map(|v| Staking::stakers(v-1))
+			.map(|v| Staking::stakers(v+1))
 			.fold(0u128, |s, v| if v.others.len() > 0 { s + v.others[0].value as u128 } else { s });
 		assert!(
-			990000068998617228 - individual_expo_sum < 100,
+			990000000000000000 - individual_expo_sum < 100,
 			format!(
 				"Nominator stake = {} / SUM(individual expo) = {} / diff = {}",
-				990000068998617227u64,
+				990000000000000000u64,
 				individual_expo_sum,
-				990000068998617228 - individual_expo_sum
+				990000000000000000 - individual_expo_sum
 			)
 		);
 	})
@@ -2023,11 +2006,13 @@ fn phragmen_large_scale_test_2() {
 	, || {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
+		let nom_budget: u64 = 1_000_000_000_000_000_000;
+		let c_budget: u64 = 4_000_000;
 
-		bond_validator(2, 1 as u64);
-		bond_validator(4, 1 as u64);
+		bond_validator(2, c_budget as u64);
+		bond_validator(4, c_budget as u64);
 
-		bond_nominator(50, 1_000_000_000_000_000_000, vec![3, 5]);
+		bond_nominator(50, nom_budget, vec![3, 5]);
 
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
@@ -2035,22 +2020,7 @@ fn phragmen_large_scale_test_2() {
 		// Each exposure => total == own + sum(others)
 		check_exposure_all();
 
-		assert_total_expo(3, 245_342_799_117_253_586);
-		assert_total_expo(5, 245_342_798_886_751_232);
-
-		// aside from some error, stake must be divided correctly
-		let individual_expo_sum: u128 = Session::validators()
-			.iter()
-			.map(|v| Staking::stakers(v-1))
-			.fold(0u128, |s, v| if v.others.len() > 0 { s + v.others[0].value as u128 } else { s });
-		assert!(
-			990000068998617228 - individual_expo_sum < 100,
-			format!(
-				"Nominator stake = {} / SUM(individual expo) = {} / diff = {}",
-				990000068998617227u64,
-				individual_expo_sum,
-				990000068998617228 - individual_expo_sum
-			)
-		);
+		assert_total_expo(3, nom_budget / 2 + c_budget);
+		assert_total_expo(5, nom_budget / 2 + c_budget);
 	})
 }
