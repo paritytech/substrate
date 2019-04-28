@@ -209,7 +209,7 @@ If you are trying to set up Substrate on Windows, you should do the following:
     * Run the installation file: `vs_buildtools.exe`
     * Please ensure the Windows 10 SDK component is included when installing the Visual C++ Build Tools.
     * image:https://i.imgur.com/zayVLmu.png[image]
-    * Restart your computer
+    * Restart your computer.
 
 2. Next, you need to install Rust:
 
