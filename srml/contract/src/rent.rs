@@ -19,6 +19,14 @@ use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 
+#[derive(PartialEq, Eq, Copy, Clone)]
+#[must_use]
+pub enum RentOutcome {
+	Exempted,
+	Evicted,
+	Paid,
+}
+
 /// Evict and optionally pay dues (or check account can pay them otherwise), for given block number.
 /// Return true iff the account has been evicted.
 ///
@@ -38,45 +46,53 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	account: &T::AccountId,
 	block_number: T::BlockNumber,
 	pay_rent: bool,
-) -> bool {
+) -> RentOutcome {
+	use self::RentOutcome;
+
 	let contract = match <ContractInfoOf<T>>::get(account) {
-		None | Some(ContractInfo::Tombstone(_)) => return false,
+		None | Some(ContractInfo::Tombstone(_)) => return RentOutcome::Exempted,
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
-	// Rent has already been paid
-	if contract.deduct_block >= block_number {
-		return false;
-	}
+	// How much block has passed since the last deduction for the contract.
+	let blocks_passed = match block_number.saturating_sub(contract.deduct_block) {
+		// Rent has already been paid
+		n if n.is_zero() => return RentOutcome::Exempted,
+		n => n,
+	};
 
 	let balance = T::Currency::free_balance(account);
 
-	let free_storage = balance
-		.checked_div(&<Module<T>>::rent_deposit_offset())
-		.unwrap_or(<BalanceOf<T>>::sa(0));
+	// An amount of funds to charge per block for storage taken up by the contract.
+	let fee_per_block = {
+		let free_storage = balance
+			.checked_div(&<Module<T>>::rent_deposit_offset())
+			.unwrap_or(<BalanceOf<T>>::sa(0));
 
-	let effective_storage_size =
-		<BalanceOf<T>>::sa(contract.storage_size).saturating_sub(free_storage);
+		let effective_storage_size =
+			<BalanceOf<T>>::sa(contract.storage_size).saturating_sub(free_storage);
 
-	let fee_per_block = effective_storage_size
-		.checked_mul(&<Module<T>>::rent_byte_price())
-		.unwrap_or(<BalanceOf<T>>::max_value());
+		effective_storage_size
+			.checked_mul(&<Module<T>>::rent_byte_price())
+			.unwrap_or(<BalanceOf<T>>::max_value())
+	};
 
 	if fee_per_block.is_zero() {
 		// The rent deposit offset reduced the fee to 0. This means that the contract
 		// gets the rent for free.
-		return false;
+		return RentOutcome::Exempted;
 	}
 
-	let blocks_to_rent = block_number.saturating_sub(contract.deduct_block);
-	let rent = fee_per_block
-		.checked_mul(&<BalanceOf<T>>::sa(blocks_to_rent.as_()))
-		.unwrap_or(<BalanceOf<T>>::max_value());
+	// The minimal amount of funds required for a contract not to be evicted.
 	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
 
-	let rent_limited = rent.min(contract.rent_allowance);
+	let dues = fee_per_block
+		.checked_mul(&<BalanceOf<T>>::sa(blocks_passed.as_()))
+		.unwrap_or(<BalanceOf<T>>::max_value());
 
-	let rent_allowance_exceeded = rent > contract.rent_allowance;
+	// TODO: Rename as well
+	let rent_limited = dues.min(contract.rent_allowance);
+	let rent_allowance_exceeded = dues > contract.rent_allowance;
 	let is_below_subsistence = balance < subsistence_threshold;
 	let go_below_subsistence = balance.saturating_sub(rent_limited) < subsistence_threshold;
 	let can_withdraw_rent = T::Currency::ensure_can_withdraw(
@@ -84,7 +100,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		rent_limited,
 		WithdrawReason::Fee,
 		balance.saturating_sub(rent_limited),
-	).is_ok();
+	)
+	.is_ok();
 
 	if !rent_allowance_exceeded && can_withdraw_rent && !go_below_subsistence {
 		// Collect dues
@@ -92,7 +109,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		if pay_rent {
 			let imbalance = T::Currency::withdraw(
 				account,
-				rent,
+				dues,
 				WithdrawReason::Fee,
 				ExistenceRequirement::KeepAlive,
 			)
@@ -110,14 +127,15 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 					.rent_allowance -= imbalance.peek(); // rent_allowance is not exceeded
 			})
 		}
-		return false;
+
+		RentOutcome::Paid
 	} else {
 		// Evict
 
 		if can_withdraw_rent && !go_below_subsistence {
 			T::Currency::withdraw(
 				account,
-				rent,
+				dues,
 				WithdrawReason::Fee,
 				ExistenceRequirement::KeepAlive,
 			)
@@ -142,7 +160,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			runtime_io::kill_child_storage(&contract.trie_id);
 		}
 
-		return true;
+		RentOutcome::Evicted
 	}
 }
 
@@ -150,13 +168,13 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 ///
 /// Call try_evict_or_and_pay_rent with setting pay rent to true
 pub fn pay_rent<T: Trait>(account: &T::AccountId) {
-	try_evict_or_and_pay_rent::<T>(account, <system::Module<T>>::block_number(), true);
+	let _ = try_evict_or_and_pay_rent::<T>(account, <system::Module<T>>::block_number(), true);
 }
 
 /// Evict the account if he should be evicted at the given block number.
 /// Return true iff the account has been evicted.
 ///
 /// Call try_evict_or_and_pay_rent with setting pay rent to false
-pub fn try_evict_at<T: Trait>(account: &T::AccountId, block: T::BlockNumber) -> bool {
+pub fn try_evict_at<T: Trait>(account: &T::AccountId, block: T::BlockNumber) -> RentOutcome {
 	try_evict_or_and_pay_rent::<T>(account, block, false)
 }
