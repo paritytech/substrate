@@ -24,6 +24,7 @@ use crate::exec::StorageKey;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
+use runtime_io::blake2_256;
 use runtime_primitives::traits::Zero;
 use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
@@ -75,7 +76,7 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
-		trie_id.and_then(|id| child::get_raw(id, location))
+		trie_id.and_then(|id| child::get_raw(id, &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -138,14 +139,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				}
 
 				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get_raw(&new_info.trie_id[..], &k) {
+					if let Some(value) = child::get_raw(&new_info.trie_id[..], &blake2_256(&k)) {
 						new_info.storage_size -= value.len() as u64;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u64;
-						child::put_raw(&new_info.trie_id[..], &k, &value[..]);
+						child::put_raw(&new_info.trie_id[..], &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(&new_info.trie_id[..], &k);
+						child::kill(&new_info.trie_id[..], &blake2_256(&k));
 					}
 				}
 

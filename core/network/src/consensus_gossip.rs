@@ -123,10 +123,10 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 	/// Send addressed message to a peer.
 	fn send_message(&mut self, who: &PeerId, message: Vec<u8>) {
-		self.protocol.send_message(who.clone(), Message::Consensus(ConsensusMessage {
+		self.protocol.send_consensus(who.clone(), ConsensusMessage {
 			engine_id: self.engine_id,
 			data: message,
-		}));
+		});
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -183,7 +183,7 @@ fn propagate<'a, B: BlockT, I>(
 			}
 			peer.known_messages.insert(message_hash.clone());
 			trace!(target: "gossip", "Propagating to {}: {:?}", id, message);
-			protocol.send_message(id.clone(), Message::Consensus(message.clone()));
+			protocol.send_consensus(id.clone(), message.clone());
 		}
 	}
 }
@@ -452,10 +452,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 				}
 				peer.known_messages.insert(entry.message_hash.clone());
 				trace!(target: "gossip", "Sending topic message to {}: {:?}", who, entry.message);
-				protocol.send_message(who.clone(), Message::Consensus(ConsensusMessage {
+				protocol.send_consensus(who.clone(), ConsensusMessage {
 					engine_id: engine_id.clone(),
 					data: entry.message.data.clone(),
-				}));
+				});
 			}
 		}
 	}
@@ -492,7 +492,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 
 		peer.known_messages.insert(message_hash);
-		protocol.send_message(who.clone(), Message::Consensus(message.clone()));
+		protocol.send_consensus(who.clone(), message.clone());
 	}
 }
 

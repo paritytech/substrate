@@ -41,9 +41,9 @@ pub fn oldest_non_pruned_trie(
 	}
 }
 
-/// Prune obslete changes tries. Puning happens at the same block, where highest
+/// Prune obsolete changes tries. Pruning happens at the same block, where highest
 /// level digest is created. Pruning guarantees to save changes tries for last
-/// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_iterval`
+/// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
 /// Returns MemoryDB that contains all deleted changes tries nodes.
 pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
