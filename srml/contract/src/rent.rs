@@ -33,8 +33,8 @@ pub enum RentOutcome {
 	/// * or can't withdraw the rent,
 	/// * or go below subsistence threshold.
 	Evicted,
-	/// The outstanding dues were paid.
-	Paid,
+	/// The outstanding dues were paid or were able to be paid.
+	Ok,
 }
 
 /// Evict and optionally pay dues (or check account can pay them otherwise) at the current
@@ -133,7 +133,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			})
 		}
 
-		RentOutcome::Paid
+		RentOutcome::Ok
 	} else {
 		// Evict
 
