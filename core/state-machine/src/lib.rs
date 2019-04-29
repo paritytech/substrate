@@ -24,7 +24,9 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
+use primitives::{
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt
+};
 
 pub mod backend;
 mod changes_trie;
@@ -52,7 +54,10 @@ pub use changes_trie::{
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
 };
 pub use overlayed_changes::OverlayedChanges;
-pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
+pub use proving_backend::{
+	create_proof_check_backend, create_proof_check_backend_storage,
+	Recorder as ProofRecorder, ProvingBackend,
+};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 

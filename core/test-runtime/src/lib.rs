@@ -102,8 +102,7 @@ pub enum Extrinsic {
 }
 
 #[cfg(feature = "std")]
-impl serde::Serialize for Extrinsic
-{
+impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
@@ -240,6 +239,13 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
+				/// Returns the initialized block number.
+				fn get_block_number() -> u64;
+				/// Takes and returns the initialized block number.
+				fn take_block_number() -> Option<u64>;
+				/// Returns if no block was initialized.
+				#[skip_initialize_block]
+				fn without_initialize_block() -> bool;
 			}
 		}
 	} else {
@@ -264,6 +270,13 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
+				/// Returns the initialized block number.
+				fn get_block_number() -> u64;
+				/// Takes and returns the initialized block number.
+				fn take_block_number() -> Option<u64>;
+				/// Returns if no block was initialized.
+				#[skip_initialize_block]
+				fn without_initialize_block() -> bool;
 			}
 		}
 	}
@@ -417,6 +430,18 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64 {
 					(0..1000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
+
+				fn get_block_number() -> u64 {
+					system::get_block_number().expect("Block number is initialized")
+				}
+
+				fn without_initialize_block() -> bool {
+					system::get_block_number().is_none()
+				}
+
+				fn take_block_number() -> Option<u64> {
+					system::take_block_number()
+				}
 			}
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
@@ -537,9 +562,19 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64 {
 					(0..10000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
+
+				fn get_block_number() -> u64 {
+					system::get_block_number().expect("Block number is initialized")
+				}
+
+				fn without_initialize_block() -> bool {
+					system::get_block_number().is_none()
+				}
+
+				fn take_block_number() -> Option<u64> {
+					system::take_block_number()
+				}
 			}
-
-
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
