@@ -22,7 +22,16 @@ use srml_support::StorageMap;
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
 pub enum RentOutcome {
+	/// Exempted from rent iff:
+	/// * rent is offset completely by the `rent_deposit_offset`,
+	/// * or rent has already been paid for this block number,
+	/// * or account doesn't have a contract,
+	/// * or account has a tombstone.
 	Exempted,
+	/// Evicted iff:
+	/// * rent exceed rent allowance,
+	/// * or can't withdraw the rent,
+	/// * or go below subsistence threshold.
 	Evicted,
 	Paid,
 }
@@ -30,18 +39,7 @@ pub enum RentOutcome {
 /// Evict and optionally pay dues (or check account can pay them otherwise), for given block number.
 /// Return true iff the account has been evicted.
 ///
-/// Exempted from rent iff:
-/// * rent is offset completely by the `rent_deposit_offset`,
-/// * or rent has already been paid for this block number,
-/// * or account doesn't have a contract,
-/// * or account has a tombstone.
-///
-/// Evicted iff:
-/// * rent exceed rent allowance,
-/// * or can't withdraw the rent,
-/// * or go below subsistence threshold.
-///
-/// This function acts eagerly, all modification are committed into storages.
+/// NOTE: This function acts eagerly, all modification are committed into storages.
 fn try_evict_or_and_pay_rent<T: Trait>(
 	account: &T::AccountId,
 	block_number: T::BlockNumber,
@@ -166,15 +164,15 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 /// Make account paying the rent for the current block number
 ///
-/// Call try_evict_or_and_pay_rent with setting pay rent to true
+/// NOTE: This function acts eagerly.
 pub fn pay_rent<T: Trait>(account: &T::AccountId) {
 	let _ = try_evict_or_and_pay_rent::<T>(account, <system::Module<T>>::block_number(), true);
 }
 
 /// Evict the account if he should be evicted at the given block number.
-/// Return true iff the account has been evicted.
+/// Return `true` iff the account has been evicted.
 ///
-/// Call try_evict_or_and_pay_rent with setting pay rent to false
+/// NOTE: This function acts eagerly.
 pub fn try_evict_at<T: Trait>(account: &T::AccountId, block: T::BlockNumber) -> RentOutcome {
 	try_evict_or_and_pay_rent::<T>(account, block, false)
 }
