@@ -168,7 +168,7 @@ You can distribute `mychain.json` so that everyone can synchronize and (dependin
 
 == Building
 
-See tiny.cc/substrate-getting-started.
+See https://tiny.cc/substrate-getting-started.
 
 === Hacking on Substrate
 
