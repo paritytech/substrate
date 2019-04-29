@@ -24,12 +24,19 @@
 //!
 //! ### Documentation Guidelines:
 //!
-//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues --> 
+//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
+//! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
-//!		<li>Documentation comments (i.e. <code>/// comment</code>) - should accompany module functions and be restricted to the module interface, not the internals of the module implementation. Only state inputs, outputs, and a brief description that mentions whether calling it requires root, but without repeating the source code details. Capitalise the first word of each documentation comment and end it with a full stop. See <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages" target="_blank">Generic example of annotating source code with documentation comments</a></li>
+//!		<li>Documentation comments (i.e. <code>/// comment</code>) - should accompany module functions and be
+//!         restricted to the module interface, not the internals of the module implementation. Only state inputs,
+//!         outputs, and a brief description that mentions whether calling it requires root, but without repeating
+//!         the source code details. Capitalise the first word of each documentation comment and end it with a full
+//!         stop. See <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
+//!         target="_blank">Generic example of annotating source code with documentation comments</a></li>
 //! 	<li>Self-documenting code - Try to refactor code to be self-documenting.</li>
 //!		<li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
-//!		<li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>, <code>u64</code>)</li>
+//!		<li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
+//!         <code>u64</code>)</li>
 //!		<li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
 //!		<li>Extended tutorials - should be moved to external files and refer to.</li>
 //!		<!-- Original author of paragraph: @AmarRSingh -->
@@ -39,13 +46,21 @@
 //!
 //! ### Documentation Template:<br>
 //!
-//! Copy and paste this template from srml/example/src/lib.rs into file srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs of your own custom module and complete it. 
+//! Copy and paste this template from srml/example/src/lib.rs into file srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs of
+//! your own custom module and complete it.
 //! <details><p><pre>
 //! // Add heading with custom module name
 //!
 //! \# <INSERT_CUSTOM_MODULE_NAME> Module
 //!
 //! // Add simple description
+//!
+//! // Include the following links that shows what trait needs to be implemented to use the module
+//! // and the supported dispatchables that are documented in the Call enum.
+//!
+//! - \[`<INSERT_CUSTOM_MODULE_NAME>::Trait`](./trait.Trait.html)
+//! - \[`Call`](./enum.Call.html)
+//! - \[`Module`](./struct.Module.html)
 //!
 //! \## Overview
 //!
@@ -59,12 +74,6 @@
 //! // Inputs it uses and the source of each input.
 //! // Outputs it produces.
 //!
-//! <br>
-//!
-//! <b>Standard format (example):</b> "The timestamp module provides functionality to get and set the on-chain time.
-//! To use the timestamp module you need to implement the following [Trait] (<INSERT_LINK_TO_TRAIT>).
-//! Supported dispatchables are documented in the [Call] enum."
-//!
 //! <!-- Original author of paragraph: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //! <!-- and comment https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
 //!
@@ -75,8 +84,7 @@
 //! // use some judgment about what is included. We don't want a list of every storage item nor types - the user
 //! // can go to the code for that. For example, "transfer fee" is obvious and should not be included, but
 //! // "free balance" and "reserved balance" should be noted to give context to the module.
-//!
-//! <br>
+//! // Please do not link to outside resources. The reference docs should be the ultimate source of truth.
 //!
 //! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //!
@@ -106,7 +114,8 @@
 //!
 //! <code>\`inherent\`</code> <INSERT_DESCRIPTION>
 //!
-//! <!-- Original author of paragraph: @Kianenigma in comment https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
+//! <!-- Original author of paragraph: @Kianenigma in comment -->
+//! <!-- https://github.com/paritytech/substrate-developer-hub/issues/44#issuecomment-471982710 -->
 //!
 //! \### Types
 //!
@@ -211,8 +220,6 @@
 //! // See:
 //! // - Substrate TCR https://github.com/parity-samples/substrate-tcr
 //! // - Substrate Kitties https://shawntabrizi.github.io/substrate-collectables-workshop/#/
-//!
-//! // Show a usage example in an actual runtime
 //!
 //! \## Genesis Config
 //!
