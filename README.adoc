@@ -187,15 +187,10 @@ rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
 ----
 
-You will also need to install the following packages:
+You will also need to install other dependencies (e.g. for Linux cmake, gcc, openssl, pkgconf, git and clang):
 
- - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
-
- - Mac:
-[source, shell]
-brew install cmake pkg-config openssl git llvm
+curl https://getsubstrate.io -sSf | bash -s -- --fast
 
 To finish installation of Substrate, jump down to <<shared-steps,shared steps>>.
 
