@@ -92,16 +92,15 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		.checked_mul(&<BalanceOf<T>>::sa(blocks_passed.as_()))
 		.unwrap_or(<BalanceOf<T>>::max_value());
 
-	// TODO: Rename as well
-	let rent_limited = dues.min(contract.rent_allowance);
+	let dues_limited = dues.min(contract.rent_allowance);
 	let rent_allowance_exceeded = dues > contract.rent_allowance;
 	let is_below_subsistence = balance < subsistence_threshold;
-	let go_below_subsistence = balance.saturating_sub(rent_limited) < subsistence_threshold;
+	let go_below_subsistence = balance.saturating_sub(dues_limited) < subsistence_threshold;
 	let can_withdraw_rent = T::Currency::ensure_can_withdraw(
 		account,
-		rent_limited,
+		dues_limited,
 		WithdrawReason::Fee,
-		balance.saturating_sub(rent_limited),
+		balance.saturating_sub(dues_limited),
 	)
 	.is_ok();
 
