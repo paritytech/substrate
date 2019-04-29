@@ -616,7 +616,8 @@ where
 			(st @ &mut PeerState::Requested, connected_point) |
 			(st @ &mut PeerState::PendingRequest { .. }, connected_point) => {
 				debug!(target: "sub-libp2p", "Libp2p => Connected({:?}): Connection \
-					requested by PSM (through {:?})", peer_id, connected_point);
+					requested by PSM (through {:?})", peer_id, connected_point
+				);
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", peer_id);
 				self.events.push(NetworkBehaviourAction::SendEvent {
 					peer_id: peer_id.clone(),
@@ -671,7 +672,8 @@ where
 			st => {
 				// This is a serious bug either in this state machine or in libp2p.
 				error!(target: "sub-libp2p", "Received inject_connected for \
-					already-connected node; state is {:?}", st);
+					already-connected node; state is {:?}", st
+				);
 			}
 		}
 	}
