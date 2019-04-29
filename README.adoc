@@ -173,11 +173,13 @@ You can distribute `mychain.json` so that everyone can synchronize and (dependin
 If you'd actually like to hack on Substrate, you can just grab the source code and
 build it. Ensure you have Rust and the support software installed:
 
+==== Linux and Mac
+
+For Unix-based operating systems, you should run the following commands:
+
 [source, shell]
 ----
 curl https://sh.rustup.rs -sSf | sh
-# on Windows download and run rustup-init.exe
-# from https://rustup.rs instead
 
 rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
@@ -195,27 +197,60 @@ sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 [source, shell]
 brew install cmake pkg-config openssl git llvm
 
- - Windows (PowerShell):
-+
-[source, shell]
-----
-# Install LLVM
-# Download and install the Pre Build Windows binaries
-# of LLVM  from http://releases.llvm.org/download.html
+To finish installation of Substrate, jump down to <<shared-steps,shared steps>>.
 
-# Install OpenSSL (through vcpkg)
-mkdir \Tools
-cd \Tools
-git clone https://github.com/Microsoft/vcpkg.git
-cd vcpkg
-.\bootstrap-vcpkg.bat
-.\vcpkg.exe install openssl:x64-windows-static
+==== Windows
 
-$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
-$env:OPENSSL_STATIC = 'Yes'
-[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
-[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
-----
+If you are trying to set up Substrate on Windows, you should do the following:
+
+1. First, you will need to download and install "Build Tools for Visual Studio:"
+
+    * You can get it at this link: https://aka.ms/buildtools
+    * Run the installation file: `vs_buildtools.exe`
+    * Please ensure the Windows 10 SDK component is included when installing the Visual C++ Build Tools.
+    * image:https://i.imgur.com/zayVLmu.png[image]
+    * Restart your computer.
+
+2. Next, you need to install Rust:
+
+    * Detailed instructions are provided by the https://doc.rust-lang.org/book/ch01-01-installation.html#installing-rustup-on-windows[Rust Book].
+        * Download from: https://www.rust-lang.org/tools/install
+        * Run the installation file: `rustup-init.exe`
+        > Note that it should not prompt you to install vs_buildtools since you did it in step 1.
+        * Choose "Default Installation."
+        * To get started, you need Cargo's bin directory (%USERPROFILE%\.cargo\bin) in your PATH environment variable. Future applications will automatically have the correct environment, but you may need to restart your current shell.
+
+3. Then, you will need to run some commands in CMD to set up your Wasm Build Environment:
+
+	rustup update nightly
+	rustup update stable
+	rustup target add wasm32-unknown-unknown --toolchain nightly
+
+4. Next, you install wasm-gc, which is used to slim down Wasm files:
+
+	cargo install --git https://github.com/alexcrichton/wasm-gc --force
+
+5. Then, you need to install LLVM: https://releases.llvm.org/download.html
+
+6. Next, you need to install OpenSSL, which we will do with `vcpkg`:
+
+	mkdir \Tools
+	cd \Tools
+	git clone https://github.com/Microsoft/vcpkg.git
+	cd vcpkg
+	.\bootstrap-vcpkg.bat
+	.\vcpkg.exe install openssl:x64-windows-static
+
+7. After, you need to add OpenSSL to your System Variables:
+
+	$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
+	$env:OPENSSL_STATIC = 'Yes'
+	[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
+	[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
+
+8. Finally, you need to install `cmake`: https://cmake.org/download/
+
+==== Shared Steps
 
 Then, grab the Substrate source code:
 
