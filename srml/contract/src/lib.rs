@@ -97,7 +97,7 @@ use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup, Saturating};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
@@ -483,17 +483,17 @@ decl_module! {
 								inherent and auxiliary sender only provided on inherent")
 			};
 
-			let mut check_block = <system::Module<T>>::block_number();
-
 			// Add some advantage for block producers (who send unsigned extrinsics) by
 			// adding a handicap: for signed extrinsics we use a slightly older block number
 			// for the eviction check. This can be viewed as if we pushed regular users back in past.
-			if signed {
-				check_block = check_block.saturating_sub(<Module<T>>::signed_claim_handicap());
-			}
+			let handicap = if signed {
+				<Module<T>>::signed_claim_handicap()
+			} else {
+				Zero::zero()
+			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if rent::try_evict_at::<T>(&dest, check_block) == rent::RentOutcome::Evicted {
+			if rent::try_evict_at::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
 				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
 			}
 		}

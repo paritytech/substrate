@@ -46,18 +46,19 @@ pub enum RentOutcome {
 /// NOTE: This function acts eagerly, all modification are committed into the storage.
 fn try_evict_or_and_pay_rent<T: Trait>(
 	account: &T::AccountId,
-	block_number: T::BlockNumber,
+	handicap: T::BlockNumber,
 	pay_rent: bool,
 ) -> RentOutcome {
-	use self::RentOutcome;
-
 	let contract = match <ContractInfoOf<T>>::get(account) {
 		None | Some(ContractInfo::Tombstone(_)) => return RentOutcome::Exempted,
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
+	// Calculate an effective block number, i.e. after adjusting for handicap.
+	let effective_block_number = <system::Module<T>>::block_number().saturating_sub(handicap);
+
 	// How much block has passed since the last deduction for the contract.
-	let blocks_passed = match block_number.saturating_sub(contract.deduct_block) {
+	let blocks_passed = match effective_block_number.saturating_sub(contract.deduct_block) {
 		// Rent has already been paid
 		n if n.is_zero() => return RentOutcome::Exempted,
 		n => n,
@@ -172,12 +173,12 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 ///
 /// NOTE: This function acts eagerly.
 pub fn pay_rent<T: Trait>(account: &T::AccountId) {
-	let _ = try_evict_or_and_pay_rent::<T>(account, <system::Module<T>>::block_number(), true);
+	let _ = try_evict_or_and_pay_rent::<T>(account, Zero::zero(), true);
 }
 
-/// Evict the account if he should be evicted at the given block number.
+/// Evict the account if it should be evicted at the given block number.
 ///
 /// NOTE: This function acts eagerly.
-pub fn try_evict_at<T: Trait>(account: &T::AccountId, block: T::BlockNumber) -> RentOutcome {
-	try_evict_or_and_pay_rent::<T>(account, block, false)
+pub fn try_evict_at<T: Trait>(account: &T::AccountId, handicap: T::BlockNumber) -> RentOutcome {
+	try_evict_or_and_pay_rent::<T>(account, handicap, false)
 }
