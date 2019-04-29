@@ -384,7 +384,7 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		pub fn on_finalize() {
+		fn on_finalize() {
 			<GasSpent<T>>::kill();
 		}
 	}
