@@ -17,12 +17,7 @@
 //! A non-std set of HTTP types.
 
 use crate::Vec;
-use crate::offchain::Timestamp;
-
-/// Opaque type for offchain http requests.
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct RequestId(pub(crate) u16);
+use primitives::offchain::{Timestamp, HttpRequestId as RequestId, HttpRequestStatus as RequestStatus};
 
 /// Request method (HTTP verb)
 #[derive(Clone, PartialEq, Eq)]
@@ -165,6 +160,7 @@ pub enum Error {
 }
 
 /// A struct representing an uncompleted http request.
+#[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PendingRequest {
 	/// Request ID
@@ -213,41 +209,8 @@ impl PendingRequest {
 	}
 }
 
-/// Status of the HTTP request
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum RequestStatus {
-	/// Deadline was reached why we waited for this request to finish.
-	DeadlineReached,
-	/// Request timed out.
-	Timeout,
-	/// Request status of this ID is not known.
-	Unknown,
-	/// The request is finished with given status code.
-	Finished(u16),
-}
-
-impl Default for RequestStatus {
-	fn default() -> Self {
-		RequestStatus::Unknown
-	}
-}
-
-impl RequestStatus {
-	/// Parse u16 as `RequestStatus`.
-	///
-	/// The first hundred of codes indicate internal states.
-	/// The rest are http response status codes.
-	pub fn from_u16(status: u16) -> Option<Self> {
-		match status {
-			0 => Some(RequestStatus::Unknown),
-			100...999 => Some(RequestStatus::Finished(status)),
-			_ => None,
-		}
-	}
-}
-
 /// A HTTP response.
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Response {
 	/// Request id
 	pub id: RequestId,
@@ -281,6 +244,7 @@ impl Response {
 }
 
 /// A buffered byte iterator over response body.
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct ResponseBody {
 	id: RequestId,
 	is_deadline_reached: bool,
@@ -344,6 +308,8 @@ impl Iterator for ResponseBody {
 }
 
 /// A collection of Headers in the response.
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Headers {
 	/// Raw headers
 	pub raw: Vec<(Vec<u8>, Vec<u8>)>,
@@ -371,6 +337,8 @@ impl Headers {
 }
 
 /// A custom iterator traversing all the headers.
+#[derive(Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct HeadersIterator<'a> {
 	collection: &'a [(Vec<u8>, Vec<u8>)],
 	index: Option<usize>,
@@ -392,5 +360,13 @@ impl<'a> HeadersIterator<'a> {
 	pub fn current(&self) -> Option<(&str, &str)> {
 		self.collection.get(self.index.unwrap_or(0))
 			.map(|val| (from_utf8(&val.0).unwrap_or(""), from_utf8(&val.1).unwrap_or("")))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn write_some() {
+		assert_eq!(true, false)
 	}
 }

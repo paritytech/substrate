@@ -24,7 +24,7 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain};
 
 pub mod backend;
 mod changes_trie;
@@ -217,10 +217,8 @@ pub trait Externalities<H: Hasher> {
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 
-	/// Submit extrinsic.
-	///
-	/// Returns an error in case the API is not available.
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+	/// Returns offchain externalities extension if present.
+	fn offchain(&mut self) -> Option<&mut offchain::Externalities>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -228,13 +226,9 @@ pub enum NeverOffchainExt {}
 
 impl NeverOffchainExt {
 	/// Create new offchain extensions.
-	pub fn new<'a>() -> Option<&'a mut Self> {
+	pub fn new<'a>() -> Option<&'a mut offchain::Externalities> {
 		None
 	}
-}
-
-impl OffchainExt for NeverOffchainExt {
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) { unreachable!() }
 }
 
 /// Code execution engine.
@@ -334,15 +328,15 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 }
 
 /// Creates new substrate state machine.
-pub fn new<'a, H, B, T, O, Exec>(
+pub fn new<'a, H, B, T, Exec>(
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a mut O>,
+	offchain_ext: Option<&'a mut offchain::Externalities>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-) -> StateMachine<'a, H, B, T, O, Exec> {
+) -> StateMachine<'a, H, B, T, Exec> {
 	StateMachine {
 		backend,
 		changes_trie_storage,
@@ -356,10 +350,10 @@ pub fn new<'a, H, B, T, O, Exec>(
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, H, B, T, O, Exec> {
+pub struct StateMachine<'a, H, B, T, Exec> {
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a mut O>,
+	offchain_ext: Option<&'a mut offchain::Externalities>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
@@ -367,12 +361,11 @@ pub struct StateMachine<'a, H, B, T, O, Exec> {
 	_hasher: PhantomData<H>,
 }
 
-impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
+impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
-	O: OffchainExt,
 	H::Out: Ord + HeapSizeOf,
 {
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -410,12 +403,11 @@ impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
-		let offchain = self.offchain_ext.as_mut();
 		let mut externalities = ext::Ext::new(
 			self.overlay,
 			self.backend,
 			self.changes_trie_storage,
-			offchain.map(|x| &mut **x),
+			self.offchain_ext.as_mut().map(|x| &mut **x),
 		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,

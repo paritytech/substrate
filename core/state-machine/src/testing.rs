@@ -23,6 +23,7 @@ use heapsize::HeapSizeOf;
 use trie::trie_root;
 use crate::backend::InMemory;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
+use primitives::offchain;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -171,7 +172,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		).map(|(root, _)| root.clone())
 	}
 
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
 		unimplemented!()
 	}
 }

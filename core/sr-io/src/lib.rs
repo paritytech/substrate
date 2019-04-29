@@ -34,6 +34,7 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
+use primitives::offchain::{Timestamp, HttpRequestId};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -237,7 +238,7 @@ export_api! {
 		fn submit_extrinsic<T: codec::Encode>(data: &T);
 
 		/// Returns current UNIX timestamp (in millis)
-		fn timestamp() -> offchain::Timestamp;
+		fn timestamp() -> Timestamp;
 
 		/// Initiaties a http request given HTTP verb and the URL.
 		///
@@ -247,11 +248,11 @@ export_api! {
 			method: &str,
 			uri: &str,
 			meta: &[u8]
-		) -> offchain::http::RequestId;
+		) -> HttpRequestId;
 
 		/// Append header to the request.
 		fn http_request_add_header(
-			request_id: offchain::http::RequestId,
+			request_id: HttpRequestId,
 			name: &str,
 			value: &str
 		);
@@ -263,9 +264,9 @@ export_api! {
 		///
 		/// Returns an error in case deadline is reached or the chunk couldn't be written.
 		fn http_request_write_body(
-			request_id: offchain::http::RequestId,
+			request_id: HttpRequestId,
 			chunk: &[u8],
-			deadline: Option<offchain::Timestamp>
+			deadline: Option<Timestamp>
 		) -> Result<(), ()>;
 
 		/// Block and wait for the responses for given requests.
@@ -276,15 +277,15 @@ export_api! {
 		///
 		/// Passing `None` as deadline blocks forever.
 		fn http_response_wait(
-			ids: &[offchain::http::RequestId],
-			deadline: Option<offchain::Timestamp>
-		) -> Vec<offchain::http::RequestStatus>;
+			ids: HttpRequestId],
+			deadline: Option<Timestamp>
+		) -> Vec<HttpRequestStatus>;
 
 		/// Read all response headers.
 		///
 		/// Resturns a vector of pairs `(HeaderKey, HeaderValue)`.
 		fn http_response_headers(
-			request_id: offchain::http::RequestId
+			request_id: HttpRequestId
 		) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 		/// Read a chunk of body response to given buffer.
@@ -293,9 +294,9 @@ export_api! {
 		/// is reached or server closed the connection.
 		/// Passing `None` as a deadline blocks forever.
 		fn http_response_read_body(
-			request_id: offchain::http::RequestId,
+			request_id: HttpRequestId,
 			buffer: &mut [u8],
-			deadline: Option<offchain::Timestamp>
+			deadline: Option<Timestamp>
 		) -> Result<usize, ()>;
 	}
 }

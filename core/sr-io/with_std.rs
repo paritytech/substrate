@@ -260,7 +260,9 @@ impl OffchainApi for () {
 	}
 
 	fn timestamp() -> offchain::Timestamp {
-		unimplemented!()
+		ext::with(|ext|
+			ext.timestamp().expect("timestamp can be called only in offchain worker context")
+		).expect("timestamp cannot be called outside of an Externalities-provided environment.")
 	}
 
 	fn http_request_start(
