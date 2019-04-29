@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Light client blockchin backend. Only stores headers and justifications of recent
+//! Light client blockchain backend. Only stores headers and justifications of recent
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
 use std::{sync::{Weak, Arc}, collections::HashMap};

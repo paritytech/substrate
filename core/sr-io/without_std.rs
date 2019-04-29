@@ -685,7 +685,6 @@ impl CryptoApi for () {
 			_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
 		}
 	}
-}
 
 impl OffchainApi for () {
 	fn submit_extrinsic<T: codec::Encode>(data: &T) {

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Light client call exector. Executes methods on remote full nodes, fetching
+//! Light client call executor. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
 use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::PhantomData};
@@ -406,7 +406,7 @@ pub fn prove_execution<Block, S, E>(
 /// Check remote contextual execution proof using given backend.
 ///
 /// Method is executed using passed header as environment' current block.
-/// Proof shoul include both environment preparation proof and method execution proof.
+/// Proof should include both environment preparation proof and method execution proof.
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,

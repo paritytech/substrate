@@ -79,7 +79,7 @@ impl Keyring {
 			.expect("static values are known good; qed")
 	}
 
-	/// Returns an interator over all test accounts.
+	/// Returns an iterator over all test accounts.
 	pub fn iter() -> impl Iterator<Item=Keyring> {
 		<Self as strum::IntoEnumIterator>::iter()
 	}

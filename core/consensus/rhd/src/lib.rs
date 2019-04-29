@@ -613,7 +613,7 @@ impl<B, P, I> BftService<B, P, I>
 			.map_or(true, |x| self.can_build_on_inner(header, x))
 	}
 
-	/// Get a reference to the underyling client.
+	/// Get a reference to the underlying client.
 	pub fn client(&self) -> &I { &*self.client }
 
 	fn can_build_on_inner(&self, header: &B::Header, live: &(B::Header, AgreementHandle)) -> bool {

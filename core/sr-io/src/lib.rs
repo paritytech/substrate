@@ -31,7 +31,7 @@ use hash_db::Hasher;
 use rstd::vec::Vec;
 
 #[doc(hidden)]
-pub use parity_codec as codec;
+pub use codec;
 
 pub use primitives::Blake2Hasher;
 
@@ -144,7 +144,7 @@ export_api! {
 		fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]>;
 
 		/// A trie root formed from the enumerated items.
-		/// TODO: remove (just use `ordered_trie_root` (NOTE currently not implemented for without_std))
+		/// TODO [#2382] remove (just use `ordered_trie_root` (NOTE currently not implemented for without_std))
 		fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
 		where
 			H: Hasher,
