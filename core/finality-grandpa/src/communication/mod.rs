@@ -65,7 +65,7 @@ mod cost {
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
 
-	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
+	pub(super) const INVALID_VIEW_CHANGE: i32 = -100;
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
