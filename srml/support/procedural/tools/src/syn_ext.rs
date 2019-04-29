@@ -22,7 +22,7 @@ use syn::{
 	visit::{Visit, self}, parse::{Parse, ParseStream, Result},
 	token::CustomKeyword, Ident,
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{ TokenStream, TokenTree };
 use quote::{ToTokens, quote};
 use std::iter::once;
 use srml_support_procedural_tools_derive::{ToTokens, Parse};
@@ -233,11 +233,32 @@ struct ContainsIdent<'a> {
 	result: bool,
 }
 
-impl<'ast> Visit<'ast> for ContainsIdent<'ast> {
-	fn visit_ident(&mut self, input: &'ast Ident) {
-		if input == self.ident {
+impl<'ast> ContainsIdent<'ast> {
+	fn visit_tokenstream(&mut self, stream: TokenStream) {
+		stream.into_iter().for_each(|tt|
+			match tt {
+				TokenTree::Ident(id) => self.visit_ident(&id),
+				TokenTree::Group(ref group) => self.visit_tokenstream(group.stream()),
+				_ => {}
+			}
+		)
+	}
+
+	fn visit_ident(&mut self, ident: &Ident) {
+		if ident == self.ident {
 			self.result = true;
 		}
+	}
+}
+
+impl<'ast> Visit<'ast> for ContainsIdent<'ast> {
+	fn visit_ident(&mut self, input: &'ast Ident) {
+		self.visit_ident(input);
+	}
+
+	fn visit_macro(&mut self, input: &'ast syn::Macro) {
+		self.visit_tokenstream(input.tts.clone());
+		visit::visit_macro(self, input);
 	}
 }
 

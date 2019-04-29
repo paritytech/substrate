@@ -318,7 +318,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
@@ -379,12 +379,12 @@ impl<T: Trait> Module<T> {
 
 	/// Gets extrinsics count.
 	pub fn extrinsic_count() -> u32 {
-		<ExtrinsicCount<T>>::get().unwrap_or_default()
+		ExtrinsicCount::get().unwrap_or_default()
 	}
 
 	/// Gets a total length of all executed extrinsics.
 	pub fn all_extrinsics_len() -> u32 {
-		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+		AllExtrinsicsLen::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
@@ -402,8 +402,8 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		<RandomSeed<T>>::kill();
-		<ExtrinsicCount<T>>::kill();
-		<AllExtrinsicsLen<T>>::kill();
+		ExtrinsicCount::kill();
+		AllExtrinsicsLen::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -493,7 +493,7 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This function is called only when the block is being constructed locally.
 	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
+		ExtrinsicData::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
@@ -507,19 +507,19 @@ impl<T: Trait> Module<T> {
 		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		<AllExtrinsicsLen<T>>::put(&total_length);
+		AllExtrinsicsLen::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
-		<ExtrinsicCount<T>>::put(extrinsic_index);
+		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}

@@ -181,7 +181,6 @@ mod tests {
 	use super::*;
 	use codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
-	use runtime_primitives::BuildStorageGen;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 		StorageFunctionType, StorageFunctionModifier,
@@ -200,9 +199,7 @@ mod tests {
 		use super::Trait;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-
-			}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 	}
 	use self::module::Module;
@@ -226,10 +223,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
 	}
 
-	type Map = Data<Test>;
+	type Map = Data;
 
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
@@ -312,7 +309,7 @@ mod tests {
 	#[test]
 	fn double_map_basic_insert_remove_remove_prefix_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			type DoubleMap = DataDM<Test>;
+			type DoubleMap = DataDM;
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
