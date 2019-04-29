@@ -55,14 +55,16 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
-	// Calculate an effective block number, i.e. after adjusting for handicap.
-	let effective_block_number = <system::Module<T>>::block_number().saturating_sub(handicap);
-
 	// How much block has passed since the last deduction for the contract.
-	let blocks_passed = match effective_block_number.saturating_sub(contract.deduct_block) {
-		// Rent has already been paid
-		n if n.is_zero() => return RentOutcome::Exempted,
-		n => n,
+	let blocks_passed = {
+		// Calculate an effective block number, i.e. after adjusting for handicap.
+		let effective_block_number = <system::Module<T>>::block_number().saturating_sub(handicap);
+
+		match effective_block_number.saturating_sub(contract.deduct_block) {
+			// Rent has already been paid
+			n if n.is_zero() => return RentOutcome::Exempted,
+			n => n,
+		}
 	};
 
 	let balance = T::Currency::free_balance(account);
