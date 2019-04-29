@@ -153,7 +153,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			// leave tombstone.
 
 			// Note: this operation is heavy.
-			// Note: if the storage hasn't been touched then it returns None, which is OK.
 			let child_storage_root = runtime_io::child_storage_root(&contract.trie_id);
 
 			let tombstone = TombstoneContractInfo::new(
@@ -179,6 +178,6 @@ pub fn pay_rent<T: Trait>(account: &T::AccountId) {
 /// Evict the account if it should be evicted at the given block number.
 ///
 /// NOTE: This function acts eagerly.
-pub fn try_evict_at<T: Trait>(account: &T::AccountId, handicap: T::BlockNumber) -> RentOutcome {
+pub fn try_evict<T: Trait>(account: &T::AccountId, handicap: T::BlockNumber) -> RentOutcome {
 	try_evict_or_and_pay_rent::<T>(account, handicap, false)
 }
