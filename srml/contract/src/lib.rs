@@ -493,7 +493,7 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if rent::try_evict_at::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
+			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
 				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
 			}
 		}
