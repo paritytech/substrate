@@ -31,7 +31,6 @@
 //! #### Council Proposals
 //!
 //! - **Councils' role** The councils' role is to: propose sensible referenda, cancel potentially dangerous or
-//!
 //! malicious referenda, and to represent passive stakeholders.
 //!
 //! - **Council member** (councillor) - A countable stakeholder represented by an on-chain
