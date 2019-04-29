@@ -23,6 +23,7 @@ use parity_codec::{Encode, Decode};
 use crate::{BalanceOf, Assignment, RawAssignment, ExpoMap, Trait, ValidatorPrefs};
 
 type Fraction = PerU128;
+/// Wrapper around the type used as the _safe_ wrapper around a `balance`.
 pub type ExtendedBalance = u128;
 
 // this is only used while creating the candidate score. Due to reasons explained below
