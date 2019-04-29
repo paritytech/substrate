@@ -148,6 +148,9 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		}
 
 		if !is_below_subsistence {
+			// The contract has funds above subsistence deposit and that means it can afford to
+			// leave tombstone.
+
 			// Note: this operation is heavy.
 			// Note: if the storage hasn't been touched then it returns None, which is OK.
 			let child_storage_root = runtime_io::child_storage_root(&contract.trie_id);
