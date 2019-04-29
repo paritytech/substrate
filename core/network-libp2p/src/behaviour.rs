@@ -20,9 +20,11 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
+#[cfg(not(target_os = "unknown"))]
 use libp2p::core::swarm::toggle::Toggle;
 use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut};
+#[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
@@ -45,6 +47,7 @@ pub struct Behaviour<TMessage, TSubstream> {
 	/// Periodically identifies the remote and responds to incoming requests.
 	identify: Identify<TSubstream>,
 	/// Discovers nodes on the local network.
+	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<TSubstream>>,
 
 	/// Queue of events to produce for the outside.
@@ -74,6 +77,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 			kademlia.add_connected_address(peer_id, addr.clone());
 		}
 
+		if enable_mdns {
+			#[cfg(target_os = "unknown")]
+			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
+		}
+
 		let clock = Clock::new();
 		Behaviour {
 			ping: Ping::new(PingConfig::new()),
@@ -87,6 +95,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 				local_peer_id: local_public_key.into_peer_id(),
 			},
 			identify,
+			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
 					Ok(mdns) => Some(mdns).into(),
@@ -304,6 +313,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
 impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: MdnsEvent) {
 		match event {

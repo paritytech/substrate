@@ -17,8 +17,10 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, tcp, dns, websocket, bandwidth
+	mplex, identity, secio, yamux, websocket, bandwidth
 };
+#[cfg(not(target_os = "unknown"))]
+use libp2p::{tcp, dns};
 use libp2p::core::{self, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
@@ -35,9 +37,15 @@ pub fn build_transport(
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
 
-	let transport = tcp::TcpConfig::new();
-	let transport = websocket::WsConfig::new(transport.clone()).or_transport(transport);
-	let transport = dns::DnsConfig::new(transport);
+	#[cfg(not(target_os = "unknown"))]
+	let transport = {
+		let transport = tcp::TcpConfig::new();
+		let transport = websocket::WsConfig::new(transport.clone()).or_transport(transport);
+		dns::DnsConfig::new(transport)
+	};
+	#[cfg(target_os = "unknown")]
+	let transport = websocket::BrowserWsConfig::new();
+
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
 	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
