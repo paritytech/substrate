@@ -748,6 +748,12 @@ impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 	}
 }
 
+impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
+	fn deref_mut(&mut self) -> &mut T {
+		&mut self.0
+	}
+}
+
 /// Something that provides a runtime api.
 pub trait ProvideRuntimeApi {
 	/// The concrete type that provides the api.
