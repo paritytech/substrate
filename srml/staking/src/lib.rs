@@ -404,7 +404,7 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
-	/// TODO: #https://github.com/paritytech/substrate/pull/2205#issuecomment-483551470
+	/// TODO: #1377
 	/// The backward convert should be removed as the new Phragmen API returns ratio.
 	/// The post-processing needs it but will be moved to off-chain.
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
@@ -953,7 +953,7 @@ impl<T: Trait> Module<T> {
 			// to be properly multiplied by a ratio, which will lead to another value
 			// less than u64 for sure. The result can then be safely passed to `to_balance`.
 			// For now the backward convert is used. A simple `TryFrom<u64>` is also safe.
-			let ratio_of = |b, p| (p as ExtendedBalance) * to_votes(b) / ACCURACY;
+			let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
 
 			// Compute the actual stake from nominator's ratio.
 			let mut assignments_with_stakes = assignments.iter().map(|(n, a)|(

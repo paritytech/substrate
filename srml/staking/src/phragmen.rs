@@ -28,9 +28,9 @@ pub type ExtendedBalance = u128;
 // this is only used while creating the candidate score. Due to reasons explained below
 // The more accurate this is, the less likely we choose a wrong candidate.
 const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
-// These are used to expose a fixed accuracy to the caller function. The bigger they are,
-// the more accurate we get, but the more likely it is for us to overflow. The case of overflow
-// is handled but accuracy will be lost. 32 or 16 are reasonable values.
+/// These are used to expose a fixed accuracy to the caller function. The bigger they are,
+/// the more accurate we get, but the more likely it is for us to overflow. The case of overflow
+/// is handled but accuracy will be lost. 32 or 16 are reasonable values.
 pub const ACCURACY: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 
 /// Wrapper around validation candidates some metadata.
@@ -69,9 +69,9 @@ pub struct Edge<AccountId> {
 	who: AccountId,
 	/// Load of this vote.
 	load: Fraction,
-	/// equal to `edge.load / nom.load`. Stored only to be used with post-processing.
+	/// Equal to `edge.load / nom.load`. Stored only to be used with post-processing.
 	ratio: ExtendedBalance,
-	/// Index of the candidate stored in the 'candidates' vector
+	/// Index of the candidate stored in the 'candidates' vector.
 	candidate_index: usize,
 }
 
@@ -83,7 +83,7 @@ pub struct Edge<AccountId> {
 /// Returns None if not enough candidates exist.
 ///
 /// The returned Option is a tuple consisting of:
-///   - The list elected candidates
+///   - The list of elected candidates.
 ///   - The list of nominators and their associated vote weights.
 pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	validator_count: usize,
@@ -268,7 +268,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 /// This function mutates the input parameters, most noticeably it updates the exposure of
 /// the elected candidates.
 ///
-/// The return value is to tolerance at which the function has stopped.
+/// No value is returned from the function and the `expo_map` parameter is updated.
 pub fn equalize<T: Trait + 'static>(
 	assignments: &mut Vec<(T::AccountId, BalanceOf<T>, Vec<Assignment<T>>)>,
 	expo_map: &mut ExpoMap<T>,
