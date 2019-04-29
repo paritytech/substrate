@@ -33,13 +33,17 @@ pub enum RentOutcome {
 	/// * or can't withdraw the rent,
 	/// * or go below subsistence threshold.
 	Evicted,
+	/// The outstanding dues were paid.
 	Paid,
 }
 
 /// Evict and optionally pay dues (or check account can pay them otherwise), for given block number.
 /// Return true iff the account has been evicted.
 ///
-/// NOTE: This function acts eagerly, all modification are committed into storages.
+/// `pay_rent` gives an ability to pay or skip paying rent. This is useful for the
+/// `try_evict_at` use-case.
+///
+/// NOTE: This function acts eagerly, all modification are committed into the storage.
 fn try_evict_or_and_pay_rent<T: Trait>(
 	account: &T::AccountId,
 	block_number: T::BlockNumber,
@@ -170,7 +174,6 @@ pub fn pay_rent<T: Trait>(account: &T::AccountId) {
 }
 
 /// Evict the account if he should be evicted at the given block number.
-/// Return `true` iff the account has been evicted.
 ///
 /// NOTE: This function acts eagerly.
 pub fn try_evict_at<T: Trait>(account: &T::AccountId, block: T::BlockNumber) -> RentOutcome {
