@@ -182,17 +182,20 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who,
-			GenericMessage::BlockRequest(request))
+			GenericMessage::BlockRequest(request)
+		)
 	}
 
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who,
-			GenericMessage::Consensus(consensus))
+			GenericMessage::Consensus(consensus)
+		)
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who,
-			GenericMessage::ChainSpecific(message))
+			GenericMessage::ChainSpecific(message)
+		)
 	}
 }
 
