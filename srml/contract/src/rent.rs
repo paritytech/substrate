@@ -37,11 +37,12 @@ pub enum RentOutcome {
 	Paid,
 }
 
-/// Evict and optionally pay dues (or check account can pay them otherwise), for given block number.
-/// Return true iff the account has been evicted.
+/// Evict and optionally pay dues (or check account can pay them otherwise) at the current
+/// block number (modulo `handicap`, read on).
 ///
-/// `pay_rent` gives an ability to pay or skip paying rent. This is useful for the
-/// `try_evict_at` use-case.
+/// `pay_rent` gives an ability to pay or skip paying rent.
+/// `handicap` gives a way to shift the state of the contract to some moment in the past.
+/// These parameters are useful for the `try_evict_at` use-case.
 ///
 /// NOTE: This function acts eagerly, all modification are committed into the storage.
 fn try_evict_or_and_pay_rent<T: Trait>(
@@ -177,6 +178,10 @@ pub fn pay_rent<T: Trait>(account: &T::AccountId) {
 }
 
 /// Evict the account if it should be evicted at the given block number.
+///
+/// `handicap` gives a way to shift the state of the contract to some moment in the past. E.g.
+/// if the contract is going to be evicted at the current block, `handicap=1` can defer
+/// the eviction for 1 block.
 ///
 /// NOTE: This function acts eagerly.
 pub fn try_evict_at<T: Trait>(account: &T::AccountId, handicap: T::BlockNumber) -> RentOutcome {
