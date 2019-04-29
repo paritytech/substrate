@@ -627,12 +627,10 @@ pub trait TestNetFactory: Sized {
 	fn new(n: usize) -> Self {
 		trace!(target: "test_network", "Creating test network");
 		let config = Self::default_config();
-		trace!(target: "test_network", "Creating test network");
 		let mut net = Self::from_config(&config);
-		trace!(target: "test_network", "Creating test network");
 
-		for _ in 0..n {
-			trace!(target: "test_network", "Creating test network");
+		for i in 0..n {
+			trace!(target: "test_network", "Adding peer {}", i);
 			net.add_peer(&config);
 		}
 		net
