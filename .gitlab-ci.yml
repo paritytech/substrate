@@ -226,7 +226,7 @@ publish-s3-doc:
   stage:                           deploy
   when:                            manual
   retry:                           1
-  image:                           parity/kubectl-helm:$HELM_VERSION
+  image:                           parity/kubetools:latest
   <<:                              *build-only
   tags:
     # this is the runner that is used to deploy it

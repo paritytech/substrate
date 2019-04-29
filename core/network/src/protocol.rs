@@ -22,7 +22,7 @@ use primitives::storage::StorageKey;
 use runtime_primitives::{generic::BlockId, ConsensusEngineId};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::import_queue::ImportQueue;
-use crate::message::{self, Message};
+use crate::message::{self, BlockRequest as BlockRequestMessage, Message};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::OnDemandService;
@@ -145,8 +145,14 @@ pub trait Context<B: BlockT> {
 	/// Get peer info.
 	fn peer_info(&self, peer: &PeerId) -> Option<PeerInfo<B>>;
 
-	/// Send a message to a peer.
-	fn send_message(&mut self, who: PeerId, data: crate::message::Message<B>);
+	/// Request a block from a peer.
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>);
+
+	/// Send a consensus message to a peer.
+	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
+
+	/// Send a chain-specific message to a peer.
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
 
 /// Protocol context.
@@ -162,10 +168,6 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn send_message(&mut self, who: PeerId, message: Message<B>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who, message)
-	}
-
 	fn report_peer(&mut self, who: PeerId, reason: Severity) {
 		self.network_chan.send(NetworkMsg::ReportPeer(who, reason))
 	}
@@ -176,6 +178,24 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 
 	fn client(&self) -> &Client<B> {
 		&*self.context_data.chain
+	}
+
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::BlockRequest(request)
+		)
+	}
+
+	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::Consensus(consensus)
+		)
+	}
+
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::ChainSpecific(message)
+		)
 	}
 }
 
