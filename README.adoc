@@ -168,12 +168,7 @@ You can distribute `mychain.json` so that everyone can synchronize and (dependin
 
 == Building
 
-* Join the Substrate technical riot chat (add a link)
-* Go through https://docs.google.com/presentation/d/1dhaoLb5V2K_vDe4EJlUcKwePD1nMktr57fOdSo8bHns/edit#slide=id.g45ee0ba2ab_3_12[Getting started on Substrate]
-* https://shawntabrizi.github.io/substrate-collectables-workshop/#/[Substratekitties tutorial]
-* https://shawntabrizi.github.io/substrate-contracts-workshop/#/[Contracts tutorial]
-* Visit the Substrate Developer Hub at https://docs.substrate.dev/.
-* Hack, try new things, ask questions
+See tiny.cc/substrate-getting-started.
 
 === Hacking on Substrate
 
