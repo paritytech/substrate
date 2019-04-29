@@ -21,6 +21,7 @@ use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
+use primitives::subtrie::SubTrie;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
@@ -41,7 +42,7 @@ use primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
-	ExecutionStrategy, ExecutionManager, prove_read,
+	ExecutionStrategy, ExecutionManager, prove_child_read, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
@@ -356,6 +357,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
 			.and_then(|state| prove_read(state, key)
+				.map(|(_, proof)| proof)
+				.map_err(Into::into))
+	}
+
+	/// Reads child storage value at a given block + key, returning read proof.
+	pub fn read_child_proof(&self, id: &BlockId<Block>, subtrie: &SubTrie, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+		self.state_at(id)
+			.and_then(|state| prove_child_read(state, subtrie, key)
 				.map(|(_, proof)| proof)
 				.map_err(Into::into))
 	}

@@ -291,7 +291,7 @@ const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;
 const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
 const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
 
-fn subtrie_root_as_hash<H: Hasher> (subtrie: &SubTrie) -> H::Out {
+pub fn subtrie_root_as_hash<H: Hasher> (subtrie: &SubTrie) -> H::Out {
 	let mut root = H::Out::default();
 	let max = rstd::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
 	root.as_mut()[..max].copy_from_slice(&subtrie.root_initial_value()[..max]);
@@ -397,6 +397,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 			return Some(NULL_NODE.into());
 		}
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
+
 		self.0.get(key, &derived_prefix)
 	}
 
@@ -415,8 +416,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 		}
 
 		let key = H::hash(value);
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		Self::emplace(self, key, &derived_prefix, value.into());
+		Self::emplace(self, key.clone(), prefix, value.into());
 		key
 	}
 
