@@ -209,7 +209,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		}
 
 		let mut local = self.local.borrow_mut();
-		let contract = local.entry(account.clone()).or_insert(Default::default());
+		let contract = local.entry(account.clone()).or_insert_with(|| Default::default());
 
 		contract.code_hash = Some(code_hash);
 		contract.rent_allowance = Some(<BalanceOf<T>>::zero());
