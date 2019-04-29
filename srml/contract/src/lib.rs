@@ -465,8 +465,8 @@ decl_module! {
 			result.map(|_| ())
 		}
 
-		/// Allows validators to claim a small reward for evicting a contract. If a validator
-		/// fails to do so, a regular users will be allowed to do so.
+		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
+		/// fails to do so, a regular users will be allowed to claim the reward.
 		///
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
@@ -485,11 +485,14 @@ decl_module! {
 
 			let mut check_block = <system::Module<T>>::block_number();
 
-			// Make validators advantaged
+			// Add some advantage for block producers (who send unsigned extrinsics) by
+			// adding a handicap: for signed extrinsics we use a slightly older block number
+			// for the eviction check. This can be viewed as if we pushed regular users back in past.
 			if signed {
 				check_block = check_block.saturating_sub(<Module<T>>::signed_claim_handicap());
 			}
 
+			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			if rent::try_evict_at::<T>(&dest, check_block) {
 				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
 			}
