@@ -30,7 +30,6 @@ use smallvec::{smallvec, SmallVec};
 use std::{error, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
-use void::Void;
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -198,6 +197,10 @@ enum ProtocolState<TMessage, TSubstream> {
 		reenable: bool,
 	},
 
+	/// In this state, we don't care about anything anymore and need to kill the connection as soon
+	/// as possible.
+	KillAsap,
+
 	/// We sometimes temporarily switch to this state during processing. If we are in this state
 	/// at the beginning of a method, that means something bad happened in the source code.
 	Poisoned,
@@ -295,6 +298,7 @@ where
 				}
 			}
 
+			st @ ProtocolState::KillAsap => st,
 			st @ ProtocolState::Opening { .. } => st,
 			st @ ProtocolState::Normal { .. } => st,
 			ProtocolState::Disabled { shutdown, .. } => {
@@ -319,27 +323,18 @@ where
 				ProtocolState::Disabled { shutdown, reenable: false }
 			}
 
-			ProtocolState::Opening { .. } => {
-				ProtocolState::Disabled { shutdown: SmallVec::new(), reenable: false }
-			}
-
-			ProtocolState::Normal { substreams, mut shutdown } => {
-				for mut substream in substreams {
-					substream.shutdown();
-					shutdown.push(substream);
-				}
-				let event = CustomProtoHandlerOut::CustomProtocolClosed {
-					result: Ok(())
-				};
-				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
-				ProtocolState::Disabled {
-					shutdown: shutdown.into_iter().collect(),
-					reenable: false
-				}
-			}
+			ProtocolState::Opening { .. } | ProtocolState::Normal { .. } =>
+				// At the moment, if we get disabled while things were working, we kill the entire
+				// connection in order to force a reset of the state.
+				// This is obviously an extremely shameful way to do things, but at the time of
+				// the writing of this comment, the networking works very poorly and a solution
+				// needs to be found.
+				ProtocolState::KillAsap,
 
 			ProtocolState::Disabled { shutdown, .. } =>
 				ProtocolState::Disabled { shutdown, reenable: false },
+
+			ProtocolState::KillAsap => ProtocolState::KillAsap,
 		};
 	}
 
@@ -465,6 +460,8 @@ where
 					None
 				}
 			}
+
+			ProtocolState::KillAsap => None,
 		}
 	}
 
@@ -510,6 +507,8 @@ where
 				shutdown.push(substream);
 				ProtocolState::Disabled { shutdown, reenable: false }
 			}
+
+			ProtocolState::KillAsap => ProtocolState::KillAsap,
 		};
 	}
 
@@ -530,7 +529,7 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	type InEvent = CustomProtoHandlerIn<TMessage>;
 	type OutEvent = CustomProtoHandlerOut<TMessage>;
 	type Substream = TSubstream;
-	type Error = Void;
+	type Error = ConnectionKillError;
 	type InboundProtocol = RegisteredProtocol<TMessage>;
 	type OutboundProtocol = RegisteredProtocol<TMessage>;
 	type OutboundOpenInfo = ();
@@ -586,7 +585,8 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 		match self.state {
 			ProtocolState::Init { .. } | ProtocolState::Opening { .. } => {}
 			ProtocolState::Normal { .. } => keep_forever = true,
-			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::No,
+			ProtocolState::Disabled { .. } | ProtocolState::Poisoned |
+			ProtocolState::KillAsap => return KeepAlive::No,
 		}
 
 		if keep_forever {
@@ -606,6 +606,11 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 		if !self.events_queue.is_empty() {
 			let event = self.events_queue.remove(0);
 			return Ok(Async::Ready(event))
+		}
+
+		// Kill the connection if needed.
+		if let ProtocolState::KillAsap = self.state {
+			return Err(ConnectionKillError);
 		}
 
 		// Process all the substreams.
@@ -642,5 +647,18 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			}
 		}
 		list.push(substream);
+	}
+}
+
+/// Error returned when switching from normal to disabled.
+#[derive(Debug)]
+pub struct ConnectionKillError;
+
+impl error::Error for ConnectionKillError {
+}
+
+impl fmt::Display for ConnectionKillError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "Connection kill when switching from normal to disabled")
 	}
 }
