@@ -238,8 +238,8 @@ impl Peerset {
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
 	/// over time, such as reputation increases for staying connected.
 	fn update_time(&mut self) {
-		// We basically do `now - self.latest_update`, except that by the way we do it we know that
-		// we're not going to miss entire seconds because of rounding to integers.
+		// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do it
+		// we know that we're not going to miss entire seconds because of rounding to integers.
 		let secs_diff = {
 			let now = Instant::now();
 			let elapsed_latest = self.latest_time_update - self.created;
@@ -286,7 +286,7 @@ impl Peerset {
 	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
 	///
 	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
-	/// connection implicitely means `Accept`, but incoming connections aren't cancelled by
+	/// connection implicitely means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
 	///
 	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
@@ -320,12 +320,14 @@ impl Peerset {
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(mut entry) => {
 				// Decrease the node's reputation so that we don't try it again and again and again.
-				// We decrease by 20% so that it doesn't take forever to remove a node we were
-				// connected to for a very long time.
-				entry.set_reputation(entry.reputation() - entry.reputation() / 20);
+				// We decrease by 20% if it's positive so that it doesn't take forever to remove a
+				// node we were connected to for a very long time.
+				if entry.reputation() > 0 {
+					entry.set_reputation(entry.reputation() - entry.reputation() / 20);
+				}
 				entry.add_reputation(-10);
 				entry.disconnect();
-			},
+			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
 				error!(target: "peerset", "Received dropped() for non-connected node"),
 		}
