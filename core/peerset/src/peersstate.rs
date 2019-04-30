@@ -240,6 +240,13 @@ impl<'a> ConnectedPeer<'a> {
 			.reserved = reserved;
 	}
 
+	/// Returns whether or not the node is reserved.
+	pub fn is_reserved(&self) -> bool {
+		self.parent.nodes.get(&self.peer_id)
+			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
+			.reserved
+	}
+
 	/// Returns the reputation value of the node.
 	pub fn reputation(&self) -> i32 {
 		self.parent.nodes.get(&self.peer_id)

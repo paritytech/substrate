@@ -196,8 +196,10 @@ impl Peerset {
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(mut peer) => {
 				peer.set_reserved(false);
-				peer.disconnect();
-				self.message_queue.push_back(Message::Drop(peer_id));
+				if self.reserved_only {
+					peer.disconnect();
+					self.message_queue.push_back(Message::Drop(peer_id));
+				}
 			}
 			peersstate::Peer::NotConnected(mut peer) => peer.set_reserved(false),
 			peersstate::Peer::Unknown(_) => {}
@@ -209,10 +211,12 @@ impl Peerset {
 		self.reserved_only = reserved_only;
 		if self.reserved_only {
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
-				self.data.peer(&peer_id).into_connected()
-					.expect("We are enumerating connected peers, therefore the peer is connected; qed")
-					.disconnect();
-				self.message_queue.push_back(Message::Drop(peer_id));
+				let peer = self.data.peer(&peer_id).into_connected()
+					.expect("We are enumerating connected peers, therefore the peer is connected; qed");
+				if !peer.is_reserved() {
+					peer.disconnect();
+					self.message_queue.push_back(Message::Drop(peer_id));
+				}
 			}
 
 		} else {
