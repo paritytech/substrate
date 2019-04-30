@@ -1,0 +1,14 @@
+[Unit]
+Description={{ app_name }} Systemd Service 
+
+[Service]
+EnvironmentFile=/etc/default/{{ app_name }}
+ExecStart={{ app_path }} --chain alex --port 30363 --name $NAME --key $KEY --node-key $NODE_KEY --in-peers 100 --out-peers 50 -laura=debug,afg=debug,sync=trace,state-db=debug,gossip=debug
+Restart=always
+User=parity
+Group=parity
+StandardOutput=file:/var/log/{{ app_name }}/{{ app_name }}.log
+StandardError=file:/var/log/polkadot/{{ app_name }}.log
+
+[Install]
+WantedBy=multi-user.target

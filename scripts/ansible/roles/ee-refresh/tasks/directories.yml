@@ -1,0 +1,8 @@
+- name: Create cache dir
+  file:
+    path: "{{ cache_dir }}"
+    state: directory
+- name: create binary dir
+  file:
+    path: "{{ binary_dir }}"
+    state: directory

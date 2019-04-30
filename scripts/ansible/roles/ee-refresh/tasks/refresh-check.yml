@@ -1,0 +1,30 @@
+- name: Download latest binary
+  copy:
+    src: "{{ artifact_path }}"
+    dest: "{{ cache_dir }}/{{ app_name }}"
+    remote_src: no
+    mode: 0755
+- name: copy binary if nothing is present in the binary_dir
+  copy:
+    src: "{{ cache_dir }}/{{ app_name }}"
+    dest: "{{ binary_dir }}/{{ app_name }}"
+    remote_src: yes
+    force: no
+- name: checksum current binary
+  stat:
+    path: "{{ binary_dir }}/{{ app_name }}"
+    get_checksum: yes
+  register: checksum_binary
+- name: checksum download cache
+  stat:
+    path: "{{ cache_dir }}/{{ app_name }}"
+    get_checksum: yes
+  register: checksum_cache
+- debug:
+     var: checksum_binary.stat.checksum
+- debug:
+     var: checksum_cache.stat.checksum
+- name: register {{ app_name }}_update if a new binary is detected
+  command: /bin/true
+  when: checksum_binary.stat.checksum != checksum_cache.stat.checksum
+  register: "{{ app_name }}_update"

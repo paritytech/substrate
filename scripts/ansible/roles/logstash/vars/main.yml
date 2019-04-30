@@ -1,0 +1,4 @@
+---
+elastic_host: "{{ lookup('env', 'ELASTIC_HOST') }}"
+elastic_user: "{{ lookup('env', 'ELASTIC_USER') }}"
+elastic_password: "{{ lookup('env', 'ELASTIC_PASSWORD') }}"

@@ -1,0 +1,2 @@
+---
+app_path: /home/parity/bin/{{ app_name }}

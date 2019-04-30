@@ -1,0 +1,25 @@
+# /etc/logstash/conf.d/{{ app_name }}.conf
+
+input {
+  file {
+    path => "/var/log/{{ app_name }}/{{ app_name }}.log"
+  }
+}
+
+filter {
+  date {
+     match => ["timestamp", "YYYY-mm-dd HH:MM:ss.SSS"]
+     target => "@timestamp"
+  }
+  grok {
+     match => { "message" => "%{TIMESTAMP_ISO8601:logtime} %{WORD:thread} %{LOGLEVEL:loglevel} %{WORD:module} %{GREEDYDATA:msg}" }
+     add_field => { "application" => "{{ app_name }}" }
+   }
+}
+output {
+   elasticsearch { 
+     hosts => ["{{ elastic_host }}"] 
+     user => "{{ elastic_user }}"
+     password => "{{ elastic_password }}"
+   }
+}

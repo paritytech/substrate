@@ -1,0 +1,18 @@
+- name: systemd stop {{ app_name }} 
+  systemd:
+    state: stopped 
+    name: "{{ app_name }}"
+- name: copy latest binary
+  copy: 
+    src: "{{ cache_dir }}/{{ app_name }}"
+    dest: "{{ binary_dir }}/{{ app_name }}"
+    remote_src: yes
+    mode: 0755
+- name: read systemd config changes
+  systemd:
+    daemon_reload: yes
+- name: systemd start {{ app_name }}
+  systemd:
+    state: started 
+    name: "{{ app_name }}"
+
