@@ -1,6 +1,6 @@
 [package]
 name = "substrate-consensus-slots"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
 edition = "2018"
