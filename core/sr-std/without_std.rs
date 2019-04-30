@@ -26,6 +26,7 @@ extern "C" {
 /// Wasm allocator
 pub struct WasmAllocator;
 
+#[cfg(not(feature = "no_global_allocator"))]
 #[global_allocator]
 static ALLOCATOR: WasmAllocator = WasmAllocator;
 
