@@ -325,7 +325,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
+		pub fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
 			}
@@ -338,7 +338,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
-		fn put_code(
+		pub fn put_code(
 			origin,
 			#[compact] gas_limit: T::Gas,
 			code: Vec<u8>
@@ -365,7 +365,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		fn call(
+		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
@@ -421,7 +421,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		fn create(
+		pub fn create(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
