@@ -159,7 +159,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&self) -> serde_json::Value {
+	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.custom_protocols.peerset_debug_info()
 	}
 }
