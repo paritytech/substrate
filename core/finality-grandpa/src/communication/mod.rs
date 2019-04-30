@@ -100,7 +100,7 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
 
 	/// Send a message to a bunch of specific peers, even if they've seen it already.
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>, topic: Option<Block::Hash>);
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
 
 	/// Report a peer's cost or benefit after some action.
 	fn report(&self, who: network::PeerId, cost_benefit: i32);
@@ -150,14 +150,14 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 		)
 	}
 
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>, topic: Option<B::Hash>) {
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
 		let msg = ConsensusMessage {
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
 
 		self.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(ctx, who, msg.clone(), topic)
+			gossip.send_message(ctx, who, msg.clone())
 		})
 	}
 
@@ -261,7 +261,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.service.send_message(
 				to,
 				GossipMessage::<B>::from(neighbor).encode(),
-				Some(topic),
 			),
 		);
 
@@ -360,7 +359,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		
 		self.validator.note_set(
 			set_id,
-			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode(), Some(topic)),
+			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
 		);
 
 		let service = self.service.clone();
@@ -439,7 +438,6 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 						|to, neighbor_msg| service.send_message(
 							to,
 							GossipMessage::<B>::from(neighbor_msg).encode(),
-							Some(topic),
 						),
 					);
 
@@ -714,7 +712,6 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			|to, neighbor| self.network.send_message(
 				to,
 				GossipMessage::<Block>::from(neighbor).encode(),
-				Some(topic),
 			),
 		);
 		self.network.gossip_message(topic, message.encode(), false);

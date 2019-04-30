@@ -487,7 +487,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		who: &PeerId,
 		message: ConsensusMessage,
-		topic: Option<B::Hash>,
 	) {
 		let peer = match self.peers.get_mut(who) {
 			None => return,

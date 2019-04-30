@@ -58,7 +58,7 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 				Async::Ready(None) => return Ok(Async::Ready(())),
 				Async::Ready(Some((to, packet))) => {
 					// send to peers.
-					net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode(), None);
+					net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
 
 					// rebroadcasting network.
 					delay.reset(rebroadcast_instant());
@@ -81,7 +81,7 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 
 					if let Some((ref to, ref packet)) = last {
 						// send to peers.
-						net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode(), None);
+						net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
 					}
 				}
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
