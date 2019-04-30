@@ -251,8 +251,10 @@ impl<
 			<system::Module<System>>::inc_account_nonce(sender);
 		} else {
 			// TODO TODO: does this can be wrongly called for just root extrinsic ? maybe we don't care
-			// TODO TODO: this final validation may differ in implementation should we provide two functions
-			let _ = Validatable::validate_transaction(xt.call());
+			match Validatable::apply(xt.call()) {
+				Ok(()) => (),
+				Err(()) => return Err(internal::ApplyError::BadSignature("TODO TODO")),
+			}
 		}
 
 		// Make sure to `note_extrinsic` only after we know it's going to be executed
@@ -344,11 +346,9 @@ impl<
 				provides,
 				longevity: TransactionLongevity::max_value(),
 			}
-		} else if let Some(valid_transaction) = Validatable::validate_transaction(xt.call()) {
-			// TODO TODO: do we want this order ? (first if signed else try validate)
-			valid_transaction
+		} else if let Some(transaction_validity) = Validatable::validate(xt.call()) {
+			transaction_validity
 		} else {
-			// TODO TODO: Change those errors.
 			return TransactionValidity::Invalid(if xt.sender().is_none() {
 				MISSING_SENDER
 			} else {
