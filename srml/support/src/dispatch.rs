@@ -54,8 +54,8 @@ pub trait Validatable {
 	}
 
 	// TODO TODO which error ApplyError, add more variants to it ?
-	fn validate_transaction(_call: &Self) -> result::Result<(), ()> {
-		Err(())
+	fn validate_transaction(_call: &Self) -> Option<result::Result<(), ()>> {
+		None
 	}
 }
 
@@ -1295,7 +1295,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 
-			fn validate_transaction(call: &Self) -> $crate::dispatch::result::Result<(), ()> {
+			fn validate_transaction(call: &Self) -> Option<$crate::dispatch::result::Result<(), ()>> {
 				match call {
 					$(
 						$call_type::$camelcase(call) => $crate::dispatch::Validatable::validate_transaction(call),

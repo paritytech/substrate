@@ -249,9 +249,10 @@ impl<
 
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_nonce(sender);
-		} else {
-			// TODO TODO: does this can be wrongly called for just root extrinsic ? maybe we don't care
-			match Validatable::validate_transaction(xt.call()) {
+
+		// TODO TODO: does this can be wrongly called for just root extrinsic ? maybe we don't care
+		} else if let Some(validated_transaction) = Validatable::validate_transaction(xt.call()) {
+			match validated_transaction {
 				Ok(()) => (),
 				Err(()) => return Err(internal::ApplyError::BadSignature("TODO TODO")),
 			}
