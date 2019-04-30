@@ -188,8 +188,6 @@ pub mod generic {
 		RemoteCallResponse(RemoteCallResponse),
 		/// Remote storage read request.
 		RemoteReadRequest(RemoteReadRequest<Hash>),
-		/// Remote child storage read request.
-		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
 		/// Remote storage read response.
 		RemoteReadResponse(RemoteReadResponse),
 		/// Remote header request.
@@ -200,6 +198,8 @@ pub mod generic {
 		RemoteChangesRequest(RemoteChangesRequest<Hash>),
 		/// Remote changes reponse.
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
+		/// Remote child storage read request.
+		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
