@@ -27,7 +27,7 @@ use crate::blocks::BlockCollection;
 use crate::extra_requests::ExtraRequestsAggregator;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, CheckedSub};
 use runtime_primitives::generic::BlockId;
-use crate::message::{self, generic::Message as GenericMessage};
+use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -791,7 +791,7 @@ impl<B: BlockT> ChainSync<B> {
 						max: Some(1),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
-					protocol.send_message(who, GenericMessage::BlockRequest(request));
+					protocol.send_block_request(who, request);
 				},
 				_ => (),
 			}
@@ -812,7 +812,7 @@ impl<B: BlockT> ChainSync<B> {
 						max: Some(MAX_UNKNOWN_FORK_DOWNLOAD_LEN),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
-					protocol.send_message(who, GenericMessage::BlockRequest(request));
+					protocol.send_block_request(who, request);
 				},
 				_ => (),
 			}
@@ -841,7 +841,7 @@ impl<B: BlockT> ChainSync<B> {
 							max: Some((range.end - range.start).as_() as u32),
 						};
 						peer.state = PeerSyncState::DownloadingNew(range.start);
-						protocol.send_message(who, GenericMessage::BlockRequest(request));
+						protocol.send_block_request(who, request);
 					} else {
 						trace!(target: "sync", "Nothing to request");
 					}
@@ -861,7 +861,7 @@ impl<B: BlockT> ChainSync<B> {
 			direction: message::Direction::Ascending,
 			max: Some(1),
 		};
-		protocol.send_message(who, GenericMessage::BlockRequest(request));
+		protocol.send_block_request(who, request);
 	}
 }
 

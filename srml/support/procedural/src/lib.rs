@@ -40,66 +40,102 @@ use proc_macro::TokenStream;
 /// }
 /// ```
 ///
-/// Declaration is set with this header `(pub) trait Store for Module<T: Trait> as Example`
-/// with `Store` a (pub) trait generated associating each storage to the Module and
-/// `as Example` setting the prefix used for storages of this module, it must be unique,
-/// another module with same name and same inner storage name will conflict.
+/// Declaration is set with the header `(pub) trait Store for Module<T: Trait> as Example`,
+/// with `Store` a (pub) trait generated associating each storage item to the `Module` and
+/// `as Example` setting the prefix used for storage items of this module. `Example` must be unique:
+/// another module with the same name and the same inner storage item name will conflict.
 ///
-/// Basic storage consist of a name and a type, supported types are:
-/// * storage value: `Foo: type`: implements [StorageValue](https://crates.parity.io/srml_support/storage/trait.StorageValue.html)
-/// * storage map: `Foo: map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html)
-/// * storage linked map: `Foo: linked_map type => type`: implements [StorageMap](https://crates.parity.io/srml_support/storage/trait.StorageMap.html) and [EnumarableStorageMap](https://crates.parity.io/srml_support/storage/trait.EnumerableStorageMap.html)
-/// * storage double map: Foo: double_map u32, $hash(u32) => u32;` implements `StorageDoubleMap` with hasher $hash one available in `Hashable` trait
-/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
+/// Basic storage consists of a name and a type; supported types are:
 ///
-/// And it can be extended as such:
+/// * Value: `Foo: type`: Implements [StorageValue](../srml_support/storage/trait.StorageValue.html).
+/// * Map: `Foo: map hasher($hash) type => type`: Implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
+///   with `$hash` representing a choice of hashing algorithms available in the
+///   [`Hashable` trait](../srml_support/trait.Hashable.html).
+///
+///   `hasher($hash)` is optional and its default is `blake2_256`.
+///
+///   /!\ Be careful with each key in the map that is inserted in the trie `$hash(module_name ++ storage_name ++ key)`.
+///   If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
+///
+/// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
+///   [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
+///
+/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements `StorageDoubleMap` with
+///   `$hash` and `$hash2` representing choices of hashing algorithms available in the
+///   [`Hashable` trait](../srml_support/trait.Hashable.html).
+///
+///   `hasher($hash)` is optional and its default is `blake2_256`.
+///
+///   /!\ Be careful with each key pair in the double map that is inserted in the trie.
+///   The final key is calculated as follows:
+///
+///   ```nocompile
+///   $hash(module_name ++ storage_name ++ first_key) ++ $hash2(second_key)
+///   ```
+///
+///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
+///   Otherwise, other values of all storage items can be compromised.
+///
+///   If the second key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
+///   Otherwise, other items in storage with the same first key can be compromised.
+///
+/// Basic storage can be extended as such:
 ///
 /// `#vis #name get(#getter) config(#field_name) build(#closure): #type = #default;`
-/// * `#vis`: set the visibility of the structure
-/// * `#name`: name of the storage, used as a prefix in the storage
-/// * [optional] `get(#getter)`: implements the function #getter to `Module`
-/// * [optional] `config(#field_name)`: `field_name` is optional if get is set: include in `GenesisConfig`
-/// * [optional] `build(#closure)`: closure called with storage overlays
-/// * `#type`: storage type
-/// * [optional] `#default`: value returned when none
 ///
-/// Storages are accessible in multiples ways, using:
-/// * the structure: `Foo::<T>`
-/// * the `Store` trait structure: `<Module<T> as Store>::Foo`
-/// * the getter on the module which calls get on the structure: `Module::<T>::foo()`
+/// * `#vis`: Set the visibility of the structure. `pub` or nothing.
+/// * `#name`: Name of the storage item, used as a prefix in storage.
+/// * [optional] `get(#getter)`: Implements the function #getter to `Module`.
+/// * [optional] `config(#field_name)`: `field_name` is optional if get is set.
+/// Will include the item in `GenesisConfig`.
+/// * [optional] `build(#closure)`: Closure called with storage overlays.
+/// * `#type`: Storage type.
+/// * [optional] `#default`: Value returned when none.
+///
+/// Storage items are accessible in multiple ways:
+///
+/// * The structure: `Foo::<T>`
+/// * The `Store` trait structure: `<Module<T> as Store>::Foo`
+/// * The getter on the module that calls get on the structure: `Module::<T>::foo()`
 ///
 /// ## GenesisConfig
 ///
 /// An optional `GenesisConfig` struct for storage initialization can be defined, either
 /// when at least one storage field requires default initialization
-/// (both `get` and `config` or `build`), or specifically as in :
+/// (both `get` and `config` or `build`), or specifically as in:
+///
 /// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
+///
+/// 		// Your storage items
 /// 	}
 ///		add_extra_genesis {
 ///			config(genesis_field): GenesisFieldType;
 ///			config(genesis_field2): GenesisFieldType;
 ///			...
 ///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
-///				// Modification of storages
+///				// Modification of storage
 ///			})
 ///		}
 /// }
 /// ```
-/// This struct can be expose as `Config` by `decl_runtime` macro.
 ///
-/// ### Module with instances
+/// This struct can be exposed as `Config` by the `decl_runtime!` macro.
 ///
-/// `decl_storage!` macro support building modules with instances with the following syntax: (DefaultInstance type
-/// is optional)
+/// ### Module with Instances
+///
+/// The `decl_storage!` macro supports building modules with instances with the following syntax
+/// (`DefaultInstance` type is optional):
+///
 /// ```nocompile
 /// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
 ///
-/// Then the genesis config is generated with two generic parameter `GenesisConfig<T, I>`
-/// and storages are now accessible using two generic parameters like:
-/// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`
+/// Then the genesis config is generated with two generic parameters (i.e. `GenesisConfig<T, I>`)
+/// and storage items are accessible using two generic parameters, e.g.:
+/// `<Dummy<T, I>>::get()` or `Dummy::<T, I>::get()`.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

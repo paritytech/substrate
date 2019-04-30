@@ -23,7 +23,7 @@ use fork_tree::ForkTree;
 use network_libp2p::PeerId;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::message::{self, Message, generic::Message as GenericMessage};
+use crate::message;
 use crate::protocol::Context;
 use crate::sync::{PeerSync, PeerSyncState};
 
@@ -39,8 +39,8 @@ pub(crate) trait ExtraRequestsEssence<B: BlockT> {
 
 	/// Name of request type to display in logs.
 	fn type_name(&self) -> &'static str;
-	/// Prepare network message corresponding to the request.
-	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B>;
+	/// Send network message corresponding to the request.
+	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>);
 	/// Accept response.
 	fn import_response(
 		&self,
@@ -221,9 +221,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 				.state = self.essence.peer_downloading_state(request.0.clone());
 
 			trace!(target: "sync", "Requesting {} for block #{} from {}", self.essence.type_name(), request.0, peer);
-			let request = self.essence.into_network_request(request);
-
-			protocol.send_message(peer, request);
+			self.essence.send_network_request(protocol, peer, request);
 		}
 
 		self.pending_requests.append(&mut unhandled_requests);
@@ -392,8 +390,8 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 		"justification"
 	}
 
-	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
-		GenericMessage::BlockRequest(message::generic::BlockRequest {
+	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>) {
+		protocol.send_block_request(peer, message::generic::BlockRequest {
 			id: 0,
 			fields: message::BlockAttributes::JUSTIFICATION,
 			from: message::FromBlock::Hash(request.0),
@@ -421,8 +419,8 @@ impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence<B> {
 		"finality proof"
 	}
 
-	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
-		GenericMessage::FinalityProofRequest(message::generic::FinalityProofRequest {
+	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>) {
+		protocol.send_finality_proof_request(peer, message::generic::FinalityProofRequest {
 			id: 0,
 			block: request.0,
 			request: self.0.as_ref()

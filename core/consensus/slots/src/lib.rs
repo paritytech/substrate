@@ -41,7 +41,7 @@ use codec::{Encode, Decode};
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {
-	/// The type fo the future that will be returned when a new slot is
+	/// The type of the future that will be returned when a new slot is
 	/// triggered.
 	type OnSlot: IntoFuture<Item=(), Error=consensus_common::Error>;
 
@@ -71,6 +71,7 @@ pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_comm
 }
 
 /// Start a new slot worker in a separate thread.
+#[deprecated(since = "1.1", note = "Please spawn a thread manually")]
 pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
 	slot_duration: SlotDuration<T>,
 	client: Arc<C>,
