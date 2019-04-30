@@ -24,8 +24,10 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
-use primitives::subtrie::SubTrie;
+use primitives::{
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt,
+	subtrie::SubTrie,
+};
 
 pub mod backend;
 mod changes_trie;
@@ -38,7 +40,7 @@ mod trie_backend;
 mod trie_backend_essence;
 
 use overlayed_changes::OverlayedChangeSet;
-pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
+pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB, Recorder as ProofRecorder};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -53,7 +55,10 @@ pub use changes_trie::{
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
 };
 pub use overlayed_changes::OverlayedChanges;
-pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
+pub use proving_backend::{
+	create_proof_check_backend, create_proof_check_backend_storage,
+	ProvingBackend,
+};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 
@@ -991,7 +996,7 @@ mod tests {
 		// Note that proof of get_subtrie should use standard child proof
 		let subtrie1 = remote_backend.child_trie(b"sub1").unwrap().unwrap();
 		let _remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let (v, remote_proof) = prove_child_read(remote_backend, &subtrie1, b"value3").unwrap();
+		let (_v, remote_proof) = prove_child_read(remote_backend, &subtrie1, b"value3").unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), &subtrie1, b"value3").unwrap();
 		let local_result2 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), &subtrie1, b"value2").unwrap();
 		assert_eq!(local_result1, Some(vec![142]));

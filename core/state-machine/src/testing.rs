@@ -161,7 +161,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 	}
 
 	fn child_storage_root(&mut self, _subtrie: &SubTrie) -> Vec<u8> {
-		unimplemented!()
+		vec![]
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {

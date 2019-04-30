@@ -745,7 +745,13 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-			assert_eq!(&contract::CodeHashOf::<Runtime>::get(addr).unwrap(), &transfer_ch);
+			assert_eq!(
+				&contract::ContractInfoOf::<Runtime>::get(addr)
+					.and_then(|c| c.get_alive())
+					.unwrap()
+					.code_hash,
+				&transfer_ch
+			);
 		});
 	}
 
