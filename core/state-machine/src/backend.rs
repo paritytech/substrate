@@ -335,16 +335,16 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;
 		let mut new_child_roots = Vec::new();
-    let mut root_map = None;
+		let mut root_map = None;
 		for (storage_key, map) in self.inner {
 			if let Some(storage_key) = storage_key.as_ref() {
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?;
-        new_child_roots.push((storage_key.clone(), ch.as_ref().into())); 
+				new_child_roots.push((storage_key.clone(), ch.as_ref().into())); 
 			} else {
 				root_map = Some(map);
 			}
 		}
-    // root handling
+		// root handling
 		if let Some(map) = root_map.take() {
 			root = Some(insert_into_memory_db::<H, _>(&mut mdb, map.into_iter().chain(new_child_roots.into_iter()))?);
 		}
