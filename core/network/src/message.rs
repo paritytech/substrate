@@ -122,15 +122,6 @@ pub struct RemoteReadResponse {
 	pub proof: Vec<Vec<u8>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-/// Remote read child response.
-pub struct RemoteReadChildResponse {
-	/// Id of a request this response was made for.
-	pub id: RequestId,
-	/// Read proof.
-	pub proof: Vec<Vec<u8>>,
-}
-
 /// Generic types.
 pub mod generic {
 	use parity_codec::{Encode, Decode};
@@ -138,7 +129,7 @@ pub mod generic {
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
-		RemoteReadResponse, RemoteReadChildResponse, Transactions, Direction,
+		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 	};
 	/// Consensus is mostly opaque to us
@@ -201,8 +192,6 @@ pub mod generic {
 		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
 		/// Remote storage read response.
 		RemoteReadResponse(RemoteReadResponse),
-		/// Remote child storage read response.
-		RemoteReadChildResponse(RemoteReadChildResponse),
 		/// Remote header request.
 		RemoteHeaderRequest(RemoteHeaderRequest<Number>),
 		/// Remote header response.

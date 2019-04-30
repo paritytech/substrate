@@ -275,6 +275,14 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				},
 				Err(error) => Accept::CheckFailed(error, RequestData::RemoteRead(request, sender)),
 			},
+			RequestData::RemoteReadChild(request, sender) => match self.checker.check_read_child_proof(&request, response.proof) {
+				Ok(response) => {
+					// we do not bother if receiver has been dropped already
+					let _ = sender.send(Ok(response));
+					Accept::Ok
+				},
+				Err(error) => Accept::CheckFailed(error, RequestData::RemoteReadChild(request, sender)),
+			},
 			data => Accept::Unexpected(data),
 		})
 	}
@@ -572,6 +580,13 @@ pub mod tests {
 		}
 
 		fn check_read_proof(&self, _: &RemoteReadRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
+			match self.ok {
+				true => Ok(Some(vec![42])),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_child_proof(&self, _: &RemoteReadChildRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),
 				false => Err(ClientError::Backend("Test error".into())),

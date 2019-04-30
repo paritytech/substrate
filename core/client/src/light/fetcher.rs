@@ -26,7 +26,8 @@ use heapsize::HeapSizeOf;
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
-	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
+	TrieBackend, read_proof_check, key_changes_proof_check,
+  create_proof_check_backend_storage, read_child_proof_check};
 
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -167,6 +168,12 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	fn check_read_proof(
 		&self,
 		request: &RemoteReadRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Option<Vec<u8>>>;
+	/// Check remote storage read proof.
+	fn check_read_child_proof(
+		&self,
+		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>>;
 	/// Check remote method execution proof.
@@ -355,6 +362,19 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
 		read_proof_check::<H>(convert_hash(request.header.state_root()), remote_proof, &request.key)
+			.map_err(Into::into)
+	}
+
+	fn check_read_child_proof(
+		&self,
+		request: &RemoteReadChildRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Option<Vec<u8>>> {
+		read_child_proof_check::<H>(
+      convert_hash(request.header.state_root()),
+      remote_proof,
+      &request.storage_key,
+      &request.key)
 			.map_err(Into::into)
 	}
 
