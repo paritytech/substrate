@@ -1,4 +1,4 @@
-- name: Copy polkadot systemd configuration
+- name: Copy {{ app_name }} systemd configuration
   template:
     src: "{{ app_name }}.service.j2"
     dest: /etc/systemd/system/{{ app_name }}.service 
@@ -10,11 +10,11 @@
   file:
     path: "/var/log/{{ app_name }}"
     state: directory
-- name: enable polkadot service 
+- name: enable {{ app_name }}  service 
   service:
     name: "{{ app_name }}"
     enabled: yes
-- name: Start polkadot service 
+- name: Start {{ app_name }} service 
   systemd:
     name: "{{ app_name }}"
     state: started

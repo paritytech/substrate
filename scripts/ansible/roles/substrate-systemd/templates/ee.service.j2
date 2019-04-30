@@ -8,7 +8,7 @@ Restart=always
 User=parity
 Group=parity
 StandardOutput=file:/var/log/{{ app_name }}/{{ app_name }}.log
-StandardError=file:/var/log/polkadot/{{ app_name }}.log
+StandardError=file:/var/log/{{ app_name }}/{{ app_name }}.log
 
 [Install]
 WantedBy=multi-user.target
