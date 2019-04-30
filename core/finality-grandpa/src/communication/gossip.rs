@@ -714,7 +714,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			match GossipMessage::<Block>::decode(&mut data) {
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
-					true
+					false
 				}
 				Some(GossipMessage::Neighbor(neighbor_msg)) => {
 					let p = neighbor_msg.into_neighbor_packet();
@@ -732,7 +732,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					&& inner.local_view.last_commit <= height
 				},
 				Some(GossipMessage::VoteOrPrecommit(_)) => {
-					true
+					false
 				}, // should not be the case.
 			}
 		})
