@@ -1295,7 +1295,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 
-			fn validate_transaction(call: &Self) -> Result<(), ()> {
+			fn validate_transaction(call: &Self) -> $crate::dispatch::result::Result<(), ()> {
 				match call {
 					$(
 						$call_type::$camelcase(call) => $crate::dispatch::Validatable::validate_transaction(call),
