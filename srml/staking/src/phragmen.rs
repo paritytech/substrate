@@ -247,12 +247,27 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			if assignment.1.len() > 0 {
 				// To ensure an assertion indicating: no stake from the nominator going to waste,
 				// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-				let sum = assignment.1.iter().map(|a| a.1).sum::<ExtendedBalance>();
-				let diff = ACCURACY.checked_sub(sum).unwrap_or(0) as usize;
+				let vote_count = assignment.1.len() as ExtendedBalance;
 				let l = assignment.1.len();
-				// TODO: rethink this approach + the limit value. There should indeed be a limit.
-				for i in 0..diff.min(1000) {
-					assignment.1[i%l].1 = assignment.1[i%l].1.saturating_add(1);
+				let sum = assignment.1.iter().map(|a| a.1).sum::<ExtendedBalance>();
+				let diff = ACCURACY.checked_sub(sum).unwrap_or(0);
+				let diff_per_vote= diff / vote_count;
+
+				if diff_per_vote > 0 {
+					for i in 0..l {
+						assignment.1[i%l].1 =
+							assignment.1[i%l].1
+							.saturating_add(diff_per_vote);
+					}
+				}
+
+				// `remainder` is set to be less than maximum votes of a nominator (currently 16).
+				// safe to cast it to usize.
+				let remainder = diff - diff_per_vote * vote_count;
+				for i in 0..remainder as usize {
+					assignment.1[i%l].1 =
+						assignment.1[i%l].1
+						.saturating_add(1);
 				}
 				assigned.push(assignment);
 			}
