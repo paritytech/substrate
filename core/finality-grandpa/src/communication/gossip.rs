@@ -755,16 +755,22 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			match GossipMessage::<Block>::decode(&mut data) {
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
-					let peer = match inner.peers.peer(who) {
-						None => return false,
-						Some(x) => x,
-					};
+					if let MessageIntent::PeriodicRebroadcast = intent {
+						println!("GOT PERIODIC REBROADCAST");
+						return do_rebroadcast;
+					}
+					
 					Some(full.message.target_number) >= inner.local_view.last_commit
 				}
 				Some(GossipMessage::Neighbor(_)) => {
 					panic!("got neighbor in message allowed")
 				},
-				Some(GossipMessage::VoteOrPrecommit(msg)) => {
+				Some(GossipMessage::VoteOrPrecommit(_)) => {
+					if let MessageIntent::PeriodicRebroadcast = intent {
+						println!("GOT PERIODIC REBROADCAST");
+						return do_rebroadcast;
+					}
+
 					let peer = match inner.peers.peer(who) {
 						None => return false,
 						Some(x) => x,
