@@ -297,8 +297,8 @@ mod tests {
 	fn proof_recorded_and_checked_with_child() {
 		let subtrie1 = ChildStorageKey::<Blake2Hasher>::from_slice(b":child_storage:default:sub1").unwrap();
 		let subtrie2 = ChildStorageKey::<Blake2Hasher>::from_slice(b":child_storage:default:sub2").unwrap();
-    let own1 = subtrie1.into_owned();
-    let own2 = subtrie2.into_owned();
+		let own1 = subtrie1.into_owned();
+		let own2 = subtrie2.into_owned();
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
 			.chain((28..65).map(|i| (Some(own1.clone()), vec![i], Some(vec![i]))))
 			.chain((10..15).map(|i| (Some(own2.clone()), vec![i], Some(vec![i]))))

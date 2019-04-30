@@ -27,7 +27,7 @@ use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check,
-  create_proof_check_backend_storage, read_child_proof_check};
+	create_proof_check_backend_storage, read_child_proof_check};
 
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -87,8 +87,6 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
 	pub retry_count: Option<usize>,
 }
-
-
 
 /// Remote key changes read request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -371,10 +369,10 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
 		read_child_proof_check::<H>(
-      convert_hash(request.header.state_root()),
-      remote_proof,
-      &request.storage_key,
-      &request.key)
+			convert_hash(request.header.state_root()),
+			remote_proof,
+			&request.storage_key,
+			&request.key)
 			.map_err(Into::into)
 	}
 
