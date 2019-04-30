@@ -152,6 +152,12 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
+			signed_claim_handicap: 2,
+			rent_byte_price: 4,
+			rent_deposit_offset: 1000,
+			storage_size_offset: 8,
+			surcharge_reward: 150,
+			tombstone_deposit: 16,
 			transaction_base_fee: 1 * CENTS,
 			transaction_byte_fee: 10 * MILLICENTS,
 			transfer_fee: 1 * CENTS,
@@ -239,6 +245,12 @@ pub fn testnet_genesis(
 	const ENDOWMENT: u128 = 1 << 20;
 
 	let mut contract_config = ContractConfig {
+		signed_claim_handicap: 2,
+		rent_byte_price: 4,
+		rent_deposit_offset: 1000,
+		storage_size_offset: 8,
+		surcharge_reward: 150,
+		tombstone_deposit: 16,
 		transaction_base_fee: 1,
 		transaction_byte_fee: 0,
 		transfer_fee: 0,
