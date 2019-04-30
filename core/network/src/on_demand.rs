@@ -27,7 +27,8 @@ use linked_hash_map::Entry;
 use parking_lot::Mutex;
 use client::error::Error as ClientError;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
+	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
+	RemoteReadChildRequest};
 use crate::message;
 use network_libp2p::{Severity, PeerId};
 use crate::config::Roles;
@@ -105,6 +106,7 @@ struct Request<Block: BlockT> {
 enum RequestData<Block: BlockT> {
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, OneShotSender<Result<Block::Header, ClientError>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
+	RemoteReadChild(RemoteReadChildRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
 	RemoteCall(RemoteCallRequest<Block::Header>, OneShotSender<Result<Vec<u8>, ClientError>>),
 	RemoteChanges(RemoteChangesRequest<Block::Header>, OneShotSender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
 }
@@ -333,6 +335,12 @@ impl<B> Fetcher<B> for OnDemand<B> where
 			RemoteResponse { receiver })
 	}
 
+	fn remote_read_child(&self, request: RemoteReadChildRequest<B::Header>) -> Self::RemoteReadResult {
+		let (sender, receiver) = channel();
+		self.schedule_request(request.retry_count.clone(), RequestData::RemoteReadChild(request, sender),
+			RemoteResponse { receiver })
+	}
+
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = channel();
 		self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
@@ -471,6 +479,7 @@ impl<Block: BlockT> Request<Block> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) => data.block,
 			RequestData::RemoteRead(ref data, _) => *data.header.number(),
+			RequestData::RemoteReadChild(ref data, _) => *data.header.number(),
 			RequestData::RemoteCall(ref data, _) => *data.header.number(),
 			RequestData::RemoteChanges(ref data, _) => data.max_block.0,
 		}
@@ -487,6 +496,13 @@ impl<Block: BlockT> Request<Block> {
 				message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
 					id: self.id,
 					block: data.block,
+					key: data.key.clone(),
+				}),
+			RequestData::RemoteReadChild(ref data, _) =>
+				message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
+					id: self.id,
+					block: data.block,
+					storage_key: data.storage_key.clone(),
 					key: data.key.clone(),
 				}),
 			RequestData::RemoteCall(ref data, _) =>
@@ -516,6 +532,7 @@ impl<Block: BlockT> RequestData<Block> {
 			RequestData::RemoteHeader(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteReadChild(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteChanges(_, sender) => { let _ = sender.send(Err(error)); },
 		}
 	}
@@ -529,7 +546,8 @@ pub mod tests {
 	use runtime_primitives::traits::NumberFor;
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
+		ChangesProof,	RemoteCallRequest, RemoteReadRequest,
+		RemoteReadChildRequest, RemoteChangesRequest};
 	use crate::config::Roles;
 	use crate::message;
 	use network_libp2p::{PeerId, Severity};
@@ -830,6 +848,33 @@ pub mod tests {
 		let response = on_demand.remote_read(RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
+			key: b":key".to_vec(),
+			retry_count: None,
+		});
+		let thread = ::std::thread::spawn(move || {
+			let result = response.wait().unwrap();
+			assert_eq!(result, Some(vec![42]));
+		});
+
+		on_demand.on_remote_read_response(peer0.clone(), message::RemoteReadResponse {
+			id: 0,
+			proof: vec![vec![2]],
+		});
+		thread.join().unwrap();
+	}
+
+	#[test]
+	fn receives_remote_read_child_response() {
+		let (_x, on_demand) = dummy(true);
+		let (network_sender, _network_port) = network_channel();
+		let peer0 = PeerId::random();
+		on_demand.set_network_sender(network_sender.clone());
+		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+
+		let response = on_demand.remote_read_child(RemoteReadChildRequest {
+			header: dummy_header(),
+			block: Default::default(),
+			storage_key: b":child_storage:sub".to_vec(),
 			key: b":key".to_vec(),
 			retry_count: None,
 		});

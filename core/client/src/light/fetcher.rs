@@ -72,6 +72,23 @@ pub struct RemoteReadRequest<Header: HeaderT> {
 	pub retry_count: Option<usize>,
 }
 
+/// Remote storage read child request.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteReadChildRequest<Header: HeaderT> {
+	/// Read at state of given block.
+	pub block: Header::Hash,
+	/// Header of block at which read is performed.
+	pub header: Header,
+	/// Storage key for child.
+	pub storage_key: Vec<u8>,
+	/// Child storage key to read.
+	pub key: Vec<u8>,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
+}
+
+
+
 /// Remote key changes read request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteChangesRequest<Header: HeaderT> {
@@ -125,6 +142,8 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
 	/// Fetch remote storage value.
 	fn remote_read(&self, request: RemoteReadRequest<Block::Header>) -> Self::RemoteReadResult;
+	/// Fetch remote storage child value.
+	fn remote_read_child(&self, request: RemoteReadChildRequest<Block::Header>) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
 	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
@@ -423,6 +442,10 @@ pub mod tests {
 		}
 
 		fn remote_read(&self, _request: RemoteReadRequest<Header>) -> Self::RemoteReadResult {
+			err("Not implemented on test node".into())
+		}
+
+		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
 			err("Not implemented on test node".into())
 		}
 

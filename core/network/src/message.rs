@@ -23,7 +23,7 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
-	FromBlock
+	FromBlock, RemoteReadChildRequest,
 };
 
 /// A unique ID of a request.
@@ -122,6 +122,15 @@ pub struct RemoteReadResponse {
 	pub proof: Vec<Vec<u8>>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+/// Remote read child response.
+pub struct RemoteReadChildResponse {
+	/// Id of a request this response was made for.
+	pub id: RequestId,
+	/// Read proof.
+	pub proof: Vec<Vec<u8>>,
+}
+
 /// Generic types.
 pub mod generic {
 	use parity_codec::{Encode, Decode};
@@ -129,8 +138,8 @@ pub mod generic {
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
-		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
-		RequestId, Transactions, Direction, ConsensusEngineId,
+		RemoteReadResponse, RemoteReadChildResponse, Transactions, Direction,
+		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -188,8 +197,12 @@ pub mod generic {
 		RemoteCallResponse(RemoteCallResponse),
 		/// Remote storage read request.
 		RemoteReadRequest(RemoteReadRequest<Hash>),
+		/// Remote child storage read request.
+		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
 		/// Remote storage read response.
 		RemoteReadResponse(RemoteReadResponse),
+		/// Remote child storage read response.
+		RemoteReadChildResponse(RemoteReadChildResponse),
 		/// Remote header request.
 		RemoteHeaderRequest(RemoteHeaderRequest<Number>),
 		/// Remote header response.
@@ -287,6 +300,19 @@ pub mod generic {
 		pub id: RequestId,
 		/// Block at which to perform call.
 		pub block: H,
+		/// Storage key.
+		pub key: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote storage read child request.
+	pub struct RemoteReadChildRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block at which to perform call.
+		pub block: H,
+		/// Child Storage key.
+		pub storage_key: Vec<u8>,
 		/// Storage key.
 		pub key: Vec<u8>,
 	}
