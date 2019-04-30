@@ -159,7 +159,8 @@ impl Decode for BabeSeal {
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::babe::Config` can be eliminated.
+// and `super::aura::Config` can be eliminated.
+// https://github.com/paritytech/substrate/issues/2434
 pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
 impl Config {
@@ -395,6 +396,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		}
 
 		// FIXME replace the dummy empty slices with real data
+		// https://github.com/paritytech/substrate/issues/2435
+		// https://github.com/paritytech/substrate/issues/2436
 		let authoring_result = if let Some((inout, proof, _batchable_proof)) = author_block(
 			&[0u8; 0],
 			slot_info.number,
@@ -840,7 +843,6 @@ fn author_block(
 	key: &sr25519::Pair,
 	threshold: u64,
 ) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
-	// FIXME this is O(n)
 	if !authorities.contains(&key.public()) { return None }
 	let transcript = make_transcript(
 		randomness,
