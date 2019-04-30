@@ -255,7 +255,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		<H as Hasher>::Out: Ord,
 	{
 		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-		let transaction: Vec<_> = delta.into_iter().collect();
+		let mut transaction: Vec<_> = delta.into_iter().collect();
 		let mut map_input = existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>();
 
@@ -263,6 +263,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		for (storage_key, _existing_pairs) in self.inner.iter() {
 			if let Some(storage_key) = storage_key.as_ref() {
 				let child_root = self.child_storage_root(storage_key, ::std::iter::empty()).0;
+				transaction.push((storage_key.clone(), Some(child_root.clone())));
 				map_input.insert(storage_key.clone(), Some(child_root));
 			}
 		}
