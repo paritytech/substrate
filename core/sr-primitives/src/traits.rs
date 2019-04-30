@@ -687,6 +687,8 @@ pub trait Applyable: Sized + Send + Sync {
 	fn index(&self) -> Option<&Self::Index>;
 	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
+	/// Returns a reference to the call.
+	fn call(&self) -> &Self::Call;
 	/// Deconstructs into function call and sender.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }

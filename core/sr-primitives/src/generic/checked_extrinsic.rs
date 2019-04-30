@@ -51,6 +51,10 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
+	fn call(&self) -> &Self::Call {
+		&self.function
+	}
+
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.function, self.signed.map(|x| x.0))
 	}

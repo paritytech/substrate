@@ -233,6 +233,7 @@ impl<Call> Applyable for TestXt<Call> where
 	type Call = Call;
 	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
 	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
+	fn call(&self) -> &Call { &self.2 }
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.2, self.0)
 	}

@@ -72,7 +72,7 @@ use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker
 };
-use srml_support::{Dispatchable, traits::MakePayment};
+use srml_support::{Dispatchable, Validatable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -114,7 +114,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable + Validatable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	fn execute_block(block: Block) {
@@ -127,11 +127,11 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
-	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable + Validatable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	/// Start the execution of a particular block.
@@ -249,6 +249,10 @@ impl<
 
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_nonce(sender);
+		} else {
+			// TODO TODO: does this can be wrongly called for just root extrinsic ? maybe we don't care
+			// TODO TODO: this final validation may differ in implementation should we provide two functions
+			let _ = Validatable::validate_transaction(xt.call());
 		}
 
 		// Make sure to `note_extrinsic` only after we know it's going to be executed
@@ -259,6 +263,7 @@ impl<
 
 		// Decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
+		// TODO TODO: does a unsigned transaction validated by module having Inherent is correct ?
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
@@ -339,7 +344,11 @@ impl<
 				provides,
 				longevity: TransactionLongevity::max_value(),
 			}
+		} else if let Some(valid_transaction) = Validatable::validate_transaction(xt.call()) {
+			// TODO TODO: do we want this order ? (first if signed else try validate)
+			valid_transaction
 		} else {
+			// TODO TODO: Change those errors.
 			return TransactionValidity::Invalid(if xt.sender().is_none() {
 				MISSING_SENDER
 			} else {
