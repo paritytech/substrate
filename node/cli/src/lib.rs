@@ -80,7 +80,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 {
 	cli::parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
 		load_spec, &version, "substrate-node", args, exit,
-		|exit, _custom_args, config| {
+		|exit, _cli_args, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
