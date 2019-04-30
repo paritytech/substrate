@@ -701,17 +701,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		-> Box<FnMut(&PeerId, &[u8]) -> bool + 'a>
 	{
 		let inner = self.inner.read();
-		Box::new(move |who, mut data| {
-			let peer = match inner.peers.peer(who) {
-				None => return false,
-				Some(x) => x,
-			};
-
+		Box::new(move |_who, mut data| {
 			match GossipMessage::<Block>::decode(&mut data) {
 				None => false,
 				Some(GossipMessage::Commit(_)) => {
-					panic!("received commit msg in allowed for peer");
-					// false
+					panic!("received commit msg in allowed for peer") // Replace by false before merge
 				},
 				Some(GossipMessage::Neighbor(neighbor_msg)) => {
 					let p = neighbor_msg.into_neighbor_packet();
@@ -723,8 +717,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					&& inner.local_view.last_commit <= height
 				},
 				Some(GossipMessage::VoteOrPrecommit(_)) => {
-					panic!("received voteOrPrecommit msg in allowed for peer");
-					// false
+					panic!("received voteOrPrecommit msg in allowed for peer") // Replace by false before merge
 				},
 			}
 		})
@@ -756,18 +749,18 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
 					if let MessageIntent::PeriodicRebroadcast = intent {
-						println!("GOT PERIODIC REBROADCAST");
+						println!("GOT PERIODIC REBROADCAST COMMIT");
 						return do_rebroadcast;
 					}
 					
 					Some(full.message.target_number) >= inner.local_view.last_commit
 				}
 				Some(GossipMessage::Neighbor(_)) => {
-					panic!("got neighbor in message allowed")
+					panic!("got neighbor in message allowed") // Remove before merge
 				},
 				Some(GossipMessage::VoteOrPrecommit(_)) => {
 					if let MessageIntent::PeriodicRebroadcast = intent {
-						println!("GOT PERIODIC REBROADCAST");
+						println!("GOT PERIODIC REBROADCAST VOTEORPRECOMIT");
 						return do_rebroadcast;
 					}
 
@@ -785,11 +778,9 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 					// if the topic is not something the peer accepts, discard.
 					if let Some(round) = maybe_round {
-						let v = peer.view.consider_vote(round, set_id) == Consider::Accept;
-						println!("consider vote is {:?}", v);
-						return v;
+						return peer.view.consider_vote(round, set_id) == Consider::Accept;
 					}
-					
+
 					false
 				},
 			}
