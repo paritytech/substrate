@@ -251,7 +251,7 @@ impl<
 			<system::Module<System>>::inc_account_nonce(sender);
 		} else {
 			// TODO TODO: does this can be wrongly called for just root extrinsic ? maybe we don't care
-			match Validatable::apply(xt.call()) {
+			match Validatable::validate_transaction(xt.call()) {
 				Ok(()) => (),
 				Err(()) => return Err(internal::ApplyError::BadSignature("TODO TODO")),
 			}
@@ -346,7 +346,7 @@ impl<
 				provides,
 				longevity: TransactionLongevity::max_value(),
 			}
-		} else if let Some(transaction_validity) = Validatable::validate(xt.call()) {
+		} else if let Some(transaction_validity) = Validatable::transaction_validity(xt.call()) {
 			transaction_validity
 		} else {
 			return TransactionValidity::Invalid(if xt.sender().is_none() {

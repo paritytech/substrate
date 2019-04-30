@@ -49,12 +49,12 @@ pub trait Dispatchable {
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
 pub trait Validatable {
-	fn validate(_call: &Self) -> Option<TransactionValidity> {
+	fn transaction_validity(_call: &Self) -> Option<TransactionValidity> {
 		None
 	}
 
 	// TODO TODO which error ApplyError, add more variants to it ?
-	fn apply(_call: &Self) -> result::Result<(), ()> {
+	fn validate_transaction(_call: &Self) -> result::Result<(), ()> {
 		Err(())
 	}
 }
@@ -270,8 +270,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* () = default;
@@ -285,8 +285,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -299,8 +299,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* (
@@ -316,8 +316,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -330,8 +330,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{}
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -345,8 +345,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -359,8 +359,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{}
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -378,8 +378,8 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -393,8 +393,8 @@ macro_rules! decl_module {
 			{ fn on_initialize( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -407,8 +407,8 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -426,8 +426,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -441,8 +441,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -456,10 +456,10 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ }
-		{ $( $apply:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn validate(call: $validate_call_type:ty) -> $validate_return:ty { $( $impl:tt )* }
+		fn transaction_validity(call: $transaction_validity_call_type:ty) -> $transaction_validity_return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -470,8 +470,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ fn validate(call: $validate_call_type) -> $validate_return { $( $impl )* } }
-			{ $( $apply )* }
+			{ fn transaction_validity(call: $transaction_validity_call_type) -> $transaction_validity_return { $( $impl )* } }
+			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -485,16 +485,16 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ }
-		{ $( $apply:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn validate
+		fn transaction_validity
 		$($rest:tt)*
 	) => {
 		compile_error!(
-			"validate is a reserved function, to use it it must be defined with \
-			the signature: `fn validate(call: &Call<T $(, I)?>) -> Option<TransactionValidity>`"
-		)
+			"transaction_validity is a reserved function, to use it it must be defined with \
+			the signature: `fn transaction_validity(call: &Call<T $(, I)?>) -> Option<TransactionValidity>`"
+		);
 	};
 	(@normalize
 		$(#[$attr:meta])*
@@ -504,11 +504,11 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
+		{ $( $transaction_validity:tt )* }
 		{ }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn apply(call: $apply_call_type:ty) -> $apply_return:ty { $( $impl:tt )* }
+		fn validate_transaction(call: $validate_transaction_call_type:ty) -> $validate_transaction_return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -519,8 +519,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ fn apply(call: $apply_call_type) -> $apply_return { $( $impl )* } }
+			{ $( $transaction_validity )* }
+			{ fn validate_transaction(call: $validate_transaction_call_type) -> $validate_transaction_return { $( $impl )* } }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -536,13 +536,13 @@ macro_rules! decl_module {
 		{ }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn apply
+		fn validate_transaction
 		$($rest:tt)*
 	) => {
 		compile_error!(
-			"apply is a reserved function, to use it it must be defined with \
-			the signature: `fn apply(call: &Call<T $(, I)?>) -> TODO TODO`"
-		)
+			"validate_transaction is a reserved function, to use it it must be defined with \
+			the signature: `fn validate_transaction(call: &Call<T $(, I)?>) -> TODO TODO`"
+		);
 	};
 	(@normalize
 		$(#[$attr:meta])*
@@ -552,8 +552,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -569,8 +569,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
@@ -590,8 +590,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -613,8 +613,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -636,8 +636,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -653,8 +653,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
@@ -674,8 +674,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 	) => {
 		$crate::decl_module!(@imp
@@ -688,8 +688,8 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 		);
 	};
 
@@ -847,17 +847,17 @@ macro_rules! decl_module {
 	(@impl_validatable
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$call_type:ident;
-		{ fn validate(call: $validate_call_type:ty) -> $validate_return:ty { $( $validate_impl:tt )* } }
-		{ fn apply(call: $apply_call_type:ty) -> $apply_return:ty { $( $apply_impl:tt )* } }
+		{ fn transaction_validity(call: $transaction_validity_call_type:ty) -> $transaction_validity_return:ty { $( $transaction_validity_impl:tt )* } }
+		{ fn validate_transaction(call: $validate_transaction_call_type:ty) -> $validate_transaction_return:ty { $( $validate_transaction_impl:tt )* } }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::dispatch::Validatable for $call_type<$trait_instance $(, $instance)?>
 		{
-			fn validate(call: $validate_call_type) -> $validate_return {
-				$( $validate_impl )*
+			fn transaction_validity(call: $transaction_validity_call_type) -> $transaction_validity_return {
+				$( $transaction_validity_impl )*
 			}
-			fn apply(call: $apply_call_type) -> $apply_return {
-				$( $apply_impl )*
+			fn validate_transaction(call: $validate_transaction_call_type) -> $validate_transaction_return {
+				$( $validate_transaction_impl )*
 			}
 		}
 	};
@@ -879,7 +879,7 @@ macro_rules! decl_module {
 		{ $( $tt:tt )+ }
 		{}
 	) => {
-		compile_error!("Invalid declaration validate function must be used alongside apply");
+		compile_error!("Invalid declaration transaction_validity function must be used alongside validate_transaction");
 	};
 
 	(@impl_validatable
@@ -888,7 +888,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $tt:tt )+ }
 	) => {
-		compile_error!("Invalid declaration apply function must be used alongside validate");
+		compile_error!("Invalid declaration validate_transaction function must be used alongside transaction_validity");
 	};
 
 	(@impl_function
@@ -1078,8 +1078,8 @@ macro_rules! decl_module {
 		{ $( $on_initialize:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
-		{ $( $validate:tt )* }
-		{ $( $apply:tt )* }
+		{ $( $transaction_validity:tt )* }
+		{ $( $validate_transaction:tt )* }
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
@@ -1108,8 +1108,8 @@ macro_rules! decl_module {
 			@impl_validatable
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			$call_type;
-			{ $( $validate )* }
-			{ $( $apply )* }
+			{ $( $transaction_validity )* }
+			{ $( $validate_transaction )* }
 		}
 
 		$crate::decl_module! {
@@ -1287,18 +1287,18 @@ macro_rules! impl_outer_dispatch {
 			}
 		}
 		impl $crate::dispatch::Validatable for $call_type {
-			fn validate(call: &Self) -> Option<$crate::runtime_primitives::transaction_validity::TransactionValidity> {
+			fn transaction_validity(call: &Self) -> Option<$crate::runtime_primitives::transaction_validity::TransactionValidity> {
 				match call {
 					$(
-						$call_type::$camelcase(call) => $crate::dispatch::Validatable::validate(call),
+						$call_type::$camelcase(call) => $crate::dispatch::Validatable::transaction_validity(call),
 					)*
 				}
 			}
 
-			fn apply(call: &Self) -> Result<(), ()> {
+			fn validate_transaction(call: &Self) -> Result<(), ()> {
 				match call {
 					$(
-						$call_type::$camelcase(call) => $crate::dispatch::Validatable::apply(call),
+						$call_type::$camelcase(call) => $crate::dispatch::Validatable::validate_transaction(call),
 					)*
 				}
 			}
