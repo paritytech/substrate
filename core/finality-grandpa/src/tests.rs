@@ -306,6 +306,14 @@ impl ApiExt<Block> for RuntimeApi {
 	fn runtime_version_at(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
 		unimplemented!("Not required for testing!")
 	}
+
+	fn record_proof(&mut self) {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+		unimplemented!("Not required for testing!")
+	}
 }
 
 impl GrandpaApi<Block> for RuntimeApi {
