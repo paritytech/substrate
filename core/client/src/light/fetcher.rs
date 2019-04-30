@@ -140,9 +140,15 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
 	/// Fetch remote storage value.
-	fn remote_read(&self, request: RemoteReadRequest<Block::Header>) -> Self::RemoteReadResult;
+	fn remote_read(
+		&self,
+		request: RemoteReadRequest<Block::Header>
+	) -> Self::RemoteReadResult;
 	/// Fetch remote storage child value.
-	fn remote_read_child(&self, request: RemoteReadChildRequest<Block::Header>) -> Self::RemoteReadResult;
+	fn remote_read_child(
+		&self,
+		request: RemoteReadChildRequest<Block::Header>
+	) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
 	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed

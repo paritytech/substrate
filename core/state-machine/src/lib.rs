@@ -632,7 +632,7 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	let trie_backend = proving_backend::create_proof_check_backend::<H>(root.into(), proof)?;
+	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
 	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
 }
 
@@ -677,7 +677,9 @@ where
 	H::Out: Ord + HeapSizeOf
 {
 	let trie_backend = backend.try_into_trie_backend()
-		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+		.ok_or_else(
+			||Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>
+		)?;
 	prove_read_on_trie_backend(&trie_backend, key)
 }
 
@@ -725,7 +727,8 @@ where
 	H::Out: Ord + HeapSizeOf
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
-	let result = proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<Error>)?;
+	let result = proving_backend.child_storage(storage_key, key)
+		.map_err(|e| Box::new(e) as Box<Error>)?;
 	Ok((result, proving_backend.extract_proof()))
 }
 
@@ -739,7 +742,7 @@ where
 	H: Hasher,
 	H::Out: Ord + HeapSizeOf
 {
-	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
+	let proving_backend = create_proof_check_backend::<H>(root, proof)?;
 	read_proof_check_on_proving_backend(&proving_backend, key)
 }
 
@@ -754,7 +757,7 @@ where
 	H: Hasher,
 	H::Out: Ord + HeapSizeOf
 {
-	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
+	let proving_backend = create_proof_check_backend::<H>(root, proof)?;
 	read_child_proof_check_on_proving_backend(&proving_backend, storage_key, key)
 }
 
@@ -1066,17 +1069,38 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
  		// check proof locally
-		let local_result1 = read_proof_check::<Blake2Hasher>(remote_root, remote_proof.clone(), b"value2").unwrap();
-		let local_result2 = read_proof_check::<Blake2Hasher>(remote_root, remote_proof.clone(), &[0xff]).is_ok();
+		let local_result1 = read_proof_check::<Blake2Hasher>(
+			remote_root,
+			remote_proof.clone(),
+			b"value2"
+		).unwrap();
+		let local_result2 = read_proof_check::<Blake2Hasher>(
+			remote_root,
+			remote_proof.clone(),
+			&[0xff]
+		).is_ok();
  		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let remote_proof = prove_child_read(remote_backend, b":child_storage:default:sub1", b"value3").unwrap().1;
-		let local_result1 = read_child_proof_check::<Blake2Hasher>(remote_root, remote_proof.clone(), b":child_storage:default:sub1", b"value3").unwrap();
-		let local_result2 = read_child_proof_check::<Blake2Hasher>(remote_root, remote_proof.clone(), b":child_storage:default:sub1", b"value2").unwrap();
+		let remote_proof = prove_child_read(
+			remote_backend,
+			b":child_storage:default:sub1",
+			b"value3"
+		).unwrap().1;
+		let local_result1 = read_child_proof_check::<Blake2Hasher>(
+			remote_root,
+			remote_proof.clone(),
+			b":child_storage:default:sub1",b"value3"
+		).unwrap();
+		let local_result2 = read_child_proof_check::<Blake2Hasher>(
+			remote_root,
+			remote_proof.clone(),
+			b":child_storage:default:sub1",
+			b"value2"
+		).unwrap();
 		assert_eq!(local_result1, Some(vec![142]));
 		assert_eq!(local_result2, None);
 	}

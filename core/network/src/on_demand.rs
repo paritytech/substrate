@@ -106,7 +106,10 @@ struct Request<Block: BlockT> {
 enum RequestData<Block: BlockT> {
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, OneShotSender<Result<Block::Header, ClientError>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
-	RemoteReadChild(RemoteReadChildRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
+	RemoteReadChild(
+		RemoteReadChildRequest<Block::Header>,
+		OneShotSender<Result<Option<Vec<u8>>, ClientError>>
+	),
 	RemoteCall(RemoteCallRequest<Block::Header>, OneShotSender<Result<Vec<u8>, ClientError>>),
 	RemoteChanges(RemoteChangesRequest<Block::Header>, OneShotSender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
 }
@@ -267,21 +270,29 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 
 	fn on_remote_read_response(&self, peer: PeerId, response: message::RemoteReadResponse) {
 		self.accept_response("read", peer, response.id, |request| match request.data {
-			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
+			RequestData::RemoteRead(request, sender) =>
+				match self.checker.check_read_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
 					Accept::Ok
 				},
-				Err(error) => Accept::CheckFailed(error, RequestData::RemoteRead(request, sender)),
+				Err(error) => Accept::CheckFailed(
+					error,
+					RequestData::RemoteRead(request, sender)
+				),
 			},
-			RequestData::RemoteReadChild(request, sender) => match self.checker.check_read_child_proof(&request, response.proof) {
+			RequestData::RemoteReadChild(request, sender) =>
+				match self.checker.check_read_child_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
 					Accept::Ok
 				},
-				Err(error) => Accept::CheckFailed(error, RequestData::RemoteReadChild(request, sender)),
+				Err(error) => Accept::CheckFailed(
+					error,
+					RequestData::RemoteReadChild(request, sender)
+				),
 			},
 			data => Accept::Unexpected(data),
 		})
@@ -339,14 +350,23 @@ impl<B> Fetcher<B> for OnDemand<B> where
 
 	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteRead(request, sender),
-			RemoteResponse { receiver })
+		self.schedule_request(
+			request.retry_count.clone(),
+			RequestData::RemoteRead(request, sender),
+			RemoteResponse { receiver }
+		)
 	}
 
-	fn remote_read_child(&self, request: RemoteReadChildRequest<B::Header>) -> Self::RemoteReadResult {
+	fn remote_read_child(
+		&self,
+		request: RemoteReadChildRequest<B::Header>
+	) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteReadChild(request, sender),
-			RemoteResponse { receiver })
+		self.schedule_request(
+			request.retry_count.clone(),
+			RequestData::RemoteReadChild(request, sender),
+			RemoteResponse { receiver }
+		)
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
@@ -507,11 +527,12 @@ impl<Block: BlockT> Request<Block> {
 					key: data.key.clone(),
 				}),
 			RequestData::RemoteReadChild(ref data, _) =>
-				message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
-					id: self.id,
-					block: data.block,
-					storage_key: data.storage_key.clone(),
-					key: data.key.clone(),
+				message::generic::Message::RemoteReadChildRequest(
+					message::RemoteReadChildRequest {
+						id: self.id,
+						block: data.block,
+						storage_key: data.storage_key.clone(),
+						key: data.key.clone(),
 				}),
 			RequestData::RemoteCall(ref data, _) =>
 				message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
@@ -586,7 +607,11 @@ pub mod tests {
 			}
 		}
 
-		fn check_read_child_proof(&self, _: &RemoteReadChildRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
+		fn check_read_child_proof(
+			&self,
+			_: &RemoteReadChildRequest<Header>,
+			_: Vec<Vec<u8>>
+		) -> ClientResult<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -898,9 +923,10 @@ pub mod tests {
 			assert_eq!(result, Some(vec![42]));
 		});
 
-		on_demand.on_remote_read_response(peer0.clone(), message::RemoteReadResponse {
-			id: 0,
-			proof: vec![vec![2]],
+		on_demand.on_remote_read_response(
+			peer0.clone(), message::RemoteReadResponse {
+				id: 0,
+				proof: vec![vec![2]],
 		});
 		thread.join().unwrap();
 	}

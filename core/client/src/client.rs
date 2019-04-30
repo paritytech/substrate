@@ -370,8 +370,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.map_err(Into::into))
 	}
 
-	/// Reads child storage value at a given block + storage_key + key, returning read proof.
-	pub fn read_child_proof(&self, id: &BlockId<Block>, storage_key: &[u8], key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+	/// Reads child storage value at a given block + storage_key + key, returning
+	/// read proof.
+	pub fn read_child_proof(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
 			.and_then(|state| prove_child_read(state, storage_key, key)
 				.map(|(_, proof)| proof)
