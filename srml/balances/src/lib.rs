@@ -711,9 +711,14 @@ where
 		if locks.is_empty() {
 			return Ok(())
 		}
+
 		let now = <system::Module<T>>::block_number();
-		if Self::locks(who).into_iter()
-			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
+		if locks.into_iter()
+			.all(|l|
+				now >= l.until
+				|| new_balance >= l.amount
+				|| !l.reasons.contains(reason)
+			)
 		{
 			Ok(())
 		} else {

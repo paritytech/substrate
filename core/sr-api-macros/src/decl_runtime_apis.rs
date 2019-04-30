@@ -57,9 +57,21 @@ const CHANGED_IN_ATTRIBUTE: &str = "changed_in";
 ///
 /// Is used when a trait method was renamed.
 const RENAMED_ATTRIBUTE: &str = "renamed";
+/// The `skip_initialize_block` attribute.
+///
+/// Is used when a trait method does not require that the block is initialized
+/// before being called.
+const SKIP_INITIALIZE_BLOCK_ATTRIBUTE: &str = "skip_initialize_block";
+/// The `initialize_block` attribute.
+///
+/// A trait method tagged with this attribute, initializes the runtime at
+/// certain block.
+const INITIALIZE_BLOCK_ATTRIBUTE: &str = "initialize_block";
 /// All attributes that we support in the declaration of a runtime api trait.
 const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[
-	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE, RENAMED_ATTRIBUTE
+	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE,
+	RENAMED_ATTRIBUTE, SKIP_INITIALIZE_BLOCK_ATTRIBUTE,
+	INITIALIZE_BLOCK_ATTRIBUTE,
 ];
 
 /// The structure used for parsing the runtime api declarations.
@@ -338,7 +350,12 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 
 		if attrs.contains_key(RENAMED_ATTRIBUTE) && attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
 			return Err(Error::new(
-				fn_.span(), format!("`{}` and `{}` are not supported at once.", RENAMED_ATTRIBUTE, CHANGED_IN_ATTRIBUTE)
+				fn_.span(),
+				format!(
+					"`{}` and `{}` are not supported at once.",
+					RENAMED_ATTRIBUTE,
+					CHANGED_IN_ATTRIBUTE
+				)
 			));
 		}
 
@@ -346,6 +363,15 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 		if attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
 			continue;
 		}
+
+		let skip_initialize_block = attrs.contains_key(SKIP_INITIALIZE_BLOCK_ATTRIBUTE);
+		let update_initialized_block = if attrs.contains_key(INITIALIZE_BLOCK_ATTRIBUTE) {
+			quote!(
+				|| *initialized_block.borrow_mut() = Some(*at)
+			)
+		} else {
+			quote!(|| ())
+		};
 
 		// Parse the renamed attributes.
 		let mut renames = Vec::new();
@@ -375,43 +401,63 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				NC: FnOnce() -> ::std::result::Result<R, &'static str> + ::std::panic::UnwindSafe,
 				Block: #crate_::runtime_api::BlockT,
 				T: #crate_::runtime_api::CallRuntimeAt<Block>,
+				C: #crate_::runtime_api::Core<Block>,
 			>(
 				call_runtime_at: &T,
+				core_api: &C,
 				at: &#crate_::runtime_api::BlockId<Block>,
 				args: Vec<u8>,
-				changes: &mut #crate_::runtime_api::OverlayedChanges,
-				initialized_block: &mut Option<#crate_::runtime_api::BlockId<Block>>,
+				changes: &std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
+				initialized_block: &std::cell::RefCell<Option<#crate_::runtime_api::BlockId<Block>>>,
 				native_call: Option<NC>,
 				context: #crate_::runtime_api::ExecutionContext,
+				recorder: &Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<Block>>>>,
 			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
 				let version = call_runtime_at.runtime_version_at(at)?;
+				use #crate_::runtime_api::InitializeBlock;
+				let initialize_block = if #skip_initialize_block {
+					InitializeBlock::Skip
+				} else {
+					InitializeBlock::Do(&initialized_block)
+				};
+				let update_initialized_block = #update_initialized_block;
 
 				#(
 					// Check if we need to call the function by an old name.
 					if version.apis.iter().any(|(s, v)| {
 						s == &ID && *v < #versions
 					}) {
-						return call_runtime_at.call_api_at::<R, fn() -> _>(
+						let ret = call_runtime_at.call_api_at::<R, fn() -> _, _>(
+							core_api,
 							at,
 							#old_names,
 							args,
 							changes,
-							initialized_block,
+							initialize_block,
 							None,
-							context
-						);
+							context,
+							recorder,
+						)?;
+
+						update_initialized_block();
+						return Ok(ret);
 					}
 				)*
 
-				call_runtime_at.call_api_at(
+				let ret = call_runtime_at.call_api_at(
+					core_api,
 					at,
 					#trait_fn_name,
 					args,
 					changes,
-					initialized_block,
+					initialize_block,
 					native_call,
-					context
-				)
+					context,
+					recorder,
+				)?;
+
+				update_initialized_block();
+				Ok(ret)
 			}
 		));
 	}

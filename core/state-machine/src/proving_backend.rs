@@ -16,12 +16,16 @@
 
 //! Proving state machine backend.
 
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 use log::debug;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{Recorder, MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
+use trie::{
+	MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_root,
+	read_trie_value_with, read_child_trie_value_with, record_all_keys
+};
+pub use trie::Recorder;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
@@ -87,7 +91,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a TrieBackend<S, H>,
-	proof_recorder: RefCell<Recorder<H::Out>>,
+	proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H> {
@@ -95,14 +99,27 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
 		ProvingBackend {
 			backend,
-			proof_recorder: RefCell::new(Recorder::new()),
+			proof_recorder: Rc::new(RefCell::new(Recorder::new())),
+		}
+	}
+
+	/// Create new proving backend with the given recorder.
+	pub fn new_with_recorder(
+		backend: &'a TrieBackend<S, H>,
+		proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
+	) -> Self {
+		ProvingBackend {
+			backend,
+			proof_recorder,
 		}
 	}
 
 	/// Consume the backend, extracting the gathered proof in lexicographical order
 	/// by value.
 	pub fn extract_proof(self) -> Vec<Vec<u8>> {
-		self.proof_recorder.into_inner().drain()
+		self.proof_recorder
+			.borrow_mut()
+			.drain()
 			.into_iter()
 			.map(|n| n.data.to_vec())
 			.collect()

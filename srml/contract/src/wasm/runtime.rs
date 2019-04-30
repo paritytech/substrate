@@ -629,6 +629,31 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Set rent allowance of the contract
+	//
+	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
+	//   Should be decodable as a `T::Balance`. Traps otherwise.
+	// - value_len: length of the value buffer.
+	ext_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
+		let value = {
+			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
+			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		ctx.ext.set_rent_allowance(value);
+
+		Ok(())
+	},
+
+	// Stores the rent allowance into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_rent_allowance(ctx) => {
+		ctx.scratch_buf = ctx.ext.rent_allowance().encode();
+
+		Ok(())
+	},
+
 	// Prints utf8 encoded string from the data buffer.
 	// Only available on `--dev` chains.
 	// This function may be removed at any time, superseded by a more general contract debugging feature.

@@ -263,9 +263,10 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		#[cfg(any(feature = "std", test))]
 		pub struct RuntimeApiImpl<C: #crate_::runtime_api::CallRuntimeAt<#block> + 'static> {
 			call: &'static C,
-			commit_on_success: ::std::cell::RefCell<bool>,
-			initialized_block: ::std::cell::RefCell<Option<#block_id>>,
-			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
+			commit_on_success: std::cell::RefCell<bool>,
+			initialized_block: std::cell::RefCell<Option<#block_id>>,
+			changes: std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
+			recorder: Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<#block>>>>,
 		}
 
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
@@ -299,6 +300,22 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 			) -> #crate_::error::Result<#crate_::runtime_api::RuntimeVersion> {
 				self.call.runtime_version_at(at)
 			}
+
+			fn record_proof(&mut self) {
+				self.recorder = Some(Default::default());
+			}
+
+			fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+				self.recorder
+					.take()
+					.map(|r| {
+						r.borrow_mut()
+							.drain()
+							.into_iter()
+							.map(|n| n.data.to_vec())
+							.collect()
+					})
+			}
 		}
 
 		#[cfg(any(feature = "std", test))]
@@ -315,6 +332,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 					commit_on_success: true.into(),
 					initialized_block: None.into(),
 					changes: Default::default(),
+					recorder: Default::default(),
 				}.into()
 			}
 		}
@@ -325,9 +343,11 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
 				F: FnOnce(
 					&C,
-					&mut #crate_::runtime_api::OverlayedChanges,
-					&mut Option<#crate_::runtime_api::BlockId<#block>>,
-				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>>
+					&Self,
+					&std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
+					&std::cell::RefCell<Option<#crate_::runtime_api::BlockId<#block>>>,
+					&Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<#block>>>>,
+				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>>,
 			>(
 				&self,
 				call_api_at: F,
@@ -335,8 +355,10 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				let res = unsafe {
 					call_api_at(
 						&self.call,
-						&mut *self.changes.borrow_mut(),
-						&mut *self.initialized_block.borrow_mut()
+						self,
+						&self.changes,
+						&self.initialized_block,
+						&self.recorder,
 					)
 				};
 
@@ -479,9 +501,10 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					#( #error )*
 
 					self.call_api_at(
-						|call_runtime_at, changes, initialized_block| {
+						|call_runtime_at, core_api, changes, initialized_block, recorder| {
 							#runtime_mod_path #call_api_at_call(
 								call_runtime_at,
+								core_api,
 								at,
 								params_encoded,
 								changes,
@@ -493,6 +516,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 									)
 								}),
 								context,
+								recorder,
 							)
 						}
 					)
