@@ -1996,7 +1996,7 @@ dependencies = [
  "substrate-basic-authorship 1.0.0",
  "substrate-cli 1.0.0",
  "substrate-client 1.0.0",
- "substrate-consensus-aura 1.0.1",
+ "substrate-consensus-aura 1.1.0",
  "substrate-finality-grandpa 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keystore 1.0.0",
@@ -2105,7 +2105,7 @@ dependencies = [
  "substrate-basic-authorship 1.0.0",
  "substrate-cli 1.0.0",
  "substrate-client 1.0.0",
- "substrate-consensus-aura 1.0.1",
+ "substrate-consensus-aura 1.1.0",
  "substrate-executor 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-network 0.1.0",
@@ -3876,7 +3876,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-consensus-aura"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3894,7 +3894,7 @@ dependencies = [
  "substrate-consensus-aura-primitives 1.0.0",
  "substrate-consensus-authorities 1.0.0",
  "substrate-consensus-common 1.0.0",
- "substrate-consensus-slots 1.0.0",
+ "substrate-consensus-slots 1.1.0",
  "substrate-executor 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keyring 1.0.0",
@@ -3949,7 +3949,7 @@ dependencies = [
  "substrate-consensus-authorities 1.0.0",
  "substrate-consensus-babe-primitives 1.0.0",
  "substrate-consensus-common 1.0.0",
- "substrate-consensus-slots 1.0.0",
+ "substrate-consensus-slots 1.1.0",
  "substrate-executor 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keyring 1.0.0",
@@ -3968,7 +3968,7 @@ dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "substrate-client 1.0.0",
- "substrate-consensus-slots 1.0.0",
+ "substrate-consensus-slots 1.1.0",
 ]
 
 [[package]]
@@ -4016,7 +4016,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-consensus-slots"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
