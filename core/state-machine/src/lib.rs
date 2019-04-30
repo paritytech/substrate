@@ -762,7 +762,7 @@ where
 	H: Hasher,
 	H::Out: Ord + HeapSizeOf
 {
-  let root = trie::subtrie_root_as_hash::<H>(subtrie);
+	let root = trie::subtrie_root_as_hash::<H>(subtrie);
 	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
 	read_child_proof_check_on_proving_backend(&proving_backend, subtrie, key)
 }
@@ -988,12 +988,10 @@ mod tests {
 
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
-		// TODO a proof of get_subtrie
-    let subtrie1 = remote_backend.child_trie(b"sub1").unwrap().unwrap();
+		// Note that proof of get_subtrie should use standard child proof
+		let subtrie1 = remote_backend.child_trie(b"sub1").unwrap().unwrap();
 		let _remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (v, remote_proof) = prove_child_read(remote_backend, &subtrie1, b"value3").unwrap();
-    println!("v {:x?}", v);
-    println!("rp {:x?}", &remote_proof);
 		let local_result1 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), &subtrie1, b"value3").unwrap();
 		let local_result2 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), &subtrie1, b"value2").unwrap();
 		assert_eq!(local_result1, Some(vec![142]));
