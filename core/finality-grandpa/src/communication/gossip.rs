@@ -154,6 +154,12 @@ impl<N: Ord> View<N> {
 			}
 		}
 	}
+
+	fn is_valid_update(&self, set_id: SetId, round: Round, number: &N) -> bool {
+		!(self.set_id > set_id
+			|| self.round > round && self.set_id == set_id
+			|| self.last_commit.as_ref() > Some(&number))
+	}
 }
 
 const KEEP_RECENT_ROUNDS: usize = 3;
@@ -364,11 +370,9 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		let invalid_change = peer.view.set_id > update.set_id
-			|| peer.view.round > update.round && peer.view.set_id == update.set_id
-			|| peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
+		let valid_change = peer.view.is_valid_update(update.set_id, update.round, &update.commit_finalized_height);
 
-		if invalid_change {
+		if !valid_change {
 			return Err(Misbehavior::InvalidViewChange);
 		}
 
@@ -709,12 +713,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				},
 				Some(GossipMessage::Neighbor(neighbor_msg)) => {
 					let p = neighbor_msg.into_neighbor_packet();
-					let round = p.round;
-					let set_id = p.set_id;
-					let height = Some(p.commit_finalized_height);
-					inner.local_view.set_id <= set_id 
-					&& (inner.local_view.round <= round || inner.local_view.set_id < set_id)
-					&& inner.local_view.last_commit <= height
+					inner.local_view.is_valid_update(p.set_id, p.round, &p.commit_finalized_height)
 				},
 				Some(GossipMessage::VoteOrPrecommit(_)) => {
 					panic!("received voteOrPrecommit msg in allowed for peer") // Replace by false before merge
