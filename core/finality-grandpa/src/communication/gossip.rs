@@ -155,10 +155,10 @@ impl<N: Ord> View<N> {
 		}
 	}
 
+	/// A valid update shows the progress of a peer.
 	fn is_valid_update(&self, set_id: SetId, round: Round, number: &N) -> bool {
-		!(self.set_id > set_id
-			|| self.round > round && self.set_id == set_id
-			|| self.last_commit.as_ref() > Some(&number))
+		self.set_id <= set_id && (self.round <= round || self.set_id < set_id)
+			&& self.last_commit.as_ref() <= Some(&number)
 	}
 }
 
@@ -370,9 +370,9 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		let valid_change = peer.view.is_valid_update(update.set_id, update.round, &update.commit_finalized_height);
+		let invalid_change = !peer.view.is_valid_update(update.set_id, update.round, &update.commit_finalized_height);
 
-		if !valid_change {
+		if invalid_change {
 			return Err(Misbehavior::InvalidViewChange);
 		}
 
@@ -522,7 +522,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		println!("GOT FULL COMMIT from={:?} number={:?} hash={:?}", who, full.message.target_number, full.message.target_hash);
+
 		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
 			return Action::Discard(misbehavior.cost());
 		}
@@ -702,22 +702,18 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_allowed_for_peer<'a>(&'a self)
-		-> Box<FnMut(&PeerId, &[u8]) -> bool + 'a>
+		-> Box<FnMut(&[u8]) -> bool + 'a>
 	{
 		let inner = self.inner.read();
-		Box::new(move |_who, mut data| {
+		Box::new(move |mut data| {
 			match GossipMessage::<Block>::decode(&mut data) {
 				None => false,
-				Some(GossipMessage::Commit(_)) => {
-					panic!("received commit msg in allowed for peer") // Replace by false before merge
-				},
+				Some(GossipMessage::Commit(_)) => false,
 				Some(GossipMessage::Neighbor(neighbor_msg)) => {
 					let p = neighbor_msg.into_neighbor_packet();
 					inner.local_view.is_valid_update(p.set_id, p.round, &p.commit_finalized_height)
 				},
-				Some(GossipMessage::VoteOrPrecommit(_)) => {
-					panic!("received voteOrPrecommit msg in allowed for peer") // Replace by false before merge
-				},
+				Some(GossipMessage::VoteOrPrecommit(_)) => false,
 			}
 		})
 	}
@@ -748,18 +744,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
 					if let MessageIntent::PeriodicRebroadcast = intent {
-						println!("GOT PERIODIC REBROADCAST COMMIT");
 						return do_rebroadcast;
 					}
-					
 					Some(full.message.target_number) >= inner.local_view.last_commit
 				}
-				Some(GossipMessage::Neighbor(_)) => {
-					panic!("got neighbor in message allowed") // Remove before merge
-				},
+				Some(GossipMessage::Neighbor(_)) => false,
 				Some(GossipMessage::VoteOrPrecommit(_)) => {
 					if let MessageIntent::PeriodicRebroadcast = intent {
-						println!("GOT PERIODIC REBROADCAST VOTEORPRECOMIT");
 						return do_rebroadcast;
 					}
 

@@ -361,9 +361,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			},
 			recv(self.from_network_port) -> event => {
 				match event {
-					Ok(msg) => {
-						Incoming::FromNetwork(msg)
-					},
+					Ok(msg) => Incoming::FromNetwork(msg),
 					// Our sender has been dropped, quit.
 					Err(_) => {
 						Incoming::FromClient(ProtocolMsg::Stop)
@@ -559,7 +557,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		message: Vec<u8>,
 		recipient: GossipMessageRecipient,
 	) {
-		println!("gossip consensus message...");
 		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
 		let message = ConsensusMessage { data: message, engine_id };
 		match recipient {

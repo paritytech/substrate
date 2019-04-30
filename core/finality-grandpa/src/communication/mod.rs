@@ -253,8 +253,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
-		let topic = round_topic::<B>(round.0, set_id.0);
-		
 		self.validator.note_round(
 			round,
 			set_id,
@@ -274,6 +272,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			}
 		});
 
+		let topic = round_topic::<B>(round.0, set_id.0);
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -355,14 +354,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item = (u64, CompactCommit<B>, impl FnMut(CommitProcessingOutcome)), Error = Error>,
 		impl Sink<SinkItem = (u64, Commit<B>), SinkError = Error>,
 	) {
-		let topic = global_topic::<B>(set_id.0);
-		
 		self.validator.note_set(
 			set_id,
 			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
 		);
 
 		let service = self.service.clone();
+		let topic = global_topic::<B>(set_id.0);
 		let incoming = incoming_global(service, topic, voters, self.validator.clone());
 
 		let outgoing = CommitsOut::<B, N>::new(
@@ -691,20 +689,19 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			.unzip();
 
 		let compact_commit = CompactCommit::<Block> {
-			target_hash: commit.target_hash.clone(),
-			target_number: commit.target_number.clone(),
+			target_hash: commit.target_hash,
+			target_number: commit.target_number,
 			precommits,
 			auth_data
 		};
 
 		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
-			round: round.clone(),
+			round: round,
 			set_id: self.set_id,
 			message: compact_commit,
 		});
 
 		let topic = global_topic::<Block>(self.set_id.0);
-		println!("COMMIT OUT hash={:?} number={:?} round={:?}", commit.target_hash, commit.target_number, round);
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(

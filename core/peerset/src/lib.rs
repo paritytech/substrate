@@ -265,7 +265,7 @@ impl Peerset {
 				score_diff
 			}
 		};
-		// println!("SCORE UPDATED id={:?} score={:?}", peer_id, score);
+
 		if score < 0 {
 			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
 			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {

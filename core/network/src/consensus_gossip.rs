@@ -31,7 +31,6 @@ pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
 
-
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
@@ -212,9 +211,9 @@ pub trait Validator<B: BlockT>: Send + Sync {
 		Box::new(move |_who, _intent, _topic, _data| true)
 	}
 
-	// Produce a closure for filtering egress messages to a peer.
-	fn message_allowed_for_peer<'a>(&'a self) -> Box<FnMut(&PeerId, &[u8]) -> bool + 'a> {
-		Box::new(move |_who, _data| true)
+	/// Produce a closure for filtering egress messages to a peer.
+	fn message_allowed_for_peer<'a>(&'a self) -> Box<FnMut(&[u8]) -> bool + 'a> {
+		Box::new(move |_data| true)
 	}
 }
 
@@ -492,17 +491,20 @@ impl<B: BlockT> ConsensusGossip<B> {
 			None => return,
 			Some(peer) => peer,
 		};
+
 		let message_hash = HashFor::<B>::hash(&message.data);
 		let engine_id = message.engine_id;
+
 		match self.validators.get(&engine_id) {
 			None => {
-				println!("validator not found, sending anyways!");
+				trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 				peer.known_messages.insert(message_hash);
 				protocol.send_consensus(who.clone(), message.clone());
 			},
 			Some(validator) => {
 				let mut check_fn = validator.message_allowed_for_peer();
-				if check_fn(who, &message.data) {// || (topic.is_some() && check_fn(who, intent, &topic.unwrap(), &message.data)) {
+				if check_fn(&message.data) {
+					trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 					peer.known_messages.insert(message_hash);
 					protocol.send_consensus(who.clone(), message.clone());
 				}
