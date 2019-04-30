@@ -100,7 +100,7 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	fn gossip_message(&self, topic: Block::Hash, data: Vec<u8>, force: bool);
 
 	/// Send a message to a bunch of specific peers, even if they've seen it already.
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>);
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>, topic: Option<Block::Hash>);
 
 	/// Report a peer's cost or benefit after some action.
 	fn report(&self, who: network::PeerId, cost_benefit: i32);
@@ -150,14 +150,14 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 		)
 	}
 
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
+	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>, topic: Option<B::Hash>) {
 		let msg = ConsensusMessage {
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
 
 		self.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(ctx, who, msg.clone())
+			gossip.send_message(ctx, who, msg.clone(), topic)
 		})
 	}
 
@@ -253,12 +253,15 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
+		let topic = round_topic::<B>(round.0, set_id.0);
+		
 		self.validator.note_round(
 			round,
 			set_id,
 			|to, neighbor| self.service.send_message(
 				to,
-				GossipMessage::<B>::from(neighbor).encode()
+				GossipMessage::<B>::from(neighbor).encode(),
+				Some(topic),
 			),
 		);
 
@@ -272,7 +275,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			}
 		});
 
-		let topic = round_topic::<B>(round.0, set_id.0);
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -354,13 +356,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item = (u64, CompactCommit<B>, impl FnMut(CommitProcessingOutcome)), Error = Error>,
 		impl Sink<SinkItem = (u64, Commit<B>), SinkError = Error>,
 	) {
+		let topic = global_topic::<B>(set_id.0);
+		
 		self.validator.note_set(
 			set_id,
-			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
+			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode(), Some(topic)),
 		);
 
 		let service = self.service.clone();
-		let topic = global_topic::<B>(set_id.0);
 		let incoming = incoming_global(service, topic, voters, self.validator.clone());
 
 		let outgoing = CommitsOut::<B, N>::new(
@@ -436,6 +439,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 						|to, neighbor_msg| service.send_message(
 							to,
 							GossipMessage::<B>::from(neighbor_msg).encode(),
+							Some(topic),
 						),
 					);
 
@@ -689,20 +693,20 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			.unzip();
 
 		let compact_commit = CompactCommit::<Block> {
-			target_hash: commit.target_hash,
-			target_number: commit.target_number,
+			target_hash: commit.target_hash.clone(),
+			target_number: commit.target_number.clone(),
 			precommits,
 			auth_data
 		};
 
 		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
-			round: round,
+			round: round.clone(),
 			set_id: self.set_id,
 			message: compact_commit,
 		});
 
 		let topic = global_topic::<Block>(self.set_id.0);
-
+		println!("COMMIT OUT hash={:?} number={:?} round={:?}", commit.target_hash, commit.target_number, round);
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
@@ -710,6 +714,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			|to, neighbor| self.network.send_message(
 				to,
 				GossipMessage::<Block>::from(neighbor).encode(),
+				Some(topic),
 			),
 		);
 		self.network.gossip_message(topic, message.encode(), false);

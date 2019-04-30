@@ -518,7 +518,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-
+		println!("GOT FULL COMMIT from={:?} number={:?} hash={:?}", who, full.message.target_number, full.message.target_hash);
 		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
 			return Action::Discard(misbehavior.cost());
 		}
@@ -697,6 +697,48 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		}
 	}
 
+	fn message_allowed_for_peer<'a>(&'a self)
+		-> Box<FnMut(&PeerId, &[u8]) -> bool + 'a>
+	{
+		let inner = self.inner.read();
+		Box::new(move |who, mut data| {
+			let peer = match inner.peers.peer(who) {
+				None => return false,
+				Some(x) => x,
+			};
+
+			// global message.
+			let our_best_commit = inner.local_view.last_commit;
+			let peer_best_commit = peer.view.last_commit;
+
+			match GossipMessage::<Block>::decode(&mut data) {
+				None => false,
+				Some(GossipMessage::Commit(full)) => {
+					true
+				}
+				Some(GossipMessage::Neighbor(neighbor_msg)) => {
+					let p = neighbor_msg.into_neighbor_packet();
+					let round = p.round;
+					let set_id = p.set_id;
+					let height = Some(p.commit_finalized_height);
+			// 		let invalid_change = peer.view.set_id > update.set_id
+			// || peer.view.round > update.round && peer.view.set_id == update.set_id
+			// || peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
+
+					println!("sending neighbor from allowed for peer {:?} = {:?} > {:?}", height, our_best_commit, peer_best_commit);
+					// true
+					inner.local_view.set_id <= set_id 
+					&& (inner.local_view.round <= round || inner.local_view.set_id < set_id)
+					&& inner.local_view.last_commit <= height
+				},
+				Some(GossipMessage::VoteOrPrecommit(_)) => {
+					true
+				}, // should not be the case.
+			}
+		})
+	}
+
+
 	fn message_allowed<'a>(&'a self)
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
@@ -717,41 +759,121 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		};
 
 		Box::new(move |who, intent, topic, mut data| {
-			if let MessageIntent::PeriodicRebroadcast = intent {
-				return do_rebroadcast;
-			}
-
-			let peer = match inner.peers.peer(who) {
-				None => return false,
-				Some(x) => x,
-			};
-
-			// if the topic is not something we're keeping at the moment,
-			// do not send.
-			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
-				None => return false,
-				Some(x) => x,
-			};
-
-			// if the topic is not something the peer accepts, discard.
-			if let Some(round) = maybe_round {
-				return peer.view.consider_vote(round, set_id) == Consider::Accept
-			}
-
-			// global message.
-			let our_best_commit = inner.local_view.last_commit;
-			let peer_best_commit = peer.view.last_commit;
-
+			
 			match GossipMessage::<Block>::decode(&mut data) {
-				None => false,
+				None => {
+					println!("message allowed NONE");
+					if let MessageIntent::PeriodicRebroadcast = intent {
+						return do_rebroadcast;
+					}
+
+					let peer = match inner.peers.peer(who) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// if the topic is not something we're keeping at the moment,
+					// do not send.
+					let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// if the topic is not something the peer accepts, discard.
+					if let Some(round) = maybe_round {
+						return peer.view.consider_vote(round, set_id) == Consider::Accept;
+					}
+
+					// global message.
+					let our_best_commit = inner.local_view.last_commit;
+					let peer_best_commit = peer.view.last_commit;
+
+					false
+				},
 				Some(GossipMessage::Commit(full)) => {
+					println!("message allowed commit");
+					let peer = match inner.peers.peer(who) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// // if the topic is not something we're keeping at the moment,
+					// // do not send.
+					// let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+					// 	None => return false,
+					// 	Some(x) => x,
+					// };
+
+					// global message.
+					let our_best_commit = inner.local_view.last_commit;
+					let peer_best_commit = peer.view.last_commit;
+
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
-					Some(full.message.target_number) == our_best_commit
-					&& Some(full.message.target_number) > peer_best_commit
+					println!("checking -----> {:?} == {:?} > {:?}", our_best_commit, full.message.target_number, peer_best_commit);
+					Some(full.message.target_number) >= our_best_commit
 				}
-				Some(GossipMessage::Neighbor(_)) => false,
-				Some(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
+				Some(GossipMessage::Neighbor(_)) => {
+					println!("message allowed neighbor");
+					if let MessageIntent::PeriodicRebroadcast = intent {
+						return do_rebroadcast;
+					}
+
+					let peer = match inner.peers.peer(who) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// if the topic is not something we're keeping at the moment,
+					// do not send.
+					let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// if the topic is not something the peer accepts, discard.
+					if let Some(round) = maybe_round {
+						return peer.view.consider_vote(round, set_id) == Consider::Accept;
+					}
+
+					// global message.
+					let our_best_commit = inner.local_view.last_commit;
+					let peer_best_commit = peer.view.last_commit;
+
+					false
+				},
+				Some(GossipMessage::VoteOrPrecommit(msg)) => {
+					println!("message allowed voteorpre {:?}", msg);
+					// if let MessageIntent::PeriodicRebroadcast = intent {
+					// 	return do_rebroadcast;
+					// }
+
+					let peer = match inner.peers.peer(who) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// if the topic is not something we're keeping at the moment,
+					// do not send.
+					let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+						None => return false,
+						Some(x) => x,
+					};
+
+					// if the topic is not something the peer accepts, discard.
+					if let Some(round) = maybe_round {
+						let v = peer.view.consider_vote(round, set_id) == Consider::Accept;
+						println!("consider vote is {:?}", v);
+						return v;
+					}
+
+					// global message.
+					let our_best_commit = inner.local_view.last_commit;
+					let peer_best_commit = peer.view.last_commit;
+
+					
+					false
+				}, // should not be the case.
 			}
 		})
 	}
