@@ -679,7 +679,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin,
 			header,
 			justification,
-			pre_digests: _,
+			pre_digests,
 			post_digests,
 			body,
 			finalized,
@@ -715,6 +715,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation,
 			origin,
 			hash,
+			pre_digests.0,
 			import_headers,
 			justification,
 			body,
@@ -738,6 +739,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
+		pre_digests: Vec<u8>,
 		import_headers: PrePostHeader<Block::Header>,
 		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
@@ -776,7 +778,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		// FIXME #1232: correct path logic for when to execute this function
-		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
+		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, pre_digests, &import_headers, origin, hash, body.clone())?;
 
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
@@ -826,6 +828,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	fn block_execution(
 		&self,
 		transaction: &B::BlockImportOperation,
+		pre_digest: Vec<u8>,
 		import_headers: &PrePostHeader<Block::Header>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
@@ -865,7 +868,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					&{
+						let mut the_block = <Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default());
+						the_block.set_pre_digest(pre_digest);
+						the_block.encode()
+					},
 					match origin {
 						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies().syncing),
 						_ => get_execution_manager(self.execution_strategies().importing),

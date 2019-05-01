@@ -594,8 +594,8 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	}
 }
 
-/// Something which fulfills the abstract idea of a Substrate block. It has types for an
-/// `Extrinsic` piece of information as well as a `Header`.
+/// Something which fulfills the abstract idea of a Substrate block. It has
+/// types for an `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
@@ -614,6 +614,9 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDes
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	/// Creates new block from header and extrinsics.
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
+	/// Set the pre-digests.  This function will never be called more than once
+	/// for a given block, so it is okay to `panic!` if it is.
+	fn set_pre_digest(&mut self, _pre_digest: Vec<u8>) { }
 	/// Returns the hash of the block.
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
