@@ -343,7 +343,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name <$event_generic:ident, $event_instance:path> $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name <$event_generic:ident, $event_instance:path> $d(, $ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -362,7 +362,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -378,7 +378,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: {
-					$macro_enum_name $d( <$event_generic:ident $d(, $event_instance:path)?> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name $d( <$event_generic:ident $d(, $event_instance:path)?> )* $d(, $ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -397,7 +397,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: $d( < $module_instance:ident >:: )? {
-					$ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* $d(, $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> )* )*
+					$ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* $d(, $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -485,7 +485,7 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$( $system:ident )?;
 		{ $( $parsed:tt )* };
-		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ingore:ident $(, $modules:ident )* },
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ignore:ident $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
 		$crate::__decl_all_modules!(
@@ -532,7 +532,7 @@ macro_rules! __decl_outer_dispatch {
 		$runtime:ident;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		System: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
+			$ignore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
 		$(, $rest_name:ident : $rest_module:ident::{
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
@@ -572,7 +572,7 @@ macro_rules! __decl_outer_dispatch {
 		$runtime:ident;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
+			$ignore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
 		$(, $rest_name:ident : $rest_module:ident::{
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
@@ -783,7 +783,7 @@ macro_rules! __decl_outer_config {
 		$runtime:ident;
 		{ $( $parsed:tt )* };
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
-			$ingore:ident $( <$ignor:ident $(, $ignore_instance:path)?> )* $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
+			$ignore:ident $( <$ignor:ident $(, $ignore_instance:path)?> )* $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
 		},
 		$( $rest:tt )*
 	) => {
@@ -880,7 +880,7 @@ macro_rules! __decl_outer_inherent {
 		$uncheckedextrinsic:ident;
 		$( $parsed_name:ident :: $parsed_call:ident ),*;
 		$name:ident: $module:ident::{
-			$ingore:ident $( ( $( $ignor:ident )* ) )*
+			$ignore:ident $( ( $( $ignor:ident )* ) )*
 				$(, $modules:ident $( ( $( $modules_call:ident )* ) )* )*
 		}
 		$(, $rest_name:ident : $rest_module:ident::{
