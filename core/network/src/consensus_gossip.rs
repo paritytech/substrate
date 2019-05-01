@@ -210,11 +210,6 @@ pub trait Validator<B: BlockT>: Send + Sync {
 	fn message_allowed<'a>(&'a self) -> Box<FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
 		Box::new(move |_who, _intent, _topic, _data| true)
 	}
-
-	/// Produce a closure for filtering egress messages to a peer.
-	fn message_allowed_for_peer<'a>(&'a self) -> Box<FnMut(&[u8]) -> bool + 'a> {
-		Box::new(move |_data| true)
-	}
 }
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
@@ -493,7 +488,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 		};
 
 		let message_hash = HashFor::<B>::hash(&message.data);
+
 		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
+
 		peer.known_messages.insert(message_hash);
 		protocol.send_consensus(who.clone(), message.clone());
 	}

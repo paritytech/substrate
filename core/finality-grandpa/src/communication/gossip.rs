@@ -155,17 +155,15 @@ impl<N: Ord> View<N> {
 		}
 	}
 
-	/// A valid update shows the progress of a peer.
+	/// A valid update for the view.
 	fn is_valid_update(&self, set_id: SetId, round: Round, number: &N) -> bool {
-		self.set_id <= set_id && (self.round <= round || self.set_id < set_id)
-			&& self.last_commit.as_ref() <= Some(&number)
+		self.is_valid_set_update(set_id, round) && self.last_commit.as_ref() <= Some(&number)
 	}
 
-	fn is_valid_round_update(&self, set_id: SetId, round: Round) -> bool {
+	/// A valid update for a set id.
+	fn is_valid_set_update(&self, set_id: SetId, round: Round) -> bool {
 		self.set_id <= set_id && (self.round <= round || self.set_id < set_id)
-			// && self.last_commit.as_ref() <= Some(&number)
 	}
-
 }
 
 const KEEP_RECENT_ROUNDS: usize = 3;
@@ -480,9 +478,9 @@ impl<Block: BlockT> Inner<Block> {
 	fn note_commit_finalized<F>(&mut self, set_id: SetId, round: Round, finalized: NumberFor<Block>, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		if self.local_view.last_commit < Some(finalized) {
+		if self.local_view.last_commit.as_ref() < Some(&finalized) {
 			self.local_view.last_commit = Some(finalized);
-			if self.local_view.is_valid_round_update(set_id, round) {
+			if self.local_view.is_valid_set_update(set_id, round) {
 				self.local_view.round = round;
 				self.local_view.set_id = set_id;
 				self.multicast_neighbor_packet(send_neighbor);
@@ -710,24 +708,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			}
 		}
 	}
-
-	fn message_allowed_for_peer<'a>(&'a self)
-		-> Box<FnMut(&[u8]) -> bool + 'a>
-	{
-		let inner = self.inner.read();
-		Box::new(move |mut data| {
-			match GossipMessage::<Block>::decode(&mut data) {
-				None => false,
-				Some(GossipMessage::Commit(_)) => false,
-				Some(GossipMessage::Neighbor(neighbor_msg)) => {
-					let p = neighbor_msg.into_neighbor_packet();
-					inner.local_view.is_valid_update(p.set_id, p.round, &p.commit_finalized_height)
-				},
-				Some(GossipMessage::VoteOrPrecommit(_)) => false,
-			}
-		})
-	}
-
 
 	fn message_allowed<'a>(&'a self)
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
