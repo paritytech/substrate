@@ -422,9 +422,8 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 			}
 		})
 		.map(move |(msg, mut notification, service)| {
-			let round = msg.round;
+			let round = msg.round.0;
 			let commit = msg.message;
-			let set_id = msg.set_id;
 			let finalized_number = commit.target_number;
 			let gossip_validator = gossip_validator.clone();
 			let cb = move |outcome| match outcome {
@@ -433,8 +432,6 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 					// any discrepancy between the actual ghost and the claimed
 					// finalized number.
 					gossip_validator.note_commit_finalized(
-						set_id,
-						round,
 						finalized_number,
 						|to, neighbor_msg| service.send_message(
 							to,
@@ -452,7 +449,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 				}
 			};
 
-			(round.0, commit, cb)
+			(round, commit, cb)
 		})
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
@@ -699,7 +696,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		};
 
 		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
-			round: round.clone(),
+			round: round,
 			set_id: self.set_id,
 			message: compact_commit,
 		});
@@ -708,8 +705,6 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
-			self.set_id,
-			round,
 			commit.target_number,
 			|to, neighbor| self.network.send_message(
 				to,
