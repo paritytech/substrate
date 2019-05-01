@@ -476,7 +476,7 @@ impl<Block: BlockT> Inner<Block> {
 	{
 		if self.local_view.last_commit.as_ref() < Some(&finalized) {
 			self.local_view.last_commit = Some(finalized);
-			self.multicast_neighbor_packet(send_neighbor);
+			self.multicast_neighbor_packet(send_neighbor)
 		}
 	}
 

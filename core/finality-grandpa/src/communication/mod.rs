@@ -258,7 +258,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			set_id,
 			|to, neighbor| self.service.send_message(
 				to,
-				GossipMessage::<B>::from(neighbor).encode(),
+				GossipMessage::<B>::from(neighbor).encode()
 			),
 		);
 
@@ -702,6 +702,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		});
 
 		let topic = global_topic::<Block>(self.set_id.0);
+
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
