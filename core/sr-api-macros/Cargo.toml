@@ -22,6 +22,8 @@ runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
 substrate-primitives = { path = "../primitives" }
 criterion = "0.2"
+consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
+codec = { package = "parity-codec", version = "3.5.1" }
 
 [[bench]]
 name = "bench"

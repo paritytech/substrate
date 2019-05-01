@@ -32,7 +32,10 @@ substrate-executor = { path = "../executor" }
 substrate-test-client = { path = "../test-client" }
 
 [features]
-default = ["std"]
+default = [
+	"std",
+	"include-wasm-blob"
+]
 std = [
 	"log",
 	"serde",
@@ -56,3 +59,5 @@ std = [
 	"executive/std",
 	"consensus_authorities/std",
 ]
+# If enabled, the WASM blob is added to the `GenesisConfig`.
+include-wasm-blob = []

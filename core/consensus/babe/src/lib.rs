@@ -31,7 +31,7 @@ use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
 };
-use std::sync::Arc;
+use std::{sync::Arc, u64, fmt::Debug};
 use parity_codec::{Decode, Encode, Input};
 use primitives::{
 	crypto::Pair,
@@ -41,8 +41,6 @@ use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use schnorrkel::{
-	//SecretKey as Secret,
-	context::SigningTranscript,
 	keys::Keypair,
 	vrf::{
 		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
@@ -75,7 +73,6 @@ use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
-use rand::Rng;
 
 /// A BABE seal.  It includes:
 ///
@@ -100,8 +97,12 @@ macro_rules! babe_assert_eq {
 			let ref a = $a;
 			let ref b = $b;
 			if a != b {
-				error!(target: "babe", "Expected {:?} to equal {:?}, but they were not", stringify!($a), stringify!($b));
-				eprintln!("ERROR: Expected {:?} to equal {:?}, but they were not", stringify!($a), stringify!($b));
+				error!(
+					target: "babe",
+					"Expected {:?} to equal {:?}, but they were not",
+					stringify!($a),
+					stringify!($b),
+				);
 				assert_eq!(a, b);
 			}
 		})
@@ -128,7 +129,8 @@ impl Encode for BabeSeal {
 		let encoded = parity_codec::Encode::encode(&tmp);
 		if cfg!(any(test, debug_assertions)) {
 			debug!(target: "babe", "Checking if encoding was correct");
-			let decoded_version = Self::decode(&mut &encoded[..]).expect("we just encoded this ourselves, so it is correct; qed");
+			let decoded_version = Self::decode(&mut &encoded[..])
+				.expect("we just encoded this ourselves, so it is correct; qed");
 			babe_assert_eq!(decoded_version.proof, self.proof);
 			babe_assert_eq!(decoded_version.vrf_output, self.vrf_output);
 			babe_assert_eq!(decoded_version.signature.signature, self.signature.signature);
@@ -157,7 +159,8 @@ impl Decode for BabeSeal {
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::babe::Config` can be eliminated.
+// and `super::aura::Config` can be eliminated.
+// https://github.com/paritytech/substrate/issues/2434
 pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
 impl Config {
@@ -202,7 +205,9 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<BabeSeal>;
 }
 
-impl<T: core::fmt::Debug, Hash: core::fmt::Debug> CompatibleDigestItem for generic::DigestItem<Hash, Public, T> {
+impl<T, Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, T>
+	where T: Debug, Hash: Debug
+{
 	/// Construct a digest item which contains a slot number and a signature
 	/// on the hash.
 	fn babe_seal(signature: BabeSeal) -> Self {
@@ -285,7 +290,10 @@ pub fn start_babe<B, C, E, I, SO, Error, OnExit>(BabeParams {
 	on_exit,
 	inherent_data_providers,
 	force_authoring,
-}: BabeParams<C, E, I, SO, OnExit>) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
+}: BabeParams<C, E, I, SO, OnExit>) -> Result<
+	impl Future<Item=(), Error=()>,
+	consensus_common::Error,
+> where
 	B: Block,
 	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -388,7 +396,9 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		}
 
 		// FIXME replace the dummy empty slices with real data
-		let (proposal_work, vrf_output, proof) = if let Some((inout, proof, _batchable_proof)) = author_block(
+		// https://github.com/paritytech/substrate/issues/2435
+		// https://github.com/paritytech/substrate/issues/2436
+		let authoring_result = if let Some((inout, proof, _batchable_proof)) = author_block(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -433,6 +443,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		} else {
 			return Box::new(future::ok(()));
 		};
+
+		let (proposal_work, vrf_output, proof) = authoring_result;
 
 		Box::new(
 			proposal_work
@@ -511,8 +523,9 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 	}
 }
 
-/// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
-/// if it's successful, returns the pre-header and the digest item containing the seal.
+/// check a header has been signed by the right key. If the slot is too far in
+/// the future, an error will be returned. If successful, returns the pre-header
+/// and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_babe_seal`.
 //
@@ -533,7 +546,12 @@ fn check_header<B: Block + Sized>(
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
 
-	let BabeSeal { slot_num, signature: LocalizedSignature { signer, signature }, proof, vrf_output } = digest_item.as_babe_seal().ok_or_else(|| {
+	let BabeSeal {
+		slot_num,
+		signature: LocalizedSignature {signer, signature },
+		proof,
+		vrf_output,
+	} = digest_item.as_babe_seal().ok_or_else(|| {
 		error!(target: "babe", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
@@ -556,16 +574,17 @@ fn check_header<B: Block + Sized>(
 					Default::default(),
 					0,
 				);
-				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| p.vrf_verify(transcript, &vrf_output, &proof)).map_err(|s| {
+				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| {
+					p.vrf_verify(transcript, &vrf_output, &proof)
+				}).map_err(|s| {
 					warn!(target: "babe", "VRF verification failed: {:?}", s);
 					format!("VRF verification failed")
 				})?
 			};
-			let r: u64 = inout.make_chacharng(BABE_VRF_PREFIX).gen();
-			if r < threshold {
+			if check(&inout, threshold) {
 				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
-				error!(target: "babe", "VRF verification failed: threshold {} but VRF produced {}", r, threshold);
+				error!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
 				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
 			}
 		} else {
@@ -647,8 +666,18 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<Public>>), String> {
-		trace!(target: "babe", "Verifying something");
-		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
+		trace!(
+			target: "babe",
+			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
+			origin,
+			header,
+			justification,
+			body,
+		);
+		let mut inherent_data = self
+			.inherent_data_providers
+			.create_inherent_data()
+			.map_err(String::from)?;
 		let (_, slot_now) = BabeSlotCompatible::extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
@@ -662,7 +691,8 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		);
 
 		// we add one to allow for some small drift.
-		// FIXME #1019 in the future, alter this queue to allow deferring of headers
+		// FIXME #1019 in the future, alter this queue to allow deferring of
+		// headers
 		let checked_header = check_header::<B>(
 			slot_now + 1,
 			header,
@@ -693,7 +723,10 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				}
 
 				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
-				telemetry!(CONSENSUS_TRACE; "babe.checked_and_importing"; "pre_header" => ?pre_header);
+				telemetry!(
+					CONSENSUS_TRACE;
+					"babe.checked_and_importing";
+					"pre_header" => ?pre_header);
 
 				extra_verification.into_future().wait()?;
 
@@ -735,7 +768,10 @@ impl<B, C, E> Authorities<B> for BabeVerifier<C, E> where
 	}
 }
 
-fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, ConsensusError> where
+fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
+	Vec<AuthorityIdFor<B>>,
+	ConsensusError,
+> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -748,7 +784,8 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 			if client.runtime_api().has_api::<AuthoritiesApi<B>>(at).unwrap_or(false) {
 				AuthoritiesApi::authorities(&*client.runtime_api(), at).ok()
 			} else {
-				panic!("We don’t support deprecated code with new consensus algorithms, therefore this is unreachable; qed")
+				panic!("We don’t support deprecated code with new consensus algorithms, \
+						therefore this is unreachable; qed")
 			}
 		}).ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
 }
@@ -775,12 +812,6 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 	q.as_ref()
 }
 
-/// Pieces:
-///
-/// 1. VRF winnership
-/// 2. * VRF randomness
-///    * relative time
-
 fn make_transcript(
 	randomness: &[u8],
 	slot_number: u64,
@@ -788,12 +819,15 @@ fn make_transcript(
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.proto_name(&BABE_ENGINE_ID);
 	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
 	transcript.commit_bytes(b"genesis block hash", genesis_hash);
 	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
 	transcript.commit_bytes(b"chain randomness", randomness);
 	transcript
+}
+
+fn check(inout: &VRFInOut, threshold: u64) -> bool {
+	u64::from_le_bytes(inout.make_bytes::<[u8; 8]>(BABE_VRF_PREFIX)) < threshold
 }
 
 /// Hash into chain:
@@ -811,23 +845,14 @@ fn author_block(
 	key: &sr25519::Pair,
 	threshold: u64,
 ) -> Option<(VRFInOut, VRFProof, VRFProofBatchable)> {
-	// FIXME this is O(n)
 	if !authorities.contains(&key.public()) { return None }
-	let (inout, proof, batchable_proof) = {
-		let transcript = make_transcript(
-			randomness,
-			slot_number,
-			genesis_hash,
-			epoch,
-		);
-		get_keypair(key).vrf_sign(transcript)
-	};
-	let r: u64 = inout.make_chacharng(BABE_VRF_PREFIX).gen();
-	if r < threshold {
-		Some((inout, proof, batchable_proof))
-	} else {
-		None
-	}
+	let transcript = make_transcript(
+		randomness,
+		slot_number,
+		genesis_hash,
+		epoch,
+	);
+	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 }
 
 #[cfg(test)]
@@ -847,11 +872,16 @@ mod tests {
 	use test_client;
 	use futures::stream::Stream;
 	use log::error;
-	use std::{u64, time::Duration};
+	use std::time::Duration;
 
 	type Error = client::error::Error;
 
-	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
+	type TestClient = client::Client<
+		test_client::Backend,
+		test_client::Executor,
+		TestBlock,
+		test_client::runtime::RuntimeApi,
+	>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);
@@ -930,7 +960,10 @@ mod tests {
 			&self.peers
 		}
 
-		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(
+			&mut self,
+			closure: F,
+		) {
 			closure(&mut self.peers);
 		}
 

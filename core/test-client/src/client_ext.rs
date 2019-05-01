@@ -38,11 +38,19 @@ pub trait TestClient: Sized {
 		-> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
-	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
-		-> Result<(), ConsensusError>;
+	fn import_justified(
+		&self,
+		origin: BlockOrigin,
+		block: runtime::Block,
+		justification: Justification
+	) -> Result<(), ConsensusError>;
 
 	/// Finalize a block.
-	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()>;
+	fn finalize_block(
+		&self,
+		id: BlockId<runtime::Block>,
+		justification: Option<Justification>,
+	) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> runtime::Hash;
@@ -72,9 +80,12 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 		self.import_block(import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
-		-> Result<(), ConsensusError>
-	{
+	fn import_justified(
+		&self,
+		origin: BlockOrigin,
+		block: runtime::Block,
+		justification: Justification,
+	) -> Result<(), ConsensusError> {
 		let import = ImportBlock {
 			origin,
 			header: block.header,
@@ -90,7 +101,11 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 		self.import_block(import, HashMap::new()).map(|_| ())
 	}
 
-	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()> {
+	fn finalize_block(
+		&self,
+		id: BlockId<runtime::Block>,
+		justification: Option<Justification>,
+	) -> client::error::Result<()> {
 		self.finalize_block(id, justification, true)
 	}
 
