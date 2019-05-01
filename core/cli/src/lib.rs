@@ -201,7 +201,7 @@ where
 	CC: StructOpt + Clone + GetLogFilter,
 	RP: StructOpt + Clone + AugmentClap,
 	E: IntoExit,
-	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
+	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
@@ -516,11 +516,11 @@ where
 	F: ServiceFactory,
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
+	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
  {
-	let config = create_run_node_config::<F, _>(cli.left, spec_factory, impl_name, version)?;
+	let config = create_run_node_config::<F, _>(cli.left.clone(), spec_factory, impl_name, version)?;
 
-	run_service(exit, cli.right, config).map_err(Into::into)
+	run_service(exit, cli.left, cli.right, config).map_err(Into::into)
 }
 
 //
