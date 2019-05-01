@@ -35,3 +35,5 @@ std = [
 nightly = []
 strict = []
 wasm-nice-panic-message = []
+no_panic_handler = []
+no_oom = []
