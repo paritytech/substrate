@@ -27,7 +27,7 @@ use libp2p::core::{
 };
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
-use std::{error, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
+use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 use void::Void;
@@ -231,8 +231,8 @@ pub enum CustomProtoHandlerOut<TMessage> {
 
 	/// Closed a custom protocol with the remote.
 	CustomProtocolClosed {
-		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
-		result: io::Result<()>,
+		/// Reason why the substream closed, for diagnostic purposes.
+		reason: Cow<'static, str>,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -329,7 +329,7 @@ where
 					shutdown.push(substream);
 				}
 				let event = CustomProtoHandlerOut::CustomProtocolClosed {
-					result: Ok(())
+					reason: "Disabled on purpose on our side".into()
 				};
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
 				ProtocolState::Disabled {
@@ -394,7 +394,7 @@ where
 				}
 			}
 
-			ProtocolState::Normal { mut substreams, shutdown } => {
+			ProtocolState::Normal { mut substreams, mut shutdown } => {
 				for n in (0..substreams.len()).rev() {
 					let mut substream = substreams.swap_remove(n);
 					match substream.poll() {
@@ -416,20 +416,22 @@ where
 							return Some(ProtocolsHandlerEvent::Custom(event));
 						}
 						Ok(Async::Ready(None)) => {
-							let event = CustomProtoHandlerOut::CustomProtocolClosed {
-								result: Ok(())
-							};
-							substreams.push(substream);
-							self.state = ProtocolState::Disabled {
-								shutdown: shutdown.into_iter().collect(),
-								reenable: true
-							};
-							return Some(ProtocolsHandlerEvent::Custom(event));
+							shutdown.push(substream);
+							if substreams.is_empty() {
+								let event = CustomProtoHandlerOut::CustomProtocolClosed {
+									reason: "All substreams have been closed by the remote".into(),
+								};
+								self.state = ProtocolState::Disabled {
+									shutdown: shutdown.into_iter().collect(),
+									reenable: true
+								};
+								return Some(ProtocolsHandlerEvent::Custom(event));
+							}
 						}
 						Err(err) => {
 							if substreams.is_empty() {
 								let event = CustomProtoHandlerOut::CustomProtocolClosed {
-									result: Err(err),
+									reason: format!("Error on the last substream: {:?}", err).into(),
 								};
 								self.state = ProtocolState::Disabled {
 									shutdown: shutdown.into_iter().collect(),
