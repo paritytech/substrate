@@ -160,6 +160,12 @@ impl<N: Ord> View<N> {
 		self.set_id <= set_id && (self.round <= round || self.set_id < set_id)
 			&& self.last_commit.as_ref() <= Some(&number)
 	}
+
+	fn is_valid_round_update(&self, set_id: SetId, round: Round) -> bool {
+		self.set_id <= set_id && (self.round <= round || self.set_id < set_id)
+			// && self.last_commit.as_ref() <= Some(&number)
+	}
+
 }
 
 const KEEP_RECENT_ROUNDS: usize = 3;
@@ -471,12 +477,16 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	fn note_commit_finalized<F>(&mut self, finalized: NumberFor<Block>, send_neighbor: F)
+	fn note_commit_finalized<F>(&mut self, set_id: SetId, round: Round, finalized: NumberFor<Block>, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		if self.local_view.last_commit.as_ref() < Some(&finalized) {
+		if self.local_view.last_commit < Some(finalized) {
 			self.local_view.last_commit = Some(finalized);
-			self.multicast_neighbor_packet(send_neighbor)
+			if self.local_view.is_valid_round_update(set_id, round) {
+				self.local_view.round = round;
+				self.local_view.set_id = set_id;
+				self.multicast_neighbor_packet(send_neighbor);
+			}
 		}
 	}
 
@@ -611,10 +621,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
+	pub(super) fn note_commit_finalized<F>(&self, set_id: SetId, round: Round, finalized: NumberFor<Block>, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_commit_finalized(finalized, send_neighbor);
+		self.inner.write().note_commit_finalized(set_id, round, finalized, send_neighbor);
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: i32) {

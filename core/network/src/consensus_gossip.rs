@@ -493,23 +493,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 		};
 
 		let message_hash = HashFor::<B>::hash(&message.data);
-		let engine_id = message.engine_id;
-
-		match self.validators.get(&engine_id) {
-			None => {
-				trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
-				peer.known_messages.insert(message_hash);
-				protocol.send_consensus(who.clone(), message.clone());
-			},
-			Some(validator) => {
-				let mut check_fn = validator.message_allowed_for_peer();
-				if check_fn(&message.data) {
-					trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
-					peer.known_messages.insert(message_hash);
-					protocol.send_consensus(who.clone(), message.clone());
-				}
-			},
-		}
+		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
+		peer.known_messages.insert(message_hash);
+		protocol.send_consensus(who.clone(), message.clone());
 	}
 }
 
