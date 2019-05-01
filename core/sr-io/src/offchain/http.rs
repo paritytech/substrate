@@ -16,7 +16,9 @@
 
 //! A non-std set of HTTP types.
 
-use crate::Vec;
+use rstd::prelude::Vec;
+#[cfg(not(feature = "std"))]
+use rstd::prelude::vec;
 use primitives::offchain::{Timestamp, HttpRequestId as RequestId, HttpRequestStatus as RequestStatus};
 
 /// Request method (HTTP verb)
@@ -50,8 +52,13 @@ impl AsRef<str> for Method {
 	}
 }
 
+#[cfg(feature = "std")]
 fn from_utf8(chunk: &[u8]) -> Option<&str> {
 	std::str::from_utf8(chunk).ok()
+}
+#[cfg(not(feature = "std"))]
+fn from_utf8(chunk: &[u8]) -> Option<&str> {
+	core::str::from_utf8(chunk).ok()
 }
 
 /// An HTTP request builder.
@@ -124,7 +131,7 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = crate::http_request_start(self.method.as_ref(), self.url, meta);
+		let id = crate::http_request_start(self.method.as_ref(), self.url, meta)?;
 
 		// add custom headers
 		for (header_name, header_value) in &self.headers {
@@ -132,7 +139,7 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 				id,
 				from_utf8(header_name).expect("Header names are always Vecs created from valid str; qed"),
 				from_utf8(header_value).expect("Header values are always Vecs created from valid str; qed"),
-			)
+			)?
 		}
 
 		// write body
@@ -172,7 +179,10 @@ impl PendingRequest {
 	///
 	/// NOTE this waits for the request indefinitely.
 	pub fn wait(self) -> Result<Response, Error> {
-		self.try_wait(None).expect("Since `None` is passed we will never get a deadline error; qed")
+		match self.try_wait(None) {
+			Ok(res) => res,
+			Err(_) => panic!("Since `None` is passed we will never get a deadline error; qed"),
+		}
 	}
 
 	/// Attempts to wait for the request to finish,
@@ -185,7 +195,10 @@ impl PendingRequest {
 	pub fn wait_all(requests: Vec<PendingRequest>) -> Vec<Result<Response, Error>> {
 		Self::try_wait_all(requests, None)
 			.into_iter()
-			.map(|r| r.expect("Since `None` is passed we will never get a deadline error; qed"))
+			.map(|r| match r {
+				Ok(r) => r,
+				Err(_) => panic!("Since `None` is passed we will never get a deadline error; qed"),
+			})
 			.collect()
 	}
 
@@ -244,7 +257,6 @@ impl Response {
 }
 
 /// A buffered byte iterator over response body.
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct ResponseBody {
 	id: RequestId,
 	is_deadline_reached: bool,
@@ -252,6 +264,20 @@ pub struct ResponseBody {
 	filled_up_to: Option<usize>,
 	position: usize,
 	deadline: Option<Timestamp>,
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for ResponseBody {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		fmt.debug_struct("ResponseBody")
+			.field("id", &self.id)
+			.field("is_deadline_reached", &self.is_deadline_reached)
+			.field("buffer", &self.buffer.len())
+			.field("filled_up_to", &self.filled_up_to)
+			.field("position", &self.position)
+			.field("deadline", &self.deadline)
+			.finish()
+	}
 }
 
 impl ResponseBody {

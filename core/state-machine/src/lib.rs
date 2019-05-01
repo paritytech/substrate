@@ -226,8 +226,89 @@ pub enum NeverOffchainExt {}
 
 impl NeverOffchainExt {
 	/// Create new offchain extensions.
-	pub fn new<'a>() -> Option<&'a mut offchain::Externalities> {
+	pub fn new<'a>() -> Option<&'a mut NeverOffchainExt> {
 		None
+	}
+}
+
+impl offchain::Externalities for NeverOffchainExt {
+	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn sign(&mut self, _data: &[u8]) -> Option<[u8; 64]> {
+		unreachable!()
+	}
+
+	fn timestamp(&mut self) -> offchain::Timestamp {
+		unreachable!()
+	}
+
+	fn sleep_until(&mut self, _deadline: offchain::Timestamp) {
+		unreachable!()
+	}
+
+	fn random_seed(&mut self) -> [u8; 32] {
+		unreachable!()
+	}
+
+	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
+		unreachable!()
+	}
+
+	fn local_storage_read(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+		unreachable!()
+	}
+
+	fn http_request_start(
+		&mut self,
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> Result<offchain::HttpRequestId, ()> {
+		unreachable!()
+	}
+
+	fn http_request_add_header(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_name: &str,
+		_value: &str
+	) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn http_request_write_body(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_chunk: &[u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn http_response_wait(
+		&mut self,
+		_ids: &[offchain::HttpRequestId],
+		_deadline: Option<offchain::Timestamp>
+	) -> Vec<offchain::HttpRequestStatus> {
+		unreachable!()
+	}
+
+	fn http_response_headers(
+		&mut self,
+		_request_id: offchain::HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unreachable!()
+	}
+
+	fn http_response_read_body(
+		&mut self,
+		_request_id: offchain::HttpRequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<offchain::Timestamp>
+	) -> Result<usize, ()> {
+		unreachable!()
 	}
 }
 
@@ -328,15 +409,15 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 }
 
 /// Creates new substrate state machine.
-pub fn new<'a, H, B, T, Exec>(
+pub fn new<'a, H, B, T, O, Exec>(
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a mut offchain::Externalities>,
+	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-) -> StateMachine<'a, H, B, T, Exec> {
+) -> StateMachine<'a, H, B, T, O, Exec> {
 	StateMachine {
 		backend,
 		changes_trie_storage,
@@ -350,10 +431,10 @@ pub fn new<'a, H, B, T, Exec>(
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, H, B, T, Exec> {
+pub struct StateMachine<'a, H, B, T, O, Exec> {
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a mut offchain::Externalities>,
+	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
@@ -361,11 +442,12 @@ pub struct StateMachine<'a, H, B, T, Exec> {
 	_hasher: PhantomData<H>,
 }
 
-impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
+impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
+	O: offchain::Externalities,
 	H::Out: Ord + HeapSizeOf,
 {
 	/// Execute a call using the given state backend, overlayed changes, and call executor.

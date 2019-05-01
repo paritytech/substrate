@@ -59,10 +59,9 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, B, T>
+pub struct Ext<'a, H, B, T, O>
 where
 	H: Hasher,
-
 	B: 'a + Backend<H>,
 {
 	/// The overlayed changes to write to.
@@ -84,14 +83,15 @@ where
 	/// Additional externalities for offchain workers.
 	///
 	/// If None, some methods from the trait might not supported.
-	offchain_externalities: Option<&'a mut offchain::Externalities>,
+	offchain_externalities: Option<&'a mut O>,
 }
 
-impl<'a, H, B, T> Ext<'a, H, B, T>
+impl<'a, H, B, T, O> Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
+	O: 'a + offchain::Externalities,
 	H::Out: Ord + HeapSizeOf,
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
@@ -99,7 +99,7 @@ where
 		overlay: &'a mut OverlayedChanges,
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
-		offchain_externalities: Option<&'a mut offchain::Externalities>,
+		offchain_externalities: Option<&'a mut O>,
 	) -> Self {
 		Ext {
 			overlay,
@@ -162,12 +162,13 @@ where
 }
 
 #[cfg(test)]
-impl<'a, H, B, T> Ext<'a, H, B, T>
+impl<'a, H, B, T, O> Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
+	O: 'a + offchain::Externalities,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
@@ -183,11 +184,12 @@ where
 	}
 }
 
-impl<'a, B, T, H> Externalities<H> for Ext<'a, H, B, T>
+impl<'a, B, T, H, O> Externalities<H> for Ext<'a, H, B, T, O>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
+	O: 'a + offchain::Externalities,
 	H::Out: Ord + HeapSizeOf,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -345,11 +347,7 @@ where
 	}
 
 	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
-		let res = self.offchain_externalities.as_mut();
-		if res.is_none() {
-			warn!("Requesting non-existent offchain externalities.");
-		}
-		res.map(|x| &mut **x)
+		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 }
 
@@ -367,7 +365,7 @@ mod tests {
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher>;
-	type TestExt<'a> = Ext<'a, Blake2Hasher, TestBackend, TestChangesTrieStorage>;
+	type TestExt<'a> = Ext<'a, Blake2Hasher, TestBackend, TestChangesTrieStorage, crate::NeverOffchainExt>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {

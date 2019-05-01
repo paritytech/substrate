@@ -589,14 +589,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(0)
 	},
-	ext_submit_extrinsic(msg_data: *const u8, len: u32) => {
+	ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 => {
 		let extrinsic = this.memory.get(msg_data, len as usize)
 			.map_err(|_| UserError("OOB while ext_submit_extrinsic: wasm"))?;
 
-		this.ext.submit_extrinsic(extrinsic)
-			.map_err(|_| UserError("Calling unavailable API ext_submit_extrinsic: wasm"))?;
+		let res = this.ext.offchain()
+			.map(|api| api.submit_transaction(extrinsic))
+			.ok_or_else(|| UserError("Calling unavailable API ext_submit_extrinsic: wasm"))?;
 
-		Ok(())
+		Ok(if res.is_ok() { 0 } else { 1 })
 	},
     // TODO [ToDr] http externalities.
 	ext_sandbox_instantiate(

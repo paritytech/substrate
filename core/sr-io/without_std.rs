@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
-use primitives::Blake2Hasher;
+use primitives::{offchain, Blake2Hasher};
 
 #[panic_handler]
 #[no_mangle]
@@ -329,13 +329,37 @@ pub mod ext {
 		// Offchain-worker Context
 		//================================
 
-		/// Submit extrinsic.
-		fn ext_submit_extrinsic(data: *const u8, len: u32);
+		/// Submit transaction.
+		///
+		/// Returns 0 if it was successfuly added to the pool, nonzero otherwise.
+		fn ext_submit_transaction(data: *const u8, len: u32) -> u32;
+
+
+		/// Sign a piece of data with authority key.
+		///
+		/// Returns `0` if successful, nonzero otherwise.
+		fn ext_sign(data: *const u8, len: u32, sig_data: *mut u8) -> u32;
 
 		/// Returns current UNIX timestamp (milliseconds)
 		fn ext_timestamp() -> u64;
 
+		/// Pause execution until `deadline` is reached.
+		fn ext_sleep_until(deadline: u64);
+
+		/// Generate a random seed
+		fn ext_random_seed(data: *mut u8);
+
+		/// Write a value to local storage.
+		fn ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32);
+
+		/// Read a value from local storage.
+		///
+		/// if len is u32::max_value the value has not been found.
+		fn ext_local_storage_read(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
+
 		/// Initiaties a http request.
+		///
+		/// If returned value is `u16::max_value` the request couldn't have started.
 		fn ext_http_request_start(
 			method: *const u8,
 			method_len: u8,
@@ -346,13 +370,15 @@ pub mod ext {
 		) -> u16;
 
 		/// Add a header to the request.
+		///
+		/// Returns `0` if successful, nonzero otherwise.
 		fn ext_http_request_add_header(
 			request_id: u16,
 			name: *const u8,
 			name_len: u32,
 			value: *const u8,
 			value_len: u32
-		);
+		) -> u16;
 
 		/// Write a chunk of request body.
 		///
@@ -391,6 +417,8 @@ pub mod ext {
 		///
 		/// Returns the number of bytes written.
 		/// Passing `0` as deadline blocks forever.
+		///
+		/// If the returned value is `u32::max_value()` reading body failed.
 		fn ext_http_response_read_body(
 			id: u16,
 			buffer: *mut u8,
@@ -685,54 +713,130 @@ impl CryptoApi for () {
 			_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
 		}
 	}
+}
 
 impl OffchainApi for () {
-	fn submit_extrinsic<T: codec::Encode>(data: &T) {
+	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		let encoded_data = codec::Encode::encode(data);
 		unsafe {
-			ext_submit_extrinsic.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
+			let ret = ext_submit_transaction.get()(encoded_data.as_ptr(), encoded_data.len() as u32);
+			if ret == 0 {
+				Ok(())
+			} else {
+				Err(())
+			}
+		}
+	}
+
+	fn sign(data: &[u8]) -> Option<[u8; 64]> {
+		let mut result = [0_u8; 64];
+		unsafe {
+			let res = ext_sign.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+			if res == 0 {
+				Some(result)
+			} else {
+				None
+			}
 		}
 	}
 
 	fn timestamp() -> offchain::Timestamp {
-		offchain::Timestamp(unsafe {
+		offchain::Timestamp::from_unix_millis(unsafe {
 			ext_timestamp.get()()
 		})
 	}
 
-	fn http_request_start(method: &str, url: &str, meta: &[u8]) -> offchain::http::RequestId {
-		let method = method.as_bytes();
-		let url = url.as_bytes();
-
-		offchain::http::RequestId(unsafe {
-			ext_http_request_start.get()(
-				method.as_ptr(),
-				method.len() as u8,
-				url.as_ptr(),
-				url.len() as u32,
-				meta.as_ptr(),
-				meta.len() as u32,
-			)
-		})
+	fn sleep_until(deadline: Timestamp) {
+		unsafe {
+			ext_sleep_until.get()(deadline.unix_millis())
+		}
 	}
 
-	fn http_request_add_header(request_id: offchain::http::RequestId, name: &str, value: &str) {
-		let name = name.as_bytes();
-		let value = value.as_bytes();
-
+	fn random_seed() -> [u8; 32] {
+		let mut result = [0_u8; 32];
 		unsafe {
-			ext_http_request_add_header.get()(
-				request_id.0,
-				name.as_ptr(),
-				name.len() as u32,
+			ext_random_seed.get()(result.as_mut_ptr())
+		}
+		result
+	}
+
+	fn local_storage_set(key: &[u8], value: &[u8]) {
+		unsafe {
+			ext_local_storage_set.get()(
+				key.as_ptr(),
+				key.len() as u32,
 				value.as_ptr(),
 				value.len() as u32,
 			)
 		}
 	}
 
+	fn local_storage_read(key: &[u8]) -> Option<Vec<u8>> {
+		let mut len = 0u32;
+		unsafe {
+			let ptr = ext_local_storage_read.get()(
+				key.as_ptr(),
+				key.len() as u32,
+				&mut len,
+			);
+
+			if len == u32::max_value() {
+				None
+			} else {
+
+				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+				// See #300 for more details.
+				Some(<Vec<u8>>::from_raw_parts(ptr, len as usize, len as usize))
+			}
+		}
+	}
+
+	fn http_request_start(method: &str, url: &str, meta: &[u8]) -> Result<offchain::HttpRequestId, ()> {
+		let method = method.as_bytes();
+		let url = url.as_bytes();
+
+		unsafe {
+			let result = ext_http_request_start.get()(
+				method.as_ptr(),
+				method.len() as u8,
+				url.as_ptr(),
+				url.len() as u32,
+				meta.as_ptr(),
+				meta.len() as u32,
+			);
+
+			if result == u16::max_value() {
+				Err(())
+			} else {
+				Ok(offchain::HttpRequestId(result))
+			}
+		}
+	}
+
+	fn http_request_add_header(request_id: offchain::HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+		let name = name.as_bytes();
+		let value = value.as_bytes();
+
+		unsafe {
+			let result = ext_http_request_add_header.get()(
+				request_id.0,
+				name.as_ptr(),
+				name.len() as u32,
+				value.as_ptr(),
+				value.len() as u32,
+			);
+
+			if result == 0 {
+				Ok(())
+			} else {
+				Err(())
+			}
+		}
+	}
+
 	fn http_request_write_body(
-		request_id: offchain::http::RequestId,
+		request_id: offchain::HttpRequestId,
 		chunk: &[u8],
 		deadline: Option<offchain::Timestamp>
 	) -> Result<(), ()> {
@@ -741,7 +845,7 @@ impl OffchainApi for () {
 				request_id.0,
 				chunk.as_ptr(),
 				chunk.len() as u32,
-				deadline.map_or(0, |x| x.0),
+				deadline.map_or(0, |x| x.unix_millis()),
 			)
 		};
 
@@ -749,9 +853,9 @@ impl OffchainApi for () {
 	}
 
 	fn http_response_wait(
-		ids: &[offchain::http::RequestId],
+		ids: &[offchain::HttpRequestId],
 		deadline: Option<offchain::Timestamp>
-	) -> Vec<offchain::http::RequestStatus> {
+	) -> Vec<offchain::HttpRequestStatus> {
 		let ids = ids.iter().map(|x| x.0).collect::<Vec<_>>();
 		let mut statuses = Vec::new();
 		statuses.resize(ids.len(), 0u16);
@@ -761,18 +865,18 @@ impl OffchainApi for () {
 				ids.as_ptr(),
 				ids.len() as u32,
 				statuses.as_mut_ptr(),
-				deadline.map_or(0, |x| x.0),
+				deadline.map_or(0, |x| x.unix_millis()),
 			)
 		}
 
 		statuses
 			.into_iter()
-			.map(|status| offchain::http::RequestStatus::from_u16(status).unwrap_or_default())
+			.map(|status| offchain::HttpRequestStatus::from_u16(status).unwrap_or_else(|| offchain::HttpRequestStatus::Unknown))
 			.collect()
 	}
 
 	fn http_response_headers(
-		request_id: offchain::http::RequestId,
+		request_id: offchain::HttpRequestId,
 	) -> Vec<(Vec<u8>, Vec<u8>)> {
 		let mut len = 0u32;
 		let raw_result = unsafe {
@@ -790,17 +894,22 @@ impl OffchainApi for () {
 	}
 
 	fn http_response_read_body(
-		request_id: offchain::http::RequestId,
+		request_id: offchain::HttpRequestId,
 		buffer: &mut [u8],
 		deadline: Option<offchain::Timestamp>,
 	) -> Result<usize, ()> {
 		unsafe {
-			ext_http_response_read_body.get()(
+			let res = ext_http_response_read_body.get()(
 				request_id.0,
 				buffer.as_mut_ptr(),
 				buffer.len() as u32,
-				deadline.map_or(0, |x| x.0),
-			) as usize
+				deadline.map_or(0, |x| x.unix_millis()),
+			);
+			if res == u32::max_value() {
+				Err(())
+			} else {
+				Ok(res as usize)
+			}
 		}
 	}
 }

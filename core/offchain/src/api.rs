@@ -19,7 +19,7 @@ use futures::{Stream, Future, sync::mpsc};
 use inherents::pool::InherentsPool;
 use log::{info, debug, warn};
 use parity_codec::Decode;
-use primitives::OffchainExt;
+use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, Externalities as OffchainExt};
 use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, Extrinsic},
@@ -36,10 +36,64 @@ enum ExtMessage {
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
 pub(crate) struct AsyncApi(mpsc::UnboundedSender<ExtMessage>);
 
+// TODO [ToDr] Implement me!
 impl OffchainExt for AsyncApi {
-	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
-		let _ = self.0.unbounded_send(ExtMessage::SubmitExtrinsic(ext));
+	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
+		self.0.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
+			.map(|_| ())
+			.map_err(|_| ())
 	}
+
+	fn sign(&mut self, data: &[u8]) -> Option<[u8; 64]> { unimplemented!() }
+
+	fn timestamp(&mut self) -> Timestamp { unimplemented!() }
+
+	fn sleep_until(&mut self, deadline: Timestamp) { unimplemented!() }
+
+	fn random_seed(&mut self) -> [u8; 32] { unimplemented!() }
+
+	fn local_storage_set(&mut self, key: &[u8], value: &[u8]) { unimplemented!() }
+
+	fn local_storage_read(&mut self, key: &[u8]) -> Option<Vec<u8>> { unimplemented!() }
+
+	fn http_request_start(
+		&mut self,
+		method: &str,
+		uri: &str,
+		meta: &[u8]
+	) -> Result<HttpRequestId, ()> { unimplemented!() }
+
+	fn http_request_add_header(
+		&mut self,
+		request_id: HttpRequestId,
+		name: &str,
+		value: &str
+	) -> Result<(), ()> { unimplemented!() }
+
+	fn http_request_write_body(
+		&mut self,
+		request_id: HttpRequestId,
+		chunk: &[u8],
+		deadline: Option<Timestamp>
+	) -> Result<(), ()> { unimplemented!() }
+
+	fn http_response_wait(
+		&mut self,
+		ids: &[HttpRequestId],
+		deadline: Option<Timestamp>
+	) -> Vec<HttpRequestStatus> { unimplemented!() }
+
+	fn http_response_headers(
+		&mut self,
+		request_id: HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> { unimplemented!() }
+
+	fn http_response_read_body(
+		&mut self,
+		request_id: HttpRequestId,
+		buffer: &mut [u8],
+		deadline: Option<Timestamp>
+	) -> Result<usize, ()> { unimplemented!() }
 }
 
 /// Offchain extensions implementation API
