@@ -483,22 +483,17 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
-		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
+		let child_delta = children.into_iter()
+			.map(|(storage_key, child_overlay)|
+				(storage_key, child_overlay.into_iter().map(|(k,v)|(k,Some(v)))));
 
-		for (child_key, child_map) in children {
-			let (root, is_default, update) = self.old_state.delta_child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
-			transaction.consolidate(update);
-
-			if !is_default {
-				top.insert(child_key, root);
-			}
-		}
-
-		let (root, update) = self.old_state.delta_storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
-		transaction.consolidate(update);
+		let (root, transaction) = self.old_state.full_storage_root(
+			top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta
+		);
 
 		self.new_state = Some(InMemory::from(transaction));
 		Ok(root)

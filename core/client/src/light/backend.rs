@@ -283,7 +283,7 @@ where
 			storage.insert(Some(child_key), child_storage);
 		}
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.delta_storage_root(::std::iter::empty());
+		let (storage_root, _) = storage_update.storage_root(::std::iter::empty());
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -355,14 +355,14 @@ where
 		// whole state is not available on light node
 	}
 
-	fn delta_storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		(H::Out::default(), ())
 	}
 
-	fn delta_child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -430,29 +430,29 @@ where
 		}
 	}
 
-	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::delta_storage_root(state, delta),
+				StateBackend::<H>::storage_root(state, delta),
 			OnDemandOrGenesisState::Genesis(ref state) => {
-				let (root, _) = state.delta_storage_root(delta);
+				let (root, _) = state.storage_root(delta);
 				(root, ())
 			},
 		}
 	}
 
-	fn delta_child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::delta_child_storage_root(state, key, delta),
+				StateBackend::<H>::child_storage_root(state, key, delta),
 			OnDemandOrGenesisState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.delta_child_storage_root(key, delta);
+				let (root, is_equal, _) = state.child_storage_root(key, delta);
 				(root, is_equal, ())
 			},
 		}

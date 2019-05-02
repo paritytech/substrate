@@ -324,29 +324,26 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
 		}
 
-		let mut transaction: PrefixedMemoryDB<Blake2Hasher> = Default::default();
-
-		for (child_key, child_map) in children {
+		for child_key in children.keys() {
 			if !well_known_keys::is_child_storage_key(&child_key) {
 				return Err(client::error::Error::GenesisInvalid.into());
 			}
+    }
 
-			let (root, is_default, update) = self.old_state.delta_child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
-			transaction.consolidate(update);
+		let child_delta = children.into_iter()
+			.map(|(storage_key, child_overlay)|
+				(storage_key, child_overlay.into_iter().map(|(k,v)|(k,Some(v)))));
 
-			if !is_default {
-				top.insert(child_key, root);
-			}
-		}
-
-		let (root, update) = self.old_state.delta_storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
-		transaction.consolidate(update);
+		let (root, transaction) = self.old_state.full_storage_root(
+			top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta
+		);
 
 		self.db_updates = transaction;
 		Ok(root)
@@ -1352,7 +1349,7 @@ mod tests {
 				(vec![1, 2, 3], vec![9, 9, 9]),
 			];
 
-			header.state_root = op.old_state.delta_storage_root(storage
+			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
@@ -1394,7 +1391,7 @@ mod tests {
 				(vec![5, 5, 5], Some(vec![4, 5, 6])),
 			];
 
-			let (root, overlay) = op.old_state.delta_storage_root(storage.iter().cloned());
+			let (root, overlay) = op.old_state.storage_root(storage.iter().cloned());
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -1434,7 +1431,7 @@ mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.delta_storage_root(storage
+			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
@@ -1470,7 +1467,7 @@ mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.delta_storage_root(storage
+			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
@@ -1505,7 +1502,7 @@ mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.delta_storage_root(storage
+			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
@@ -1539,7 +1536,7 @@ mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.delta_storage_root(storage
+			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))

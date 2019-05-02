@@ -72,7 +72,7 @@ pub trait Backend<H: Hasher> {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	/// Does not include child storage updates.
-	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -80,7 +80,7 @@ pub trait Backend<H: Hasher> {
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -113,7 +113,7 @@ pub trait Backend<H: Hasher> {
 		// child first
 		for (storage_key, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.delta_child_storage_root(&storage_key[..], child_delta);
+				self.child_storage_root(&storage_key[..], child_delta);
 			txs.consolidate(child_txs);
 			if empty {
 				child_roots.push((storage_key, None));
@@ -121,7 +121,7 @@ pub trait Backend<H: Hasher> {
 				child_roots.push((storage_key, Some(child_root)));
 			}
 		}
-		let (root, parent_txs) = self.delta_storage_root(
+		let (root, parent_txs) = self.storage_root(
 			delta.into_iter().chain(child_roots.into_iter())
 		);
 		txs.consolidate(parent_txs);
@@ -282,7 +282,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
 	}
 
-	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
@@ -301,7 +301,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		(root, full_transaction)
 	}
 
-	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord

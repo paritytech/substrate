@@ -126,7 +126,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let mut write_overlay = S::Overlay::default();
@@ -147,7 +147,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
@@ -248,19 +248,19 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().delta_storage_root(::std::iter::empty()).0 != H256::repeat_byte(0));
+		assert!(test_trie().storage_root(::std::iter::empty()).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().delta_storage_root(::std::iter::empty()).1.drain().is_empty());
+		assert!(test_trie().storage_root(::std::iter::empty()).1.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		let (new_root, mut tx) = test_trie().delta_storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
+		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().delta_storage_root(::std::iter::empty()).0);
+		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
 	}
 
 	#[test]

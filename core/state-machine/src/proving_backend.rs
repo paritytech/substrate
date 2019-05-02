@@ -168,18 +168,18 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.keys(prefix)
 	}
 
-	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.backend.delta_storage_root(delta)
+		self.backend.storage_root(delta)
 	}
 
-	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.backend.delta_child_storage_root(storage_key, delta)
+		self.backend.child_storage_root(storage_key, delta)
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
@@ -259,8 +259,8 @@ mod tests {
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.delta_storage_root(::std::iter::empty());
-		let (proving_root, mut proving_mdb) = proving_backend.delta_storage_root(::std::iter::empty());
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
@@ -270,11 +270,11 @@ mod tests {
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let in_memory = in_memory.update(contents);
-		let in_memory_root = in_memory.delta_storage_root(::std::iter::empty()).0;
+		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let trie = in_memory.try_into_trie_backend().unwrap();
-		let trie_root = trie.delta_storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -321,7 +321,7 @@ mod tests {
 		));
 
 		let trie = in_memory.try_into_trie_backend().unwrap();
-		let trie_root = trie.delta_storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
 			trie.storage(&[i]).unwrap().unwrap(),
