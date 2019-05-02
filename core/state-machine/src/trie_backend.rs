@@ -147,12 +147,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		self.delta_storage_root(delta)
-	}
-
 	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,

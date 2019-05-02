@@ -362,13 +362,6 @@ where
 		(H::Out::default(), ())
 	}
 
-	fn full_storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		(H::Out::default(), ())
-	}
-
 	fn delta_child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
@@ -434,20 +427,6 @@ where
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::for_keys_in_child_storage(state, storage_key, action),
 			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_in_child_storage(storage_key, action),
-		}
-	}
-
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::full_storage_root(state, delta),
-			OnDemandOrGenesisState::Genesis(ref state) => {
-				let (root, _) = state.full_storage_root(delta);
-				(root, ())
-			},
 		}
 	}
 

@@ -77,15 +77,6 @@ pub trait Backend<H: Hasher> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
 
-	/// Calculate the storage root, with given delta over what is already stored
-	/// in the backend, and produce a "transaction" that can be used to commit.
-	/// Does include child storage updates.
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord;
-
-
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
@@ -102,6 +93,41 @@ pub trait Backend<H: Hasher> {
 
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
+
+	/// Calculate the storage root, with given delta over what is already stored
+	/// in the backend, and produce a "transaction" that can be used to commit.
+	/// Does include child storage updates.
+	fn full_storage_root<I1,I2i,I2>(
+		&self,
+		delta: I1,
+		child_deltas: I2)
+	-> (H::Out, Self::Transaction)
+	where
+		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
+		<H as Hasher>::Out: Ord,
+	{
+		let mut txs: Self::Transaction = Default::default();
+		let mut child_roots: Vec<_> = Default::default();
+		// child first
+		for (storage_key, child_delta) in child_deltas {
+			let (child_root, empty, child_txs) =
+				self.delta_child_storage_root(&storage_key[..], child_delta);
+			txs.consolidate(child_txs);
+			if empty {
+				child_roots.push((storage_key, None));
+			} else {
+				child_roots.push((storage_key, Some(child_root)));
+			}
+		}
+		let (root, parent_txs) = self.delta_storage_root(
+			delta.into_iter().chain(child_roots.into_iter())
+		);
+		txs.consolidate(parent_txs);
+		(root, txs)
+	}
+
 }
 
 /// Trait that allows consolidate two transactions together.
@@ -224,6 +250,13 @@ impl<H> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
 
 impl super::Error for Void {}
 
+impl<H: Hasher> InMemory<H> {
+	/// child storage key iterator
+	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
+		self.inner.iter().filter_map(|item|item.0.as_ref().map(|v|&v[..]))
+	}
+}
+
 impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	type Error = Void;
 	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
@@ -248,41 +281,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
 		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
 	}
-
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		<H as Hasher>::Out: Ord,
-	{
-		let existing_pairs = self.inner.get(&None).into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-		let mut transaction: Vec<_> = delta.into_iter().collect();
-		let mut map_input = existing_pairs.chain(transaction.iter().cloned())
-			.collect::<HashMap<_, _>>();
-
-		// first add child root to delta
-		for (storage_key, _existing_pairs) in self.inner.iter() {
-			if let Some(storage_key) = storage_key.as_ref() {
-				let child_root = self.delta_child_storage_root(
-					storage_key,
-					::std::iter::empty()
-				).0;
-				transaction.push((storage_key.clone(), Some(child_root.clone())));
-				map_input.insert(storage_key.clone(), Some(child_root));
-			}
-		}
-
-
-		let root = trie_root::<H, _, _, _>(map_input
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
-		);
-
-		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
-
-		(root, full_transaction)
-	}
-
 
 	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where

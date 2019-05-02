@@ -174,12 +174,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.delta_storage_root(delta)
 	}
 
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		self.backend.full_storage_root(delta)
-	}
-
 	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -309,7 +303,10 @@ mod tests {
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let in_memory = in_memory.update(contents);
-		let in_memory_root = in_memory.full_storage_root(::std::iter::empty()).0;
+		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
+			::std::iter::empty(),
+      in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new()))
+		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
 			vec![i]
