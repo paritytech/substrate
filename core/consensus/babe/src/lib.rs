@@ -71,7 +71,7 @@ use client::{
 use slots::CheckedHeader;
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
-use log::{warn, debug, info, trace};
+use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
