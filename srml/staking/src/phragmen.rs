@@ -102,6 +102,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	// return structures
 	let mut elected_candidates: Vec<T::AccountId>;
 	let mut assigned: Vec<(T::AccountId, Vec<RawAssignment<T>>)>;
+	let mut c_idx_cache = BTreeMap::<T::AccountId, usize>::new();
 
 	// 1- Pre-process candidates and place them in a container, optimisation and add phantom votes.
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
@@ -126,35 +127,23 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				budget: to_votes(s),
 				load: Fraction::zero(),
 			});
+			c_idx_cache.insert(c.who.clone(), idx);
 			c
 		})
 		.collect::<Vec<Candidate<T::AccountId>>>();
 
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
-	// Caching the index is needed to prevent complexity exploitation.
-	let mut c_idx_cache = BTreeMap::<T::AccountId, usize>::new();
 	nominators.extend(nominator_iter.map(|(who, nominees)| {
 		let nominator_stake = stash_of(&who);
 		let mut edges: Vec<Edge<T::AccountId>> = Vec::with_capacity(nominees.len());
 		for n in &nominees {
-			let mut c_idx: Option<usize> = None;
 			if let Some(idx) = c_idx_cache.get(n) {
-				// This candidate is already checked.
-				c_idx = Some(*idx);
-			} else {
-				// New candidate. Must do a linear search for it.
-				if let Some(idx) = candidates.iter().position(|i| i.who == *n) {
-					c_idx_cache.insert(n.clone(), idx);
-					c_idx = Some(idx);
-				}
-				// else {} would be wrong votes. We don't really care about that.
-			}
-			if let Some(idx) = c_idx {
-				candidates[idx].approval_stake = candidates[idx].approval_stake
+				// This candidate is valid + already cached.
+				candidates[*idx].approval_stake = candidates[*idx].approval_stake
 					.saturating_add(to_votes(nominator_stake));
-				edges.push(Edge { who: n.clone(), candidate_index: idx, ..Default::default() });
-			}
+				edges.push(Edge { who: n.clone(), candidate_index: *idx, ..Default::default() });
+			} // else {} would be wrong votes. We don't really care about it.
 		}
 		Nominator {
 			who,

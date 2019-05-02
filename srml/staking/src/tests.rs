@@ -1831,9 +1831,9 @@ fn phragmen_chooses_correct_number_of_validators() {
 #[test]
 fn phragmen_score_should_be_accurate_on_large_stakes() {
 	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.build()
-	, || {
+		.nominate(false)
+		.build(),
+	|| {
 		bond_validator(2, u64::max_value());
 		bond_validator(4, u64::max_value());
 		bond_validator(6, u64::max_value()-1);
@@ -1850,9 +1850,9 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 #[test]
 fn phragmen_should_not_overflow_validators() {
 	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.build()
-	, || {
+		.nominate(false)
+		.build(),
+	|| {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
 
@@ -1877,9 +1877,9 @@ fn phragmen_should_not_overflow_validators() {
 #[test]
 fn phragmen_should_not_overflow_nominators() {
 	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.build()
-	, || {
+		.nominate(false)
+		.build(),
+	|| {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
 
@@ -1903,9 +1903,9 @@ fn phragmen_should_not_overflow_nominators() {
 #[test]
 fn phragmen_should_not_overflow_ultimate() {
 	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.build()
-	, || {
+		.nominate(false)
+		.build(),
+	|| {
 		bond_validator(2, u64::max_value());
 		bond_validator(4, u64::max_value());
 
@@ -1927,11 +1927,11 @@ fn phragmen_should_not_overflow_ultimate() {
 #[test]
 fn phragmen_large_scale_test() {
 	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.minimum_validator_count(1)
-	.validator_count(20)
-	.build()
-	, || {
+		.nominate(false)
+		.minimum_validator_count(1)
+		.validator_count(20)
+		.build(),
+	|| {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
 		let _ = Staking::chill(Origin::signed(30));
@@ -2000,11 +2000,11 @@ fn phragmen_large_scale_test() {
 #[test]
 fn phragmen_large_scale_test_2() {
 	with_externalities(&mut ExtBuilder::default()
-	.nominate(false)
-	.minimum_validator_count(1)
-	.validator_count(2)
-	.build()
-	, || {
+		.nominate(false)
+		.minimum_validator_count(1)
+		.validator_count(2)
+		.build(),
+	|| {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
 		let nom_budget: u64 = 1_000_000_000_000_000_000;
