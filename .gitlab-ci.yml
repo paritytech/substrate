@@ -84,6 +84,7 @@ check-web-wasm:
   allow_failure: true
   only:
     - master
+    - /^[0-9]+$/
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here.
