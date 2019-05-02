@@ -323,7 +323,7 @@ impl Peerset {
 				// We decrease by 20% if it's positive so that it doesn't take forever to remove a
 				// node we were connected to for a very long time.
 				if entry.reputation() > 0 {
-					entry.set_reputation(entry.reputation() - entry.reputation() / 20);
+					entry.set_reputation(entry.reputation() - entry.reputation() / 5);
 				}
 				entry.add_reputation(-10);
 				entry.disconnect();

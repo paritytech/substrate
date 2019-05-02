@@ -219,11 +219,19 @@ impl<'a> ConnectedPeer<'a> {
 		self.peer_id.into_owned()
 	}
 
-	/// Switches the peer to "not connected".
-	pub fn disconnect(self) -> NotConnectedPeer<'a> {
-		let connec_state = &mut self.parent.nodes.get_mut(&self.peer_id)
+	fn state(&self) -> &Node {
+		self.parent.nodes.get(&self.peer_id)
 			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.connection_state;
+	}
+
+	fn state_mut(&mut self) -> &mut Node {
+		self.parent.nodes.get_mut(&self.peer_id)
+			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
+	}
+
+	/// Switches the peer to "not connected".
+	pub fn disconnect(mut self) -> NotConnectedPeer<'a> {
+		let connec_state = &mut self.state_mut().connection_state;
 		debug_assert!(connec_state.is_connected());
 		*connec_state = ConnectionState::NotConnected;
 
@@ -235,39 +243,29 @@ impl<'a> ConnectedPeer<'a> {
 
 	/// Sets whether or not the node is reserved.
 	pub fn set_reserved(&mut self, reserved: bool) {
-		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reserved = reserved;
+		self.state_mut().reserved = reserved;
 	}
 
 	/// Returns whether or not the node is reserved.
 	pub fn is_reserved(&self) -> bool {
-		self.parent.nodes.get(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reserved
+		self.state().reserved
 	}
 
 	/// Returns the reputation value of the node.
 	pub fn reputation(&self) -> i32 {
-		self.parent.nodes.get(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reputation
+		self.state().reputation
 	}
 
 	/// Sets the reputation of the peer.
 	pub fn set_reputation(&mut self, value: i32) {
-		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reputation = value;
+		self.state_mut().reputation = value;
 	}
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
 	/// In case of overflow, the value will be capped.
 	pub fn add_reputation(&mut self, modifier: i32) {
-		let reputation = &mut self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reputation;
+		let reputation = &mut self.state_mut().reputation;
 		*reputation = reputation.saturating_add(modifier);
 	}
 }
@@ -279,6 +277,16 @@ pub struct NotConnectedPeer<'a> {
 }
 
 impl<'a> NotConnectedPeer<'a> {
+	fn state(&self) -> &Node {
+		self.parent.nodes.get(&self.peer_id)
+			.expect("We only ever build a NotConnectedPeer if the node's in the list; QED")
+	}
+
+	fn state_mut(&mut self) -> &mut Node {
+		self.parent.nodes.get_mut(&self.peer_id)
+			.expect("We only ever build a NotConnectedPeer if the node's in the list; QED")
+	}
+
 	/// Tries to set the peer as connected as an outgoing connection.
 	///
 	/// If there are enough slots available, switches the node to "connected" and returns `Ok`. If
@@ -308,10 +316,8 @@ impl<'a> NotConnectedPeer<'a> {
 	}
 
 	/// Sets the peer as connected as an outgoing connection.
-	pub fn force_outgoing(self) -> ConnectedPeer<'a> {
-		let connec_state = &mut self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.connection_state;
+	pub fn force_outgoing(mut self) -> ConnectedPeer<'a> {
+		let connec_state = &mut self.state_mut().connection_state;
 		debug_assert!(!connec_state.is_connected());
 		*connec_state = ConnectionState::Out;
 
@@ -348,10 +354,8 @@ impl<'a> NotConnectedPeer<'a> {
 	}
 
 	/// Sets the peer as connected as an ingoing connection.
-	pub fn force_ingoing(self) -> ConnectedPeer<'a> {
-		let connec_state = &mut self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.connection_state;
+	pub fn force_ingoing(mut self) -> ConnectedPeer<'a> {
+		let connec_state = &mut self.state_mut().connection_state;
 		debug_assert!(!connec_state.is_connected());
 		*connec_state = ConnectionState::In;
 
@@ -363,23 +367,17 @@ impl<'a> NotConnectedPeer<'a> {
 
 	/// Returns true if the the node is reserved.
 	pub fn is_reserved(&self) -> bool {
-		self.parent.nodes.get(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reserved
+		self.state().reserved
 	}
 
 	/// Sets whether or not the node is reserved.
 	pub fn set_reserved(&mut self, reserved: bool) {
-		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reserved = reserved;
+		self.state_mut().reserved = reserved;
 	}
 
 	/// Returns the reputation value of the node.
 	pub fn reputation(&self) -> i32 {
-		self.parent.nodes.get(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reputation
+		self.state().reputation
 	}
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
@@ -387,9 +385,7 @@ impl<'a> NotConnectedPeer<'a> {
 	/// In case of overflow, the value will be capped.
 	/// If the peer is unknown to us, we insert it and consider that it has a reputation of 0.
 	pub fn add_reputation(&mut self, modifier: i32) {
-		let reputation = &mut self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
-			.reputation;
+		let reputation = &mut self.state_mut().reputation;
 		*reputation = reputation.saturating_add(modifier);
 	}
 }
