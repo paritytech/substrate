@@ -27,6 +27,8 @@
 #![deny(warnings)]
 extern crate core;
 pub use babe_primitives::*;
+pub use consensus_common::SyncOracle;
+use consensus_common::ExtraVerification;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
@@ -48,7 +50,6 @@ use schnorrkel::{
 	},
 	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
-pub use consensus_common::SyncOracle;
 use authorities::AuthoritiesApi;
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
@@ -93,7 +94,7 @@ pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
 macro_rules! babe_assert_eq {
 	($a: expr, $b: expr) => {
-		({
+		{
 			let ref a = $a;
 			let ref b = $b;
 			if a != b {
@@ -105,7 +106,7 @@ macro_rules! babe_assert_eq {
 				);
 				assert_eq!(a, b);
 			}
-		})
+		}
 	};
 }
 
@@ -366,7 +367,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		let _public_key = self.local_key.public();
 		let client = self.client.clone();
 		let block_import = self.block_import.clone();
-		let env = self.env.clone();
+		let ref env = self.env;
 
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
@@ -398,7 +399,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let authoring_result = if let Some((inout, proof, _batchable_proof)) = author_block(
+		let authoring_result = if let Some((inout, proof, _batchable_proof)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -591,19 +592,6 @@ fn check_header<B: Block + Sized>(
 			Err(format!("Bad signature on {:?}", hash))
 		}
 	}
-}
-
-/// Extra verification for Babe blocks.
-pub trait ExtraVerification<B: Block>: Send + Sync {
-	/// Future that resolves when the block is verified or fails with error if not.
-	type Verified: IntoFuture<Item=(),Error=String>;
-
-	/// Do additional verification for this block.
-	fn verify(
-		&self,
-		header: &B::Header,
-		body: Option<&[B::Extrinsic]>,
-	) -> Self::Verified;
 }
 
 /// A verifier for Babe blocks.
@@ -828,13 +816,12 @@ fn check(inout: &VRFInOut, threshold: u64) -> bool {
 	u64::from_le_bytes(inout.make_bytes::<[u8; 8]>(BABE_VRF_PREFIX)) < threshold
 }
 
-/// Hash into chain:
+/// Claim a slot if it is our turn.  Returns `None` if it is not our turn.
 ///
-/// * slot number
-/// * epoch
-/// * genesis hash
-/// * chain randomness
-fn author_block(
+/// This hashes the slot number, epoch, genesis hash, and chain randomness into
+/// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
+/// so it returns `Some(_)`.  Otherwise, it returns `None`.
+fn claim_slot(
 	randomness: &[u8],
 	slot_number: u64,
 	genesis_hash: &[u8],
@@ -850,6 +837,13 @@ fn author_block(
 		genesis_hash,
 		epoch,
 	);
+
+	// Compute the threshold we will use.
+	//
+	// We already checked that authorities contains `key.public()`, so it can’t
+	// be empty.  Therefore, this division is safe.
+	let threshold = threshold / authorities.len();
+
 	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 }
 
@@ -1080,7 +1074,7 @@ mod tests {
 		let pair = sr25519::Pair::generate();
 		let mut i = 0;
 		loop {
-			match author_block(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
+			match claim_slot(randomness, i, &[], 0, &[pair.public()], &pair, u64::MAX / 10) {
 				None => i += 1,
 				Some(s) => {
 					debug!(target: "babe", "Authored block {:?}", s);

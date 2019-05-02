@@ -65,7 +65,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS
 use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
 pub use aura_primitives::*;
-pub use consensus_common::SyncOracle;
+pub use consensus_common::{SyncOracle, ExtraVerification};
 
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
@@ -500,19 +500,6 @@ fn check_header<B: Block, P: Pair>(
 			Err(format!("Bad signature on {:?}", hash))
 		}
 	}
-}
-
-/// Extra verification for Aura blocks.
-pub trait ExtraVerification<B: Block>: Send + Sync {
-	/// Future that resolves when the block is verified or fails with error if not.
-	type Verified: IntoFuture<Item=(),Error=String>;
-
-	/// Do additional verification for this block.
-	fn verify(
-		&self,
-		header: &B::Header,
-		body: Option<&[B::Extrinsic]>,
-	) -> Self::Verified;
 }
 
 /// A verifier for Aura blocks.

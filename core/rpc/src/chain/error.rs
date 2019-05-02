@@ -18,6 +18,7 @@ use error_chain::*;
 use client;
 use crate::rpc;
 use crate::errors;
+pub use internal_errors::*;
 
 #[allow(deprecated)]
 mod internal_errors {
@@ -35,8 +36,6 @@ mod internal_errors {
 		}
 	}
 }
-
-pub use internal_errors::*;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
