@@ -157,12 +157,8 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 		self.link.request_justification(hash, number);
 	}
 
-	fn useless_peer(&self, who: PeerId, reason: &str) {
-		self.link.useless_peer(who, reason);
-	}
-
-	fn note_useless_and_restart_sync(&self, who: PeerId, reason: &str) {
-		self.link.note_useless_and_restart_sync(who, reason);
+	fn report_peer(&self, who: PeerId, reputation_change: i32) {
+		self.link.report_peer(who, reputation_change);
 	}
 
 	fn restart(&self) {
@@ -704,6 +700,7 @@ pub trait TestNetFactory: Sized {
 			let need_continue = self.route_single(true, None, &|msg| match *msg {
 				NetworkMsg::Outgoing(_, crate::message::generic::Message::Status(_)) => true,
 				NetworkMsg::Outgoing(_, _) => false,
+				NetworkMsg::DisconnectPeer(_) |
 				NetworkMsg::ReportPeer(_, _) | NetworkMsg::Synchronized => true,
 			});
 			if !need_continue {
@@ -747,7 +744,7 @@ pub trait TestNetFactory: Sized {
 
 						peers[recipient_pos].receive_message(&peer.peer_id, packet);
 					},
-					NetworkMsg::ReportPeer(who, _) => {
+					NetworkMsg::DisconnectPeer(who) => {
 						if disconnect {
 							to_disconnect.insert(who);
 						}
