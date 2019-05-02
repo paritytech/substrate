@@ -14,21 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result};
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use parity_codec::{Encode, Decode};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, RuntimeApiInfo};
+use runtime_primitives::{
+	generic::BlockId, traits::Block as BlockT,
+};
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy, NeverOffchainExt,
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
+	ExecutionStrategy, NeverOffchainExt, backend::Backend as _,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt};
+use primitives::{
+	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue, OffchainExt
+};
 
+use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
 use crate::error;
-use crate::runtime_api::Core as CoreApi;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -60,8 +64,9 @@ where
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
 	fn contextual_call<
+		'a,
 		O: OffchainExt,
-		PB: Fn() -> error::Result<B::Header>,
+		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -70,15 +75,16 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
+		initialize_block_fn: IB,
 		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<B>>,
-		prepare_environment_block: PB,
+		changes: &RefCell<OverlayedChanges>,
+		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
+		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -119,7 +125,10 @@ where
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
 		let trie_state = state.try_into_trie_backend()
-			.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
+			.ok_or_else(||
+				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+					as Box<state_machine::Error>
+			)?;
 		self.prove_at_trie_state(&trie_state, overlay, method, call_data)
 	}
 
@@ -172,7 +181,8 @@ where
 {
 	type Error = E::Error;
 
-	fn call<O: OffchainExt>(&self,
+	fn call<O: OffchainExt>(
+		&self,
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
@@ -200,8 +210,9 @@ where
 	}
 
 	fn contextual_call<
+		'a,
 		O: OffchainExt,
-		PB: Fn() -> error::Result<Block::Header>,
+		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -210,64 +221,75 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
+		initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
-		prepare_environment_block: PB,
+		changes: &RefCell<OverlayedChanges>,
+		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		mut side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<&mut O>,
+		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
+		match initialize_block {
+			InitializeBlock::Do(ref init_block)
+				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
+				initialize_block_fn()?;
+			},
+			// We don't need to initialize the runtime at a block.
+			_ => {},
+		}
+
 		let state = self.backend.state_at(*at)?;
 
-		let core_version = self.runtime_version(at)?.apis.iter().find(|a| a.0 == CoreApi::<Block>::ID).map(|a| a.1);
-		let init_block_function = if core_version < Some(2) {
-			"Core_initialise_block"
-		} else {
-			"Core_initialize_block"
-		};
+		match recorder {
+			Some(recorder) => {
+				let trie_state = state.try_into_trie_backend()
+					.ok_or_else(||
+						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+							as Box<state_machine::Error>
+					)?;
 
-		if method != init_block_function && initialized_block.map(|id| id != *at).unwrap_or(true) {
-			let header = prepare_environment_block()?;
-			state_machine::new(
+				let backend = state_machine::ProvingBackend::new_with_recorder(
+					&trie_state,
+					recorder.clone()
+				);
+
+				state_machine::new(
+					&backend,
+					self.backend.changes_trie_storage(),
+					side_effects_handler,
+					&mut *changes.borrow_mut(),
+					&self.executor,
+					method,
+					call_data,
+				)
+				.execute_using_consensus_failure_handler(
+					execution_manager,
+					false,
+					native_call,
+				)
+				.map(|(result, _, _)| result)
+				.map_err(Into::into)
+			}
+			None => state_machine::new(
 				&state,
 				self.backend.changes_trie_storage(),
-				side_effects_handler.as_mut().map(|x| &mut **x),
-				changes,
+				side_effects_handler,
+				&mut *changes.borrow_mut(),
 				&self.executor,
-				init_block_function,
-				&header.encode(),
-			).execute_using_consensus_failure_handler::<_, R, fn() -> _>(
-				execution_manager.clone(),
+				method,
+				call_data,
+			)
+			.execute_using_consensus_failure_handler(
+				execution_manager,
 				false,
-				None,
-			)?;
-			*initialized_block = Some(*at);
+				native_call,
+			)
+			.map(|(result, _, _)| result)
+			.map_err(Into::into)
 		}
-
-		let result = state_machine::new(
-			&state,
-			self.backend.changes_trie_storage(),
-			side_effects_handler,
-			changes,
-			&self.executor,
-			method,
-			call_data,
-		).execute_using_consensus_failure_handler(
-			execution_manager,
-			false,
-			native_call,
-		).map(|(result, _, _)| result)?;
-
-		// If the method is `initialize_block` we need to set the `initialized_block`
-		if method == init_block_function {
-			*initialized_block = Some(*at);
-		}
-
-		self.backend.destroy_state(state)?;
-		Ok(result)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {

@@ -71,6 +71,7 @@ pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_comm
 }
 
 /// Start a new slot worker in a separate thread.
+#[deprecated(since = "1.1", note = "Please spawn a thread manually")]
 pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
 	slot_duration: SlotDuration<T>,
 	client: Arc<C>,

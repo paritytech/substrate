@@ -200,6 +200,7 @@ mod tests {
 	#[derive(Default)]
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
+		rent_allowance: u64,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
@@ -280,6 +281,14 @@ mod tests {
 
 		fn deposit_event(&mut self, data: Vec<u8>) {
 			self.events.push(data)
+		}
+
+		fn set_rent_allowance(&mut self, rent_allowance: u64) {
+			self.rent_allowance = rent_allowance;
+		}
+
+		fn rent_allowance(&self) -> u64 {
+			self.rent_allowance
 		}
 	}
 

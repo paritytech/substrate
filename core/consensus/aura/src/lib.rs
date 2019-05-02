@@ -194,6 +194,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker in a separate thread.
+#[deprecated(since = "1.1", note = "Please spawn a thread manually")]
 pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
@@ -231,6 +232,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 		force_authoring,
 	};
 
+	#[allow(deprecated)]	// The function we are in is also deprecated.
 	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, u64, _>(
 		slot_duration.0,
 		client,
