@@ -489,7 +489,7 @@ where
 		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
 
 		for (child_key, child_map) in children {
-			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
+			let (root, is_default, update) = self.old_state.delta_child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
 			transaction.consolidate(update);
 
 			if !is_default {
@@ -497,7 +497,7 @@ where
 			}
 		}
 
-		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
+		let (root, update) = self.old_state.delta_storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
 		transaction.consolidate(update);
 
 		self.new_state = Some(InMemory::from(transaction));

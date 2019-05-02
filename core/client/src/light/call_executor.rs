@@ -493,7 +493,7 @@ mod tests {
 		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
 			let remote_block_id = BlockId::Number(at);
 			let remote_root = remote_client.state_at(&remote_block_id)
-				.unwrap().storage_root(::std::iter::empty()).0;
+				.unwrap().delta_storage_root(::std::iter::empty()).0;
 
 			// 'fetch' execution proof from remote node
 			let (remote_result, remote_execution_proof) = remote_client.execution_proof(

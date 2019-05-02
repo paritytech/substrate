@@ -385,20 +385,20 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.full_storage_root(delta)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn delta_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
 	{
-		self.state.storage_root(delta)
+		self.state.delta_storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn delta_child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.delta_child_storage_root(storage_key, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

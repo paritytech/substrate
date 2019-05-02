@@ -147,7 +147,7 @@ where
 						.into_iter()
 						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
 
-			self.backend.child_storage_root(storage_key, delta)
+			self.backend.delta_child_storage_root(storage_key, delta)
 		};
 
 		let root_val = if is_default {
@@ -302,7 +302,7 @@ where
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let (root, t) = self.backend.storage_root(delta);
+		let (root, t) = self.backend.delta_storage_root(delta);
 		transaction.consolidate(t);
 		self.storage_transaction = Some((transaction, root));
 		root

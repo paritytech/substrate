@@ -971,7 +971,7 @@ mod tests {
 
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.delta_storage_root(::std::iter::empty()).0;
 		let (remote_result, remote_proof) = prove_execution(remote_backend,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
@@ -1066,7 +1066,7 @@ mod tests {
 	fn prove_read_and_proof_check_works() {
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.delta_storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
  		// check proof locally
 		let local_result1 = read_proof_check::<Blake2Hasher>(
@@ -1084,7 +1084,7 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.delta_storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			b":child_storage:default:sub1",
