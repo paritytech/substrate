@@ -87,6 +87,7 @@ mod internal {
 		Future,
 		CantPay,
 		FullBlock,
+		Module(super::ApplyError),
 	}
 
 	pub enum ApplyOutcome {
@@ -209,6 +210,7 @@ impl<
 			Err(internal::ApplyError::Stale) => Err(ApplyError::Stale),
 			Err(internal::ApplyError::Future) => Err(ApplyError::Future),
 			Err(internal::ApplyError::FullBlock) => Err(ApplyError::FullBlock),
+			Err(internal::ApplyError::Module(e)) => Err(e),
 		}
 	}
 
@@ -222,6 +224,7 @@ impl<
 			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
 			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
 			Err(internal::ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
+			Err(internal::ApplyError::Module(e)) => panic!("Module validate_transaction error: {:?}", e),
 		}
 	}
 
@@ -250,11 +253,10 @@ impl<
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_nonce(sender);
 
-		// TODO TODO: does this can be wrongly called for just root extrinsic ? maybe we don't care
 		} else if let Some(validated_transaction) = Validatable::validate_transaction(xt.call()) {
 			match validated_transaction {
 				Ok(()) => (),
-				Err(()) => return Err(internal::ApplyError::BadSignature("TODO TODO")),
+				Err(e) => return Err(internal::ApplyError::Module(e)),
 			}
 		}
 

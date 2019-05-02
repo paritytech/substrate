@@ -27,6 +27,7 @@ pub use srml_metadata::{
 	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 use sr_primitives::transaction_validity::TransactionValidity;
+use sr_primitives::ApplyError;
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -46,15 +47,12 @@ pub trait Dispatchable {
 	fn dispatch(self, origin: Self::Origin) -> Result;
 }
 
-/// A lazy call (module function and argument values) that can be executed via its `dispatch`
-/// method.
 pub trait Validatable {
 	fn transaction_validity(_call: &Self) -> Option<TransactionValidity> {
 		None
 	}
 
-	// TODO TODO which error ApplyError, add more variants to it ?
-	fn validate_transaction(_call: &Self) -> Option<result::Result<(), ()>> {
+	fn validate_transaction(_call: &Self) -> Option<result::Result<(), ApplyError>> {
 		None
 	}
 }
@@ -541,7 +539,8 @@ macro_rules! decl_module {
 	) => {
 		compile_error!(
 			"validate_transaction is a reserved function, to use it it must be defined with \
-			the signature: `fn validate_transaction(call: &Call<T $(, I)?>) -> TODO TODO`"
+			the signature: `fn validate_transaction(call: &Call<T $(, I)?>) \
+			-> Option<Result<(), ApplyError>>`"
 		);
 	};
 	(@normalize
@@ -1295,7 +1294,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 
-			fn validate_transaction(call: &Self) -> Option<$crate::dispatch::result::Result<(), ()>> {
+			fn validate_transaction(call: &Self) -> Option<$crate::dispatch::result::Result<(), $crate::runtime_primitives::ApplyError>> {
 				match call {
 					$(
 						$call_type::$camelcase(call) => $crate::dispatch::Validatable::validate_transaction(call),
