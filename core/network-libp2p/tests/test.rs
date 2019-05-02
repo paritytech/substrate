@@ -16,7 +16,7 @@
 
 use futures::{future, stream, prelude::*, try_ready};
 use rand::seq::SliceRandom;
-use std::io;
+use std::{io, time::Duration, time::Instant};
 use substrate_network_libp2p::{CustomMessage, Multiaddr, multiaddr::Protocol, ServiceEvent, build_multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
@@ -252,4 +252,108 @@ fn basic_two_nodes_requests_in_parallel() {
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
 	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+}
+
+#[test]
+fn reconnect_after_disconnect() {
+	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
+	// check that the disconnect worked, and finally check whether they successfully reconnect.
+
+	let (mut service1, mut service2) = {
+		let mut l = build_nodes::<Vec<u8>>(2, 50350).into_iter();
+		let a = l.next().unwrap();
+		let b = l.next().unwrap();
+		(a, b)
+	};
+
+	// We use the `current_thread` runtime because it doesn't require us to have `'static` futures.
+	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+
+	// For this test, the services can be in the following states.
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	enum ServiceState { NotConnected, FirstConnec, Disconnected, ConnectedAgain }
+	let mut service1_state = ServiceState::NotConnected;
+	let mut service2_state = ServiceState::NotConnected;
+
+	// Run the events loops.
+	runtime.block_on(future::poll_fn(|| -> Result<_, io::Error> {
+		loop {
+			let mut service1_not_ready = false;
+
+			match service1.poll().unwrap() {
+				Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { .. })) => {
+					match service1_state {
+						ServiceState::NotConnected => {
+							service1_state = ServiceState::FirstConnec;
+							if service2_state == ServiceState::FirstConnec {
+								service1.drop_node(service2.peer_id());
+							}
+						},
+						ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
+						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+					}
+				},
+				Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { .. })) => {
+					match service1_state {
+						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
+						ServiceState::ConnectedAgain| ServiceState::NotConnected |
+						ServiceState::Disconnected => panic!(),
+					}
+				},
+				Async::NotReady => service1_not_ready = true,
+				_ => panic!()
+			}
+
+			match service2.poll().unwrap() {
+				Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { .. })) => {
+					match service2_state {
+						ServiceState::NotConnected => {
+							service2_state = ServiceState::FirstConnec;
+							if service1_state == ServiceState::FirstConnec {
+								service1.drop_node(service2.peer_id());
+							}
+						},
+						ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,
+						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+					}
+				},
+				Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { .. })) => {
+					match service2_state {
+						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
+						ServiceState::ConnectedAgain| ServiceState::NotConnected |
+						ServiceState::Disconnected => panic!(),
+					}
+				},
+				Async::NotReady if service1_not_ready => break,
+				Async::NotReady => {}
+				_ => panic!()
+			}
+		}
+
+		if service1_state == ServiceState::ConnectedAgain && service2_state == ServiceState::ConnectedAgain {
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	})).unwrap();
+
+	// Do a second 3-seconds run to make sure we don't get disconnected immediately again.
+	let mut delay = tokio::timer::Delay::new(Instant::now() + Duration::from_secs(3));
+	runtime.block_on(future::poll_fn(|| -> Result<_, io::Error> {
+		match service1.poll().unwrap() {
+			Async::NotReady => {},
+			_ => panic!()
+		}
+
+		match service2.poll().unwrap() {
+			Async::NotReady => {},
+			_ => panic!()
+		}
+
+		if let Async::Ready(()) = delay.poll().unwrap() {
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	})).unwrap();
 }
