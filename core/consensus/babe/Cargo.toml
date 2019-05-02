@@ -16,6 +16,7 @@ runtime_io = { package = "sr-io", path = "../../sr-io" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
 substrate-telemetry = { path = "../../telemetry" }
+srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
@@ -26,10 +27,9 @@ tokio = "0.1.18"
 parking_lot = "0.7.1"
 error-chain = "0.12.0"
 log = "0.4.6"
-
-[dependencies.schnorrkel]
-git = "https://github.com/paritytech/schnorrkel"
-branch = "master"
+schnorrkel = "0.1.1"
+rand = "0.6.5"
+merlin = "1.0.3"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }
