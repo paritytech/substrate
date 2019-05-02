@@ -27,7 +27,7 @@ use libp2p::core::{
 };
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};
-use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
+use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 use void::Void;
@@ -125,7 +125,6 @@ where
 				init_deadline: Delay::new(clock.now() + Duration::from_secs(5))
 			},
 			events_queue: SmallVec::new(),
-			warm_up_end: clock.now() + Duration::from_secs(5),
 			clock,
 		}
 	}
@@ -148,10 +147,6 @@ pub struct CustomProtoHandler<TMessage, TSubstream> {
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
 	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol<TMessage>, (), CustomProtoHandlerOut<TMessage>>; 16]>,
-
-	/// We have a warm-up period after creating the handler during which we don't shut down the
-	/// connection.
-	warm_up_end: Instant,
 
 	/// `Clock` instance that uses the current execution context's source of time.
 	clock: Clock,
@@ -579,22 +574,10 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
-		if self.warm_up_end >= self.clock.now() {
-			return KeepAlive::Until(self.warm_up_end)
-		}
-
-		let mut keep_forever = false;
-
 		match self.state {
-			ProtocolState::Init { .. } | ProtocolState::Opening { .. } => {}
-			ProtocolState::Normal { .. } => keep_forever = true,
-			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => return KeepAlive::No,
-		}
-
-		if keep_forever {
-			KeepAlive::Yes
-		} else {
-			KeepAlive::No
+			ProtocolState::Init { .. } | ProtocolState::Opening { .. } |
+			ProtocolState::Normal { .. } => KeepAlive::Yes,
+			ProtocolState::Disabled { .. } | ProtocolState::Poisoned => KeepAlive::No,
 		}
 	}
 
