@@ -12,13 +12,14 @@ stages:
   - publish
   - deploy
 
-image:                             parity/rust-substrate-build:stretch
+image:                             parity/rust-builder:latest
 
 variables:
   GIT_STRATEGY:                    fetch
-  CI_SERVER_NAME:                  "GitLab CI"
-  CARGO_HOME:                      "/ci-cache/substrate/cargo/${CI_JOB_NAME}"
+  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
+  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   SCCACHE_CACHE_SIZE:              50G
+  CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
 
