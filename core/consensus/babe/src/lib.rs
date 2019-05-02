@@ -71,7 +71,7 @@ use client::{
 use slots::CheckedHeader;
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
-use log::{error, warn, debug, info, trace};
+use log::{warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
@@ -551,7 +551,7 @@ fn check_header<B: Block + Sized>(
 		proof,
 		vrf_output,
 	} = digest_item.as_babe_seal().ok_or_else(|| {
-		error!(target: "babe", "Header {:?} is unsealed", hash);
+		debug!(target: "babe", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
 
@@ -559,7 +559,7 @@ fn check_header<B: Block + Sized>(
 		header.digest_mut().push(digest_item);
 		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else if !authorities.contains(&signer) {
-		error!(target: "babe", "Slot Author not found");
+		debug!(target: "babe", "Slot Author not found");
 		Err("Slot Author not found".to_string())
 	} else {
 		let pre_hash = header.hash();
@@ -576,18 +576,18 @@ fn check_header<B: Block + Sized>(
 				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| {
 					p.vrf_verify(transcript, &vrf_output, &proof)
 				}).map_err(|s| {
-					warn!(target: "babe", "VRF verification failed: {:?}", s);
+					debug!(target: "babe", "VRF verification failed: {:?}", s);
 					format!("VRF verification failed")
 				})?
 			};
 			if check(&inout, threshold) {
 				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
-				error!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
+				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
 				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
 			}
 		} else {
-			error!(target: "babe", "Bad signature on {:?}", hash);
+			debug!(target: "babe", "Bad signature on {:?}", hash);
 			Err(format!("Bad signature on {:?}", hash))
 		}
 	}
@@ -862,7 +862,7 @@ mod tests {
 	use client::BlockchainEvents;
 	use test_client;
 	use futures::stream::Stream;
-	use log::error;
+	use log::debug;
 	use std::time::Duration;
 
 	type Error = client::error::Error;
