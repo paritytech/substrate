@@ -364,8 +364,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
 		let pair = self.local_key.clone();
-		let _public_key = self.local_key.public();
-		let client = self.client.clone();
+		let ref client = self.client;
 		let block_import = self.block_import.clone();
 		let ref env = self.env;
 
@@ -842,7 +841,7 @@ fn claim_slot(
 	//
 	// We already checked that authorities contains `key.public()`, so it can’t
 	// be empty.  Therefore, this division is safe.
-	let threshold = threshold / authorities.len();
+	let threshold = threshold / authorities.len() as u64;
 
 	get_keypair(key).vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 }
