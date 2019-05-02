@@ -19,7 +19,7 @@ mod given_validate_transaction {
 			fn transaction_validity(call: &Call<T>) -> Option<sr_primitives::transaction_validity::TransactionValidity> {
 				None
 			}
-			fn validate_transaction(call: &Call<T>) -> Option<Result<(), ()>> {
+			fn validate_transaction(call: &Call<T>) -> Option<Result<(), sr_primitives::ApplyError>> {
 				None
 			}
 		}
@@ -67,7 +67,7 @@ mod missing_validate {
 
 		srml_support::decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				fn validate_transaction(call: &Call<T>) -> Option<Result<(), ()>> {
+				fn validate_transaction(call: &Call<T>) -> Option<Result<(), sr_primitives::ApplyError>> {
 					None
 				}
 			}

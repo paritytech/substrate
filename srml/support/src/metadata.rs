@@ -265,14 +265,14 @@ mod tests {
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
-			Inherent,
+			None,
 		}
 
 		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
 				match s {
 					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::Inherent,
+					None => RawOrigin::None,
 				}
 			}
 		}
