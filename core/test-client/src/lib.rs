@@ -29,7 +29,7 @@ pub use client::{ExecutionStrategies, blockchain, backend, self};
 pub use executor::{NativeExecutor, self};
 pub use runtime;
 pub use consensus;
-pub use keyring::{AuthorityKeyring, AccountKeyring};
+pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 
 use std::{sync::Arc, collections::HashMap};
 use futures::future::FutureResult;

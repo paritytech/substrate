@@ -29,31 +29,28 @@ pub const BABE_ENGINE_ID: ConsensusEngineId = [b'b', b'a', b'b', b'e'];
 /// Configuration data used by the BABE consensus engine.
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
 pub struct BabeConfiguration {
-	slot_duration: u64,
-	expected_block_time: u64,
-}
-
-impl BabeConfiguration {
-	/// Return the expected block time in milliseconds for BABE.  Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic expected block time may be supported in the future.
-	pub fn expected_block_time(&self) -> u64 {
-		self.expected_block_time
-	}
-
-	/// Return the slot duration in milliseconds for BABE.  Currently, only
+	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
 	/// Dynamic slot duration may be supported in the future.
-	pub fn slot_duration(&self) -> u64 {
-		self.slot_duration
-	}
+	pub slot_duration: u64,
+
+	/// The expected block time in milliseconds for BABE. Currently,
+	/// only the value provided by this type at genesis will be used.
+	///
+	/// Dynamic expected block time may be supported in the future.
+	pub expected_block_time: u64,
+
+	/// The maximum permitted VRF output, or *threshold*, for BABE. Currently,
+	/// only the value provided by this type at genesis will be used.
+	///
+	/// Dynamic thresholds may be supported in the future.
+	pub threshold: u64,
 }
 
 #[cfg(feature = "std")]
 impl slots::SlotData for BabeConfiguration {
-	/// Return the slot duration in milliseconds for BABE.  Currently, only
+	/// Return the slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
 	/// Dynamic slot duration may be supported in the future.
@@ -67,7 +64,7 @@ impl slots::SlotData for BabeConfiguration {
 decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	pub trait BabeApi {
-		/// Return the configuration for BABE.  Currently,
+		/// Return the configuration for BABE. Currently,
 		/// only the value provided by this type at genesis will be used.
 		///
 		/// Dynamic configuration may be supported in the future.

@@ -848,8 +848,9 @@ impl<B: BlockT> ChainSync<B> {
 	/// Handle new block announcement.
 	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context<B>, who: PeerId, hash: B::Hash, header: &B::Header) {
 		let number = *header.number();
+		debug!(target: "sync", "Received block announcement with number {:?}", number);
 		if number <= As::sa(0) {
-			trace!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
+			warn!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
 			return;
 		}
 		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()

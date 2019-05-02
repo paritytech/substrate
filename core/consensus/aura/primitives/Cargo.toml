@@ -12,5 +12,6 @@ runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives
 [features]
 default = ["std"]
 std = [
+	"runtime_primitives/std",
 	"substrate-client/std",
 ]

@@ -2895,23 +2895,6 @@ dependencies = [
 [[package]]
 name = "schnorrkel"
 version = "0.1.1"
-source = "git+https://github.com/paritytech/schnorrkel#1762df02ac48ba5c3fa8c162e19a393247079f88"
-dependencies = [
- "clear_on_drop 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "curve25519-dalek 1.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "ed25519-dalek 1.0.0-pre.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "merlin 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sha3 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "subtle 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "schnorrkel"
-version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "clear_on_drop 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3267,6 +3250,29 @@ dependencies = [
  "srml-support 1.0.0",
  "srml-system 1.0.0",
  "srml-timestamp 1.0.0",
+ "substrate-inherents 1.0.0",
+ "substrate-primitives 1.0.0",
+]
+
+[[package]]
+name = "srml-babe"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 1.0.0",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
+ "srml-consensus 1.0.0",
+ "srml-session 1.0.0",
+ "srml-staking 1.0.0",
+ "srml-support 1.0.0",
+ "srml-system 1.0.0",
+ "srml-timestamp 1.0.0",
+ "substrate-consensus-babe-primitives 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-primitives 1.0.0",
 ]
@@ -3936,13 +3942,16 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "merlin 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "schnorrkel 0.1.1 (git+https://github.com/paritytech/schnorrkel)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "schnorrkel 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
  "sr-primitives 1.0.0",
  "sr-version 1.0.0",
+ "srml-babe 0.1.0",
  "srml-consensus 1.0.0",
  "srml-support 1.0.0",
  "substrate-client 1.0.0",
@@ -4450,6 +4459,7 @@ dependencies = [
  "substrate-client 1.0.0",
  "substrate-consensus-aura-primitives 1.0.0",
  "substrate-consensus-authorities 1.0.0",
+ "substrate-consensus-babe-primitives 1.0.0",
  "substrate-executor 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keyring 1.0.0",
@@ -5671,7 +5681,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum safemem 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8dca453248a96cb0749e36ccdfe2b0b4e54a61bfef89fb97ec621eb8e0a93dd9"
 "checksum same-file 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "8f20c4be53a8a1ff4c1f1b2bd14570d2f634628709752f0702ecdd2b3f9a5267"
 "checksum schannel 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)" = "f2f6abf258d99c3c1c5c2131d99d064e94b7b3dd5f416483057f308fea253339"
-"checksum schnorrkel 0.1.1 (git+https://github.com/paritytech/schnorrkel)" = "<none>"
 "checksum schnorrkel 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b5eff518f9bed3d803a0d002af0ab96339b0ebbedde3bec98a684986134b7a39"
 "checksum scopeguard 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "94258f53601af11e6a49f722422f6e3425c52b06245a5cf9bc09908b174f5e27"
 "checksum secp256k1 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)" = "bfaccd3a23619349e0878d9a241f34b1982343cdf67367058cd7d078d326b63e"
