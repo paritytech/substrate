@@ -224,7 +224,11 @@ impl<
 			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
 			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
 			Err(internal::ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
-			Err(internal::ApplyError::Module(e)) => panic!("Module validate_transaction error: {:?}", e),
+			Err(internal::ApplyError::Module(ApplyError::CantPay)) => panic!("Module validate_transaction error: CantPay"),
+			Err(internal::ApplyError::Module(ApplyError::BadSignature)) => panic!("Module validate_transaction error: BadSignature"),
+			Err(internal::ApplyError::Module(ApplyError::Stale)) => panic!("Module validate_transaction error: Stale"),
+			Err(internal::ApplyError::Module(ApplyError::FullBlock)) => panic!("Module validate_transaction error: FullBlock"),
+			Err(internal::ApplyError::Module(ApplyError::Future)) => panic!("Module validate_transaction error: Future"),
 		}
 	}
 
