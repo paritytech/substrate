@@ -272,7 +272,6 @@ impl<
 
 		// Decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
-		// TODO TODO: does a unsigned transaction validated by module having Inherent is correct ?
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
