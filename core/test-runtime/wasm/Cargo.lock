@@ -2434,6 +2434,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-babe-primitives"
+version = "1.0.0"
+dependencies = [
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 1.0.0",
+ "substrate-client 1.0.0",
+ "substrate-consensus-slots 1.1.0",
+]
+
+[[package]]
 name = "substrate-consensus-common"
 version = "1.0.0"
 dependencies = [
@@ -2445,6 +2455,23 @@ dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-version 1.0.0",
+ "substrate-inherents 1.0.0",
+ "substrate-primitives 1.0.0",
+ "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-consensus-slots"
+version = "1.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 1.0.0",
+ "substrate-client 1.0.0",
+ "substrate-consensus-common 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-primitives 1.0.0",
  "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2596,6 +2623,7 @@ dependencies = [
  "substrate-client 1.0.0",
  "substrate-consensus-aura-primitives 1.0.0",
  "substrate-consensus-authorities 1.0.0",
+ "substrate-consensus-babe-primitives 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-keyring 1.0.0",
  "substrate-offchain-primitives 0.1.0",

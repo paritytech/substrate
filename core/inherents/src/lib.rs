@@ -114,7 +114,9 @@ impl InherentData {
 		match self.data.get(identifier) {
 			Some(inherent) =>
 				I::decode(&mut &inherent[..])
-					.ok_or_else(|| "Could not decode requested inherent type!".into())
+					.ok_or_else(|| {
+						"Could not decode requested inherent type!".into()
+					})
 					.map(Some),
 			None => Ok(None)
 		}
