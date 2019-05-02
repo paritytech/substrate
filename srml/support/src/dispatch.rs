@@ -457,7 +457,7 @@ macro_rules! decl_module {
 		{ $( $validate_transaction:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn transaction_validity(call: $transaction_validity_call_type:ty) -> $transaction_validity_return:ty { $( $impl:tt )* }
+		fn transaction_validity(call: $validity_call_type:ty) -> $validity_return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -468,7 +468,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
-			{ fn transaction_validity(call: $transaction_validity_call_type) -> $transaction_validity_return { $( $impl )* } }
+			{ fn transaction_validity(call: $validity_call_type) -> $validity_return { $( $impl )* } }
 			{ $( $validate_transaction )* }
 			[ $($t)* ]
 			$($rest)*
@@ -506,7 +506,7 @@ macro_rules! decl_module {
 		{ }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn validate_transaction(call: $validate_transaction_call_type:ty) -> $validate_transaction_return:ty { $( $impl:tt )* }
+		fn validate_transaction(call: $validate_call_type:ty) -> $validate_return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -518,7 +518,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $transaction_validity )* }
-			{ fn validate_transaction(call: $validate_transaction_call_type) -> $validate_transaction_return { $( $impl )* } }
+			{ fn validate_transaction(call: $validate_call_type) -> $validate_return { $( $impl )* } }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -846,17 +846,17 @@ macro_rules! decl_module {
 	(@impl_validatable
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$call_type:ident;
-		{ fn transaction_validity(call: $transaction_validity_call_type:ty) -> $transaction_validity_return:ty { $( $transaction_validity_impl:tt )* } }
-		{ fn validate_transaction(call: $validate_transaction_call_type:ty) -> $validate_transaction_return:ty { $( $validate_transaction_impl:tt )* } }
+		{ fn transaction_validity(call: $validity_call_type:ty) -> $validity_return:ty { $( $validity_impl:tt )* } }
+		{ fn validate_transaction(call: $validate_call_type:ty) -> $validate_return:ty { $( $validate_impl:tt )* } }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::dispatch::Validatable for $call_type<$trait_instance $(, $instance)?>
 		{
-			fn transaction_validity(call: $transaction_validity_call_type) -> $transaction_validity_return {
-				$( $transaction_validity_impl )*
+			fn transaction_validity(call: $validity_call_type) -> $validity_return {
+				$( $validity_impl )*
 			}
-			fn validate_transaction(call: $validate_transaction_call_type) -> $validate_transaction_return {
-				$( $validate_transaction_impl )*
+			fn validate_transaction(call: $validate_call_type) -> $validate_return {
+				$( $validate_impl )*
 			}
 		}
 	};
@@ -1286,18 +1286,24 @@ macro_rules! impl_outer_dispatch {
 			}
 		}
 		impl $crate::dispatch::Validatable for $call_type {
-			fn transaction_validity(call: &Self) -> Option<$crate::runtime_primitives::transaction_validity::TransactionValidity> {
+			fn transaction_validity(call: &Self)
+				-> Option<$crate::runtime_primitives::transaction_validity::TransactionValidity>
+			{
 				match call {
 					$(
-						$call_type::$camelcase(call) => $crate::dispatch::Validatable::transaction_validity(call),
+						$call_type::$camelcase(call)
+							=> $crate::dispatch::Validatable::transaction_validity(call),
 					)*
 				}
 			}
 
-			fn validate_transaction(call: &Self) -> Option<$crate::dispatch::result::Result<(), $crate::runtime_primitives::ApplyError>> {
+			fn validate_transaction(call: &Self)
+				-> Option<$crate::dispatch::result::Result<(), $crate::runtime_primitives::ApplyError>>
+			{
 				match call {
 					$(
-						$call_type::$camelcase(call) => $crate::dispatch::Validatable::validate_transaction(call),
+						$call_type::$camelcase(call)
+							=> $crate::dispatch::Validatable::validate_transaction(call),
 					)*
 				}
 			}
