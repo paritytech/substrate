@@ -614,7 +614,6 @@ const CODE_SET_RENT: &str = r#"
 "#;
 const HASH_SET_RENT: [u8; 32] = hex!("a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef");
 
-
 /// Input data for each call in set_rent code
 mod call {
 	pub fn set_storage_4_byte() -> Vec<u8> { vec![] }
@@ -897,6 +896,48 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(super::ContractInfoOf::<Test>::get(BOB).is_none());
+		}
+	);
+}
+
+const CODE_DEFAULT_RENT: &str = r#"
+(module
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call"))
+	(func (export "deploy"))
+)
+"#;
+const HASH_DEFAULT_RENT: [u8; 32] = hex!("4318bf9add830725edf0ff3c5f064a3aee455cb015ac560be9739deae4f700c7"); // todo
+
+#[test]
+fn default_rent_allowance_on_create() {
+	let wasm = wabt::wat2wasm(CODE_DEFAULT_RENT).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+			println!("{:?}", System::events());
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000,
+				HASH_DEFAULT_RENT.into(),
+				vec![],
+			));
+
+			// Advance 4 blocks
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Check result
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive();
+			assert!(bob_contract.is_some())
 		}
 	);
 }
