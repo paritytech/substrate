@@ -1379,7 +1379,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
-	net.peer(0).push_authorities_change_block(vec![AuthorityId::from_raw([42; 32])]);
+	net.peer(0).push_authorities_change_block(vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(1, net.clone(), peers);
 	net.lock().sync_without_disconnects();
@@ -1438,7 +1438,9 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 		// ensure block#10 enacts authorities set change => justification is generated
 		// normally it will reach light client, but because of the forced change, it will not
 		net.lock().peer(0).push_blocks(8, false); // best is #9
-		net.lock().peer(0).push_authorities_change_block(vec![AuthorityId::from_raw([42; 32])]); // #10
+		net.lock().peer(0).push_authorities_change_block(
+			vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]
+		); // #10
 		net.lock().peer(0).push_blocks(1, false); // best is #11
 		net.lock().sync_without_disconnects();
 

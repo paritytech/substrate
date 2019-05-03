@@ -33,8 +33,7 @@ use consensus_common::{
 };
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi,
-	DigestItem, DigestFor, DigestItemFor,
+	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
@@ -111,7 +110,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 {
 	type Error = ConsensusError;
@@ -139,7 +137,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 {
 	type Error = ConsensusError;
@@ -228,7 +225,6 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		RA: Send + Sync,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		J: ProvableJustification<Block::Header>,
 {
 	let hash = block.post_header().hash();
@@ -287,7 +283,6 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		J: ProvableJustification<Block::Header>,
 {
@@ -541,7 +536,6 @@ pub mod tests {
 			B: Backend<Block, Blake2Hasher> + 'static,
 			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 			DigestFor<Block>: Encode,
-			DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 			RA: Send + Sync,
 	{
 		type Error = ConsensusError;
@@ -570,7 +564,6 @@ pub mod tests {
 			B: Backend<Block, Blake2Hasher> + 'static,
 			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 			DigestFor<Block>: Encode,
-			DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 			RA: Send + Sync,
 	{
 		type Error = ConsensusError;
