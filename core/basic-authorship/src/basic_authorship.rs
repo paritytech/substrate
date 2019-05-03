@@ -30,7 +30,8 @@ use codec::Decode;
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
-	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
+	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
+	AuthorityIdFor, DigestFor,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
@@ -174,12 +175,16 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
 	type Error = error::Error;
 
-	fn propose(&self, inherent_data: InherentData, max_duration: time::Duration)
-		-> Result<<C as AuthoringApi>::Block, error::Error>
+	fn propose(
+		&self,
+		inherent_data: InherentData,
+		max_duration: time::Duration,
+		inherent_digests: DigestFor<Block>,
+	) -> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		// leave some time for evaluation and block finalization (33%)
 		let deadline = (self.now)() + max_duration - max_duration / 3;
-		self.propose_with(inherent_data, deadline)
+		self.propose_with(inherent_data, deadline, inherent_digests)
 	}
 }
 
@@ -190,8 +195,12 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
-	fn propose_with(&self, inherent_data: InherentData, deadline: time::Instant)
-		-> Result<<C as AuthoringApi>::Block, error::Error>
+	fn propose_with(
+		&self,
+		inherent_data: InherentData,
+		deadline: time::Instant,
+		inherent_digests: DigestFor<Block>,
+	) -> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
 
@@ -331,7 +340,7 @@ mod tests {
 			cell.replace(new)
 		});
 		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), deadline).unwrap();
+		let block = proposer.propose(Default::default(), deadline, Default::default()).unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.
@@ -362,7 +371,7 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), deadline).unwrap();
+		let block = proposer.propose(Default::default(), deadline, Default::default()).unwrap();
 
 		// then
 		assert_eq!(block.extrinsics().len(), 1);

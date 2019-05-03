@@ -373,7 +373,11 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 				// deadline our production to approx. the end of the
 				// slot
 				Timeout::new(
-					proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
+					proposer.propose(
+						slot_info.inherent_data,
+						remaining_duration,
+						Default::default(),
+					).into_future(),
 					remaining_duration,
 				)
 			} else {
@@ -797,7 +801,7 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
-	use runtime_primitives::traits::Block as BlockT;
+	use runtime_primitives::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
@@ -828,7 +832,7 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
+		fn propose(&self, _: InherentData, _: Duration, _: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}

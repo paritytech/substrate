@@ -32,12 +32,14 @@ use consensus_common::ExtraVerification;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	SimpleBitOps,
 };
-use std::{sync::Arc, u64, fmt::Debug};
+use std::{sync::Arc, u64, fmt::{Debug, Display}};
+use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode, Input};
 use primitives::{
 	crypto::Pair,
-	sr25519::{Public, Signature, LocalizedSignature, self},
+	sr25519::{Public, Signature, self},
 };
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
@@ -75,17 +77,17 @@ use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
-/// A BABE seal.  It includes:
+/// A BABE pre-digest.  It includes:
 ///
-/// * The public key
-/// * The VRF proof
-/// * The signature
-/// * The slot number
+/// * The public key of the author.
+/// * The VRF proof.
+/// * The VRF output.
+/// * The slot number.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BabeSeal {
+pub struct BabePreDigest {
 	vrf_output: VRFOutput,
 	proof: VRFProof,
-	signature: LocalizedSignature,
+	author: Public,
 	slot_num: u64,
 }
 
@@ -113,18 +115,16 @@ macro_rules! babe_assert_eq {
 type TmpDecode = (
 	[u8; VRF_OUTPUT_LENGTH],
 	[u8; VRF_PROOF_LENGTH],
-	[u8; SIGNATURE_LENGTH],
 	[u8; PUBLIC_KEY_LENGTH],
 	u64,
 );
 
-impl Encode for BabeSeal {
+impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
 		let tmp: TmpDecode = (
 			*self.vrf_output.as_bytes(),
 			self.proof.to_bytes(),
-			self.signature.signature.0,
-			self.signature.signer.0,
+			self.author.0,
 			self.slot_num,
 		);
 		let encoded = parity_codec::Encode::encode(&tmp);
@@ -134,8 +134,7 @@ impl Encode for BabeSeal {
 				.expect("we just encoded this ourselves, so it is correct; qed");
 			babe_assert_eq!(decoded_version.proof, self.proof);
 			babe_assert_eq!(decoded_version.vrf_output, self.vrf_output);
-			babe_assert_eq!(decoded_version.signature.signature, self.signature.signature);
-			babe_assert_eq!(decoded_version.signature.signer, self.signature.signer);
+			babe_assert_eq!(decoded_version.author, self.author);
 			babe_assert_eq!(decoded_version.slot_num, self.slot_num);
 			debug!(target: "babe", "Encoding was correct")
 		}
@@ -143,16 +142,13 @@ impl Encode for BabeSeal {
 	}
 }
 
-impl Decode for BabeSeal {
+impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, proof, sig, public_key, slot_num): TmpDecode = Decode::decode(i)?;
-		Some(BabeSeal {
+		let (output, proof, public_key, slot_num): TmpDecode = Decode::decode(i)?;
+		Some(BabePreDigest {
 			proof: VRFProof::from_bytes(&proof).ok()?,
 			vrf_output: VRFOutput::from_bytes(&output).ok()?,
-			signature: LocalizedSignature {
-				signature: Signature(sig),
-				signer: Public(public_key),
-			},
+			author: Public(public_key),
 			slot_num,
 		})
 	}
@@ -198,12 +194,14 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 
 /// A digest item which is usable with BABE consensus.
 pub trait CompatibleDigestItem: Sized {
-	/// Construct a digest item which contains a slot number and a signature
-	/// on the hash.
-	fn babe_seal(signature: BabeSeal) -> Self;
+	/// Construct a digest item which contains a BABE pre-digest.
+	fn babe_seal(signature: BabePreDigest) -> Self;
 
-	/// If this item is an Babe seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabeSeal>;
+	/// If this item is an BABE pre-digest, return it.
+	fn as_babe_seal(&self) -> Option<BabePreDigest>;
+
+	/// If this item is a BABE signature, return it.
+	fn check_babe_signature(&self) -> Option<Signature>;
 }
 
 impl<T, Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, T>
@@ -211,12 +209,12 @@ impl<T, Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, T>
 {
 	/// Construct a digest item which contains a slot number and a signature
 	/// on the hash.
-	fn babe_seal(signature: BabeSeal) -> Self {
+	fn babe_seal(signature: BabePreDigest) -> Self {
 		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
 	}
 
 	/// If this item is an BABE seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabeSeal> {
+	fn as_babe_seal(&self) -> Option<BabePreDigest> {
 		match self {
 			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => {
 				match Decode::decode(&mut &seal[..]) {
@@ -231,6 +229,14 @@ impl<T, Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, T>
 				info!(target: "babe", "Invalid consensus: {:?}!", self);
 				None
 			}
+		}
+	}
+
+	fn check_babe_signature(&self) -> Option<Signature> {
+		match self {
+			generic::DigestItem::Consensus(BABE_ENGINE_ID, signature)
+				if signature.len() == SIGNATURE_LENGTH => Some(Signature::from_slice(&signature[..])),
+			_ => None,
 		}
 	}
 }
@@ -281,7 +287,20 @@ pub struct BabeParams<C, E, I, SO, OnExit> {
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, E, I, SO, Error, OnExit>(BabeParams {
+pub fn start_babe<
+	B: Block<Header=H>,
+	H: Header<Digest=generic::Digest<generic::DigestItem<<B as Block>::Hash, Public, Signature>>, Hash=<B as Block>::Hash>,
+	/*D: Digest<
+		Item=generic::DigestItem<<B as Block>::Hash, Public, Signature>,
+		Hash=<B as Block>::Hash,
+	> + Encode + Decode,*/
+	C,
+	E,
+	I,
+	SO,
+	Error,
+	OnExit,
+>(BabeParams {
 	config,
 	local_key,
 	client,
@@ -295,7 +314,6 @@ pub fn start_babe<B, C, E, I, SO, Error, OnExit>(BabeParams {
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	B: Block,
 	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
@@ -306,6 +324,7 @@ pub fn start_babe<B, C, E, I, SO, Error, OnExit>(BabeParams {
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	OnExit: Future<Item=(), Error=()>,
+	generic::DigestItem<<B as Block>::Hash, Public, Signature>: DigestItem<Hash = <B as Block>::Hash>,
 {
 	let worker = BabeWorker {
 		client: client.clone(),
@@ -338,7 +357,18 @@ struct BabeWorker<C, E, I, SO> {
 	threshold: u64,
 }
 
-impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
+impl<
+	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
+		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
+		std::hash::Hash + Display + Send + Sync + 'static,
+	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
+	B: Block<Header=H, Hash=Hash>,
+	C,
+	E,
+	I,
+	Error,
+	SO,
+> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
@@ -346,7 +376,6 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -398,7 +427,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let authoring_result = if let Some((inout, proof, _batchable_proof)) = claim_slot(
+		let proposal_work = if let Some((inout, proof, _batchable_proof)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -428,97 +457,91 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 				}
 			};
 
+			let inherent_digest = BabePreDigest {
+				proof,
+				vrf_output: inout.to_output(),
+				author: pair.public(),
+				slot_num,
+			};
+
+			// deadline our production to approx. the end of the slot
 			let remaining_duration = slot_info.remaining_duration();
-			// deadline our production to approx. the end of the
-			// slot
-			(Timeout::new(
+			Timeout::new(
 				proposer.propose(
 					slot_info.inherent_data,
 					remaining_duration,
+					generic::Digest {
+						logs: vec![
+							generic::DigestItem::babe_seal(inherent_digest),
+						],
+					},
 				).into_future(),
 				remaining_duration,
-			),
-			inout.to_output(),
-			proof)
+			)
 		} else {
 			return Box::new(future::ok(()));
 		};
 
-		let (proposal_work, vrf_output, proof) = authoring_result;
+		Box::new(proposal_work.map(move |b| {
+			// minor hack since we don't have access to the timestamp
+			// that is actually set by the proposer.
+			let slot_after_building = slot_now(slot_duration);
+			if slot_after_building != Some(slot_num) {
+				info!(
+					target: "babe",
+					"Discarding proposal for slot {}; block production took too long",
+					slot_num
+				);
+				telemetry!(CONSENSUS_INFO; "babe.discarding_proposal_took_too_long";
+					"slot" => slot_num
+				);
+				return
+			}
 
-		Box::new(
-			proposal_work
-				.map(move |b| {
-					// minor hack since we don't have access to the timestamp
-					// that is actually set by the proposer.
-					let slot_after_building = slot_now(slot_duration);
-					if slot_after_building != Some(slot_num) {
-						info!(
-							target: "babe",
-							"Discarding proposal for slot {}; block production took too long",
-							slot_num
-						);
-						telemetry!(CONSENSUS_INFO; "babe.discarding_proposal_took_too_long";
-							"slot" => slot_num
-						);
-						return
-					}
+			let (header, body) = b.deconstruct();
+			let header_num = header.number().clone();
+			let pre_hash = header.hash();
+			let parent_hash = header.parent_hash().clone();
 
-					let (header, body) = b.deconstruct();
-					let header_num = header.number().clone();
-					let pre_hash = header.hash();
-					let parent_hash = header.parent_hash().clone();
+			// sign the pre-sealed hash of the block and then
+			// add it to a digest item.
+			let signature = pair.sign(pre_hash.as_ref());
+			let signature_digest_item = generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.0[..].to_owned());
 
-					// sign the pre-sealed hash of the block and then
-					// add it to a digest item.
-					let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
-					let signature = pair.sign(&to_sign[..]);
-					let item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(BabeSeal {
-						proof,
-						signature: LocalizedSignature {
-							signature,
-							signer: pair.public(),
-						},
-						slot_num,
-						vrf_output,
-					});
+			let import_block: ImportBlock<B> = ImportBlock {
+				origin: BlockOrigin::Own,
+				header,
+				justification: None,
+				post_digests: vec![signature_digest_item],
+				body: Some(body),
+				finalized: false,
+				auxiliary: Vec::new(),
+				fork_choice: ForkChoiceStrategy::LongestChain,
+			};
 
-					let import_block: ImportBlock<B> = ImportBlock {
-						origin: BlockOrigin::Own,
-						header,
-						justification: None,
-						post_digests: vec![item],
-						body: Some(body),
-						finalized: false,
-						auxiliary: Vec::new(),
-						fork_choice: ForkChoiceStrategy::LongestChain,
-					};
+			info!(target: "babe",
+					"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+					header_num,
+					import_block.post_header().hash(),
+					pre_hash
+			);
+			telemetry!(CONSENSUS_INFO; "babe.pre_sealed_block";
+				"header_num" => ?header_num,
+				"hash_now" => ?import_block.post_header().hash(),
+				"hash_previously" => ?pre_hash
+			);
 
-					info!(target: "babe",
-						  "Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
-						  header_num,
-						  import_block.post_header().hash(),
-						  pre_hash
-					);
-					telemetry!(CONSENSUS_INFO; "babe.pre_sealed_block";
-						"header_num" => ?header_num,
-						"hash_now" => ?import_block.post_header().hash(),
-						"hash_previously" => ?pre_hash
-					);
-
-					if let Err(e) = block_import.import_block(import_block, Default::default()) {
-						warn!(target: "babe", "Error with block built on {:?}: {:?}",
-							  parent_hash, e);
-						telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
-							"hash" => ?parent_hash, "err" => ?e
-						);
-					}
-				})
-				.map_err(|e| {
-					warn!("Client import failed: {:?}", e);
-					consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()
-				})
-		)
+			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+				warn!(target: "babe", "Error with block built on {:?}: {:?}",
+						parent_hash, e);
+				telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
+					"hash" => ?parent_hash, "err" => ?e
+				);
+			}
+		}).map_err(|e| {
+			warn!("Client import failed: {:?}", e);
+			consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()
+		}))
 	}
 }
 
@@ -526,11 +549,16 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
 ///
+/// The seal must be the last digest.  Otherwise, the whole header is considered
+/// unsigned.  This is required for security and must not be changed.
+///
 /// This digest item will always return `Some` when used with `as_babe_seal`.
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
-fn check_header<B: Block + Sized>(
+fn check_header<
+	B: Block + Sized,
+>(
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -545,12 +573,31 @@ fn check_header<B: Block + Sized>(
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
 
-	let BabeSeal {
+	let mut pre_digest_seal: Option<BabePreDigest> = None;
+
+	for i in header.digest().logs() {
+		match i.as_babe_seal() {
+			s @ Some(_) => if pre_digest_seal.is_some() {
+				info!("Multiple BABE pre-runtime headers, rejecting!");
+				return Err("Multiple BABE pre-runtime headers, rejecting!".to_string())
+			} else {
+				pre_digest_seal = s
+			},
+			None => trace!("Ignoring digest not meant for us"),
+		}
+	}
+
+	let BabePreDigest {
 		slot_num,
-		signature: LocalizedSignature {signer, signature },
-		proof,
+		author,
 		vrf_output,
-	} = digest_item.as_babe_seal().ok_or_else(|| {
+		proof,
+	} = pre_digest_seal.ok_or_else(|| {
+		debug!(target: "babe", "Header {:?} has no BABE pre-digest", hash);
+		format!("Header {:?} has no BABE pre-digest", hash)
+	})?;
+
+	let signature = digest_item.check_babe_signature().ok_or_else(|| {
 		debug!(target: "babe", "Header {:?} is unsealed", hash);
 		format!("Header {:?} is unsealed", hash)
 	})?;
@@ -558,14 +605,14 @@ fn check_header<B: Block + Sized>(
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
 		Ok(CheckedHeader::Deferred(header, slot_num))
-	} else if !authorities.contains(&signer) {
+	} else if !authorities.contains(&author) {
 		debug!(target: "babe", "Slot Author not found");
 		Err("Slot Author not found".to_string())
 	} else {
 		let pre_hash = header.hash();
-		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
+		let to_sign = pre_hash;
 
-		if sr25519::Pair::verify(&signature, &to_sign[..], &signer) {
+		if sr25519::Pair::verify(&signature, to_sign.as_ref(), &author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -573,7 +620,7 @@ fn check_header<B: Block + Sized>(
 					Default::default(),
 					0,
 				);
-				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| {
+				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 					p.vrf_verify(transcript, &vrf_output, &proof)
 				}).map_err(|s| {
 					debug!(target: "babe", "VRF verification failed: {:?}", s);
@@ -584,7 +631,7 @@ fn check_header<B: Block + Sized>(
 				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
 				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
-				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
+				Err(format!("Validator {:?} made seal when it wasn’t its turn", author))
 			}
 		} else {
 			debug!(target: "babe", "Bad signature on {:?}", hash);
@@ -688,7 +735,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, seal) => {
-				let BabeSeal { slot_num, .. } = seal.as_babe_seal()
+				let BabePreDigest { slot_num, .. } = seal.as_babe_seal()
 					.expect("check_header always returns a seal digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
@@ -854,7 +901,7 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
-	use runtime_primitives::traits::Block as BlockT;
+	use runtime_primitives::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
@@ -892,7 +939,7 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
+		fn propose(&self, _: InherentData, _: Duration, _: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}
@@ -970,7 +1017,7 @@ mod tests {
 	#[test]
 	fn can_serialize_block() {
 		drop(env_logger::try_init());
-		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
+		assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
 	}
 
 	#[test]

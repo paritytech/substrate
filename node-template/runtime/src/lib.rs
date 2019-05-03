@@ -242,6 +242,7 @@ impl_runtime_apis! {
 			Executive::initialize_block(header)
 		}
 
+		#[allow(deprecated)]
 		fn authorities() -> Vec<AuthorityId> {
 			panic!("Deprecated, please use `AuthoritiesApi`.")
 		}
