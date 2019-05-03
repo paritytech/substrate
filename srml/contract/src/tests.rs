@@ -928,7 +928,7 @@ fn default_rent_allowance_on_create() {
 				vec![],
 			));
 
-			// Advance 5 blocks
+			// Advance blocks
 			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
 
 			// Trigger rent through call
