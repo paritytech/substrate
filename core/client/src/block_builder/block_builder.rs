@@ -20,7 +20,7 @@ use parity_codec::Encode;
 use runtime_primitives::ApplyOutcome;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
+	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
 };
 use primitives::{H256, ExecutionContext};
 use crate::blockchain::HeaderBackend;
@@ -113,6 +113,11 @@ where
 				}
 			}
 		})
+	}
+
+	/// Set the digest of `self` to `digest`.
+	pub fn push_digest(&mut self, digest: DigestFor<Block>) -> error::Result<()> {
+		Ok(self.header.set_digest(digest))
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

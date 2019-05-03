@@ -43,6 +43,9 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error>;
+	/// Push an inherent digest onto the block. Fails if the inherent digest is invalid.
+	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>) -> Result<(), error::Error>;
+
 }
 
 /// Local client abstraction for the consensus.
@@ -75,6 +78,10 @@ where
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
+	}
+
+	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>) -> Result<(), error::Error> {
+		client::block_builder::BlockBuilder::push_digest(self, inherent_digest).map_err(Into::into)
 	}
 }
 
@@ -214,14 +221,16 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			inherent_data,
 			|block_builder| {
 				// Add inherents from the internal pool
-
 				let inherents = self.inherents_pool.drain();
-				debug!("Pushing {} queued inherents.", inherents.len());
+				debug!("Pushing {} queued inherent extrinsics.", inherents.len());
 				for i in inherents {
 					if let Err(e) = block_builder.push_extrinsic(i) {
 						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
 					}
 				}
+
+				// Add inherent digests
+				block_builder.set_inherent_digest(inherent_digests.clone()).expect("this never returns `Err`; qed");
 
 				// proceed with transactions
 				let mut is_first = true;
