@@ -900,7 +900,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	);
 }
 
-const CODE_DEFAULT_RENT: &str = r#"
+const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 (module
 	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
