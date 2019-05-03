@@ -748,7 +748,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
 					Some(full.message.target_number) == our_best_commit
-					&& Some(full.message.target_number) >= peer_best_commit
+					&& Some(full.message.target_number) > peer_best_commit
 				}
 				Some(GossipMessage::Neighbor(_)) => false,
 				Some(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
