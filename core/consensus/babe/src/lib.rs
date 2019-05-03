@@ -936,7 +936,7 @@ mod tests {
 	}
 
 	impl Proposer<TestBlock> for DummyProposer {
-		type Error = Error;DigestFor
+		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
 		fn propose(&self, _: InherentData, _: Duration, _: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
