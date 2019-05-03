@@ -446,12 +446,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(&mut self, protocol: &mut Context<B>, who: &PeerId, topic: B::Hash, engine_id: ConsensusEngineId, force: bool) {
 		let mut check_fns = HashMap::new();
-		let validators = self.validators.get(&engine_id);
+		let validator = self.validators.get(&engine_id);
 		let mut message_allowed = move |who: &PeerId, intent: MessageIntent, topic: &B::Hash, message: &ConsensusMessage| {
 			let engine_id = message.engine_id;
 			let check_fn = match check_fns.entry(engine_id) {
 				Entry::Occupied(entry) => entry.into_mut(),
-				Entry::Vacant(vacant) => match validators {
+				Entry::Vacant(vacant) => match validator {
 					None => return false, // treat all messages with no validator as not allowed
 					Some(validator) => vacant.insert(validator.message_allowed()),
 				}
