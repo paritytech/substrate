@@ -25,6 +25,9 @@ use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
 
+/// Reputation change for a node when we get disconnected from it.
+const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
+
 #[derive(Debug)]
 enum Action {
 	AddReservedPeer(PeerId),
@@ -239,7 +242,7 @@ impl Peerset {
 	/// over time, such as reputation increases for staying connected.
 	fn update_time(&mut self) {
 		// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do it
-		// we know that we're not going to miss entire seconds because of rounding to integers.
+		// we know that we're not going to miss seconds because of rounding to integers.
 		let secs_diff = {
 			let now = Instant::now();
 			let elapsed_latest = self.latest_time_update - self.created;
@@ -247,6 +250,16 @@ impl Peerset {
 			self.latest_time_update = now;
 			elapsed_now.as_secs() - elapsed_latest.as_secs()
 		};
+
+		// For each elapsed second, move the node reputation towards zero.
+		for _ in 0..secs_diff {
+			for peer in self.data.connected_peers().cloned().collect::<Vec<_>>() {
+				let mut peer = self.data.peer(&peer).into_connected()
+					.expect("we iterate over connected peers; qed");
+				let cur_reput = peer.reputation();
+				peer.set_reputation(cur_reput.saturating_sub(cur_reput / 20));
+			}
+		}
 
 		let rep_increase = i32::try_from(secs_diff).unwrap_or(i32::max_value());
 		self.data.connected_reputation_increase(rep_increase);
@@ -320,12 +333,7 @@ impl Peerset {
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(mut entry) => {
 				// Decrease the node's reputation so that we don't try it again and again and again.
-				// We decrease by 20% if it's positive so that it doesn't take forever to remove a
-				// node we were connected to for a very long time.
-				if entry.reputation() > 0 {
-					entry.set_reputation(entry.reputation() - entry.reputation() / 5);
-				}
-				entry.add_reputation(-10);
+				entry.add_reputation(DISCONNECT_REPUTATION_CHANGE);
 				entry.disconnect();
 			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
