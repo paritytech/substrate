@@ -790,7 +790,9 @@ pub trait RuntimeApiInfo {
 
 /// Something that can validate unsigned extrinsics.
 pub trait ValidateUnsigned {
+	/// The call to validate
 	type Call;
 
+	/// Return the validity of the call
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
