@@ -902,13 +902,54 @@ fn removals(trigger_call: impl Fn() -> bool) {
 
 const CODE_DEFAULT_RENT: &str = r#"
 (module
+	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
 	(func (export "call"))
-	(func (export "deploy"))
+
+	(func (export "deploy")
+		;; fill the scratch buffer with the rent allowance.
+		(call $ext_rent_allowance)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to <BalanceOf<T>>::max_value().
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 18446744073709551615)
+			)
+		)
+	)
 )
 "#;
-const HASH_DEFAULT_RENT: [u8; 32] = hex!("4318bf9add830725edf0ff3c5f064a3aee455cb015ac560be9739deae4f700c7");
+const HASH_DEFAULT_RENT: [u8; 32] = hex!("4f9ec2b94eea522cfff10b77ef4056c631045c00978a457d283950521ecf07b6");
 
 #[test]
 fn default_rent_allowance_on_create() {
@@ -938,7 +979,7 @@ fn default_rent_allowance_on_create() {
 			// Trigger rent through call
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
 
-			// Check result
+			// Check contract is still alive
 			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive();
 			assert!(bob_contract.is_some())
 		}
