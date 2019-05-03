@@ -16,12 +16,12 @@ offchain-primitives = { package = "substrate-offchain-primitives", path = "./pri
 parity-codec = { version = "3.3", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-tokio = "0.1.7"
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 env_logger = "0.6"
 test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+tokio = "0.1.7"
 
 [features]
 default = []

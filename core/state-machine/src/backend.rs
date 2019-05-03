@@ -25,7 +25,6 @@ use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
-use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -165,7 +164,7 @@ impl<H> PartialEq for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
@@ -214,7 +213,7 @@ impl<H> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
 
 impl super::Error for Void {}
 
-impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
 	type TrieBackendStorage = MemoryDB<H>;
@@ -313,7 +312,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Option<H::Out>
 	where
 		H: Hasher,
-		H::Out: HeapSizeOf,
 		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
 {
 	let mut root = <H as Hasher>::Out::default();

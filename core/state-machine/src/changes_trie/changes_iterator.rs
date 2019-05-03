@@ -21,7 +21,6 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use parity_codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
-use heapsize::HeapSizeOf;
 use trie::{Recorder, MemoryDB};
 use crate::changes_trie::{AnchorBlockId, Configuration, RootsStorage, Storage};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
@@ -39,7 +38,7 @@ pub fn key_changes<'a, S: Storage<H>, H: Hasher>(
 	end: &'a AnchorBlockId<H::Out>,
 	max: u64,
 	key: &'a [u8],
-) -> Result<DrilldownIterator<'a, S, S, H>, String> where H::Out: HeapSizeOf {
+) -> Result<DrilldownIterator<'a, S, S, H>, String> {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max, end.number);
 
@@ -69,7 +68,7 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher>(
 	end: &AnchorBlockId<H::Out>,
 	max: u64,
 	key: &[u8],
-) -> Result<Vec<Vec<u8>>, String> where H::Out: HeapSizeOf {
+) -> Result<Vec<Vec<u8>>, String> {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max, end.number);
 
@@ -109,7 +108,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H>, H: Hasher>(
 	end: &AnchorBlockId<H::Out>,
 	max: u64,
 	key: &[u8]
-) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
+) -> Result<Vec<(u64, u32)>, String> {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max, end.number);
 
@@ -278,7 +277,6 @@ pub struct DrilldownIterator<'a, RS: 'a + RootsStorage<H>, S: 'a + Storage<H>, H
 
 impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> Iterator
 	for DrilldownIterator<'a, RS, S, H>
-	where H::Out: HeapSizeOf
 {
 	type Item = Result<(u64, u32), String>;
 
@@ -305,7 +303,7 @@ impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> ProvingDrilldownIte
 	}
 }
 
-impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> Iterator for ProvingDrilldownIterator<'a, RS, S, H> where H::Out: HeapSizeOf {
+impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> Iterator for ProvingDrilldownIterator<'a, RS, S, H> {
 	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {

@@ -22,7 +22,6 @@ use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
 use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt
@@ -378,7 +377,7 @@ impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
 	O: OffchainExt,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
 	/// Produces a state-backend-specific "transaction" which can be used to apply the changes
@@ -569,7 +568,7 @@ where
 	B: Backend<H>,
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
@@ -596,7 +595,7 @@ where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine {
@@ -630,7 +629,7 @@ pub fn execution_proof_check<H, Exec>(
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	let trie_backend = proving_backend::create_proof_check_backend::<H>(root.into(), proof)?;
 	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
@@ -647,7 +646,7 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	let mut sm = StateMachine {
 		backend: trie_backend,
@@ -674,7 +673,7 @@ pub fn prove_read<B, H>(
 where
 	B: Backend<H>,
 	H: Hasher,
-	H::Out: Ord + HeapSizeOf
+	H::Out: Ord
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
@@ -689,7 +688,7 @@ pub fn prove_read_on_trie_backend<S, H>(
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
-	H::Out: Ord + HeapSizeOf
+	H::Out: Ord
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)?;
@@ -704,7 +703,7 @@ pub fn read_proof_check<H>(
 ) -> Result<Option<Vec<u8>>, Box<Error>>
 where
 	H: Hasher,
-	H::Out: Ord + HeapSizeOf
+	H::Out: Ord
 {
 	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
 	read_proof_check_on_proving_backend(&proving_backend, key)
@@ -717,7 +716,7 @@ pub fn read_proof_check_on_proving_backend<H>(
 ) -> Result<Option<Vec<u8>>, Box<Error>>
 where
 	H: Hasher,
-	H::Out: Ord + HeapSizeOf
+	H::Out: Ord
 {
 	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
 }
