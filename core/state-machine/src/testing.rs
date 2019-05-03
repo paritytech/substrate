@@ -18,24 +18,27 @@
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use std::marker::PhantomData;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use trie::trie_root;
-use crate::backend::InMemory;
+use crate::backend::{InMemory, Backend};
+use primitives::storage::well_known_keys::is_child_storage_key;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
+const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
-	inner: HashMap<Vec<u8>, Vec<u8>>,
+pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf + Ord {
+	overlay: OverlayedChanges,
+	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
-	changes: OverlayedChanges,
-	code: Option<Vec<u8>>,
+	_hasher: PhantomData<H>,
 }
 
-impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf + Ord {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::new_with_code(&[], inner)
@@ -44,6 +47,7 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 	/// Create a new instance of `TestExternalities`
 	pub fn new_with_code(code: &[u8], mut inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
+
 		super::set_changes_trie_config(
 			&mut overlay,
 			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
@@ -51,122 +55,159 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 		).expect("changes trie configuration is correct in test env; qed");
 
 		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
+		inner.insert(CODE.to_vec(), code.to_vec());
 
-		TestExternalities {
-			inner,
+		let mut t = TestExternalities {
+			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			changes: overlay,
-			code: Some(code.to_vec()),
+			backend: InMemory::default(),
+			_hasher: Default::default(),
+		};
+
+		for (key, value) in inner {
+			t.insert(key, value);
 		}
+
+		t
 	}
 
-	/// Insert key/value
-	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) -> Option<Vec<u8>> {
-		self.inner.insert(k, v)
+	/// Insert key/value into backend
+	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
+		self.backend = self.backend.update(vec![(None, k, Some(v))]);
+	}
+
+	fn iter_pairs(&self) -> impl Iterator<Item=(Vec<u8>, Vec<u8>)> {
+		self.backend.pairs().iter()
+			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.collect::<HashMap<_, _>>()
+			.into_iter()
+			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 	}
 }
 
-impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{:?}", self.inner)
+		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+	/// This doesn't test if they are in the same state, only if they contains the
+	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H>) -> bool {
-		self.inner.eq(&other.inner)
+		self.iter_pairs().eq(other.iter_pairs())
 	}
 }
 
-impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
-		t.inner.extend(iter);
+		t.backend = t.backend.update(iter.into_iter().map(|(k, v)| (None, k, Some(v))).collect());
 		t
 	}
 }
 
-impl<H: Hasher> Default for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> Default for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf {
+impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf + Ord {
 	fn from(tex: TestExternalities<H>) -> Self {
-		tex.inner.into()
+		tex.iter_pairs().collect()
 	}
 }
 
-impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		TestExternalities {
-			inner: hashmap,
-			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			changes: Default::default(),
-			code: None,
-		}
+		Self::from_iter(hashmap)
 	}
 }
 
-// TODO child test primitives are currently limited to `changes` (for non child the way
-// things are defined seems utterly odd to (put changes in changes but never make them
-// available for read through inner)
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		match key {
-			CODE => self.code.clone(),
-			_ => self.inner.get(key).cloned(),
-		}
+		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key)
+		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
-		self.changes.child_storage(storage_key.as_ref(), key)?.map(Vec::from)
+		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
-		self.changes.set_storage(key.clone(), maybe_value.clone());
-		match key.as_ref() {
-			CODE => self.code = maybe_value,
-			_ => {
-				match maybe_value {
-					Some(value) => { self.inner.insert(key, value); }
-					None => { self.inner.remove(&key); }
-				}
-			}
+		if is_child_storage_key(&key) {
+			panic!("Refuse to directly set child storage key");
 		}
+
+		self.overlay.set_storage(key, maybe_value);
 	}
 
 	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>) {
-		self.changes.set_child_storage(storage_key.into_owned(), key, value);
+		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {
-		self.changes.clear_child_storage(storage_key.as_ref());
+		let backend = &self.backend;
+		let overlay = &mut self.overlay;
+
+		overlay.clear_child_storage(storage_key.as_ref());
+		backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
+			overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.changes.clear_prefix(prefix);
-		self.inner.retain(|key, _| !key.starts_with(prefix));
+		if is_child_storage_key(prefix) {
+			panic!("Refuse to directly clear prefix that is part of child storage key");
+		}
+
+		self.overlay.clear_prefix(prefix);
+
+		let backend = &self.backend;
+		let overlay = &mut self.overlay;
+		backend.for_keys_with_prefix(prefix, |key| {
+			overlay.set_storage(key.to_vec(), None);
+		});
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.inner.clone())
+		// compute and memoize
+		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
+			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+
+		self.backend.storage_root(delta).0
 	}
 
-	fn child_storage_root(&mut self, _storage_key: ChildStorageKey<H>) -> Vec<u8> {
-		vec![]
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
+		let storage_key = storage_key.as_ref();
+
+		let (root, _, _) = {
+			let delta = self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+						.into_iter()
+						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+
+			self.backend.child_storage_root(storage_key, delta)
+		};
+
+		root
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {
-		compute_changes_trie_root::<_, _, H>(
-			&InMemory::default(),
+		compute_changes_trie_root::<_, ChangesTrieInMemoryStorage<H>, H>(
+			&self.backend,
 			Some(&self.changes_trie_storage),
-			&self.changes,
+			&self.overlay,
 			&AnchorBlockId { hash: parent, number: parent_num },
 		).map(|(root, _)| root.clone())
 	}

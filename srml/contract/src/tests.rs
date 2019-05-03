@@ -64,7 +64,7 @@ impl_outer_dispatch! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -538,7 +538,7 @@ const CODE_SET_RENT: &str = r#"
 	;; transfer 50 to ALICE
 	(func $call_2
 		(call $ext_dispatch_call
-			(i32.const 8)
+			(i32.const 68)
 			(i32.const 11)
 		)
 	)
@@ -610,12 +610,12 @@ const CODE_SET_RENT: &str = r#"
 	(data (i32.const 0) "\28")
 
 	;; Encoding of call transfer 50 to CHARLIE
-	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
+	(data (i32.const 68) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
 
 // Use test_hash_and_code test to get the actual hash if the code changed.
-const HASH_SET_RENT: [u8; 32] = hex!("a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef");
+const HASH_SET_RENT: [u8; 32] = hex!("21d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f24320697f05");
 
 
 /// Input data for each call in set_rent code
@@ -919,22 +919,28 @@ const CODE_RESTORATION: &str = r#"
 			(i32.const 4)
 		)
 		(call $ext_dispatch_call
-			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 68) ;; Pointer to the start of encoded call buffer
 			(i32.const 50) ;; Length of the buffer
 		)
 	)
 
 	(data (i32.const 0) "\28")
-	(data (i32.const 8) "\01\05\02\00\00\00\00\00\00\00\a5\1c\2a\6f\3f\68\93\6d\4a\e9\ab\db\93\b2\8e\ed\cb\d0\f6\f3\97\70\e1\68\f9\02\5f\0c\1e\70\94\ef\32\00\00\00\00\00\00\00")
+	(data (i32.const 68) "\01\05\02\00\00\00\00\00\00\00\21\d6\b1\d5\9a\a6\03\8f\ca\d6\32\48\8e\90\26\89\3a\1b\bb\48\58\17\74\c7\71\b8\f2\43\20\69\7f\05\32\00\00\00\00\00\00\00")
 )
 "#;
-const HASH_RESTORATION: [u8; 32] = hex!("cb296eb769bbe432b43adfe387d6edc25467083aed4cb0e99974a5be9c81ac7f");
+const HASH_RESTORATION: [u8; 32] = hex!("47943ae9394cf62824b8567b49f33ec2fda638198fd6ba084de81ad8d01ce740");
 
-
-/// Test correspondance of set_rent code and its hash.
-/// Also test that encoded extrinsic in code correspond to the correct transfer
 #[test]
-fn restoration() {
+fn failing_restoration() {
+	restoration(true);
+}
+
+#[test]
+fn successful_restoration() {
+	restoration(false);
+}
+
+fn restoration(failing_test: bool) {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
 	let encoded = parity_codec::Encode::encode(&Call::Contract(super::Call::restore_to(
@@ -942,7 +948,7 @@ fn restoration() {
 		HASH_SET_RENT.into(),
 		<Test as balances::Trait>::Balance::sa(50u64),
 	)));
-	assert_eq!(&encoded[..], &hex!("01050200000000000000a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef3200000000000000")[..]);
+	assert_eq!(&encoded[..], &hex!("0105020000000000000021d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f24320697f053200000000000000")[..]);
 	assert_eq!(50, hex!("01050200000000000000a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef3200000000000000").len());
 
 	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
@@ -982,6 +988,10 @@ fn restoration() {
 			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 0);
 
+			if failing_test {
+				assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::set_storage_4_byte()));
+			}
+
 			// Advance 4 blocks
 			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
 
@@ -1000,12 +1010,21 @@ fn restoration() {
 			let mut django_trie_id = <Test as Trait>::TrieIdGenerator::trie_id(&DJANGO);
 			*django_trie_id.last_mut().unwrap() -= 1;
 
-			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, 50);
-			assert_eq!(bob_contract.storage_size, 12);
-			assert_eq!(bob_contract.trie_id, django_trie_id);
-			assert_eq!(bob_contract.deduct_block, System::block_number());
-			assert!(super::ContractInfoOf::<Test>::get(DJANGO).is_none());
+			if failing_test {
+				assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+				let django_contract = super::ContractInfoOf::<Test>::get(DJANGO).unwrap().get_alive().unwrap();
+				assert_eq!(django_contract.rent_allowance, 0);
+				assert_eq!(django_contract.storage_size, 12);
+				assert_eq!(django_contract.trie_id, django_trie_id);
+				assert_eq!(django_contract.deduct_block, System::block_number());
+			} else {
+				let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+				assert_eq!(bob_contract.rent_allowance, 50);
+				assert_eq!(bob_contract.storage_size, 12);
+				assert_eq!(bob_contract.trie_id, django_trie_id);
+				assert_eq!(bob_contract.deduct_block, System::block_number());
+				assert!(super::ContractInfoOf::<Test>::get(DJANGO).is_none());
+			}
 		}
 	);
 }

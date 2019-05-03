@@ -154,7 +154,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					.map(|old_info| old_info != new_info)
 					.unwrap_or(true)
 				{
-					println!("{:?}", address);
+					// println!("{:?}", address);
 					<ContractInfoOf<T>>::insert(&address, ContractInfo::Alive(new_info));
 				}
 			}

@@ -121,6 +121,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),
@@ -184,6 +185,7 @@ pub type AliveContractInfo<T> = RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, 
 /// This is the required info to cache for an account.
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -196,6 +198,7 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 }
 
 #[derive(Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct TombstoneContractInfo<T: Trait>(T::Hash);
 
 impl<T: Trait> TombstoneContractInfo<T> {
