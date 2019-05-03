@@ -13,8 +13,12 @@ use rstd::prelude::*;
 use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
-	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	ApplyResult, ApplyError, transaction_validity::TransactionValidity, generic,
+	create_runtime_str,
+	traits::{
+		self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify,
+		ValidateUnsigned, Extrinsic,
+	}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -277,7 +281,11 @@ impl_runtime_apis! {
 
 	impl runtime_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-			Executive::validate_transaction(tx)
+			match tx.is_signed() {
+				Some(true) => Executive::validate_transaction(tx),
+				Some(false) => Runtime::validate_unsigned(&tx.function),
+				None => TransactionValidity::Unknown(ApplyError::BadSignature as i8)
+			}
 		}
 	}
 

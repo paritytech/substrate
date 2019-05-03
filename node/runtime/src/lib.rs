@@ -35,7 +35,7 @@ use runtime_primitives::{ApplyResult, ApplyError, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
-	ValidateUnsigned,
+	ValidateUnsigned, Extrinsic,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -301,8 +301,6 @@ impl_runtime_apis! {
 
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-			use runtime_primitives::traits::Extrinsic;
-
 			match tx.is_signed() {
 				Some(true) => Executive::validate_transaction(tx),
 				Some(false) => Runtime::validate_unsigned(&tx.function),
