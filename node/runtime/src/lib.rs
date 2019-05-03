@@ -31,7 +31,7 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, generic, create_runtime_str};
+use runtime_primitives::{ApplyResult, ApplyError, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
@@ -305,7 +305,8 @@ impl_runtime_apis! {
 
 			match tx.is_signed() {
 				Some(true) => Executive::validate_transaction(tx),
-				Some(false) | None => Runtime::validate_unsigned(&tx.function),
+				Some(false) => Runtime::validate_unsigned(&tx.function),
+				None => TransactionValidity::Unknown(ApplyError::BadSignature as i8)
 			}
 		}
 	}
