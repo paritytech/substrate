@@ -88,17 +88,6 @@ impl PeersState {
 		}
 	}
 
-	/// Adds `value` to the reputation of all the nodes we are connected to.
-	///
-	/// In case of overflow, the value of capped.
-	pub fn connected_reputation_increase(&mut self, value: i32) {
-		for (_, peer_state) in self.nodes.iter_mut() {
-			if peer_state.connection_state.is_connected() {
-				peer_state.reputation = peer_state.reputation.saturating_add(value);
-			}
-		}
-	}
-
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
 		if let Some(node) = self.nodes.get(peer_id) {
@@ -205,6 +194,28 @@ impl<'a> Peer<'a> {
 			Peer::Unknown(_) => None,
 		}
 	}
+
+	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// otherwise.
+	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
+	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
+		match self {
+			Peer::Connected(_) => None,
+			Peer::NotConnected(peer) => Some(peer),
+			Peer::Unknown(_) => None,
+		}
+	}
+
+	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// otherwise.
+	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
+	pub fn into_unknown(self) -> Option<UnknownPeer<'a>> {
+		match self {
+			Peer::Connected(_) => None,
+			Peer::NotConnected(_) => None,
+			Peer::Unknown(peer) => Some(peer),
+		}
+	}
 }
 
 /// A peer that is connected to us.
@@ -277,6 +288,12 @@ pub struct NotConnectedPeer<'a> {
 }
 
 impl<'a> NotConnectedPeer<'a> {
+	/// Destroys this `NotConnectedPeer` and returns the `PeerId` inside of it.
+	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
+	pub fn into_peer_id(self) -> PeerId {
+		self.peer_id.into_owned()
+	}
+
 	fn state(&self) -> &Node {
 		self.parent.nodes.get(&self.peer_id)
 			.expect("We only ever build a NotConnectedPeer if the node's in the list; QED")
@@ -463,18 +480,50 @@ mod tests {
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
-		if let Peer::Unknown(e) = peers_state.peer(&id1) {
-			assert!(e.discover().try_accept_incoming().is_ok());
-		} else { panic!() }
-
-		if let Peer::Unknown(e) = peers_state.peer(&id2) {
-			assert!(e.discover().try_accept_incoming().is_err());
-		} else { panic!() }
-
+		assert!(peers_state.peer(&id1).into_unknown().unwrap().discover().try_accept_incoming().is_ok());
+		assert!(peers_state.peer(&id2).into_unknown().unwrap().discover().try_accept_incoming().is_err());
 		peers_state.peer(&id1).into_connected().unwrap().disconnect();
+		assert!(peers_state.peer(&id2).into_not_connected().unwrap().try_accept_incoming().is_ok());
+	}
 
-		if let Peer::NotConnected(e) = peers_state.peer(&id2) {
-			assert!(e.try_accept_incoming().is_ok());
-		}
+	#[test]
+	fn reserved_not_connected_peer() {
+		let mut peers_state = PeersState::new(25, 25);
+		let id1 = PeerId::random();
+		let id2 = PeerId::random();
+
+		assert!(peers_state.reserved_not_connected_peer().is_none());
+		peers_state.peer(&id1).into_unknown().unwrap().discover();
+		peers_state.peer(&id2).into_unknown().unwrap().discover();
+
+		assert!(peers_state.reserved_not_connected_peer().is_none());
+		peers_state.peer(&id1).into_not_connected().unwrap().set_reserved(true);
+		assert!(peers_state.reserved_not_connected_peer().is_some());
+		peers_state.peer(&id2).into_not_connected().unwrap().set_reserved(true);
+		peers_state.peer(&id1).into_not_connected().unwrap().set_reserved(false);
+		assert!(peers_state.reserved_not_connected_peer().is_some());
+		peers_state.peer(&id2).into_not_connected().unwrap().set_reserved(false);
+		assert!(peers_state.reserved_not_connected_peer().is_none());
+	}
+
+	#[test]
+	fn highest_not_connected_peer() {
+		let mut peers_state = PeersState::new(25, 25);
+		let id1 = PeerId::random();
+		let id2 = PeerId::random();
+
+		assert!(peers_state.highest_not_connected_peer().is_none());
+		peers_state.peer(&id1).into_unknown().unwrap().discover().set_reputation(50);
+		peers_state.peer(&id2).into_unknown().unwrap().discover().set_reputation(25);
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
+		peers_state.peer(&id2).into_not_connected().unwrap().set_reputation(75);
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
+		peers_state.peer(&id2).into_not_connected().unwrap().force_ingoing();
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
+		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(100);
+		peers_state.peer(&id2).into_connected().unwrap().disconnect();
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
+		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(-100);
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
 	}
 }

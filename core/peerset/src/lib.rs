@@ -19,7 +19,7 @@
 
 mod peersstate;
 
-use std::{collections::HashMap, collections::VecDeque, convert::TryFrom, time::Instant};
+use std::{collections::HashMap, collections::VecDeque, time::Instant};
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
 use log::{debug, error, trace};
@@ -272,9 +272,6 @@ impl Peerset {
 				}
 			}
 		}
-
-		let rep_increase = i32::try_from(secs_diff).unwrap_or(i32::max_value());
-		self.data.connected_reputation_increase(rep_increase);
 	}
 
 	/// Try to fill available out slots with nodes.
