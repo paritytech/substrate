@@ -20,7 +20,7 @@ use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
-use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
+use runtime_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use srml_support::{StorageMap, traits::{WithdrawReason, Currency}};
 use timestamp;
 
@@ -641,7 +641,7 @@ where
 
 	fn rent_allowance(&self) -> BalanceOf<T> {
 		self.ctx.overlay.get_rent_allowance(&self.ctx.self_account)
-			.unwrap_or(<BalanceOf<T>>::zero()) // Must never be triggered actually
+			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
 }
 
