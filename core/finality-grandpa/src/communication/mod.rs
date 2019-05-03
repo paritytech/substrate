@@ -426,11 +426,21 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 			let commit = msg.message;
 			let finalized_number = commit.target_number;
 			let gossip_validator = gossip_validator.clone();
+			let commit2 = commit.clone();
 			let cb = move |outcome| match outcome {
 				CommitProcessingOutcome::Good => {
 					// if it checks out, gossip it. not accounting for
 					// any discrepancy between the actual ghost and the claimed
 					// finalized number.
+					
+					// gossip_validator.update_local_last_commit(finalized_number.clone()); ?
+
+					{
+						if gossip_validator.inner.read().local_view.last_commit < Some(commit2.target_number) {
+							gossip_validator.inner.write().local_view.last_commit = Some(commit2.target_number);
+						} 
+					}
+					
 					gossip_validator.note_commit_finalized(
 						finalized_number,
 						|to, neighbor_msg| service.send_message(
@@ -438,7 +448,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 							GossipMessage::<B>::from(neighbor_msg).encode(),
 						),
 					);
-
+					
 					service.gossip_message(topic, notification.message.clone(), false);
 				}
 				CommitProcessingOutcome::Bad => {

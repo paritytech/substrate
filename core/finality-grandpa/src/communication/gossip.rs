@@ -98,10 +98,10 @@ enum Consider {
 
 /// A view of protocol state.
 #[derive(Debug)]
-struct View<N> {
+pub struct View<N> {
 	round: Round, // the current round we are at.
 	set_id: SetId, // the current voter set id.
-	last_commit: Option<N>, // commit-finalized block height, if any.
+	pub last_commit: Option<N>, // commit-finalized block height, if any.
 }
 
 impl<N> Default for View<N> {
@@ -417,8 +417,8 @@ pub(super) enum Action<H>  {
 	Discard(i32),
 }
 
-struct Inner<Block: BlockT> {
-	local_view: View<NumberFor<Block>>,
+pub struct Inner<Block: BlockT> {
+	pub local_view: View<NumberFor<Block>>,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
 	config: crate::Config,
@@ -576,7 +576,7 @@ impl<Block: BlockT> Inner<Block> {
 
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
-	inner: parking_lot::RwLock<Inner<Block>>,
+	pub inner: parking_lot::RwLock<Inner<Block>>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
