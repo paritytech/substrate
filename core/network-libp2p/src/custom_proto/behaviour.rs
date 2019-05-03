@@ -22,7 +22,7 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
-use std::{collections::hash_map::Entry, cmp, error, io, marker::PhantomData, mem, time::Duration, time::Instant};
+use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::clock::Clock;
 
@@ -182,8 +182,8 @@ pub enum CustomProtoOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
-		result: io::Result<()>,
+		/// Reason why the substream closed, for debugging purposes.
+		reason: Cow<'static, str>,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -696,7 +696,7 @@ where
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
-						result: Ok(()),
+						reason: "Disconnected by libp2p".into(),
 					};
 
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
@@ -713,7 +713,7 @@ where
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
-						result: Ok(()),
+						reason: "Disconnected by libp2p".into(),
 					};
 
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
@@ -730,7 +730,7 @@ where
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
-						result: Ok(()),
+						reason: "Disconnected by libp2p".into(),
 					};
 
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
@@ -802,8 +802,8 @@ where
 		event: CustomProtoHandlerOut<TMessage>,
 	) {
 		match event {
-			CustomProtoHandlerOut::CustomProtocolClosed { result } => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Closed({:?})", source, result);
+			CustomProtoHandlerOut::CustomProtocolClosed { reason } => {
+				debug!(target: "sub-libp2p", "Handler({:?}) => Closed: {}", source, reason);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
 					entry
@@ -814,7 +814,7 @@ where
 
 				debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
 				let event = CustomProtoOut::CustomProtocolClosed {
-					result,
+					reason,
 					peer_id: source.clone(),
 				};
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));

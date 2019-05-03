@@ -87,7 +87,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///     type Token;
 /// }
 ///
-/// // For module with instances, DefaultInstance is optionnal
+/// // For module with instances, DefaultInstance is optional
 /// srml_support::decl_event!(
 ///    pub enum Event<T, I: Instance = DefaultInstance> where
 ///       <T as Trait>::Balance,
@@ -613,7 +613,7 @@ mod tests {
 		}
 
 		decl_event!(
-			/// Event finish formatting on an named one with trailling comma
+			/// Event finish formatting on an named one with trailing comma
 			pub enum Event<T> where
 				BalanceRenamed = <T as Trait>::Balance,
 				OriginRenamed = <T as Trait>::Origin,

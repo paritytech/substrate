@@ -43,7 +43,7 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{ed25519, sr25519, OpaqueMetadata};
+use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -142,7 +142,7 @@ impl Extrinsic {
 }
 
 /// The signature type used by authorities.
-pub type AuthoritySignature = ed25519::Signature;
+pub type AuthoritySignature = sr25519::Signature;
 /// The identity type used by authorities.
 pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
 /// The signature type used by accounts/transactions.
@@ -448,6 +448,16 @@ cfg_if! {
 				fn slot_duration() -> u64 { 1 }
 			}
 
+			impl consensus_babe::BabeApi<Block> for Runtime {
+				fn startup_data() -> consensus_babe::BabeConfiguration {
+					consensus_babe::BabeConfiguration {
+						slot_duration: 1,
+						expected_block_time: 1,
+						threshold: std::u64::MAX,
+					}
+				}
+			}
+
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
@@ -457,7 +467,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}
@@ -580,6 +590,16 @@ cfg_if! {
 				fn slot_duration() -> u64 { 1 }
 			}
 
+			impl consensus_babe::BabeApi<Block> for Runtime {
+				fn startup_data() -> consensus_babe::BabeConfiguration {
+					consensus_babe::BabeConfiguration {
+						slot_duration: 1,
+						expected_block_time: 1,
+						threshold: core::u64::MAX,
+					}
+				}
+			}
+
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
@@ -589,7 +609,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}

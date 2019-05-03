@@ -142,7 +142,7 @@ use inherents::{
 };
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::ed25519::Public as AuthorityId;
+use substrate_primitives::sr25519::Public as AuthorityId;
 
 mod mock;
 mod tests;

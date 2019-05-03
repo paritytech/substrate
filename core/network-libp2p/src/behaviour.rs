@@ -29,7 +29,7 @@ use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, info, trace, warn};
-use std::{cmp, io, fmt, time::Duration};
+use std::{borrow::Cow, cmp, fmt, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 use void;
@@ -181,8 +181,8 @@ pub enum BehaviourOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
-		result: io::Result<()>,
+		/// Reason why the substream closed, for diagnostic purposes.
+		reason: Cow<'static, str>,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -224,8 +224,8 @@ impl<TMessage> From<CustomProtoOut<TMessage>> for BehaviourOut<TMessage> {
 			CustomProtoOut::CustomProtocolOpen { version, peer_id, endpoint } => {
 				BehaviourOut::CustomProtocolOpen { version, peer_id, endpoint }
 			}
-			CustomProtoOut::CustomProtocolClosed { peer_id, result } => {
-				BehaviourOut::CustomProtocolClosed { peer_id, result }
+			CustomProtoOut::CustomProtocolClosed { peer_id, reason } => {
+				BehaviourOut::CustomProtocolClosed { peer_id, reason }
 			}
 			CustomProtoOut::CustomMessage { peer_id, message } => {
 				BehaviourOut::CustomMessage { peer_id, message }
