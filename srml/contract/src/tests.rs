@@ -21,7 +21,7 @@
 
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
-	ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
+	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, TrieIdGenerator,
 };
 use assert_matches::assert_matches;
@@ -927,6 +927,10 @@ fn default_rent_allowance_on_create() {
 				HASH_DEFAULT_RENT.into(),
 				vec![],
 			));
+
+			// Check creation
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
 
 			// Advance blocks
 			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
