@@ -908,7 +908,7 @@ const CODE_DEFAULT_RENT: &str = r#"
 	(func (export "deploy"))
 )
 "#;
-const HASH_DEFAULT_RENT: [u8; 32] = hex!("4318bf9add830725edf0ff3c5f064a3aee455cb015ac560be9739deae4f700c7"); // todo
+const HASH_DEFAULT_RENT: [u8; 32] = hex!("4318bf9add830725edf0ff3c5f064a3aee455cb015ac560be9739deae4f700c7");
 
 #[test]
 fn default_rent_allowance_on_create() {
@@ -920,7 +920,6 @@ fn default_rent_allowance_on_create() {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-			println!("{:?}", System::events());
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
 				30_000,
@@ -929,7 +928,7 @@ fn default_rent_allowance_on_create() {
 				vec![],
 			));
 
-			// Advance 4 blocks
+			// Advance 5 blocks
 			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
 
 			// Trigger rent through call
