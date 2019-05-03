@@ -658,7 +658,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{
-		ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
+		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
 		Vm, VmExecResult, InstantiateReceipt, RawEvent,
 	};
 	use crate::account_db::AccountDb;
@@ -1373,7 +1373,7 @@ mod tests {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let rent_allowance_ch = loader.insert(|ctx| {
-			assert_eq!(ctx.ext.rent_allowance(), 0);
+			assert_eq!(ctx.ext.rent_allowance(), <BalanceOf<Test>>::max_value());
 			ctx.ext.set_rent_allowance(10);
 			assert_eq!(ctx.ext.rent_allowance(), 10);
 			VmExecResult::Ok
