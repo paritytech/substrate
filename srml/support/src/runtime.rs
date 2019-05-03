@@ -66,7 +66,7 @@
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
 ///                             inherent.
-/// - `ValidateUnsigned`      - TODO TODO
+/// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
 ///
 /// # Note
 ///
