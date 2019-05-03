@@ -943,7 +943,7 @@ const CODE_DEFAULT_RENT: &str = r#"
 				(i64.load
 					(i32.const 8)
 				)
-				(i64.const 18446744073709551615)
+				(i64.const 0xFFFFFFFFFFFFFFFF)
 			)
 		)
 	)
