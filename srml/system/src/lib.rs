@@ -302,8 +302,9 @@ decl_storage! {
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		/// Random seed of the current block.
-		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
+		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
+		/// ring buffer with the `u8` prefix being the index into the `Vec` of the oldest hash.
+		RandomMaterial get(random_material): (i8, Vec<T::Hash>);
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
 		/// Hash of the previous block.
@@ -395,13 +396,17 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
-		<RandomSeed<T>>::put(Self::calculate_random());
+		<RandomMaterial<T>>::mutate(|&mut(ref mut index, ref mut values)| if values.len() < 81 {
+			values.push(parent_hash.clone())
+		} else {
+			values[*index as usize] = parent_hash.clone();
+			*index = (*index + 1) % 81;
+		});
 		<Events<T>>::kill();
 	}
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
-		<RandomSeed<T>>::kill();
 		<ExtrinsicCount<T>>::kill();
 		<AllExtrinsicsLen<T>>::kill();
 
@@ -432,26 +437,13 @@ impl<T: Trait> Module<T> {
 		<Digest<T>>::put(l);
 	}
 
-	/// Calculate the current block's random seed.
-	fn calculate_random() -> T::Hash {
-		assert!(Self::block_number() > Zero::zero(), "Block number may never be zero");
-		(0..81)
-			.scan(
-				Self::block_number() - One::one(),
-				|c, _| { if *c > Zero::zero() { *c -= One::one() }; Some(*c)
-			})
-			.map(Self::block_hash)
-			.triplet_mix()
-	}
-
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
+			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
 		])
 	}
 
@@ -475,11 +467,24 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(n);
 	}
 
-	/// Set the random seed to something in particular. Can be used as an alternative to
-	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", test))]
-	pub fn set_random_seed(seed: T::Hash) {
-		<RandomSeed<T>>::put(seed);
+	pub fn random_seed() -> T::Hash {
+		Self::random(&[][..])
+	}
+
+	pub fn random(subject: &[u8]) -> T::Hash {
+		let (index, hash_series) = <RandomMaterial<T>>::get();
+		if hash_series.len() > 0 {
+			// Always the case after block 1 is initialised.
+			hash_series.iter()
+				.cycle()
+				.skip(index as usize)
+				.take(81)
+				.enumerate()
+				.map(|(i, h)| (i as i8, subject, h).using_encoded(T::Hashing::hash))
+				.triplet_mix()
+		} else {
+			T::Hash::default()
+		}
 	}
 
 	/// Increment a particular account's nonce by 1.
