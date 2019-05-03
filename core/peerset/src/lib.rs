@@ -252,12 +252,17 @@ impl Peerset {
 		};
 
 		// For each elapsed second, move the node reputation towards zero.
+		// If we multiply each second the reputation by `k` (where `k` is between 0 and 1), it
+		// takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half. Use this formula to
+		// empirically determine a value of `k` that looks correct.
 		for _ in 0..secs_diff {
 			for peer in self.data.connected_peers().cloned().collect::<Vec<_>>() {
 				let mut peer = self.data.peer(&peer).into_connected()
 					.expect("we iterate over connected peers; qed");
 				let cur_reput = peer.reputation();
-				peer.set_reputation(cur_reput.saturating_sub(cur_reput / 20));
+				// We use `k = 0.98`, so we divide by `50`. With that value, it takes 34.3 seconds
+				// to reduce the reputation by half.
+				peer.set_reputation(cur_reput.saturating_sub(cur_reput / 50));
 			}
 		}
 
