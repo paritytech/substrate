@@ -788,6 +788,7 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
+/// Something that can validate unsigned extrinsics.
 pub trait ValidateUnsigned {
 	type Call;
 
