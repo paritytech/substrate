@@ -435,7 +435,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return false;
 			},
 			#[cfg(any(test, feature = "test-helpers"))]
-			ProtocolMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
+			ProtocolMsg::Synchronize => {
+				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
+				self.network_chan.send(NetworkMsg::Synchronized)
+			}
 		}
 		true
 	}
@@ -755,6 +758,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
+				trace!(
+					target: "protocol",
+					"Peer is on different chain (our genesis: {} theirs: {})",
+					self.genesis_hash, status.genesis_hash
+				);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
 					Severity::Bad(reason),
@@ -763,6 +771,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
 				let reason = format!("Peer using unsupported protocol version {}", status.version);
+				trace!(target: "protocol", "Peer {:?} using unsupported protocol version {}", who, status.version);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
 					Severity::Bad(reason),

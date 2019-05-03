@@ -51,7 +51,7 @@
 //! number (this is num(signal) + N). When finalizing a block, we either apply
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
-
+#![forbid(warnings)]
 use futures::prelude::*;
 use log::{debug, info, warn};
 use futures::sync::mpsc;
@@ -62,7 +62,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, DigestItemFor, DigestItem,
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
@@ -362,7 +362,6 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 {
 
 	let is_voter = local_key
@@ -463,7 +462,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
@@ -716,7 +714,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
