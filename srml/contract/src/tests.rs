@@ -130,8 +130,8 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 		let mut res = vec![];
 		res.extend_from_slice(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
 		res.extend_from_slice(b"default:");
-		res.extend_from_slice(&KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes());
 		res.extend_from_slice(&account_id.to_le_bytes());
+		res.extend_from_slice(&KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_be_bytes());
 		res
 	}
 }
@@ -996,14 +996,16 @@ fn restoration() {
 				100_000, HASH_RESTORATION.into(),
 				<Test as balances::Trait>::Balance::sa(0u64).encode()
 			));
+
+			let mut django_trie_id = <Test as Trait>::TrieIdGenerator::trie_id(&DJANGO);
+			*django_trie_id.last_mut().unwrap() -= 1;
+
 			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 50);
 			assert_eq!(bob_contract.storage_size, 12);
-			// TODO TODO: check trie_id
-			// TODO TODO: check deduct_block
+			assert_eq!(bob_contract.trie_id, django_trie_id);
+			assert_eq!(bob_contract.deduct_block, System::block_number());
 			assert!(super::ContractInfoOf::<Test>::get(DJANGO).is_none());
 		}
 	);
 }
-
-// TODO TODO: make a failing restoration ?
