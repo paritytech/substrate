@@ -965,7 +965,7 @@ fn default_rent_allowance_on_create() {
 				Origin::signed(ALICE),
 				30_000,
 				100_000,
-				HASH_DEFAULT_RENT.into(),
+				HASH_CHECK_DEFAULT_RENT_ALLOWANCE.into(),
 				vec![],
 			));
 
