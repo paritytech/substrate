@@ -146,6 +146,7 @@ impl ComputeDispatchFee<Call, u64> for DummyComputeDispatchFee {
 const ALICE: u64 = 1;
 const BOB: u64 = 2;
 const CHARLIE: u64 = 3;
+const DJANGO: u64 = 4;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -612,6 +613,8 @@ const CODE_SET_RENT: &str = r#"
 	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
+
+// Use test_hash_and_code test to get the actual hash if the code changed.
 const HASH_SET_RENT: [u8; 32] = hex!("a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef");
 
 
@@ -626,7 +629,7 @@ mod call {
 /// Test correspondance of set_rent code and its hash.
 /// Also test that encoded extrinsic in code correspond to the correct transfer
 #[test]
-fn set_rent_hash_and_code() {
+fn test_set_rent_code_and_hash() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
 	let encoded = parity_codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
@@ -900,3 +903,107 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		}
 	);
 }
+
+const CODE_RESTORATION: &str = r#"
+(module
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call"))
+	(func (export "deploy")
+		(call $ext_set_storage
+			(i32.const 0)
+			(i32.const 1)
+			(i32.const 0)
+			(i32.const 4)
+		)
+		(call $ext_dispatch_call
+			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 50) ;; Length of the buffer
+		)
+	)
+
+	(data (i32.const 0) "\28")
+	(data (i32.const 8) "\01\05\02\00\00\00\00\00\00\00\a5\1c\2a\6f\3f\68\93\6d\4a\e9\ab\db\93\b2\8e\ed\cb\d0\f6\f3\97\70\e1\68\f9\02\5f\0c\1e\70\94\ef\32\00\00\00\00\00\00\00")
+)
+"#;
+const HASH_RESTORATION: [u8; 32] = hex!("cb296eb769bbe432b43adfe387d6edc25467083aed4cb0e99974a5be9c81ac7f");
+
+
+/// Test correspondance of set_rent code and its hash.
+/// Also test that encoded extrinsic in code correspond to the correct transfer
+#[test]
+fn restoration() {
+	// This test can fail due to the encoding changes. In case it becomes too annoying
+	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+	let encoded = parity_codec::Encode::encode(&Call::Contract(super::Call::restore_to(
+		BOB,
+		HASH_SET_RENT.into(),
+		<Test as balances::Trait>::Balance::sa(50u64),
+	)));
+	assert_eq!(&encoded[..], &hex!("01050200000000000000a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef3200000000000000")[..]);
+	assert_eq!(50, hex!("01050200000000000000a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef3200000000000000").len());
+
+	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
+	let set_rent_wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, restoration_wasm));
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, set_rent_wasm));
+
+			// If you ever need to update the wasm source this test will fail and will show you the actual hash.
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RESTORATION.into())),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+				},
+			]);
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000, HASH_SET_RENT.into(),
+				<Test as balances::Trait>::Balance::sa(0u64).encode()
+			));
+
+			// Check creation
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, 0);
+
+			// Advance 4 blocks
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
+
+			Balances::deposit_creating(&CHARLIE, 1_000_000);
+			assert_ok!(Contract::create(
+				Origin::signed(CHARLIE),
+				30_000,
+				100_000, HASH_RESTORATION.into(),
+				<Test as balances::Trait>::Balance::sa(0u64).encode()
+			));
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, 50);
+			assert_eq!(bob_contract.storage_size, 12);
+			// TODO TODO: check trie_id
+			// TODO TODO: check deduct_block
+			assert!(super::ContractInfoOf::<Test>::get(DJANGO).is_none());
+		}
+	);
+}
+
+// TODO TODO: make a failing restoration ?

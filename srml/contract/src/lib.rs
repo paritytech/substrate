@@ -498,6 +498,43 @@ decl_module! {
 			}
 		}
 
+		fn restore_to(origin, dest: T::AccountId, code_hash: CodeHash<T>, rent_allowance: BalanceOf<T>) {
+			let origin = ensure_signed(origin)?;
+
+			let origin_contract = <ContractInfoOf<T>>::get(&origin)
+				.and_then(|c| c.get_alive())
+				.ok_or("Cannot restore from inexisting or tombstone contract")?;
+
+			let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
+				.and_then(|c| c.get_tombstone())
+				.ok_or("Cannot restore to inexisting or alive contract")?;
+
+			let tombstone = <TombstoneContractInfo<T>>::new(
+				// TODO TODO: should he pay for that ? is restoring should be payed
+				runtime_io::child_storage_root(&origin_contract.trie_id),
+				origin_contract.storage_size,
+				code_hash,
+			);
+
+			// TODO TODO: deriving Eq ?
+			if tombstone.0 != dest_tombstone.0 {
+				return Err("Tombstones don't match");
+			}
+
+			<ContractInfoOf<T>>::remove(&origin);
+			<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
+				trie_id: origin_contract.trie_id,
+				storage_size: origin_contract.storage_size,
+				code_hash,
+				rent_allowance,
+				deduct_block: <system::Module<T>>::block_number(),
+			}));
+
+			let origin_free_balance = T::Currency::free_balance(&origin);
+			T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
+			T::Currency::deposit_creating(&dest, origin_free_balance);
+		}
+
 		fn on_finalize() {
 			<GasSpent<T>>::kill();
 		}
