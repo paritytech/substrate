@@ -445,9 +445,20 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(&mut self, protocol: &mut Context<B>, who: &PeerId, topic: B::Hash, engine_id: ConsensusEngineId, force: bool) {
+		let validator = self.validators.get(&engine_id);
+		let mut message_allowed = match validator {
+			None => return, // treat all messages with no validator as not allowed
+			Some(validator) => validator.message_allowed(),
+		};
+
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+
 		if let Some(ref mut peer) = self.peers.get_mut(who) {
 			for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
 				if !force && peer.known_messages.contains(&entry.message_hash) {
+					continue
+				}
+				if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
 					continue
 				}
 				peer.known_messages.insert(entry.message_hash.clone());
