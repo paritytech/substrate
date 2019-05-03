@@ -953,7 +953,7 @@ const HASH_DEFAULT_RENT: [u8; 32] = hex!("4f9ec2b94eea522cfff10b77ef4056c631045c
 
 #[test]
 fn default_rent_allowance_on_create() {
-	let wasm = wabt::wat2wasm(CODE_DEFAULT_RENT).unwrap();
+	let wasm = wabt::wat2wasm(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
