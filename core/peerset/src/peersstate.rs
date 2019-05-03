@@ -380,6 +380,11 @@ impl<'a> NotConnectedPeer<'a> {
 		self.state().reputation
 	}
 
+	/// Sets the reputation of the peer.
+	pub fn set_reputation(&mut self, value: i32) {
+		self.state_mut().reputation = value;
+	}
+
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
 	/// In case of overflow, the value will be capped.
