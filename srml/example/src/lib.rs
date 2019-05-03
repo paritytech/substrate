@@ -323,8 +323,8 @@ decl_event!(
 // - Public calls that are signed by an external account.
 // - Root calls that are allowed to be made only by the governance system.
 // - Unsigned calls that can be of two kinds:
-//   * Inherent calls that are allowed to be made only by the block authors and validators.
-//   * Module validated calls that internally validated by modules.
+//   * "Inherent extrinsics" that are opinions generally held by the block authors that build child blocks.
+//   * Unsigned Transactions that are of intrinsic recognisable utility to the network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
