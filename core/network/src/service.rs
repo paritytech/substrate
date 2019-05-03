@@ -618,7 +618,7 @@ fn run_thread<B: BlockT + 'static>(
 				}
 			}
 		}
-		
+
 		Ok(Async::NotReady)
 	})
 }
