@@ -213,6 +213,8 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub phase: Phase,
 	/// The event itself.
 	pub event: E,
+
+	// TODO: Add list of topics here.
 }
 
 decl_event!(
@@ -314,6 +316,9 @@ decl_storage! {
 		Digest get(digest): T::Digest;
 		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event>>;
+		/// Mapping between a topic (represented by T::Hash) and a vector of indices
+		/// of events in the `<Events<T>>` list.
+		EventTopics get(event_topics): map T::Hash => Vec<u32>; // u32 = EventIndex
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -372,6 +377,21 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
+	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		// FIXME: Inefficient
+		let event_idx = Self::events().len() as u32;
+
+		Self::deposit_event(event);
+
+		for topic in topics {
+			<EventTopics<T>>::mutate(topic, |event_indices| {
+				// We want to use something like `StorageValue::append` here to avoid
+				// the same problem we used to have with <Events<T>>.
+				event_indices.push(event_idx);
+			});
+		}
+	}
+
 	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
@@ -397,6 +417,8 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
 		<Events<T>>::kill();
+
+		// TODO: <EventTopics<T>>::kill();
 	}
 
 	/// Remove temporary "environment" entries in storage.
