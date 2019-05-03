@@ -497,6 +497,10 @@ impl<T: Trait> Module<T> {
 	/// - Require your user to first commit to an additional value by first posting its hash. Require them to reveal
 	/// the value to determine the final result, hashing it with the output of this random function. This reduces the
 	/// ability of a cabal of block producers from conspiring against individuals.
+	///
+	/// WARNING: Hashing the result of this function will remove any low-infleunce properties it has and mean that
+	/// all bits of the resulting value are entirely manipulatable by the author of the parent block, who can determine
+	/// the value of `parent_hash`.
 	pub fn random(subject: &[u8]) -> T::Hash {
 		let (index, hash_series) = <RandomMaterial<T>>::get();
 		if hash_series.len() > 0 {
