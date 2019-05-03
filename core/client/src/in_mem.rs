@@ -24,7 +24,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
+use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
@@ -488,7 +488,7 @@ where
 
 		let child_delta = children.into_iter()
 			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k,v)|(k,Some(v)))));
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),

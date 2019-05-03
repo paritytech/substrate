@@ -97,7 +97,7 @@ pub trait Backend<H: Hasher> {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	fn full_storage_root<I1,I2i,I2>(
+	fn full_storage_root<I1, I2i, I2>(
 		&self,
 		delta: I1,
 		child_deltas: I2)

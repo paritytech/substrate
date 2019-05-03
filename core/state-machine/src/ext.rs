@@ -18,7 +18,7 @@
 
 use std::{error, fmt, cmp::Ord};
 use log::warn;
-use crate::backend::{Backend, Consolidate};
+use crate::backend::Backend;
 use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
 use crate::{Externalities, OverlayedChanges, OffchainExt, ChildStorageKey};
 use hash_db::Hasher;
@@ -266,11 +266,11 @@ where
 		}
 
 		let child_storage_keys =
-      self.overlay.prospective.children.keys()
-			  .chain(self.overlay.committed.children.keys());
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
 
 		let child_delta_iter = child_storage_keys.map(|storage_key|
-      (storage_key.clone(), self.overlay.committed.children.get(storage_key)
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
@@ -296,16 +296,16 @@ where
 					default_child_trie_root::<H>(storage_key.as_ref())
 				)
 		} else {
-      let storage_key = storage_key.as_ref();
-    
-      let delta = self.overlay.committed.children.get(storage_key)
-        .into_iter()
-        .flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-        .chain(self.overlay.prospective.children.get(storage_key)
-            .into_iter()
-            .flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+			let storage_key = storage_key.as_ref();
 
-      self.backend.child_storage_root(storage_key, delta).0
+			let delta = self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+						.into_iter()
+						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+
+			self.backend.child_storage_root(storage_key, delta).0
 
 		}
 	}

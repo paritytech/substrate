@@ -334,11 +334,11 @@ where Block: BlockT<Hash=H256>,
 			if !well_known_keys::is_child_storage_key(&child_key) {
 				return Err(client::error::Error::GenesisInvalid.into());
 			}
-    }
+		}
 
 		let child_delta = children.into_iter()
 			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k,v)|(k,Some(v)))));
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),

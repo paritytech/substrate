@@ -270,30 +270,30 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 
 	fn on_remote_read_response(&self, peer: PeerId, response: message::RemoteReadResponse) {
 		self.accept_response("read", peer, response.id, |request| match request.data {
-			RequestData::RemoteRead(request, sender) =>
+			RequestData::RemoteRead(request, sender) => {
 				match self.checker.check_read_proof(&request, response.proof) {
-				Ok(response) => {
-					// we do not bother if receiver has been dropped already
-					let _ = sender.send(Ok(response));
-					Accept::Ok
-				},
-				Err(error) => Accept::CheckFailed(
-					error,
-					RequestData::RemoteRead(request, sender)
-				),
-			},
-			RequestData::RemoteReadChild(request, sender) =>
+					Ok(response) => {
+						// we do not bother if receiver has been dropped already
+						let _ = sender.send(Ok(response));
+						Accept::Ok
+					},
+					Err(error) => Accept::CheckFailed(
+						error,
+						RequestData::RemoteRead(request, sender)
+					),
+			}},
+			RequestData::RemoteReadChild(request, sender) => {
 				match self.checker.check_read_child_proof(&request, response.proof) {
-				Ok(response) => {
-					// we do not bother if receiver has been dropped already
-					let _ = sender.send(Ok(response));
-					Accept::Ok
-				},
-				Err(error) => Accept::CheckFailed(
-					error,
-					RequestData::RemoteReadChild(request, sender)
-				),
-			},
+					Ok(response) => {
+						// we do not bother if receiver has been dropped already
+						let _ = sender.send(Ok(response));
+						Accept::Ok
+					},
+					Err(error) => Accept::CheckFailed(
+						error,
+						RequestData::RemoteReadChild(request, sender)
+					),
+			}},
 			data => Accept::Unexpected(data),
 		})
 	}
