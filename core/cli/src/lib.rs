@@ -184,7 +184,7 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 ///
 /// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
 /// `NoCustom` can be used as type here.
-/// `RP` is are custom parameters for the run command. This needs to be a `struct`! The custom
+/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
 pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
