@@ -27,7 +27,9 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::time::Instant;
 
 use grandpa::voter_set::VoterSet;
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
@@ -202,6 +204,26 @@ pub(crate) enum CommitProcessingOutcome {
 	Bad,
 }
 
+pub(crate) struct VoteBuffer<Block: BlockT> {
+    votes: VecDeque<SignedMessage<Block>>,
+    handled_pre_commits: usize,
+    handled_pre_votes: usize,
+    handled_primary_proposals: usize,
+    timed_out: Option<Instant>,
+}
+
+impl<Block: BlockT> Default for VoteBuffer<Block> {
+    fn default() -> VoteBuffer<Block> {
+        VoteBuffer {
+            votes: Default::default(),
+            handled_pre_commits: 0,
+            handled_pre_votes: 0,
+            handled_primary_proposals: 0,
+            timed_out: None,
+        }
+    }
+}
+
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
@@ -273,6 +295,13 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
+
+        let mut votes_tally: HashMap<AuthorityId, VoteBuffer<B>> = HashMap::new();
+        let signer_ids : Vec<AuthorityId> = voters.voters().iter().map(|(id, _)| id.clone()).collect();
+		let num_signers = signer_ids.len();
+		let max_timed_out = num_signers.checked_div(3).unwrap_or(1);
+        let mut signers = signer_ids.into_iter().cycle();
+
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -290,6 +319,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							return Ok(None);
 						}
 
+                        let mut tally = votes_tally.entry(msg.message.id.clone()).or_insert(Default::default());
+
 						match &msg.message.message {
 							PrimaryPropose(propose) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_propose";
@@ -297,6 +328,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?propose.target_number,
 									"target_hash" => ?propose.target_hash,
 								);
+                                tally.votes.push_back(msg.message);
+                                tally.handled_primary_proposals += 1;
+								if tally.handled_primary_proposals > 2 && !tally.timed_out.is_some() {
+									tally.timed_out = Some(Instant::now());
+								}
 							},
 							Prevote(prevote) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
@@ -304,6 +340,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?prevote.target_number,
 									"target_hash" => ?prevote.target_hash,
 								);
+                                tally.votes.push_back(msg.message);
+                                tally.handled_pre_votes += 1;
+								if tally.handled_pre_votes > 2 && !tally.timed_out.is_some() {
+									tally.timed_out = Some(Instant::now());
+								}
 							},
 							Precommit(precommit) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
@@ -311,10 +352,34 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?precommit.target_number,
 									"target_hash" => ?precommit.target_hash,
 								);
+                                tally.votes.push_back(msg.message);
+                                tally.handled_pre_commits += 1;
+								if tally.handled_pre_commits > 2 && !tally.timed_out.is_some() {
+									tally.timed_out = Some(Instant::now());
+								}
 							},
-						};
+						}
 
-						Ok(Some(msg.message))
+						let timed_out = votes_tally.values().filter(|tally| tally.timed_out.is_some()).count();
+						loop {
+							let id = signers.next().expect("Infinite iterator never ends; qed");
+							let tally = votes_tally.entry(id.clone()).or_insert(Default::default());
+							if let Some(instant) = tally.timed_out {
+								if instant.elapsed().as_secs() > 600 {
+									tally.timed_out = None;
+									return Ok(tally.votes.pop_front());
+								}
+								if timed_out == max_timed_out {
+									// We've timed-out too many voters,
+									// consider this one not timed out.
+									return Ok(tally.votes.pop_front());
+								}
+								// dropping messages for timed-out voter.
+								let _ = tally.votes.drain(0..);
+								continue;
+							}
+							return Ok(tally.votes.pop_front());
+						}
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
