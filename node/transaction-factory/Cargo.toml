@@ -1,0 +1,40 @@
+[package]
+name = "transaction-factory"
+version = "0.0.1"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+client = { package = "substrate-client", path = "../../core/client" }
+parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+primitives = { package = "substrate-primitives", path = "../../core/primitives", default-features = false }
+sr-io = { path = "../../core/sr-io" }
+sr_primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+substrate-service = { path = "../../core/service" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+rand = "0.6"
+srml_support = { package = "srml-support", path = "../../srml/support" }
+consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
+indices = { package = "srml-indices", path = "../../srml/indices" }
+timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
+structopt = "0.2"
+node-runtime = { path = "../runtime" }
+node-primitives = { path = "../primitives" }
+cli = { package = "substrate-cli", path = "../../core/cli" }
+log = "0.4"
+
+[dev-dependencies]
+substrate-serializer = { path = "../../core/serializer" }
+pretty_assertions = "0.5"
+
+[build-dependencies]
+cli = { package = "substrate-cli", path = "../../core/cli" }
+structopt = "0.2"
+
+[features]
+default = ["std"]
+std = [
+	"parity-codec/std",
+	"primitives/std",
+]

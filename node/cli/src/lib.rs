@@ -29,6 +29,9 @@ pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
 use log::info;
+use structopt::{StructOpt, clap::App};
+use cli::AugmentClap;
+use transaction_factory;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -41,6 +44,20 @@ pub enum ChainSpec {
 	EmbericElm,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
+}
+
+/// The `factory` command used to generate transactions.
+#[derive(Debug, StructOpt, Clone)]
+pub struct FactoryCmd {
+	/// Number of transactions to generate.
+	#[structopt(long="transaction-factory", default_value = "256")]
+	pub transaction_factory: u64,
+}
+
+impl AugmentClap for FactoryCmd {
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+		FactoryCmd::augment_clap(app)
+	}
 }
 
 /// Get a chain config from a spec setting.
@@ -78,9 +95,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	cli::parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
+	cli::parse_and_execute::<service::Factory, NoCustom, FactoryCmd, _, _, _, _, _>(
 		load_spec, &version, "substrate-node", args, exit,
-		|exit, _cli_args, _custom_args, config| {
+		|exit, _cli_args, custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -90,6 +107,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
 				.map_err(|e| format!("{:?}", e))?;
 			let executor = runtime.executor();
+
+			if custom_args.transaction_factory > 0 {
+				transaction_factory::factory::<service::Factory>(
+					config,
+					custom_args.transaction_factory
+				).map_err(|e| format!("Error in transaction factory: {}", e))?;
+				return Ok(());
+			}
+
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,

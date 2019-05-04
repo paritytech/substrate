@@ -39,7 +39,7 @@ pub use inherents::InherentData;
 
 pub mod offline_tracker;
 pub mod error;
-mod block_import;
+pub mod block_import;
 pub mod import_queue;
 pub mod evaluation;
 
