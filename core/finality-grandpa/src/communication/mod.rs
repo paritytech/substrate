@@ -27,7 +27,7 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -43,6 +43,7 @@ use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
+use parking_lot::RwLock;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
 use crate::environment::HasVoted;
@@ -269,6 +270,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
+		equivocators: Arc<RwLock<HashSet<AuthorityId>>>,
 		local_key: Option<Arc<ed25519::Pair>>,
 		has_voted: HasVoted<B>,
 	) -> (
@@ -330,9 +332,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 								);
                                 tally.votes.push_back(msg.message);
                                 tally.handled_primary_proposals += 1;
-								if tally.handled_primary_proposals > 2 && !tally.timed_out.is_some() {
-									tally.timed_out = Some(Instant::now());
-								}
 							},
 							Prevote(prevote) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
@@ -342,9 +341,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 								);
                                 tally.votes.push_back(msg.message);
                                 tally.handled_pre_votes += 1;
-								if tally.handled_pre_votes > 2 && !tally.timed_out.is_some() {
-									tally.timed_out = Some(Instant::now());
-								}
 							},
 							Precommit(precommit) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
@@ -354,10 +350,24 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 								);
                                 tally.votes.push_back(msg.message);
                                 tally.handled_pre_commits += 1;
-								if tally.handled_pre_commits > 2 && !tally.timed_out.is_some() {
-									tally.timed_out = Some(Instant::now());
-								}
 							},
+						}
+
+						if (tally.handled_primary_proposals > 2
+							|| tally.handled_pre_votes > 2
+							|| tally.handled_pre_commits > 2)
+							&& !tally.timed_out.is_some() {
+							// When we're processed 2 votes of each type, time-out the voter.
+							tally.timed_out = Some(Instant::now());
+						}
+
+						let equivocators: Vec<AuthorityId> = equivocators.write().drain().collect();
+						for equivocator in equivocators {
+							// Time-out all equivocators.
+							let tally = votes_tally.entry(equivocator).or_insert(Default::default());
+							if !tally.timed_out.is_some() {
+								tally.timed_out = Some(Instant::now());
+							}
 						}
 
 						let timed_out = votes_tally.values().filter(|tally| tally.timed_out.is_some()).count();
@@ -374,7 +384,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									// consider this one not timed out.
 									return Ok(tally.votes.pop_front());
 								}
-								// dropping messages for timed-out voter.
+								// Drop messages for timed-out voter.
 								let _ = tally.votes.drain(0..);
 								continue;
 							}
