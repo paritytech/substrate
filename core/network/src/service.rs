@@ -19,10 +19,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
 
-use log::{warn, debug, error, trace, info};
+use log::{warn, debug, error, info};
 use futures::{Async, Future, Stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{ProtocolId, NetworkConfiguration, Severity};
+use network_libp2p::{ProtocolId, NetworkConfiguration};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
@@ -98,8 +98,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 	fn justification_imported(&self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
-			let reason = Severity::Bad(format!("Invalid justification provided for #{}", hash).to_string());
-			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
+			info!("Invalid justification provided by {} for #{}", who, hash);
+			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+			let _ = self.network_sender.send(NetworkMsg::DisconnectPeer(who.clone()));
 		}
 	}
 
@@ -111,16 +112,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
-	fn useless_peer(&self, who: PeerId, reason: &str) {
-		trace!(target:"sync", "Useless peer {}, {}", who, reason);
-		self.network_sender.send(NetworkMsg::ReportPeer(who, Severity::Useless(reason.to_string())));
-	}
-
-	fn note_useless_and_restart_sync(&self, who: PeerId, reason: &str) {
-		trace!(target:"sync", "Bad peer {}, {}", who, reason);
-		// is this actually malign or just useless?
-		self.network_sender.send(NetworkMsg::ReportPeer(who, Severity::Useless(reason.to_string())));
-		let _ = self.protocol_sender.send(ProtocolMsg::RestartSync);
+	fn report_peer(&self, who: PeerId, reputation_change: i32) {
+		self.network_sender.send(NetworkMsg::ReportPeer(who, reputation_change));
 	}
 
 	fn restart(&self) {
@@ -473,8 +466,10 @@ impl<B: BlockT + 'static> NetworkPort<B> {
 pub enum NetworkMsg<B: BlockT + 'static> {
 	/// Send an outgoing custom message.
 	Outgoing(PeerId, Message<B>),
-	/// Report a peer.
-	ReportPeer(PeerId, Severity),
+	/// Disconnect a peer we're connected to, or do nothing if we're not connected.
+	DisconnectPeer(PeerId),
+	/// Performs a reputation adjustement on a peer.
+	ReportPeer(PeerId, i32),
 	/// Synchronization response.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Synchronized,
@@ -529,29 +524,12 @@ fn run_thread<B: BlockT + 'static>(
 		loop {
 			match network_port.take_one_message() {
 				Ok(None) => break,
-				Ok(Some(NetworkMsg::Outgoing(who, outgoing_message))) => {
-					network_service
-						.lock()
-						.send_custom_message(&who, outgoing_message);
-				},
-				Ok(Some(NetworkMsg::ReportPeer(who, severity))) => {
-					match severity {
-						Severity::Bad(message) => {
-							info!(target: "sync", "Banning {:?} because {:?}", who, message);
-							network_service.lock().drop_node(&who);
-							// temporary: make sure the peer gets dropped from the peerset
-							peerset.report_peer(who, i32::min_value());
-						},
-						Severity::Useless(message) => {
-							debug!(target: "sync", "Dropping {:?} because {:?}", who, message);
-							network_service.lock().drop_node(&who)
-						},
-						Severity::Timeout => {
-							debug!(target: "sync", "Dropping {:?} because it timed out", who);
-							network_service.lock().drop_node(&who)
-						},
-					}
-				},
+				Ok(Some(NetworkMsg::Outgoing(who, outgoing_message))) =>
+					network_service.lock().send_custom_message(&who, outgoing_message),
+				Ok(Some(NetworkMsg::ReportPeer(who, reputation))) =>
+					peerset.report_peer(who, reputation),
+				Ok(Some(NetworkMsg::DisconnectPeer(who))) =>
+					network_service.lock().drop_node(&who),
 				#[cfg(any(test, feature = "test-helpers"))]
 				Ok(Some(NetworkMsg::Synchronized)) => {}
 

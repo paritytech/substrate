@@ -19,7 +19,7 @@
 
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
-//! 
+//!
 //! **Important**: This crate is unstable and the API and usage may change.
 //!
 
@@ -49,7 +49,7 @@ pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
 	identity, multiaddr,
-	ProtocolId, Severity, Multiaddr,
+	ProtocolId, Multiaddr,
 	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
 	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
 	build_multiaddr, PeerId, PublicKey
