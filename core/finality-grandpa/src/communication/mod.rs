@@ -205,6 +205,7 @@ pub(crate) enum CommitProcessingOutcome {
 	Bad,
 }
 
+#[derive(Debug)]
 pub(crate) struct VoteBuffer<Block: BlockT> {
     votes: VecDeque<SignedMessage<Block>>,
     handled_pre_commits: usize,
@@ -374,6 +375,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						loop {
 							let id = signers.next().expect("Infinite iterator never ends; qed");
 							let tally = votes_tally.entry(id.clone()).or_insert(Default::default());
+							println!("Now {:?}", tally.votes.len());
 							if let Some(instant) = tally.timed_out {
 								if instant.elapsed().as_secs() > 600 {
 									tally.timed_out = None;
@@ -388,6 +390,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 								let _ = tally.votes.drain(0..);
 								continue;
 							}
+							if tally.votes.len() == 0 {
+								println!("Continue 1");
+								continue;
+							}
+							println!("Done");
 							return Ok(tally.votes.pop_front());
 						}
 					}

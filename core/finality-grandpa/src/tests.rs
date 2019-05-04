@@ -387,8 +387,6 @@ fn run_to_completion_with<F>(
 ) -> u64 where
 	F: FnOnce(current_thread::Handle) -> Option<Box<Future<Item=(),Error=()>>>
 {
-	use parking_lot::RwLock;
-
 	let mut wait_for = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
@@ -1162,6 +1160,7 @@ fn voter_persists_its_votes() {
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::from_iter(voters)),
+			Arc::new(RwLock::new(Default::default())),
 			Some(config.local_key.unwrap()),
 			HasVoted::No,
 		);
