@@ -19,7 +19,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use parity_codec::Decode;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use crate::backend::Backend;
 use crate::overlayed_changes::OverlayedChanges;
 use crate::trie_backend_essence::{TrieBackendStorage, TrieBackendEssence};
@@ -44,7 +43,6 @@ pub fn prepare_input<'a, B, S, H>(
 		S: Storage<H>,
 		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
-		H::Out: HeapSizeOf,
 {
 	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
 		(Some(storage), Some(config)) => (storage, config),
@@ -110,7 +108,7 @@ fn prepare_digest_input<'a, S, H>(
 		S: Storage<H>,
 		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
-		H::Out: 'a + HeapSizeOf,
+		H::Out: 'a,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<u64>>::new();
 	for digest_build_block in digest_build_iterator(config, parent.number + 1) {
