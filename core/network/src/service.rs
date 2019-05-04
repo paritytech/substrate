@@ -274,11 +274,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			));
 	}
 
-	/// Return a cloneable handle for reporting peers' benefits or misbehavior.
-	pub fn report_handle(&self) -> ReportHandle {
-		ReportHandle { inner: self.peerset.clone() }
-	}
-
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
 	/// given scalar.
 	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
