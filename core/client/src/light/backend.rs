@@ -33,7 +33,6 @@ use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use heapsize::HeapSizeOf;
 use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
@@ -108,7 +107,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
@@ -222,7 +221,7 @@ where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.genesis_state.read().is_some()
@@ -238,7 +237,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
 
@@ -390,7 +389,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type Error = ClientError;
 	type Transaction = ();
