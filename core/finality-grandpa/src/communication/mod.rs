@@ -27,7 +27,7 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -206,18 +206,16 @@ pub(crate) enum CommitProcessingOutcome {
 }
 
 #[derive(Debug)]
-pub(crate) struct VoteBuffer<Block: BlockT> {
-    votes: VecDeque<SignedMessage<Block>>,
+pub(crate) struct VoteTally {
     handled_pre_commits: usize,
     handled_pre_votes: usize,
     handled_primary_proposals: usize,
     timed_out: Option<Instant>,
 }
 
-impl<Block: BlockT> Default for VoteBuffer<Block> {
-    fn default() -> VoteBuffer<Block> {
-        VoteBuffer {
-            votes: Default::default(),
+impl Default for VoteTally {
+    fn default() -> VoteTally {
+        VoteTally {
             handled_pre_commits: 0,
             handled_pre_votes: 0,
             handled_primary_proposals: 0,
@@ -299,11 +297,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let topic = round_topic::<B>(round.0, set_id.0);
 
-        let mut votes_tally: HashMap<AuthorityId, VoteBuffer<B>> = HashMap::new();
+        let mut votes_tally: HashMap<AuthorityId, VoteTally> = HashMap::new();
         let signer_ids : Vec<AuthorityId> = voters.voters().iter().map(|(id, _)| id.clone()).collect();
 		let num_signers = signer_ids.len();
 		let max_timed_out = num_signers.checked_div(3).unwrap_or(1);
-        let mut signers = signer_ids.into_iter().cycle();
 
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
@@ -331,7 +328,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?propose.target_number,
 									"target_hash" => ?propose.target_hash,
 								);
-                                tally.votes.push_back(msg.message);
                                 tally.handled_primary_proposals += 1;
 							},
 							Prevote(prevote) => {
@@ -340,7 +336,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?prevote.target_number,
 									"target_hash" => ?prevote.target_hash,
 								);
-                                tally.votes.push_back(msg.message);
                                 tally.handled_pre_votes += 1;
 							},
 							Precommit(precommit) => {
@@ -349,54 +344,37 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?precommit.target_number,
 									"target_hash" => ?precommit.target_hash,
 								);
-                                tally.votes.push_back(msg.message);
                                 tally.handled_pre_commits += 1;
 							},
 						}
 
-						if (tally.handled_primary_proposals > 2
+						let is_equivocator = equivocators.read().contains(&msg.message.id);
+
+						if ((tally.handled_primary_proposals > 2
 							|| tally.handled_pre_votes > 2
 							|| tally.handled_pre_commits > 2)
+							|| is_equivocator)
 							&& !tally.timed_out.is_some() {
-							// When we're processed 2 votes of each type, time-out the voter.
+							// When we're processed 2 votes of each type,
+							// or if it is an equivocator, time-out the voter.
 							tally.timed_out = Some(Instant::now());
 						}
 
-						let equivocators: Vec<AuthorityId> = equivocators.write().drain().collect();
-						for equivocator in equivocators {
-							// Time-out all equivocators.
-							let tally = votes_tally.entry(equivocator).or_insert(Default::default());
-							if !tally.timed_out.is_some() {
-								tally.timed_out = Some(Instant::now());
+						if let Some(instant) = tally.timed_out {
+							if instant.elapsed().as_secs() > 600 {
+								tally.timed_out = None;
+								return Ok(Some(msg.message));
 							}
+							let timed_out = votes_tally.values().filter(|tally| tally.timed_out.is_some()).count();
+							if timed_out == max_timed_out {
+								// We've timed-out too many voters,
+								// consider this one not timed out.
+								return Ok(Some(msg.message));
+							}
+							// Drop the message for timed-out voter.
+							return Ok(None);
 						}
-
-						let timed_out = votes_tally.values().filter(|tally| tally.timed_out.is_some()).count();
-						loop {
-							let id = signers.next().expect("Infinite iterator never ends; qed");
-							let tally = votes_tally.entry(id.clone()).or_insert(Default::default());
-							println!("Now {:?}", tally.votes.len());
-							if let Some(instant) = tally.timed_out {
-								if instant.elapsed().as_secs() > 600 {
-									tally.timed_out = None;
-									return Ok(tally.votes.pop_front());
-								}
-								if timed_out == max_timed_out {
-									// We've timed-out too many voters,
-									// consider this one not timed out.
-									return Ok(tally.votes.pop_front());
-								}
-								// Drop messages for timed-out voter.
-								let _ = tally.votes.drain(0..);
-								continue;
-							}
-							if tally.votes.len() == 0 {
-								println!("Continue 1");
-								continue;
-							}
-							println!("Done");
-							return Ok(tally.votes.pop_front());
-						}
+						return Ok(Some(msg.message));
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
