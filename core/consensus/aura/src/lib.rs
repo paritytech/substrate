@@ -87,6 +87,7 @@ pub trait Network: Clone {
 }
 
 /// A slot duration. Create with `get_or_compute`.
+#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration(slots::SlotDuration<u64>);
 
 impl SlotDuration {

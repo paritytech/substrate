@@ -24,7 +24,6 @@ use crate::{Externalities, OverlayedChanges, OffchainExt, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
-use heapsize::HeapSizeOf;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -92,7 +91,7 @@ where
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 	O: 'a + OffchainExt,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
@@ -190,7 +189,7 @@ where
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 	O: 'a + OffchainExt,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
