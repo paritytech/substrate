@@ -312,11 +312,6 @@ pub enum FromNetworkMsg<B: BlockT> {
 	Synchronize,
 }
 
-enum Incoming<B: BlockT, S: NetworkSpecialization<B>> {
-	FromNetwork(FromNetworkMsg<B>),
-	FromClient(ProtocolMsg<B, S>)
-}
-
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
@@ -375,42 +370,34 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		propagate_timeout: &Receiver<time::Instant>,
 		status_interval: &Receiver<time::Instant>,
 	) -> bool {
-		let msg = select! {
+		select! {
 			recv(self.port) -> event => {
 				match event {
-					Ok(msg) => Incoming::FromClient(msg),
+					Ok(msg) => self.handle_client_msg(msg),
 					// Our sender has been dropped, quit.
 					Err(_) => {
-						Incoming::FromClient(ProtocolMsg::Stop)
+						self.handle_client_msg(ProtocolMsg::Stop)
 					},
 				}
 			},
 			recv(self.from_network_port) -> event => {
 				match event {
-					Ok(msg) => Incoming::FromNetwork(msg),
+					Ok(msg) => self.handle_network_msg(msg),
 					// Our sender has been dropped, quit.
 					Err(_) => {
-						Incoming::FromClient(ProtocolMsg::Stop)
+						self.handle_client_msg(ProtocolMsg::Stop)
 					},
 				}
 			},
 			recv(tick_timeout) -> _ => {
-				Incoming::FromClient(ProtocolMsg::Tick)
+				self.handle_client_msg(ProtocolMsg::Tick)
 			},
 			recv(propagate_timeout) -> _ => {
-				Incoming::FromClient(ProtocolMsg::PropagateExtrinsics)
+				self.handle_client_msg(ProtocolMsg::PropagateExtrinsics)
 			},
 			recv(status_interval) -> _ => {
-				Incoming::FromClient(ProtocolMsg::Status)
+				self.handle_client_msg(ProtocolMsg::Status)
 			},
-		};
-		self.handle_msg(msg)
-	}
-
-	fn handle_msg(&mut self, msg: Incoming<B, S>) -> bool {
-		match msg {
-			Incoming::FromNetwork(msg) => self.handle_network_msg(msg),
-			Incoming::FromClient(msg) => self.handle_client_msg(msg),
 		}
 	}
 
