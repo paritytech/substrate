@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crossbeam_channel::{self as channel, Receiver, Sender, select};
-use futures::sync::mpsc;
+use futures::{prelude::*, sync::mpsc};
 use parking_lot::Mutex;
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
@@ -83,8 +82,8 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	network_chan: NetworkChan<B>,
-	port: Receiver<ProtocolMsg<B, S>>,
-	from_network_port: Receiver<FromNetworkMsg<B>>,
+	port: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
+	from_network_port: mpsc::UnboundedReceiver<FromNetworkMsg<B>>,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -326,15 +325,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<(Sender<ProtocolMsg<B, S>>, Sender<FromNetworkMsg<B>>)> {
-		let (protocol_sender, port) = channel::unbounded();
-		let (from_network_sender, from_network_port) = channel::bounded(4);
+	) -> error::Result<(mpsc::UnboundedSender<ProtocolMsg<B, S>>, mpsc::UnboundedSender<FromNetworkMsg<B>>)> {
+		let (protocol_sender, port) = mpsc::unbounded();
+		let (from_network_sender, from_network_port) = mpsc::unbounded();
 		let info = chain.info()?;
 		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
 		let _ = thread::Builder::new()
 			.name("Protocol".into())
 			.spawn(move || {
-				let mut protocol = Protocol {
+				let protocol = Protocol {
 					status_sinks,
 					network_chan,
 					from_network_port,
@@ -353,52 +352,67 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					connected_peers,
 					transaction_pool: transaction_pool,
 				};
-				let tick_timeout = channel::tick(TICK_TIMEOUT);
-				let propagate_timeout = channel::tick(PROPAGATE_TIMEOUT);
-				let status_interval = channel::tick(STATUS_INTERVAL);
-				while protocol.run(&tick_timeout, &propagate_timeout, &status_interval) {
-					// Running until all senders have been dropped...
-				}
+
+				protocol.run();
+				debug!(target: "sync", "Networking thread finished");
 			})
 			.expect("Protocol thread spawning failed");
 		Ok((protocol_sender, from_network_sender))
 	}
 
-	fn run(
-		&mut self,
-		tick_timeout: &Receiver<time::Instant>,
-		propagate_timeout: &Receiver<time::Instant>,
-		status_interval: &Receiver<time::Instant>,
-	) -> bool {
-		select! {
-			recv(self.port) -> event => {
-				match event {
-					Ok(msg) => self.handle_client_msg(msg),
-					// Our sender has been dropped, quit.
-					Err(_) => {
-						self.handle_client_msg(ProtocolMsg::Stop)
-					},
+	/// Blocks the current thread and "runs" the protocol by reading and writing from/to the fields
+	/// in `self`.
+	/// You are expected to run this method in a background thread.
+	fn run(mut self) {
+		let mut tick_timeout = tokio::timer::Interval::new_interval(TICK_TIMEOUT);
+		let mut propagate_timeout = tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT);
+		let mut status_interval = tokio::timer::Interval::new_interval(STATUS_INTERVAL);
+
+		tokio::run(futures::future::poll_fn(move || {
+			while let Ok(Async::Ready(_)) = tick_timeout.poll() {
+				if !self.handle_client_msg(ProtocolMsg::Tick) {
+					return Ok(Async::Ready(()))
 				}
-			},
-			recv(self.from_network_port) -> event => {
-				match event {
-					Ok(msg) => self.handle_network_msg(msg),
-					// Our sender has been dropped, quit.
-					Err(_) => {
-						self.handle_client_msg(ProtocolMsg::Stop)
-					},
+			}
+
+			while let Ok(Async::Ready(_)) = propagate_timeout.poll() {
+				if !self.handle_client_msg(ProtocolMsg::PropagateExtrinsics) {
+					return Ok(Async::Ready(()))
 				}
-			},
-			recv(tick_timeout) -> _ => {
-				self.handle_client_msg(ProtocolMsg::Tick)
-			},
-			recv(propagate_timeout) -> _ => {
-				self.handle_client_msg(ProtocolMsg::PropagateExtrinsics)
-			},
-			recv(status_interval) -> _ => {
-				self.handle_client_msg(ProtocolMsg::Status)
-			},
-		}
+			}
+
+			while let Ok(Async::Ready(_)) = status_interval.poll() {
+				if !self.handle_client_msg(ProtocolMsg::Status) {
+					return Ok(Async::Ready(()))
+				}
+			}
+
+			loop {
+				let cont = match self.port.poll() {
+					Ok(Async::Ready(None)) | Err(_) => self.handle_client_msg(ProtocolMsg::Stop),
+					Ok(Async::Ready(Some(msg))) => self.handle_client_msg(msg),
+					Ok(Async::NotReady)=> break,
+				};
+
+				if !cont {
+					return Ok(Async::Ready(()))
+				}
+			}
+
+			loop {
+				let cont = match self.from_network_port.poll() {
+					Ok(Async::Ready(None)) | Err(_) => self.handle_client_msg(ProtocolMsg::Stop),
+					Ok(Async::Ready(Some(msg))) => self.handle_network_msg(msg),
+					Ok(Async::NotReady)=> break,
+				};
+
+				if !cont {
+					return Ok(Async::Ready(()))
+				}
+			}
+
+			Ok(Async::NotReady)
+		}));
 	}
 
 	fn handle_client_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {

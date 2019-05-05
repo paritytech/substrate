@@ -34,7 +34,7 @@ use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
-use crossbeam_channel::{Sender, RecvError};
+use crossbeam_channel::RecvError;
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use crate::message::Message;
@@ -120,13 +120,13 @@ pub struct TestLink<S: NetworkSpecialization<Block>> {
 	link: NetworkLink<Block, S>,
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+	network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
 }
 
 impl<S: NetworkSpecialization<Block>> TestLink<S> {
 	fn new(
-		protocol_sender: Sender<ProtocolMsg<Block, S>>,
-		_network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
+		_network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
 		network_sender: NetworkChan<Block>
 	) -> TestLink<S> {
 		TestLink {
@@ -172,7 +172,7 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	fn synchronized(&self) {
 		trace!(target: "test_network", "Synchronizing");
-		drop(self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize))
+		drop(self.network_to_protocol_sender.unbounded_send(FromNetworkMsg::Synchronize))
 	}
 }
 
@@ -193,16 +193,16 @@ type MessageFilter = Fn(&NetworkMsg<Block>) -> bool;
 
 struct ProtocolChannel<S: NetworkSpecialization<Block>> {
 	buffered_messages: Mutex<VecDeque<NetworkMsg<Block>>>,
-	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
-	client_to_protocol_sender: Sender<ProtocolMsg<Block, S>>,
+	network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
+	client_to_protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
 	protocol_to_network_receiver: NetworkPort<Block>,
 }
 
 impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 	/// Create new buffered network port.
 	pub fn new(
-		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
-		client_to_protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
+		client_to_protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
 		protocol_to_network_receiver: NetworkPort<Block>,
 	) -> Self {
 		ProtocolChannel {
@@ -215,17 +215,17 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 
 	/// Send message from network to protocol.
 	pub fn send_from_net(&self, message: FromNetworkMsg<Block>) {
-		let _ = self.network_to_protocol_sender.send(message);
+		let _ = self.network_to_protocol_sender.unbounded_send(message);
 
-		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize);
+		let _ = self.network_to_protocol_sender.unbounded_send(FromNetworkMsg::Synchronize);
 		let _ = self.wait_sync();
 	}
 
 	/// Send message from client to protocol.
 	pub fn send_from_client(&self, message: ProtocolMsg<Block, S>) {
-		let _ = self.client_to_protocol_sender.send(message);
+		let _ = self.client_to_protocol_sender.unbounded_send(message);
 
-		let _ = self.client_to_protocol_sender.send(ProtocolMsg::Synchronize);
+		let _ = self.client_to_protocol_sender.unbounded_send(ProtocolMsg::Synchronize);
 		let _ = self.wait_sync();
 	}
 
@@ -290,8 +290,8 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 		client: Arc<PeersClient>,
 		import_queue: Box<BasicQueue<Block>>,
-		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
-		protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
+		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
 		network_sender: NetworkChan<Block>,
 		network_port: NetworkPort<Block>,
 		data: D,
