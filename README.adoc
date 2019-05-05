@@ -12,7 +12,7 @@ Substrate is a next-generation framework for blockchain innovation.
 
 At its heart, Substrate is a combination of three technologies: https://webassembly.org/[WebAssembly], https://libp2p.io/[Libp2p] and GRANDPA Consensus. About GRANDPA, see this https://hackmd.io/Jd0byWX0RiqFiXUVC78Bdw?view#GRANDPA[definition], https://medium.com/polkadot-network/grandpa-block-finality-in-polkadot-an-introduction-part-1-d08a24a021b5[introduction] and https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf[formal specification]. It is both a library for building new blockchains and a "skeleton key" of a blockchain client, able to synchronize to any Substrate-based chain.
 
-Substrate chains have three distinct features that make them "next-generation": a dynamic, self-defining state-transition function; light-client functionality from day one; and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and procedures for replacing any aspect of itself or of the blockchain's state ("governance"). Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organizm".
+Substrate chains have three distinct features that make them "next-generation": a dynamic, self-defining state-transition function; light-client functionality from day one; and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and procedures for replacing any aspect of itself or of the blockchain's state ("governance"). Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organism".
 
 See also https://www.parity.io/what-is-substrate/.
 
@@ -30,7 +30,7 @@ Substrate is designed to be used in one of three ways:
 
 === The Basics of Substrate
 
-Substrate is a blockchain platform with a completely generic state transition function. That said, it does come with both standards and conventions (particularly regarding the Runtime Module Library) regarding underlying datastructures. Roughly speaking, these core datatypes correspond to +trait+s in terms of the actual non-negotiable standard and generic +struct+s in terms of the convention.
+Substrate is a blockchain platform with a completely generic state transition function. That said, it does come with both standards and conventions (particularly regarding the Runtime Module Library) regarding underlying data structures. Roughly speaking, these core datatypes correspond to +trait+s in terms of the actual non-negotiable standard and generic +struct+s in terms of the convention.
 
 ```
 Header := Parent + ExtrinsicsRoot + StorageRoot + Digest
@@ -39,7 +39,7 @@ Block := Header + Extrinsics + Justifications
 
 === Extrinsics
 
-Extrinsics in Substrate are pieces of information from "the outside world" that are contained in the blocks of the chain. You might think "ahh, that means *transactions*": in fact, no. Extrinsics fall into two broad categories of which only one is *transactions*. The other is known as *inherents*. The difference between these two is that transactions are signed and gossipped on the network and can be deemed useful *per se*. This fits the mold of what you would call transactions in Bitcoin or Ethereum.
+Extrinsics in Substrate are pieces of information from "the outside world" that are contained in the blocks of the chain. You might think "ahh, that means *transactions*": in fact, no. Extrinsics fall into two broad categories of which only one is *transactions*. The other is known as *inherents*. The difference between these two is that transactions are signed and gossiped on the network and can be deemed useful *per se*. This fits the mold of what you would call transactions in Bitcoin or Ethereum.
 
 Inherents, meanwhile, are not passed on the network and are not signed. They represent data which describes the environment but which cannot call upon anything to prove it such as a signature. Rather they are assumed to be "true" simply because a sufficiently large number of validators have agreed on them being reasonable.
 
@@ -111,7 +111,7 @@ Inherent extrinsic knowledge is again somewhat generic, and the actual construct
 
 == Trying out Substrate Node
 
-Substate Node is Substrate's pre-baked blockchain client. You can run a development node locally or configure a new chain and launch your own global testnet.
+Substrate Node is Substrate's pre-baked blockchain client. You can run a development node locally or configure a new chain and launch your own global testnet.
 
 === On Mac and Ubuntu
 
