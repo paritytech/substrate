@@ -298,8 +298,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let topic = round_topic::<B>(round.0, set_id.0);
 
         let mut votes_tally: HashMap<AuthorityId, VoteTally> = HashMap::new();
-        let signer_ids : Vec<AuthorityId> = voters.voters().iter().map(|(id, _)| id.clone()).collect();
-		let num_signers = signer_ids.len();
+		let num_signers = voters.voters().iter().count();
 		let max_timed_out = num_signers.checked_div(3).unwrap_or(1);
 
 		let incoming = self.service.messages_for(topic)
