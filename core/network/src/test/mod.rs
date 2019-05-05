@@ -648,7 +648,7 @@ pub trait TestNetFactory: Sized {
 		let specialization = self::SpecializationFactory::create();
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
-		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
+		let (protocol, protocol_sender, network_to_protocol_sender) = Protocol::new(
 			status_sinks,
 			is_offline.clone(),
 			is_major_syncing.clone(),
@@ -661,6 +661,10 @@ pub trait TestNetFactory: Sized {
 			tx_pool,
 			specialization,
 		).unwrap();
+
+		std::thread::spawn(move || {
+			tokio::run(protocol.map_err(|err| void::unreachable(err)));
+		});
 
 		let peer = Arc::new(Peer::new(
 			is_offline,

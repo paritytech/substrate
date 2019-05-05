@@ -34,7 +34,7 @@ use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::{cmp, num::NonZeroUsize, thread, time};
+use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
@@ -84,6 +84,12 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	network_chan: NetworkChan<B>,
 	port: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	from_network_port: mpsc::UnboundedReceiver<FromNetworkMsg<B>>,
+	/// Interval at which we call `tick`.
+	tick_timeout: tokio::timer::Interval,
+	/// Interval at which we call `propagate_extrinsics`.
+	propagate_timeout: tokio::timer::Interval,
+	/// Interval at which we push our status to the `status_sinks`.
+	status_interval: tokio::timer::Interval,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -322,90 +328,84 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<(mpsc::UnboundedSender<ProtocolMsg<B, S>>, mpsc::UnboundedSender<FromNetworkMsg<B>>)> {
+	) -> error::Result<(Protocol<B, S, H>, mpsc::UnboundedSender<ProtocolMsg<B, S>>, mpsc::UnboundedSender<FromNetworkMsg<B>>)> {
 		let (protocol_sender, port) = mpsc::unbounded();
 		let (from_network_sender, from_network_port) = mpsc::unbounded();
 		let info = chain.info()?;
 		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
-		let _ = thread::Builder::new()
-			.name("Protocol".into())
-			.spawn(move || {
-				let protocol = Protocol {
-					status_sinks,
-					network_chan,
-					from_network_port,
-					port,
-					config: config,
-					context_data: ContextData {
-						peers: HashMap::new(),
-						chain,
-					},
-					on_demand,
-					genesis_hash: info.chain.genesis_hash,
-					sync,
-					specialization: specialization,
-					consensus_gossip: ConsensusGossip::new(),
-					handshaking_peers: HashMap::new(),
-					connected_peers,
-					transaction_pool: transaction_pool,
-				};
+		let protocol = Protocol {
+			status_sinks,
+			network_chan,
+			from_network_port,
+			port,
+			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
+			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			status_interval: tokio::timer::Interval::new_interval(STATUS_INTERVAL),
+			config: config,
+			context_data: ContextData {
+				peers: HashMap::new(),
+				chain,
+			},
+			on_demand,
+			genesis_hash: info.chain.genesis_hash,
+			sync,
+			specialization: specialization,
+			consensus_gossip: ConsensusGossip::new(),
+			handshaking_peers: HashMap::new(),
+			connected_peers,
+			transaction_pool: transaction_pool,
+		};
 
-				protocol.run();
-				debug!(target: "sync", "Networking thread finished");
-			})
-			.expect("Protocol thread spawning failed");
-		Ok((protocol_sender, from_network_sender))
+		Ok((protocol, protocol_sender, from_network_sender))
 	}
+}
 
-	/// Blocks the current thread and "runs" the protocol by reading and writing from/to the fields
-	/// in `self`.
-	/// You are expected to run this method in a background thread.
-	fn run(mut self) {
-		let mut tick_timeout = tokio::timer::Interval::new_interval(TICK_TIMEOUT);
-		let mut propagate_timeout = tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT);
-		let mut status_interval = tokio::timer::Interval::new_interval(STATUS_INTERVAL);
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, S, H> {
+	type Item = ();
+	type Error = void::Void;
 
-		tokio::run(futures::future::poll_fn(move || {
-			while let Ok(Async::Ready(_)) = tick_timeout.poll() {
-				self.tick();
-			}
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
+			self.tick();
+		}
 
-			while let Ok(Async::Ready(_)) = propagate_timeout.poll() {
-				self.propagate_extrinsics();
-			}
+		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
+			self.propagate_extrinsics();
+		}
 
-			while let Ok(Async::Ready(_)) = status_interval.poll() {
-				self.on_status();
-			}
+		while let Ok(Async::Ready(_)) = self.status_interval.poll() {
+			self.on_status();
+		}
 
-			loop {
-				match self.port.poll() {
-					Ok(Async::Ready(None)) | Err(_) => {
-						self.stop();
-						return Ok(Async::Ready(()))
-					}
-					Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
-						return Ok(Async::Ready(()))
-					}
-					Ok(Async::NotReady) => break,
+		loop {
+			match self.port.poll() {
+				Ok(Async::Ready(None)) | Err(_) => {
+					self.stop();
+					return Ok(Async::Ready(()))
 				}
-			}
-
-			loop {
-				match self.from_network_port.poll() {
-					Ok(Async::Ready(None)) | Err(_) => {
-						self.stop();
-						return Ok(Async::Ready(()))
-					},
-					Ok(Async::Ready(Some(msg))) => self.handle_network_msg(msg),
-					Ok(Async::NotReady) => break,
+				Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
+					return Ok(Async::Ready(()))
 				}
+				Ok(Async::NotReady) => break,
 			}
+		}
 
-			Ok(Async::NotReady)
-		}));
+		loop {
+			match self.from_network_port.poll() {
+				Ok(Async::Ready(None)) | Err(_) => {
+					self.stop();
+					return Ok(Async::Ready(()))
+				},
+				Ok(Async::Ready(Some(msg))) => self.handle_network_msg(msg),
+				Ok(Async::NotReady) => break,
+			}
+		}
+
+		Ok(Async::NotReady)
 	}
+}
 
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn handle_client_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
 		match msg {
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
@@ -906,7 +906,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash) {
+	fn announce_block(&mut self, hash: B::Hash) {
 		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {

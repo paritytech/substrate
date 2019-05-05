@@ -171,7 +171,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
-		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
+		let (protocol, protocol_sender, network_to_protocol_sender) = Protocol::new(
 			status_sinks.clone(),
 			is_offline.clone(),
 			is_major_syncing.clone(),
@@ -187,6 +187,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
 		let registered = RegisteredProtocol::new(protocol_id, &versions);
 		let (thread, network, peerset) = start_thread(
+			protocol,
 			network_to_protocol_sender,
 			network_port,
 			params.network_config,
@@ -471,7 +472,8 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 }
 
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static>(
+fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
+	protocol: Protocol<B, S, H>,
 	protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<B>>,
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
@@ -491,7 +493,7 @@ fn start_thread<B: BlockT + 'static>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol_sender, service_clone, network_port, peerset_clone)
+		let fut = run_thread(protocol, protocol_sender, service_clone, network_port, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -508,14 +510,23 @@ fn start_thread<B: BlockT + 'static>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static>(
+fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
+	protocol: Protocol<B, S, H>,
 	protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
 	peerset: PeersetHandle,
 ) -> impl Future<Item = (), Error = io::Error> {
+	// The `protocol` implements `Future`. We put it in an `Option`. If it is `Some`, we need to
+	// spawn a task for it.
+	let mut protocol = Some(protocol);
 
 	futures::future::poll_fn(move || {
+		// Spawn that the task dedicated to the protocol, if not already done so.
+		if let Some(protocol) = protocol.take() {
+			tokio::spawn(protocol.map_err(|err| void::unreachable(err)));
+		}
+
 		loop {
 			match network_port.take_one_message() {
 				Ok(None) => break,
