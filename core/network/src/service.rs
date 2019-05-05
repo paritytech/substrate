@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::{io, thread};
+use std::{io, thread, time::Duration};
 
 use log::{warn, debug, error, info};
 use futures::{Async, Future, Stream, sync::oneshot, sync::mpsc};
@@ -39,6 +39,9 @@ use crate::specialization::NetworkSpecialization;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use tokio::prelude::task::AtomicTask;
 use tokio::runtime::Builder as RuntimeBuilder;
+
+/// Interval at which we send status updates on the SyncProvider status stream.
+const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 
 pub use network_libp2p::PeerId;
 
@@ -172,7 +175,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let (protocol, protocol_sender, network_to_protocol_sender) = Protocol::new(
-			status_sinks.clone(),
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			peers.clone(),
@@ -190,6 +192,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			protocol,
 			network_to_protocol_sender,
 			network_port,
+			status_sinks.clone(),
 			params.network_config,
 			registered,
 		)?;
@@ -476,6 +479,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	protocol: Protocol<B, S, H>,
 	protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<B>>,
 	network_port: NetworkPort<B>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
 ) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, PeersetHandle), Error> {
@@ -493,7 +497,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol, protocol_sender, service_clone, network_port, peerset_clone)
+		let fut = run_thread(protocol, protocol_sender, service_clone, network_port, status_sinks, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -511,20 +515,26 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 
 /// Runs the background thread that handles the networking.
 fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
-	protocol: Protocol<B, S, H>,
+	mut protocol: Protocol<B, S, H>,
 	protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	peerset: PeersetHandle,
 ) -> impl Future<Item = (), Error = io::Error> {
-	// The `protocol` implements `Future`. We put it in an `Option`. If it is `Some`, we need to
-	// spawn a task for it.
-	let mut protocol = Some(protocol);
+	// Interval at which we send status updates on the `status_sinks`.
+	let mut status_interval = tokio::timer::Interval::new_interval(STATUS_INTERVAL);
 
 	futures::future::poll_fn(move || {
-		// Spawn that the task dedicated to the protocol, if not already done so.
-		if let Some(protocol) = protocol.take() {
-			tokio::spawn(protocol.map_err(|err| void::unreachable(err)));
+		while let Ok(Async::Ready(_)) = status_interval.poll() {
+			let status = protocol.status();
+			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
+		}
+
+		match protocol.poll() {
+			Ok(Async::Ready(())) => return Ok(Async::Ready(())),
+			Ok(Async::NotReady) => {}
+			Err(err) => void::unreachable(err),
 		}
 
 		loop {

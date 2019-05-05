@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::{prelude::*, sync::mpsc};
-use parking_lot::Mutex;
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use runtime_primitives::{generic::BlockId, ConsensusEngineId};
@@ -45,8 +44,6 @@ const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate exstrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
-/// Interval at which we send status updates on the SyncProvider status stream.
-const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 3;
@@ -80,7 +77,6 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	network_chan: NetworkChan<B>,
 	port: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	from_network_port: mpsc::UnboundedReceiver<FromNetworkMsg<B>>,
@@ -88,8 +84,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	tick_timeout: tokio::timer::Interval,
 	/// Interval at which we call `propagate_extrinsics`.
 	propagate_timeout: tokio::timer::Interval,
-	/// Interval at which we push our status to the `status_sinks`.
-	status_interval: tokio::timer::Interval,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -317,7 +311,6 @@ pub enum FromNetworkMsg<B: BlockT> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
-		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 		is_offline: Arc<AtomicBool>,
 		is_major_syncing: Arc<AtomicBool>,
 		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
@@ -334,13 +327,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
 		let protocol = Protocol {
-			status_sinks,
 			network_chan,
 			from_network_port,
 			port,
 			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
 			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
-			status_interval: tokio::timer::Interval::new_interval(STATUS_INTERVAL),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -358,6 +349,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		Ok((protocol, protocol_sender, from_network_sender))
 	}
+
+	/// Returns an object representing the status of the protocol.
+	pub fn status(&mut self) -> ProtocolStatus<B> {
+		ProtocolStatus {
+			sync: self.sync.status(),
+			num_peers: self.context_data.peers.values().count(),
+			num_active_peers: self
+				.context_data
+				.peers
+				.values()
+				.filter(|p| p.block_request.is_some())
+				.count(),
+		}
+	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, S, H> {
@@ -371,10 +376,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, 
 
 		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
 			self.propagate_extrinsics();
-		}
-
-		while let Ok(Async::Ready(_)) = self.status_interval.poll() {
-			self.on_status();
 		}
 
 		loop {
@@ -500,21 +501,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.peer_info.best_number = info.best_number;
 			}
 		}
-	}
-
-	/// Propagates protocol statuses.
-	fn on_status(&mut self) {
-		let status = ProtocolStatus {
-			sync: self.sync.status(),
-			num_peers: self.context_data.peers.values().count(),
-			num_active_peers: self
-				.context_data
-				.peers
-				.values()
-				.filter(|p| p.block_request.is_some())
-				.count(),
-		};
-		self.status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 	}
 
 	fn on_custom_message(&mut self, who: PeerId, message: Message<B>) {
