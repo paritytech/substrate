@@ -374,7 +374,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							// Drop the message for timed-out voter.
 							return Ok(None);
 						}
-						return Ok(Some(msg.message));
+						Ok(Some(msg.message))
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
