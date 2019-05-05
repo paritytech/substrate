@@ -31,7 +31,7 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
-use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
+use crate::protocol::{self, Context, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crate::error::Error;
 use crate::specialization::NetworkSpecialization;
@@ -174,7 +174,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
-		let (protocol, protocol_sender, network_to_protocol_sender) = Protocol::new(
+		let (protocol, protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			peers.clone(),
@@ -190,7 +190,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let registered = RegisteredProtocol::new(protocol_id, &versions);
 		let (thread, network, peerset) = start_thread(
 			protocol,
-			network_to_protocol_sender,
 			network_port,
 			status_sinks.clone(),
 			params.network_config,
@@ -477,7 +476,6 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 /// Starts the background thread that handles the networking.
 fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	protocol: Protocol<B, S, H>,
-	protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<B>>,
 	network_port: NetworkPort<B>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	config: NetworkConfiguration,
@@ -497,7 +495,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol, protocol_sender, service_clone, network_port, status_sinks, peerset_clone)
+		let fut = run_thread(protocol, service_clone, network_port, status_sinks, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -516,7 +514,6 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 /// Runs the background thread that handles the networking.
 fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	mut protocol: Protocol<B, S, H>,
-	protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -561,19 +558,17 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 						version <= protocol::CURRENT_VERSION as u8
 						&& version >= protocol::MIN_VERSION as u8
 					);
-					let _ = protocol_sender.unbounded_send(FromNetworkMsg::PeerConnected(peer_id, debug_info));
+					protocol.on_peer_connected(peer_id, debug_info);
 				}
-				Ok(Async::Ready(Some(NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) => {
-					let _ = protocol_sender.unbounded_send(FromNetworkMsg::PeerDisconnected(peer_id, debug_info));
-				}
-				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) => {
-					let _ = protocol_sender.unbounded_send(FromNetworkMsg::CustomMessage(peer_id, message));
-				}
+				Ok(Async::Ready(Some(NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) =>
+					protocol.on_peer_disconnected(peer_id, debug_info),
+				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) =>
+					protocol.on_custom_message(peer_id, message),
 				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
 					debug!(target: "sync", "{} clogging messages:", messages.len());
 					for msg in messages.into_iter().take(5) {
 						debug!(target: "sync", "{:?}", msg);
-						let _ = protocol_sender.unbounded_send(FromNetworkMsg::PeerClogged(peer_id.clone(), Some(msg)));
+						protocol.on_clogged_peer(peer_id.clone(), Some(msg));
 					}
 				}
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
