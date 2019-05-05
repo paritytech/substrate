@@ -263,7 +263,8 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 				if info.listen_addrs.len() > 30 {
 					warn!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
 						it is identified by {:?} and {:?}", peer_id, info.protocol_version,
-						info.agent_version);
+						info.agent_version
+					);
 					info.listen_addrs.truncate(30);
 				}
 				for addr in &info.listen_addrs {
