@@ -259,8 +259,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	BlocksProcessed(Vec<B::Hash>, bool),
 	/// Tell protocol to restart sync.
 	RestartSync,
-	/// Propagate status updates.
-	Status,
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
 	/// Tell protocol that a block was imported (sent by the import-queue).
@@ -287,9 +285,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Abort,
-	/// Tell protocol to abort sync and stop.
-	Stop,
 	/// Tell protocol to perform regular maintenance.
+	#[cfg(any(test, feature = "test-helpers"))]
 	Tick,
 	/// Synchronization request.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -370,44 +367,38 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		tokio::run(futures::future::poll_fn(move || {
 			while let Ok(Async::Ready(_)) = tick_timeout.poll() {
-				if !self.handle_client_msg(ProtocolMsg::Tick) {
-					return Ok(Async::Ready(()))
-				}
+				self.tick();
 			}
 
 			while let Ok(Async::Ready(_)) = propagate_timeout.poll() {
-				if !self.handle_client_msg(ProtocolMsg::PropagateExtrinsics) {
-					return Ok(Async::Ready(()))
-				}
+				self.propagate_extrinsics();
 			}
 
 			while let Ok(Async::Ready(_)) = status_interval.poll() {
-				if !self.handle_client_msg(ProtocolMsg::Status) {
-					return Ok(Async::Ready(()))
+				self.on_status();
+			}
+
+			loop {
+				match self.port.poll() {
+					Ok(Async::Ready(None)) | Err(_) => {
+						self.stop();
+						return Ok(Async::Ready(()))
+					}
+					Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
+						return Ok(Async::Ready(()))
+					}
+					Ok(Async::NotReady) => break,
 				}
 			}
 
 			loop {
-				let cont = match self.port.poll() {
-					Ok(Async::Ready(None)) | Err(_) => self.handle_client_msg(ProtocolMsg::Stop),
-					Ok(Async::Ready(Some(msg))) => self.handle_client_msg(msg),
-					Ok(Async::NotReady)=> break,
-				};
-
-				if !cont {
-					return Ok(Async::Ready(()))
-				}
-			}
-
-			loop {
-				let cont = match self.from_network_port.poll() {
-					Ok(Async::Ready(None)) | Err(_) => self.handle_client_msg(ProtocolMsg::Stop),
+				match self.from_network_port.poll() {
+					Ok(Async::Ready(None)) | Err(_) => {
+						self.stop();
+						return Ok(Async::Ready(()))
+					},
 					Ok(Async::Ready(Some(msg))) => self.handle_network_msg(msg),
-					Ok(Async::NotReady)=> break,
-				};
-
-				if !cont {
-					return Ok(Async::Ready(()))
+					Ok(Async::NotReady) => break,
 				}
 			}
 
@@ -417,7 +408,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn handle_client_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
 		match msg {
-			ProtocolMsg::Status => self.on_status(),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
 			ProtocolMsg::ExecuteWithSpec(task) => {
@@ -454,13 +444,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			},
 			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
+			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Tick => self.tick(),
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Abort => self.abort(),
-			ProtocolMsg::Stop => {
-				self.stop();
-				return false;
-			},
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Synchronize => {
 				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
@@ -470,7 +457,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		true
 	}
 
-	fn handle_network_msg(&mut self, msg: FromNetworkMsg<B>) -> bool {
+	fn handle_network_msg(&mut self, msg: FromNetworkMsg<B>) {
 		match msg {
 			FromNetworkMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected(who, debug_info),
 			FromNetworkMsg::PeerConnected(who, debug_info) => self.on_peer_connected(who, debug_info),
@@ -481,7 +468,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			#[cfg(any(test, feature = "test-helpers"))]
 			FromNetworkMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
 		}
-		true
 	}
 
 	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>) -> Option<message::BlockRequest<B>> {
