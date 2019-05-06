@@ -191,8 +191,21 @@ decl_module! {
 				let [event] = events;
 				<Events<T>>::put(vec![event]);
 				<EventCount<T>>::put(1);
+
+				// TODO: this has an unpleasant effect: from now on `<EventTopics<T>>`
+				// refers to indexes of wrong events and also might refer to events
+				// which don't exist in `EventTopics<T>`.
 			} else {
-				<EventCount<T>>::mutate(|event_count| *event_count += 1);
+				<EventCount<T>>::mutate(|event_count| {
+					event_count.checked_add(1).expect(
+						"if `append` returns `Err` in case if we are trying to insert more than
+						`u32::max_value` events;
+						if we in this branch then there are less than `u32::max_value` events;
+						`checked_add(1)` must succeed in this case;
+						qed
+						"
+					)
+				});
 			}
 		}
 	}
@@ -295,6 +308,10 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	h
 }
 
+/// This type alias represents an index of an event.
+///
+/// We use `u32` here because this index is used as index for `Events<T>`
+/// which can't contain more than `u32::max_value()` items.
 type EventIndex = u32;
 
 decl_storage! {
@@ -449,7 +466,13 @@ impl<T: Trait> Module<T> {
 			digest.push(item);
 		}
 
-		// <Events<T>> stays to be inspected by the client.
+		// The following fields
+		//
+		// - <Events<T>>
+		// - <EventCount<T>>
+		// - <EventTopics<T>>
+		//
+		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
