@@ -80,7 +80,10 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
-use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{
+	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
+	StorageMap, Parameter,
+};
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
 
@@ -342,7 +345,11 @@ decl_storage! {
 		EventCount get(event_count): EventIndex;
 		/// Mapping between a topic (represented by T::Hash) and a vector of indices
 		/// of events in the `<Events<T>>` list.
-		EventTopics get(event_topics): map T::Hash => Vec<EventIndex>;
+		///
+		/// The key serves no purpose. This field is declared as double_map just for convenience
+		/// of using `remove_prefix`.
+		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
+			=> Vec<EventIndex>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -402,16 +409,20 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 
 impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		// TODO: What are we going to do with duplicates in `topics`?
+
 		let event_idx = Self::event_count();
 
 		Self::deposit_event(event);
 
 		for topic in topics {
-			<EventTopics<T>>::mutate(topic, |event_indices| {
-				// We want to use something like `StorageValue::append` here to avoid
-				// the same problem we used to have with <Events<T>>.
-				event_indices.push(event_idx);
-			});
+			let mut event_indices = <EventTopics<T>>::get(&(), topic);
+
+			// We want to use something like `StorageValue::append` here to avoid
+			// the same problem we used to have with <Events<T>>.
+			event_indices.push(event_idx);
+
+			<EventTopics<T>>::insert(&(), topic, event_indices);
 		}
 	}
 
@@ -441,8 +452,7 @@ impl<T: Trait> Module<T> {
 		<RandomSeed<T>>::put(Self::calculate_random());
 		<Events<T>>::kill();
 		<EventCount<T>>::kill();
-
-		// TODO: <EventTopics<T>>::kill();
+		<EventTopics<T>>::remove_prefix(&());
 	}
 
 	/// Remove temporary "environment" entries in storage.
