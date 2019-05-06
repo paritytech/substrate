@@ -182,34 +182,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposits an event into this block's event record.
 		pub fn deposit_event(event: T::Event) {
-			let extrinsic_index = Self::extrinsic_index();
-			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-			let event = EventRecord { phase, event };
-
-			// Appending can only fail if `Events<T>` can not be decoded or
-			// when we try to insert more than `u32::max_value()` events.
-			// If one of these conditions is met, we just insert the new event.
-			let events = [event];
-			if <Events<T>>::append(&events).is_err() {
-				let [event] = events;
-				<Events<T>>::put(vec![event]);
-				<EventCount<T>>::put(1);
-
-				// TODO: this has an unpleasant effect: from now on `<EventTopics<T>>`
-				// refers to indexes of wrong events and also might refer to events
-				// which don't exist in `EventTopics<T>`.
-			} else {
-				<EventCount<T>>::mutate(|event_count| {
-					event_count.checked_add(1).expect(
-						"if `append` returns `Err` in case if we are trying to insert more than
-						`u32::max_value` events;
-						if we in this branch then there are less than `u32::max_value` events;
-						`checked_add(1)` must succeed in this case;
-						qed
-						"
-					)
-				});
-			}
+			Self::deposit_event_indexed(&[], event);
 		}
 	}
 }
@@ -408,17 +381,49 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposit an event with the given topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		// TODO: What are we going to do with duplicates in `topics`?
-		let event_idx = Self::event_count();
+		let extrinsic_index = Self::extrinsic_index();
+		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let event = EventRecord { phase, event };
 
-		Self::deposit_event(event);
+		let event_idx = match <EventCount<T>>::mutate(|event_count|
+			event_count
+				.checked_add(1)
+				.map(|new_count| {
+					let old_count = *event_count;
+					// Update the event_count storage item and return the old_count as
+					// the result of this mutation.
+					*event_count = new_count;
+					old_count
+				})
+		) {
+			// We've reached the maximum number of events at this block, just
+			// don't do anything and leave the event_count unaltered.
+			None => return,
+			Some(old_count) => old_count,
+		};
+
+		// Appending can only fail if `Events<T>` can not be decoded or
+		// when we try to insert more than `u32::max_value()` events.
+		//
+		// We perform early return if we've reached the maximum capacity of the event list,
+		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
+		// (since the event list is cleared at the block initialization).
+		// The most sensible thing to do here is to just ignore this event and wait until the
+		// new block.
+		if <Events<T>>::append(&[event]).is_err() {
+			// TODO(reviewers): debug_assert!(false) is tempting here, since we want to be safe in
+			// the production version but it would be nice to catch these kind of issues at the
+			// development time. We even have -Cdebug-assertion=y on CI and it seems
+			// we are building wasm with this flag enabled.
+			//
+			// However, there no prior precedents of using it.
+			return;
+		}
 
 		for topic in topics {
-			if <EventTopics<T>>::append(&(), topic, &[event_idx]).is_err() {
-				// Overwrite
-				<EventTopics<T>>::insert(&(), topic, vec![event_idx]);
-			}
+			<EventTopics<T>>::append(&(), topic, &[event_idx]);
 		}
 	}
 
