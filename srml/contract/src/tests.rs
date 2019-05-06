@@ -732,7 +732,6 @@ fn deduct_blocks() {
 				* 4 // rent byte price
 				* 7; // blocks to rent
 			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			println!("rent:{}", rent/4);
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
 			assert_eq!(bob_contract.deduct_block, 12);
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
