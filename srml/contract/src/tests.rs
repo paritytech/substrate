@@ -735,6 +735,14 @@ fn deduct_blocks() {
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
 			assert_eq!(bob_contract.deduct_block, 12);
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
+
+			// Second call on same block should have no effect on rent
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
+			assert_eq!(bob_contract.deduct_block, 12);
+			assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
 		}
 	);
 }
