@@ -33,6 +33,11 @@ substrate-serializer = { path = "../serializer" }
 pretty_assertions = "0.6"
 hex-literal = "0.2"
 rand = "0.6"
+criterion = "0.2"
+
+[[bench]]
+name = "benches"
+harness = false
 
 [features]
 default = ["std"]
