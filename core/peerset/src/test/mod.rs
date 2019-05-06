@@ -195,7 +195,7 @@ fn test_random_api_use() {
                     }
                 };
 				match last_message {
-					Some(Message::Connect(_)) | Some(Message::Accept(_)) => {},
+					Some(Message::Connect(_)) | Some(Message::Accept(_)) | None => {},
 					_ => panic!("Unexpected Drop message, after a {:?} message, sequence of actions: {:?}", last_message, action_sequence),
 				}
 				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
@@ -225,8 +225,6 @@ fn test_random_api_use() {
                         match (drop_position, incoming_position) {
                             (Some(drop), Some(incoming)) => {
                                 assert!(drop < incoming);
-                                println!("Last messages: {:?}", last_messages);
-                                assert!(last_messages.contains(&Message::Connect(peer_id.clone())));
                                 continue
                             },
                             _ => {}
