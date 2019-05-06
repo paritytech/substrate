@@ -195,8 +195,12 @@ fn test_random_api_use() {
                     }
                 };
 				match last_message {
-					Some(Message::Connect(_)) | Some(Message::Accept(_)) | None => {},
-					_ => panic!("Unexpected Drop message, after a {:?} message, sequence of actions: {:?}", last_message, action_sequence),
+					Some(Message::Connect(_)) | Some(Message::Accept(_)) => {},
+					_ => {
+						if !discovered_called.remove(&peer_id) {
+							panic!("Unexpected Drop message for {:?}, after a {:?} message, sequence of actions: {:?}", peer_id, last_message, action_sequence)
+						}
+					},
 				}
 				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
                 received.push_back(Message::Drop(peer_id));
