@@ -303,7 +303,7 @@ decl_storage! {
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
-		/// ring buffer with the `u8` prefix being the index into the `Vec` of the oldest hash.
+		/// ring buffer with the `i8` prefix being the index into the `Vec` of the oldest hash.
 		RandomMaterial get(random_material): (i8, Vec<T::Hash>);
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
