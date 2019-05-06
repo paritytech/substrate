@@ -20,7 +20,7 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![forbid(warnings, unsafe_code, missing_docs)]
+#![forbid(unsafe_code, missing_docs)]
 
 mod slots;
 mod aux_schema;
@@ -28,7 +28,7 @@ mod aux_schema;
 pub use slots::{slot_now, SlotInfo, Slots};
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY};
 
-use client::{ChainHead, backend::AuxStore};
+use client::ChainHead;
 use codec::{Decode, Encode};
 use consensus_common::SyncOracle;
 use futures::prelude::*;
