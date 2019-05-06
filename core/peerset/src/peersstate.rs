@@ -219,6 +219,12 @@ impl<'a> Peer<'a> {
 }
 
 /// A peer that is connected to us.
+//
+// Implementation note: the fact this object is alive is a guarantee that the peer is in the list
+// and in a connected state. It holds a mutable borrow to `PeersState`, guaranteeing that nothing
+// else can modify that list except for the local object. Any method on `ConnectedPeer` that
+// transitions the state away from "connected and in the list" must destroy the `ConnectedPeer`
+// in the process.
 pub struct ConnectedPeer<'a> {
 	parent: &'a mut PeersState,
 	peer_id: Cow<'a, PeerId>,
@@ -232,12 +238,18 @@ impl<'a> ConnectedPeer<'a> {
 
 	fn state(&self) -> &Node {
 		self.parent.nodes.get(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
+			.expect("we only initially create a ConnectedPeer object when have verified that a \
+					 node is in the list; additionally, keeping the ConnectedPeer alive mutably \
+					 borrows the list of nodes, guaranteeing that nothing can remove the current \
+					 node from said list; QED")
 	}
 
 	fn state_mut(&mut self) -> &mut Node {
 		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a ConnectedPeer if the node's in the list; QED")
+			.expect("we only initially create a ConnectedPeer object when have verified that a \
+					 node is in the list; additionally, keeping the ConnectedPeer alive mutably \
+					 borrows the list of nodes, guaranteeing that nothing can remove the current \
+					 node from said list; QED")
 	}
 
 	/// Switches the peer to "not connected".
@@ -282,6 +294,12 @@ impl<'a> ConnectedPeer<'a> {
 }
 
 /// A peer that is not connected to us.
+//
+// Implementation note: the fact this object is alive is a guarantee that the peer is in the list
+// and in a non-connected state. It holds a mutable borrow to `PeersState`, guaranteeing that
+// nothing else can modify that list except for the local object. Any method on `NotConnectedPeer`
+// that transitions the state away from "not connected and in the list" must destroy the
+// `NotConnectedPeer` in the process.
 pub struct NotConnectedPeer<'a> {
 	parent: &'a mut PeersState,
 	peer_id: Cow<'a, PeerId>,
@@ -296,12 +314,18 @@ impl<'a> NotConnectedPeer<'a> {
 
 	fn state(&self) -> &Node {
 		self.parent.nodes.get(&self.peer_id)
-			.expect("We only ever build a NotConnectedPeer if the node's in the list; QED")
+			.expect("we only initially create a NotConnectedPeer object when have verified that a \
+					 node is in the list; additionally, keeping the NotConnectedPeer alive mutably \
+					 borrows the list of nodes, guaranteeing that nothing can remove the current \
+					 node from said list; QED")
 	}
 
 	fn state_mut(&mut self) -> &mut Node {
 		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("We only ever build a NotConnectedPeer if the node's in the list; QED")
+			.expect("we only initially create a NotConnectedPeer object when have verified that a \
+					 node is in the list; additionally, keeping the NotConnectedPeer alive mutably \
+					 borrows the list of nodes, guaranteeing that nothing can remove the current \
+					 node from said list; QED")
 	}
 
 	/// Tries to set the peer as connected as an outgoing connection.
