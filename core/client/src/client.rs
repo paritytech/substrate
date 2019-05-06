@@ -321,18 +321,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Expose backend reference. To be used in tests only
 	#[doc(hidden)]
-	#[deprecated(since="1.0.1", note="Rather than relying on `client` \
-	to provide this, access to the backend should be handled at setup \
-	only - see #1134. This function will be removed once that is in place.")]
+	#[deprecated(note="Rather than relying on `client` to provide this, access \
+	to the backend should be handled at setup only - see #1134. This function \
+	will be removed once that is in place.")]
 	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
 	}
 
 	/// Expose reference to import lock
 	#[doc(hidden)]
-	#[deprecated(since="1.0.1", note="Rather than relying on `client` \
-	to provide this, access to the backend should be handled at setup \
-	only - see #1134. This function will be removed once that is in place.")]
+	#[deprecated(note="Rather than relying on `client` to provide this, access \
+	to the backend should be handled at setup only - see #1134. This function \
+	will be removed once that is in place.")]
 	pub fn import_lock(&self) -> Arc<Mutex<()>> {
 		self.import_lock.clone()
 	}
