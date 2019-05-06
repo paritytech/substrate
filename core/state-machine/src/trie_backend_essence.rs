@@ -21,7 +21,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher};
-use heapsize::HeapSizeOf;
 use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError, default_child_trie_root, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
 use crate::changes_trie::Storage as ChangesTrieStorage;
 use crate::backend::Consolidate;
@@ -38,7 +37,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
@@ -154,7 +153,6 @@ impl<'a,
 	H: 'a + Hasher
 > hash_db::AsPlainDB<H::Out, DBValue>
 	for Ephemeral<'a, S, H>
-	where H::Out: HeapSizeOf
 {
 	fn as_plain_db<'b>(&'b self) -> &'b (hash_db::PlainDB<H::Out, DBValue> + 'b) { self }
 	fn as_plain_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::PlainDB<H::Out, DBValue> + 'b) { self }
@@ -165,7 +163,6 @@ impl<'a,
 	H: 'a + Hasher
 > hash_db::AsHashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
-	where H::Out: HeapSizeOf
 {
 	fn as_hash_db<'b>(&'b self) -> &'b (hash_db::HashDB<H, DBValue> + 'b) { self }
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::HashDB<H, DBValue> + 'b) { self }
@@ -185,7 +182,6 @@ impl<'a,
 	H: Hasher
 > hash_db::PlainDB<H::Out, DBValue>
 	for Ephemeral<'a, S, H>
-	where H::Out: HeapSizeOf
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, &[]) {
@@ -219,7 +215,6 @@ impl<'a,
 	H: Hasher
 > hash_db::PlainDBRef<H::Out, DBValue>
 	for Ephemeral<'a, S, H>
-	where H::Out: HeapSizeOf
 {
 	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::PlainDB::get(self, key) }
 	fn contains(&self, key: &H::Out) -> bool { hash_db::PlainDB::contains(self, key) }
@@ -230,7 +225,6 @@ impl<'a,
 	H: Hasher
 > hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
-	where H::Out: HeapSizeOf
 {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<DBValue> {
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
@@ -268,7 +262,6 @@ impl<'a,
 	H: Hasher
 > hash_db::HashDBRef<H, DBValue>
 	for Ephemeral<'a, S, H>
-	where H::Out: HeapSizeOf
 {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Option<DBValue> { hash_db::HashDB::get(self, key, prefix) }
 	fn contains(&self, key: &H::Out, prefix: &[u8]) -> bool { hash_db::HashDB::contains(self, key, prefix) }

@@ -44,3 +44,102 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	/// Not guaranteed to be called for every block, but will be most of the after major sync.
 	fn on_block_imported(&mut self, _ctx: &mut Context<B>, _hash: B::Hash, _header: &B::Header) { }
 }
+
+/// Construct a simple protocol that is composed of several sub protocols.
+/// Each "sub protocol" needs to implement `Specialization` and needs to provide a `new()` function.
+/// For more fine grained implementations, this macro is not usable.
+///
+/// # Example
+///
+/// ```nocompile
+/// construct_simple_protocol! {
+///     pub struct MyProtocol where Block = MyBlock {
+///         consensus_gossip: ConsensusGossip<MyBlock>,
+///         other_protocol: MyCoolStuff,
+///     }
+/// }
+/// ```
+///
+/// You can also provide an optional parameter after `where Block = MyBlock`, so it looks like
+/// `where Block = MyBlock, Status = consensus_gossip`. This will instruct the implementation to
+/// use the `status()` function from the `ConsensusGossip` protocol. By default, `status()` returns
+/// an empty vector.
+#[macro_export]
+macro_rules! construct_simple_protocol {
+	(
+		$( #[ $attr:meta ] )*
+		pub struct $protocol:ident where
+			Block = $block:ident
+			$( , Status = $status_protocol_name:ident )*
+		{
+			$( $sub_protocol_name:ident : $sub_protocol:ident $( <$protocol_block:ty> )*, )*
+		}
+	) => {
+		$( #[$attr] )*
+		pub struct $protocol {
+			$( $sub_protocol_name: $sub_protocol $( <$protocol_block> )*, )*
+		}
+
+		impl $protocol {
+			/// Instantiate a node protocol handler.
+			pub fn new() -> Self {
+				Self {
+					$( $sub_protocol_name: $sub_protocol::new(), )*
+				}
+			}
+		}
+
+		impl $crate::specialization::NetworkSpecialization<$block> for $protocol {
+			fn status(&self) -> Vec<u8> {
+				$(
+					let status = self.$status_protocol_name.status();
+
+					if !status.is_empty() {
+						return status;
+					}
+				)*
+
+				Vec::new()
+			}
+
+			fn on_connect(
+				&mut self,
+				_ctx: &mut $crate::Context<$block>,
+				_who: $crate::PeerId,
+				_status: $crate::StatusMessage<$block>
+			) {
+				$( self.$sub_protocol_name.on_connect(_ctx, _who, _status); )*
+			}
+
+			fn on_disconnect(&mut self, _ctx: &mut $crate::Context<$block>, _who: $crate::PeerId) {
+				$( self.$sub_protocol_name.on_disconnect(_ctx, _who); )*
+			}
+
+			fn on_message(
+				&mut self,
+				_ctx: &mut $crate::Context<$block>,
+				_who: $crate::PeerId,
+				_message: &mut Option<$crate::message::Message<$block>>
+			) {
+				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
+			}
+
+			fn on_abort(&mut self) {
+				$( self.$sub_protocol_name.on_abort(); )*
+			}
+
+			fn maintain_peers(&mut self, _ctx: &mut $crate::Context<$block>) {
+				$( self.$sub_protocol_name.maintain_peers(_ctx); )*
+			}
+
+			fn on_block_imported(
+				&mut self,
+				_ctx: &mut $crate::Context<$block>,
+				_hash: <$block as $crate::BlockT>::Hash,
+				_header: &<$block as $crate::BlockT>::Header
+			) {
+				$( self.$sub_protocol_name.on_block_imported(_ctx, _hash, _header); )*
+			}
+		}
+	}
+}

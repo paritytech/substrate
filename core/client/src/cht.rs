@@ -26,7 +26,6 @@
 use std::collections::HashSet;
 
 use hash_db;
-use heapsize::HeapSizeOf;
 use trie;
 
 use primitives::{H256, convert_hash};
@@ -88,7 +87,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 		BlocksI: IntoIterator<Item=Header::Number>,
 		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
@@ -120,7 +119,7 @@ pub fn check_proof<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 {
 	do_check_proof::<Header, Hasher, _>(local_root, local_number, remote_hash, move |local_root, local_cht_key|
 		read_proof_check::<Hasher>(local_root, remote_proof,
@@ -137,7 +136,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 {
 	do_check_proof::<Header, Hasher, _>(local_root, local_number, remote_hash, |_, local_cht_key|
 		read_proof_check_on_proving_backend::<Hasher>(
@@ -154,7 +153,7 @@ fn do_check_proof<Header, Hasher, F>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 		F: FnOnce(Hasher::Out, &[u8]) -> ClientResult<Option<Vec<u8>>>,
 {
 	let root: Hasher::Out = convert_hash(&local_root);

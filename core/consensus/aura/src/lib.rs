@@ -62,10 +62,10 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
 pub use aura_primitives::*;
-pub use consensus_common::SyncOracle;
+pub use consensus_common::{SyncOracle, ExtraVerification};
 
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
@@ -87,6 +87,7 @@ pub trait Network: Clone {
 }
 
 /// A slot duration. Create with `get_or_compute`.
+#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration(slots::SlotDuration<u64>);
 
 impl SlotDuration {
@@ -118,20 +119,6 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 				this is a valid index; qed");
 
 	Some(current_author)
-}
-
-fn duration_now() -> Option<Duration> {
-	use std::time::SystemTime;
-
-	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
-			warn!("Current time {:?} is before unix epoch. Something is wrong: {:?}", now, e);
-	}).ok()
-}
-
-/// Get the slot for now.
-fn slot_now(slot_duration: u64) -> Option<u64> {
-	duration_now().map(|s| s.as_secs() / slot_duration)
 }
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
@@ -194,6 +181,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker in a separate thread.
+#[deprecated(since = "1.1", note = "Please spawn a thread manually")]
 pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
@@ -231,6 +219,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 		force_authoring,
 	};
 
+	#[allow(deprecated)]	// The function we are in is also deprecated.
 	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, u64, _>(
 		slot_duration.0,
 		client,
@@ -465,7 +454,6 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
-#[forbid(deprecated)]
 fn check_header<B: Block, P: Pair>(
 	slot_now: u64,
 	mut header: B::Header,
@@ -513,19 +501,6 @@ fn check_header<B: Block, P: Pair>(
 			Err(format!("Bad signature on {:?}", hash))
 		}
 	}
-}
-
-/// Extra verification for Aura blocks.
-pub trait ExtraVerification<B: Block>: Send + Sync {
-	/// Future that resolves when the block is verified or fails with error if not.
-	type Verified: IntoFuture<Item=(),Error=String>;
-
-	/// Do additional verification for this block.
-	fn verify(
-		&self,
-		header: &B::Header,
-		body: Option<&[B::Extrinsic]>,
-	) -> Self::Verified;
 }
 
 /// A verifier for Aura blocks.
@@ -783,7 +758,8 @@ pub fn import_queue<B, C, E, P>(
 
 /// Start an import queue for the Aura consensus algorithm with backwards compatibility.
 #[deprecated(
-	note = "should not be used unless backwards compatibility with an older chain is needed."
+	since = "1.0.1",
+	note = "should not be used unless backwards compatibility with an older chain is needed.",
 )]
 pub fn import_queue_accept_old_seals<B, C, E, P>(
 	slot_duration: SlotDuration,
@@ -826,8 +802,8 @@ mod tests {
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
-	use keyring::ed25519::Keyring;
-	use primitives::ed25519;
+	use keyring::sr25519::Keyring;
+	use primitives::sr25519;
 	use client::BlockchainEvents;
 	use test_client;
 
@@ -842,7 +818,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId<ed25519::Pair>])
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId<sr25519::Pair>])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -868,7 +844,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersClient, NothingExtra, ed25519::Pair>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra, sr25519::Pair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -955,7 +931,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, ed25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),

@@ -35,4 +35,5 @@ pub use std::result;
 
 pub mod collections {
 	pub use std::collections::btree_map;
+	pub use std::collections::btree_set;
 }
