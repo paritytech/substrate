@@ -92,6 +92,9 @@ check-web-wasm:
     - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
+  except:
+    refs:
+      - v1.0
 
 .build-only:                      &build-only
   only:
