@@ -7,8 +7,7 @@ edition = "2018"
 [dependencies]
 num-traits = { version = "0.2", default-features = false }
 integer-sqrt = { version = "0.1.2" }
-serde = { version = "1.0", optional = true }
-serde_derive = { version = "1.0", optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 substrate-primitives = { path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
@@ -23,7 +22,6 @@ default = ["std"]
 std = [
 	"num-traits/std",
 	"serde",
-	"serde_derive",
 	"log",
 	"rstd/std",
 	"runtime_io/std",

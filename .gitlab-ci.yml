@@ -12,12 +12,14 @@ stages:
   - publish
   - deploy
 
-image:                             parity/rust-substrate-build:stretch
+image:                             parity/rust-builder:latest
 
 variables:
   GIT_STRATEGY:                    fetch
+  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
+  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
+  SCCACHE_CACHE_SIZE:              50G
   CI_SERVER_NAME:                  "GitLab CI"
-  CARGO_HOME:                      "/ci-cache/substrate/cargo/${CI_JOB_NAME}"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
 
@@ -77,6 +79,20 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
+check-web-wasm:
+  stage:                           test
+  image:                           tomaka/cargo-web:latest
+  allow_failure: true
+  only:
+    - master
+    - /^[0-9]+$/
+  script:
+    # WASM support is in progress. As more and more crates support WASM, we
+    # should add entries here.
+    - time cargo web build -p substrate-network-libp2p
+    - time cargo web build -p substrate-panic-handler
+    - time cargo web build -p substrate-peerset
+
 .build-only:                      &build-only
   only:
     - master
@@ -127,8 +143,10 @@ build-rust-doc-release:            &build
   <<:                              *build-only
   tags:
     - linux-docker
-  script:
+  before_script:
     - sccache -s
+    - ./scripts/build.sh
+  script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --verbose
     - cp -R ./target/doc ./crate-docs
@@ -197,6 +215,7 @@ publish-s3-release:
 
 publish-s3-doc:
   stage:                           publish
+  image:                           parity/awscli:latest
   allow_failure:                   true
   dependencies:
     - build-rust-doc-release
@@ -222,7 +241,7 @@ publish-s3-doc:
   stage:                           deploy
   when:                            manual
   retry:                           1
-  image:                           parity/kubectl-helm:$HELM_VERSION
+  image:                           parity/kubetools:latest
   <<:                              *build-only
   tags:
     # this is the runner that is used to deploy it
@@ -285,4 +304,24 @@ deploy-ue1-tag:
   <<:                              *deploy-tag
   environment:
     name: parity-prod-ue1
+
+.validator-deploy: &validator-deploy
+  stage: publish
+  dependencies:
+    - build-linux-release
+  image: parity/azure-ansible:v1
+  allow_failure: true
+  when: manual
+  tags:
+    - linux-docker
+
+validator1:
+  <<: *validator-deploy
+  script:
+    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator1
+
+validator2:
+  <<: *validator-deploy
+  script:
+    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator2
 

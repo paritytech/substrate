@@ -247,7 +247,7 @@ pub fn refund_unused_gas<T: Trait>(
 	// also has T::Gas type.
 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
-	// Refund gas left by the price it was bought.
+	// Refund gas left by the price it was bought at.
 	let refund = <T::Gas as As<BalanceOf<T>>>::as_(gas_left) * gas_meter.gas_price;
 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
@@ -255,7 +255,7 @@ pub fn refund_unused_gas<T: Trait>(
 	}
 }
 
-/// A little handy utility for converting a value in balance units into approximitate value in gas units
+/// A little handy utility for converting a value in balance units into approximate value in gas units
 /// at the given gas price.
 pub fn approx_gas_for_balance<T: Trait>(gas_price: BalanceOf<T>, balance: BalanceOf<T>) -> T::Gas {
 	let amount_in_gas: BalanceOf<T> = balance / gas_price;
@@ -316,7 +316,7 @@ mod tests {
 	struct DoubleTokenMetadata {
 		multiplier: u64,
 	}
-	/// A simple token that charges for the given amount multipled to
+	/// A simple token that charges for the given amount multiplied to
 	/// a multiplier taken from a given metadata.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 	struct DoubleToken(u64);
@@ -324,7 +324,7 @@ mod tests {
 	impl Token<Test> for DoubleToken {
 		type Metadata = DoubleTokenMetadata;
 		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
-			// Probably you want to use saturating mul in producation code.
+			// Probably you want to use saturating mul in production code.
 			self.0 * metadata.multiplier
 		}
 	}

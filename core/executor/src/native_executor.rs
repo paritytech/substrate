@@ -53,11 +53,11 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 	ext: &mut E,
 	default_heap_pages: Option<u64>,
 ) -> Result<(&'a WasmModuleInstanceRef, &'a Option<RuntimeVersion>)> {
-
 	let code_hash = match ext.original_storage_hash(well_known_keys::CODE) {
 		Some(code_hash) => code_hash,
 		None => return Err(ErrorKind::InvalidCode(vec![]).into()),
 	};
+
 	let maybe_runtime_preproc = cache.borrow_mut().entry(code_hash.into())
 		.or_insert_with(|| {
 			let code = match ext.original_storage(well_known_keys::CODE) {
@@ -84,6 +84,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 				}
 			}
 		});
+
 	match maybe_runtime_preproc {
 		RuntimePreproc::InvalidCode => {
 			let code = ext.original_storage(well_known_keys::CODE).unwrap_or(vec![]);
@@ -265,6 +266,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	}
 }
 
+/// Implements a `NativeExecutionDispatch` for provided parameters.
 #[macro_export]
 macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path, $code:expr) => {

@@ -16,31 +16,37 @@
 
 use futures::{future, stream, prelude::*, try_ready};
 use rand::seq::SliceRandom;
-use std::io;
-use substrate_network_libp2p::{CustomMessage, multiaddr::Protocol, ServiceEvent, build_multiaddr};
+use std::{io, time::Duration, time::Instant};
+use substrate_network_libp2p::{CustomMessage, Multiaddr, multiaddr::Protocol, ServiceEvent, build_multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
+fn build_nodes<TMsg>(num: usize, base_port: u16) -> Vec<substrate_network_libp2p::Service<TMsg>>
 	where TMsg: CustomMessage + Send + 'static
 {
 	let mut result: Vec<substrate_network_libp2p::Service<_>> = Vec::with_capacity(num);
+	let mut first_addr = None::<Multiaddr>;
 
-	for _ in 0 .. num {
+	for index in 0 .. num {
 		let mut boot_nodes = Vec::new();
-		if !result.is_empty() {
-			let mut bootnode = result[0].listeners().next().unwrap().clone();
-			bootnode.append(Protocol::P2p(result[0].peer_id().clone().into()));
-			boot_nodes.push(bootnode.to_string());
+
+		if let Some(first_addr) = first_addr.as_ref() {
+			boot_nodes.push(first_addr.clone()
+				.with(Protocol::P2p(result[0].peer_id().clone().into()))
+				.to_string());
 		}
 
 		let config = substrate_network_libp2p::NetworkConfiguration {
-			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0u16)]],
+			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(base_port + index as u16)]],
 			boot_nodes,
 			..substrate_network_libp2p::NetworkConfiguration::default()
 		};
 
-		let proto = substrate_network_libp2p::RegisteredProtocol::new(*b"tst", &[1]);
+		if first_addr.is_none() {
+			first_addr = Some(config.listen_addresses.iter().next().unwrap().clone());
+		}
+
+		let proto = substrate_network_libp2p::RegisteredProtocol::new(&b"tst"[..], &[1]);
 		result.push(substrate_network_libp2p::start_service(config, proto).unwrap().0);
 	}
 
@@ -50,7 +56,7 @@ fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
 #[test]
 fn basic_two_nodes_connectivity() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2, 50400).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -90,7 +96,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	const NUM_PACKETS: u32 = 5000;
 
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2, 50450).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -138,7 +144,7 @@ fn many_nodes_connectivity() {
 	// increased in the `NetworkConfiguration`.
 	const NUM_NODES: usize = 25;
 
-	let mut futures = build_nodes::<Vec<u8>>(NUM_NODES)
+	let mut futures = build_nodes::<Vec<u8>>(NUM_NODES, 50500)
 		.into_iter()
 		.map(move |mut node| {
 			let mut num_connecs = 0;
@@ -194,7 +200,7 @@ fn many_nodes_connectivity() {
 #[test]
 fn basic_two_nodes_requests_in_parallel() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes::<(Option<u64>, Vec<u8>)>(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2, 50550).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -203,17 +209,8 @@ fn basic_two_nodes_requests_in_parallel() {
 	// Generate random messages with or without a request id.
 	let mut to_send = {
 		let mut to_send = Vec::new();
-		let mut next_id = 0;
 		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
-			let id = if rand::random::<usize>() % 4 != 0 {
-				let i = next_id;
-				next_id += 1;
-				Some(i)
-			} else {
-				None
-			};
-
-			let msg = (id, (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>());
+			let msg = (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
 			to_send.push(msg);
 		}
 		to_send
@@ -255,4 +252,108 @@ fn basic_two_nodes_requests_in_parallel() {
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
 	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+}
+
+#[test]
+fn reconnect_after_disconnect() {
+	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
+	// check that the disconnect worked, and finally check whether they successfully reconnect.
+
+	let (mut service1, mut service2) = {
+		let mut l = build_nodes::<Vec<u8>>(2, 50350).into_iter();
+		let a = l.next().unwrap();
+		let b = l.next().unwrap();
+		(a, b)
+	};
+
+	// We use the `current_thread` runtime because it doesn't require us to have `'static` futures.
+	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+
+	// For this test, the services can be in the following states.
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	enum ServiceState { NotConnected, FirstConnec, Disconnected, ConnectedAgain }
+	let mut service1_state = ServiceState::NotConnected;
+	let mut service2_state = ServiceState::NotConnected;
+
+	// Run the events loops.
+	runtime.block_on(future::poll_fn(|| -> Result<_, io::Error> {
+		loop {
+			let mut service1_not_ready = false;
+
+			match service1.poll().unwrap() {
+				Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { .. })) => {
+					match service1_state {
+						ServiceState::NotConnected => {
+							service1_state = ServiceState::FirstConnec;
+							if service2_state == ServiceState::FirstConnec {
+								service1.drop_node(service2.peer_id());
+							}
+						},
+						ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
+						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+					}
+				},
+				Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { .. })) => {
+					match service1_state {
+						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
+						ServiceState::ConnectedAgain| ServiceState::NotConnected |
+						ServiceState::Disconnected => panic!(),
+					}
+				},
+				Async::NotReady => service1_not_ready = true,
+				_ => panic!()
+			}
+
+			match service2.poll().unwrap() {
+				Async::Ready(Some(ServiceEvent::OpenedCustomProtocol { .. })) => {
+					match service2_state {
+						ServiceState::NotConnected => {
+							service2_state = ServiceState::FirstConnec;
+							if service1_state == ServiceState::FirstConnec {
+								service1.drop_node(service2.peer_id());
+							}
+						},
+						ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,
+						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+					}
+				},
+				Async::Ready(Some(ServiceEvent::ClosedCustomProtocol { .. })) => {
+					match service2_state {
+						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
+						ServiceState::ConnectedAgain| ServiceState::NotConnected |
+						ServiceState::Disconnected => panic!(),
+					}
+				},
+				Async::NotReady if service1_not_ready => break,
+				Async::NotReady => {}
+				_ => panic!()
+			}
+		}
+
+		if service1_state == ServiceState::ConnectedAgain && service2_state == ServiceState::ConnectedAgain {
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	})).unwrap();
+
+	// Do a second 3-seconds run to make sure we don't get disconnected immediately again.
+	let mut delay = tokio::timer::Delay::new(Instant::now() + Duration::from_secs(3));
+	runtime.block_on(future::poll_fn(|| -> Result<_, io::Error> {
+		match service1.poll().unwrap() {
+			Async::NotReady => {},
+			_ => panic!()
+		}
+
+		match service2.poll().unwrap() {
+			Async::NotReady => {},
+			_ => panic!()
+		}
+
+		if let Async::Ready(()) = delay.poll().unwrap() {
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
+	})).unwrap();
 }

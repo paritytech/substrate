@@ -29,20 +29,34 @@ use rstd::prelude::*;
 use runtime_primitives::traits::As;
 
 struct ContractModule<'a, Gas: 'a> {
-	// An `Option` is used here for loaning (`take()`-ing) the module.
-	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
-	// the value *must* be `Some`).
+	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
+	///
+	/// An `Option` is used here for loaning (`take()`-ing) the module.
+	/// Invariant: Can't be `None` (i.e. on enter and on exit from the function
+	/// the value *must* be `Some`).
 	module: Option<elements::Module>,
 	schedule: &'a Schedule<Gas>,
 }
 
 impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
+	/// Creates a new instance of `ContractModule`.
+	///
+	/// Returns `Err` if the `original_code` couldn't be decoded or
+	/// if it contains an invalid module.
 	fn new(
 		original_code: &[u8],
 		schedule: &'a Schedule<Gas>,
 	) -> Result<ContractModule<'a, Gas>, &'static str> {
+		use wasmi_validation::{validate_module, PlainValidator};
+
 		let module =
-			elements::deserialize_buffer(original_code).map_err(|_| "can't decode wasm code")?;
+			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
+
+		// Make sure that the module is valid.
+		validate_module::<PlainValidator>(&module).map_err(|_| "Module is not valid")?;
+
+		// Return a `ContractModule` instance with
+		// __valid__ module.
 		Ok(ContractModule {
 			module: Some(module),
 			schedule,
@@ -239,6 +253,12 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 				.get(*type_idx as usize)
 				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
 
+			// We disallow importing `ext_println` unless debug features are enabled,
+			// which should only be allowed on a dev chain
+			if !self.schedule.enable_println && import.field().as_bytes() == b"ext_println" {
+				return Err("module imports `ext_println` but debug features disabled");
+			}
+
 			// We disallow importing `gas` function here since it is treated as implementation detail.
 			if import.field().as_bytes() == b"gas"
 				|| !C::can_satisfy(import.field().as_bytes(), func_ty)
@@ -264,7 +284,8 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 ///
 /// The checks are:
 ///
-/// - module doesn't define an internal memory instance,
+/// - provided code is a valid wasm module.
+/// - the module doesn't define an internal memory instance,
 /// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`,
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
@@ -297,7 +318,7 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 			(initial, Some(maximum)) => MemoryDefinition { initial, maximum },
 			(_, None) => {
 				// Maximum number of pages should be always declared.
-				// This isn't a hard requirement and can be treated as a maxiumum set
+				// This isn't a hard requirement and can be treated as a maximum set
 				// to configured maximum.
 				return Err("Maximum number of pages should be always declared.");
 			}
@@ -347,6 +368,8 @@ mod tests {
 		gas(_ctx, _amount: u32) => { unreachable!(); },
 
 		nop(_ctx, _unused: u64) => { unreachable!(); },
+
+		ext_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
 	);
 
 	macro_rules! prepare_test {
@@ -430,7 +453,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Requested initial number of pages should not exceed the requested maximum")
+			Err("Module is not valid")
 		);
 
 		prepare_test!(no_maximum,
@@ -479,7 +502,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Multiple memory imports defined")
+			Err("Module is not valid")
 		);
 
 		prepare_test!(table_import,
@@ -497,7 +520,7 @@ mod tests {
 		prepare_test!(global_import,
 			r#"
 			(module
-				(global $g (import "env" "global") (mut i32))
+				(global $g (import "env" "global") i32)
 				(func (export "call"))
 				(func (export "deploy"))
 			)
@@ -572,6 +595,36 @@ mod tests {
 			"#,
 			Err("module imports a non-existent function")
 		);
+
+		prepare_test!(ext_println_debug_disabled,
+			r#"
+			(module
+				(import "env" "ext_println" (func $ext_println (param i32 i32)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("module imports `ext_println` but debug features disabled")
+		);
+
+		#[test]
+		fn ext_println_debug_enabled() {
+			let wasm = wabt::Wat2Wasm::new().validate(false).convert(
+				r#"
+				(module
+					(import "env" "ext_println" (func $ext_println (param i32 i32)))
+
+					(func (export "call"))
+					(func (export "deploy"))
+				)
+				"#
+			).unwrap();
+			let mut schedule = Schedule::<u64>::default();
+			schedule.enable_println = true;
+			let r = prepare_contract::<Test, TestEnv>(wasm.as_ref(), &schedule);
+			assert_matches!(r, Ok(_));
+		}
 	}
 
 	mod entrypoints {

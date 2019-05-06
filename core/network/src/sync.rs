@@ -17,10 +17,10 @@
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use log::{debug, trace, warn};
+use log::{debug, trace, info, warn};
 use crate::protocol::Context;
 use fork_tree::ForkTree;
-use network_libp2p::{Severity, PeerId};
+use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
@@ -29,7 +29,7 @@ use crate::blocks::BlockCollection;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, CheckedSub};
 use runtime_primitives::generic::BlockId;
-use crate::message::{self, generic::Message as GenericMessage};
+use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -47,6 +47,12 @@ const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
+/// Reputation change when a peer sent us a status message that led to a database read error.
+const BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE: i32 = -(1 << 16);
+/// Reputation change when a peer failed to answer our legitimate ancestry block search.
+const ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE: i32 = -(1 << 9);
+/// Reputation change when a peer sent us a status message with a different genesis than us.
+const GENESIS_MISMATCH_REPUTATION_CHANGE: i32 = i32::min_value() + 1;
 
 #[derive(Debug)]
 struct PeerSync<B: BlockT> {
@@ -200,7 +206,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				max: Some(1),
 			};
 
-			protocol.send_message(peer, GenericMessage::BlockRequest(request));
+			protocol.send_block_request(peer, request);
 		}
 
 		self.pending_requests.append(&mut unhandled_requests);
@@ -470,16 +476,18 @@ impl<B: BlockT> ChainSync<B> {
 			match (status, info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
-					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
-					protocol.report_peer(who, Severity::Useless(reason));
+					protocol.report_peer(who.clone(), BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE);
+					protocol.disconnect_peer(who);
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
-					let reason = format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
-					protocol.report_peer(who, Severity::Bad(reason));
+					info!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who.clone(), i32::min_value());
+					protocol.disconnect_peer(who);
 				},
 				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
-					let reason = format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
-					protocol.report_peer(who, Severity::Bad(reason));
+					info!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who.clone(), i32::min_value());
+					protocol.disconnect_peer(who);
 				},
 				(Ok(BlockStatus::Unknown), _) if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS => {
 					// when actively syncing the common point moves too fast.
@@ -638,13 +646,15 @@ impl<B: BlockT> ChainSync<B> {
 							maybe_our_block_hash.map_or(false, |x| x == block.hash)
 						},
 						(None, _) => {
-							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
-							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
+							debug!(target: "sync", "Invalid response when searching for ancestor from {}", who);
+							protocol.report_peer(who.clone(), i32::min_value());
+							protocol.disconnect_peer(who);
 							return;
 						},
 						(_, Err(e)) => {
-							let reason = format!("Error answering legitimate blockchain query: {:?}", e);
-							protocol.report_peer(who, Severity::Useless(reason));
+							info!("Error answering legitimate blockchain query: {:?}", e);
+							protocol.report_peer(who.clone(), ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE);
+							protocol.disconnect_peer(who);
 							return;
 						},
 					};
@@ -653,7 +663,8 @@ impl<B: BlockT> ChainSync<B> {
 					}
 					if !block_hash_match && num == As::sa(0) {
 						trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-						protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
+						protocol.report_peer(who.clone(), GENESIS_MISMATCH_REPUTATION_CHANGE);
+						protocol.disconnect_peer(who);
 						return;
 					}
 					if let Some((next_state, next_block_num)) = Self::handle_ancestor_search_state(state, num, block_hash_match) {
@@ -710,13 +721,10 @@ impl<B: BlockT> ChainSync<B> {
 				match response.blocks.into_iter().next() {
 					Some(response) => {
 						if hash != response.hash {
-							let msg = format!(
-								"Invalid block justification provided: requested: {:?} got: {:?}",
-								hash,
-								response.hash,
-							);
-
-							protocol.report_peer(who, Severity::Bad(msg));
+							info!("Invalid block justification provided by {}: requested: {:?} got: {:?}",
+								who, hash, response.hash);
+							protocol.report_peer(who.clone(), i32::min_value());
+							protocol.disconnect_peer(who);
 							return;
 						}
 
@@ -848,8 +856,9 @@ impl<B: BlockT> ChainSync<B> {
 	/// Handle new block announcement.
 	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context<B>, who: PeerId, hash: B::Hash, header: &B::Header) {
 		let number = *header.number();
+		debug!(target: "sync", "Received block announcement with number {:?}", number);
 		if number <= As::sa(0) {
-			trace!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
+			warn!(target: "sync", "Ignored invalid block announcement from {}: {}", who, hash);
 			return;
 		}
 		let parent_status = block_status(&*protocol.client(), &self.queue_blocks, header.parent_hash().clone()).ok()
@@ -984,7 +993,7 @@ impl<B: BlockT> ChainSync<B> {
 						max: Some(1),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
-					protocol.send_message(who, GenericMessage::BlockRequest(request));
+					protocol.send_block_request(who, request);
 				},
 				_ => (),
 			}
@@ -1005,7 +1014,7 @@ impl<B: BlockT> ChainSync<B> {
 						max: Some(MAX_UNKNOWN_FORK_DOWNLOAD_LEN),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
-					protocol.send_message(who, GenericMessage::BlockRequest(request));
+					protocol.send_block_request(who, request);
 				},
 				_ => (),
 			}
@@ -1034,7 +1043,7 @@ impl<B: BlockT> ChainSync<B> {
 							max: Some((range.end - range.start).as_() as u32),
 						};
 						peer.state = PeerSyncState::DownloadingNew(range.start);
-						protocol.send_message(who, GenericMessage::BlockRequest(request));
+						protocol.send_block_request(who, request);
 					} else {
 						trace!(target: "sync", "Nothing to request");
 					}
@@ -1054,7 +1063,7 @@ impl<B: BlockT> ChainSync<B> {
 			direction: message::Direction::Ascending,
 			max: Some(1),
 		};
-		protocol.send_message(who, GenericMessage::BlockRequest(request));
+		protocol.send_block_request(who, request);
 	}
 }
 

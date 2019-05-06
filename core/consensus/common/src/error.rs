@@ -35,7 +35,7 @@ error_chain! {
 		}
 
 		/// Unable to schedule wakeup.
-		FaultyTimer(e: ::tokio::timer::Error) {
+		FaultyTimer(e: ::tokio_timer::Error) {
 			description("Timer error"),
 			display("Timer error: {}", e),
 		}

@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
 use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;

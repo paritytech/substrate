@@ -19,7 +19,6 @@
 use std::collections::HashMap;
 use hash_db::Hasher;
 use trie::DBValue;
-use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::changes_trie::{AnchorBlockId, RootsStorage, Storage};
@@ -33,7 +32,7 @@ use crate::backend::insert_into_memory_db;
 use crate::changes_trie::input::InputPair;
 
 /// In-memory implementation of changes trie storage.
-pub struct InMemoryStorage<H: Hasher> where H::Out: HeapSizeOf {
+pub struct InMemoryStorage<H: Hasher> {
 	data: RwLock<InMemoryStorageData<H>>,
 }
 
@@ -43,12 +42,12 @@ pub struct TrieBackendAdapter<'a, H: Hasher, S: 'a + Storage<H>> {
 	_hasher: ::std::marker::PhantomData<H>,
 }
 
-struct InMemoryStorageData<H: Hasher> where H::Out: HeapSizeOf {
+struct InMemoryStorageData<H: Hasher> {
 	roots: HashMap<u64, H::Out>,
 	mdb: MemoryDB<H>,
 }
 
-impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> InMemoryStorage<H> {
 	/// Create the storage from given in-memory database.
 	pub fn with_db(mdb: MemoryDB<H>) -> Self {
 		Self {
@@ -109,13 +108,13 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	}
 }
 
-impl<H: Hasher> RootsStorage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> RootsStorage<H> for InMemoryStorage<H> {
 	fn root(&self, _anchor_block: &AnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
 		Ok(self.data.read().roots.get(&block).cloned())
 	}
 }
 
-impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> Storage<H> for InMemoryStorage<H> {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}

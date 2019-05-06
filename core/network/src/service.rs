@@ -19,12 +19,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
 
-use log::{warn, debug, error, trace, info};
-use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
+use log::{warn, debug, error, info};
+use futures::{Async, Future, Stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{ProtocolId, NetworkConfiguration, Severity};
+use network_libp2p::{ProtocolId, NetworkConfiguration};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
+use network_libp2p::{RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -44,7 +44,6 @@ pub use network_libp2p::PeerId;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
-
 
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
@@ -99,8 +98,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 	fn justification_imported(&self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
-			let reason = Severity::Bad(format!("Invalid justification provided for #{}", hash).to_string());
-			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
+			info!("Invalid justification provided by {} for #{}", who, hash);
+			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+			let _ = self.network_sender.send(NetworkMsg::DisconnectPeer(who.clone()));
 		}
 	}
 
@@ -112,20 +112,26 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
-	fn useless_peer(&self, who: PeerId, reason: &str) {
-		trace!(target:"sync", "Useless peer {}, {}", who, reason);
-		self.network_sender.send(NetworkMsg::ReportPeer(who, Severity::Useless(reason.to_string())));
-	}
-
-	fn note_useless_and_restart_sync(&self, who: PeerId, reason: &str) {
-		trace!(target:"sync", "Bad peer {}, {}", who, reason);
-		// is this actually malign or just useless?
-		self.network_sender.send(NetworkMsg::ReportPeer(who, Severity::Useless(reason.to_string())));
-		let _ = self.protocol_sender.send(ProtocolMsg::RestartSync);
+	fn report_peer(&self, who: PeerId, reputation_change: i32) {
+		self.network_sender.send(NetworkMsg::ReportPeer(who, reputation_change));
 	}
 
 	fn restart(&self) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RestartSync);
+	}
+}
+
+/// A cloneable handle for reporting cost/benefits of peers.
+#[derive(Clone)]
+pub struct ReportHandle {
+	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
+}
+
+impl ReportHandle {
+	/// Report a given peer as either beneficial (+) or costly (-) according to the
+	/// given scalar.
+	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
+		self.inner.report_peer(who, cost_benefit);
 	}
 }
 
@@ -178,8 +184,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			params.transaction_pool,
 			params.specialization,
 		)?;
-		let versions = [(protocol::CURRENT_VERSION as u8)];
-		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
+		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
+		let registered = RegisteredProtocol::new(protocol_id, &versions);
 		let (thread, network, peerset) = start_thread(
 			network_to_protocol_sender,
 			network_port,
@@ -268,6 +274,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			));
 	}
 
+	/// Report a given peer as either beneficial (+) or costly (-) according to the
+	/// given scalar.
+	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
+		self.peerset.report_peer(who, cost_benefit);
+	}
+
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F>(&self, f: F)
 		where F: FnOnce(&mut S, &mut Context<B>) + Send + 'static
@@ -346,8 +358,6 @@ pub trait ManageNetwork {
 	fn remove_reserved_peer(&self, peer: PeerId);
 	/// Add reserved peer
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
-	/// Returns a user-friendly identifier of our node.
-	fn node_id(&self) -> Option<String>;
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
@@ -368,19 +378,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 		self.peerset.add_reserved_peer(peer_id.clone());
 		self.network.lock().add_known_address(peer_id, addr);
 		Ok(())
-	}
-
-	fn node_id(&self) -> Option<String> {
-		let network = self.network.lock();
-		let ret = network
-			.listeners()
-			.next()
-			.map(|addr| {
-				let mut addr = addr.clone();
-				addr.append(multiaddr::Protocol::P2p(network.peer_id().clone().into()));
-				addr.to_string()
-			});
-		ret
 	}
 }
 
@@ -464,8 +461,13 @@ impl<B: BlockT + 'static> NetworkPort<B> {
 pub enum NetworkMsg<B: BlockT + 'static> {
 	/// Send an outgoing custom message.
 	Outgoing(PeerId, Message<B>),
-	/// Report a peer.
-	ReportPeer(PeerId, Severity),
+	/// Disconnect a peer we're connected to, or do nothing if we're not connected.
+	DisconnectPeer(PeerId),
+	/// Performs a reputation adjustement on a peer.
+	ReportPeer(PeerId, i32),
+	/// Synchronization response.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronized,
 }
 
 /// Starts the background thread that handles the networking.
@@ -487,8 +489,9 @@ fn start_thread<B: BlockT + 'static>(
 	let (close_tx, close_rx) = oneshot::channel();
 	let service_clone = service.clone();
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
+	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol_sender, service_clone, network_port)
+		let fut = run_thread(protocol_sender, service_clone, network_port, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -509,89 +512,57 @@ fn run_thread<B: BlockT + 'static>(
 	protocol_sender: Sender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
+	peerset: PeersetHandle,
 ) -> impl Future<Item = (), Error = io::Error> {
 
-	let network_service_2 = network_service.clone();
+	futures::future::poll_fn(move || {
+		loop {
+			match network_port.take_one_message() {
+				Ok(None) => break,
+				Ok(Some(NetworkMsg::Outgoing(who, outgoing_message))) =>
+					network_service.lock().send_custom_message(&who, outgoing_message),
+				Ok(Some(NetworkMsg::ReportPeer(who, reputation))) =>
+					peerset.report_peer(who, reputation),
+				Ok(Some(NetworkMsg::DisconnectPeer(who))) =>
+					network_service.lock().drop_node(&who),
+				#[cfg(any(test, feature = "test-helpers"))]
+				Ok(Some(NetworkMsg::Synchronized)) => {}
 
-	// Protocol produces a stream of messages about what happens in sync.
-	let protocol = stream::poll_fn(move || {
-		match network_port.take_one_message() {
-			Ok(Some(message)) => Ok(Async::Ready(Some(message))),
-			Ok(None) => Ok(Async::NotReady),
-			Err(_) => Err(())
+				Err(_) => return Ok(Async::Ready(())),
+			}
 		}
-	}).for_each(move |msg| {
-		// Handle message from Protocol.
-		match msg {
-			NetworkMsg::Outgoing(who, outgoing_message) => {
-				network_service_2
-					.lock()
-					.send_custom_message(&who, outgoing_message);
-			},
-			NetworkMsg::ReportPeer(who, severity) => {
-				match severity {
-					Severity::Bad(message) => {
-						info!(target: "sync", "Banning {:?} because {:?}", who, message);
-						warn!(target: "sync", "Banning a node is a deprecated mechanism that \
-							should be removed");
-						network_service_2.lock().drop_node(&who)
-					},
-					Severity::Useless(message) => {
-						debug!(target: "sync", "Dropping {:?} because {:?}", who, message);
-						network_service_2.lock().drop_node(&who)
-					},
-					Severity::Timeout => {
-						debug!(target: "sync", "Dropping {:?} because it timed out", who);
-						network_service_2.lock().drop_node(&who)
-					},
+
+		loop {
+			match network_service.lock().poll() {
+				Ok(Async::NotReady) => break,
+				Ok(Async::Ready(Some(NetworkServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. }))) => {
+					debug_assert!(
+						version <= protocol::CURRENT_VERSION as u8
+						&& version >= protocol::MIN_VERSION as u8
+					);
+					let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(peer_id, debug_info));
 				}
-			},
+				Ok(Async::Ready(Some(NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) => {
+					let _ = protocol_sender.send(FromNetworkMsg::PeerDisconnected(peer_id, debug_info));
+				}
+				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) => {
+					let _ = protocol_sender.send(FromNetworkMsg::CustomMessage(peer_id, message));
+				}
+				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
+					debug!(target: "sync", "{} clogging messages:", messages.len());
+					for msg in messages.into_iter().take(5) {
+						debug!(target: "sync", "{:?}", msg);
+						let _ = protocol_sender.send(FromNetworkMsg::PeerClogged(peer_id.clone(), Some(msg)));
+					}
+				}
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
+				Err(err) => {
+					error!(target: "sync", "Error in the network: {:?}", err);
+					return Err(err)
+				}
+			}
 		}
-		Ok(())
+
+		Ok(Async::NotReady)
 	})
-	.then(|res| {
-		match res {
-			Ok(()) => (),
-			Err(_) => error!("Protocol disconnected"),
-		};
-		Ok(())
-	});
-
-	// The network service produces events about what happens on the network. Let's process them.
-	let network = stream::poll_fn(move || network_service.lock().poll()).for_each(move |event| {
-		match event {
-			NetworkServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. } => {
-				debug_assert_eq!(version, protocol::CURRENT_VERSION as u8);
-				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(peer_id, debug_info));
-			}
-			NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. } => {
-				let _ = protocol_sender.send(FromNetworkMsg::PeerDisconnected(peer_id, debug_info));
-			}
-			NetworkServiceEvent::CustomMessage { peer_id, message, .. } => {
-				let _ = protocol_sender.send(FromNetworkMsg::CustomMessage(peer_id, message));
-				return Ok(())
-			}
-			NetworkServiceEvent::Clogged { peer_id, messages, .. } => {
-				debug!(target: "sync", "{} clogging messages:", messages.len());
-				for msg in messages.into_iter().take(5) {
-					debug!(target: "sync", "{:?}", msg);
-					let _ = protocol_sender.send(FromNetworkMsg::PeerClogged(peer_id.clone(), Some(msg)));
-				}
-			}
-		};
-		Ok(())
-	});
-
-	// Merge all futures into one.
-	let futures: Vec<Box<Future<Item = (), Error = io::Error> + Send>> = vec![
-		Box::new(protocol) as Box<_>,
-		Box::new(network) as Box<_>
-	];
-
-	futures::select_all(futures)
-		.and_then(move |_| {
-			debug!("Networking ended");
-			Ok(())
-		})
-		.map_err(|(r, _, _)| r)
 }

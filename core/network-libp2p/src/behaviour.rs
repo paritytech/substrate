@@ -20,15 +20,18 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
+#[cfg(not(target_os = "unknown"))]
 use libp2p::core::swarm::toggle::Toggle;
 use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut};
+#[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
-use libp2p::ping::{Ping, PingEvent};
-use log::{debug, trace, warn};
-use std::{cmp, io, fmt, time::Duration, time::Instant};
+use libp2p::multiaddr::Protocol;
+use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
+use log::{debug, info, trace, warn};
+use std::{borrow::Cow, cmp, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::Delay;
+use tokio_timer::{Delay, clock::Clock};
 use void;
 
 /// General behaviour of the network.
@@ -44,6 +47,7 @@ pub struct Behaviour<TMessage, TSubstream> {
 	/// Periodically identifies the remote and responds to incoming requests.
 	identify: Identify<TSubstream>,
 	/// Discovers nodes on the local network.
+	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<TSubstream>>,
 
 	/// Queue of events to produce for the outside.
@@ -68,21 +72,30 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 
 		let custom_protocols = CustomProto::new(protocol, peerset);
 
-		let mut kademlia = Kademlia::new(local_public_key.into_peer_id());
+		let mut kademlia = Kademlia::new(local_public_key.clone().into_peer_id());
 		for (peer_id, addr) in &known_addresses {
 			kademlia.add_connected_address(peer_id, addr.clone());
 		}
 
+		if enable_mdns {
+			#[cfg(target_os = "unknown")]
+			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
+		}
+
+		let clock = Clock::new();
 		Behaviour {
-			ping: Ping::new(),
+			ping: Ping::new(PingConfig::new()),
 			custom_protocols,
 			discovery: DiscoveryBehaviour {
 				user_defined: known_addresses,
 				kademlia,
-				next_kad_random_query: Delay::new(Instant::now()),
+				next_kad_random_query: Delay::new(clock.now()),
 				duration_to_next_kad: Duration::from_secs(1),
+				clock,
+				local_peer_id: local_public_key.into_peer_id(),
 			},
 			identify,
+			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
 					Ok(mdns) => Some(mdns).into(),
@@ -168,8 +181,8 @@ pub enum BehaviourOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
-		result: io::Result<()>,
+		/// Reason why the substream closed, for diagnostic purposes.
+		reason: Cow<'static, str>,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -211,8 +224,8 @@ impl<TMessage> From<CustomProtoOut<TMessage>> for BehaviourOut<TMessage> {
 			CustomProtoOut::CustomProtocolOpen { version, peer_id, endpoint } => {
 				BehaviourOut::CustomProtocolOpen { version, peer_id, endpoint }
 			}
-			CustomProtoOut::CustomProtocolClosed { peer_id, result } => {
-				BehaviourOut::CustomProtocolClosed { peer_id, result }
+			CustomProtoOut::CustomProtocolClosed { peer_id, reason } => {
+				BehaviourOut::CustomProtocolClosed { peer_id, reason }
 			}
 			CustomProtoOut::CustomMessage { peer_id, message } => {
 				BehaviourOut::CustomMessage { peer_id, message }
@@ -291,14 +304,16 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behavio
 impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: PingEvent) {
 		match event {
-			PingEvent::PingSuccess { peer, time } => {
-				trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer, time);
-				self.events.push(BehaviourOut::PingSuccess { peer_id: peer, ping_time: time });
+			PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } => {
+				trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer, rtt);
+				self.events.push(BehaviourOut::PingSuccess { peer_id: peer, ping_time: rtt });
 			}
+			_ => ()
 		}
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
 impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: MdnsEvent) {
 		match event {
@@ -331,6 +346,10 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
+	/// `Clock` instance that uses the current execution context's source of time.
+	clock: Clock,
+	/// Identity of our local node.
+	local_peer_id: PeerId,
 }
 
 impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>
@@ -382,6 +401,16 @@ where
 		NetworkBehaviour::inject_node_event(&mut self.kademlia, peer_id, event)
 	}
 
+	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
+		let new_addr = addr.clone()
+			.with(Protocol::P2p(self.local_peer_id.clone().into()));
+		info!(target: "sub-libp2p", "Discovered external node address: {}", new_addr);
+	}
+
+	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
+		info!(target: "sub-libp2p", "No longer listening on {}", addr);
+	}
+
 	fn poll(
 		&mut self,
 		params: &mut PollParameters,
@@ -408,7 +437,7 @@ where
 					self.kademlia.find_node(random_peer_id);
 
 					// Reset the `Delay` to the next random.
-					self.next_kad_random_query.reset(Instant::now() + self.duration_to_next_kad);
+					self.next_kad_random_query.reset(self.clock.now() + self.duration_to_next_kad);
 					self.duration_to_next_kad = cmp::min(self.duration_to_next_kad * 2,
 						Duration::from_secs(60));
 				},
@@ -422,27 +451,3 @@ where
 		Async::NotReady
 	}
 }
-
-/// The severity of misbehaviour of a peer that is reported.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Severity {
-	/// Peer is timing out. Could be bad connectivity of overload of work on either of our sides.
-	Timeout,
-	/// Peer has been notably useless. E.g. unable to answer a request that we might reasonably consider
-	/// it could answer.
-	Useless(String),
-	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
-	/// must have taken concrete action in order to behave in such a way which is wantanly invalid.
-	Bad(String),
-}
-
-impl fmt::Display for Severity {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Severity::Timeout => write!(fmt, "Timeout"),
-			Severity::Useless(r) => write!(fmt, "Useless ({})", r),
-			Severity::Bad(r) => write!(fmt, "Bad ({})", r),
-		}
-	}
-}
-

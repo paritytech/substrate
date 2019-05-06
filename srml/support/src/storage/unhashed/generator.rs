@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::codec;
-use runtime_io::twox_128;
 use crate::rstd::vec::Vec;
 
 /// Abstraction around storage with unhashed access.
@@ -55,32 +54,46 @@ pub trait UnhashedStorage {
 
 	/// Take a value from storage, deleting it after reading.
 	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+
+	/// Get a Vec of bytes from storage.
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Put a raw byte slice into storage.
+	fn put_raw(&self, key: &[u8], value: &[u8]);
 }
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl<H> UnhashedStorage for (crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay>, H) {
+impl UnhashedStorage for std::cell::RefCell<&mut sr_primitives::StorageOverlay> {
 	fn exists(&self, key: &[u8]) -> bool {
-		self.0.borrow().contains_key(key)
+		self.borrow().contains_key(key)
 	}
 
 	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		self.0.borrow().get(key)
+		self.borrow().get(key)
 			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
 	}
 
 	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		self.0.borrow_mut().insert(key.to_vec(), codec::Encode::encode(val));
+		self.borrow_mut().insert(key.to_vec(), codec::Encode::encode(val));
 	}
 
 	fn kill(&self, key: &[u8]) {
-		self.0.borrow_mut().remove(key);
+		self.borrow_mut().remove(key);
 	}
 
 	fn kill_prefix(&self, prefix: &[u8]) {
-		self.0.borrow_mut().retain(|key, _| {
+		self.borrow_mut().retain(|key, _| {
 			!key.starts_with(prefix)
 		})
+	}
+
+	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.borrow().get(key).cloned()
+	}
+
+	fn put_raw(&self, key: &[u8], value: &[u8]) {
+		self.borrow_mut().insert(key.to_vec(), value.to_vec());
 	}
 }
 
@@ -107,11 +120,7 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	fn key_for(k1: &K1, k2: &K2) -> Vec<u8>;
 
 	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
-	fn prefix_for(k1: &K1) -> Vec<u8> {
-		let mut key = Self::prefix().to_vec();
-		codec::Encode::encode_to(k1, &mut key);
-		twox_128(&key).to_vec()
-	}
+	fn prefix_for(k1: &K1) -> Vec<u8>;
 
 	/// true if the value is defined in storage.
 	fn exists<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> bool {

@@ -205,7 +205,7 @@ mod tests {
 	use crate::tests::{Call, Origin, Event as OuterEvent};
 	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 
 	#[test]
 	fn motions_basic_environment_works() {

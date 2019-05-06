@@ -143,6 +143,7 @@ pub trait StartRPC<C: Components> {
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Self::ServersHandle>;
@@ -161,6 +162,7 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Self::ServersHandle> {
@@ -184,8 +186,8 @@ impl<C: Components> StartRPC<Self> for C where
 		};
 
 		Ok((
-			maybe_start_server(rpc_http, |address| rpc::start_http(address, handler()))?,
-			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, handler()))?.map(Mutex::new),
+			maybe_start_server(rpc_http, |address| rpc::start_http(address, rpc_cors.as_ref(), handler()))?,
+			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, rpc_cors.as_ref(), handler()))?.map(Mutex::new),
 		))
 	}
 }
@@ -473,6 +475,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	{
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: config.database_cache_size.map(|u| u as usize),
+			state_cache_size: config.state_cache_size,
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -557,6 +560,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	{
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
+			state_cache_size: config.state_cache_size,
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
@@ -596,27 +600,23 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::Encode;
 	use consensus_common::BlockOrigin;
 	use client::LongestChain;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::{Extrinsic, Transfer}};
+	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
 		let client = Arc::new(substrate_test_client::new());
 		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
-		let transaction = {
-			let transfer = Transfer {
-				amount: 5,
-				nonce: 0,
-				from: AccountKeyring::Alice.into(),
-				to: Default::default(),
-			};
-			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
-			Extrinsic::Transfer(transfer, signature)
-		};
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
 		let best = LongestChain::new(client.backend().clone(), client.import_lock())
 			.best_block_header_for_authoring().unwrap();
+
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 

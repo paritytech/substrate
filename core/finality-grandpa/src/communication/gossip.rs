@@ -73,10 +73,12 @@ use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::{trace, debug};
+use log::{trace, debug, warn};
+use futures::prelude::*;
+use futures::sync::mpsc;
 
 use crate::{CompactCommit, SignedMessage};
-use super::{Round, SetId, Network};
+use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -227,6 +229,12 @@ pub(super) enum GossipMessage<Block: BlockT> {
 	Neighbor(VersionedNeighborPacket<NumberFor<Block>>),
 }
 
+impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Block> {
+	fn from(neighbor: NeighborPacket<NumberFor<Block>>) -> Self {
+		GossipMessage::Neighbor(VersionedNeighborPacket::V1(neighbor))
+	}
+}
+
 /// Network level message with topic information.
 #[derive(Debug, Encode, Decode)]
 pub(super) struct VoteOrPrecommitMessage<Block: BlockT> {
@@ -273,32 +281,12 @@ impl<N> VersionedNeighborPacket<N> {
 	}
 }
 
-// cost scalars for reporting peers.
-mod cost {
-	pub(super) const PAST_REJECTION: i32 = -50;
-	pub(super) const BAD_SIGNATURE: i32 = -100;
-	pub(super) const MALFORMED_COMMIT: i32 = -1000;
-	pub(super) const FUTURE_MESSAGE: i32 = -500;
-
-	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
-	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
-	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
-	pub(super) const PER_BLOCK_LOADED: i32 = -10;
-}
-
-// benefit scalars for reporting peers.
-mod benefit {
-	pub(super) const ROUND_MESSAGE: i32 = 100;
-	pub(super) const BASIC_VALIDATED_COMMIT: i32 = 100;
-	pub(super) const PER_EQUIVOCATION: i32 = 10;
-}
-
 /// Misbehavior that peers can perform.
 ///
 /// `cost` gives a cost that can be used to perform cost/benefit analysis of a
 /// peer.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Misbehavior {
+pub(super) enum Misbehavior {
 	// invalid neighbor message, considering the last one.
 	InvalidViewChange,
 	// could not decode neighbor message. bytes-length of the packet.
@@ -315,7 +303,7 @@ enum Misbehavior {
 }
 
 impl Misbehavior {
-	fn cost(&self) -> i32 {
+	pub(super) fn cost(&self) -> i32 {
 		use Misbehavior::*;
 
 		match *self {
@@ -402,9 +390,13 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		if peer.view.last_commit.as_ref() >= Some(&new_height) {
+		// this doesn't allow a peer to send us unlimited commits with the
+		// same height, because there is still a misbehavior condition based on
+		// sending commits that are <= the best we are aware of.
+		if peer.view.last_commit.as_ref() > Some(&new_height) {
 			return Err(Misbehavior::InvalidViewChange);
 		}
+
 		peer.view.last_commit = Some(new_height);
 
 		Ok(())
@@ -416,7 +408,7 @@ impl<N: Ord> Peers<N> {
 }
 
 #[derive(Debug)]
-enum Action<H>  {
+pub(super) enum Action<H>  {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
 	Keep(H, i32),
 	// discard and process.
@@ -445,7 +437,9 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	/// Note a round in a set has started.
-	fn note_round<N: Network<Block>>(&mut self, round: Round, set_id: SetId, net: &N) {
+	fn note_round<F>(&mut self, round: Round, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		if self.local_view.round == round && self.local_view.set_id == set_id {
 			return
 		}
@@ -457,24 +451,28 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.set_id = set_id;
 
 		self.live_topics.push(round, set_id);
-		self.multicast_neighbor_packet(net);
+		self.multicast_neighbor_packet(send_neighbor);
 	}
 
 	/// Note that a voter set with given ID has started. Does nothing if the last
 	/// call to the function was with the same `set_id`.
-	fn note_set<N: Network<Block>>(&mut self, set_id: SetId, net: &N) {
+	fn note_set<F>(&mut self, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		if self.local_view.set_id == set_id { return }
 
 		self.local_view.update_set(set_id);
 		self.live_topics.push(Round(0), set_id);
-		self.multicast_neighbor_packet(net);
+		self.multicast_neighbor_packet(send_neighbor);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	fn note_commit_finalized<N: Network<Block>>(&mut self, finalized: NumberFor<Block>, net: &N) {
+	fn note_commit_finalized<F>(&mut self, finalized: NumberFor<Block>, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		if self.local_view.last_commit.as_ref() < Some(&finalized) {
 			self.local_view.last_commit = Some(finalized);
-			self.multicast_neighbor_packet(net)
+			self.multicast_neighbor_packet(send_neighbor)
 		}
 	}
 
@@ -520,7 +518,6 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		use grandpa::Message as GrandpaMessage;
 
 		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
 			return Action::Discard(misbehavior.cost());
@@ -543,28 +540,6 @@ impl<Block: BlockT> Inner<Block> {
 			return Action::Discard(cost::MALFORMED_COMMIT);
 		}
 
-		// check signatures on all contained precommits.
-		for (i, (precommit, &(ref sig, ref id))) in full.message.precommits.iter()
-			.zip(&full.message.auth_data)
-			.enumerate()
-		{
-			if let Err(()) = super::check_message_sig::<Block>(
-				&GrandpaMessage::Precommit(precommit.clone()),
-				id,
-				sig,
-				full.round.0,
-				full.set_id.0,
-			) {
-				debug!(target: "afg", "Bad commit message signature {}", id);
-				telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
-				return Action::Discard(Misbehavior::BadCommitMessage {
-					signatures_checked: i as i32,
-					blocks_loaded: 0,
-					equivocations_caught: 0,
-				}.cost());
-			}
-		}
-
 		// always discard commits initially and rebroadcast after doing full
 		// checking.
 		let topic = super::global_topic::<Block>(full.set_id.0);
@@ -585,54 +560,64 @@ impl<Block: BlockT> Inner<Block> {
 		(neighbor_topics, Action::Discard(cb))
 	}
 
-	fn construct_neighbor_packet(&self) -> GossipMessage<Block> {
+	fn multicast_neighbor_packet<F>(&self, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
 		let packet = NeighborPacket {
 			round: self.local_view.round,
 			set_id: self.local_view.set_id,
 			commit_finalized_height: self.local_view.last_commit.unwrap_or(Zero::zero()),
 		};
 
-		GossipMessage::Neighbor(VersionedNeighborPacket::V1(packet))
-	}
-
-	fn multicast_neighbor_packet<N: Network<Block>>(&self, net: &N) {
-		let packet = self.construct_neighbor_packet();
 		let peers = self.peers.inner.keys().cloned().collect();
-		net.send_message(peers, packet.encode());
+		send_neighbor(peers, packet);
 	}
 }
 
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
+	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
-	pub(super) fn new(config: crate::Config) -> GossipValidator<Block> {
-		GossipValidator { inner: parking_lot::RwLock::new(Inner::new(config)) }
+	pub(super) fn new(config: crate::Config) -> (GossipValidator<Block>, ReportStream) {
+		let (tx, rx) = mpsc::unbounded();
+		let val = GossipValidator {
+			inner: parking_lot::RwLock::new(Inner::new(config)),
+			report_sender: tx,
+		};
+
+		(val, ReportStream { reports: rx })
 	}
 
 	/// Note a round in a set has started.
-	pub(super) fn note_round<N: Network<Block>>(&self, round: Round, set_id: SetId, net: &N) {
-		self.inner.write().note_round(round, set_id, net);
+	pub(super) fn note_round<F>(&self, round: Round, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
+		self.inner.write().note_round(round, set_id, send_neighbor);
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(super) fn note_set<N: Network<Block>>(&self, set_id: SetId, net: &N) {
-		self.inner.write().note_set(set_id, net);
+	pub(super) fn note_set<F>(&self, set_id: SetId, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
+		self.inner.write().note_set(set_id, send_neighbor);
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	pub(super) fn note_commit_finalized<N: Network<Block>>(&self, finalized: NumberFor<Block>, net: &N) {
-		self.inner.write().note_commit_finalized(finalized, net);
+	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	{
+		self.inner.write().note_commit_finalized(finalized, send_neighbor);
 	}
 
-	fn report(&self, _who: &PeerId, _cost_benefit: i32) {
-		// report
+	fn report(&self, who: PeerId, cost_benefit: i32) {
+		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
-	fn do_validate(&self, who: &PeerId, mut data: &[u8])
+	pub(super) fn do_validate(&self, who: &PeerId, mut data: &[u8])
 		-> (Action<Block::Hash>, Vec<Block::Hash>)
 	{
 		let mut broadcast_topics = Vec::new();
@@ -670,7 +655,14 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		let packet_data = {
 			let mut inner = self.inner.write();
 			inner.peers.new_peer(who.clone());
-			inner.construct_neighbor_packet().encode()
+
+			let packet = NeighborPacket {
+				round: inner.local_view.round,
+				set_id: inner.local_view.set_id,
+				commit_finalized_height: inner.local_view.last_commit.unwrap_or(Zero::zero()),
+			};
+
+			GossipMessage::<Block>::from(packet).encode()
 		};
 		context.send_message(who, packet_data);
 	}
@@ -691,15 +683,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 		match action {
 			Action::Keep(topic, cb) => {
-				self.report(who, cb);
+				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {
-				self.report(who, cb);
+				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			}
 			Action::Discard(cb) => {
-				self.report(who, cb);
+				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::Discard
 			}
 		}
@@ -788,6 +780,62 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 }
 
+struct PeerReport {
+	who: PeerId,
+	cost_benefit: i32,
+}
+
+// wrapper around a stream of reports.
+#[must_use = "The report stream must be consumed"]
+pub(super) struct ReportStream {
+	reports: mpsc::UnboundedReceiver<PeerReport>,
+}
+
+impl ReportStream {
+	/// Consume the report stream, converting it into a future that
+	/// handles all reports.
+	pub(super) fn consume<B, N>(self, net: N)
+		-> impl Future<Item=(),Error=()> + Send + 'static
+	where
+		B: BlockT,
+		N: super::Network<B> + Send + 'static,
+	{
+		ReportingTask {
+			reports: self.reports,
+			net,
+			_marker: Default::default(),
+		}
+	}
+}
+
+/// A future for reporting peers.
+#[must_use = "Futures do nothing unless polled"]
+struct ReportingTask<B, N> {
+	reports: mpsc::UnboundedReceiver<PeerReport>,
+	net: N,
+	_marker: std::marker::PhantomData<B>,
+}
+
+impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<(), ()> {
+		loop {
+			match self.reports.poll() {
+				Err(_) => {
+					warn!(target: "afg", "Report stream terminated unexpectedly");
+					return Ok(Async::Ready(()))
+				}
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
+				Ok(Async::Ready(Some(PeerReport { who, cost_benefit }))) =>
+					self.net.report(who, cost_benefit),
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
+			}
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -801,36 +849,6 @@ mod tests {
 			justification_period: 256,
 			local_key: None,
 			name: None,
-		}
-	}
-
-	#[derive(Clone)]
-	struct StubNetwork;
-
-	impl<Block: BlockT> super::Network<Block> for StubNetwork {
-		type In = futures::stream::Empty<network_gossip::TopicNotification, ()>;
-
-		fn messages_for(&self, _topic: Block::Hash) -> Self::In {
-			futures::stream::empty()
-		}
-
-		fn register_validator(
-			&self,
-			_validator: std::sync::Arc<dyn network_gossip::Validator<Block>>,
-		) {
-
-		}
-
-		fn gossip_message(&self, _topic: Block::Hash, _data: Vec<u8>, _force: bool) {
-
-		}
-
-		fn send_message(&self, _who: Vec<network::PeerId>, _data: Vec<u8>) {
-
-		}
-
-		fn announce(&self, _block: Block::Hash) {
-
 		}
 	}
 
@@ -975,12 +993,12 @@ mod tests {
 
 	#[test]
 	fn messages_not_expired_immediately() {
-		let val = GossipValidator::<Block>::new(config());
+		let (val, _) = GossipValidator::<Block>::new(config());
 
 		let set_id = 1;
 
 		for round_num in 1u64..10 {
-			val.note_round(Round(round_num), SetId(set_id), &StubNetwork);
+			val.note_round(Round(round_num), SetId(set_id), |_, _| {});
 		}
 
 		{
@@ -989,14 +1007,12 @@ mod tests {
 
 			// messages from old rounds are expired.
 			for round_num in 1u64..last_kept_round {
-				println!("{} should be expired?", round_num);
 				let topic = crate::communication::round_topic::<Block>(round_num, 1);
 				assert!(is_expired(topic, &[1, 2, 3]));
 			}
 
 			// messages from not-too-old rounds are not expired.
 			for round_num in last_kept_round..10 {
-				println!("{} should not be expired?", round_num);
 				let topic = crate::communication::round_topic::<Block>(round_num, 1);
 				assert!(!is_expired(topic, &[1, 2, 3]));
 			}

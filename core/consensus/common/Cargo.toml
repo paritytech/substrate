@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 crossbeam-channel = "0.3.4"
-libp2p = { version = "0.6.0", default-features = false }
+libp2p = { version = "0.7.0", default-features = false }
 log = "0.4"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
@@ -15,8 +15,12 @@ error-chain = "0.12"
 futures = "0.1"
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-tokio = "0.1.7"
+tokio-timer = "0.2"
 parity-codec = { version = "3.3", features = ["derive"] }
 
 [dev-dependencies]
 test_client = { package = "substrate-test-client", path = "../../test-client" }
+
+[features]
+default = []
+test-helpers = []

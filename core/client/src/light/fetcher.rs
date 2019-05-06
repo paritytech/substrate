@@ -22,14 +22,13 @@ use std::marker::PhantomData;
 use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher};
-use heapsize::HeapSizeOf;
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
 use crate::cht;
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::call_executor::check_execution_proof;
 
@@ -188,12 +187,12 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
-			H::Out: Ord + HeapSizeOf,
+			H::Out: Ord,
 	{
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
 		if remote_proof.max_block > request.max_block.0 || remote_proof.max_block < request.last_block.0 {
-			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
+			return Err(ClientError::ChangesTrieAccessFailed(format!(
 				"Invalid max_block used by the remote node: {}. Local: {}..{}..{}",
 				remote_proof.max_block, request.first_block.0, request.last_block.0, request.max_block.0,
 			)).into());
@@ -209,7 +208,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			.map(|last_root| *last_root >= request.tries_roots.0)
 			.unwrap_or(false);
 		if is_extra_first_root || is_extra_last_root {
-			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
+			return Err(ClientError::ChangesTrieAccessFailed(format!(
 				"Extra changes tries roots proofs provided by the remote node: [{:?}..{:?}]. Expected in range: [{}; {})",
 				remote_proof.roots.keys().next(), remote_proof.roots.keys().next_back(),
 				request.first_block.0, request.tries_roots.0,
@@ -247,7 +246,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			remote_max_block.as_(),
 			&request.key)
 		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
-		.map_err(|err| ClientErrorKind::ChangesTrieAccessFailed(err).into())
+		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
 	/// Check CHT-based proof for changes tries roots.
@@ -259,7 +258,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	) -> ClientResult<()>
 		where
 			H: Hasher,
-			H::Out: Ord + HeapSizeOf,
+			H::Out: Ord,
 	{
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
@@ -283,7 +282,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
 				if !storage.contains(&cht_root, &[]) {
-					return Err(ClientErrorKind::InvalidCHTProof.into());
+					return Err(ClientError::InvalidCHTProof.into());
 				}
 
 				// check proof for single changes trie root
@@ -309,7 +308,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord + HeapSizeOf,
+		H::Out: Ord,
 		S: BlockchainStorage<Block>,
 		F: Send + Sync,
 {
@@ -320,7 +319,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Block::Header> {
 		let remote_header = remote_header.ok_or_else(||
-			ClientError::from(ClientErrorKind::InvalidCHTProof))?;
+			ClientError::from(ClientError::InvalidCHTProof))?;
 		let remote_header_hash = remote_header.hash();
 		cht::check_proof::<Block::Header, H>(
 			request.cht_root,
@@ -404,7 +403,7 @@ pub mod tests {
 	use crate::light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use primitives::{twox_128, Blake2Hasher};
+	use primitives::{blake2_256, Blake2Hasher};
 	use primitives::storage::{StorageKey, well_known_keys};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
@@ -473,7 +472,7 @@ pub mod tests {
 			let builder = remote_client.new_block().unwrap();
 			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 			local_headers_hashes.push(remote_client.block_hash(i + 1)
-				.map_err(|_| ClientErrorKind::Backend("TestError".into()).into()));
+				.map_err(|_| ClientError::Backend("TestError".into())));
 		}
 
 		// 'fetch' header proof from remote node
@@ -587,7 +586,7 @@ pub mod tests {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
-		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
@@ -699,7 +698,7 @@ pub mod tests {
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
-		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
 		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:

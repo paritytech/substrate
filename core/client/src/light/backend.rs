@@ -28,12 +28,11 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use heapsize::HeapSizeOf;
 use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
@@ -108,7 +107,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
@@ -183,6 +182,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 		&self.blockchain
 	}
 
+	fn used_state_cache_size(&self) -> Option<usize> {
+		None
+	}
+
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		None
 	}
@@ -208,7 +211,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 }
 
@@ -218,7 +221,7 @@ where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.genesis_state.read().is_some()
@@ -234,7 +237,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
 
@@ -323,13 +326,13 @@ where
 		let mut header = self.cached_header.read().clone();
 		if header.is_none() {
 			let cached_header = self.blockchain.upgrade()
-				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", self.block)).into())
+				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", self.block)))
 				.and_then(|blockchain| blockchain.expect_header(BlockId::Hash(self.block)))?;
 			header = Some(cached_header.clone());
 			*self.cached_header.write() = Some(cached_header);
 		}
 
-		self.fetcher.upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
+		self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 			.remote_read(RemoteReadRequest {
 				block: self.block,
 				header: header.expect("if block above guarantees that header is_some(); qed"),
@@ -340,7 +343,7 @@ where
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
@@ -386,7 +389,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type Error = ClientError;
 	type Transaction = ();

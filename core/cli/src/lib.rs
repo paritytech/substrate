@@ -39,7 +39,7 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
+	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
 	path::{Path, PathBuf}, str::FromStr,
 };
 
@@ -201,7 +201,7 @@ where
 	CC: StructOpt + Clone + GetLogFilter,
 	RP: StructOpt + Clone + AugmentClap,
 	E: IntoExit,
-	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
+	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
@@ -322,6 +322,7 @@ fn fill_network_configuration(
 	chain_spec_id: &str,
 	config: &mut NetworkConfiguration,
 	client_id: String,
+	is_dev: bool,
 ) -> error::Result<()> {
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
 	config.config_path = Some(
@@ -359,7 +360,7 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
-	config.enable_mdns = !cli.no_mdns;
+	config.enable_mdns = !is_dev && !cli.no_mdns;
 
 	Ok(())
 }
@@ -404,6 +405,7 @@ where
 	config.database_path =
 		db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	config.database_cache_size = cli.database_cache_size;
+	config.state_cache_size = cli.state_cache_size;
 	config.pruning = match cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
@@ -440,6 +442,8 @@ where
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
 
+	let is_dev = cli.shared_params.dev;
+
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
@@ -447,6 +451,7 @@ where
 		spec.id(),
 		&mut config.network,
 		client_id,
+		is_dev,
 	)?;
 
 	fill_transaction_pool_configuration::<F>(
@@ -475,6 +480,19 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
+	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
+		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+		None
+	} else {
+		Some(vec![
+			"http://localhost:*".into(),
+			"http://127.0.0.1:*".into(),
+			"https://localhost:*".into(),
+			"https://127.0.0.1:*".into(),
+			"https://polkadot.js.org".into(),
+			"https://substrate-ui.parity.io".into(),
+		])
+	});
 
 	// Override telemetry
 	if cli.no_telemetry {
@@ -501,11 +519,11 @@ where
 	F: ServiceFactory,
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
+	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
  {
-	let config = create_run_node_config::<F, _>(cli.left, spec_factory, impl_name, version)?;
+	let config = create_run_node_config::<F, _>(cli.left.clone(), spec_factory, impl_name, version)?;
 
-	run_service(exit, cli.right, config).map_err(Into::into)
+	run_service(exit, cli.left, cli.right, config).map_err(Into::into)
 }
 
 //
@@ -668,10 +686,17 @@ where
 		}
 	}
 
-	fs::remove_dir_all(&db_path)?;
-	println!("{:?} removed.", &db_path);
-
-	Ok(())
+	match fs::remove_dir_all(&db_path) {
+		Result::Ok(_) => {
+			println!("{:?} removed.", &db_path);
+			Ok(())
+		},
+		Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+			println!("{:?} did not exist.", &db_path);
+			Ok(())
+		},
+		Result::Err(err) => Result::Err(err.into())
+	}
 }
 
 fn parse_address(
@@ -723,10 +748,10 @@ fn init_logger(pattern: &str) {
 	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse(&lvl);
+		builder.parse_filters(&lvl);
 	}
 
-	builder.parse(pattern);
+	builder.parse_filters(pattern);
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 
