@@ -12,18 +12,17 @@ stages:
   - publish
   - deploy
 
-image:                             parity/rust:nightly
+image:                             parity/rust-builder:latest
 
 variables:
+  GIT_STRATEGY:                    fetch
+  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
+  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
+  SCCACHE_CACHE_SIZE:              50G
   CI_SERVER_NAME:                  "GitLab CI"
-  CARGO_HOME:                      "${CI_PROJECT_DIR}/.cargo"
-  # have OS based build containers in the future
-  DOCKER_OS:                       "ubuntu:xenial"
+  DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
 
-
-
-cache:                             {}
 
 .collect-artifacts:                &collect-artifacts
   artifacts:
@@ -31,9 +30,7 @@ cache:                             {}
     when:                          on_success
     expire_in:                     7 days
     paths:
-    - artifacts/
-
-
+      - artifacts/
 
 .kubernetes-build:                 &kubernetes-build
   tags:
@@ -42,13 +39,11 @@ cache:                             {}
     name: parity-build
 
 
-
 #### stage:                        test
 
 check-runtime:
   stage:                           test
   image:                           parity/tools:latest
-  cache:                           {}
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -58,16 +53,8 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
-
-
-
 test-linux-stable:                 &test
   stage:                           test
-  cache:
-    key:                           "${CI_JOB_NAME}"
-    paths:
-      - ${CARGO_HOME}
-      - ./target
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
@@ -86,16 +73,11 @@ test-linux-stable:                 &test
     variables:
       - $DEPLOY_TAG
   before_script:
-   - test -d ${CARGO_HOME} -a -d ./target &&
-     echo "build cache size:" &&
-     du -h --max-depth=2 ${CARGO_HOME} ./target
-   - ./scripts/build.sh
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - time cargo test --all --release --verbose --locked
-
-
-
-
+    - sccache -s
 
 .build-only:                      &build-only
   only:
@@ -103,16 +85,10 @@ test-linux-stable:                 &test
     - tags
     - web
 
-
 #### stage:                        build
 
 build-linux-release:               &build
   stage:                           build
-  cache:
-    key:                           "${CI_JOB_NAME}"
-    paths:
-      - ${CARGO_HOME}
-      - ./target
   <<:                              *collect-artifacts
   <<:                              *build-only
   except:
@@ -121,7 +97,8 @@ build-linux-release:               &build
   tags:
     - linux-docker
   before_script:
-   - ./scripts/build.sh
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
@@ -135,11 +112,10 @@ build-linux-release:               &build
         tee ./artifacts/VERSION;
       fi
     - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
-    - echo "\n# building node-template\n"
+    - printf '\n# building node-template\n\n'
     - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
     - cp -r scripts/docker/* ./artifacts
-
-
+    - sccache -s
 
 build-rust-doc-release:            &build
   stage:                           build
@@ -153,14 +129,15 @@ build-rust-doc-release:            &build
   <<:                              *build-only
   tags:
     - linux-docker
+  before_script:
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
-
-
-
+    - sccache -s
 
 #### stage:                        publish
 
@@ -168,11 +145,8 @@ build-rust-doc-release:            &build
   stage:                           publish
   dependencies:
     - build-linux-release
-  cache: {}
   <<:                              *build-only
   <<:                              *kubernetes-build
-
-
 
 publish-docker-release:
   <<:                              *publish-build
@@ -205,9 +179,6 @@ publish-docker-release:
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -not -name artifacts -delete
 
-
-
-
 publish-s3-release:
   <<:                              *publish-build
   image:                           parity/awscli:latest
@@ -228,14 +199,13 @@ publish-s3-release:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
 
-
-
 publish-s3-doc:
   stage:                           publish
+  image:                           parity/awscli:latest
   allow_failure:                   true
   dependencies:
     - build-rust-doc-release
-  cache: {}
+  cache:                           {}
   <<:                              *build-only
   <<:                              *kubernetes-build
   variables:
@@ -253,16 +223,11 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-
-
-
-
 .deploy-template:                  &deploy
   stage:                           deploy
   when:                            manual
-  cache:                           {}
   retry:                           1
-  image:                           parity/kubectl-helm:$HELM_VERSION
+  image:                           parity/kubetools:latest
   <<:                              *build-only
   tags:
     # this is the runner that is used to deploy it
@@ -291,10 +256,7 @@ publish-s3-doc:
     - echo "# wait for the rollout to complete"
     - kubectl -n ${KUBE_NAMESPACE} rollout status statefulset/substrate
 
-
-
 # have environment:url eventually point to the logs
-
 
 .deploy-cibuild:                   &deploy-cibuild
   <<:                              *deploy
@@ -307,9 +269,8 @@ publish-s3-doc:
     variables:
       - $DEPLOY_TAG
 
-
-
 # have environment:url eventually point to the logs
+
 deploy-ew3:
   <<:                              *deploy-cibuild
   environment:
@@ -330,6 +291,23 @@ deploy-ue1-tag:
   environment:
     name: parity-prod-ue1
 
+.validator-deploy: &validator-deploy
+  stage: publish
+  dependencies:
+    - build-linux-release
+  image: parity/azure-ansible:v1
+  allow_failure: true
+  when: manual
+  tags:
+    - linux-docker
 
+validator1:
+  <<: *validator-deploy
+  script:
+    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator1
 
+validator2:
+  <<: *validator-deploy
+  script:
+    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator2
 
