@@ -18,16 +18,21 @@ use error_chain::*;
 use client;
 use crate::rpc;
 use crate::errors;
+pub use internal_errors::*;
 
-error_chain! {
-	foreign_links {
-		Client(client::error::Error) #[doc = "Client error"];
-	}
-	errors {
-		/// Not implemented yet
-		Unimplemented {
-			description("not yet implemented"),
-			display("Method Not Implemented"),
+#[allow(deprecated)]
+mod internal_errors {
+	use super::*;
+	error_chain! {
+		foreign_links {
+			Client(client::error::Error) #[doc = "Client error"];
+		}
+		errors {
+			/// Not implemented yet
+			Unimplemented {
+				description("not yet implemented"),
+				display("Method Not Implemented"),
+			}
 		}
 	}
 }

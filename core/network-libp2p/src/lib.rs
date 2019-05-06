@@ -25,7 +25,6 @@ mod custom_proto;
 mod service_task;
 mod transport;
 
-pub use crate::behaviour::Severity;
 pub use crate::config::*;
 pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
