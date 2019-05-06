@@ -79,24 +79,6 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
-check-web-wasm:
-  stage:                           test
-  image:                           tomaka/cargo-web:latest
-  allow_failure: true
-  script:
-    # WASM support is in progress. As more and more crates support WASM, we
-    # should add entries here.
-    - time cargo web build -p substrate-network-libp2p
-    - time cargo web build -p substrate-panic-handler
-    - time cargo web build -p substrate-peerset
-  only:
-    refs:
-      - master
-      - /^[0-9]+$/
-  except:
-    refs:
-      - v1.0
-
 .build-only:                      &build-only
   only:
     - master
