@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
-use log::{warn, debug, error, trace, info};
+use log::{warn, debug, error, trace};
 use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, Severity};
@@ -519,7 +519,7 @@ fn run_thread<B: BlockT + 'static>(
 			NetworkMsg::ReportPeer(who, severity) => {
 				match severity {
 					Severity::Bad(message) => {
-						info!(target: "sync", "Banning {:?} because {:?}", who, message);
+						debug!(target: "sync", "Banning {:?} because {:?}", who, message);
 						network_service_2.lock().drop_node(&who);
 						// temporary: make sure the peer gets dropped from the peerset
 						peerset.report_peer(who, i32::min_value());
