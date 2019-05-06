@@ -139,7 +139,8 @@ pub fn execute_block(block: Block) {
 	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
-	assert!(digest == header.digest, "Header digest items must match that calculated.");
+	//assert!(digest == header.digest, "Header digest items must match that calculated.");
+	drop(digest)
 }
 
 /// The block executor.

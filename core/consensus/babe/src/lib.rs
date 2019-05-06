@@ -427,7 +427,7 @@ impl<
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let proposal_work = if let Some((inout, proof, _batchable_proof)) = claim_slot(
+		let (proposal_work, inherent_digest) = if let Some((inout, proof, _batchable_proof)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -466,18 +466,18 @@ impl<
 
 			// deadline our production to approx. the end of the slot
 			let remaining_duration = slot_info.remaining_duration();
-			Timeout::new(
+			(Timeout::new(
 				proposer.propose(
 					slot_info.inherent_data,
 					remaining_duration,
 					generic::Digest {
 						logs: vec![
-							generic::DigestItem::babe_seal(inherent_digest),
+							generic::DigestItem::babe_seal(inherent_digest.clone()),
 						],
 					},
 				).into_future(),
 				remaining_duration,
-			)
+			), inherent_digest)
 		} else {
 			return Box::new(future::ok(()));
 		};
@@ -498,7 +498,22 @@ impl<
 				return
 			}
 
-			let (header, body) = b.deconstruct();
+			let (mut header, body) = b.deconstruct();
+			match header.digest().logs().len() {
+				0 => {
+					warn!(target: "babe", "Runtime stripped our digest!  Re-adding it.");
+					header.set_digest(generic::Digest {
+						logs: vec![
+							generic::DigestItem::babe_seal(inherent_digest)
+						],
+					})
+				}
+				1 => trace!(target: "babe", "Got correct number of seals.  Good!"),
+				_ => {
+					unimplemented!()
+				}
+
+			};
 			let header_num = header.number().clone();
 			let pre_hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
@@ -570,22 +585,28 @@ fn check_header<
 	trace!(target: "babe", "Checking header");
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => return Err(format!("Header {:?} is unsealed", hash)),
+		None => {
+			info!(target: "babe", "Header {:?} is unsealed", hash);
+			return Err(format!("Header {:?} is unsealed", hash))
+		}
 	};
 
 	let mut pre_digest_seal: Option<BabePreDigest> = None;
-
+	let mut num_logs = 0;
 	for i in header.digest().logs() {
+		num_logs += 1;
+		trace!(target: "babe", "Checking log {:?} in header {:?}", i, hash);
 		match i.as_babe_seal() {
 			s @ Some(_) => if pre_digest_seal.is_some() {
-				info!("Multiple BABE pre-runtime headers, rejecting!");
+				info!(target: "babe", "Multiple BABE pre-runtime headers, rejecting!");
 				return Err("Multiple BABE pre-runtime headers, rejecting!".to_string())
 			} else {
 				pre_digest_seal = s
 			},
-			None => trace!("Ignoring digest not meant for us"),
+			None => debug!(target: "babe", "Ignoring digest not meant for us"),
 		}
 	}
+	trace!(target: "babe", "Header {:?} has {:?} pre-runtime digests", hash, num_logs);
 
 	let BabePreDigest {
 		slot_num,
@@ -628,6 +649,12 @@ fn check_header<
 				})?
 			};
 			if check(&inout, threshold) {
+				let digest_item = CompatibleDigestItem::babe_seal(BabePreDigest {
+					slot_num,
+					author,
+					vrf_output,
+					proof,
+				});
 				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
 				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
@@ -707,6 +734,8 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			justification,
 			body,
 		);
+
+		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
 		let mut inherent_data = self
 			.inherent_data_providers
 			.create_inherent_data()
@@ -939,8 +968,8 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData, _: Duration, _: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
-			self.1.new_block().unwrap().bake().map_err(|e| e.into())
+		fn propose(&self, _: InherentData, _: Duration, digests: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
+			self.1.new_block().unwrap().push_digest(digests).bake().map_err(|e| e.into())
 		}
 	}
 

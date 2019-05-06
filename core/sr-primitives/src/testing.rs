@@ -18,8 +18,9 @@
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
+use log::debug;
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert, Digest as _DigestT};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
@@ -107,7 +108,12 @@ impl traits::Header for Header {
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
 	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
-	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
+	fn set_digest(&mut self, digest: Self::Digest) {
+		for i in digest.logs {
+			debug!(target: "import", "Importing log");
+			self.digest.push(i)
+		}
+	}
 
 	fn new(
 		number: Self::Number,

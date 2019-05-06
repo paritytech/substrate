@@ -19,8 +19,10 @@ use std::vec::Vec;
 use parity_codec::Encode;
 use runtime_primitives::ApplyOutcome;
 use runtime_primitives::generic::BlockId;
+use log::debug;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
+	Digest,
 };
 use primitives::{H256, ExecutionContext};
 use crate::blockchain::HeaderBackend;
@@ -115,9 +117,16 @@ where
 		})
 	}
 
-	/// Set the digest of `self` to `digest`.
-	pub fn push_digest(&mut self, digest: DigestFor<Block>) -> error::Result<()> {
-		Ok(self.header.set_digest(digest))
+	/// Set the digest of `self` to `digest`.  Returns `self`, to help with
+	/// chaining.
+	pub fn push_digest(mut self, mut digest: DigestFor<Block>) -> Self {
+		assert!(self.header.digest().logs().len() == 0, "We never call this method if there are existing digests; qed");
+		let num_logs = digest.logs().len();
+		debug!(target: "import", "Setting {} digests!", num_logs);
+		assert!(num_logs > 0, "We never call this method with an empty digest; qed");
+		self.header.set_digest(digest);
+		assert!(self.header.digest().logs().len() == num_logs, "we will have the correct number of digests here; qed");
+		self
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

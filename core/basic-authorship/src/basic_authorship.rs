@@ -44,7 +44,7 @@ pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error>;
 	/// Push an inherent digest onto the block. Fails if the inherent digest is invalid.
-	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>) -> Result<(), error::Error>;
+	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>);
 
 }
 
@@ -80,8 +80,8 @@ where
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
 	}
 
-	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>) -> Result<(), error::Error> {
-		client::block_builder::BlockBuilder::push_digest(self, inherent_digest).map_err(Into::into)
+	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>) {
+		client::block_builder::BlockBuilder::push_digest(self, inherent_digest)
 	}
 }
 
@@ -229,8 +229,10 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 					}
 				}
 
+				let p = inherent_digests.clone();
+
 				// Add inherent digests
-				block_builder.set_inherent_digest(inherent_digests.clone()).expect("this never returns `Err`; qed");
+				block_builder.set_inherent_digest(inherent_digests.clone());
 
 				// proceed with transactions
 				let mut is_first = true;
@@ -276,6 +278,9 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
+
+		debug_assert_eq!(block.header().digest(), &inherent_digests, "We just set the digests above; qed");
+		debug_assert!(inherent_digests.clone().pop().is_some(), "We will have at least one inherent digest for BABE; qed");
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
