@@ -200,13 +200,13 @@ pub enum Phase {
 /// Record of an event happening.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
-pub struct EventRecord<E: Parameter + Member> {
+pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
 	/// The event itself.
 	pub event: E,
-
-	// TODO: Add list of topics here.
+	/// The list of the topics this event has.
+	pub topics: Vec<T>,
 }
 
 decl_event!(
@@ -313,7 +313,7 @@ decl_storage! {
 		/// Digest of the current block, also part of the block header.
 		Digest get(digest): T::Digest;
 		/// Events deposited for the current block.
-		Events get(events): Vec<EventRecord<T::Event>>;
+		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
 		EventCount get(event_count): EventIndex;
 		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
@@ -389,7 +389,11 @@ impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let extrinsic_index = Self::extrinsic_index();
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-		let event = EventRecord { phase, event };
+		let event = EventRecord {
+			phase,
+			event,
+			topics: topics.iter().cloned().collect::<Vec<_>>(),
+		};
 
 		// Index of the to be added event.
 		let event_idx = {
@@ -675,7 +679,13 @@ mod tests {
 			System::finalize();
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]
+				vec![
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 1u16,
+						topics: vec![],
+					}
+				]
 			);
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
@@ -686,10 +696,10 @@ mod tests {
 			System::deposit_event(3u16);
 			System::finalize();
 			assert_eq!(System::events(), vec![
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16 },
-				EventRecord { phase: Phase::Finalization, event: 3u16 }
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
+				EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
 			]);
 		});
 	}
