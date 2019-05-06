@@ -190,6 +190,9 @@ decl_module! {
 			if <Events<T>>::append(&events).is_err() {
 				let [event] = events;
 				<Events<T>>::put(vec![event]);
+				<EventCount<T>>::put(1);
+			} else {
+				<EventCount<T>>::mutate(|event_count| *event_count += 1);
 			}
 		}
 	}
@@ -292,6 +295,8 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	h
 }
 
+type EventIndex = u32;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
@@ -316,9 +321,11 @@ decl_storage! {
 		Digest get(digest): T::Digest;
 		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event>>;
+		/// The number of events in the `Events<T>` list.
+		EventCount get(event_count): EventIndex;
 		/// Mapping between a topic (represented by T::Hash) and a vector of indices
 		/// of events in the `<Events<T>>` list.
-		EventTopics get(event_topics): map T::Hash => Vec<u32>; // u32 = EventIndex
+		EventTopics get(event_topics): map T::Hash => Vec<EventIndex>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -378,8 +385,7 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 
 impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		// FIXME: Inefficient
-		let event_idx = Self::events().len() as u32;
+		let event_idx = Self::event_count();
 
 		Self::deposit_event(event);
 
@@ -417,6 +423,7 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
 		<Events<T>>::kill();
+		<EventCount<T>>::kill();
 
 		// TODO: <EventTopics<T>>::kill();
 	}
