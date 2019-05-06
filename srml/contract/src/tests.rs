@@ -720,6 +720,22 @@ fn deduct_blocks() {
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent);
 			assert_eq!(bob_contract.deduct_block, 5);
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
+
+			// Advance 7 blocks more
+			System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Check result
+			let rent_2 = (8 + 4 - 2) // storage size = size_offset + deploy_set_storage - deposit_offset
+				* 4 // rent byte price
+				* 7; // blocks to rent
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			println!("rent:{}", rent/4);
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
+			assert_eq!(bob_contract.deduct_block, 12);
+			assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
 		}
 	);
 }
