@@ -90,10 +90,12 @@ check-web-wasm:
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
   only:
-    - master
-    - /^[0-9]+$/
+    refs:
+      - master
+      - /^[0-9]+$/
   except:
-    - v1.0
+    refs:
+      - v1.0
 
 .build-only:                      &build-only
   only:
