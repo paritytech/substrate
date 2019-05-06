@@ -278,7 +278,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			})?;
 
 		debug_assert_eq!(block.header().digest(), &inherent_digests, "We just set the digests above; qed");
-		debug_assert!(inherent_digests.logs().len() > 0, "We will have at least one inherent digest for BABE; qed");
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
