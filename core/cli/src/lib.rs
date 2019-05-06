@@ -322,6 +322,7 @@ fn fill_network_configuration(
 	chain_spec_id: &str,
 	config: &mut NetworkConfiguration,
 	client_id: String,
+	is_dev: bool,
 ) -> error::Result<()> {
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
 	config.config_path = Some(
@@ -359,7 +360,7 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
-	config.enable_mdns = !cli.no_mdns;
+	config.enable_mdns = !is_dev && !cli.no_mdns;
 
 	Ok(())
 }
@@ -440,6 +441,8 @@ where
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
 
+	let is_dev = cli.shared_params.dev;
+
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
@@ -447,6 +450,7 @@ where
 		spec.id(),
 		&mut config.network,
 		client_id,
+		is_dev,
 	)?;
 
 	fill_transaction_pool_configuration::<F>(

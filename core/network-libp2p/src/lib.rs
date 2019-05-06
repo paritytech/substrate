@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Networking layer of Substrate.
-//! 
+//!
 //! **Important**: This crate is unstable and the API and usage may change.
 //!
 
@@ -27,7 +27,7 @@ mod transport;
 
 pub use crate::behaviour::Severity;
 pub use crate::config::*;
-pub use crate::custom_proto::{CustomMessage, CustomMessageId, RegisteredProtocol};
+pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 pub use crate::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
 pub use crate::service_task::{start_service, Service, ServiceEvent};
 pub use libp2p::{Multiaddr, multiaddr, build_multiaddr};
@@ -37,8 +37,22 @@ use libp2p::core::nodes::ConnectedPoint;
 use serde_derive::Serialize;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
 
-/// Protocol / handler id
-pub type ProtocolId = [u8; 3];
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
+
+impl<'a> From<&'a [u8]> for ProtocolId {
+	fn from(bytes: &'a [u8]) -> ProtocolId {
+		ProtocolId(bytes.into())
+	}
+}
+
+impl ProtocolId {
+	/// Exposes the `ProtocolId` as bytes.
+	pub fn as_bytes(&self) -> &[u8] {
+		self.0.as_ref()
+	}
+}
 
 /// Parses a string address and returns the component, if valid.
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
