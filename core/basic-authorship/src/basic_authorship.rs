@@ -31,7 +31,7 @@ use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	AuthorityIdFor, DigestFor,
+	AuthorityIdFor, DigestFor, Digest,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
@@ -43,7 +43,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error>;
-	/// Push an inherent digest onto the block. Fails if the inherent digest is invalid.
+	/// Push an inherent digest onto the block.
 	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>);
 
 }
@@ -229,8 +229,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 					}
 				}
 
-				let p = inherent_digests.clone();
-
 				// Add inherent digests
 				block_builder.set_inherent_digest(inherent_digests.clone());
 
@@ -280,7 +278,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			})?;
 
 		debug_assert_eq!(block.header().digest(), &inherent_digests, "We just set the digests above; qed");
-		debug_assert!(inherent_digests.clone().pop().is_some(), "We will have at least one inherent digest for BABE; qed");
+		debug_assert!(inherent_digests.logs().len() > 0, "We will have at least one inherent digest for BABE; qed");
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),

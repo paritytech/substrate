@@ -117,16 +117,13 @@ where
 		})
 	}
 
-	/// Set the digest of `self` to `digest`.  Returns `self`, to help with
-	/// chaining.
-	pub fn push_digest(mut self, mut digest: DigestFor<Block>) -> Self {
+	/// Set the digest of `self` to `digest`.
+	pub fn push_digest(&mut self, mut digest: DigestFor<Block>) {
 		assert!(self.header.digest().logs().len() == 0, "We never call this method if there are existing digests; qed");
 		let num_logs = digest.logs().len();
 		debug!(target: "import", "Setting {} digests!", num_logs);
-		assert!(num_logs > 0, "We never call this method with an empty digest; qed");
 		self.header.set_digest(digest);
-		assert!(self.header.digest().logs().len() == num_logs, "we will have the correct number of digests here; qed");
-		self
+		assert!(self.header.digest().logs().len() == num_logs, "we will have the correct number of digests here; qed")
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

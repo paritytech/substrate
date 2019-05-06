@@ -579,7 +579,7 @@ fn check_header<
 	hash: B::Hash,
 	authorities: &[Public],
 	threshold: u64,
-) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
+) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
@@ -619,8 +619,8 @@ fn check_header<
 	})?;
 
 	let signature = digest_item.check_babe_signature().ok_or_else(|| {
-		debug!(target: "babe", "Header {:?} is unsealed", hash);
-		format!("Header {:?} is unsealed", hash)
+		debug!(target: "babe", "Header {:?} has a bad seal", hash);
+		format!("Header {:?} has a bad seal", hash)
 	})?;
 
 	if slot_num > slot_now {
@@ -649,13 +649,13 @@ fn check_header<
 				})?
 			};
 			if check(&inout, threshold) {
-				let digest_item = CompatibleDigestItem::babe_seal(BabePreDigest {
+				let pre_digest = CompatibleDigestItem::babe_seal(BabePreDigest {
 					slot_num,
 					author,
 					vrf_output,
 					proof,
 				});
-				Ok(CheckedHeader::Checked(header, digest_item))
+				Ok(CheckedHeader::Checked(header, (pre_digest, digest_item)))
 			} else {
 				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
 				Err(format!("Validator {:?} made seal when it wasn’t its turn", author))
@@ -763,9 +763,9 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			self.threshold,
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, seal) => {
-				let BabePreDigest { slot_num, .. } = seal.as_babe_seal()
-					.expect("check_header always returns a seal digest item; qed");
+			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
+				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_seal()
+					.expect("check_header always returns a pre-digest digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -969,7 +969,9 @@ mod tests {
 		type Create = Result<TestBlock, Error>;
 
 		fn propose(&self, _: InherentData, _: Duration, digests: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
-			self.1.new_block().unwrap().push_digest(digests).bake().map_err(|e| e.into())
+			let mut block = self.1.new_block().unwrap();
+			block.push_digest(digests);
+			block.bake().map_err(|e| e.into())
 		}
 	}
 
