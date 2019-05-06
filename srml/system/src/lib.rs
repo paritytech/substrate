@@ -410,19 +410,15 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		// TODO: What are we going to do with duplicates in `topics`?
-
 		let event_idx = Self::event_count();
 
 		Self::deposit_event(event);
 
 		for topic in topics {
-			let mut event_indices = <EventTopics<T>>::get(&(), topic);
-
-			// We want to use something like `StorageValue::append` here to avoid
-			// the same problem we used to have with <Events<T>>.
-			event_indices.push(event_idx);
-
-			<EventTopics<T>>::insert(&(), topic, event_indices);
+			if <EventTopics<T>>::append(&(), topic, &[event_idx]).is_err() {
+				// Overwrite
+				<EventTopics<T>>::insert(&(), topic, vec![event_idx]);
+			}
 		}
 	}
 
