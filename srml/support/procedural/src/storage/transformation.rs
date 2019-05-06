@@ -596,7 +596,7 @@ fn decl_storage_items(
 				i.linked_map(hasher.into_storage_hasher_struct(), key_type)
 			},
 			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher, hasher } => {
-				i.double_map(hasher.into_hashable_fn(), key1_type, key2_type, key2_hasher)
+				i.double_map(hasher.into_storage_hasher_struct(), key1_type, key2_type, key2_hasher)
 			},
 		};
 		impls.extend(implementation)
