@@ -13,12 +13,8 @@ use rstd::prelude::*;
 use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use runtime_primitives::{
-	ApplyResult, ApplyError, transaction_validity::TransactionValidity, generic,
-	create_runtime_str,
-	traits::{
-		self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify,
-		ValidateUnsigned, Extrinsic,
-	}
+	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -229,7 +225,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Nonce, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
 
 // Implement our runtime API endpoints. This is just a bunch of proxying.
 impl_runtime_apis! {
@@ -281,11 +277,7 @@ impl_runtime_apis! {
 
 	impl runtime_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-			match tx.is_signed() {
-				Some(true) => Executive::validate_transaction(tx),
-				Some(false) => Runtime::validate_unsigned(&tx.function),
-				None => TransactionValidity::Unknown(ApplyError::BadSignature as i8)
-			}
+			Executive::validate_transaction(tx)
 		}
 	}
 

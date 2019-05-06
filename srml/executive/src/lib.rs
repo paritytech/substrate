@@ -70,7 +70,8 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker
+	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
+	Extrinsic, ValidateUnsigned,
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -101,8 +102,8 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block);
 }
 
-pub struct Executive<System, Block, Context, Payment, AllModules>(
-	PhantomData<(System, Block, Context, Payment, AllModules)>
+pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
+	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
 );
 
 impl<
@@ -110,15 +111,18 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
+	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
+> ExecuteBlock<Block> for Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
+where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, Payment, UnsignedValidator, AllModules>::execute_block(block);
 	}
 }
 
@@ -127,12 +131,15 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	Payment: MakePayment<System::AccountId>,
+	UnsignedValidator,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
-> Executive<System, Block, Context, Payment, AllModules> where
+> Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>
+where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call=<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call>
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
@@ -227,6 +234,8 @@ impl<
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+		let uxt_signature = uxt.is_signed();
+
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
@@ -235,7 +244,7 @@ impl<
 			return Err(internal::ApplyError::FullBlock);
 		}
 
-		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
+		if let (Some(true), Some(sender), Some(index)) = (uxt_signature, xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if index != &expected_index { return Err(
@@ -290,7 +299,7 @@ impl<
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 	}
 
-	/// Check a given transaction for validity. This doesn't execute any
+	/// Check a given signed transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded.
@@ -300,6 +309,7 @@ impl<
 		const MISSING_SENDER: i8 = -20;
 		const INVALID_INDEX: i8 = -10;
 
+		let uxt_signature = uxt.is_signed();
 		let encoded_len = uxt.encode().len();
 
 		let xt = match uxt.check(&Default::default()) {
@@ -313,38 +323,38 @@ impl<
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
-			// pay any fees
-			if Payment::make_payment(sender, encoded_len).is_err() {
-				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
-			}
+		match (uxt_signature, xt.sender(), xt.index()) {
+			(Some(true), Some(sender), Some(index)) => {
+				// pay any fees
+				if Payment::make_payment(sender, encoded_len).is_err() {
+					return TransactionValidity::Invalid(ApplyError::CantPay as i8)
+				}
 
-			// check index
-			let expected_index = <system::Module<System>>::account_nonce(sender);
-			if index < &expected_index {
-				return TransactionValidity::Invalid(ApplyError::Stale as i8)
-			}
+				// check index
+				let expected_index = <system::Module<System>>::account_nonce(sender);
+				if index < &expected_index {
+					return TransactionValidity::Invalid(ApplyError::Stale as i8)
+				}
 
-			let index = *index;
-			let provides = vec![(sender, index).encode()];
-			let requires = if expected_index < index {
-				vec![(sender, index - One::one()).encode()]
-			} else {
-				vec![]
-			};
+				let index = *index;
+				let provides = vec![(sender, index).encode()];
+				let requires = if expected_index < index {
+					vec![(sender, index - One::one()).encode()]
+				} else {
+					vec![]
+				};
 
-			TransactionValidity::Valid {
-				priority: encoded_len as TransactionPriority,
-				requires,
-				provides,
-				longevity: TransactionLongevity::max_value(),
-			}
-		} else {
-			return TransactionValidity::Invalid(if xt.sender().is_none() {
-				MISSING_SENDER
-			} else {
-				INVALID_INDEX
-			})
+				TransactionValidity::Valid {
+					priority: encoded_len as TransactionPriority,
+					requires,
+					provides,
+					longevity: TransactionLongevity::max_value(),
+				}
+			},
+			(Some(false), _, _) => UnsignedValidator::validate_unsigned(&xt.deconstruct().0),
+			(Some(true), Some(_), None) => TransactionValidity::Invalid(INVALID_INDEX),
+			(Some(true), None, _) => TransactionValidity::Invalid(MISSING_SENDER),
+			(None, _, _) => TransactionValidity::Invalid(UNKNOWN_ERROR),
 		}
 	}
 

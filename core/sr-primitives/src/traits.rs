@@ -794,5 +794,10 @@ pub trait ValidateUnsigned {
 	type Call;
 
 	/// Return the validity of the call
+	///
+	/// This doesn't execute any side-effects; it merely checks
+	/// whether the transaction would panic if it were included or not.
+	///
+	/// Changes made to storage should be discarded by caller.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
