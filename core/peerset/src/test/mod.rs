@@ -196,11 +196,7 @@ fn test_random_api_use() {
                 };
 				match last_message {
 					Some(Message::Connect(_)) | Some(Message::Accept(_)) => {},
-					_ => {
-						if !discovered_called.remove(&peer_id) {
-							panic!("Unexpected Drop message for {:?}, after a {:?} message, sequence of actions: {:?}", peer_id, last_message, action_sequence)
-						}
-					},
+					_ => panic!("Unexpected Drop message for {:?}, after a {:?} message, sequence of actions: {:?}", peer_id, last_message, action_sequence)
 				}
 				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
                 received.push_back(Message::Drop(peer_id));
@@ -214,14 +210,14 @@ fn test_random_api_use() {
 						None
 					}
 				};
-				let last_messages = {
+				let last_message = {
                     if let Some(messages) = last_received_messages.get_mut(&peer_id) {
-                        messages
+                        messages.pop_front()
                     } else {
-                        continue;
+                        None
                     }
                 };
-				if let Some(Message::Connect(_)) = last_messages.pop_front() {
+				if let Some(Message::Connect(_)) = last_message {
                     if let Some(action_sequence) = action_sequence.clone() {
                         let mut actions = action_sequence.into_iter();
                         let drop_position = actions.clone().rposition(|x| x == &TestAction::DropPeer);
@@ -229,12 +225,10 @@ fn test_random_api_use() {
                         match (drop_position, incoming_position) {
                             (Some(drop), Some(incoming)) => {
                                 assert!(drop < incoming);
-                                continue
                             },
                             _ => {}
                         }
                     }
-					panic!("Unexpected Accept message, after a Connect message, sequence of actions: {:?}", action_sequence);
 				}
 				let received = last_received_messages.entry(peer_id.clone()).or_insert(VecDeque::new());
                 received.push_back(Message::Accept(index));
