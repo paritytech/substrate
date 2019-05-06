@@ -83,18 +83,17 @@ check-web-wasm:
   stage:                           test
   image:                           tomaka/cargo-web:latest
   allow_failure: true
-  only:
-    - master
-    - /^[0-9]+$/
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here.
     - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
+  only:
+    - master
+    - /^[0-9]+$/
   except:
-    refs:
-      - v1.0
+    - v1.0
 
 .build-only:                      &build-only
   only:
