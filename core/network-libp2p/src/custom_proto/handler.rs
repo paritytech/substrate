@@ -344,7 +344,7 @@ where
 				match init_deadline.poll() {
 					Ok(Async::Ready(())) => {
 						init_deadline.reset(Instant::now() + Duration::from_secs(60));
-						error!(target: "sub-libp2p", "Handler initialization process is too long \
+						debug!(target: "sub-libp2p", "Handler initialization process is too long \
 							with {:?}", self.remote_peer_id)
 					},
 					Ok(Async::NotReady) => {}
