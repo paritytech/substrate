@@ -52,8 +52,7 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 #![forbid(warnings)]
-/// FIXME
-#![allow(deprecated)]
+#![allow(deprecated)] // FIXME
 
 use futures::prelude::*;
 use log::{debug, info, warn};

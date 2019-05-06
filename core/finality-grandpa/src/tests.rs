@@ -51,6 +51,7 @@ type PeerData =
 				test_client::Executor,
 				Block,
 				test_client::runtime::RuntimeApi,
+				LongestChain<test_client::Backend, Block>
 			>
 		>
 	>;
@@ -534,10 +535,6 @@ fn finalize_3_voters_1_full_observer() {
 				link,
 			)
 		};
-		let select_chain = LongestChain::new(
-			client.backend().clone(),
-			client.import_lock().clone()
-		);
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| Ok(n.header.number() < &20))
@@ -695,11 +692,6 @@ fn transition_3_voters_twice_1_full_observer() {
 				link,
 			)
 		};
-
-		let select_chain = LongestChain::new(
-			client.backend().clone(),
-			client.import_lock().clone()
-		);
 
 		finality_notifications.push(
 			client.finality_notification_stream()
@@ -1115,10 +1107,6 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
-			let select_chain = LongestChain::new(
-				client.backend().clone(),
-				client.import_lock().clone()
-			);
 			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
