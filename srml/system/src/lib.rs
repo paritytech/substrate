@@ -316,11 +316,11 @@ decl_storage! {
 		Events get(events): Vec<EventRecord<T::Event>>;
 		/// The number of events in the `Events<T>` list.
 		EventCount get(event_count): EventIndex;
-		/// Mapping between a topic (represented by T::Hash) and a vector of indices
+		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
 		/// of events in the `<Events<T>>` list.
 		///
-		/// The key serves no purpose. This field is declared as double_map just for convenience
-		/// of using `remove_prefix`.
+		/// The first key serves no purpose. This field is declared as double_map just
+		/// for convenience of using `remove_prefix`.
 		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
 			=> Vec<EventIndex>;
 	}
@@ -381,7 +381,11 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
-	/// Deposit an event with the given topics.
+	/// Deposits an event into this block's event record adding this event
+	/// to the corresponding topic indexes.
+	///
+	/// This will update storage entries that correpond to the specified topics.
+	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let extrinsic_index = Self::extrinsic_index();
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
