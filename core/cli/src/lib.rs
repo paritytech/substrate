@@ -50,10 +50,10 @@ use structopt::{StructOpt, clap::AppSettings};
 pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, SharedParams, MergeParameters, TransactionPoolParams,
+	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType
 };
-pub use params::{NoCustom, CoreParams};
+pub use params::{NoCustom, CoreParams, SharedParams};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
@@ -578,7 +578,8 @@ where
 	Ok(())
 }
 
-fn create_config_with_db_path<F, S>(
+/// Creates a configuration including the database path.
+pub fn create_config_with_db_path<F, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
 ) -> error::Result<FactoryFullConfiguration<F>>
 where

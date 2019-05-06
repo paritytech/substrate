@@ -25,12 +25,12 @@ mod service;
 
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
-pub use cli::{VersionInfo, IntoExit, NoCustom};
+pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
 use log::info;
 use structopt::{StructOpt, clap::App};
-use cli::AugmentClap;
+use cli::{AugmentClap, GetLogFilter};
 use transaction_factory;
 
 /// The chain specification option.
@@ -46,12 +46,30 @@ pub enum ChainSpec {
 	StagingTestnet,
 }
 
+/// Custom subcommands.
+#[derive(Clone, Debug, StructOpt)]
+pub enum CustomSubcommands {
+	/// The custom factory subcommmand for manufacturing transactions.
+	#[structopt(name = "factory", about = "Manufactures num transactions from Alice to random accounts")]
+	Factory(FactoryCmd),
+}
+
+impl GetLogFilter for CustomSubcommands {
+	fn get_log_filter(&self) -> Option<String> {
+		None
+	}
+}
+
 /// The `factory` command used to generate transactions.
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
 	/// Number of transactions to generate.
-	#[structopt(long="transaction-factory", default_value = "256")]
-	pub transaction_factory: u64,
+	#[structopt(long="num", default_value = "256")]
+	pub num: u64,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: SharedParams,
 }
 
 impl AugmentClap for FactoryCmd {
@@ -95,9 +113,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	cli::parse_and_execute::<service::Factory, NoCustom, FactoryCmd, _, _, _, _, _>(
+	let ret = cli::parse_and_execute::<service::Factory, CustomSubcommands, NoCustom, _, _, _, _, _>(
 		load_spec, &version, "substrate-node", args, exit,
-		|exit, _cli_args, custom_args, config| {
+		|exit, _cli_args, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -107,14 +125,6 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
 				.map_err(|e| format!("{:?}", e))?;
 			let executor = runtime.executor();
-
-			if custom_args.transaction_factory > 0 {
-				transaction_factory::factory::<service::Factory>(
-					config,
-					custom_args.transaction_factory
-				).map_err(|e| format!("Error in transaction factory: {}", e))?;
-				return Ok(());
-			}
 
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
@@ -129,7 +139,25 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				),
 			}.map_err(|e| format!("{:?}", e))
 		}
-	).map_err(Into::into).map(|_| ())
+	);
+
+	match &ret {
+		Ok(Some(CustomSubcommands::Factory(cli_args))) => {
+			let config = cli::create_config_with_db_path::<service::Factory, _>(
+				load_spec,
+				&cli_args.shared_params,
+				&version,
+			)?;
+
+			transaction_factory::factory::<service::Factory>(
+				config,
+				cli_args.num,
+			).map_err(|e| format!("Error in transaction factory: {}", e))?;
+
+			Ok(())
+		},
+		_ => ret.map_err(Into::into).map(|_| ())
+	}
 }
 
 fn run_until_exit<T, C, E>(
