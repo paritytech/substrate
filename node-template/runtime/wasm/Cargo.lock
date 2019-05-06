@@ -2599,7 +2599,7 @@ dependencies = [
  "sr-version 1.0.0",
  "substrate-inherents 1.0.0",
  "substrate-primitives 1.0.0",
- "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
