@@ -17,6 +17,7 @@
 extern crate criterion;
 
 use criterion::{Criterion, black_box, Bencher, Fun};
+use std::time::Duration;
 use substrate_primitives::hashing::{twox_128, blake2_128};
 
 const MAX_KEY_SIZE: u32 = 32;
@@ -64,6 +65,9 @@ fn bench_hash_128_dyn_size(c: &mut Criterion) {
 	c.bench_function_over_inputs("dyn size hashing - twox", |b, key| bench_twox_128(b, &key), keys);
 }
 
-criterion_group!(benches_fix, bench_hash_128_fix_size);
-criterion_group!(benches_dyn, bench_hash_128_dyn_size);
-criterion_main!(benches_fix, benches_dyn);
+criterion_group!{
+    name = benches;
+    config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
+    targets = bench_hash_128_fix_size, bench_hash_128_dyn_size
+}
+criterion_main!(benches);

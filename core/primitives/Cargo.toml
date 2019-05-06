@@ -39,6 +39,9 @@ criterion = "0.2"
 name = "benches"
 harness = false
 
+[lib]
+bench = false
+
 [features]
 default = ["std"]
 std = [
