@@ -28,10 +28,6 @@ log = "0.4"
 substrate-serializer = { path = "../../core/serializer" }
 pretty_assertions = "0.5"
 
-[build-dependencies]
-cli = { package = "substrate-cli", path = "../../core/cli" }
-structopt = "0.2"
-
 [features]
 default = ["std"]
 std = [
