@@ -718,6 +718,7 @@ fn deduct_blocks() {
 				* 4; // blocks to rent
 			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent);
+			assert_eq!(bob_contract.deduct_block, 5);
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
 		}
 	);
