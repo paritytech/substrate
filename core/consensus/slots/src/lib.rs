@@ -23,10 +23,12 @@
 #![forbid(warnings, unsafe_code, missing_docs)]
 
 mod slots;
+mod aux_schema;
 
 pub use slots::{slot_now, SlotInfo, Slots};
+pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY};
 
-use client::ChainHead;
+use client::{ChainHead, backend::AuxStore};
 use codec::{Decode, Encode};
 use consensus_common::SyncOracle;
 use futures::prelude::*;

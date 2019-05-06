@@ -12,8 +12,12 @@ primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
+network = { package = "substrate-network", path = "../../../network" }
 futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"
 error-chain = "0.12"
 log = "0.4"
+
+[dev-dependencies]
+test_client = { package = "substrate-test-client", path = "../../../test-client"}
