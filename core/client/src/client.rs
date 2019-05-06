@@ -1567,24 +1567,25 @@ where
 	B: backend::Backend<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
-	fn best_block_header_for_authoring(&self)
+
+	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
+		LongestChain::leaves(self)
+			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+	}
+
+	fn best_chain(&self)
 		-> Result<<Block as BlockT>::Header, ConsensusError>
 	{
 		LongestChain::best_block_header(&self)
 			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
 	}
 
-	fn best_containing_for_authoring(
+	fn finality_target(
 		&self,
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>
 	) -> Result<Option<Block::Hash>, ConsensusError> {
 		LongestChain::best_containing(self, target_hash, maybe_max_number)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
-	}
-
-	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
-		LongestChain::leaves(self)
 			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
 	}
 }

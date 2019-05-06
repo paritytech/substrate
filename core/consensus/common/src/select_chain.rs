@@ -29,7 +29,7 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 ///
 /// Any particular user must make explicit, however, whether they intend to finalise
 /// or author through the using the right function call, as these might differ in
-/// some implemntations.
+/// some implementations.
 ///
 /// Non-deterministicly finalising chains may only use the `_authoring` functions.
 pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
@@ -38,29 +38,17 @@ pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 	/// Leaves that can never be finalized will not be returned.
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, Error>;
 
-	/// Get best block header for authoring.
-	fn best_block_header_for_authoring(&self) -> Result<<Block as BlockT>::Header, Error>;
-
-	/// Get best block header for finalisation
-	fn best_block_header_for_finalisation(&self) -> Result<<Block as BlockT>::Header, Error> {
-		self.best_block_header_for_authoring()
-	}
-
-	/// Get the most recent block hash of the best chain that contain block
-	/// with the given `target_hash` for authoring
-	fn best_containing_for_authoring(
-		&self,
-		target_hash: <Block as BlockT>::Hash,
-		maybe_max_number: Option<NumberFor<Block>>
-	) -> Result<Option<<Block as BlockT>::Hash>, Error>;
+	/// Among those `leaves` deterministically pick one chain as the generally
+	/// best chain to author new blocks upon and probably finalize.
+	fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
 
 	/// Get the most recent block hash of the best chain that contain block
 	/// with the given `target_hash` for finalisation
-	fn best_containing_for_finalisation(
+	fn finality_target(
 		&self,
 		target_hash: <Block as BlockT>::Hash,
-		maybe_max_number: Option<NumberFor<Block>>
+		_maybe_max_number: Option<NumberFor<Block>>
 	) -> Result<Option<<Block as BlockT>::Hash>, Error> {
-		self.best_containing_for_authoring(target_hash, maybe_max_number)
+		Ok(Some(target_hash))
 	}
 }

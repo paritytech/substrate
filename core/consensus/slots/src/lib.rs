@@ -172,7 +172,7 @@ where
 				}
 
 				let slot_num = slot_info.number;
-				let chain_head = match client.best_block_header_for_authoring() {
+				let chain_head = match client.best_chain() {
 					Ok(x) => x,
 					Err(e) => {
 						warn!(target: "slots", "Unable to author block in slot {}. \
