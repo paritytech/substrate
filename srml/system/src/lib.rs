@@ -387,21 +387,17 @@ impl<T: Trait> Module<T> {
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
 		let event = EventRecord { phase, event };
 
-		let event_idx = match <EventCount<T>>::mutate(|event_count|
-			event_count
-				.checked_add(1)
-				.map(|new_count| {
-					let old_count = *event_count;
-					// Update the event_count storage item and return the old_count as
-					// the result of this mutation.
-					*event_count = new_count;
-					old_count
-				})
-		) {
-			// We've reached the maximum number of events at this block, just
-			// don't do anything and leave the event_count unaltered.
-			None => return,
-			Some(old_count) => old_count,
+		// Index of the to be added event.
+		let event_idx = {
+			let old_event_count = <EventCount<T>>::get();
+			let new_event_count = match old_event_count.checked_add(1) {
+				// We've reached the maximum number of events at this block, just
+				// don't do anything and leave the event_count unaltered.
+				None => return,
+				Some(nc) => nc,
+			};
+			<EventCount<T>>::put(new_event_count);
+			old_event_count
 		};
 
 		// Appending can only fail if `Events<T>` can not be decoded or
@@ -423,7 +419,10 @@ impl<T: Trait> Module<T> {
 		}
 
 		for topic in topics {
-			<EventTopics<T>>::append(&(), topic, &[event_idx]);
+			// The same applies here.
+			if <EventTopics<T>>::append(&(), topic, &[event_idx]).is_err() {
+				return;
+			}
 		}
 	}
 
