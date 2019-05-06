@@ -19,8 +19,8 @@ balances = { package = "srml-balances", path = "../../srml/balances", default-fe
 indices = { package = "srml-indices", path = "../../srml/indices" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 structopt = "0.2"
-node-runtime = { path = "../runtime" }
-node-primitives = { path = "../primitives" }
+node-runtime = { path = "../../node/runtime" }
+node-primitives = { path = "../../node/primitives" }
 cli = { package = "substrate-cli", path = "../../core/cli" }
 log = "0.4"
 
