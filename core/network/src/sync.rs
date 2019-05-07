@@ -14,6 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Contains the state of the chain synchronization process
+//!
+//! At any given point in time, a running node tries as much as possible to be at the head of the
+//! chain. This module handles the logic of which blocks to request from remotes, and processing
+//! responses. It yields blocks to check and potentially move to the database.
+//!
+//! # Usage
+//!
+//! The `ChainSync` struct maintains the state of the block requests. Whenever something happens on
+//! the network, or whenever a block has been successfully verified, call the appropriate method in
+//! order to update it. You must also regularly call `tick()`.
+//!
+//! To each of these methods, you must pass a `Context` object that the `ChainSync` will use to
+//! send its new outgoing requests.
+//!
+
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -396,7 +412,7 @@ impl<B: BlockT> Status<B> {
 }
 
 impl<B: BlockT> ChainSync<B> {
-	/// Create a new instance.
+	/// Create a new instance. Pass the initial known state of the chain.
 	pub(crate) fn new(
 		role: Roles,
 		info: &ClientInfo<B>,
@@ -430,7 +446,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Returns peer sync status (if any).
+	/// Returns the state of the sync of the given peer. Returns `None` if the peer is unknown.
 	pub(crate) fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
 		self.peers.get(who).map(|peer| {
 			PeerInfo {
@@ -451,7 +467,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Handle new connected peer.
+	/// Handle new connected peer. Call this method whenever we connect to a new peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId) {
 		if let Some(info) = protocol.peer_info(&who) {
 			let status = block_status(&*protocol.client(), &self.queue_blocks, info.best_hash);
@@ -560,7 +576,9 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Handle new block data.
+	/// Handle a response from the remote to a block request that we made.
+	///
+	/// `request` must be the original request that triggered `response`.
 	///
 	/// If this corresponds to a valid block, this outputs the block that must be imported in the
 	/// import queue.
@@ -675,7 +693,9 @@ impl<B: BlockT> ChainSync<B> {
 		Some((origin, new_blocks))
 	}
 
-	/// Handle new justification data.
+	/// Handle a response from the remote to a justification request that we made.
+	///
+	/// `request` must be the original request that triggered `response`.
 	///
 	/// Returns `Some` if this produces a justification that must be imported into the import
 	/// queue.
@@ -724,7 +744,8 @@ impl<B: BlockT> ChainSync<B> {
 		None
 	}
 
-	/// A batch of blocks have been processed, with or without errors.
+	/// Call this when a batch of blocks have been processed by the import queue, with or without
+	/// errors.
 	pub fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		for hash in processed_blocks {
 			self.queue_blocks.remove(&hash);
@@ -743,14 +764,16 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
-	/// Called periodically to perform any time-based actions.
+	/// Called periodically to perform any time-based actions. Must be called at a regular
+	/// interval.
 	pub fn tick(&mut self, protocol: &mut Context<B>) {
 		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Request a justification for the given block.
 	///
-	/// Queues a new justification request and tries to dispatch all pending requests.
+	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
+	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.justifications.queue_request(
 			&(*hash, number),
@@ -765,6 +788,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.clear();
 	}
 
+	/// Call this when a justification has been processed by the import queue, with or without
+	/// errors.
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		self.justifications.justification_import_result(hash, number, success);
 	}
@@ -805,12 +830,13 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Sets the new head of chain.
 	pub(crate) fn update_chain_info(&mut self, best_header: &B::Header) {
 		let hash = best_header.hash();
 		self.block_queued(&hash, best_header.number().clone())
 	}
 
-	/// Handle new block announcement.
+	/// Call when a node announces a new block.
 	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context<B>, who: PeerId, hash: B::Hash, header: &B::Header) {
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement with number {:?}", number);
@@ -886,7 +912,7 @@ impl<B: BlockT> ChainSync<B> {
 		block_status(&*protocol.client(), &self.queue_blocks, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
-	/// Handle disconnected peer.
+	/// Call when a peer has disconnected.
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, who: PeerId) {
 		self.blocks.clear_peer_download(&who);
 		self.peers.remove(&who);
