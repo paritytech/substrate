@@ -43,6 +43,15 @@ use runtime_primitives::Justification;
 use crate::error::Error as ConsensusError;
 use parity_codec::alloc::collections::hash_map::HashMap;
 
+/// Reputation change for peers which send us a block with an incomplete header.
+const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change for peers which send us a block which we fail to verify.
+const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change for peers which send us a bad block.
+const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
+/// Reputation change for peers which send us a block with bad justifications.
+const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
+
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
 
@@ -421,7 +430,8 @@ impl<B: BlockT> BlockImporter<B> {
 
 					if aux.bad_justification {
 						if let Some(peer) = who {
-							link.useless_peer(peer, "Sent block with bad justification to import");
+							info!("Sent block with bad justification to import");
+							link.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
 						}
 					}
 
@@ -432,17 +442,23 @@ impl<B: BlockT> BlockImporter<B> {
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
-						link.note_useless_and_restart_sync(peer, "Sent block with incomplete header to import");
+						info!("Peer sent block with incomplete header to import");
+						link.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
+						link.restart();
 					}
 				},
 				Err(BlockImportError::VerificationFailed(who, e)) => {
 					if let Some(peer) = who {
-						link.note_useless_and_restart_sync(peer, &format!("Verification failed: {}", e));
+						info!("Verification failed from peer: {}", e);
+						link.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
+						link.restart();
 					}
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
-						link.note_useless_and_restart_sync(peer, "Sent us a bad block");
+						info!("Bad block");
+						link.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
+						link.restart();
 					}
 				},
 				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
@@ -630,10 +646,8 @@ pub trait Link<B: BlockT>: Send {
 	fn request_finality_proof(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Remember finality proof request builder on start.
 	fn set_finality_proof_request_builder(&self, _request_builder: SharedFinalityProofRequestBuilder<B>) {}
-	/// Disconnect from peer.
-	fn useless_peer(&self, _who: Origin, _reason: &str) {}
-	/// Disconnect from peer and restart sync.
-	fn note_useless_and_restart_sync(&self, _who: Origin, _reason: &str) {}
+	/// Adjusts the reputation of the given peer.
+	fn report_peer(&self, _who: Origin, _reputation_change: i32) {}
 	/// Restart sync.
 	fn restart(&self) {}
 	/// Synchronization request has been processed.
@@ -775,12 +789,8 @@ mod tests {
 		) {
 			let _ = self.sender.send(LinkMsg::FinalityProofImported);
 		}
-		fn useless_peer(&self, _: Origin, _: &str) {
+		fn report_peer(&self, _: Origin, _: i32) {
 			let _ = self.sender.send(LinkMsg::Disconnected);
-		}
-		fn note_useless_and_restart_sync(&self, id: Origin, r: &str) {
-			self.useless_peer(id, r);
-			self.restart();
 		}
 		fn restart(&self) {
 			let _ = self.sender.send(LinkMsg::Restarted);
