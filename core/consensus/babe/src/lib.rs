@@ -530,7 +530,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
-fn check_header<B: Block + Sized>(
+fn check_header<B: Block + Sized, C: AuxStore>(
+	client: Arc<C>
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -581,7 +582,21 @@ fn check_header<B: Block + Sized>(
 				})?
 			};
 			if check(&inout, threshold) {
-				Ok(CheckedHeader::Checked(header, digest_item))
+				match check_equivocation(client, slot_num, header.clone()) {
+					Ok(Some(equivocation_proof)) => {
+						// TODO: dispatch report here.
+						Err(format!("Slot author is equivocating with headers {:?} and {:?}",
+							equivocation_proof.get_fst_header().hash(),
+							equivocation_proof.get_snd_header().hash(),
+						))
+					},
+					Ok(None) => {
+						Ok(CheckedHeader::Checked(header, digest_item))
+					},
+					Err(e) => {
+						Err(e.to_string())
+					},
+				}
 			} else {
 				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
 				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
@@ -639,7 +654,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
-	C: ProvideRuntimeApi + Send + Sync,
+	C: ProvideRuntimeApi + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	E: ExtraVerification<B>,
@@ -679,7 +694,8 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
-		let checked_header = check_header::<B>(
+		let checked_header = check_header::<C, B>(
+			&self.client,
 			slot_now + 1,
 			header,
 			hash,

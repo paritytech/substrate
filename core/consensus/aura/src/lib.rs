@@ -62,7 +62,7 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
@@ -194,7 +194,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static + AuxStore,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
@@ -243,7 +243,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + AuxStore,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -287,7 +287,7 @@ struct AuraWorker<C, E, I, P, SO> {
 }
 
 impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	C: ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -454,7 +454,8 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<B: Block, P: Pair>(
+fn check_header<C, B: Block, P: Pair>(
+	client: &Arc<C>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -464,6 +465,7 @@ fn check_header<B: Block, P: Pair>(
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Public: AsRef<P::Public>,
 		P::Signature: Decode,
+		C: client::backend::AuxStore,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -496,7 +498,21 @@ fn check_header<B: Block, P: Pair>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			Ok(CheckedHeader::Checked(header, digest_item))
+			match check_equivocation(client, slot_num, header.clone()) {
+				Ok(Some(equivocation_proof)) => {
+					// TODO: dispatch report here.
+					Err(format!("Slot author is equivocating with headers {:?} and {:?}",
+						equivocation_proof.get_fst_header().hash(),
+						equivocation_proof.get_snd_header().hash(),
+					))
+				},
+				Ok(None) => {
+					Ok(CheckedHeader::Checked(header, digest_item))
+				},
+				Err(e) => {
+					Err(e.to_string())
+				},
+			}
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -578,7 +594,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 
 #[forbid(deprecated)]
 impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
-	C: ProvideRuntimeApi + Send + Sync,
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
@@ -609,7 +625,8 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, P>(
+		let checked_header = check_header::<C, B, P>(
+			&self.client,
 			slot_now + 1,
 			header,
 			hash,
@@ -734,7 +751,7 @@ pub fn import_queue<B, C, E, P>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
@@ -770,7 +787,7 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
