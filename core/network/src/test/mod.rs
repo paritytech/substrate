@@ -33,10 +33,10 @@ use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
+use crate::consensus_gossip::{MessageRecipient as GossipMessageRecipient, TopicNotification, Validator};
 use crossbeam_channel::RecvError;
 use futures::{prelude::*, sync::{mpsc, oneshot}};
-use crate::message::Message;
+use crate::message::{Message, generic::ConsensusMessage};
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId};
@@ -453,7 +453,14 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
-		self.with_gossip(move |gossip, _| gossip.collect_garbage())
+		self.net_proto_channel.send_from_client(ProtocolMsg::GossipConsensusCollectGarbage);
+	}
+
+	/// Send a consensus gossip message to a specific destination.
+	pub fn consensus_gossip_send(&self, who: PeerId, message: ConsensusMessage) {
+		let _ = self
+			.net_proto_channel
+			.send_from_client(ProtocolMsg::GossipConsensusSend(who, message));
 	}
 
 	/// access the underlying consensus gossip handler
@@ -463,18 +470,15 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		topic: <Block as BlockT>::Hash,
 	) -> mpsc::UnboundedReceiver<TopicNotification> {
 		let (tx, rx) = oneshot::channel();
-		self.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(engine_id, topic);
-			let _ = tx.send(inner_rx);
-		});
+		self.net_proto_channel.send_from_client(ProtocolMsg::GossipConsensusMessagesFor(tx, engine_id, topic));
 		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")
 	}
 
-	/// Execute a closure with the consensus gossip.
-	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<Block>, &mut Context<Block>) + Send + 'static
-	{
-		self.net_proto_channel.send_from_client(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
+	/// Registers a validator for the given engine ID.
+	pub fn consensus_gossip_register_validator(&self, engine_id: ConsensusEngineId, validator: Arc<dyn Validator<Block>>) {
+		let _ = self
+			.net_proto_channel
+			.send_from_client(ProtocolMsg::GossipConsensusRegisterValidator(engine_id, validator));
 	}
 
 	/// Announce a block to peers.

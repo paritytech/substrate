@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{prelude::*, sync::mpsc};
+use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
@@ -22,7 +22,7 @@ use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use crate::message::{self, BlockRequest as BlockRequestMessage, Message};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification, Validator};
 use crate::on_demand::OnDemandService;
 use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
@@ -240,17 +240,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)>
 	}
 }
 
-/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait GossipTask<B: BlockT> {
-	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
-}
-
-impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
-	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
-		(*self)(gossip, context)
-	}
-}
-
 /// Messages sent to Protocol from elsewhere inside the system.
 pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// A batch of blocks has been processed, with or without errors.
@@ -275,10 +264,20 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	BlockFinalized(B::Hash, B::Header),
 	/// Execute a closure with the chain-specific network specialization.
 	ExecuteWithSpec(Box<SpecTask<B, S> + Send + 'static>),
-	/// Execute a closure with the consensus gossip.
-	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
+	/// Request the consensus gossip to send a message to a destination.
+	GossipConsensusSend(PeerId, ConsensusMessage),
+	/// Request the consensus gossip to multicast a message on a topic. If the last parameter is
+	/// true, sends the message to everyone.
+	GossipConsensusMulticast(B::Hash, ConsensusMessage, bool),
+	/// Grabs a stream of messages from the consensus gossip and sends it over the channel.
+	GossipConsensusMessagesFor(oneshot::Sender<mpsc::UnboundedReceiver<TopicNotification>>, ConsensusEngineId, B::Hash),
+	/// Register a validator for the given engine.
+	GossipConsensusRegisterValidator(ConsensusEngineId, Arc<dyn Validator<B>>),
+	/// Requests the consensus gossip to perform garbage collection.
+	#[cfg(any(test, feature = "test-helpers"))]
+	GossipConsensusCollectGarbage,
 	/// Tell protocol to perform regular maintenance.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Tick,
@@ -384,13 +383,31 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.specialization, &mut context);
 			},
-			ProtocolMsg::ExecuteWithGossip(task) => {
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				task.call_box(&mut self.consensus_gossip, &mut context);
-			}
 			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) => {
 				self.gossip_consensus_message(topic, engine_id, message, recipient)
+			}
+			ProtocolMsg::GossipConsensusSend(who, message) => {
+				let mut context =
+					ProtocolContext::new(&mut self.context_data, &self.network_chan);
+				self.consensus_gossip.send_message(&mut context, &who, message);
+			}
+			ProtocolMsg::GossipConsensusMulticast(topic, message, force) => {
+				let mut context =
+					ProtocolContext::new(&mut self.context_data, &self.network_chan);
+				self.consensus_gossip.multicast(&mut context, topic, message, force);
+			}
+			ProtocolMsg::GossipConsensusMessagesFor(tx, engine_id, topic) => {
+				let rx = self.consensus_gossip.messages_for(engine_id, topic);
+				let _ = tx.send(rx);
+			}
+			ProtocolMsg::GossipConsensusRegisterValidator(engine_id, validator) => {
+				let mut context =
+					ProtocolContext::new(&mut self.context_data, &self.network_chan);
+				self.consensus_gossip.register_validator(&mut context, engine_id, validator);
+			}
+			#[cfg(any(test, feature = "test-helpers"))]
+			ProtocolMsg::GossipConsensusCollectGarbage => {
+				self.consensus_gossip.collect_garbage();
 			}
 			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
 				self.sync.blocks_processed(hashes, has_error);

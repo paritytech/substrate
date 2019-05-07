@@ -126,18 +126,12 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 	type In = NetworkStream;
 
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
-		let (tx, rx) = oneshot::channel();
-		self.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, topic);
-			let _ = tx.send(inner_rx);
-		});
+		let rx = self.consensus_gossip_messages_for(GRANDPA_ENGINE_ID, topic);
 		NetworkStream { outer: rx, inner: None }
 	}
 
 	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
-		self.with_gossip(
-			move |gossip, context| gossip.register_validator(context, GRANDPA_ENGINE_ID, validator)
-		)
+		self.consensus_gossip_register_validator(GRANDPA_ENGINE_ID, validator);
 	}
 
 	fn gossip_message(&self, topic: B::Hash, data: Vec<u8>, force: bool) {
@@ -145,9 +139,8 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 			engine_id: GRANDPA_ENGINE_ID,
 			data,
 		};
-		self.with_gossip(
-			move |gossip, ctx| gossip.multicast(ctx, topic, msg, force)
-		)
+
+		self.consensus_gossip_multicast(topic, msg, force)
 	}
 
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
@@ -156,9 +149,9 @@ impl<B, S> Network<B> for Arc<NetworkService<B, S>> where
 			data,
 		};
 
-		self.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(ctx, who, msg.clone())
-		})
+		for who in &who {
+			self.consensus_gossip_send(who.clone(), msg.clone());
+		}
 	}
 
 	fn report(&self, who: network::PeerId, cost_benefit: i32) {

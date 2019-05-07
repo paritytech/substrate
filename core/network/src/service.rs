@@ -29,8 +29,8 @@ use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::message::Message;
+use crate::consensus_gossip::{MessageRecipient as GossipMessageRecipient, TopicNotification, Validator};
+use crate::message::{Message, generic::ConsensusMessage};
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crate::error::Error;
@@ -292,13 +292,36 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			.unbounded_send(ProtocolMsg::ExecuteWithSpec(Box::new(f)));
 	}
 
-	/// Execute a closure with the consensus gossip.
-	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>) + Send + 'static
-	{
+	/// Send a consensus gossip message to a specific destination.
+	pub fn consensus_gossip_send(&self, who: PeerId, message: ConsensusMessage) {
 		let _ = self
 			.protocol_sender
-			.unbounded_send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
+			.unbounded_send(ProtocolMsg::GossipConsensusSend(who, message));
+	}
+
+	/// Multicasts a consensus gossip message. If `force` is true, sends it to all the nodes even
+	/// if they have already received it.
+	pub fn consensus_gossip_multicast(&self, topic: B::Hash, message: ConsensusMessage, force: bool) {
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ProtocolMsg::GossipConsensusMulticast(topic, message, force));
+	}
+
+	/// Returns a channel producing a stream to the messages of the given topic.
+	pub fn consensus_gossip_messages_for(&self, engine_id: ConsensusEngineId, topic: B::Hash) ->
+		oneshot::Receiver<mpsc::UnboundedReceiver<TopicNotification>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ProtocolMsg::GossipConsensusMessagesFor(tx, engine_id, topic));
+		rx
+	}
+
+	/// Registers a validator for the given engine ID.
+	pub fn consensus_gossip_register_validator(&self, engine_id: ConsensusEngineId, validator: Arc<dyn Validator<B>>) {
+		let _ = self
+			.protocol_sender
+			.unbounded_send(ProtocolMsg::GossipConsensusRegisterValidator(engine_id, validator));
 	}
 
 	/// Are we in the process of downloading the chain?
