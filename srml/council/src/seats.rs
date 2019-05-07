@@ -198,7 +198,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::presentation_active(), "cannot retract when presenting");
-			ensure!(<VoterActivityInfo<T>>::exists(&who), "cannot retract non-voter");
+			ensure!(<ActivityInfoOf<T>>::exists(&who), "cannot retract non-voter");
 			let voters = Self::voters();
 			let index = index as usize;
 			ensure!(index < voters.len(), "retraction index invalid");
@@ -386,9 +386,10 @@ decl_storage! {
 		/// currently registered.
 		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
 		/// Activity status of a voter.
-		/// Note that last_win = N indicates a last win at index N-1, hence last_win = 0 mean no win ever.
-		pub VoterActivityInfo get(voter_activity): map T::AccountId => Option<VoterActivity>;
-		/// Accumulated offset weight of a voter. Has a value only when a voter is not winning and decides to change votes.
+		/// Note that `last_win = N` indicates a last win at index `N-1`, hence `last_win = 0` means no win ever.
+		pub ActivityInfoOf get(voter_activity): map T::AccountId => Option<VoterActivity>;
+		/// Accumulated offset weight of a voter.
+		/// Has a value only when a voter is not winning and decides to change votes.
 		pub OffsetPotOf get(offset_pot): map T::AccountId => Option<BalanceOf<T>>;
 		/// The present voter list and their _locked_ balance.
 		pub Voters get(voters): Vec<(T::AccountId, BalanceOf<T>)>;
@@ -490,7 +491,7 @@ impl<T: Trait> Module<T> {
 	fn remove_voter(voter: &T::AccountId, index: usize, mut voters: Vec<(T::AccountId, BalanceOf<T>)>) {
 		<Voters<T>>::put({ voters.swap_remove(index); voters });
 		<ApprovalsOf<T>>::remove(voter);
-		<VoterActivityInfo<T>>::remove(voter);
+		<ActivityInfoOf<T>>::remove(voter);
 		<OffsetPotOf<T>>::remove(voter);
 	}
 
@@ -541,7 +542,7 @@ impl<T: Trait> Module<T> {
 			WithdrawReasons::all()
 		);
 
-		<VoterActivityInfo<T>>::insert(
+		<ActivityInfoOf<T>>::insert(
 			&who,
 			VoterActivity { last_active: index, last_win: index }
 		);
@@ -597,7 +598,7 @@ impl<T: Trait> Module<T> {
 				.iter()
 				.map(|(a, _)| a)
 				.filter(|v| *Self::approvals_of(*v).get(index).unwrap_or(&false))
-				.for_each(|v| <VoterActivityInfo<T>>::mutate(v, |a| {
+				.for_each(|v| <ActivityInfoOf<T>>::mutate(v, |a| {
 					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
 				}));
 		});
