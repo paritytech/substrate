@@ -49,7 +49,7 @@ pub use crate::runtime_primitives::ApplyError;
 /// # pub enum Call {
 /// # 	Timestamp(timestamp::Call),
 /// # }
-///
+/// # #[allow(unused)]
 /// pub struct Runtime;
 ///
 /// srml_support::impl_outer_validate_unsigned! {
@@ -128,6 +128,7 @@ mod test_partial_and_full_call {
 		#[test]
 		fn used() {
 			let _ = Call::Timestamp(super::timestamp::Call::Foo);
+			let _ = Runtime;
 		}
 	}
 
@@ -146,6 +147,7 @@ mod test_partial_and_full_call {
 		#[test]
 		fn used() {
 			let _ = Call::Timestamp(super::timestamp::Call::Foo);
+			let _ = Runtime;
 		}
 	}
 }
