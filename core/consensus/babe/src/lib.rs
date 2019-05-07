@@ -68,7 +68,7 @@ use client::{
 	error::Result as CResult,
 	backend::AuxStore,
 };
-use slots::CheckedHeader;
+use slots::{CheckedHeader, check_equivocation};
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{error, warn, debug, info, trace};
@@ -531,7 +531,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
-	client: Arc<C>
+	client: &Arc<C>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -581,8 +581,9 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					format!("VRF verification failed")
 				})?
 			};
+				
 			if check(&inout, threshold) {
-				match check_equivocation(client, slot_num, header.clone()) {
+				match check_equivocation(&client, slot_num, header.clone()) {
 					Ok(Some(equivocation_proof)) => {
 						// TODO: dispatch report here.
 						Err(format!("Slot author is equivocating with headers {:?} and {:?}",
@@ -694,7 +695,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
-		let checked_header = check_header::<C, B>(
+		let checked_header = check_header::<B, C>(
 			&self.client,
 			slot_now + 1,
 			header,
@@ -880,6 +881,12 @@ mod tests {
 	use futures::stream::Stream;
 	use log::debug;
 	use std::time::Duration;
+	use test_client::AuthorityKeyring;
+	use primitives::hash::H256;
+	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
+	use hex_literal::*;
+	use slots::MAX_SLOT_CAPACITY;
+
 
 	type Error = client::error::Error;
 
@@ -981,6 +988,41 @@ mod tests {
 		fn set_started(&mut self, new: bool) {
 			self.started = new;
 		}
+	}
+
+	fn create_header(slot_num: u64, number: u64, pair: &sr25519::Pair) -> (HeaderTest, H256) {
+		// Construct one header.
+		let mut header = HeaderTest {
+			parent_hash: [69u8; 32].into(),
+			number,
+			state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
+			digest: DigestTest { logs: vec![], },
+		};
+
+		let transcript = make_transcript(
+			Default::default(),
+			slot_num,
+			Default::default(),
+			0,
+		);
+		
+		let (inout, proof, _batchable_proof) = get_keypair(&pair).vrf_sign_n_check(transcript, |inout| check(inout, u64::MAX)).unwrap();
+		let pre_hash: H256 = header.hash();
+		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
+		let signature = pair.sign(&to_sign[..]);
+		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem>::babe_seal(BabeSeal {
+			proof,
+			signature: LocalizedSignature {
+				signature,
+				signer: pair.public(),
+			},
+			slot_num,
+			vrf_output: inout.to_output(),
+		});
+
+		header.digest_mut().push(item);
+		(header, pre_hash)
 	}
 
 	#[test]
@@ -1110,5 +1152,41 @@ mod tests {
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
 		]);
+	}
+
+
+	#[test]
+	fn check_header_works_with_equivocation() {
+		let client = test_client::new();
+		let slot_num = 3;
+		let pair = sr25519::Pair::generate();
+		let public = pair.public();
+		let authorities = vec![public.clone()];
+
+		// Construct one header.
+		let (header1, header1_hash) = create_header(slot_num, 1, &pair);
+		
+		// Construct a different header.
+		let (header2, header2_hash) = create_header(slot_num, 2, &pair);
+		
+		// Construct a header with high slot number.
+		let (header3, header3_hash) = create_header(slot_num + MAX_SLOT_CAPACITY, 3, &pair);
+		
+		let c = Arc::new(client);
+
+		type B = RawBlock<ExtrinsicWrapper<u64>>;
+		type P = sr25519::Pair;
+		let high_slot = 2000;
+		let max = u64::MAX;
+
+		// It's ok to sign same headers.
+		assert!(check_header::<B, _>(&c, high_slot, header1.clone(), header1_hash, &authorities, max).is_ok());
+		assert!(check_header::<B, _>(&c, high_slot, header1, header1_hash, &authorities, max).is_ok());
+
+		// But not two different headers at the same slot.
+		assert!(check_header::<B, _>(&c, high_slot, header2, header2_hash, &authorities, max).is_err());
+
+		// We should ignore old slot headers (out of MAX_SLOT_CAPACITY).
+		assert!(check_header::<B, _>(&c, high_slot, header3, header3_hash, &authorities, max).is_ok());
 	}
 }
