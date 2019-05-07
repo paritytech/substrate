@@ -23,7 +23,7 @@ mod sync;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use log::trace;
 use client;
@@ -660,8 +660,6 @@ pub trait TestNetFactory: Sized {
 		let (network_to_protocol_sender, mut network_to_protocol_rx) = mpsc::unbounded();
 
 		let (mut protocol, protocol_sender) = Protocol::new(
-			is_offline.clone(),
-			is_major_syncing.clone(),
 			peers.clone(),
 			network_sender.clone(),
 			config.clone(),
@@ -671,6 +669,9 @@ pub trait TestNetFactory: Sized {
 			tx_pool,
 			specialization,
 		).unwrap();
+
+		let is_offline2 = is_offline.clone();
+		let is_major_syncing2 = is_major_syncing.clone();
 
 		std::thread::spawn(move || {
 			tokio::run(futures::future::poll_fn(move || {
@@ -690,6 +691,9 @@ pub trait TestNetFactory: Sized {
 				if let Async::Ready(_) = protocol.poll().unwrap() {
 					return Ok(Async::Ready(()))
 				}
+
+				is_offline2.store(protocol.is_offline(), Ordering::Relaxed);
+				is_major_syncing2.store(protocol.is_major_syncing(), Ordering::Relaxed);
 
 				Ok(Async::NotReady)
 			}));
