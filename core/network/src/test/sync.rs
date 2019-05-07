@@ -33,7 +33,6 @@ fn test_ancestor_search_when_common_is(n: usize) {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
 		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
@@ -143,7 +142,6 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
 		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
@@ -158,7 +156,6 @@ fn ancestry_search_works_when_backoff_is_one() {
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
 
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
 		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
@@ -173,7 +170,6 @@ fn ancestry_search_works_when_ancestor_is_genesis() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
 		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
