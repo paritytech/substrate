@@ -109,6 +109,9 @@ fn basic_setup_works() {
 		// initial slash_count of validators
 		assert_eq!(Staking::slash_count(&11), 0);
 		assert_eq!(Staking::slash_count(&21), 0);
+
+		// All exposures must be correct.
+		check_exposure_all();
 	});
 }
 
@@ -341,7 +344,7 @@ fn rewards_should_work() {
 		.sessions_per_era(3)
 	.build(),
 	|| {
-		let delay = 0;
+		let delay = 1;
 		// this test is only in the scope of one era. Since this variable changes
 		// at the last block/new era, we'll save it.
 		let session_reward = 10;
@@ -364,7 +367,6 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&2), 500);
 
 		// add a dummy nominator.
-		// NOTE: this nominator is being added 'manually'. a Further test (nomination_and_reward..) will add it via '.nominate()'
 		<Stakers<Test>>::insert(&11, Exposure {
 			own: 500, // equal division indicates that the reward will be equally divided among validator and nominator.
 			total: 1000,
@@ -375,8 +377,7 @@ fn rewards_should_work() {
 		assert_eq!(Staking::payee(2), RewardDestination::Stash);
 		assert_eq!(Staking::payee(11), RewardDestination::Controller);
 
-		let mut block = 3;
-		// Block 3 => Session 1 => Era 0
+		let mut block = 3; // Block 3 => Session 1 => Era 0
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5);	// on time.
 		Session::check_rotate_session(System::block_number());
@@ -413,16 +414,16 @@ fn rewards_should_work() {
 
 #[test]
 fn multi_era_reward_should_work() {
-	// should check that:
+	// Should check that:
 	// The value of current_session_reward is set at the end of each era, based on
-	// slot_stake and session_reward. Check and verify this.
+	// slot_stake and session_reward.
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(3)
 		.sessions_per_era(3)
 		.nominate(false)
 		.build(),
 	|| {
-		let delay = 0;
+		let delay = 1;
 		let session_reward = 10;
 
 		// This is set by the test config builder.
@@ -437,12 +438,12 @@ fn multi_era_reward_should_work() {
 		let mut block = 3;
 		// Block 3 => Session 1 => Era 0
 		System::set_block_number(block);
-		Timestamp::set_timestamp(block*5);	// on time.
+		Timestamp::set_timestamp(block*5);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 
-		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
+		// session triggered: the reward value stashed should be 10
 		assert_eq!(Staking::current_session_reward(), session_reward);
 		assert_eq!(Staking::current_era_reward(), session_reward);
 
@@ -472,14 +473,14 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Staking::current_session_reward(), new_session_reward);
 
 		// fast forward to next era:
-		block=12;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
-		block=15;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		block=12; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		block=15; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
 
 		// intermediate test.
 		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
 
 		// new era is triggered here.
-		block=18;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		block=18; System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
 
 		// pay time
 		assert_eq!(Balances::total_balance(&10), 3*new_session_reward + recorded_balance);
@@ -574,31 +575,28 @@ fn staking_should_work() {
 
 #[test]
 fn less_than_needed_candidates_works() {
-	// Test the situation where the number of validators are less than `ValidatorCount` but more than <MinValidators>
-	// The expected behavior is to choose all the candidates that have some vote.
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(1)
 		.validator_count(4)
 		.nominate(false)
 		.build(),
 	|| {
-		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 4);
 		assert_eq!(Staking::minimum_validator_count(), 1);
+		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
-		// 10 and 20 are now valid candidates.
-		// trigger era
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 
-		// both validators will be chosen again. NO election algorithm is even executed.
+		// Previous set is selected. NO election algorithm is even executed.
 		assert_eq_uvec!(Session::validators(), vec![30, 20, 10]);
 
 		// But the exposure is updated in a simple way. No external votes exists. This is purely self-vote.
-		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![]);
-		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![]);
-		assert_eq!(Staking::stakers(30).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![]);
+		assert_eq!(Staking::stakers(10).others.len(), 0);
+		assert_eq!(Staking::stakers(20).others.len(), 0);
+		assert_eq!(Staking::stakers(30).others.len(), 0);
+		check_exposure_all();
 	});
 }
 
@@ -619,13 +617,15 @@ fn no_candidate_emergency_condition() {
 		// initial validators
 		assert_eq_uvec!(Session::validators(), vec![10, 20, 30, 40]);
 
+		let _ = Staking::chill(Origin::signed(10));
+
 		// trigger era
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
 
-		// No one nominates => no one has a proper vote => no change
+		// Previous ones are elected. chill is invalidates. TODO: #2494
 		assert_eq_uvec!(Session::validators(), vec![10, 20, 30, 40]);
+		assert_eq!(Staking::current_elected().len(), 0);
 	});
 }
 
@@ -744,9 +744,11 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Balances::total_balance(&4), initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11));
 
 		// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9) ;
+		assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9);
 		// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
 		assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11);
+
+		check_exposure_all();
 	});
 }
 
@@ -760,7 +762,7 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 10 has not been reported offline
 		assert_eq!(Staking::slash_count(&10), 0);
-	<OfflineSlash<Test>>::put(Perbill::from_percent(12));
+		<OfflineSlash<Test>>::put(Perbill::from_percent(12));
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -794,6 +796,7 @@ fn nominators_also_get_slashed() {
 		// initial + first era reward + slash
 		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
+		check_exposure_all();
 		// Because slashing happened.
 		assert!(Staking::forcing_new_era().is_some());
 	});
@@ -1109,6 +1112,8 @@ fn validator_payment_prefs_work() {
 		assert_eq!(Balances::total_balance(&10), 1);
 		// Rest of the reward will be shared and paid to the nominator in stake.
 		assert_eq!(Balances::total_balance(&2), 500 + shared_cut/2);
+
+		check_exposure_all();
 	});
 
 }
@@ -1279,6 +1284,8 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		assert_eq!(Staking::slash_count(&11), 4);
 		// check the balance of 10 (slash will be deducted from free balance.)
 		assert_eq!(Balances::free_balance(&11), 1000 + 10 - 50 /*5% of 1000*/ * 8 /*2**3*/);
+
+		check_exposure_all();
 	});
 }
 

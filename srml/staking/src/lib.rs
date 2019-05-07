@@ -972,7 +972,9 @@ impl<T: Trait> Module<T> {
 			elected_stashes
 				.iter()
 				.map(|e| (e, Self::slashable_balance_of(e)))
-				.for_each(|(e, s)| { exposures.insert(e.clone(), Exposure { own: s, total: s, others: vec![] }); });
+				.for_each(|(e, s)| {
+					exposures.insert(e.clone(), Exposure { own: s, total: s, ..Default::default() });
+				});
 
 			for (n, _, assignment) in &assignments_with_stakes {
 				for (c, _, s) in assignment {
@@ -1027,6 +1029,7 @@ impl<T: Trait> Module<T> {
 			// We should probably disable all functionality except for block production
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
+			// TODO: #2494
 			Self::slot_stake()
 		}
 	}
