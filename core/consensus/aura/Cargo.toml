@@ -26,7 +26,6 @@ tokio = "0.1.7"
 parking_lot = "0.7.1"
 error-chain = "0.12"
 log = "0.4"
-hex-literal = "0.1.0"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }

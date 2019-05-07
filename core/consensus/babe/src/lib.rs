@@ -884,7 +884,6 @@ mod tests {
 	use test_client::AuthorityKeyring;
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
-	use hex_literal::*;
 	use slots::MAX_SLOT_CAPACITY;
 
 
@@ -991,12 +990,11 @@ mod tests {
 	}
 
 	fn create_header(slot_num: u64, number: u64, pair: &sr25519::Pair) -> (HeaderTest, H256) {
-		// Construct one header.
 		let mut header = HeaderTest {
-			parent_hash: [69u8; 32].into(),
+			parent_hash: Default::default(),
 			number,
-			state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
-			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
 			digest: DigestTest { logs: vec![], },
 		};
 
@@ -1186,7 +1184,7 @@ mod tests {
 		// But not two different headers at the same slot.
 		assert!(check_header::<B, _>(&c, high_slot, header2, header2_hash, &authorities, max).is_err());
 
-		// We should ignore old slot headers (out of MAX_SLOT_CAPACITY).
+		// We should ignore old slot headers.
 		assert!(check_header::<B, _>(&c, high_slot, header3, header3_hash, &authorities, max).is_ok());
 	}
 }

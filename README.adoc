@@ -1,0 +1,455 @@
+= Substrate
+:Author: Substrate developers
+:Revision: 0.2.0
+:toc:
+:sectnums:
+
+== Intro in one sentence
+
+Substrate is a next-generation framework for blockchain innovation.
+
+== Description
+
+At its heart, Substrate is a combination of three technologies: https://webassembly.org/[WebAssembly], https://libp2p.io/[Libp2p] and GRANDPA Consensus. About GRANDPA, see this https://hackmd.io/Jd0byWX0RiqFiXUVC78Bdw?view#GRANDPA[definition], https://medium.com/polkadot-network/grandpa-block-finality-in-polkadot-an-introduction-part-1-d08a24a021b5[introduction] and https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf[formal specification]. It is both a library for building new blockchains and a "skeleton key" of a blockchain client, able to synchronize to any Substrate-based chain.
+
+Substrate chains have three distinct features that make them "next-generation": a dynamic, self-defining state-transition function; light-client functionality from day one; and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and procedures for replacing any aspect of itself or of the blockchain's state ("governance"). Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organism".
+
+See also https://www.parity.io/what-is-substrate/.
+
+== Usage
+
+Substrate is still an early stage project, and while it has already been used as the basis of major projects like Polkadot, using it is still a significant undertaking. In particular, you should have a good knowledge of blockchain concepts and basic cryptography. Terminology like header, block, client, hash, transaction and signature should be familiar. At present you will need a working knowledge of Rust to be able to do anything interesting (though eventually, we aim for this not to be the case).
+
+Substrate is designed to be used in one of three ways:
+
+1. Trivial: By running the Substrate binary `substrate` and configuring it with a genesis block that includes the current demonstration runtime. In this case, you just build Substrate, configure a JSON file and launch your own blockchain. This affords you the least amount of customisability, primarily allowing you to change the genesis parameters of the various included runtime modules such as balances, staking, block-period, fees and governance.
+
+2. Modular: By hacking together modules from the Substrate Runtime Module Library into a new runtime and possibly altering or reconfiguring the Substrate client's block authoring logic. This affords you a very large amount of freedom over your own blockchain's logic, letting you change datatypes, add or remove modules and, crucially, add your own modules. Much can be changed without touching the block-authoring logic (since it is generic). If this is the case, then the existing Substrate binary can be used for block authoring and syncing. If the block authoring logic needs to be tweaked, then a new altered block-authoring binary must be built as a separate project and used by validators. This is how the Polkadot relay chain is built and should suffice for almost all circumstances in the near to mid-term.
+
+3. Generic: The entire Substrate Runtime Module Library can be ignored and the entire runtime designed and implemented from scratch. If desired, this can be done in a language other than Rust, providing it can target WebAssembly. If the runtime can be made to be compatible with the existing client's block authoring logic, then you can simply construct a new genesis block from your Wasm blob and launch your chain with the existing Rust-based Substrate client. If not, then you'll need to alter the client's block authoring logic accordingly. This is probably a useless option for most projects right now, but provides complete flexibility allowing for a long-term far-reaching upgrade path for the Substrate paradigm.
+
+=== The Basics of Substrate
+
+Substrate is a blockchain platform with a completely generic state transition function. That said, it does come with both standards and conventions (particularly regarding the Runtime Module Library) regarding underlying data structures. Roughly speaking, these core datatypes correspond to +trait+s in terms of the actual non-negotiable standard and generic +struct+s in terms of the convention.
+
+```
+Header := Parent + ExtrinsicsRoot + StorageRoot + Digest
+Block := Header + Extrinsics + Justifications
+```
+
+=== Extrinsics
+
+Extrinsics in Substrate are pieces of information from "the outside world" that are contained in the blocks of the chain. You might think "ahh, that means *transactions*": in fact, no. Extrinsics fall into two broad categories of which only one is *transactions*. The other is known as *inherents*. The difference between these two is that transactions are signed and gossiped on the network and can be deemed useful *per se*. This fits the mold of what you would call transactions in Bitcoin or Ethereum.
+
+Inherents, meanwhile, are not passed on the network and are not signed. They represent data which describes the environment but which cannot call upon anything to prove it such as a signature. Rather they are assumed to be "true" simply because a sufficiently large number of validators have agreed on them being reasonable.
+
+To give an example, there is the timestamp inherent, which sets the current timestamp of the block. This is not a fixed part of Substrate, but does come as part of the Substrate Runtime Module Library to be used as desired. No signature could fundamentally prove that a block were authored at a given time in quite the same way that a signature can "prove" the desire to spend some particular funds. Rather, it is the business of each validator to ensure that they believe the timestamp is set to something reasonable before they agree that the block candidate is valid.
+
+Other examples include the parachain-heads extrinsic in Polkadot and the "note-missed-proposal" extrinsic used in the Substrate Runtime Module Library to determine and punish or deactivate offline validators.
+
+
+=== Runtime and API
+
+Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks.
+
+If you want to develop a chain with Substrate, you will need to implement the `Core` trait. This `Core` trait generates an API with the minimum necessary functionality to interact with your runtime. A special macro is provided called `impl_runtime_apis!` that help you implement runtime API traits. All runtime API trait implementations need to be done in one call of the `impl_runtime_apis!` macro. All parameters and return values need to implement https://crates.io/crates/parity-codec[`parity-codec`] to be encodable and decodable.
+
+Here's a snippet of the Polkadot API implementation as of PoC-3:
+
+```rust
+impl_runtime_apis! {
+	impl client_api::Core<Block> for Runtime {
+		fn version() -> RuntimeVersion {
+			VERSION
+		}
+
+		fn execute_block(block: Block) {
+			Executive::execute_block(block)
+		}
+
+		fn initialize_block(header: <Block as BlockT>::Header) {
+			Executive::initialize_block(&header)
+		}
+	}
+	// ---snip---
+}
+```
+
+
+=== Inherent Extrinsics
+
+The Substrate Runtime Module Library includes functionality for timestamps and slashing. If used, these rely on "trusted" external information being passed in via inherent extrinsics. The Substrate reference block authoring client software will expect to be able to call into the runtime API with collated data (in the case of the reference Substrate authoring client, this is merely the current timestamp and which nodes were offline) in order to return the appropriate extrinsics ready for inclusion. If new inherent extrinsic types and data are to be used in a modified runtime, then it is this function (and its argument type) that would change.
+
+=== Block-authoring Logic
+
+In Substrate, there is a major distinction between blockchain *syncing* and block *authoring* ("authoring" is a more general term for what is called "mining" in Bitcoin). The first case might be referred to as a "full node" (or "light node" - Substrate supports both): authoring necessarily requires a synced node and, therefore, all authoring clients must necessarily be able to synchronize. However, the reverse is not true. The primary functionality that authoring nodes have which is not in "sync nodes" is threefold: transaction queue logic, inherent transaction knowledge and BFT consensus logic. BFT consensus logic is provided as a core element of Substrate and can be ignored since it is only exposed in the SDK under the `authorities()` API entry.
+
+Transaction queue logic in Substrate is designed to be as generic as possible, allowing a runtime to express which transactions are fit for inclusion in a block through the `initialize_block` and `apply_extrinsic` calls. However, more subtle aspects like prioritization and replacement policy must currently be expressed "hard coded" as part of the blockchain's authoring code. That said, Substrate's reference implementation for a transaction queue should be sufficient for an initial chain implementation.
+
+Inherent extrinsic knowledge is again somewhat generic, and the actual construction of the extrinsics is, by convention, delegated to the "soft code" in the runtime. If ever there needs to be additional extrinsic information in the chain, then both the block authoring logic will need to be altered to provide it into the runtime and the runtime's `inherent_extrinsics` call will need to use this extra information in order to construct any additional extrinsic transactions for inclusion in the block.
+
+== Roadmap
+
+=== So far
+
+- 0.1 "PoC-1": PBFT consensus, Wasm runtime engine, basic runtime modules.
+- 0.2 "PoC-2": Libp2p
+
+=== In progress
+
+- AfG consensus
+- Improved PoS
+- Smart contract runtime module
+
+=== The future
+
+- Splitting out runtime modules into separate repo
+- Introduce substrate executable (the skeleton-key runtime)
+- Introduce basic but extensible transaction queue and block-builder and place them in the executable.
+- DAO runtime module
+- Audit
+
+== Trying out Substrate Node
+
+Substrate Node is Substrate's pre-baked blockchain client. You can run a development node locally or configure a new chain and launch your own global testnet.
+
+=== On Mac and Ubuntu
+
+To get going as fast as possible, there is a simple script that installs all required dependencies and installs Substrate into your path. Just open a terminal and run:
+
+[source, shell]
+----
+curl https://getsubstrate.io -sSf | bash
+----
+
+You can start a local Substrate development chain with running `substrate --dev`.
+
+To create your own global network/cryptocurrency, you'll need to make a new Substrate Node chain specification file ("chainspec").
+
+First let's get a template chainspec that you can edit. We'll use the "staging" chain, a sort of default chain that the node comes pre-configured with:
+
+[source, shell]
+----
+substrate build-spec --chain=staging > ~/chainspec.json
+----
+
+Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
+
+[source, json]
+----
+     "timestamp": {
+        "period": 10
+      },
+----
+
+Now with this new chainspec file, you can build a "raw" chain definition for your new chain:
+
+[source, shell]
+----
+substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
+----
+
+This can be fed into Substrate:
+
+[source, shell]
+----
+substrate --chain ~/mychain.json
+----
+
+It won't do much until you start producing blocks though, so to do that you'll need to use the `--validator` option together with passing the seed for the account(s) that is configured to be the initial authorities:
+
+[source, shell]
+----
+substrate --chain ~/mychain.json --validator --key ...
+----
+
+You can distribute `mychain.json` so that everyone can synchronize and (depending on your authorities list) validate on your chain.
+
+
+== Building
+
+=== Hacking on Substrate
+
+If you'd actually like to hack on Substrate, you can just grab the source code and
+build it. Ensure you have Rust and the support software installed:
+
+==== Linux and Mac
+
+For Unix-based operating systems, you should run the following commands:
+
+[source, shell]
+----
+curl https://sh.rustup.rs -sSf | sh
+
+rustup update nightly
+rustup target add wasm32-unknown-unknown --toolchain nightly
+rustup update stable
+cargo install --git https://github.com/alexcrichton/wasm-gc
+----
+
+You will also need to install the following packages:
+
+ - Linux:
+[source, shell]
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
+
+ - Mac:
+[source, shell]
+brew install cmake pkg-config openssl git llvm
+
+To finish installation of Substrate, jump down to <<shared-steps,shared steps>>.
+
+==== Windows
+
+If you are trying to set up Substrate on Windows, you should do the following:
+
+1. First, you will need to download and install "Build Tools for Visual Studio:"
+
+    * You can get it at this link: https://aka.ms/buildtools
+    * Run the installation file: `vs_buildtools.exe`
+    * Please ensure the Windows 10 SDK component is included when installing the Visual C++ Build Tools.
+    * image:https://i.imgur.com/zayVLmu.png[image]
+    * Restart your computer.
+
+2. Next, you need to install Rust:
+
+    * Detailed instructions are provided by the https://doc.rust-lang.org/book/ch01-01-installation.html#installing-rustup-on-windows[Rust Book].
+        * Download from: https://www.rust-lang.org/tools/install
+        * Run the installation file: `rustup-init.exe`
+        > Note that it should not prompt you to install vs_buildtools since you did it in step 1.
+        * Choose "Default Installation."
+        * To get started, you need Cargo's bin directory (%USERPROFILE%\.cargo\bin) in your PATH environment variable. Future applications will automatically have the correct environment, but you may need to restart your current shell.
+
+3. Then, you will need to run some commands in CMD to set up your Wasm Build Environment:
+
+	rustup update nightly
+	rustup update stable
+	rustup target add wasm32-unknown-unknown --toolchain nightly
+
+4. Next, you install wasm-gc, which is used to slim down Wasm files:
+
+	cargo install --git https://github.com/alexcrichton/wasm-gc --force
+
+5. Then, you need to install LLVM: https://releases.llvm.org/download.html
+
+6. Next, you need to install OpenSSL, which we will do with `vcpkg`:
+
+	mkdir \Tools
+	cd \Tools
+	git clone https://github.com/Microsoft/vcpkg.git
+	cd vcpkg
+	.\bootstrap-vcpkg.bat
+	.\vcpkg.exe install openssl:x64-windows-static
+
+7. After, you need to add OpenSSL to your System Variables:
+
+	$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
+	$env:OPENSSL_STATIC = 'Yes'
+	[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
+	[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
+
+8. Finally, you need to install `cmake`: https://cmake.org/download/
+
+==== Shared Steps
+
+Then, grab the Substrate source code:
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+----
+
+Then build the code:
+
+[source, shell]
+----
+./scripts/build.sh          # Builds the WebAssembly binaries
+cargo build                 # Builds all native code
+----
+
+You can run all the tests if you like:
+
+[source, shell]
+cargo test --all
+
+Or just run the tests of a specific package (i.e. `cargo test -p srml-assets`)
+
+You can start a development chain with:
+
+[source, shell]
+cargo run \-- --dev
+
+Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run \-- --dev`.
+
+If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on link:https://telemetry.polkadot.io/#/Local%20Testnet[Telemetry] . You'll need two terminals windows open.
+
+We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN`, which is generated from the `--node-key` value that we specify below:
+
+[source, shell]
+cargo run --release \-- \
+  --base-path /tmp/alice \
+  --chain=local \
+  --alice \
+  --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
+  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --validator
+
+In the second terminal, we'll run the following to start Bob's substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
+
+[source, shell]
+cargo run --release \-- \
+  --base-path /tmp/bob \
+  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN \
+  --chain=local \
+  --bob \
+  --port 30334 \
+  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --validator
+
+Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
+
+=== Joining the Emberic Elm Testnet
+
+Emberic Elm is the new testnet for Substrate 1.0. Please note that 1.0 is not compatible with the BBQ-Birch, Charred-Cherry, or Dried-Danta testnets. Ensure you have the dependencies listed above before compiling.
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+----
+
+You can run the tests if you like:
+
+[source, shell]
+cargo test --all
+
+Start your node:
+
+[source, shell]
+cargo run --release \--
+
+To see a list of command line options, enter:
+
+[source, shell]
+cargo run --release \-- --help
+
+For example, you can choose a custom node name:
+
+[source, shell]
+cargo run --release \-- --name my_custom_name
+
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Emberic%20Elm
+
+
+== Documentation
+
+=== Viewing documentation for Substrate packages
+
+You can generate documentation for a Substrate Rust package and have it automatically open in your web browser using https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html#using-rustdoc-with-cargo[rustdoc with Cargo],
+(of the The Rustdoc Book), by running the the following command:
+
+```
+cargo doc --package <spec> --open
+```
+
+Replacing `<spec>` with one of the following (i.e. `cargo doc --package substrate --open`):
+
+* All Substrate Packages
+[source, shell]
+substrate
+* Substrate Core
+[source, shell]
+substrate, substrate-cli, substrate-client, substrate-client-db,
+substrate-consensus-common, substrate-consensus-rhd,
+substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore, substrate-network,
+substrate-network-libp2p, substrate-primitives, substrate-rpc, substrate-rpc-servers,
+substrate-serializer, substrate-service, substrate-service-test, substrate-state-db,
+substrate-state-machine, substrate-telemetry, substrate-test-client,
+substrate-test-runtime, substrate-transaction-graph, substrate-transaction-pool,
+substrate-trie
+* Substrate Runtime
+[source, shell]
+sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
+* Substrate Runtime Module Library (SRML)
+[source, shell]
+srml-assets, srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
+srml-executive, srml-metadata, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
+srml-treasury
+* Node
+[source, shell]
+node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime
+* Subkey
+[source, shell]
+subkey
+
+=== Contributing to documentation for Substrate packages
+
+https://doc.rust-lang.org/1.9.0/book/documentation.html[Document source code] for Substrate packages by annotating the source code with documentation comments.
+
+Example (generic):
+```markdown
+/// Summary
+///
+/// Description
+///
+/// # Panics
+///
+/// # Errors
+///
+/// # Safety
+///
+/// # Examples
+///
+/// Summary of Example 1
+///
+/// ```rust
+/// // insert example 1 code here
+/// ```
+///
+```
+
+* Important notes:
+** Documentation comments must use annotations with a triple slash `///`
+** Modules are documented using `//!`
+```
+//! Summary (of module)
+//!
+//! Description (of module)
+```
+* Special section header is indicated with a hash `#`.
+** `Panics` section requires an explanation if the function triggers a panic
+** `Errors` section is for describing conditions under which a function of method returns `Err(E)` if it returns a `Result<T, E>`
+** `Safety` section requires an explanation if the function is `unsafe`
+** `Examples` section includes examples of using the function or method
+* Code block annotations for examples are included between triple graves, as shown above.
+Instead of including the programming language to use for syntax highlighting as the annotation
+after the triple graves, alternative annotations include the `ignore`, `text`, `should_panic`, or `no_run`.
+* Summary sentence is a short high level single sentence of its functionality
+* Description paragraph is for details additional to the summary sentence
+* Missing documentation annotations may be used to identify where to generate warnings with `#![warn(missing_docs)]`
+or errors `#![deny(missing_docs)]`
+* Hide documentation for items with `#[doc(hidden)]`
+
+=== Contributing to documentation (tests, extended examples, macros) for Substrate packages
+
+The code block annotations in the `# Example` section may be used as https://doc.rust-lang.org/1.9.0/book/documentation.html#documentation-as-tests[documentation as tests and for extended examples].
+
+* Important notes:
+** Rustdoc will automatically add a `main()` wrapper around the code block to test it
+** https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documenting macros].
+** Documentation as tests examples are included when running `cargo test`
+
+== Contributing
+
+=== Contributing Guidelines
+
+include::CONTRIBUTING.adoc[]
+
+=== Contributor Code of Conduct
+
+include::CODE_OF_CONDUCT.adoc[]
+
+== License
+
+https://github.com/paritytech/substrate/blob/master/LICENSE[LICENSE]

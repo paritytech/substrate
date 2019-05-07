@@ -30,7 +30,6 @@ log = "0.4.6"
 schnorrkel = "0.1.1"
 rand = "0.6.5"
 merlin = "1.0.3"
-hex-literal = "0.1.0"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }
