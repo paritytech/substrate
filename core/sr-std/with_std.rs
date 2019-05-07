@@ -32,6 +32,7 @@ pub use std::slice;
 pub use std::vec;
 pub use std::default;
 pub use std::result;
+pub use std::convert;
 
 pub mod collections {
 	pub use std::collections::btree_map;
