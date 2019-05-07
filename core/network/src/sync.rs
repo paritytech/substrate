@@ -31,7 +31,6 @@ use runtime_primitives::generic::BlockId;
 use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -358,7 +357,6 @@ pub struct ChainSync<B: BlockT> {
 	justifications: PendingJustifications<B>,
 	queue_blocks: HashSet<B::Hash>,
 	best_importing_number: NumberFor<B>,
-	is_stopping: AtomicBool,
 }
 
 /// Reported sync state.
@@ -418,7 +416,6 @@ impl<B: BlockT> ChainSync<B> {
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			is_stopping: Default::default(),
 		}
 	}
 
@@ -739,9 +736,6 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
-		if self.is_stopping.load(Ordering::SeqCst) {
-			return
-		}
 		let peers: Vec<PeerId> = self.peers.keys().map(|p| p.clone()).collect();
 		for peer in peers {
 			self.download_new(protocol, peer);
@@ -773,10 +767,6 @@ impl<B: BlockT> ChainSync<B> {
 
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		self.justifications.justification_import_result(hash, number, success);
-	}
-
-	pub fn stop(&self) {
-		self.is_stopping.store(true, Ordering::SeqCst);
 	}
 
 	/// Notify about successful import of the given block.
@@ -925,12 +915,6 @@ impl<B: BlockT> ChainSync<B> {
 		for id in ids {
 			self.new_peer(protocol, id);
 		}
-	}
-
-	/// Clear all sync data.
-	pub(crate) fn clear(&mut self) {
-		self.blocks.clear();
-		self.peers.clear();
 	}
 
 	// Download old block with known parent.

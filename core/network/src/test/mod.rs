@@ -433,11 +433,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		*finalized_hash = Some(info.chain.finalized_hash);
 	}
 
-	/// Restart sync for a peer.
-	fn restart_sync(&self) {
-		self.net_proto_channel.send_from_client(ProtocolMsg::Abort);
-	}
-
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(
@@ -831,11 +826,6 @@ pub trait TestNetFactory: Sized {
 	/// Send block finalization notifications for all peers.
 	fn send_finality_notifications(&mut self) {
 		self.peers().iter().for_each(|peer| peer.send_finality_notifications())
-	}
-
-	/// Restart sync for a peer.
-	fn restart_peer(&mut self, i: usize) {
-		self.peers()[i].restart_sync();
 	}
 
 	/// Perform synchronization until complete, if provided the

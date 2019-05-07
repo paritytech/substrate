@@ -275,10 +275,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	/// Tell protocol to abort sync (does not stop protocol).
-	/// Only used in tests.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Abort,
 	/// Tell protocol to perform regular maintenance.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Tick,
@@ -362,10 +358,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, 
 
 		loop {
 			match self.port.poll() {
-				Ok(Async::Ready(None)) | Err(_) => {
-					self.stop();
-					return Ok(Async::Ready(()))
-				}
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 				Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
 					return Ok(Async::Ready(()))
 				}
@@ -418,8 +411,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Tick => self.tick(),
-			#[cfg(any(test, feature = "test-helpers"))]
-			ProtocolMsg::Abort => self.abort(),
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Synchronize => {
 				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
@@ -908,22 +899,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			};
 			self.send_message(who, GenericMessage::Status(status))
 		}
-	}
-
-	fn abort(&mut self) {
-		self.sync.clear();
-		self.specialization.on_abort();
-		self.context_data.peers.clear();
-		self.handshaking_peers.clear();
-		self.consensus_gossip.abort();
-	}
-
-	fn stop(&mut self) {
-		// stop processing import requests first (without holding a sync lock)
-		self.sync.stop();
-
-		// and then clear all the sync data
-		self.abort();
 	}
 
 	fn on_block_announce(&mut self, who: PeerId, announce: message::BlockAnnounce<B::Header>) {
