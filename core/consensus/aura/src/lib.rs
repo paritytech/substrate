@@ -67,6 +67,7 @@ use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
 
+
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
 
@@ -823,6 +824,12 @@ mod tests {
 	use primitives::sr25519;
 	use client::BlockchainEvents;
 	use test_client;
+	use test_client::AuthorityKeyring;
+	use primitives::hash::H256;
+	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
+	use hex_literal::*;
+	use slots::MAX_SLOT_CAPACITY;
+
 
 	type Error = client::error::Error;
 
@@ -914,6 +921,27 @@ mod tests {
 		}
 	}
 
+	fn create_header(slot_num: u64, number: u64) -> (HeaderTest, H256) {
+		// Construct one header.
+		let mut header = HeaderTest {
+			parent_hash: [69u8; 32].into(),
+			number,
+			state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
+			digest: DigestTest { logs: vec![], },
+		};
+		let header_hash: H256 = header.hash();
+		let to_sign = (slot_num, header_hash).encode();
+		let signature = AuthorityKeyring::Alice.sign(&to_sign[..]);
+		
+		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(
+			slot_num,
+			signature,
+		);
+		header.digest_mut().push(item);
+		(header, header_hash)
+	}
+
 	#[test]
 	fn authoring_blocks() {
 		let _ = ::env_logger::try_init();
@@ -990,5 +1018,37 @@ mod tests {
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
 		]);
+	}
+
+	#[test]
+	fn check_header_works_with_equivocation() {
+		let client = test_client::new();
+		let authorities = authorities(&client, &BlockId::Number(0)).unwrap();
+		let slot_num = 3;
+
+		// Construct one header.
+		let (header1, header1_hash) = create_header(slot_num, 1);
+
+		// Construct a different header.
+		let (header2, header2_hash) = create_header(slot_num, 2);
+
+		// Construct a header with high slot number.
+		let (header3, header3_hash) = create_header(slot_num + MAX_SLOT_CAPACITY, 3);
+
+		let c = Arc::new(client);
+
+		type B = RawBlock<ExtrinsicWrapper<u64>>;
+		type P = sr25519::Pair;
+		let high_slot = 2000;
+
+		// It's ok to sign same headers.
+		assert!(check_header::<_, B, P>(&c, high_slot, header1.clone(), header1_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, high_slot, header1, header1_hash, &authorities, false).is_ok());
+
+		// But not two different headers at the same slot.
+		assert!(check_header::<_, B, P>(&c, high_slot, header2, header2_hash, &authorities, false).is_err());
+
+		// We should ignore old slot headers (out of MAX_SLOT_CAPACITY).
+		assert!(check_header::<_, B, P>(&c, high_slot, header3, header3_hash, &authorities, false).is_err());
 	}
 }
