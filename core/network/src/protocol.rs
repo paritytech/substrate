@@ -991,7 +991,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			hash,
 			&header,
 		);
-		self.network_chan.send(NetworkMsg::ReportPeer(who, BLOCK_ANNOUNCE_REPUTATION_CHANGE));
+		//self.network_chan.send(NetworkMsg::ReportPeer(who, BLOCK_ANNOUNCE_REPUTATION_CHANGE));
 	}
 
 	fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
