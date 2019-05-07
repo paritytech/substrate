@@ -19,7 +19,6 @@
 use std::{cell::RefCell, rc::Rc};
 use log::debug;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use hash_db::HashDB;
 use trie::{
 	MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_root,
@@ -41,7 +40,6 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
-		H::Out: HeapSizeOf,
 {
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
@@ -130,7 +128,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
 		S: 'a + TrieBackendStorage<H>,
 		H: 'a + Hasher,
-		H::Out: Ord + HeapSizeOf,
+		H::Out: Ord,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
@@ -194,7 +192,6 @@ pub fn create_proof_check_backend<H>(
 ) -> Result<TrieBackend<MemoryDB<H>, H>, Box<Error>>
 where
 	H: Hasher,
-	H::Out: HeapSizeOf,
 {
 	let db = create_proof_check_backend_storage(proof);
 
@@ -211,7 +208,6 @@ pub fn create_proof_check_backend_storage<H>(
 ) -> MemoryDB<H>
 where
 	H: Hasher,
-	H::Out: HeapSizeOf,
 {
 	let mut db = MemoryDB::default();
 	for item in proof {

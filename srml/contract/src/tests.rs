@@ -21,7 +21,7 @@
 
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
-	ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
+	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, TrieIdGenerator,
 };
 use assert_matches::assert_matches;
@@ -614,7 +614,6 @@ const CODE_SET_RENT: &str = r#"
 "#;
 const HASH_SET_RENT: [u8; 32] = hex!("a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef");
 
-
 /// Input data for each call in set_rent code
 mod call {
 	pub fn set_storage_4_byte() -> Vec<u8> { vec![] }
@@ -897,6 +896,92 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(super::ContractInfoOf::<Test>::get(BOB).is_none());
+		}
+	);
+}
+
+const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
+(module
+	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call"))
+
+	(func (export "deploy")
+		;; fill the scratch buffer with the rent allowance.
+		(call $ext_rent_allowance)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to <BalanceOf<T>>::max_value().
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 0xFFFFFFFFFFFFFFFF)
+			)
+		)
+	)
+)
+"#;
+const HASH_CHECK_DEFAULT_RENT_ALLOWANCE: [u8; 32] = hex!("4f9ec2b94eea522cfff10b77ef4056c631045c00978a457d283950521ecf07b6");
+
+#[test]
+fn default_rent_allowance_on_create() {
+	let wasm = wabt::wat2wasm(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000,
+				HASH_CHECK_DEFAULT_RENT_ALLOWANCE.into(),
+				vec![],
+			));
+
+			// Check creation
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+
+			// Advance blocks
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Check contract is still alive
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive();
+			assert!(bob_contract.is_some())
 		}
 	);
 }

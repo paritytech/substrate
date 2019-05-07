@@ -18,7 +18,6 @@
 
 use log::{warn, debug};
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
@@ -28,7 +27,7 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
@@ -60,7 +59,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSi
 impl super::Error for String {}
 
 impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
