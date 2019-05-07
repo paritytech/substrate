@@ -69,6 +69,7 @@ test-linux-stable:                 &test
     - schedules
     - web
     - /^[0-9]+$/
+    - v1.0
   except:
     variables:
       - $DEPLOY_TAG
@@ -84,6 +85,14 @@ test-linux-stable:                 &test
     - master
     - tags
     - web
+    - v1.0
+
+.build-only-doc:                      &build-only-doc
+  only:
+    - master
+    - tags
+    - web
+
 
 #### stage:                        build
 
@@ -126,7 +135,7 @@ build-rust-doc-release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only
+  <<:                              *build-only-doc
   tags:
     - linux-docker
   before_script:
@@ -170,10 +179,12 @@ publish-docker-release:
     - VERSION="$(cat ./artifacts/VERSION)"
     - echo "Substrate version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
+    - test "$CI_COMMIT_REF_NAME" = "master" ||
+        BRANCH="-$(echo "${CI_COMMIT_REF_NAME}" | sed -r 's/^(v[0-9]+\.[0-9]+)\.[0-9]+$/\1/')"
     - cd ./artifacts
-    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest .
+    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest$BRANCH .
     - docker push $CONTAINER_IMAGE:$VERSION
-    - docker push $CONTAINER_IMAGE:latest
+    - docker push $CONTAINER_IMAGE:latest$BRANCH
   after_script:
     - docker logout
     # only VERSION information is needed for the deployment
@@ -188,12 +199,14 @@ publish-s3-release:
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
     - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
+    - test "$CI_COMMIT_REF_NAME" = "master" ||
+        BRANCH="-$(echo "${CI_COMMIT_REF_NAME}" | sed -r 's/^(v[0-9]+\.[0-9]+)\.[0-9]+$/\1/')"
     - echo "update objects in latest path"
     - for file in ./artifacts/*; do
       name="$(basename ${file})";
       aws s3api copy-object
         --copy-source ${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/${name}
-        --bucket ${BUCKET} --key ${PREFIX}/latest/${name};
+        --bucket ${BUCKET} --key ${PREFIX}/latest${BRANCH}/${name};
       done
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
@@ -206,7 +219,7 @@ publish-s3-doc:
   dependencies:
     - build-rust-doc-release
   cache:                           {}
-  <<:                              *build-only
+  <<:                              *build-only-doc
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none

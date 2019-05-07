@@ -15,6 +15,9 @@ git log --graph --oneline --decorate=short -n 10
 
 RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
 VERSIONS_FILE="node/runtime/src/lib.rs"
+BASE_BRANCH="origin/v1.0"
+
+
 
 github_label () {
 	echo
@@ -31,7 +34,7 @@ github_label () {
 
 
 # check if the wasm sources changed
-if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
+if ! git diff --name-only ${BASE_BRANCH}...${CI_COMMIT_SHA} \
 	| grep -q -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
 then
 	cat <<-EOT
@@ -49,9 +52,9 @@ fi
 # consensus-critical logic that has changed. the runtime wasm blobs must be
 # rebuilt.
 
-add_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+add_spec_version="$(git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
-sub_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+sub_spec_version="$(git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 
 
@@ -74,9 +77,9 @@ else
 	# check for impl_version updates: if only the impl versions changed, we assume
 	# there is no consensus-critical logic that has changed.
 
-	add_impl_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	add_impl_version="$(git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 		| sed -n -r 's/^\+[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
-	sub_impl_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	sub_impl_version="$(git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 		| sed -n -r 's/^\-[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
 
 
