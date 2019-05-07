@@ -17,7 +17,7 @@
 //! Contains the state storage behind the peerset.
 
 use libp2p::PeerId;
-use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
+use std::{borrow::Cow, collections::HashMap};
 
 /// State storage behind the peerset.
 ///
@@ -34,6 +34,12 @@ pub struct PeersState {
 	/// 			easily select the best node to connect to. As a first draft, however, we don't
 	/// 			sort, to make the logic easier.
 	nodes: HashMap<PeerId, Node>,
+
+	/// Number of non-reserved nodes for which the `ConnectionState` is `In`.
+	num_in: u32,
+
+	/// Number of non-reserved nodes for which the `ConnectionState` is `In`.
+	num_out: u32,
 
 	/// Maximum allowed number of non-reserved nodes for which the `ConnectionState` is `In`.
 	max_in: u32,
@@ -83,6 +89,8 @@ impl PeersState {
 	pub fn new(in_peers: u32, out_peers: u32) -> Self {
 		PeersState {
 			nodes: HashMap::new(),
+			num_in: 0,
+			num_out: 0,
 			max_in: in_peers,
 			max_out: out_peers,
 		}
@@ -90,22 +98,36 @@ impl PeersState {
 
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
-		if let Some(node) = self.nodes.get(peer_id) {
-			if node.connection_state.is_connected() {
-				Peer::Connected(ConnectedPeer {
-					parent: self,
-					peer_id: Cow::Borrowed(peer_id),
-				})
-			} else {
-				Peer::NotConnected(NotConnectedPeer {
-					parent: self,
-					peer_id: Cow::Borrowed(peer_id),
-				})
-			}
-		} else {
-			Peer::Unknown(UnknownPeer {
+		// Note: the Rust borrow checker still has some issues. In particular, we can't put this
+		// block as an `else` below (as the obvious solution would be here), or it will complain
+		// that we borrow `self` while it is already borrowed.
+		if !self.nodes.contains_key(peer_id) {
+			return Peer::Unknown(UnknownPeer {
 				parent: self,
 				peer_id: Cow::Borrowed(peer_id),
+			});
+		}
+
+		let state = self.nodes.get_mut(peer_id)
+			.expect("We check that the value is present right above; QED");
+
+		if state.connection_state.is_connected() {
+			Peer::Connected(ConnectedPeer {
+				state,
+				peer_id: Cow::Borrowed(peer_id),
+				num_in: &mut self.num_in,
+				num_out: &mut self.num_out,
+				max_in: self.max_in,
+				max_out: self.max_out,
+			})
+		} else {
+			Peer::NotConnected(NotConnectedPeer {
+				state,
+				peer_id: Cow::Borrowed(peer_id),
+				num_in: &mut self.num_in,
+				num_out: &mut self.num_out,
+				max_in: self.max_in,
+				max_out: self.max_out,
 			})
 		}
 	}
@@ -130,16 +152,20 @@ impl PeersState {
 	///
 	/// If multiple nodes are reserved, which one is returned is unspecified.
 	pub fn reserved_not_connected_peer(&mut self) -> Option<NotConnectedPeer> {
-		let peer_id = self.nodes.iter_mut()
+		let outcome = self.nodes.iter_mut()
 			.find(|(_, &mut Node { connection_state, reserved, .. })| {
 				reserved && !connection_state.is_connected()
 			})
-			.map(|(peer_id, _)| peer_id.clone());
+			.map(|(peer_id, node)| (peer_id.clone(), node));
 
-		if let Some(peer_id) = peer_id {
+		if let Some((peer_id, state)) = outcome {
 			Some(NotConnectedPeer {
-				parent: self,
+				state,
 				peer_id: Cow::Owned(peer_id),
+				num_in: &mut self.num_in,
+				num_out: &mut self.num_out,
+				max_in: self.max_in,
+				max_out: self.max_out,
 			})
 		} else {
 			None
@@ -150,10 +176,10 @@ impl PeersState {
 	///
 	/// If multiple nodes have the same reputation, which one is returned is unspecified.
 	pub fn highest_not_connected_peer(&mut self) -> Option<NotConnectedPeer> {
-		let peer_id = self.nodes
-			.iter()
+		let outcome = self.nodes
+			.iter_mut()
 			.filter(|(_, Node { connection_state, .. })| !connection_state.is_connected())
-			.fold(None::<(&PeerId, &Node)>, |mut cur_node, to_try| {
+			.fold(None::<(&PeerId, &mut Node)>, |mut cur_node, to_try| {
 				if let Some(cur_node) = cur_node.take() {
 					if cur_node.1.reputation >= to_try.1.reputation {
 						return Some(cur_node);
@@ -161,12 +187,16 @@ impl PeersState {
 				}
 				Some(to_try)
 			})
-			.map(|(peer_id, _)| peer_id.clone());
+			.map(|(peer_id, state)| (peer_id.clone(), state));
 
-		if let Some(peer_id) = peer_id {
+		if let Some((peer_id, state)) = outcome {
 			Some(NotConnectedPeer {
-				parent: self,
+				state,
 				peer_id: Cow::Owned(peer_id),
+				num_in: &mut self.num_in,
+				num_out: &mut self.num_out,
+				max_in: self.max_in,
+				max_out: self.max_out,
 			})
 		} else {
 			None
@@ -219,15 +249,13 @@ impl<'a> Peer<'a> {
 }
 
 /// A peer that is connected to us.
-//
-// Implementation note: the fact this object is alive is a guarantee that the peer is in the list
-// and in a connected state. It holds a mutable borrow to `PeersState`, guaranteeing that nothing
-// else can modify that list except for the local object. Any method on `ConnectedPeer` that
-// transitions the state away from "connected and in the list" must destroy the `ConnectedPeer`
-// in the process.
 pub struct ConnectedPeer<'a> {
-	parent: &'a mut PeersState,
+	state: &'a mut Node,
 	peer_id: Cow<'a, PeerId>,
+	num_in: &'a mut u32,
+	num_out: &'a mut u32,
+	max_in: u32,
+	max_out: u32,
 }
 
 impl<'a> ConnectedPeer<'a> {
@@ -236,73 +264,83 @@ impl<'a> ConnectedPeer<'a> {
 		self.peer_id.into_owned()
 	}
 
-	fn state(&self) -> &Node {
-		self.parent.nodes.get(&self.peer_id)
-			.expect("we only initially create a ConnectedPeer object when have verified that a \
-					 node is in the list; additionally, keeping the ConnectedPeer alive mutably \
-					 borrows the list of nodes, guaranteeing that nothing can remove the current \
-					 node from said list; QED")
-	}
-
-	fn state_mut(&mut self) -> &mut Node {
-		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("we only initially create a ConnectedPeer object when have verified that a \
-					 node is in the list; additionally, keeping the ConnectedPeer alive mutably \
-					 borrows the list of nodes, guaranteeing that nothing can remove the current \
-					 node from said list; QED")
-	}
-
 	/// Switches the peer to "not connected".
-	pub fn disconnect(mut self) -> NotConnectedPeer<'a> {
-		let connec_state = &mut self.state_mut().connection_state;
-		debug_assert!(connec_state.is_connected());
+	pub fn disconnect(self) -> NotConnectedPeer<'a> {
+		let connec_state = &mut self.state.connection_state;
+
+		match *connec_state {
+			ConnectionState::In => *self.num_in -= 1,
+			ConnectionState::Out => *self.num_out -= 1,
+			ConnectionState::NotConnected =>
+				debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
+		}
+
 		*connec_state = ConnectionState::NotConnected;
 
 		NotConnectedPeer {
-			parent: self.parent,
+			state: self.state,
 			peer_id: self.peer_id,
+			num_in: self.num_in,
+			num_out: self.num_out,
+			max_in: self.max_in,
+			max_out: self.max_out,
 		}
 	}
 
 	/// Sets whether or not the node is reserved.
 	pub fn set_reserved(&mut self, reserved: bool) {
-		self.state_mut().reserved = reserved;
+		if reserved {
+			self.state.reserved = true;
+			match self.state.connection_state {
+				ConnectionState::In => *self.num_in -= 1,
+				ConnectionState::Out => *self.num_out -= 1,
+				ConnectionState::NotConnected => debug_assert!(false, "State inconsistency: \
+					connected node is in fact not connected"),
+			}
+
+		} else {
+			self.state.reserved = false;
+			match self.state.connection_state {
+				ConnectionState::In => *self.num_in += 1,
+				ConnectionState::Out => *self.num_out += 1,
+				ConnectionState::NotConnected => debug_assert!(false, "State inconsistency: \
+					connected node is in fact not connected"),
+			}
+		}
 	}
 
 	/// Returns whether or not the node is reserved.
 	pub fn is_reserved(&self) -> bool {
-		self.state().reserved
+		self.state.reserved
 	}
 
 	/// Returns the reputation value of the node.
 	pub fn reputation(&self) -> i32 {
-		self.state().reputation
+		self.state.reputation
 	}
 
 	/// Sets the reputation of the peer.
 	pub fn set_reputation(&mut self, value: i32) {
-		self.state_mut().reputation = value;
+		self.state.reputation = value;
 	}
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
 	/// In case of overflow, the value will be capped.
 	pub fn add_reputation(&mut self, modifier: i32) {
-		let reputation = &mut self.state_mut().reputation;
+		let reputation = &mut self.state.reputation;
 		*reputation = reputation.saturating_add(modifier);
 	}
 }
 
 /// A peer that is not connected to us.
-//
-// Implementation note: the fact this object is alive is a guarantee that the peer is in the list
-// and in a non-connected state. It holds a mutable borrow to `PeersState`, guaranteeing that
-// nothing else can modify that list except for the local object. Any method on `NotConnectedPeer`
-// that transitions the state away from "not connected and in the list" must destroy the
-// `NotConnectedPeer` in the process.
 pub struct NotConnectedPeer<'a> {
-	parent: &'a mut PeersState,
+	state: &'a mut Node,
 	peer_id: Cow<'a, PeerId>,
+	num_in: &'a mut u32,
+	num_out: &'a mut u32,
+	max_in: u32,
+	max_out: u32,
 }
 
 impl<'a> NotConnectedPeer<'a> {
@@ -310,22 +348,6 @@ impl<'a> NotConnectedPeer<'a> {
 	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
 	pub fn into_peer_id(self) -> PeerId {
 		self.peer_id.into_owned()
-	}
-
-	fn state(&self) -> &Node {
-		self.parent.nodes.get(&self.peer_id)
-			.expect("we only initially create a NotConnectedPeer object when have verified that a \
-					 node is in the list; additionally, keeping the NotConnectedPeer alive mutably \
-					 borrows the list of nodes, guaranteeing that nothing can remove the current \
-					 node from said list; QED")
-	}
-
-	fn state_mut(&mut self) -> &mut Node {
-		self.parent.nodes.get_mut(&self.peer_id)
-			.expect("we only initially create a NotConnectedPeer object when have verified that a \
-					 node is in the list; additionally, keeping the NotConnectedPeer alive mutably \
-					 borrows the list of nodes, guaranteeing that nothing can remove the current \
-					 node from said list; QED")
 	}
 
 	/// Tries to set the peer as connected as an outgoing connection.
@@ -340,16 +362,10 @@ impl<'a> NotConnectedPeer<'a> {
 			return Ok(self.force_outgoing())
 		}
 
-		// Count number of nodes in our "out" slots and that are not reserved.
-		let num_out_peers = u32::try_from(self.parent.nodes.values()
-			.filter(|p| !p.reserved && p.connection_state == ConnectionState::Out)
-			.count())
-			.unwrap_or(u32::max_value());
-
-		// Note that it is possible for num_out_peers to be strictly superior to the max, in case
-		// we were connected to reserved node then marked them as not reserved, or if the user
-		// used `force_outgoing`.
-		if num_out_peers >= self.parent.max_out {
+		// Note that it is possible for num_out to be strictly superior to the max, in case we were
+		// connected to reserved node then marked them as not reserved, or if the user used
+		// `force_outgoing`.
+		if *self.num_out >= self.max_out {
 			return Err(self);
 		}
 
@@ -357,14 +373,22 @@ impl<'a> NotConnectedPeer<'a> {
 	}
 
 	/// Sets the peer as connected as an outgoing connection.
-	pub fn force_outgoing(mut self) -> ConnectedPeer<'a> {
-		let connec_state = &mut self.state_mut().connection_state;
+	pub fn force_outgoing(self) -> ConnectedPeer<'a> {
+		let connec_state = &mut self.state.connection_state;
 		debug_assert!(!connec_state.is_connected());
 		*connec_state = ConnectionState::Out;
 
+		if !self.state.reserved {
+			*self.num_out += 1;
+		}
+
 		ConnectedPeer {
-			parent: self.parent,
+			state: self.state,
 			peer_id: self.peer_id,
+			num_in: self.num_in,
+			num_out: self.num_out,
+			max_in: self.max_in,
+			max_out: self.max_out,
 		}
 	}
 
@@ -379,15 +403,9 @@ impl<'a> NotConnectedPeer<'a> {
 			return Ok(self.force_ingoing())
 		}
 
-		// Count number of nodes in our "in" slots and that are not reserved.
-		let num_in_peers = u32::try_from(self.parent.nodes.values()
-			.filter(|p| !p.reserved && p.connection_state == ConnectionState::In)
-			.count())
-			.unwrap_or(u32::max_value());
-
-		// Note that it is possible for num_in_peers to be strictly superior to the max, in case
-		// we were connected to reserved node then marked them as not reserved.
-		if num_in_peers >= self.parent.max_in {
+		// Note that it is possible for num_in to be strictly superior to the max, in case we were
+		// connected to reserved node then marked them as not reserved.
+		if *self.num_in >= self.max_in {
 			return Err(self);
 		}
 
@@ -395,35 +413,43 @@ impl<'a> NotConnectedPeer<'a> {
 	}
 
 	/// Sets the peer as connected as an ingoing connection.
-	pub fn force_ingoing(mut self) -> ConnectedPeer<'a> {
-		let connec_state = &mut self.state_mut().connection_state;
+	pub fn force_ingoing(self) -> ConnectedPeer<'a> {
+		let connec_state = &mut self.state.connection_state;
 		debug_assert!(!connec_state.is_connected());
 		*connec_state = ConnectionState::In;
 
-		ConnectedPeer {
-			parent: self.parent,
-			peer_id: self.peer_id,
+		if !self.state.reserved {
+			*self.num_in += 1;
 		}
-	}
 
-	/// Returns true if the the node is reserved.
-	pub fn is_reserved(&self) -> bool {
-		self.state().reserved
+		ConnectedPeer {
+			state: self.state,
+			peer_id: self.peer_id,
+			num_in: self.num_in,
+			num_out: self.num_out,
+			max_in: self.max_in,
+			max_out: self.max_out,
+		}
 	}
 
 	/// Sets whether or not the node is reserved.
 	pub fn set_reserved(&mut self, reserved: bool) {
-		self.state_mut().reserved = reserved;
+		self.state.reserved = reserved;
+	}
+
+	/// Returns true if the the node is reserved.
+	pub fn is_reserved(&self) -> bool {
+		self.state.reserved
 	}
 
 	/// Returns the reputation value of the node.
 	pub fn reputation(&self) -> i32 {
-		self.state().reputation
+		self.state.reputation
 	}
 
 	/// Sets the reputation of the peer.
 	pub fn set_reputation(&mut self, value: i32) {
-		self.state_mut().reputation = value;
+		self.state.reputation = value;
 	}
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
@@ -431,7 +457,7 @@ impl<'a> NotConnectedPeer<'a> {
 	/// In case of overflow, the value will be capped.
 	/// If the peer is unknown to us, we insert it and consider that it has a reputation of 0.
 	pub fn add_reputation(&mut self, modifier: i32) {
-		let reputation = &mut self.state_mut().reputation;
+		let reputation = &mut self.state.reputation;
 		*reputation = reputation.saturating_add(modifier);
 	}
 }
@@ -454,9 +480,16 @@ impl<'a> UnknownPeer<'a> {
 			reserved: false,
 		});
 
+		let state = self.parent.nodes.get_mut(&self.peer_id)
+			.expect("We insert that key into the HashMap right above; QED");
+
 		NotConnectedPeer {
-			parent: self.parent,
+			state,
 			peer_id: self.peer_id,
+			num_in: &mut self.parent.num_in,
+			num_out: &mut self.parent.num_out,
+			max_in: self.parent.max_in,
+			max_out: self.parent.max_out,
 		}
 	}
 }
