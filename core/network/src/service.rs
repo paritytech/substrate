@@ -31,7 +31,7 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
-use crate::protocol::{self, Context, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
+use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crate::error::Error;
 use crate::specialization::NetworkSpecialization;
@@ -179,7 +179,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			network_chan.clone(),
 			params.config,
 			params.chain,
-			import_queue.clone(),
 			params.on_demand,
 			params.transaction_pool,
 			params.specialization,
@@ -190,6 +189,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			protocol,
+			import_queue.clone(),
 			network_port,
 			status_sinks.clone(),
 			params.network_config,
@@ -478,6 +478,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
+	import_queue: Box<ImportQueue<B>>,
 	network_port: NetworkPort<B>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	config: NetworkConfiguration,
@@ -497,7 +498,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(is_offline, is_major_syncing, protocol, service_clone, network_port, status_sinks, peerset_clone)
+		let fut = run_thread(is_offline, is_major_syncing, protocol, service_clone, import_queue, network_port, status_sinks, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -519,6 +520,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_major_syncing: Arc<AtomicBool>,
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
+	import_queue: Box<ImportQueue<B>>,
 	network_port: NetworkPort<B>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	peerset: PeersetHandle,
@@ -555,7 +557,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 		}
 
 		loop {
-			match network_service.lock().poll() {
+			let outcome = match network_service.lock().poll() {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(NetworkServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. }))) => {
 					debug_assert!(
@@ -563,9 +565,12 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 						&& version >= protocol::MIN_VERSION as u8
 					);
 					protocol.on_peer_connected(peer_id, debug_info);
+					CustomMessageOutcome::None
 				}
-				Ok(Async::Ready(Some(NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) =>
-					protocol.on_peer_disconnected(peer_id, debug_info),
+				Ok(Async::Ready(Some(NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) => {
+					protocol.on_peer_disconnected(peer_id, debug_info);
+					CustomMessageOutcome::None
+				},
 				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) =>
 					protocol.on_custom_message(peer_id, message),
 				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
@@ -574,12 +579,21 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 						debug!(target: "sync", "{:?}", msg);
 						protocol.on_clogged_peer(peer_id.clone(), Some(msg));
 					}
+					CustomMessageOutcome::None
 				}
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
 					return Err(err)
 				}
+			};
+
+			match outcome {
+				CustomMessageOutcome::BlockImport(origin, blocks) =>
+					import_queue.import_blocks(origin, blocks),
+				CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
+					import_queue.import_justification(origin, hash, nb, justification),
+				CustomMessageOutcome::None => {}
 			}
 		}
 

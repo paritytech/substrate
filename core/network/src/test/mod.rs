@@ -40,7 +40,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg};
+use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg, CustomMessageOutcome};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -664,7 +664,6 @@ pub trait TestNetFactory: Sized {
 			network_sender.clone(),
 			config.clone(),
 			client.clone(),
-			import_queue.clone(),
 			None,
 			tx_pool,
 			specialization,
@@ -672,19 +671,35 @@ pub trait TestNetFactory: Sized {
 
 		let is_offline2 = is_offline.clone();
 		let is_major_syncing2 = is_major_syncing.clone();
+		let import_queue2 = import_queue.clone();
 
 		std::thread::spawn(move || {
 			tokio::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
-					match msg {
-						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) =>
-							protocol.on_peer_connected(peer_id, debug_msg),
-						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) =>
-							protocol.on_peer_disconnected(peer_id, debug_msg),
+					let outcome = match msg {
+						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
+							protocol.on_peer_connected(peer_id, debug_msg);
+							CustomMessageOutcome::None
+						},
+						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
+							protocol.on_peer_disconnected(peer_id, debug_msg);
+							CustomMessageOutcome::None
+						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
 							protocol.on_custom_message(peer_id, message),
-						Some(FromNetworkMsg::Synchronize) => protocol.synchronize(),
+						Some(FromNetworkMsg::Synchronize) => {
+							protocol.synchronize();
+							CustomMessageOutcome::None
+						},
 						None => return Ok(Async::Ready(()))
+					};
+
+					match outcome {
+						CustomMessageOutcome::BlockImport(origin, blocks) =>
+							import_queue2.import_blocks(origin, blocks),
+						CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
+							import_queue2.import_justification(origin, hash, nb, justification),
+						CustomMessageOutcome::None => {}
 					}
 				}
 
