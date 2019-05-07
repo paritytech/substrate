@@ -175,8 +175,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let (protocol, protocol_sender) = Protocol::new(
-			is_offline.clone(),
-			is_major_syncing.clone(),
 			peers.clone(),
 			network_chan.clone(),
 			params.config,
@@ -189,6 +187,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
 		let registered = RegisteredProtocol::new(protocol_id, &versions);
 		let (thread, network, peerset) = start_thread(
+			is_offline.clone(),
+			is_major_syncing.clone(),
 			protocol,
 			network_port,
 			status_sinks.clone(),
@@ -475,6 +475,8 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 
 /// Starts the background thread that handles the networking.
 fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
+	is_offline: Arc<AtomicBool>,
+	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
 	network_port: NetworkPort<B>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -495,7 +497,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol, service_clone, network_port, status_sinks, peerset_clone)
+		let fut = run_thread(is_offline, is_major_syncing, protocol, service_clone, network_port, status_sinks, peerset_clone)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -513,6 +515,8 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 
 /// Runs the background thread that handles the networking.
 fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
+	is_offline: Arc<AtomicBool>,
+	is_major_syncing: Arc<AtomicBool>,
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
@@ -578,6 +582,9 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 				}
 			}
 		}
+
+		is_offline.store(protocol.is_offline(), Ordering::Relaxed);
+		is_major_syncing.store(protocol.is_major_syncing(), Ordering::Relaxed);
 
 		Ok(Async::NotReady)
 	})

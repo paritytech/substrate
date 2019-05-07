@@ -96,6 +96,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 				net.peer(peer).on_disconnect(net.peer(other));
 			}
 		}
+		net.sync();
 		assert!(net.peer(peer).is_offline());
 		assert!(!net.peer(peer).is_major_syncing());
 	}
@@ -119,6 +120,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	net.peer(1).on_disconnect(net.peer(2));
 
 	// Peer 1 is not major-syncing.
+	net.sync();
 	assert!(!net.peer(1).is_major_syncing());
 }
 

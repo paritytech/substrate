@@ -32,7 +32,6 @@ use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::Client;
@@ -295,8 +294,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
 		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
@@ -308,7 +305,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	) -> error::Result<(Protocol<B, S, H>, mpsc::UnboundedSender<ProtocolMsg<B, S>>)> {
 		let (protocol_sender, port) = mpsc::unbounded();
 		let info = chain.info()?;
-		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
+		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {
 			network_chan,
 			port,
@@ -344,6 +341,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.filter(|p| p.block_request.is_some())
 				.count(),
 		}
+	}
+
+	pub fn is_major_syncing(&self) -> bool {
+		self.sync.status().is_major_syncing()
+	}
+
+	pub fn is_offline(&self) -> bool {
+		self.sync.status().is_offline()
 	}
 }
 
