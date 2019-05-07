@@ -304,7 +304,11 @@ where
 						.into_iter()
 						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
 
-			self.backend.child_storage_root(storage_key, delta).0
+			let root = self.backend.child_storage_root(storage_key, delta).0;
+
+			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
+
+			root
 
 		}
 	}

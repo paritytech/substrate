@@ -252,7 +252,7 @@ impl super::Error for Void {}
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
 	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
-		self.inner.iter().filter_map(|item|item.0.as_ref().map(|v|&v[..]))
+		self.inner.iter().filter_map(|item| item.0.as_ref().map(|v|&v[..]))
 	}
 }
 

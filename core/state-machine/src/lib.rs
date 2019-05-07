@@ -786,8 +786,6 @@ where
 	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<Error>)
 }
 
-
-
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
 /// differs from previous OR config decode has failed.
 pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
