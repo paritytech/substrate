@@ -22,6 +22,7 @@ use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
 use primitives::Blake2Hasher;
 
+#[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &PanicInfo) -> ! {
@@ -43,6 +44,7 @@ pub fn panic(info: &PanicInfo) -> ! {
 	}
 }
 
+#[cfg(not(feature = "no_oom"))]
 #[alloc_error_handler]
 pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";

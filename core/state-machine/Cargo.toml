@@ -8,7 +8,6 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 parking_lot = "0.7.1"
-heapsize = "0.4"
 hash-db = "0.12"
 trie-db = "0.12"
 trie-root = "0.12"

@@ -85,7 +85,7 @@ execution contexts operate on the AccountDb. All changes are flushed into underl
 
 Today `AccountDb` is implemented as a cascade of overlays with the direct storage at the bottom. Each overlay is represented by a `Map`. On a commit from an overlay to an overlay, maps are merged. On commit from an overlay to the bottommost `AccountDb` all changes are flushed to the storage. On revert, the overlay is just discarded.
 
-## get_storage, get_code, get_balance
+## get_storage, get_code_hash, get_rent_allowance, get_balance, contract_exists
 
 These functions check the local cache for a requested value and, if it is there, the value is returned. Otherwise, these functions will ask an underlying `AccountDb`  for the value. This means that the number of lookups is proportional to the depth of the overlay cascade. If the value can't be found before reaching the bottommost `AccountDb`, then a DB read will be performed (in case `get_balance` the function `free_balance` will be invoked).
 
@@ -95,7 +95,7 @@ These functions return an owned value as its result, so memory usage depends on 
 
 **complexity**: The memory complexity is proportional to the size of the value. The computational complexity is proportional to the depth of the overlay cascade and the size of the value; the cost is dominated by the DB read though.
 
-## set_storage, set_code, set_balance
+## set_storage, set_balance, set_rent_allowance
 
 These functions only modify the local `Map`.
 
@@ -104,6 +104,12 @@ A lookup in the local cache consists of at least one `Map` lookup, for locating 
 While these functions only modify the local `Map`, if changes made by them are committed to the bottommost `AccountDb`, each changed entry in the `Map` will require a DB write. Moreover, if the balance of the account is changed to be below `existential_deposit` then that account along with all its storage will be removed, which requires time proportional to the number of storage entries that account has. It should be ensured that pricing accounts for these facts.
 
 **complexity**: Each lookup has a logarithmical computing time to the number of already inserted entries. No additional memory is required.
+
+## create_contract
+
+Calls `contract_exists` and if it doesn't exist, do not modify the local `Map` similarly to `set_rent_allowance`.
+
+**complexity**: The computational complexity is proportional to the depth of the overlay cascade and the size of the value; the cost is dominated by the DB read though. No additional memory is required.
 
 ## commit
 
@@ -327,3 +333,25 @@ This function copies slice of data from the scratch buffer to the sandbox memory
 1. Storing a specified slice of the scratch buffer into the sandbox memory (see sandboxing memory set)
 
 **complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
+
+## ext_set_rent_allowance
+
+This function receives the following argument:
+
+- `value` buffer of a marshaled `Balance`,
+
+It consists of the following steps:
+
+1. Loading `value` buffer from the sandbox memory and then decoding it.
+2. Invoking `set_rent_allowance` AccountDB function.
+
+**complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
+
+## ext_rent_allowance
+
+It consists of the following steps:
+
+1. Invoking `get_rent_allowance` AccountDB function.
+2. Serializing the rent allowance of the current contract into the scratch buffer.
+
+**complexity**: Assuming that the rent allowance is of constant size, this function has constant complexity.

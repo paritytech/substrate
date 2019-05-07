@@ -17,12 +17,13 @@
 //! Import Queue primitive: something which can verify and import blocks.
 //!
 //! This serves as an intermediate and abstracted step between synchronization
-//! and import. Each mode of consensus will have its own requirements for block verification.
-//! Some algorithms can verify in parallel, while others only sequentially.
+//! and import. Each mode of consensus will have its own requirements for block
+//! verification. Some algorithms can verify in parallel, while others only
+//! sequentially.
 //!
-//! The `ImportQueue` trait allows such verification strategies to be instantiated.
-//! The `BasicQueue` and `BasicVerifier` traits allow serial queues to be
-//! instantiated simply.
+//! The `ImportQueue` trait allows such verification strategies to be
+//! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
+//! queues to be instantiated simply.
 
 use crate::block_import::{
 	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
@@ -40,6 +41,15 @@ use runtime_primitives::Justification;
 
 use crate::error::Error as ConsensusError;
 use parity_codec::alloc::collections::hash_map::HashMap;
+
+/// Reputation change for peers which send us a block with an incomplete header.
+const INCOMPLETE_HEADER_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change for peers which send us a block which we fail to verify.
+const VERIFICATION_FAIL_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change for peers which send us a bad block.
+const BAD_BLOCK_REPUTATION_CHANGE: i32 = -(1 << 29);
+/// Reputation change for peers which send us a block with bad justifications.
+const BAD_JUSTIFICATION_REPUTATION_CHANGE: i32 = -(1 << 16);
 
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
@@ -106,8 +116,8 @@ impl<B: BlockT> Clone for Box<ImportQueue<B>> {
 	}
 }
 
-/// Interface to a basic block import queue that is importing blocks sequentially in a separate thread,
-/// with pluggable verification.
+/// Interface to a basic block import queue that is importing blocks
+/// sequentially in a separate thread, with pluggable verification.
 #[derive(Clone)]
 pub struct BasicQueue<B: BlockT> {
 	sender: Sender<BlockImportMsg<B>>,
@@ -120,20 +130,24 @@ impl<B: BlockT> ImportQueueClone<B> for BasicQueue<B> {
 }
 
 /// "BasicQueue" is a wrapper around a channel sender to the "BlockImporter".
-/// "BasicQueue" itself does not keep any state or do any importing work, and can therefore be send to other threads.
+/// "BasicQueue" itself does not keep any state or do any importing work, and
+/// can therefore be send to other threads.
 ///
-/// "BasicQueue" implements "ImportQueue" by sending messages to the "BlockImporter", which runs in it's own thread.
+/// "BasicQueue" implements "ImportQueue" by sending messages to the
+/// "BlockImporter", which runs in it's own thread.
 ///
-/// The "BlockImporter" is responsible for handling incoming requests from the "BasicQueue",
-/// some of these requests are handled by the "BlockImporter" itself, such as "is_importing" or "status",
-/// and justifications are also imported by the "BlockImporter".
+/// The "BlockImporter" is responsible for handling incoming requests from the
+/// "BasicQueue". Some of these requests are handled by the "BlockImporter"
+/// itself, such as "is_importing", "status", and justifications.
 ///
-/// The "import block" work will be offloaded to a single "BlockImportWorker", running in another thread.
-/// Offloading the work is done via a channel,
-/// ensuring blocks in this implementation are imported sequentially and in order(as received by the "BlockImporter")
+/// The "import block" work will be offloaded to a single "BlockImportWorker",
+/// running in another thread. Offloading the work is done via a channel,
+/// ensuring blocks in this implementation are imported sequentially and in
+/// order (as received by the "BlockImporter").
 ///
-/// As long as the "BasicQueue" is not dropped, the "BlockImporter" will keep running.
-/// The "BlockImporter" owns a sender to the "BlockImportWorker", ensuring that the worker is kept alive until that sender is dropped.
+/// As long as the "BasicQueue" is not dropped, the "BlockImporter" will keep
+/// running. The "BlockImporter" owns a sender to the "BlockImportWorker",
+/// ensuring that the worker is kept alive until that sender is dropped.
 impl<B: BlockT> BasicQueue<B> {
 	/// Instantiate a new basic queue, with given verifier.
 	pub fn new<V: 'static + Verifier<B>>(
@@ -152,8 +166,8 @@ impl<B: BlockT> BasicQueue<B> {
 
 	/// Send synchronization request to the block import channel.
 	///
-	/// The caller should wait for Link::synchronized() call to ensure that it has synchronized
-	/// with ImportQueue.
+	/// The caller should wait for Link::synchronized() call to ensure that it
+	/// has synchronized with ImportQueue.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn synchronize(&self) {
 		self
@@ -238,6 +252,7 @@ impl<B: BlockT> BlockImporter<B> {
 		worker_sender: Sender<BlockImportWorkerMsg<B>>,
 		justification_import: Option<SharedJustificationImport<B>>,
 	) -> Sender<BlockImportMsg<B>> {
+		trace!(target: "block_import", "Creating new Block Importer!");
 		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
 			.name("ImportQueue".into())
@@ -258,6 +273,7 @@ impl<B: BlockT> BlockImporter<B> {
 	}
 
 	fn run(&mut self) -> bool {
+		trace!(target: "import_queue", "Running import queue");
 		let msg = select! {
 			recv(self.port) -> msg => {
 				match msg {
@@ -297,6 +313,7 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportMsg::Stop => return false,
 			#[cfg(any(test, feature = "test-helpers"))]
 			BlockImportMsg::Synchronize => {
+				trace!(target: "sync", "Received synchronization message");
 				self.worker_sender
 					.send(BlockImportWorkerMsg::Synchronize)
 					.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
@@ -318,6 +335,7 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportWorkerMsg::Imported(results) => (results),
 			#[cfg(any(test, feature = "test-helpers"))]
 			BlockImportWorkerMsg::Synchronize => {
+				trace!(target: "sync", "Synchronizing link");
 				link.synchronized();
 				return true;
 			},
@@ -353,23 +371,30 @@ impl<B: BlockT> BlockImporter<B> {
 
 					if aux.bad_justification {
 						if let Some(peer) = who {
-							link.useless_peer(peer, "Sent block with bad justification to import");
+							info!("Sent block with bad justification to import");
+							link.report_peer(peer, BAD_JUSTIFICATION_REPUTATION_CHANGE);
 						}
 					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
-						link.note_useless_and_restart_sync(peer, "Sent block with incomplete header to import");
+						info!("Peer sent block with incomplete header to import");
+						link.report_peer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE);
+						link.restart();
 					}
 				},
 				Err(BlockImportError::VerificationFailed(who, e)) => {
 					if let Some(peer) = who {
-						link.note_useless_and_restart_sync(peer, &format!("Verification failed: {}", e));
+						info!("Verification failed from peer: {}", e);
+						link.report_peer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE);
+						link.restart();
 					}
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
-						link.note_useless_and_restart_sync(peer, "Sent us a bad block");
+						info!("Bad block");
+						link.report_peer(peer, BAD_BLOCK_REPUTATION_CHANGE);
+						link.restart();
 					}
 				},
 				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
@@ -434,6 +459,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 						},
 						#[cfg(any(test, feature = "test-helpers"))]
 						BlockImportWorkerMsg::Synchronize => {
+							trace!(target: "sync", "Sending sync message");
 							let _ = worker.result_sender.send(BlockImportWorkerMsg::Synchronize);
 						},
 						_ => unreachable!("Import Worker does not receive the Imported message; qed"),
@@ -505,10 +531,8 @@ pub trait Link<B: BlockT>: Send {
 	fn clear_justification_requests(&self) {}
 	/// Request a justification for the given block.
 	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
-	/// Disconnect from peer.
-	fn useless_peer(&self, _who: Origin, _reason: &str) {}
-	/// Disconnect from peer and restart sync.
-	fn note_useless_and_restart_sync(&self, _who: Origin, _reason: &str) {}
+	/// Adjusts the reputation of the given peer.
+	fn report_peer(&self, _who: Origin, _reputation_change: i32) {}
 	/// Restart sync.
 	fn restart(&self) {}
 	/// Synchronization request has been processed.
@@ -640,12 +664,8 @@ mod tests {
 		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
 			let _ = self.sender.send(LinkMsg::BlockImported);
 		}
-		fn useless_peer(&self, _: Origin, _: &str) {
+		fn report_peer(&self, _: Origin, _: i32) {
 			let _ = self.sender.send(LinkMsg::Disconnected);
-		}
-		fn note_useless_and_restart_sync(&self, id: Origin, r: &str) {
-			self.useless_peer(id, r);
-			self.restart();
 		}
 		fn restart(&self) {
 			let _ = self.sender.send(LinkMsg::Restarted);

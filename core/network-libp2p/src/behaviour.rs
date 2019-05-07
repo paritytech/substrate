@@ -20,14 +20,16 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
+#[cfg(not(target_os = "unknown"))]
 use libp2p::core::swarm::toggle::Toggle;
 use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut};
+#[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, info, trace, warn};
-use std::{cmp, io, fmt, time::Duration};
+use std::{borrow::Cow, cmp, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 use void;
@@ -45,6 +47,7 @@ pub struct Behaviour<TMessage, TSubstream> {
 	/// Periodically identifies the remote and responds to incoming requests.
 	identify: Identify<TSubstream>,
 	/// Discovers nodes on the local network.
+	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<TSubstream>>,
 
 	/// Queue of events to produce for the outside.
@@ -74,6 +77,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 			kademlia.add_connected_address(peer_id, addr.clone());
 		}
 
+		if enable_mdns {
+			#[cfg(target_os = "unknown")]
+			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
+		}
+
 		let clock = Clock::new();
 		Behaviour {
 			ping: Ping::new(PingConfig::new()),
@@ -87,6 +95,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 				local_peer_id: local_public_key.into_peer_id(),
 			},
 			identify,
+			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
 					Ok(mdns) => Some(mdns).into(),
@@ -172,8 +181,8 @@ pub enum BehaviourOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
-		result: io::Result<()>,
+		/// Reason why the substream closed, for diagnostic purposes.
+		reason: Cow<'static, str>,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -215,8 +224,8 @@ impl<TMessage> From<CustomProtoOut<TMessage>> for BehaviourOut<TMessage> {
 			CustomProtoOut::CustomProtocolOpen { version, peer_id, endpoint } => {
 				BehaviourOut::CustomProtocolOpen { version, peer_id, endpoint }
 			}
-			CustomProtoOut::CustomProtocolClosed { peer_id, result } => {
-				BehaviourOut::CustomProtocolClosed { peer_id, result }
+			CustomProtoOut::CustomProtocolClosed { peer_id, reason } => {
+				BehaviourOut::CustomProtocolClosed { peer_id, reason }
 			}
 			CustomProtoOut::CustomMessage { peer_id, message } => {
 				BehaviourOut::CustomMessage { peer_id, message }
@@ -252,8 +261,10 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 					warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
 				}
 				if info.listen_addrs.len() > 30 {
-					warn!(target: "sub-libp2p", "Node {:?} id reported more than 30 addresses",
-						peer_id);
+					warn!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
+						it is identified by {:?} and {:?}", peer_id, info.protocol_version,
+						info.agent_version
+					);
 					info.listen_addrs.truncate(30);
 				}
 				for addr in &info.listen_addrs {
@@ -304,6 +315,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour
 	}
 }
 
+#[cfg(not(target_os = "unknown"))]
 impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: MdnsEvent) {
 		match event {
@@ -441,27 +453,3 @@ where
 		Async::NotReady
 	}
 }
-
-/// The severity of misbehaviour of a peer that is reported.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Severity {
-	/// Peer is timing out. Could be bad connectivity of overload of work on either of our sides.
-	Timeout,
-	/// Peer has been notably useless. E.g. unable to answer a request that we might reasonably consider
-	/// it could answer.
-	Useless(String),
-	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
-	/// must have taken concrete action in order to behave in such a way which is wantanly invalid.
-	Bad(String),
-}
-
-impl fmt::Display for Severity {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Severity::Timeout => write!(fmt, "Timeout"),
-			Severity::Useless(r) => write!(fmt, "Useless ({})", r),
-			Severity::Bad(r) => write!(fmt, "Bad ({})", r),
-		}
-	}
-}
-

@@ -19,7 +19,6 @@
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::trie_root;
 use crate::backend::InMemory;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
@@ -28,14 +27,14 @@ use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
+pub struct TestExternalities<H: Hasher> {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
 	changes: OverlayedChanges,
 	code: Option<Vec<u8>>,
 }
 
-impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> TestExternalities<H> {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::new_with_code(&[], inner)
@@ -66,19 +65,19 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 	}
 }
 
-impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{:?}", self.inner)
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> PartialEq for TestExternalities<H> {
 	fn eq(&self, other: &TestExternalities<H>) -> bool {
 		self.inner.eq(&other.inner)
 	}
 }
 
-impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
 		t.inner.extend(iter);
@@ -86,17 +85,17 @@ impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where 
 	}
 }
 
-impl<H: Hasher> Default for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> Default for TestExternalities<H> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf {
+impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> {
 	fn from(tex: TestExternalities<H>) -> Self {
 		tex.inner.into()
 	}
 }
 
-impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		TestExternalities {
 			inner: hashmap,
@@ -110,7 +109,7 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 // TODO child test primitives are currently limited to `changes` (for non child the way
 // things are defined seems utterly odd to (put changes in changes but never make them
 // available for read through inner)
-impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
 			CODE => self.code.clone(),
@@ -159,7 +158,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 	}
 
 	fn child_storage_root(&mut self, _storage_key: ChildStorageKey<H>) -> Vec<u8> {
-		unimplemented!()
+		vec![]
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {

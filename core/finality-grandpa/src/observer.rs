@@ -25,9 +25,8 @@ use grandpa::{
 use log::{debug, info, warn};
 
 use client::{CallExecutor, Client, backend::Backend};
-use ed25519::Public as AuthorityId;
-use runtime_primitives::traits::{NumberFor, Block as BlockT, DigestItemFor, DigestItem};
-use substrate_primitives::{ed25519, H256, Blake2Hasher};
+use runtime_primitives::traits::{NumberFor, Block as BlockT};
+use substrate_primitives::{ed25519::Public as AuthorityId, H256, Blake2Hasher};
 
 use crate::{
 	AuthoritySignature, global_communication, CommandOrError, Config, environment,
@@ -155,7 +154,6 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync + 'static,
 {
 	let LinkHalf {

@@ -24,9 +24,8 @@ use runtime_primitives::traits::{
 };
 use primitives::{H256, ExecutionContext};
 use crate::blockchain::HeaderBackend;
-use crate::runtime_api::Core;
+use crate::runtime_api::{Core, ApiExt};
 use crate::error;
-
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
@@ -44,12 +43,22 @@ where
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
-		api.info().and_then(|i| Self::at_block(&BlockId::Hash(i.best_hash), api))
+		api.info().and_then(|i|
+			Self::at_block(&BlockId::Hash(i.best_hash), api, false)
+		)
 	}
 
-	/// Create a new instance of builder from the given client using a particular block's ID to
-	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, api: &'a A) -> error::Result<Self> {
+	/// Create a new instance of builder from the given client using a
+	/// particular block's ID to build upon with optional proof recording enabled.
+	///
+	/// While proof recording is enabled, all accessed trie nodes are saved.
+	/// These recorded trie nodes can be used by a third party to proof the
+	/// output of this block builder without having access to the full storage.
+	pub fn at_block(
+		block_id: &BlockId<Block>,
+		api: &'a A,
+		proof_recording: bool
+	) -> error::Result<Self> {
 		let number = api.block_number_from_id(block_id)?
 			.ok_or_else(|| error::Error::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
@@ -63,8 +72,17 @@ where
 			parent_hash,
 			Default::default()
 		);
-		let api = api.runtime_api();
-		api.initialize_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
+
+		let mut api = api.runtime_api();
+
+		if proof_recording {
+			api.record_proof();
+		}
+
+		api.initialize_block_with_context(
+			block_id, ExecutionContext::BlockConstruction, &header
+		)?;
+
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
@@ -77,13 +95,15 @@ where
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it);
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		use crate::runtime_api::ApiExt;
-
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
 		self.api.map_api_result(|api| {
-			match api.apply_extrinsic_with_context(block_id, ExecutionContext::BlockConstruction, xt.clone())? {
+			match api.apply_extrinsic_with_context(
+				block_id,
+				ExecutionContext::BlockConstruction,
+				xt.clone()
+			)? {
 				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
 					extrinsics.push(xt);
 					Ok(())
@@ -97,13 +117,34 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+		self.bake_impl()?;
+		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
+	}
+
+	fn bake_impl(&mut self) -> error::Result<()> {
+		self.header = self.api.finalize_block_with_context(
+			&self.block_id, ExecutionContext::BlockConstruction
+		)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Encode::encode)),
+			HashFor::<Block>::ordered_trie_root(
+				self.extrinsics.iter().map(Encode::encode)
+			),
 		);
 
-		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
+		Ok(())
+	}
+
+	/// Consume the builder to return a valid `Block` containing all pushed extrinsics
+	/// and the generated proof.
+	///
+	/// The proof will be `Some(_)`, if proof recording was enabled while creating
+	/// the block builder.
+	pub fn bake_and_extract_proof(mut self) -> error::Result<(Block, Option<Vec<Vec<u8>>>)> {
+		self.bake_impl()?;
+
+		let proof = self.api.extract_proof();
+		Ok((<Block as BlockT>::new(self.header, self.extrinsics), proof))
 	}
 }

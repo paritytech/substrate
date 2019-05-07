@@ -570,15 +570,12 @@ mod tests {
 	fn should_remove_transactions_from_the_pool() {
 		let client = Arc::new(substrate_test_client::new());
 		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
-		let transaction = {
-			let transfer = Transfer {
-				amount: 5,
-				nonce: 0,
-				from: AccountKeyring::Alice.into(),
-				to: Default::default(),
-			};
-			transfer.into_signed_tx()
-		};
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();
 

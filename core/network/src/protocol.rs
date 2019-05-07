@@ -17,12 +17,12 @@
 use crossbeam_channel::{self as channel, Receiver, Sender, select};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
-use network_libp2p::{PeerId, Severity};
+use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use runtime_primitives::{generic::BlockId, ConsensusEngineId};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::import_queue::ImportQueue;
-use crate::message::{self, Message};
+use crate::message::{self, BlockRequest as BlockRequestMessage, Message};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::OnDemandService;
@@ -36,7 +36,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::{cmp, num::NonZeroUsize, thread, time};
-use log::{trace, debug, warn};
+use log::{trace, debug, warn, error};
 use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
 use crate::{error, util::LruHashSet};
@@ -60,6 +60,24 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
 /// and disconnect to free connection slot.
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
+
+/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
+/// messages.
+const CLOGGED_PEER_REPUTATION_CHANGE: i32 = -(1 << 12);
+/// Reputation change when a peer doesn't respond in time to our messages.
+const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 10);
+/// Reputation change when a peer sends us a status message while we already received one.
+const UNEXPECTED_STATUS_REPUTATION_CHANGE: i32 = -(1 << 20);
+/// Reputation change when we are a light client and a peer is behind us.
+const PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
+/// Reputation change when a peer sends us an extrinsic that we didn't know about.
+const NEW_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
+/// Reputation change when a peer sends us a block. We don't know whether this block is valid or
+/// already known to us. Since this has a small cost, we decrease the reputation of the node, and
+/// will increase it back later if the import is successful.
+const BLOCK_ANNOUNCE_REPUTATION_CHANGE: i32 = -(1 << 2);
+/// We sent an RPC query to the given node, but it failed.
+const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
@@ -139,14 +157,24 @@ pub trait Context<B: BlockT> {
 	/// Get a reference to the client.
 	fn client(&self) -> &crate::chain::Client<B>;
 
-	/// Point out that a peer has been malign or irresponsible or appeared lazy.
-	fn report_peer(&mut self, who: PeerId, reason: Severity);
+	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
+	/// irresponsible or appeared lazy.
+	fn report_peer(&mut self, who: PeerId, reputation: i32);
+
+	/// Force disconnecting from a peer. Use this when a peer misbehaved.
+	fn disconnect_peer(&mut self, who: PeerId);
 
 	/// Get peer info.
 	fn peer_info(&self, peer: &PeerId) -> Option<PeerInfo<B>>;
 
-	/// Send a message to a peer.
-	fn send_message(&mut self, who: PeerId, data: crate::message::Message<B>);
+	/// Request a block from a peer.
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>);
+
+	/// Send a consensus message to a peer.
+	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
+
+	/// Send a chain-specific message to a peer.
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
 }
 
 /// Protocol context.
@@ -162,12 +190,12 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn send_message(&mut self, who: PeerId, message: Message<B>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who, message)
+	fn report_peer(&mut self, who: PeerId, reputation: i32) {
+		self.network_chan.send(NetworkMsg::ReportPeer(who, reputation))
 	}
 
-	fn report_peer(&mut self, who: PeerId, reason: Severity) {
-		self.network_chan.send(NetworkMsg::ReportPeer(who, reason))
+	fn disconnect_peer(&mut self, who: PeerId) {
+		self.network_chan.send(NetworkMsg::DisconnectPeer(who))
 	}
 
 	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
@@ -176,6 +204,24 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 
 	fn client(&self) -> &Client<B> {
 		&*self.context_data.chain
+	}
+
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::BlockRequest(request)
+		)
+	}
+
+	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::Consensus(consensus)
+		)
+	}
+
+	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::ChainSpecific(message)
+		)
 	}
 }
 
@@ -415,7 +461,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return false;
 			},
 			#[cfg(any(test, feature = "test-helpers"))]
-			ProtocolMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
+			ProtocolMsg::Synchronize => {
+				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
+				self.network_chan.send(NetworkMsg::Synchronized)
+			}
 		}
 		true
 	}
@@ -445,9 +494,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			if request.as_ref().map_or(false, |(_, r)| r.id == response.id) {
 				return request.map(|(_, r)| r)
 			}
-			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id,);
-			let severity = Severity::Bad("Unexpected response packet received from peer".to_string());
-			self.network_chan.send(NetworkMsg::ReportPeer(who, severity))
+			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id);
+			self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+			self.network_chan.send(NetworkMsg::DisconnectPeer(who));
 		}
 		None
 	}
@@ -579,7 +628,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
 	/// our messaging rate fast enough.
 	pub fn on_clogged_peer(&self, who: PeerId, _msg: Option<Message<B>>) {
-		// We don't do anything but print some diagnostics for now.
+		self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), CLOGGED_PEER_REPUTATION_CHANGE));
+
+		// Print some diagnostics.
 		if let Some(peer) = self.context_data.peers.get(&who) {
 			debug!(target: "sync", "Clogged peer {} (protocol_version: {:?}; roles: {:?}; \
 				known_extrinsics: {:?}; known_blocks: {:?}; best_hash: {:?}; best_number: {:?})",
@@ -716,9 +767,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		self.specialization.maintain_peers(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		for p in aborting {
-			let _ = self
-				.network_chan
-				.send(NetworkMsg::ReportPeer(p, Severity::Timeout));
+			let _ = self.network_chan.send(NetworkMsg::DisconnectPeer(p.clone()));
+			let _ = self.network_chan.send(NetworkMsg::ReportPeer(p, TIMEOUT_REPUTATION_CHANGE));
 		}
 	}
 
@@ -728,25 +778,23 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
 				debug!("Unexpected status packet from {}", who);
+				self.network_chan.send(NetworkMsg::ReportPeer(who, UNEXPECTED_STATUS_REPUTATION_CHANGE));
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
-				let reason = format!(
+				trace!(
+					target: "protocol",
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
-				self.network_chan.send(NetworkMsg::ReportPeer(
-					who,
-					Severity::Bad(reason),
-				));
+				self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+				self.network_chan.send(NetworkMsg::DisconnectPeer(who));
 				return;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
-				let reason = format!("Peer using unsupported protocol version {}", status.version);
-				self.network_chan.send(NetworkMsg::ReportPeer(
-					who,
-					Severity::Bad(reason),
-				));
+				trace!(target: "protocol", "Peer {:?} using unsupported protocol version {}", who, status.version);
+				self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+				self.network_chan.send(NetworkMsg::DisconnectPeer(who));
 				return;
 			}
 			if self.config.roles & Roles::LIGHT == Roles::LIGHT {
@@ -762,13 +810,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.checked_sub(status.best_number.as_())
 					.unwrap_or(0);
 				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
-					self.network_chan.send(NetworkMsg::ReportPeer(
-						who,
-						Severity::Useless(
-							"Peer is far behind us and will unable to serve light requests"
-								.to_string(),
-						),
-					));
+					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
+					self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE));
+					self.network_chan.send(NetworkMsg::DisconnectPeer(who));
 					return;
 				}
 			}
@@ -789,7 +833,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					peer_info
 				},
 				None => {
-					debug!(target: "sync", "Received status from previously unconnected node {}", who);
+					error!(target: "sync", "Received status from previously unconnected node {}", who);
 					return;
 				},
 			};
@@ -830,6 +874,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			for t in extrinsics {
 				if let Some(hash) = self.transaction_pool.import(&t) {
+					self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), NEW_EXTRINSIC_REPUTATION_CHANGE));
 					peer.known_extrinsics.insert(hash);
 				} else {
 					trace!(target: "sync", "Extrinsic rejected");
@@ -942,10 +987,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			.map(|s| s.on_block_announce(who.clone(), *header.number()));
 		self.sync.on_block_announce(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
-			who,
+			who.clone(),
 			hash,
 			&header,
 		);
+		self.network_chan.send(NetworkMsg::ReportPeer(who, BLOCK_ANNOUNCE_REPUTATION_CHANGE));
 	}
 
 	fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
@@ -996,6 +1042,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Err(error) => {
 				trace!(target: "sync", "Remote call request {} from {} ({} at {}) failed with: {}",
 					request.id, who, request.method, request.block, error);
+				self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), RPC_FAILED_REPUTATION_CHANGE));
 				Default::default()
 			}
 		};
@@ -1146,103 +1193,4 @@ fn send_message<B: BlockT, H: ExHashT>(
 		}
 	}
 	network_chan.send(NetworkMsg::Outgoing(who, message));
-}
-
-/// Construct a simple protocol that is composed of several sub protocols.
-/// Each "sub protocol" needs to implement `Specialization` and needs to provide a `new()` function.
-/// For more fine grained implementations, this macro is not usable.
-///
-/// # Example
-///
-/// ```nocompile
-/// construct_simple_protocol! {
-///     pub struct MyProtocol where Block = MyBlock {
-///         consensus_gossip: ConsensusGossip<MyBlock>,
-///         other_protocol: MyCoolStuff,
-///     }
-/// }
-/// ```
-///
-/// You can also provide an optional parameter after `where Block = MyBlock`, so it looks like
-/// `where Block = MyBlock, Status = consensus_gossip`. This will instruct the implementation to
-/// use the `status()` function from the `ConsensusGossip` protocol. By default, `status()` returns
-/// an empty vector.
-#[macro_export]
-macro_rules! construct_simple_protocol {
-	(
-		$( #[ $attr:meta ] )*
-		pub struct $protocol:ident where
-			Block = $block:ident
-			$( , Status = $status_protocol_name:ident )*
-		{
-			$( $sub_protocol_name:ident : $sub_protocol:ident $( <$protocol_block:ty> )*, )*
-		}
-	) => {
-		$( #[$attr] )*
-		pub struct $protocol {
-			$( $sub_protocol_name: $sub_protocol $( <$protocol_block> )*, )*
-		}
-
-		impl $protocol {
-			/// Instantiate a node protocol handler.
-			pub fn new() -> Self {
-				Self {
-					$( $sub_protocol_name: $sub_protocol::new(), )*
-				}
-			}
-		}
-
-		impl $crate::specialization::NetworkSpecialization<$block> for $protocol {
-			fn status(&self) -> Vec<u8> {
-				$(
-					let status = self.$status_protocol_name.status();
-
-					if !status.is_empty() {
-						return status;
-					}
-				)*
-
-				Vec::new()
-			}
-
-			fn on_connect(
-				&mut self,
-				_ctx: &mut $crate::Context<$block>,
-				_who: $crate::PeerId,
-				_status: $crate::StatusMessage<$block>
-			) {
-				$( self.$sub_protocol_name.on_connect(_ctx, _who, _status); )*
-			}
-
-			fn on_disconnect(&mut self, _ctx: &mut $crate::Context<$block>, _who: $crate::PeerId) {
-				$( self.$sub_protocol_name.on_disconnect(_ctx, _who); )*
-			}
-
-			fn on_message(
-				&mut self,
-				_ctx: &mut $crate::Context<$block>,
-				_who: $crate::PeerId,
-				_message: &mut Option<$crate::message::Message<$block>>
-			) {
-				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
-			}
-
-			fn on_abort(&mut self) {
-				$( self.$sub_protocol_name.on_abort(); )*
-			}
-
-			fn maintain_peers(&mut self, _ctx: &mut $crate::Context<$block>) {
-				$( self.$sub_protocol_name.maintain_peers(_ctx); )*
-			}
-
-			fn on_block_imported(
-				&mut self,
-				_ctx: &mut $crate::Context<$block>,
-				_hash: <$block as $crate::BlockT>::Hash,
-				_header: &<$block as $crate::BlockT>::Header
-			) {
-				$( self.$sub_protocol_name.on_block_imported(_ctx, _hash, _header); )*
-			}
-		}
-	}
 }

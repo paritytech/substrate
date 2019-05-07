@@ -296,13 +296,12 @@ mod tests {
 	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
-		let tx = Transfer {
+		Transfer {
 			amount: Default::default(),
 			nonce,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
-		};
-		tx.into_signed_tx()
+		}.into_signed_tx()
 	}
 
 	#[test]

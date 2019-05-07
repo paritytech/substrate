@@ -11,7 +11,7 @@ rustc_version = "0.2"
 [dependencies]
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
-codec = { package="parity-codec", version = "3.3", default-features = false }
+codec = { package = "parity-codec", version = "3.5.1", default-features = false }
 hash-db = { version = "0.12", default-features = false }
 libsecp256k1 = { version = "0.2.1", optional = true }
 tiny-keccak = { version = "1.4.2", optional = true }
@@ -35,3 +35,5 @@ std = [
 nightly = []
 strict = []
 wasm-nice-panic-message = []
+no_panic_handler = []
+no_oom = []

@@ -83,6 +83,7 @@ mod gas;
 mod account_db;
 mod exec;
 mod wasm;
+mod rent;
 
 #[cfg(test)]
 mod tests;
@@ -96,7 +97,7 @@ use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
@@ -117,14 +118,94 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-#[derive(Encode,Decode,Clone,Debug)]
+/// Information for managing an acocunt and its sub trie abstraction.
+/// This is the required info to cache for an account
+#[derive(Encode, Decode)]
+pub enum ContractInfo<T: Trait> {
+	Alive(AliveContractInfo<T>),
+	Tombstone(TombstoneContractInfo<T>),
+}
+
+impl<T: Trait> ContractInfo<T> {
+	/// If contract is alive then return some alive info
+	pub fn get_alive(self) -> Option<AliveContractInfo<T>> {
+		if let ContractInfo::Alive(alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+	/// If contract is alive then return some reference to alive info
+	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
+		if let ContractInfo::Alive(ref alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+	/// If contract is alive then return some mutable reference to alive info
+	pub fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
+		if let ContractInfo::Alive(ref mut alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+
+	/// If contract is tombstone then return some alive info
+	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+	/// If contract is tombstone then return some reference to tombstone info
+	pub fn as_tombstone(&self) -> Option<&TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(ref tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+	/// If contract is tombstone then return some mutable reference to tombstone info
+	pub fn as_tombstone_mut(&mut self) -> Option<&mut TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(ref mut tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+}
+
+pub type AliveContractInfo<T> = RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
+
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-pub struct AccountInfo {
-	/// Unique ID for the subtree encoded as a byte.
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The size of stored value in octet.
 	pub storage_size: u64,
+	/// The code associated with a given account.
+	pub code_hash: CodeHash,
+	pub rent_allowance: Balance,
+	pub deduct_block: BlockNumber,
+}
+
+#[derive(Encode, Decode)]
+pub struct TombstoneContractInfo<T: Trait>(T::Hash);
+
+impl<T: Trait> TombstoneContractInfo<T> {
+	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
+		let mut buf = Vec::new();
+		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
+		storage_size.using_encoded(|encoded| buf.extend_from_slice(encoded));
+		buf.extend_from_slice(code_hash.as_ref());
+		TombstoneContractInfo(T::Hashing::hash(&buf[..]))
+	}
 }
 
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context).
@@ -244,7 +325,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
+		pub fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
 			}
@@ -257,7 +338,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
-		fn put_code(
+		pub fn put_code(
 			origin,
 			#[compact] gas_limit: T::Gas,
 			code: Vec<u8>
@@ -284,7 +365,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		fn call(
+		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
@@ -340,7 +421,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		fn create(
+		pub fn create(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
@@ -384,6 +465,39 @@ decl_module! {
 			result.map(|_| ())
 		}
 
+		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
+		/// fails to do so, a regular users will be allowed to claim the reward.
+		///
+		/// If contract is not evicted as a result of this call, no actions are taken and
+		/// the sender is not eligible for the reward.
+		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+			let origin = origin.into();
+			let (signed, rewarded) = match origin {
+				Some(system::RawOrigin::Signed(ref account)) if aux_sender.is_none() => {
+					(true, account)
+				},
+				Some(system::RawOrigin::Inherent) if aux_sender.is_some() => {
+					(false, aux_sender.as_ref().expect("checked above"))
+				},
+				_ => return Err("Invalid surcharge claim: origin must be signed or \
+								inherent and auxiliary sender only provided on inherent")
+			};
+
+			// Add some advantage for block producers (who send unsigned extrinsics) by
+			// adding a handicap: for signed extrinsics we use a slightly older block number
+			// for the eviction check. This can be viewed as if we pushed regular users back in past.
+			let handicap = if signed {
+				<Module<T>>::signed_claim_handicap()
+			} else {
+				Zero::zero()
+			};
+
+			// If poking the contract has lead to eviction of the contract, give out the rewards.
+			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
+				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
+			}
+		}
+
 		fn on_finalize() {
 			<GasSpent<T>>::kill();
 		}
@@ -420,6 +534,29 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
+		/// Number of block delay an extrinsic claim surcharge has.
+		///
+		/// When claim surchage is called by an extrinsic the rent is checked
+		/// for current_block - delay
+		SignedClaimHandicap get(signed_claim_handicap) config(): T::BlockNumber;
+		/// The minimum amount required to generate a tombstone.
+		TombstoneDeposit get(tombstone_deposit) config(): BalanceOf<T>;
+		/// Size of a contract at the time of creation. This is a simple way to ensure
+		/// that empty contracts eventually gets deleted.
+		StorageSizeOffset get(storage_size_offset) config(): u64;
+		/// Price of a byte of storage per one block interval. Should be greater than 0.
+		RentByteFee get(rent_byte_price) config(): BalanceOf<T>;
+		/// The amount of funds a contract should deposit in order to offset
+		/// the cost of one byte.
+		///
+		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
+		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
+		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
+		/// then it would pay 500 BU/day.
+		RentDepositOffset get(rent_deposit_offset) config(): BalanceOf<T>;
+		/// Reward that is received by the party whose touch has led
+		/// to removal of a contract.
+		SurchargeReward get(surcharge_reward) config(): BalanceOf<T>;
 		/// The fee required to make a transfer.
 		TransferFee get(transfer_fee) config(): BalanceOf<T>;
 		/// The fee required to create an account.
@@ -444,8 +581,6 @@ decl_storage! {
 		GasSpent get(gas_spent): T::Gas;
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
-		/// The code associated with a given account.
-		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
@@ -453,14 +588,16 @@ decl_storage! {
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
-		pub AccountInfoOf: map T::AccountId => Option<AccountInfo>;
+		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		<CodeHashOf<T>>::remove(who);
-		<AccountInfoOf<T>>::get(who).map(|info| child::kill_storage(&info.trie_id));
+		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
+			child::kill_storage(&info.trie_id);
+		}
+		<ContractInfoOf<T>>::remove(who);
 	}
 }
 

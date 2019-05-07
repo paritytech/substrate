@@ -13,6 +13,7 @@ substrate-client = { path = "../client", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
 consensus_aura = { package = "substrate-consensus-aura-primitives", path = "../consensus/aura/primitives", default-features = false }
+consensus_babe = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
@@ -31,7 +32,10 @@ substrate-executor = { path = "../executor" }
 substrate-test-client = { path = "../test-client" }
 
 [features]
-default = ["std"]
+default = [
+	"std",
+	"include-wasm-blob"
+]
 std = [
 	"log",
 	"serde",
@@ -46,6 +50,7 @@ std = [
 	"runtime_primitives/std",
 	"runtime_version/std",
 	"consensus_aura/std",
+	"consensus_babe/std",
 	"primitives/std",
 	"substrate-trie/std",
 	"trie-db/std",
@@ -54,3 +59,5 @@ std = [
 	"executive/std",
 	"consensus_authorities/std",
 ]
+# If enabled, the WASM blob is added to the `GenesisConfig`.
+include-wasm-blob = []
