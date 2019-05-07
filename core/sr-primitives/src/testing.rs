@@ -222,7 +222,7 @@ impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
 	fn is_signed(&self) -> Option<bool> {
-		None
+		Some(true)
 	}
 }
 impl<Call> Applyable for TestXt<Call> where

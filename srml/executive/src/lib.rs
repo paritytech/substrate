@@ -59,8 +59,17 @@
 //! # pub type Balances = u64;
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
+//! # use primitives::transaction_validity::TransactionValidity;
+//! # use primitives::traits::ValidateUnsigned;
+//! # impl ValidateUnsigned for Runtime {
+//! # 	type Call = ();
+//! #
+//! # 	fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
+//! # 		TransactionValidity::Invalid(0)
+//! # 	}
+//! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -412,6 +421,14 @@ mod tests {
 		type TransactionPayment = ();
 		type DustRemoval = ();
 		type TransferPayment = ();
+	}
+
+	impl ValidateUnsigned for Runtime {
+		type Call = Call<Runtime>;
+
+		fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
+			TransactionValidity::Invalid(0)
+		}
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
