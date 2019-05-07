@@ -22,6 +22,7 @@
 pub use cli::error;
 pub mod chain_spec;
 mod service;
+mod factory_impl;
 
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
@@ -31,7 +32,7 @@ use std::ops::Deref;
 use log::info;
 use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter};
-use transaction_factory;
+use crate::factory_impl::RuntimeAdapterImpl;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -149,7 +150,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				&version,
 			)?;
 
-			transaction_factory::factory::<service::Factory>(
+			transaction_factory::factory::<service::Factory, RuntimeAdapterImpl>(
 				config,
 				cli_args.num,
 			).map_err(|e| format!("Error in transaction factory: {}", e))?;
@@ -188,3 +189,4 @@ fn run_until_exit<T, C, E>(
 
 	Ok(())
 }
+

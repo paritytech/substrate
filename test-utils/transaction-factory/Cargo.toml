@@ -11,13 +11,8 @@ primitives = { package = "substrate-primitives", path = "../../core/primitives",
 sr-io = { path = "../../core/sr-io" }
 sr_primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 substrate-service = { path = "../../core/service" }
-keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-rand = "0.6"
 srml_support = { package = "srml-support", path = "../../srml/support" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
-balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
-indices = { package = "srml-indices", path = "../../srml/indices" }
-timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 structopt = "0.2"
 node-runtime = { path = "../../node/runtime" }
 node-primitives = { path = "../../node/primitives" }

@@ -21,77 +21,58 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use log::info;
-use rand::{Rng, SeedableRng};
-use rand::rngs::StdRng;
 
-use balances;
-use balances::Call as BalancesCall;
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
 use consensus_common::{BlockOrigin, ImportBlock, ForkChoiceStrategy};
 use consensus_common::block_import::BlockImport;
-use indices;
-use keyring::sr25519::Keyring;
-use node_primitives::Hash;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic};
 use parity_codec::{Decode, Encode};
-use primitives::sr25519;
-use primitives::crypto::Pair;
-use sr_primitives::generic::Era;
-use sr_primitives::traits::{As, Block, Header, ProvideRuntimeApi};
+use sr_primitives::traits::{As, Block, Header, ProvideRuntimeApi, SimpleArithmetic};
 use substrate_service::{FactoryBlock, FactoryFullConfiguration, FullClient, new_client, ServiceFactory};
 
-/// Generates a random `AccountId` from `seed`.
-fn gen_random_account_id(seed: u64) -> node_primitives::AccountId {
-	let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
+pub trait RuntimeAdapter {
+	type AccountId;
+	type Extrinsic;
+	type Balance;
+	type Moment;
+	type BlockNumber;
+	type BlockId;
+	type Hash;
+	type Secret;
+	type Index;
+	type Phase;
 
-	let mut seed_bytes = [0u8; 32];
-	for i in 0..32 {
-		seed_bytes[i] = rng.gen::<u8>();
-	}
+	fn transfer_extrinsic(
+		sender: Self::AccountId,
+		key: Self::Secret,
+		destination: &Self::AccountId,
+		amount: Self::Balance,
+		index: Self::Index,
+		phase: Self::Phase,
+		prior_block_hash: &Self::Hash,
+	) -> Self::Extrinsic;
 
-	let pair: sr25519::Pair = sr25519::Pair::from_seed(seed_bytes);
-	pair.public().into()
-}
+	fn timestamp_inherent(
+		ts: Self::Moment,
+		key: Self::Secret,
+		phase: Self::Phase,
+		prior_block_hash: &Self::Hash
+	) -> Self::Extrinsic;
 
-/// Creates an `UncheckedExtrinsic` containing the appropriate signature for
-/// a `CheckedExtrinsics`.
-fn sign<F: ServiceFactory>(xt: CheckedExtrinsic, prior_block_hash: Hash, block_no: u64) -> UncheckedExtrinsic {
-	let mut phase = 0;
-	if block_no > 0 {
-		phase = block_no - 1;
-	}
-
-	match xt.signed {
-		Some((signed, index)) => {
-			let era = Era::mortal(256, phase);
-			let payload = (index.into(), xt.function, era, prior_block_hash);
-			let key = Keyring::from_public(&signed)
-				.expect("Failed to create public key from signed");
-			let signature = payload.using_encoded(|b| {
-				if b.len() > 256 {
-					key.sign(&sr_io::blake2_256(b))
-				} else {
-					key.sign(b)
-				}
-			}).into();
-			UncheckedExtrinsic {
-				signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
-				function: payload.1,
-			}
-		}
-		None => UncheckedExtrinsic {
-			signature: None,
-			function: xt.function,
-		},
-	}
+	fn minimum_balance() -> Self::Balance;
+	fn minimum_period() -> Self::Moment;
+	fn master_account_id() -> Self::AccountId;
+	fn master_account_secret() -> Self::Secret;
+	fn extract_timestamp(block_hash: Self::Hash) -> Self::Moment;
+	fn extract_index(block_hash: Self::Hash) -> Self::Index;
+	fn extract_phase(block_hash: Self::Hash) -> Self::Phase;
+	fn gen_random_account_id(seed: u64) -> Self::AccountId;
 }
 
 /// Manufacture `num` transactions from Alice to `num` accounts.
-pub fn factory<F>(
+pub fn factory<F, RA>(
 	config: FactoryFullConfiguration<F>,
 	num: u64,
 ) -> cli::error::Result<()>
@@ -100,72 +81,70 @@ where
 	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
 	FullClient<F>: ProvideRuntimeApi,
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
+
+	RA: RuntimeAdapter,
+	<RA as RuntimeAdapter>::Extrinsic: Encode,
+	<RA as RuntimeAdapter>::AccountId: std::fmt::Display,
+	<RA as RuntimeAdapter>::Hash: std::convert::From<primitives::H256> + Copy,
+	<RA as RuntimeAdapter>::Hash: std::fmt::Display,
+	<RA as RuntimeAdapter>::Moment: SimpleArithmetic + Copy,
+	<RA as RuntimeAdapter>::Index: Copy + As<u64>,
+	<RA as RuntimeAdapter>::Phase: Copy + As<u64>,
 {
 	info!("Creating {} transactions...", num);
 
 	let client = new_client::<F>(&config)?;
 
-	let mut prior_block_hash = client.best_block_header()?.hash();
+	let mut prior_block_hash: RA::Hash = client.best_block_header()?.hash().into();
+	let mut last_ts = RA::extract_timestamp(prior_block_hash);
+	let mut index: u64 = RA::extract_index(prior_block_hash).as_();
+	let mut phase: u64 = RA::extract_phase(prior_block_hash).as_();
 
-	// TODO extract timestamp from last block inherents via the api
-	// 	let api = client.runtime_api(); ?
-	// 	let block = client.block(&BlockId::Hash(prior_block_hash))?;
-	let now = SystemTime::now();
-	let mut last_ts: u64 = now.duration_since(UNIX_EPOCH)
-		.expect("Time went backwards").as_secs();
+	let start_number: u64 = client.info()?.chain.best_number.as_();
+	let mut curr = start_number;
 
-	let start_number: u64 = client.info()?.chain.best_number.as_() + 1;
-	let mut curr_block_no = start_number;
-	while curr_block_no < start_number + num {
-		info!("Creating block {}", curr_block_no);
+	while curr < start_number + num {
+		info!("Creating block {}", curr);
 
 		let mut block = client.new_block().expect("Failed to create new block");
-		let alice: node_primitives::AccountId = Keyring::Alice.into();
-		let to: node_primitives::AccountId = gen_random_account_id(curr_block_no);
+		let to = RA::gen_random_account_id(curr);
 
 		// index contains amount of prior transactions on this account
-		// TODO fetch correct nonce via api
-		let index = curr_block_no - 1;
+		// TODO fetch correct nonce and phase via api
+		let transfer = RA::transfer_extrinsic(
+			RA::master_account_id(),
+			RA::master_account_secret(),
+			&to,
+			RA::minimum_balance(),
+			RA::Index::sa(index),
+			RA::Phase::sa(phase),
+			&prior_block_hash,
+		);
 
-		// TODO get amount via api from minimum balance
-		let amount = 1337;
-
-		let transfer = sign::<F>(CheckedExtrinsic {
-			signed: Some((alice.into(), index)),
-			function: Call::Balances(
-				BalancesCall::transfer(
-					indices::address::Address::Id(
-						to.clone().into(),
-					),
-					amount
-				)
-			)
-		}, prior_block_hash, curr_block_no);
 		block.push(
 			Decode::decode(&mut &transfer.encode()[..])
 				.expect("Failed to decode transfer extrinsic")
 		).unwrap();
 
-		// TODO get minimum_period via api: <timestamp::Module<T>>::minimum_period()
-		let minimum_period = 99;
-		let new_ts = last_ts + minimum_period;
-		last_ts = new_ts;
-		let cex = CheckedExtrinsic {
-			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(new_ts)),
-		};
-		let timestamp = sign::<F>(cex, prior_block_hash, curr_block_no);
+		let new_ts = last_ts + RA::minimum_period();
+		let timestamp = RA::timestamp_inherent(
+			new_ts.clone(),
+			RA::master_account_secret(),
+			RA::Phase::sa(phase),
+			&prior_block_hash
+		);
 		block.push(
 			Decode::decode(&mut &timestamp.encode()[..])
 				.expect("Failed to decode timestamp extrinsic")
 		).expect("Failed to push timestamp inherent into block");
+		last_ts = new_ts;
 
 		let block = block.bake().expect("Failed to bake block");
-		prior_block_hash = block.header().hash();
+		prior_block_hash = block.header().hash().into();
 
 		info!(
-			"Created block {} with hash {}. Transferring from Alice to {}.",
-			curr_block_no,
+			"Created block {} with hash {}. Transferring from master account to {}.",
+			curr + 1,
 			prior_block_hash,
 			to
 		);
@@ -182,11 +161,14 @@ where
 		};
 		client.import_block(import, HashMap::new()).expect("Failed to import block");
 
-		info!("Imported block {}", curr_block_no);
-		curr_block_no += 1;
+		info!("Imported block {}", curr + 1);
+
+		curr += 1;
+		phase += 1;
+		index += 1;
 	}
 
-	info!("Finished importing {} blocks", curr_block_no-1);
+	info!("Finished importing {} blocks", curr);
 
 	Ok(())
 }
