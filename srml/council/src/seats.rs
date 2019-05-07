@@ -271,18 +271,17 @@ decl_module! {
 			let (registered_since, candidate_index): (VoteIndex, u32) =
 				Self::candidate_reg_info(&candidate).ok_or("presented candidate must be current")?;
 			let actual_total = voters.iter()
-				.filter_map(|(voter, stake)|
-							match Self::voter_activity(voter) {
-								Some(b) if b.last_active >= registered_since => {
-									let last_win = b.last_win;
-									let now = Self::vote_index();
-									let offset = Self::get_offset(*stake, now - last_win);
-									let weight = *stake + offset + Self::offset_pot(voter).unwrap_or_default();
-									Self::approvals_of(voter).get(candidate_index as usize)
-										.and_then(|approved| if *approved { Some(weight) } else { None })
-								},
-								_ => None,
-							})
+				.filter_map(|(voter, stake)| match Self::voter_activity(voter) {
+					Some(b) if b.last_active >= registered_since => {
+						let last_win = b.last_win;
+						let now = Self::vote_index();
+						let offset = Self::get_offset(*stake, now - last_win);
+						let weight = *stake + offset + Self::offset_pot(voter).unwrap_or_default();
+						Self::approvals_of(voter).get(candidate_index as usize)
+							.and_then(|approved| if *approved { Some(weight) } else { None })
+					},
+					_ => None,
+				})
 				.fold(Zero::zero(), |acc, n| acc + n);
 			let dupe = leaderboard.iter().find(|&&(_, ref c)| c == &candidate).is_some();
 			if total == actual_total && !dupe {
