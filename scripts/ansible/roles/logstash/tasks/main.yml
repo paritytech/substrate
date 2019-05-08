@@ -26,7 +26,7 @@
   become: yes
 - name: Generate the client and server configuration files
   template:
-    src: "{{ app_name }}.conf.j2"
+    src: "substrate.conf.j2"
     dest: "/etc/logstash/conf.d/{{ app_name }}.conf"
     owner: logstash 
     group: logstash 

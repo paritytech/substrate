@@ -1,4 +1,4 @@
 - include_tasks: directories.yml
 - include_tasks: refresh-check.yml
 - include_tasks: refresh.yml
-  when: "{{ app_name }}_update.changed"
+  when: substrate_update.changed

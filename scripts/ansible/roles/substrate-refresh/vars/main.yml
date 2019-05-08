@@ -3,4 +3,4 @@ user: parity
 systemd_name: "{{ app_name }}" 
 cache_dir: "/home/{{ user }}/cache"
 binary_dir: "/home/{{ user }}/bin"
-artifact_path: "../../artifacts/{{ app_name }}"
+artifact_path: "../../artifacts/substrate"

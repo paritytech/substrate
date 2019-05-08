@@ -24,7 +24,7 @@
      var: checksum_binary.stat.checksum
 - debug:
      var: checksum_cache.stat.checksum
-- name: register {{ app_name }}_update if a new binary is detected
+- name: register substrate_update if a new binary is detected
   command: /bin/true
   when: checksum_binary.stat.checksum != checksum_cache.stat.checksum
-  register: "{{ app_name }}_update"
+  register: substrate_update

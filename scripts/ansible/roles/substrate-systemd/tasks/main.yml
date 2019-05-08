@@ -1,6 +1,6 @@
 - name: Copy {{ app_name }} systemd configuration
   template:
-    src: "{{ app_name }}.service.j2"
+    src: "substrate.service.j2"
     dest: /etc/systemd/system/{{ app_name }}.service 
     owner: root
     group: root
