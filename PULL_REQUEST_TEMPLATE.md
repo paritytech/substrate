@@ -8,5 +8,6 @@
 - [ ] Make sure you've bumped the runtime version if there are breaking changes.
 - [ ] Did you update any rustdocs which may have changed
 
+After you've read this notice feel free to remove it
 
 ✄ -----------------------------------------------------------------------------
