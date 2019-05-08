@@ -18,7 +18,6 @@ variables:
   GIT_STRATEGY:                    fetch
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
-  SCCACHE_CACHE_SIZE:              50G
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
@@ -143,9 +142,9 @@ build-rust-doc-release:            &build
   <<:                              *build-only
   tags:
     - linux-docker
-  before_script:
-    - sccache -s
-    - ./scripts/build.sh
+  # before_script:
+  #   - sccache -s
+  #   - ./scripts/build.sh
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --verbose
