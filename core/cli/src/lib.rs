@@ -365,6 +365,17 @@ fn fill_network_configuration(
 	Ok(())
 }
 
+fn input_keystore_password() -> Result<String, String> {
+	let password =
+		rpassword::read_password_from_tty(Some("Password: ")).map_err(|e| format!("{:?}", e))?;
+	let confirmed_password = rpassword::read_password_from_tty(Some("Repeat again: "))
+		.map_err(|e| format!("{:?}", e))?;
+	if confirmed_password != password {
+		return Err("Password does not match".to_string());
+	}
+	Ok(password)
+}
+
 fn create_run_node_config<F, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
 ) -> error::Result<FactoryFullConfiguration<F>>
@@ -374,6 +385,9 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
+	if cli.interactive_password {
+		config.password = input_keystore_password()?
+	}
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;

@@ -112,17 +112,6 @@ pub struct TelemetryOnConnect<'a> {
 	pub executor: &'a TaskExecutor,
 }
 
-fn input_keystore_password() -> Result<String, String> {
-	let password =
-		rpassword::read_password_from_tty(Some("Password: ")).map_err(|e| format!("{:?}", e))?;
-	let confirmed_password = rpassword::read_password_from_tty(Some("Password again: "))
-		.map_err(|e| format!("{:?}", e))?;
-	if confirmed_password != password {
-		return Err("Password is not match".to_string());
-	}
-	Ok(password)
-}
-
 impl<Components: components::Components> Service<Components> {
 	/// Get event stream for telemetry connection established events.
 	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
@@ -152,8 +141,7 @@ impl<Components: components::Components> Service<Components> {
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
 			None => {
-				let password = input_keystore_password()?;
-				let key = keystore.generate(&password)?;
+				let key = keystore.generate(&config.password)?;
 				let public_key = key.public();
 				info!("Generated a new keypair: {:?}", public_key);
 
@@ -386,9 +374,8 @@ impl<Components: components::Components> Service<Components> {
 	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
 		if self.config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
-		let password = input_keystore_password().unwrap_or("".to_string());
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, &password)))
+				.map(|k| keystore.load(k, &self.config.password)))
 		{
 			Some(key)
 		} else {

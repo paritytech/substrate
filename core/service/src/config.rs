@@ -78,6 +78,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
+	/// Node keystore's password
+	pub password: String,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -108,6 +110,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			offchain_worker: Default::default(),
 			force_authoring: false,
 			disable_grandpa: false,
+			password: "".to_string(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 
