@@ -514,6 +514,12 @@ decl_module! {
 			}
 		}
 
+		/// Allows a contract to restore a tombstone by giving its storage.
+		///
+		/// The contract that want to restore (i.e. origin of the call) will compute a
+		/// tombstone with its storage and the given code_hash. If the computed tombstone
+		/// match the dest ones then dest contract is restored with the rent_allowance specified,
+		/// the origin send all its fund to the the destination and gets removed.
 		fn restore_to(
 			origin,
 			dest: T::AccountId,
