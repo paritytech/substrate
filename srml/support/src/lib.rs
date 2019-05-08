@@ -64,6 +64,9 @@ pub use runtime_io::print;
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
 
+/// Return Err of the expression: `return Err($expression);`.
+///
+/// Used as `fail!(expression)`.
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
@@ -71,6 +74,9 @@ macro_rules! fail {
 	}}
 }
 
+/// Evaluate `$x:expr` and if not true return `Err($y:expr)`.
+///
+/// Used as `ensure!(expression_to_ensure, expression_to_return_on_false)`.
 #[macro_export]
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
@@ -80,6 +86,10 @@ macro_rules! ensure {
 	}}
 }
 
+/// Evaluate an expression, assert it returns the expected error and check
+/// runtime storage root hasn't change (i.e. expression is no operation on storage).
+///
+/// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
@@ -90,6 +100,9 @@ macro_rules! assert_noop {
 	}
 }
 
+/// Assert an expression returns an error specified.
+///
+/// Used as `assert_err!(expression_to_assert, expected_error_expression)`
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err {
@@ -98,6 +111,10 @@ macro_rules! assert_err {
 	}
 }
 
+/// Assert an expression is specified Ok
+///
+/// Used as `assert_ok!(expression_to_assert, expected_ok_expression)`,
+/// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
