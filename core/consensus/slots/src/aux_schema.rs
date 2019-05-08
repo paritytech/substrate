@@ -25,8 +25,10 @@ use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::{Header};
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
-/// We keep this number of slots in database.
+/// We keep at least this number of slots in database.
 pub const MAX_SLOT_CAPACITY: u64 = 1000;
+/// We prune slots when they reach this number.
+pub const PRUNING_BOUND: u64 = MAX_SLOT_CAPACITY + 1000;
 
 fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
 	where
@@ -103,7 +105,7 @@ pub fn check_equivocation<C, H>(
 		},
 	};
 
-	if slot > MAX_SLOT_CAPACITY {
+	if slot > PRUNING_BOUND {
 		slot_header_map = slot_header_map.split_off(&(slot - MAX_SLOT_CAPACITY));
 	}
 
