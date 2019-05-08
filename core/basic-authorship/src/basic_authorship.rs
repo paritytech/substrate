@@ -31,7 +31,7 @@ use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	AuthorityIdFor, DigestFor, Digest,
+	AuthorityIdFor, DigestFor,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;

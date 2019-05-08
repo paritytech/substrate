@@ -118,7 +118,7 @@ where
 	}
 
 	/// Set the digest of `self` to `digest`.
-	pub fn push_digest(&mut self, mut digest: DigestFor<Block>) {
+	pub fn push_digest(&mut self, digest: DigestFor<Block>) {
 		assert!(self.header.digest().logs().len() == 0, "We never call this method if there are existing digests; qed");
 		let num_logs = digest.logs().len();
 		debug!(target: "import", "Setting {} digests!", num_logs);

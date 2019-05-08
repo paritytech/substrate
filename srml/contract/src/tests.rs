@@ -722,7 +722,7 @@ fn deduct_blocks() {
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
 
 			// Advance 7 blocks more
-			System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into(), None);
 
 			// Trigger rent through call
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
