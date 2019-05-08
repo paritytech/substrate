@@ -587,8 +587,8 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					Ok(Some(equivocation_proof)) => {
 						// TODO: dispatch report here.
 						Err(format!("Slot author is equivocating with headers {:?} and {:?}",
-							equivocation_proof.get_fst_header().hash(),
-							equivocation_proof.get_snd_header().hash(),
+							equivocation_proof.fst_header().hash(),
+							equivocation_proof.snd_header().hash(),
 						))
 					},
 					Ok(None) => {

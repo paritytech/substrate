@@ -28,7 +28,7 @@ const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 /// We keep at least this number of slots in database.
 pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
-pub const PRUNING_BOUND: u64 = MAX_SLOT_CAPACITY + 1000;
+pub const PRUNING_BOUND: usize = MAX_SLOT_CAPACITY as usize + 1000;
 
 fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
 	where
@@ -45,13 +45,6 @@ fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Persistent data kept between slots.
-#[derive(Debug)]
-pub struct PersistentData<H: Header> {
-	pub version: u32,
-	pub slot_header_map: BTreeMap<u64, H>,
-}
-
 #[derive(Debug, Clone)]
 pub struct EquivocationProof<H> {
 	slot: u64,
@@ -60,15 +53,15 @@ pub struct EquivocationProof<H> {
 }
 
 impl<H> EquivocationProof<H> {
-	pub fn get_slot(&self) -> u64 {
+	pub fn slot(&self) -> u64 {
 		self.slot
 	}
 
-	pub fn get_fst_header(&self) -> &H {
+	pub fn fst_header(&self) -> &H {
 		&self.fst_header
 	}
 
-	pub fn get_snd_header(&self) -> &H {
+	pub fn snd_header(&self) -> &H {
 		&self.snd_header
 	}
 }
@@ -105,7 +98,7 @@ pub fn check_equivocation<C, H>(
 		},
 	};
 
-	if slot > PRUNING_BOUND {
+	if slot_header_map.len() > PRUNING_BOUND {
 		slot_header_map = slot_header_map.split_off(&(slot - MAX_SLOT_CAPACITY));
 	}
 
