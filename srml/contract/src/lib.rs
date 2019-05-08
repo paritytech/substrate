@@ -97,9 +97,13 @@ use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero};
+use runtime_primitives::traits::{
+	Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
+};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
+use srml_support::{
+	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child
+};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
 use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
@@ -197,17 +201,24 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub deduct_block: BlockNumber,
 }
 
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct TombstoneContractInfo<T: Trait>(T::Hash);
+pub type TombstoneContractInfo<T> = RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
 
-impl<T: Trait> TombstoneContractInfo<T> {
-	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: CodeHash<T>) -> Self {
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
+
+impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
+where
+	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash,
+	Hasher: Hash<Output=H>,
+{
+	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: H) -> Self {
 		let mut buf = Vec::new();
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		storage_size.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
-		TombstoneContractInfo(T::Hashing::hash(&buf[..]))
+		RawTombstoneContractInfo(Hasher::hash(&buf[..]), Default::default())
 	}
 }
 
@@ -513,14 +524,12 @@ decl_module! {
 				.ok_or("Cannot restore to inexisting or alive contract")?;
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
-				// TODO TODO: should he pay for that ? is restoring should be payed
 				runtime_io::child_storage_root(&origin_contract.trie_id),
 				origin_contract.storage_size,
 				code_hash,
 			);
 
-			// TODO TODO: deriving Eq ?
-			if tombstone.0 != dest_tombstone.0 {
+			if tombstone != dest_tombstone {
 				return Err("Tombstones don't match");
 			}
 
