@@ -389,10 +389,21 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
+	pub fn initialize<I: IntoIterator<Item=DigestItemOf<T>>>(
+		number: &T::BlockNumber,
+		parent_hash: &T::Hash,
+		txs_root: &T::Hash,
+		digests: I,
+	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
+		let mut pre_digest = <T as Trait>::Digest::default();
+		for i in digests {
+			pre_digest.push(i)
+		}
+
+		<Digest<T>>::put(pre_digest);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
@@ -638,7 +649,7 @@ mod tests {
 	#[test]
 	fn deposit_event_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), None);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
@@ -647,7 +658,7 @@ mod tests {
 				vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]
 			);
 
-			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), None);
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0);
 			System::note_applied_extrinsic(&Err(""), 0);

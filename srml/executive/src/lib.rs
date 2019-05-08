@@ -140,7 +140,7 @@ impl<
 	}
 
 	fn initialize_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash) {
-		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root);
+		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, None);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 	}
 
