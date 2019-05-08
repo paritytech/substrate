@@ -94,6 +94,9 @@ test-node-template:
   only:
     changes:
       - node-template/*
+  before_script:
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
     - sccache -s
