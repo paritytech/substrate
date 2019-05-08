@@ -17,7 +17,6 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[macro_use]
 extern crate bitmask;

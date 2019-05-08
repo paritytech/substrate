@@ -19,7 +19,6 @@
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::trie_root;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
@@ -103,7 +102,7 @@ impl From< HashMap<Vec<u8>, Vec<u8>> > for BasicExternalities {
 	}
 }
 
-impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
 			CODE => self.code.clone(),
