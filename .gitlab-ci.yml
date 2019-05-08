@@ -53,7 +53,7 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
-test-linux-stable:                 &test
+test-linux-stable:
   stage:                           test
   variables:
     RUST_TOOLCHAIN: stable
@@ -80,6 +80,27 @@ test-linux-stable:                 &test
     - time cargo test --all --release --verbose --locked
     - sccache -s
 
+
+test-node-template:
+  stage:                           test
+  variables:
+    RUST_TOOLCHAIN: stable
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    TARGET: native
+  tags:
+    - linux-docker
+  only:
+    changes:
+      - node-template/*
+  script:
+    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
+    - sccache -s
+
+
+
+
 .build-only:                      &build-only
   only:
     - master
@@ -96,7 +117,7 @@ test-linux-stable:                 &test
 
 #### stage:                        build
 
-build-linux-release:               &build
+build-linux-release:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *build-only
@@ -209,7 +230,7 @@ publish-s3-release:
         --bucket ${BUCKET} --key ${PREFIX}/latest${BRANCH}/${name};
       done
   after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/latest${BRANCH}/
         --recursive --human-readable --summarize
 
 publish-s3-doc:
@@ -304,8 +325,13 @@ deploy-ue1-tag:
   environment:
     name: parity-prod-ue1
 
+
+
+
+
+
 .validator-deploy: &validator-deploy
-  stage: publish
+  stage: deploy
   dependencies:
     - build-linux-release
   image: parity/azure-ansible:v1
