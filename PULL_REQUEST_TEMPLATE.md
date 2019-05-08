@@ -1,0 +1,5 @@
+- [ ] Make sure you add a brief description of the PR.
+  - What does it do?
+  - What important points reviewers should know about?
+- [ ] If this PR closes a PR make sure you mention it, e.g. `Fixes #228` or `Related #1337`.
+- [ ] Are there any particular reviewers you want to take a look?
