@@ -183,7 +183,8 @@ impl<T: Trait> ContractInfo<T> {
 	}
 }
 
-pub type AliveContractInfo<T> = RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
+pub type AliveContractInfo<T> =
+	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
@@ -201,7 +202,8 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub deduct_block: BlockNumber,
 }
 
-pub type TombstoneContractInfo<T> = RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
+pub type TombstoneContractInfo<T> =
+	RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Encode, Decode, PartialEq, Eq)]
@@ -512,7 +514,12 @@ decl_module! {
 			}
 		}
 
-		fn restore_to(origin, dest: T::AccountId, code_hash: CodeHash<T>, rent_allowance: BalanceOf<T>) {
+		fn restore_to(
+			origin,
+			dest: T::AccountId,
+			code_hash: CodeHash<T>,
+			rent_allowance: BalanceOf<T>
+		) {
 			let origin = ensure_signed(origin)?;
 
 			let origin_contract = <ContractInfoOf<T>>::get(&origin)

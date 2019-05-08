@@ -22,7 +22,9 @@ use std::marker::PhantomData;
 use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
-use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
+use crate::changes_trie::{
+	compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId
+};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -135,8 +137,13 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| self.backend
+				.child_storage(storage_key.as_ref(), key)
+				.expect(EXT_NOT_ALLOWED_TO_FAIL)
+			)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -147,7 +154,12 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 		self.overlay.set_storage(key, maybe_value);
 	}
 
-	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>) {
+	fn place_child_storage(
+		&mut self,
+		storage_key: ChildStorageKey<H>,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>
+	) {
 		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
 	}
 
