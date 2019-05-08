@@ -703,4 +703,62 @@ mod tests {
 			]);
 		});
 	}
+
+	#[test]
+	fn deposit_event_topics() {
+		with_externalities(&mut new_test_ext(), || {
+			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into());
+			System::note_finished_extrinsics();
+
+			let topics = vec![
+				H256::repeat_byte(1),
+				H256::repeat_byte(2),
+				H256::repeat_byte(3),
+			];
+
+			// We deposit a few events with different sets of topics.
+			System::deposit_event_indexed(&topics[0..3], 1u16);
+			System::deposit_event_indexed(&topics[0..1], 2u16);
+			System::deposit_event_indexed(&topics[1..2], 3u16);
+
+			System::finalize();
+
+			// Check that topics are reflected in the event record.
+			assert_eq!(
+				System::events(),
+				vec![
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 1u16,
+						topics: topics[0..3].to_vec(),
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 2u16,
+						topics: topics[0..1].to_vec(),
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 3u16,
+						topics: topics[1..2].to_vec(),
+					}
+				]
+			);
+
+			// Check that the topic-events mapping reflects the deposited topics.
+			// Note that these are indexes of the events.
+			assert_eq!(
+				System::event_topics(&(), &topics[0]),
+				vec![0, 1],
+			);
+			assert_eq!(
+				System::event_topics(&(), &topics[1]),
+				vec![0, 2],
+			);
+			assert_eq!(
+				System::event_topics(&(), &topics[2]),
+				vec![0],
+			);
+		});
+	}
 }
