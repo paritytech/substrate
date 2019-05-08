@@ -139,7 +139,7 @@ build-rust-doc-release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only
+  # <<:                              *build-only
   tags:
     - linux-docker
   # before_script:
