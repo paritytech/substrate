@@ -19,7 +19,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
-use log::trace;
+use log::{trace, info};
 use futures::{Async, Future, Poll};
 use futures::sync::oneshot::{channel, Receiver, Sender as OneShotSender};
 use linked_hash_map::LinkedHashMap;
@@ -29,7 +29,7 @@ use client::error::Error as ClientError;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 use crate::message;
-use network_libp2p::{Severity, PeerId};
+use network_libp2p::PeerId;
 use crate::config::Roles;
 use crate::service::{NetworkChan, NetworkMsg};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -38,6 +38,8 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Default request retry count.
 const RETRY_COUNT: usize = 1;
+/// Reputation change for a peer when a request timed out.
+const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
 /// On-demand service API.
 pub trait OnDemandService<Block: BlockT>: Send + Sync {
@@ -175,8 +177,9 @@ impl<B: BlockT> OnDemand<B> where
 		let request = match core.remove(peer.clone(), request_id) {
 			Some(request) => request,
 			None => {
-				let reason = format!("Invalid remote {} response from peer", rtype);
-				self.send(NetworkMsg::ReportPeer(peer.clone(), Severity::Bad(reason)));
+				info!("Invalid remote {} response from peer {}", rtype, peer);
+				self.send(NetworkMsg::ReportPeer(peer.clone(), i32::min_value()));
+				self.send(NetworkMsg::DisconnectPeer(peer.clone()));
 				core.remove_peer(peer);
 				return;
 			},
@@ -186,8 +189,9 @@ impl<B: BlockT> OnDemand<B> where
 		let (retry_count, retry_request_data) = match try_accept(request) {
 			Accept::Ok => (retry_count, None),
 			Accept::CheckFailed(error, retry_request_data) => {
-				let reason = format!("Failed to check remote {} response from peer: {}", rtype, error);
-				self.send(NetworkMsg::ReportPeer(peer.clone(), Severity::Bad(reason)));
+				info!("Failed to check remote {} response from peer {}: {}", rtype, peer, error);
+				self.send(NetworkMsg::ReportPeer(peer.clone(), i32::min_value()));
+				self.send(NetworkMsg::DisconnectPeer(peer.clone()));
 				core.remove_peer(peer);
 
 				if retry_count > 0 {
@@ -199,8 +203,9 @@ impl<B: BlockT> OnDemand<B> where
 				}
 			},
 			Accept::Unexpected(retry_request_data) => {
-				let reason = format!("Unexpected response to remote {} from peer", rtype);
-				self.send(NetworkMsg::ReportPeer(peer.clone(), Severity::Bad(reason)));
+				info!("Unexpected response to remote {} from peer", rtype);
+				self.send(NetworkMsg::ReportPeer(peer.clone(), i32::min_value()));
+				self.send(NetworkMsg::DisconnectPeer(peer.clone()));
 				core.remove_peer(peer);
 
 				(retry_count, Some(retry_request_data))
@@ -244,7 +249,8 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 	fn maintain_peers(&self) {
 		let mut core = self.core.lock();
 		for bad_peer in core.maintain_peers() {
-			self.send(NetworkMsg::ReportPeer(bad_peer, Severity::Timeout));
+			self.send(NetworkMsg::ReportPeer(bad_peer.clone(), TIMEOUT_REPUTATION_CHANGE));
+			self.send(NetworkMsg::DisconnectPeer(bad_peer));
 		}
 		core.dispatch(self);
 	}
@@ -532,7 +538,7 @@ pub mod tests {
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 	use crate::config::Roles;
 	use crate::message;
-	use network_libp2p::{PeerId, Severity};
+	use network_libp2p::PeerId;
 	use crate::service::{network_channel, NetworkPort, NetworkMsg};
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};
@@ -603,15 +609,11 @@ pub mod tests {
 		}
 	}
 
-	fn assert_disconnected_peer(network_port: NetworkPort<Block>, expected_severity: Severity) {
+	fn assert_disconnected_peer(network_port: NetworkPort<Block>) {
 		let mut disconnect_count = 0;
 		while let Ok(msg) = network_port.receiver().try_recv() {
 			match msg {
-				NetworkMsg::ReportPeer(_, severity) => {
-					if severity == expected_severity {
-						disconnect_count = disconnect_count + 1;
-					}
-				},
+				NetworkMsg::DisconnectPeer(_) => disconnect_count = disconnect_count + 1,
 				_ => {},
 			}
 		}
@@ -672,7 +674,7 @@ pub mod tests {
 		on_demand.maintain_peers();
 		assert!(on_demand.core.lock().idle_peers.is_empty());
 		assert_eq!(vec![peer1.clone()], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
-		assert_disconnected_peer(network_port, Severity::Timeout);
+		assert_disconnected_peer(network_port);
 	}
 
 	#[test]
@@ -691,7 +693,7 @@ pub mod tests {
 			retry_count: None,
 		});
 		receive_call_response(&*on_demand, peer0, 1);
-		assert_disconnected_peer(network_port, Severity::Bad("Invalid remote call response from peer".to_string()));
+		assert_disconnected_peer(network_port);
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 
@@ -711,7 +713,7 @@ pub mod tests {
 
 		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
 		receive_call_response(&*on_demand, peer0.clone(), 0);
-		assert_disconnected_peer(network_port, Severity::Bad("Failed to check remote call response from peer: Backend error: Test error".to_string()));
+		assert_disconnected_peer(network_port);
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 
@@ -724,7 +726,7 @@ pub mod tests {
 		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
 
 		receive_call_response(&*on_demand, peer0, 0);
-		assert_disconnected_peer(network_port, Severity::Bad("Invalid remote call response from peer".to_string()));
+		assert_disconnected_peer(network_port);
 	}
 
 	#[test]
@@ -747,7 +749,7 @@ pub mod tests {
 			id: 0,
 			proof: vec![vec![2]],
 		});
-		assert_disconnected_peer(network_port, Severity::Bad("Unexpected response to remote read from peer".to_string()));
+		assert_disconnected_peer(network_port);
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 

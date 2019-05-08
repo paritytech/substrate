@@ -15,7 +15,7 @@ error-chain = "0.12"
 futures = "0.1"
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-tokio = "0.1.7"
+tokio-timer = "0.2"
 parity-codec = { version = "3.3", features = ["derive"] }
 
 [dev-dependencies]

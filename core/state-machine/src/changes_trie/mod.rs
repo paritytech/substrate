@@ -47,7 +47,6 @@ pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_pro
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use crate::backend::Backend;
 use primitives;
 use crate::changes_trie::build::prepare_input;
@@ -93,7 +92,7 @@ pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H>, H: Hasher>(
 ) -> Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>
 	where
 		&'a S: TrieBackendStorage<H>,
-		H::Out: Ord + HeapSizeOf,
+		H::Out: Ord,
 {
 	let input_pairs = prepare_input::<B, S, H>(backend, storage, changes, parent)
 		.expect("storage is not allowed to fail within runtime")?;
