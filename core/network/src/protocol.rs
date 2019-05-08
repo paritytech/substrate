@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crossbeam_channel::{self as channel, Receiver, Sender, select};
-use futures::sync::mpsc;
-use parking_lot::Mutex;
+use futures::{prelude::*, sync::mpsc};
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use runtime_primitives::{generic::BlockId, ConsensusEngineId};
@@ -35,7 +33,7 @@ use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::{cmp, num::NonZeroUsize, thread, time};
+use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
@@ -46,8 +44,6 @@ const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate exstrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
-/// Interval at which we send status updates on the SyncProvider status stream.
-const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 3;
@@ -77,10 +73,12 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	network_chan: NetworkChan<B>,
-	port: Receiver<ProtocolMsg<B, S>>,
-	from_network_port: Receiver<FromNetworkMsg<B>>,
+	port: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
+	/// Interval at which we call `tick`.
+	tick_timeout: tokio::timer::Interval,
+	/// Interval at which we call `propagate_extrinsics`.
+	propagate_timeout: tokio::timer::Interval,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -256,8 +254,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	BlocksProcessed(Vec<B::Hash>, bool),
 	/// Tell protocol to restart sync.
 	RestartSync,
-	/// Propagate status updates.
-	Status,
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
 	/// Tell protocol that a block was imported (sent by the import-queue).
@@ -284,39 +280,17 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	/// Only used in tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Abort,
-	/// Tell protocol to abort sync and stop.
-	Stop,
 	/// Tell protocol to perform regular maintenance.
+	#[cfg(any(test, feature = "test-helpers"))]
 	Tick,
 	/// Synchronization request.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Synchronize,
 }
 
-/// Messages sent to Protocol from Network-libp2p.
-pub enum FromNetworkMsg<B: BlockT> {
-	/// A peer connected, with debug info.
-	PeerConnected(PeerId, String),
-	/// A peer disconnected, with debug info.
-	PeerDisconnected(PeerId, String),
-	/// A custom message from another peer.
-	CustomMessage(PeerId, Message<B>),
-	/// Let protocol know a peer is currenlty clogged.
-	PeerClogged(PeerId, Option<Message<B>>),
-	/// Synchronization request.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronize,
-}
-
-enum Incoming<B: BlockT, S: NetworkSpecialization<B>> {
-	FromNetwork(FromNetworkMsg<B>),
-	FromClient(ProtocolMsg<B, S>)
-}
-
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
-		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 		is_offline: Arc<AtomicBool>,
 		is_major_syncing: Arc<AtomicBool>,
 		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
@@ -327,92 +301,81 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<(Sender<ProtocolMsg<B, S>>, Sender<FromNetworkMsg<B>>)> {
-		let (protocol_sender, port) = channel::unbounded();
-		let (from_network_sender, from_network_port) = channel::bounded(4);
+	) -> error::Result<(Protocol<B, S, H>, mpsc::UnboundedSender<ProtocolMsg<B, S>>)> {
+		let (protocol_sender, port) = mpsc::unbounded();
 		let info = chain.info()?;
 		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
-		let _ = thread::Builder::new()
-			.name("Protocol".into())
-			.spawn(move || {
-				let mut protocol = Protocol {
-					status_sinks,
-					network_chan,
-					from_network_port,
-					port,
-					config: config,
-					context_data: ContextData {
-						peers: HashMap::new(),
-						chain,
-					},
-					on_demand,
-					genesis_hash: info.chain.genesis_hash,
-					sync,
-					specialization: specialization,
-					consensus_gossip: ConsensusGossip::new(),
-					handshaking_peers: HashMap::new(),
-					connected_peers,
-					transaction_pool: transaction_pool,
-				};
-				let tick_timeout = channel::tick(TICK_TIMEOUT);
-				let propagate_timeout = channel::tick(PROPAGATE_TIMEOUT);
-				let status_interval = channel::tick(STATUS_INTERVAL);
-				while protocol.run(&tick_timeout, &propagate_timeout, &status_interval) {
-					// Running until all senders have been dropped...
-				}
-			})
-			.expect("Protocol thread spawning failed");
-		Ok((protocol_sender, from_network_sender))
-	}
-
-	fn run(
-		&mut self,
-		tick_timeout: &Receiver<time::Instant>,
-		propagate_timeout: &Receiver<time::Instant>,
-		status_interval: &Receiver<time::Instant>,
-	) -> bool {
-		let msg = select! {
-			recv(self.port) -> event => {
-				match event {
-					Ok(msg) => Incoming::FromClient(msg),
-					// Our sender has been dropped, quit.
-					Err(_) => {
-						Incoming::FromClient(ProtocolMsg::Stop)
-					},
-				}
+		let protocol = Protocol {
+			network_chan,
+			port,
+			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
+			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			config: config,
+			context_data: ContextData {
+				peers: HashMap::new(),
+				chain,
 			},
-			recv(self.from_network_port) -> event => {
-				match event {
-					Ok(msg) => Incoming::FromNetwork(msg),
-					// Our sender has been dropped, quit.
-					Err(_) => {
-						Incoming::FromClient(ProtocolMsg::Stop)
-					},
-				}
-			},
-			recv(tick_timeout) -> _ => {
-				Incoming::FromClient(ProtocolMsg::Tick)
-			},
-			recv(propagate_timeout) -> _ => {
-				Incoming::FromClient(ProtocolMsg::PropagateExtrinsics)
-			},
-			recv(status_interval) -> _ => {
-				Incoming::FromClient(ProtocolMsg::Status)
-			},
+			on_demand,
+			genesis_hash: info.chain.genesis_hash,
+			sync,
+			specialization: specialization,
+			consensus_gossip: ConsensusGossip::new(),
+			handshaking_peers: HashMap::new(),
+			connected_peers,
+			transaction_pool: transaction_pool,
 		};
-		self.handle_msg(msg)
+
+		Ok((protocol, protocol_sender))
 	}
 
-	fn handle_msg(&mut self, msg: Incoming<B, S>) -> bool {
-		match msg {
-			Incoming::FromNetwork(msg) => self.handle_network_msg(msg),
-			Incoming::FromClient(msg) => self.handle_client_msg(msg),
+	/// Returns an object representing the status of the protocol.
+	pub fn status(&mut self) -> ProtocolStatus<B> {
+		ProtocolStatus {
+			sync: self.sync.status(),
+			num_peers: self.context_data.peers.values().count(),
+			num_active_peers: self
+				.context_data
+				.peers
+				.values()
+				.filter(|p| p.block_request.is_some())
+				.count(),
 		}
 	}
+}
 
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, S, H> {
+	type Item = ();
+	type Error = void::Void;
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
+			self.tick();
+		}
+
+		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
+			self.propagate_extrinsics();
+		}
+
+		loop {
+			match self.port.poll() {
+				Ok(Async::Ready(None)) | Err(_) => {
+					self.stop();
+					return Ok(Async::Ready(()))
+				}
+				Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
+					return Ok(Async::Ready(()))
+				}
+				Ok(Async::NotReady) => break,
+			}
+		}
+
+		Ok(Async::NotReady)
+	}
+}
+
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn handle_client_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
 		match msg {
-			ProtocolMsg::Status => self.on_status(),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
 			ProtocolMsg::ExecuteWithSpec(task) => {
@@ -449,32 +412,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			},
 			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
+			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Tick => self.tick(),
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Abort => self.abort(),
-			ProtocolMsg::Stop => {
-				self.stop();
-				return false;
-			},
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Synchronize => {
 				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
 				self.network_chan.send(NetworkMsg::Synchronized)
 			}
-		}
-		true
-	}
-
-	fn handle_network_msg(&mut self, msg: FromNetworkMsg<B>) -> bool {
-		match msg {
-			FromNetworkMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected(who, debug_info),
-			FromNetworkMsg::PeerConnected(who, debug_info) => self.on_peer_connected(who, debug_info),
-			FromNetworkMsg::PeerClogged(who, message) => self.on_clogged_peer(who, message),
-			FromNetworkMsg::CustomMessage(who, message) => {
-				self.on_custom_message(who, message)
-			},
-			#[cfg(any(test, feature = "test-helpers"))]
-			FromNetworkMsg::Synchronize => self.network_chan.send(NetworkMsg::Synchronized),
 		}
 		true
 	}
@@ -511,22 +457,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	/// Propagates protocol statuses.
-	fn on_status(&mut self) {
-		let status = ProtocolStatus {
-			sync: self.sync.status(),
-			num_peers: self.context_data.peers.values().count(),
-			num_active_peers: self
-				.context_data
-				.peers
-				.values()
-				.filter(|p| p.block_request.is_some())
-				.count(),
-		};
-		self.status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
-	}
-
-	fn on_custom_message(&mut self, who: PeerId, message: Message<B>) {
+	pub fn on_custom_message(&mut self, who: PeerId, message: Message<B>) {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
@@ -595,14 +526,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called when a new peer is connected
-	fn on_peer_connected(&mut self, who: PeerId, debug_info: String) {
+	pub fn on_peer_connected(&mut self, who: PeerId, debug_info: String) {
 		trace!(target: "sync", "Connecting {}: {}", who, debug_info);
 		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: time::Instant::now() });
 		self.send_status(who);
 	}
 
 	/// Called by peer when it is disconnecting
-	fn on_peer_disconnected(&mut self, peer: PeerId, debug_info: String) {
+	pub fn on_peer_disconnected(&mut self, peer: PeerId, debug_info: String) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, debug_info);
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
@@ -635,6 +566,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		} else {
 			debug!(target: "sync", "Peer clogged before being properly connected");
 		}
+	}
+
+	/// Puts the `Synchronized` message on `network_chan`.
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn synchronize(&self) {
+		self.network_chan.send(NetworkMsg::Synchronized);
 	}
 
 	fn on_block_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
@@ -915,7 +852,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash) {
+	fn announce_block(&mut self, hash: B::Hash) {
 		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
