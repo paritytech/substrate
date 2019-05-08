@@ -16,7 +16,7 @@
 
 //! Test implementation for Externalities.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use hash_db::Hasher;
@@ -77,12 +77,13 @@ impl<H: Hasher> TestExternalities<H> {
 		self.backend = self.backend.update(vec![(None, k, Some(v))]);
 	}
 
-	fn iter_pairs(&self) -> impl Iterator<Item=(Vec<u8>, Vec<u8>)> {
+	/// Iter to all pairs in key order
+	pub fn iter_pairs_in_order(&self) -> impl Iterator<Item=(Vec<u8>, Vec<u8>)> {
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
 			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
 			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.collect::<HashMap<_, _>>()
+			.collect::<BTreeMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 	}
@@ -98,7 +99,7 @@ impl<H: Hasher> PartialEq for TestExternalities<H> {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H>) -> bool {
-		self.iter_pairs().eq(other.iter_pairs())
+		self.iter_pairs_in_order().eq(other.iter_pairs_in_order())
 	}
 }
 
@@ -116,7 +117,7 @@ impl<H: Hasher> Default for TestExternalities<H> {
 
 impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> {
 	fn from(tex: TestExternalities<H>) -> Self {
-		tex.iter_pairs().collect()
+		tex.iter_pairs_in_order().collect()
 	}
 }
 
