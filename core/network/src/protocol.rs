@@ -72,10 +72,6 @@ const UNEXPECTED_STATUS_REPUTATION_CHANGE: i32 = -(1 << 20);
 const PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
 /// Reputation change when a peer sends us an extrinsic that we didn't know about.
 const NEW_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
-/// Reputation change when a peer sends us a block. We don't know whether this block is valid or
-/// already known to us. Since this has a small cost, we decrease the reputation of the node, and
-/// will increase it back later if the import is successful.
-const BLOCK_ANNOUNCE_REPUTATION_CHANGE: i32 = -(1 << 2);
 /// We sent an RPC query to the given node, but it failed.
 const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 
@@ -991,7 +987,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			hash,
 			&header,
 		);
-		self.network_chan.send(NetworkMsg::ReportPeer(who, BLOCK_ANNOUNCE_REPUTATION_CHANGE));
 	}
 
 	fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
