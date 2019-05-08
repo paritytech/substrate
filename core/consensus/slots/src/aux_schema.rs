@@ -21,8 +21,7 @@ use std::sync::Arc;
 use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-// use consensus_common::error::{ErrorKind as CommonErrorKind};
-use runtime_primitives::traits::{Header};
+use runtime_primitives::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 /// We keep at least this number of slots in database.
@@ -39,7 +38,7 @@ fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
 			.ok_or_else(
-				|| ClientError::Backend(format!("Aura DB is corrupted.")).into(),
+				|| ClientError::Backend(format!("Slots DB is corrupted.")).into(),
 			)
 			.map(Some)
 	}
@@ -68,42 +67,73 @@ impl<H> EquivocationProof<H> {
 
 /// Check if the header is an equivocation and returns the proof in that case.
 /// Assumes all the headers in the same slot are signed by the same Signer.
-pub fn check_equivocation<C, H>(
+pub fn check_equivocation<C, H, P>(
 	backend: &Arc<C>,
 	slot: u64,
 	header: H,
+	signer: P,
 ) -> ClientResult<Option<EquivocationProof<H>>>
 	where
 		H: Header,
 		C: AuxStore,
+		P: Encode + Decode + PartialEq,
 {
-	let mut slot_header_map = load_decode::<_, BTreeMap<u64, H>>(backend.clone(), SLOT_HEADER_MAP_KEY)?
-		.unwrap_or_else(BTreeMap::new);
+	let mut key = SLOT_HEADER_MAP_KEY.to_vec();
+	slot.using_encoded(|s| key.extend(s));
 
-	match slot_header_map.entry(slot) {
-		Entry::Vacant(vacant_entry) => {
-			vacant_entry.insert(header);
-		},
-		Entry::Occupied(occupied_entry) => {
-			let fst_header = occupied_entry.get().clone();
-			let snd_header = header;
+	let mut v = load_decode::<_, Vec<(H, P)>>(backend.clone(), &key[..])?
+		.unwrap_or_else(Vec::new);
 
-			if fst_header.hash() != snd_header.hash() {
+	for (prev_header, prev_signer) in v.iter() {
+		if *prev_signer == signer {
+			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
 					slot,
-					fst_header,
-					snd_header,
+					fst_header: prev_header.clone(),
+					snd_header: header.clone(),
 				}));
 			}
-		},
-	};
-
-	if slot_header_map.len() > PRUNING_BOUND {
-		slot_header_map = slot_header_map.split_off(&(slot - MAX_SLOT_CAPACITY));
+		}
 	}
 
+	// match slot_header_map.entry(slot) {
+	// 	Entry::Vacant(vacant_entry) => {
+	// 		vacant_entry.insert(vec![(header, signer)]);
+	// 	},
+	// 	Entry::Occupied(occupied_entry) => {
+	// 		let v = occupied_entry.get();
+	// 		for (prev_header, prev_signer) in v.iter() {
+	// 			if *prev_signer == signer {
+	// 				if header.hash() != prev_header.hash() {
+	// 					return Ok(Some(EquivocationProof {
+	// 						slot,
+	// 						fst_header: prev_header.clone(),
+	// 						snd_header: header.clone(),
+	// 					}));
+	// 				}
+	// 			}
+	// 		}
+			// let fst_header = occupied_entry.get().clone();
+			// let snd_header = header;
+
+			// if fst_header.hash() != snd_header.hash() {
+			// 	return Ok(Some(EquivocationProof {
+			// 		slot,
+			// 		fst_header,
+			// 		snd_header,
+			// 	}));
+			// }
+	// 	},
+	// };
+
+	if slot % PRUNING_BOUND == 0 {
+		// slot_header_map = slot_header_map.split_off(&(slot - MAX_SLOT_CAPACITY));
+	}
+
+	v.push((header, signer));
+
 	backend.insert_aux(
-		&[(SLOT_HEADER_MAP_KEY, slot_header_map.encode().as_slice())],
+		&[(&key[..], v.encode().as_slice())],
 		&[],
 	)?;
 

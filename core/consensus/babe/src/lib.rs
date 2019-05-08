@@ -583,7 +583,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			};
 				
 			if check(&inout, threshold) {
-				match check_equivocation(&client, slot_num, header.clone()) {
+				match check_equivocation(&client, slot_num, header.clone(), signer) {
 					Ok(Some(equivocation_proof)) => {
 						// TODO: dispatch report here.
 						Err(format!("Slot author is equivocating with headers {:?} and {:?}",

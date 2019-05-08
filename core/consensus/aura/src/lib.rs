@@ -464,9 +464,9 @@ fn check_header<C, B: Block, P: Pair>(
 	allow_old_seals: bool,
 ) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Public: AsRef<P::Public>,
 		P::Signature: Decode,
 		C: client::backend::AuxStore,
+		<P as Pair>::Public: AsRef<<P as Pair>::Public> + Encode + Decode + PartialEq,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -499,7 +499,7 @@ fn check_header<C, B: Block, P: Pair>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			match check_equivocation(client, slot_num, header.clone()) {
+			match check_equivocation::<_, _, <P as Pair>::Public>(client, slot_num, header.clone(), public.clone()) {
 				Ok(Some(equivocation_proof)) => {
 					// TODO: dispatch report here.
 					Err(format!("Slot author is equivocating with headers {:?} and {:?}",
