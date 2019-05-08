@@ -55,10 +55,12 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		Some(ContractInfo::Alive(contract)) => contract,
 	};
 
+	let current_block_number = <system::Module<T>>::block_number();
+
 	// How much block has passed since the last deduction for the contract.
 	let blocks_passed = {
 		// Calculate an effective block number, i.e. after adjusting for handicap.
-		let effective_block_number = <system::Module<T>>::block_number().saturating_sub(handicap);
+		let effective_block_number = current_block_number.saturating_sub(handicap);
 		let n = effective_block_number.saturating_sub(contract.deduct_block);
 		if n.is_zero() {
 			// Rent has already been paid
@@ -125,11 +127,13 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			);
 
 			<ContractInfoOf<T>>::mutate(account, |contract| {
-				contract
+				let contract = contract
 					.as_mut()
 					.and_then(|c| c.as_alive_mut())
-					.expect("Dead or inexistent account has been exempt above; qed")
-					.rent_allowance -= imbalance.peek(); // rent_allowance is not exceeded
+					.expect("Dead or inexistent account has been exempt above; qed");
+
+				contract.rent_allowance -= imbalance.peek(); // rent_allowance is not exceeded
+				contract.deduct_block = current_block_number;
 			})
 		}
 

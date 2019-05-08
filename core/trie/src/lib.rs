@@ -17,7 +17,6 @@
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 mod error;
 mod node_header;

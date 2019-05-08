@@ -20,7 +20,6 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
@@ -31,14 +30,14 @@ use super::{ChildStorageKey, Externalities, OverlayedChanges};
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf + Ord {
+pub struct TestExternalities<H: Hasher> {
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
 	_hasher: PhantomData<H>,
 }
 
-impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> TestExternalities<H> {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::new_with_code(&[], inner)
@@ -87,13 +86,13 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf + Ord {
 	}
 }
 
-impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> PartialEq for TestExternalities<H> {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H>) -> bool {
@@ -101,7 +100,7 @@ impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf + Or
 	}
 }
 
-impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
 		t.backend = t.backend.update(iter.into_iter().map(|(k, v)| (None, k, Some(v))).collect());
@@ -109,23 +108,23 @@ impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where 
 	}
 }
 
-impl<H: Hasher> Default for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> Default for TestExternalities<H> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> {
 	fn from(tex: TestExternalities<H>) -> Self {
 		tex.iter_pairs().collect()
 	}
 }
 
-impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where H::Out: HeapSizeOf + Ord {
+impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::from_iter(hashmap)
 	}
 }
 
-impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))

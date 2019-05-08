@@ -119,7 +119,7 @@ pub struct NetworkConfigurationParams {
 	pub in_peers: u32,
 
 	/// By default, the network will use mDNS to discover other nodes on the local network. This
-	/// disables it.
+	/// disables it. Automatically implied when using --dev.
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
 

@@ -23,7 +23,7 @@ use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
-use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use substrate_primitives::sr25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
