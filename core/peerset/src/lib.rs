@@ -259,15 +259,20 @@ impl Peerset {
 			for peer in self.data.peers().cloned().collect::<Vec<_>>() {
 				// We use `k = 0.98`, so we divide by `50`. With that value, it takes 34.3 seconds
 				// to reduce the reputation by half.
+				fn reput_tick(reput: i32) -> i32 {
+					let mut diff = -reput / 50;
+					if diff == 0 && reput < 0 {
+						diff = 1;
+					} else if diff == 0 && reput > 0 {
+						diff = -1;
+					}
+					reput.saturating_add(diff)
+				}
 				match self.data.peer(&peer) {
-					peersstate::Peer::Connected(mut peer) => {
-						let cur_reput = peer.reputation();
-						peer.set_reputation(cur_reput.saturating_sub(cur_reput / 50));
-					}
-					peersstate::Peer::NotConnected(mut peer) => {
-						let cur_reput = peer.reputation();
-						peer.set_reputation(cur_reput.saturating_sub(cur_reput / 50));
-					}
+					peersstate::Peer::Connected(mut peer) =>
+						peer.set_reputation(reput_tick(peer.reputation())),
+					peersstate::Peer::NotConnected(mut peer) =>
+						peer.set_reputation(reput_tick(peer.reputation())),
 					peersstate::Peer::Unknown(_) => unreachable!("We iterate over known peers; qed")
 				}
 			}
