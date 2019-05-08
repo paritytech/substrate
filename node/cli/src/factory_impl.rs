@@ -31,7 +31,7 @@ use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic};
 use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
-use sr_primitives::generic::Era;
+use sr_primitives::generic::{Era, UncheckedMortalCompactExtrinsic};
 use sr_primitives::traits::As;
 use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;
@@ -43,7 +43,7 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 	type AccountId = node_primitives::AccountId;
 	type BlockNumber = node_primitives::BlockNumber;
 
-	type Extrinsic = sr_primitives::generic::UncheckedMortalCompactExtrinsic<
+	type Extrinsic = UncheckedMortalCompactExtrinsic<
 		indices::address::Address<Public, u32>,
 		u64,
 		node_runtime::Call,
@@ -56,11 +56,12 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 	type BlockId = node_primitives::BlockId;
 	type Index = node_primitives::Index;
 	type Phase = sr_primitives::generic::Phase;
-	type Secret = Keyring;
+	type Secret = sr25519::Pair;
+	type Header = node_primitives::Header;
 
 	fn transfer_extrinsic(
-		sender: Self::AccountId,
-		key: Self::Secret,
+		sender: &Self::AccountId,
+		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: Self::Balance,
 		index: Self::Index,
@@ -68,7 +69,7 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 		prior_block_hash: &Self::Hash,
 	) -> Self::Extrinsic {
 		sign::<service::Factory>(CheckedExtrinsic {
-			signed: Some((sender.into(), index)),
+			signed: Some((sender.clone(), index)),
 			function: Call::Balances(
 				BalancesCall::transfer(
 					indices::address::Address::Id(
@@ -90,12 +91,12 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 			signed: None,
 			function: Call::Timestamp(timestamp::Call::set(ts)),
 		};
-		let timestamp = sign::<service::Factory>(cex, key, &prior_block_hash, phase.as_());
+		let timestamp = sign::<service::Factory>(cex, &key, &prior_block_hash, phase.as_());
 		timestamp
 	}
 
 	fn minimum_balance() -> Self::Balance {
-		// TODO get amount via api from minimum balance
+		// TODO get correct amount via api
 		1337
 	}
 
@@ -109,45 +110,54 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 	}
 
 	fn master_account_secret() -> Self::Secret {
-		Keyring::Alice
+		Keyring::Alice.pair()
 	}
 
 	/// Generates a random `AccountId` from `seed`.
 	fn gen_random_account_id(seed: u64) -> Self::AccountId {
-		let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
-
-		let mut seed_bytes = [0u8; 32];
-		for i in 0..32 {
-			seed_bytes[i] = rng.gen::<u8>();
-		}
-
-		let pair: sr25519::Pair = sr25519::Pair::from_seed(seed_bytes);
+		let pair: sr25519::Pair = sr25519::Pair::from_seed(gen_seed_bytes(seed));
 		pair.public().into()
 	}
 
+	/// Generates a random `Secret` from `seed`.
+	fn gen_random_account_secret(seed: u64) -> Self::Secret {
+		let pair: sr25519::Pair = sr25519::Pair::from_seed(gen_seed_bytes(seed));
+		pair
+	}
+
 	fn extract_timestamp(_block_hash: Self::Hash) -> Self::Moment {
-		// TODO
+		// TODO get correct timestamp from inherent
 		let now = SystemTime::now();
 		now.duration_since(UNIX_EPOCH)
 			.expect("Time went backwards").as_secs()
 	}
 
-	fn extract_index(_block_hash: Self::Hash) -> Self::Index {
-		// TODO
+	fn extract_index(_account_id: Self::AccountId, _block_hash: Self::Hash) -> Self::Index {
+		// TODO get correct index for account via api
 		0.as_()
 	}
 
 	fn extract_phase(_block_hash: Self::Hash) -> Self::Phase {
-		// TODO
+		// TODO get correct phase via api
 		0.as_()
 	}
+}
+
+fn gen_seed_bytes(seed: u64) -> [u8; 32] {
+	let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
+
+	let mut seed_bytes = [0u8; 32];
+	for i in 0..32 {
+		seed_bytes[i] = rng.gen::<u8>();
+	}
+	seed_bytes
 }
 
 /// Creates an `UncheckedExtrinsic` containing the appropriate signature for
 /// a `CheckedExtrinsics`.
 fn sign<F: ServiceFactory>(
 	xt: CheckedExtrinsic,
-	key: Keyring,
+	key: &sr25519::Pair,
 	prior_block_hash: &Hash,
 	phase: u64,
 ) -> UncheckedExtrinsic {

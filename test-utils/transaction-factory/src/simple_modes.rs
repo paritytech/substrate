@@ -1,0 +1,123 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+/// This module implements two manufacturing modes:
+///
+/// # MasterToN
+/// Manufacture `num` transactions from the master account
+/// to `num` randomly created accounts, one each.
+///
+///   A -> B
+///   A -> C
+///   ... x `num`
+///
+///
+/// # MasterTo1
+/// Manufacture `num` transactions from the master account
+/// to exactly one other randomly created account.
+///
+///   A -> B
+///   A -> B
+///   ... x `num`
+
+use std::ops::Mul;
+use std::sync::Arc;
+use std::fmt::Display;
+
+use log::info;
+use client::block_builder::api::BlockBuilder;
+use client::runtime_api::ConstructRuntimeApi;
+use parity_codec::Encode;
+use serde::Serialize;
+use sr_primitives::traits::{As, ProvideRuntimeApi, SimpleArithmetic};
+use substrate_service::{FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents};
+
+use crate::{FactoryState, Mode, RuntimeAdapter, create_block};
+
+pub fn next<F, RA>(
+	curr: &mut FactoryState,
+	client: &Arc<ComponentClient<FullComponents<F>>>,
+	prior_block_hash: RA::Hash,
+	last_ts: RA::Moment,
+)
+	-> Option<(RA::Moment, <F as ServiceFactory>::Block)>
+where
+	F: ServiceFactory,
+	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
+	FullClient<F>: ProvideRuntimeApi,
+	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
+
+	RA: RuntimeAdapter,
+	<RA as RuntimeAdapter>::AccountId: Display,
+	<RA as RuntimeAdapter>::Balance: Display + Mul + As<u64>,
+	<RA as RuntimeAdapter>::Extrinsic: Encode + Serialize,
+	<RA as RuntimeAdapter>::Hash: From<primitives::H256> + Copy + Display,
+	<RA as RuntimeAdapter>::Index: Copy + As<u64>,
+	<RA as RuntimeAdapter>::Moment: SimpleArithmetic + Copy,
+	<RA as RuntimeAdapter>::Phase: Copy + As<u64>,
+{
+	if !(curr.block_no < curr.num) {
+		return None;
+	}
+
+	let from = (RA::master_account_id(), RA::master_account_secret());
+
+	let seed = match curr.mode {
+		// choose the same receiver for all transactions
+		Mode::MasterTo1 => curr.start_number,
+
+		// different receiver for each transaction
+		Mode::MasterToN => curr.start_number + curr.block_no,
+		_ => unreachable!("Mode not covered!"),
+	};
+	let to = RA::gen_random_account_id(seed);
+
+	let amount = RA::minimum_balance().as_();
+
+	let transfer = RA::transfer_extrinsic(
+		&from.0,
+		&from.1,
+		&to,
+		RA::Balance::sa(amount),
+		RA::Index::sa(curr.index),
+		RA::Phase::sa(curr.phase),
+		&prior_block_hash,
+	);
+
+	let new_ts = last_ts + RA::minimum_period();
+	let timestamp = RA::timestamp_inherent(
+		new_ts.clone(),
+		RA::master_account_secret(),
+		RA::Phase::sa(curr.phase),
+		&prior_block_hash
+	);
+
+	let block = create_block::<F, RA>(&client, transfer, timestamp);
+	info!(
+		"Created block {} with hash {}. Transferring {} from {} to {}.",
+		curr.block_no + 1,
+		prior_block_hash,
+		amount,
+		from.0,
+		to
+	);
+
+	curr.block_no += 1;
+	curr.phase += 1;
+	curr.index += 1;
+
+	Some((new_ts, block))
+}

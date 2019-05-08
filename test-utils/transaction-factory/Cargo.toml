@@ -13,11 +13,12 @@ sr_primitives = { package = "sr-primitives", path = "../../core/sr-primitives", 
 substrate-service = { path = "../../core/service" }
 srml_support = { package = "srml-support", path = "../../srml/support" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
-structopt = "0.2"
 node-runtime = { path = "../../node/runtime" }
+serde = { version = "1.0", features = ["derive"] }
 node-primitives = { path = "../../node/primitives" }
 cli = { package = "substrate-cli", path = "../../core/cli" }
 log = "0.4"
+indices = { package = "srml-indices", path = "../../srml/indices" }
 
 [dev-dependencies]
 substrate-serializer = { path = "../../core/serializer" }
