@@ -493,11 +493,11 @@ impl<T: Trait> Module<T> {
 	/// Remove a voter at a specified index from the system.
 	///
 	/// Trusts that Self::voters()[index] != voter.
-	/// Also panics if index is out of bound (see `swap_remove`).
 	fn remove_voter(voter: &T::AccountId, index: usize) {
 		let set_index = SetIndex::sa(index / VOTER_SET_SIZE);
 		let vec_index = index % VOTER_SET_SIZE;
 		let mut set = Self::voters(set_index);
+		// TODO: panics if index is out of bound or wrong. Index is most ofter user-provided.
 		set.swap_remove(vec_index);
 		// There is room for one new voter in the current set.
 		<NextVoterSet<T>>::put(set_index);
