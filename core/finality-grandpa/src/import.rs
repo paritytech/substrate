@@ -33,18 +33,16 @@ use fg_primitives::GrandpaApi;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	Block as BlockT, DigestFor, DigestItemFor, DigestItem,
+	Block as BlockT, DigestFor,
 	Header as HeaderT, NumberFor, ProvideRuntimeApi,
 };
-use substrate_primitives::{H256, ed25519, Blake2Hasher};
+use substrate_primitives::{H256, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::{finalize_block, is_descendent_of};
 use crate::justification::GrandpaJustification;
-
-use ed25519::Public as AuthorityId;
 
 /// A block-import handler for GRANDPA.
 ///
@@ -69,7 +67,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
@@ -163,7 +160,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
-	DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
@@ -362,7 +358,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				AppliedChanges::None => None,
 			};
 
-			crate::aux_schema::update_authority_set(
+			crate::aux_schema::update_authority_set::<Block, _, _>(
 				authorities,
 				authorities_change,
 				|insert| block.auxiliary.extend(
@@ -381,7 +377,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		DigestItemFor<Block>: DigestItem<AuthorityId=AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
@@ -546,8 +541,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		justification: Justification,
 		enacts_change: bool,
 	) -> Result<(), ConsensusError> {
-		let justification = GrandpaJustification::decode_and_verify(
+		let justification = GrandpaJustification::decode_and_verify_finalizes(
 			justification,
+			(hash, number),
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),
 		);

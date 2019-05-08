@@ -19,6 +19,9 @@
 
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
+//!
+//! **Important**: This crate is unstable and the API and usage may change.
+//!
 
 mod service;
 mod sync;
@@ -38,12 +41,15 @@ pub mod specialization;
 pub mod test;
 
 pub use chain::Client as ClientHandle;
-pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg, SyncProvider, ExHashT};
+pub use service::{
+	Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg,
+	SyncProvider, ExHashT, ReportHandle,
+};
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
 	identity, multiaddr,
-	ProtocolId, Severity, Multiaddr,
+	ProtocolId, Multiaddr,
 	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
 	NodeKeyConfig, Secret, Secp256k1Secret, Ed25519Secret,
 	build_multiaddr, PeerId, PublicKey

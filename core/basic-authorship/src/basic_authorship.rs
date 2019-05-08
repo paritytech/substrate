@@ -232,7 +232,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);
 						}
-						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
+						Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
 							if is_first {
 								debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
 								unqueue_invalid.push(pending.hash.clone());
@@ -291,20 +291,17 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 mod tests {
 	use super::*;
 
-	use codec::Encode;
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
 	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
-		let tx = Transfer {
+		Transfer {
 			amount: Default::default(),
 			nonce,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
-		};
-		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
-		Extrinsic::Transfer(tx, signature)
+		}.into_signed_tx()
 	}
 
 	#[test]

@@ -17,16 +17,13 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use serde_derive::Serialize;
-#[cfg(feature = "std")]
-use serde_derive::Deserialize;
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
-use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use substrate_primitives::sr25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]

@@ -155,8 +155,8 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 			Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
 			Err(_err @ sandbox::Error::Module) => {
 				// `Error::Module` is returned only if instantiation or linking failed (i.e.
-				// wasm bianry tried to import a function that is not provided by the host).
-				// This shouldn't happen because validation proccess ought to reject such binaries.
+				// wasm binary tried to import a function that is not provided by the host).
+				// This shouldn't happen because validation process ought to reject such binaries.
 				//
 				// Because panics are really undesirable in the runtime code, we treat this as
 				// a trap for now. Eventually, we might want to revisit this.
@@ -200,6 +200,7 @@ mod tests {
 	#[derive(Default)]
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
+		rent_allowance: u64,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
@@ -280,6 +281,14 @@ mod tests {
 
 		fn deposit_event(&mut self, data: Vec<u8>) {
 			self.events.push(data)
+		}
+
+		fn set_rent_allowance(&mut self, rent_allowance: u64) {
+			self.rent_allowance = rent_allowance;
+		}
+
+		fn rent_allowance(&self) -> u64 {
+			self.rent_allowance
 		}
 	}
 

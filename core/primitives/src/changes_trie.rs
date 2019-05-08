@@ -17,7 +17,7 @@
 //! Substrate changes trie configuration.
 
 #[cfg(any(feature = "std", test))]
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use parity_codec::{Encode, Decode};
 
 /// Substrate changes trie configuration.
@@ -53,16 +53,7 @@ impl ChangesTrieConfiguration {
 			return 1;
 		}
 
-		// FIXME: use saturating_pow once stabilized  - https://github.com/rust-lang/rust/issues/48320
-		let mut max_digest_interval = self.digest_interval;
-		for _ in 1..self.digest_levels {
-			max_digest_interval = match max_digest_interval.checked_mul(self.digest_interval) {
-				Some(max_digest_interval) => max_digest_interval,
-				None => return u64::max_value(),
-			}
-		}
-
-		max_digest_interval
+		self.digest_interval.saturating_pow(self.digest_levels)
 	}
 
 	/// Returns Some if digest must be built at given block number.

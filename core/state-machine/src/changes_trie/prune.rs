@@ -17,7 +17,6 @@
 //! Changes trie pruning-related functions.
 
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::Recorder;
 use log::warn;
 use crate::proving_backend::ProvingBackendEssence;
@@ -41,9 +40,9 @@ pub fn oldest_non_pruned_trie(
 	}
 }
 
-/// Prune obslete changes tries. Puning happens at the same block, where highest
+/// Prune obsolete changes tries. Pruning happens at the same block, where highest
 /// level digest is created. Pruning guarantees to save changes tries for last
-/// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_iterval`
+/// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
 /// Returns MemoryDB that contains all deleted changes tries nodes.
 pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
@@ -53,8 +52,6 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	current_block: &AnchorBlockId<H::Out>,
 	mut remove_trie_node: F,
 )
-	where
-		H::Out: HeapSizeOf,
 {
 	// select range for pruning
 	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number) {
@@ -169,10 +166,7 @@ mod tests {
 		storage: &S,
 		min_blocks_to_keep: u64,
 		current_block: u64,
-	) -> HashSet<H::Out>
-		where
-			H::Out: HeapSizeOf,
-	{
+	) -> HashSet<H::Out> {
 		let mut pruned_trie_nodes = HashSet::new();
 		prune(config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
 			|node| { pruned_trie_nodes.insert(node); });
