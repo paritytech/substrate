@@ -25,7 +25,7 @@ use parity_codec::{Encode, Decode};
 #[derive(Debug, Clone, PartialEq, Eq, Default, Encode, Decode)]
 pub struct ChangesTrieConfiguration {
 	/// Interval (in blocks) at which level1-digests are created. Digests are not
-	/// created when this is less or equal to 1.
+	/// created when this is less than or equal to 1.
 	pub digest_interval: u64,
 	/// Maximal number of digest levels in hierarchy. 0 means that digests are not
 	/// created at all (even level1 digests). 1 means only level1-digests are created.
@@ -47,29 +47,22 @@ impl ChangesTrieConfiguration {
 	}
 
 	/// Returns max digest interval. One if digests are not created at all.
-	/// Returns ::std::u64::MAX instead of panic in the case of overflow.
+	/// Returns `::std::u64::MAX` instead of panic in the case of overflow.
 	pub fn max_digest_interval(&self) -> u64 {
 		if !self.is_digest_build_enabled() {
 			return 1;
 		}
 
-		// FIXME: use saturating_pow once stabilized  - https://github.com/rust-lang/rust/issues/48320
-		let mut max_digest_interval = self.digest_interval;
-		for _ in 1..self.digest_levels {
-			max_digest_interval = match max_digest_interval.checked_mul(self.digest_interval) {
-				Some(max_digest_interval) => max_digest_interval,
-				None => return u64::max_value(),
-			}
-		}
+		let max_digest_interval = self.digest_interval.saturating_pow(self.digest_levels);
 
 		max_digest_interval
 	}
 
-	/// Returns Some if digest must be built at given block number.
+	/// Returns `Some(tuple)` if digest must be built at given block number.
 	/// The tuple is:
 	/// (
-	///  digest level
-	///  digest interval (in blocks)
+	///  digest level,
+	///  digest interval (in blocks),
 	///  step between blocks we're interested in when digest is built
 	/// )
 	pub fn digest_level_at_block(&self, block: u64) -> Option<(u32, u64, u64)> {
@@ -88,7 +81,7 @@ impl ChangesTrieConfiguration {
 
 			digest_step = digest_interval;
 			digest_interval = new_digest_interval;
-			current_level = current_level + 1;
+			current_level += 1;
 		}
 
 		Some((
