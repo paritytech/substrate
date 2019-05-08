@@ -64,10 +64,12 @@ pub use core::ptr;
 pub use core::slice;
 pub use core::default;
 pub use core::result;
+pub use core::convert;
 // We are trying to avoid certain things here, such as `core::string`
 // (if you need `String` you most probably doing something wrong, since
 // runtime doesn't require anything human readable).
 
 pub mod collections {
 	pub use alloc::collections::btree_map;
+	pub use alloc::collections::btree_set;
 }
