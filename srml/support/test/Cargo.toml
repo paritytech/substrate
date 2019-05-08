@@ -1,6 +1,6 @@
 [package]
 name = "srml-support-test"
-version = "0.1.0"
+version = "2.0.0"
 authors = ["thiolliere <gui.thiolliere@gmail.com>"]
 edition = "2018"
 

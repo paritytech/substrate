@@ -1,6 +1,6 @@
 [package]
 name = "chain-spec-builder"
-version = "0.1.0"
+version = "2.0.0"
 authors = ["haydn dufrene <haydn.dufrene@gmail.com>"]
 edition = "2018"
 
