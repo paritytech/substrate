@@ -80,7 +80,7 @@ use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
-	Extrinsic, ValidateUnsigned,
+	ValidateUnsigned,
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -243,8 +243,6 @@ where
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
-		let uxt_signature = uxt.is_signed();
-
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
@@ -253,7 +251,7 @@ where
 			return Err(internal::ApplyError::FullBlock);
 		}
 
-		if let (Some(true), Some(sender), Some(index)) = (uxt_signature, xt.sender(), xt.index()) {
+		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if index != &expected_index { return Err(
@@ -318,7 +316,6 @@ where
 		const MISSING_SENDER: i8 = -20;
 		const INVALID_INDEX: i8 = -10;
 
-		let uxt_signature = uxt.is_signed();
 		let encoded_len = uxt.encode().len();
 
 		let xt = match uxt.check(&Default::default()) {
@@ -332,8 +329,8 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		match (uxt_signature, xt.sender(), xt.index()) {
-			(Some(true), Some(sender), Some(index)) => {
+		match (xt.sender(), xt.index()) {
+			(Some(sender), Some(index)) => {
 				// pay any fees
 				if Payment::make_payment(sender, encoded_len).is_err() {
 					return TransactionValidity::Invalid(ApplyError::CantPay as i8)
@@ -360,10 +357,9 @@ where
 					longevity: TransactionLongevity::max_value(),
 				}
 			},
-			(Some(false), _, _) => UnsignedValidator::validate_unsigned(&xt.deconstruct().0),
-			(Some(true), Some(_), None) => TransactionValidity::Invalid(INVALID_INDEX),
-			(Some(true), None, _) => TransactionValidity::Invalid(MISSING_SENDER),
-			(None, _, _) => TransactionValidity::Invalid(UNKNOWN_ERROR),
+			(None, None) => UnsignedValidator::validate_unsigned(&xt.deconstruct().0),
+			(Some(_), None) => TransactionValidity::Invalid(INVALID_INDEX),
+			(None, Some(_)) => TransactionValidity::Invalid(MISSING_SENDER),
 		}
 	}
 

@@ -202,7 +202,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 /// Test transaction, tuple of (sender, index, call)
 /// with index only used if sender is some.
 ///
-/// if sender is some then the transaction is signed otherwise it is unsigned.
+/// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
