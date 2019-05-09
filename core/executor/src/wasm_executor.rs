@@ -599,7 +599,73 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
-    // TODO [ToDr] http externalities.
+	ext_sign(data: *const u8, len: u32, sig_data: *mut u8) -> u32 => {
+		unimplemented!()
+	},
+	ext_timestamp() -> u64 => {
+		unimplemented!()
+	},
+	ext_sleep_until(deadline: u64) => {
+		unimplemented!()
+	},
+	ext_random_seed(data: *mut u8) => {
+		unimplemented!()
+	},
+	ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32) => {
+		unimplemented!()
+	},
+	ext_local_storage_read(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8 => {
+		unimplemented!()
+	},
+	ext_http_request_start(
+		method: *const u8,
+		method_len: u32,
+		url: *const u8,
+		url_len: u32,
+		meta: *const u8,
+		meta_len: u32
+	) -> u32 => {
+		unimplemented!()
+	},
+	ext_http_request_add_header(
+		request_id: u32,
+		name: *const u8,
+		name_len: u32,
+		value: *const u8,
+		value_len: u32
+	) -> u32 => {
+		unimplemented!()
+	},
+	ext_http_request_write_body(
+		request_id: u32,
+		chunk: *const u8,
+		chunk_len: u32,
+		deadline: u64
+	) -> u32 => {
+		unimplemented!()
+	},
+	ext_http_response_wait(
+		ids: *const u32,
+		ids_len: u32,
+		statuses: *mut u32,
+		deadline: u64
+	) => {
+		unimplemented!()
+	},
+	ext_http_response_headers(
+		id: u32,
+		written_out: *mut u32
+	) -> *mut u8 => {
+		unimplemented!()
+	},
+	ext_http_response_read_body(
+		id: u32,
+		buffer: *mut u8,
+		buffer_len: u32,
+		deadline: u64
+	) -> u32 => {
+		unimplemented!()
+	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
 		wasm_ptr: *const u8,

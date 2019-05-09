@@ -334,7 +334,6 @@ pub mod ext {
 		/// Returns 0 if it was successfuly added to the pool, nonzero otherwise.
 		fn ext_submit_transaction(data: *const u8, len: u32) -> u32;
 
-
 		/// Sign a piece of data with authority key.
 		///
 		/// Returns `0` if successful, nonzero otherwise.
@@ -359,7 +358,7 @@ pub mod ext {
 
 		/// Initiaties a http request.
 		///
-		/// If returned value is `u16::max_value` the request couldn't have started.
+		/// If returned value is `u32::max_value` the request couldn't have started.
 		fn ext_http_request_start(
 			method: *const u8,
 			method_len: u8,
@@ -367,29 +366,30 @@ pub mod ext {
 			url_len: u32,
 			meta: *const u8,
 			meta_len: u32
-		) -> u16;
+		) -> u32;
 
 		/// Add a header to the request.
 		///
 		/// Returns `0` if successful, nonzero otherwise.
 		fn ext_http_request_add_header(
-			request_id: u16,
+			request_id: u32,
 			name: *const u8,
 			name_len: u32,
 			value: *const u8,
 			value_len: u32
-		) -> u16;
+		) -> u32;
 
 		/// Write a chunk of request body.
 		///
 		/// Writing an empty chunks finalises the request.
 		/// Passing `0` as deadline blocks forever.
+		/// Returns `0` if successful, nonzero otherwise.
 		fn ext_http_request_write_body(
-			request_id: u16,
+			request_id: u32,
 			chunk: *const u8,
 			chunk_len: u32,
 			deadline: u64
-		) -> bool;
+		) -> u32;
 
 		/// Block and wait for the responses for given requests.
 		///
@@ -399,9 +399,9 @@ pub mod ext {
 		/// Make sure that `statuses` have the same length as ids.
 		/// Passing `0` as deadline blocks forever.
 		fn ext_http_response_wait(
-			ids: *const u16,
+			ids: *const u32,
 			ids_len: u32,
-			statuses: *mut u16,
+			statuses: *mut u32,
 			deadline: u64
 		);
 
@@ -409,7 +409,7 @@ pub mod ext {
 		///
 		/// Resturns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
 		fn ext_http_response_headers(
-			id: u16,
+			id: u32,
 			written_out: *mut u32
 		) -> *mut u8;
 
@@ -420,7 +420,7 @@ pub mod ext {
 		///
 		/// If the returned value is `u32::max_value()` reading body failed.
 		fn ext_http_response_read_body(
-			id: u16,
+			id: u32,
 			buffer: *mut u8,
 			buffer_len: u32,
 			deadline: u64
@@ -806,10 +806,10 @@ impl OffchainApi for () {
 				meta.len() as u32,
 			);
 
-			if result == u16::max_value() {
+			if result > u16::max_value() as u32 {
 				Err(())
 			} else {
-				Ok(offchain::HttpRequestId(result))
+				Ok(offchain::HttpRequestId(result as u16))
 			}
 		}
 	}
@@ -820,7 +820,7 @@ impl OffchainApi for () {
 
 		unsafe {
 			let result = ext_http_request_add_header.get()(
-				request_id.0,
+				request_id.0 as u32,
 				name.as_ptr(),
 				name.len() as u32,
 				value.as_ptr(),
@@ -842,23 +842,23 @@ impl OffchainApi for () {
 	) -> Result<(), ()> {
 		let res = unsafe {
 			ext_http_request_write_body.get()(
-				request_id.0,
+				request_id.0 as u32,
 				chunk.as_ptr(),
 				chunk.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),
 			)
 		};
 
-		if res { Ok(()) } else { Err(()) }
+		if res == 0 { Ok(()) } else { Err(()) }
 	}
 
 	fn http_response_wait(
 		ids: &[offchain::HttpRequestId],
 		deadline: Option<offchain::Timestamp>
 	) -> Vec<offchain::HttpRequestStatus> {
-		let ids = ids.iter().map(|x| x.0).collect::<Vec<_>>();
+		let ids = ids.iter().map(|x| x.0 as u32).collect::<Vec<_>>();
 		let mut statuses = Vec::new();
-		statuses.resize(ids.len(), 0u16);
+		statuses.resize(ids.len(), 0u32);
 
 		unsafe {
 			ext_http_response_wait.get()(
@@ -871,7 +871,7 @@ impl OffchainApi for () {
 
 		statuses
 			.into_iter()
-			.map(|status| offchain::HttpRequestStatus::from_u16(status).unwrap_or_else(|| offchain::HttpRequestStatus::Unknown))
+			.map(|status| offchain::HttpRequestStatus::from_u32(status).unwrap_or_else(|| offchain::HttpRequestStatus::Unknown))
 			.collect()
 	}
 
@@ -881,7 +881,7 @@ impl OffchainApi for () {
 		let mut len = 0u32;
 		let raw_result = unsafe {
 			let ptr = ext_http_response_headers.get()(
-				request_id.0,
+				request_id.0 as u32,
 				&mut len,
 			);
 			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
@@ -900,7 +900,7 @@ impl OffchainApi for () {
 	) -> Result<usize, ()> {
 		unsafe {
 			let res = ext_http_response_read_body.get()(
-				request_id.0,
+				request_id.0 as u32,
 				buffer.as_mut_ptr(),
 				buffer.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),

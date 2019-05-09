@@ -38,16 +38,16 @@ pub enum HttpRequestStatus {
 }
 
 impl HttpRequestStatus {
-	/// Parse u16 as `RequestStatus`.
+	/// Parse u32 as `RequestStatus`.
 	///
 	/// The first hundred of codes indicate internal states.
 	/// The rest are http response status codes.
-	pub fn from_u16(status: u16) -> Option<Self> {
+	pub fn from_u32(status: u32) -> Option<Self> {
 		match status {
 			0 => Some(HttpRequestStatus::Unknown),
 			10 => Some(HttpRequestStatus::DeadlineReached),
 			20 => Some(HttpRequestStatus::Timeout),
-			100...999 => Some(HttpRequestStatus::Finished(status)),
+			100...999 => Some(HttpRequestStatus::Finished(status as u16)),
 			_ => None,
 		}
 	}
