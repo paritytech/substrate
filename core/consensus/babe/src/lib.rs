@@ -26,6 +26,9 @@
 #![forbid(unsafe_code, missing_docs)]
 #![deny(warnings)]
 extern crate core;
+mod digest;
+use digest::CompatibleDigestItem;
+pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ExtraVerification;
@@ -36,7 +39,7 @@ use runtime_primitives::traits::{
 };
 use std::{sync::Arc, u64, fmt::{Debug, Display}};
 use runtime_support::serde::{Serialize, Deserialize};
-use parity_codec::{Decode, Encode, Input};
+use parity_codec::{Decode, Encode};
 use primitives::{
 	crypto::Pair,
 	sr25519::{Public, Signature, self},
@@ -47,10 +50,8 @@ use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS
 use schnorrkel::{
 	keys::Keypair,
 	vrf::{
-		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
-		VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+		VRFProof, VRFProofBatchable, VRFInOut,
 	},
-	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
 use authorities::AuthoritiesApi;
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
@@ -77,82 +78,6 @@ use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
-/// A BABE pre-digest.  It includes:
-///
-/// * The public key of the author.
-/// * The VRF proof.
-/// * The VRF output.
-/// * The slot number.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BabePreDigest {
-	vrf_output: VRFOutput,
-	proof: VRFProof,
-	author: Public,
-	slot_num: u64,
-}
-
-/// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
-
-macro_rules! babe_assert_eq {
-	($a: expr, $b: expr) => {
-		{
-			let ref a = $a;
-			let ref b = $b;
-			if a != b {
-				error!(
-					target: "babe",
-					"Expected {:?} to equal {:?}, but they were not",
-					stringify!($a),
-					stringify!($b),
-				);
-				assert_eq!(a, b);
-			}
-		}
-	};
-}
-
-type TmpDecode = (
-	[u8; VRF_OUTPUT_LENGTH],
-	[u8; VRF_PROOF_LENGTH],
-	[u8; PUBLIC_KEY_LENGTH],
-	u64,
-);
-
-impl Encode for BabePreDigest {
-	fn encode(&self) -> Vec<u8> {
-		let tmp: TmpDecode = (
-			*self.vrf_output.as_bytes(),
-			self.proof.to_bytes(),
-			self.author.0,
-			self.slot_num,
-		);
-		let encoded = parity_codec::Encode::encode(&tmp);
-		if cfg!(any(test, debug_assertions)) {
-			debug!(target: "babe", "Checking if encoding was correct");
-			let decoded_version = Self::decode(&mut &encoded[..])
-				.expect("we just encoded this ourselves, so it is correct; qed");
-			babe_assert_eq!(decoded_version.proof, self.proof);
-			babe_assert_eq!(decoded_version.vrf_output, self.vrf_output);
-			babe_assert_eq!(decoded_version.author, self.author);
-			babe_assert_eq!(decoded_version.slot_num, self.slot_num);
-			debug!(target: "babe", "Encoding was correct")
-		}
-		encoded
-	}
-}
-
-impl Decode for BabePreDigest {
-	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, proof, public_key, slot_num): TmpDecode = Decode::decode(i)?;
-		Some(BabePreDigest {
-			proof: VRFProof::from_bytes(&proof).ok()?,
-			vrf_output: VRFOutput::from_bytes(&output).ok()?,
-			author: Public(public_key),
-			slot_num,
-		})
-	}
-}
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -190,55 +115,6 @@ impl Config {
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 	consensus_common::ErrorKind::InherentData(err.into()).into()
-}
-
-/// A digest item which is usable with BABE consensus.
-pub trait CompatibleDigestItem: Sized {
-	/// Construct a digest item which contains a BABE pre-digest.
-	fn babe_seal(signature: BabePreDigest) -> Self;
-
-	/// If this item is an BABE pre-digest, return it.
-	fn as_babe_seal(&self) -> Option<BabePreDigest>;
-
-	/// If this item is a BABE signature, return it.
-	fn check_babe_signature(&self) -> Option<Signature>;
-}
-
-impl<T, Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, T>
-	where T: Debug, Hash: Debug
-{
-	/// Construct a digest item which contains a slot number and a signature
-	/// on the hash.
-	fn babe_seal(signature: BabePreDigest) -> Self {
-		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
-	}
-
-	/// If this item is an BABE seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabePreDigest> {
-		match self {
-			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => {
-				match Decode::decode(&mut &seal[..]) {
-					s @ Some(_) => s,
-					s @ None => {
-						info!(target: "babe", "Failed to decode {:?}", seal);
-						s
-					}
-				}
-			}
-			_ => {
-				info!(target: "babe", "Invalid consensus: {:?}!", self);
-				None
-			}
-		}
-	}
-
-	fn check_babe_signature(&self) -> Option<Signature> {
-		match self {
-			generic::DigestItem::Consensus(BABE_ENGINE_ID, signature)
-				if signature.len() == SIGNATURE_LENGTH => Some(Signature::from_slice(&signature[..])),
-			_ => None,
-		}
-	}
 }
 
 struct BabeSlotCompatible;
@@ -521,7 +397,7 @@ impl<
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(pre_hash.as_ref());
-			let signature_digest_item = generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.0[..].to_owned());
+			let signature_digest_item = generic::DigestItem::Seal2(BABE_ENGINE_ID, signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -567,7 +443,7 @@ impl<
 /// The seal must be the last digest.  Otherwise, the whole header is considered
 /// unsigned.  This is required for security and must not be changed.
 ///
-/// This digest item will always return `Some` when used with `as_babe_seal`.
+/// This digest item will always return `Some` when used with `as_babe_pre_digest`.
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
@@ -596,7 +472,7 @@ fn check_header<
 	for i in header.digest().logs() {
 		num_logs += 1;
 		trace!(target: "babe", "Checking log {:?} in header {:?}", i, hash);
-		match i.as_babe_seal() {
+		match i.as_babe_pre_digest() {
 			s @ Some(_) => if pre_digest_seal.is_some() {
 				info!(target: "babe", "Multiple BABE pre-runtime headers, rejecting!");
 				return Err("Multiple BABE pre-runtime headers, rejecting!".to_string())
@@ -618,7 +494,7 @@ fn check_header<
 		format!("Header {:?} has no BABE pre-digest", hash)
 	})?;
 
-	let signature = digest_item.check_babe_signature().ok_or_else(|| {
+	let signature = digest_item.as_babe_seal().ok_or_else(|| {
 		debug!(target: "babe", "Header {:?} has a bad seal", hash);
 		format!("Header {:?} has a bad seal", hash)
 	})?;
@@ -633,7 +509,7 @@ fn check_header<
 		let pre_hash = header.hash();
 		let to_sign = pre_hash;
 
-		if sr25519::Pair::verify(&signature, to_sign.as_ref(), &author) {
+		if sr25519::Pair::verify(signature, to_sign.as_ref(), &author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -764,7 +640,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
-				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_seal()
+				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
@@ -880,10 +756,10 @@ fn make_transcript(
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"genesis block hash", genesis_hash);
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript.append_message(b"slot number", &slot_number.to_le_bytes());
+	transcript.append_message(b"genesis block hash", genesis_hash);
+	transcript.append_message(b"current epoch", &epoch.to_le_bytes());
+	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }
 
@@ -940,7 +816,8 @@ mod tests {
 	use futures::stream::Stream;
 	use log::debug;
 	use std::time::Duration;
-
+	use generic::DigestItem;
+	type Item = DigestItem<Hash, Public, Signature>;
 	type Error = client::error::Error;
 
 	type TestClient = client::Client<
@@ -1121,25 +998,37 @@ mod tests {
 
 	#[test]
 	#[allow(deprecated)]
-	#[should_panic]
 	fn old_seals_rejected() {
 		drop(env_logger::try_init());
-		generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Seal(0, Signature([0; 64])).as_babe_seal().unwrap();
-	}
-
-	#[test]
-	fn wrong_number_rejected() {
-		drop(env_logger::try_init());
-		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus([0; 4], Signature([0; 64]).encode());
+		let sig = sr25519::Pair::generate().sign(b"");
+		let bad_seal: Item = DigestItem::Seal(0, sig);
+		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_none())
 	}
 
 	#[test]
-	#[should_panic]
-	fn bad_seal_rejected() {
+	fn wrong_consensus_engine_id_rejected() {
 		drop(env_logger::try_init());
-		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus(BABE_ENGINE_ID, Signature([0; 64]).encode());
-		bad_seal.as_babe_seal().expect("we should not decode this successfully");
+		let sig = sr25519::Pair::generate().sign(b"");
+		let bad_seal: Item = DigestItem::Seal2([0; 4], sig);
+		assert!(bad_seal.as_babe_pre_digest().is_none());
+		assert!(bad_seal.as_babe_seal().is_none())
+	}
+
+	#[test]
+	fn malformed_pre_digest_rejected() {
+		drop(env_logger::try_init());
+		let bad_seal: Item = DigestItem::Seal2(BABE_ENGINE_ID, Signature([0; 64]));
+		assert!(bad_seal.as_babe_pre_digest().is_none());
+	}
+
+	#[test]
+	fn sig_is_not_pre_digest() {
+		drop(env_logger::try_init());
+		let sig = sr25519::Pair::generate().sign(b"");
+		let bad_seal: Item = DigestItem::Seal2(BABE_ENGINE_ID, sig);
+		assert!(bad_seal.as_babe_pre_digest().is_none());
+		assert!(bad_seal.as_babe_seal().is_some())
 	}
 
 	#[test]
