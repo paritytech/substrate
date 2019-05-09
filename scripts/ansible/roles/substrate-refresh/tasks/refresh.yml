@@ -7,6 +7,7 @@
     src: "{{ cache_dir }}/{{ app_name }}"
     dest: "{{ binary_dir }}/{{ app_name }}"
     remote_src: yes
+    owner: "{{ user }}"
     mode: 0755
 - name: read systemd config changes
   systemd:

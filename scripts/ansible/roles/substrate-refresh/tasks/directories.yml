@@ -2,7 +2,11 @@
   file:
     path: "{{ cache_dir }}"
     state: directory
+    owner: "{{ user }}"
+    group: "{{ user }}"
 - name: create binary dir
   file:
     path: "{{ binary_dir }}"
     state: directory
+    owner: "{{ user }}"
+    group: "{{ user }}"
