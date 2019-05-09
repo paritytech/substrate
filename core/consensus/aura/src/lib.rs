@@ -833,8 +833,8 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData, _: Duration, _: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
-			self.1.new_block().unwrap().bake().map_err(|e| e.into())
+		fn propose(&self, _: InherentData, _: Duration, digests: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
+			self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 		}
 	}
 

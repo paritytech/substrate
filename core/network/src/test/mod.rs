@@ -508,7 +508,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	{
 		let mut at = self.client.header(&at).unwrap().unwrap().hash();
 		for _  in 0..count {
-			let builder = self.client.new_block_at(&BlockId::Hash(at)).unwrap();
+			let builder = self.client.new_block_at(&BlockId::Hash(at), Default::default()).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!(

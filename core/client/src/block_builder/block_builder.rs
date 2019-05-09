@@ -19,10 +19,8 @@ use std::vec::Vec;
 use parity_codec::Encode;
 use runtime_primitives::ApplyOutcome;
 use runtime_primitives::generic::BlockId;
-use log::debug;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
-	Digest,
 };
 use primitives::{H256, ExecutionContext};
 use crate::blockchain::HeaderBackend;
@@ -43,10 +41,11 @@ where
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
 	A::Api: BlockBuilderApi<Block>,
 {
-	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(api: &'a A) -> error::Result<Self> {
+	/// Create a new instance of builder from the given client, building on the
+	/// latest block.
+	pub fn new(api: &'a A, inherent_digests: DigestFor<Block>) -> error::Result<Self> {
 		api.info().and_then(|i|
-			Self::at_block(&BlockId::Hash(i.best_hash), api, false)
+			Self::at_block(&BlockId::Hash(i.best_hash), api, false, inherent_digests)
 		)
 	}
 
@@ -59,7 +58,8 @@ where
 	pub fn at_block(
 		block_id: &BlockId<Block>,
 		api: &'a A,
-		proof_recording: bool
+		proof_recording: bool,
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<Self> {
 		let number = api.block_number_from_id(block_id)?
 			.ok_or_else(|| error::Error::UnknownBlock(format!("{}", block_id)))?
@@ -67,7 +67,7 @@ where
 
 		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::Error::UnknownBlock(format!("{}", block_id)))?;
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
+		let mut header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
 			Default::default(),
@@ -84,6 +84,8 @@ where
 		api.initialize_block_with_context(
 			block_id, ExecutionContext::BlockConstruction, &header
 		)?;
+
+		header.set_digest(inherent_digests);
 
 		Ok(BlockBuilder {
 			header,
@@ -115,15 +117,6 @@ where
 				}
 			}
 		})
-	}
-
-	/// Set the digest of `self` to `digest`.
-	pub fn push_digest(&mut self, digest: DigestFor<Block>) {
-		assert!(self.header.digest().logs().len() == 0, "We never call this method if there are existing digests; qed");
-		let num_logs = digest.logs().len();
-		debug!(target: "import", "Setting {} digests!", num_logs);
-		self.header.set_digest(digest);
-		assert!(self.header.digest().logs().len() == num_logs, "we will have the correct number of digests here; qed")
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

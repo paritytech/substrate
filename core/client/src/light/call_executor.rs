@@ -525,7 +525,7 @@ mod tests {
 		for _ in 1..3 {
 			remote_client.import_justified(
 				BlockOrigin::Own,
-				remote_client.new_block().unwrap().bake().unwrap(),
+				remote_client.new_block(Default::default()).unwrap().bake().unwrap(),
 				Default::default(),
 			).unwrap();
 		}

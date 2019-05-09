@@ -580,7 +580,7 @@ mod tests {
 		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();
 
 		// import the block
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.bake().unwrap();
 		let id = BlockId::hash(block.header().hash());

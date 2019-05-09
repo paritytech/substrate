@@ -43,9 +43,6 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error>;
-	/// Push an inherent digest onto the block.
-	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>);
-
 }
 
 /// Local client abstraction for the consensus.
@@ -62,6 +59,7 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
+		inherent_digests: DigestFor<Self::Block>,
 		build_ctx: F,
 	) -> Result<Self::Block, error::Error>;
 }
@@ -78,10 +76,6 @@ where
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
-	}
-
-	fn set_inherent_digest(&mut self, inherent_digest: DigestFor<Block>) {
-		client::block_builder::BlockBuilder::push_digest(self, inherent_digest)
 	}
 }
 
@@ -100,9 +94,10 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
+		inherent_digests: DigestFor<Self::Block>,
 		mut build_ctx: F,
 	) -> Result<Self::Block, error::Error> {
-		let mut block_builder = self.new_block_at(at)?;
+		let mut block_builder = self.new_block_at(at, inherent_digests)?;
 
 		let runtime_api = self.runtime_api();
 		// We don't check the API versions any further here since the dispatch compatibility
@@ -219,6 +214,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		let block = self.client.build_block(
 			&self.parent_id,
 			inherent_data,
+			inherent_digests.clone(),
 			|block_builder| {
 				// Add inherents from the internal pool
 				let inherents = self.inherents_pool.drain();
@@ -228,10 +224,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
 					}
 				}
-
-				// Add inherent digests
-				block_builder.set_inherent_digest(inherent_digests.clone());
-
 				// proceed with transactions
 				let mut is_first = true;
 				let mut skipped = 0;

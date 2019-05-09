@@ -969,9 +969,7 @@ mod tests {
 		type Create = Result<TestBlock, Error>;
 
 		fn propose(&self, _: InherentData, _: Duration, digests: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
-			let mut block = self.1.new_block().unwrap();
-			block.push_digest(digests);
-			block.bake().map_err(|e| e.into())
+			self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 		}
 	}
 
