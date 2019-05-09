@@ -82,6 +82,7 @@ fn generate_impl_call(
 				};
 			)*
 
+			#[allow(deprecated)]
 			let output = <#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*);
 			#c::runtime_api::Encode::encode(&output)
 		)

@@ -4165,6 +4165,7 @@ dependencies = [
  "substrate-primitives 1.0.0",
  "substrate-test-client 1.0.0",
  "tokio 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
