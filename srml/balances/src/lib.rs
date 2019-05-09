@@ -105,7 +105,7 @@
 //! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 //!
 //! # fn main() {}
-//!```
+//! ```
 //!
 //! The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
 //!

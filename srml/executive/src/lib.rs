@@ -422,8 +422,16 @@ mod tests {
 	impl ValidateUnsigned for Runtime {
 		type Call = Call<Runtime>;
 
-		fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
-			TransactionValidity::Invalid(0)
+		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+			match call {
+				Call::set_balance(_, _, _) => TransactionValidity::Valid {
+					priority: 0,
+					requires: vec![],
+					provides: vec![],
+					longevity: std::u64::MAX,
+				},
+				_ => TransactionValidity::Invalid(0),
+			}
 		}
 	}
 
@@ -549,5 +557,22 @@ mod tests {
 
 		run_test(false);
 		run_test(true);
+	}
+
+	#[test]
+	fn validate_unsigned() {
+		let xt = primitives::testing::TestXt(None, 0, Call::set_balance(33, 69, 69));
+		let valid = TransactionValidity::Valid {
+			priority: 0,
+			requires: vec![],
+			provides: vec![],
+			longevity: 18446744073709551615
+		};
+		let mut t = new_test_ext();
+
+		with_externalities(&mut t, || {
+			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
+			assert_eq!(Executive::apply_extrinsic(xt), Ok(ApplyOutcome::Fail));
+		});
 	}
 }
