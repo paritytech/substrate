@@ -152,11 +152,12 @@ decl_module! {
 			let last_active = activity.last_active;
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
 			ensure!(assumed_vote_index > last_active + Self::inactivity_grace_period(), "cannot reap during grace period");
-			let voters = Self::all_voters();
 			let reporter_index = reporter_index as usize;
 			let who_index = who_index as usize;
-			ensure!(reporter_index < voters.len() && voters[reporter_index].0 == reporter, "bad reporter index");
-			ensure!(who_index < voters.len() && voters[who_index].0 == who, "bad target index");
+			let maybe_voter = Self::voter_at(reporter_index);
+			let maybe_who = Self::voter_at(who_index);
+			ensure!(maybe_voter.is_some() && maybe_voter.unwrap_or_default().0 == reporter, "bad reporter index");
+			ensure!(maybe_who.is_some() && maybe_who.unwrap_or_default().0 == who, "bad target index");
 
 			// will definitely kill one of reporter or who now.
 
@@ -199,12 +200,10 @@ decl_module! {
 
 			ensure!(!Self::presentation_active(), "cannot retract when presenting");
 			ensure!(<ActivityInfoOf<T>>::exists(&who), "cannot retract non-voter");
-			// TODO: still can be optimized. We are reading all voters from storage to get the total size.
-			// Can just store a counter instead. Requires a small change to `voters[index].0 == who`.
-			let voters = Self::all_voters();
 			let index = index as usize;
-			ensure!(index < voters.len(), "retraction index invalid");
-			ensure!(voters[index].0 == who, "retraction index mismatch");
+			let maybe_who = Self::voter_at(index);
+			ensure!(maybe_who.is_some(), "retraction index invalid");
+			ensure!(maybe_who.unwrap_or_default().0 == who, "retraction index mismatch");
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, Self::voting_bond());
@@ -260,7 +259,7 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let voters = Self::all_voters();
-			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(voters.len() as u64);
+			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(Self::voter_count() as u64);
 			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
@@ -396,6 +395,8 @@ decl_storage! {
 		pub Voters get(voters): linked_map SetIndex => Vec<(T::AccountId, BalanceOf<T>)>;
 		/// the next free set to store a voter in.
 		pub NextVoterSet get(next_voter_set): SetIndex = 0;
+		/// Current number of Voters.
+		pub VoterCount get(voter_count): SetIndex = 0;
 		/// The present candidate list.
 		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
 		/// Current number of active candidates
@@ -491,17 +492,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove a voter at a specified index from the system.
-	///
-	/// Trusts that Self::voters()[index] != voter.
 	fn remove_voter(voter: &T::AccountId, index: usize) {
-		let set_index = SetIndex::sa(index / VOTER_SET_SIZE);
-		let vec_index = index % VOTER_SET_SIZE;
+		let (set_index, vec_index) = Self::split_index(index);
 		let mut set = Self::voters(set_index);
 		// TODO: panics if index is out of bound or wrong. Index is most ofter user-provided.
 		set.swap_remove(vec_index);
 		// There is room for one new voter in the current set.
 		<NextVoterSet<T>>::put(set_index);
 		<Voters<T>>::insert(set_index, set);
+		<VoterCount<T>>::mutate(|c| *c = *c - 1);
 		<ApprovalsOf<T>>::remove(voter);
 		<ActivityInfoOf<T>>::remove(voter);
 		<OffsetPotOf<T>>::remove(voter);
@@ -566,6 +565,7 @@ impl<T: Trait> Module<T> {
 				<NextVoterSet<T>>::put(next_index);
 			}
 			<Voters<T>>::insert(current_index, set);
+			<VoterCount<T>>::mutate(|c| *c = *c + 1);
 		}
 
 		T::Currency::set_lock(
@@ -681,12 +681,37 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Return a concatenated vector over all voter sets.
+	/// TODO: remove this or move to test module.
 	fn all_voters() -> Vec<(T::AccountId, BalanceOf<T>)> {
 		let mut all = <Voters<T>>::get(0);
 		<Voters<T>>::enumerate().skip(1).for_each(|(_, set)| all.extend(set));
 		all
 	}
 
+	/// Get the set and vector index of a global voter index.
+	fn split_index(index: usize) ->(SetIndex, usize) {
+		let set_index = SetIndex::sa(index / VOTER_SET_SIZE);
+		let vec_index = index % VOTER_SET_SIZE;
+		(set_index, vec_index)
+	}
+
+	/// Shorthand for fetching a voter at a specific (global) index.
+	///
+	/// NOTE: this function is used for checking indexes. Yet, it does not take holes into account.
+	/// This means that any account submitting an index at any point in time should submit:
+	/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in the
+	/// first `set_index` sets.
+	fn voter_at(index: usize) -> Option<(T::AccountId, BalanceOf<T>)> {
+		let (set_index, vec_index) = Self::split_index(index);
+		let set = Self::voters(set_index);
+		if vec_index < set.len() {
+			Some(set[vec_index].clone())
+		} else {
+			None
+		}
+	}
+
+	/// Search for the set containing account id indicated by `who`.
 	fn set_for(who: &T::AccountId) -> Option<(SetIndex, usize, Vec<(T::AccountId, BalanceOf<T>)>)> {
 		for (index, set) in <Voters<T>>::enumerate() {
 			if let Some(pos) = set.iter().position(|a| a.0 == *who) {
@@ -705,7 +730,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// In other words, this function returns everything extra that should be added
 	/// to a voter's stake value to get the correct weight. Indeed, zero is
-	/// returned if T is zero.
+	/// returned if `t` is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
 		let decay_ratio = BalanceOf::<T>::sa(Self::decay_ratio() as u64);
 		if t > 150 { return stake * decay_ratio }
