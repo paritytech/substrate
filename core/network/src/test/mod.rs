@@ -673,7 +673,7 @@ pub trait TestNetFactory: Sized {
 		).unwrap();
 
 		std::thread::spawn(move || {
-			tokio::run(futures::future::poll_fn(move || {
+			tokio::runtime::current_thread::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
 					match msg {
 						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) =>
