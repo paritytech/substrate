@@ -1,0 +1,13 @@
+---
+- hosts: ff
+  gather_facts: False
+  pre_tasks:
+    - raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+    - setup: # aka gather_facts
+  become: yes
+  become_user: root
+  vars_files:
+    - group_vars/ff-refresh-env.yml
+  roles:
+    - substrate-systemd
+    - substrate-refresh
