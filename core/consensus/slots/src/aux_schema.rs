@@ -65,8 +65,11 @@ impl<H> EquivocationProof<H> {
 }
 
 /// Checks if the header is an equivocation and returns the proof in that case.
+///
+/// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
 pub fn check_equivocation<C, H, P>(
 	backend: &Arc<C>,
+	slot_now: u64,
 	slot: u64,
 	header: H,
 	signer: P,
@@ -74,8 +77,12 @@ pub fn check_equivocation<C, H, P>(
 	where
 		H: Header,
 		C: AuxStore,
-		P: Encode + Decode + PartialEq,
+		P: Encode + Decode + PartialEq + std::fmt::Debug,
 {
+	if slot_now - slot > MAX_SLOT_CAPACITY {
+		return Ok(None)
+	}
+
 	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
@@ -98,12 +105,11 @@ pub fn check_equivocation<C, H, P>(
 
 	let mut keys_to_delete = vec![];
 
-	if slot % PRUNING_BOUND == 0 {
+	if slot_now % PRUNING_BOUND == 0 {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
 
-		let first_slot = slot - PRUNING_BOUND;
-		let last_slot = slot - MAX_SLOT_CAPACITY;
-
+		let first_slot = slot_now - PRUNING_BOUND;
+		let last_slot = slot_now - MAX_SLOT_CAPACITY;
 		for s in first_slot..last_slot {
 			let mut p = prefix.clone();
 			s.using_encoded(|s| p.extend(s));

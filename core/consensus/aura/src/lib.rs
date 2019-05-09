@@ -501,6 +501,7 @@ fn check_header<C, B: Block, P: Pair>(
 		if P::verify(&sig, &to_sign[..], public) {
 			match check_equivocation::<_, _, <P as Pair>::Public>(
 				client,
+				slot_now,
 				slot_num,
 				header.clone(),
 				public.clone()
@@ -526,6 +527,7 @@ fn check_header<C, B: Block, P: Pair>(
 					Ok(CheckedHeader::Checked(header, digest_item))
 				},
 				Err(e) => {
+					println!("{}", e.to_string());
 					Err(e.to_string())
 				},
 			}
@@ -841,8 +843,7 @@ mod tests {
 	use test_client;
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
-	use slots::MAX_SLOT_CAPACITY;
-
+	use slots::{MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 	type Error = client::error::Error;
 
@@ -1038,33 +1039,31 @@ mod tests {
 		let pair = sr25519::Pair::generate();
 		let public = pair.public();
 		let authorities = vec![public.clone()];
-		
-		let slot_num = 3;
 
-		// Construct one header.
-		let (header1, header1_hash) = create_header(slot_num, 1, &pair);
-
-		// Construct a different header.
-		let (header2, header2_hash) = create_header(slot_num, 2, &pair);
-
-		// Construct a header with high slot number.
-		let (header3, header3_hash) = create_header(slot_num + MAX_SLOT_CAPACITY, 3, &pair);
-
+		let (header1, header1_hash) = create_header(1, 1, &pair);
+		let (header2, header2_hash) = create_header(1, 2, &pair);
+		let (header3, header3_hash) = create_header(2, 2, &pair);
+		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 2, 3, &pair);
+		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 2, 4, &pair);
 
 		type B = RawBlock<ExtrinsicWrapper<u64>>;
 		type P = sr25519::Pair;
-		let high_slot = 2000;
 
 		let c = Arc::new(client);
 
 		// It's ok to sign same headers.
-		assert!(check_header::<_, B, P>(&c, high_slot, header1.clone(), header1_hash, &authorities, false).is_ok());
-		assert!(check_header::<_, B, P>(&c, high_slot, header1, header1_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 1, header1.clone(), header1_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 1, header1, header1_hash, &authorities, false).is_ok());
 
 		// But not two different headers at the same slot.
-		assert!(check_header::<_, B, P>(&c, high_slot, header2, header2_hash, &authorities, false).is_err());
+		assert!(check_header::<_, B, P>(&c, 1, header2, header2_hash, &authorities, false).is_err());
 
-		// We should ignore old slot headers.
-		assert!(check_header::<_, B, P>(&c, high_slot, header3, header3_hash, &authorities, false).is_ok());
+		// Different slot is ok.
+		assert!(check_header::<_, B, P>(&c, 2, header3.clone(), header3_hash, &authorities, false).is_ok());
+		
+		// Pruning works.
+		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND, header4, header4_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 1, header5, header5_hash, &authorities, false).is_err());
+		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header3, header3_hash, &authorities, false).is_ok());
 	}
 }

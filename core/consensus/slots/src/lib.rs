@@ -26,7 +26,7 @@ mod slots;
 mod aux_schema;
 
 pub use slots::{slot_now, SlotInfo, Slots};
-pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY};
+pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use client::ChainHead;
 use codec::{Decode, Encode};
