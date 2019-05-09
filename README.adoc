@@ -309,9 +309,11 @@ cargo run --release \-- \
 
 Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
-=== Joining the Emberic Elm Testnet
+[[flaming-fir]]
+=== Joining the Flaming Fir Testnet
 
-Emberic Elm is the new testnet for Substrate 1.0. Please note that 1.0 is not compatible with the BBQ-Birch, Charred-Cherry, or Dried-Danta testnets. Ensure you have the dependencies listed above before compiling.
+Flaming Fir is the new testnet for Substrate master (2.0). Please note that master is not compatible with the BBQ-Birch, Charred-Cherry, Dried-Danta or Emberic-Elm testnets. Ensure you have the dependencies listed above before compiling.
+The master branch might have breaking changes as development progresses, therefore you should make sure you have a reasonably updated client when trying to sync Flaming Fir.
 
 [source, shell]
 ----
@@ -339,8 +341,21 @@ For example, you can choose a custom node name:
 [source, shell]
 cargo run --release \-- --name my_custom_name
 
-If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Emberic%20Elm
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Flaming%20Fir
 
+=== Joining the Emberic Elm Testnet
+
+Emberic Elm is the testnet for Substrate 1.0. Please note that 1.0 is not compatible with the BBQ-Birch, Charred-Cherry, Dried-Danta or Flaming-Fir testnets.
+In order to join the Emberic Elm testnet you should build from the `v1.0` branch. Ensure you have the dependencies listed above before compiling.
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+git checkout -b v1.0 origin/v1.0
+----
+
+You can then follow the same steps for building and running as described above in <<flaming-fir>>.
 
 == Documentation
 
