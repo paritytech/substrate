@@ -34,7 +34,7 @@ use runtime_primitives::traits::{As, BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
 	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
-	traits::Currency, StorageMap,
+	traits::Currency, StorageMap, StorageValue
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use substrate_primitives::storage::well_known_keys;
@@ -119,19 +119,22 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 	}
 }
 
-static KEY_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
 pub struct DummyTrieIdGenerator;
 impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
 		use substrate_primitives::storage::well_known_keys;
+
+		let new_seed = <super::AccountCounter<Test>>::mutate(|v| {
+			*v = v.wrapping_add(1);
+			*v
+		});
 
 		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		let mut res = vec![];
 		res.extend_from_slice(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
 		res.extend_from_slice(b"default:");
 		res.extend_from_slice(&account_id.to_le_bytes());
-		res.extend_from_slice(&KEY_COUNTER.fetch_add(1, Ordering::Relaxed).to_be_bytes());
+		res.extend_from_slice(&new_seed.to_be_bytes());
 		res
 	}
 }
