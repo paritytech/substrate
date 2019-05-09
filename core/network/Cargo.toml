@@ -9,32 +9,32 @@ edition = "2018"
 [lib]
 
 [dependencies]
-crossbeam-channel = "0.3.6"
-log = "0.4"
-parking_lot = "0.7.1"
-error-chain = "0.12"
-bitflags = "1.0"
-futures = "0.1.17"
-linked-hash-map = "0.5"
+crossbeam-channel = "0.3.8"
+log = "0.4.6"
+parking_lot = "0.8.0"
+error-chain = "0.12.0"
+bitflags = "1.0.4"
+futures = "0.1.26"
+linked-hash-map = "0.5.2"
 linked_hash_set = "0.1.3"
-lru-cache = "0.1.1"
-rustc-hex = "2.0"
-rand = "0.6"
+lru-cache = "0.1.2"
+rustc-hex = "2.0.1"
+rand = "0.6.5"
 fork-tree = { path = "../../core/util/fork-tree" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-parity-codec = { version = "3.3", features = ["derive"] }
+parity-codec = { version = "3.5.1", features = ["derive"] }
 network_libp2p = { package = "substrate-network-libp2p", path = "../../core/network-libp2p" }
 peerset = { package = "substrate-peerset", path = "../../core/peerset" }
-tokio = "0.1.11"
+tokio = "0.1.19"
 keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }
 test_client = { package = "substrate-test-client", path = "../../core/test-client", optional = true }
-void = "1.0"
+void = "1.0.2"
 
 [dev-dependencies]
-env_logger = { version = "0.6" }
+env_logger = "0.6.1"
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 test_client = { package = "substrate-test-client", path = "../../core/test-client" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common", features = ["test-helpers"] }

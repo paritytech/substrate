@@ -6,14 +6,14 @@ description = "Telemetry utils"
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.7.1"
-lazy_static = "1.0"
-log = "0.4"
-rand = "0.6"
-serde = { version = "1.0.81", features = ["derive"] }
-serde_json = "1.0"
-slog = { version = "^2", features = ["nested-values"] }
-slog-json = { version = "^2", features = ["nested-values"] }
-slog-async = { version = "^2", features = ["nested-values"] }
-slog-scope = "^4"
-ws = { version = "^0.7", features = ["ssl"] }
+parking_lot = "0.8.0"
+lazy_static = "1.3.0"
+log = "0.4.6"
+rand = "0.6.5"
+serde = { version = "1.0.91", features = ["derive"] }
+serde_json = "1.0.39"
+slog = { version = "2.4.1", features = ["nested-values"] }
+slog-json = { version = "2.3.0", features = ["nested-values"] }
+slog-async = { version = "2.3.0", features = ["nested-values"] }
+slog-scope = "4.1.1"
+ws = { version = "0.8.0", features = ["ssl"] }

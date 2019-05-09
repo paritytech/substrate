@@ -5,11 +5,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-error-chain = "0.12"
-futures = "0.1"
-log = "0.4"
-parity-codec = "3.3"
-parking_lot = "0.7.1"
+error-chain = "0.12.0"
+futures = "0.1.26"
+log = "0.4.6"
+parity-codec = "3.5.1"
+parking_lot = "0.8.0"
 sr-primitives = { path = "../sr-primitives" }
 client = { package = "substrate-client", path = "../client" }
 substrate-primitives = { path = "../primitives" }

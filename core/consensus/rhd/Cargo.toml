@@ -6,7 +6,7 @@ description = "Rhododendron Round-Based consensus-algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-futures = "0.1.17"
+futures = "0.1.26"
 codec = { package = "parity-codec", version = "3.2", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 consensus = { package = "substrate-consensus-common", path = "../common" }
@@ -18,12 +18,12 @@ srml-consensus = { path = "../../../srml/consensus" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
-tokio = "0.1.7"
-parking_lot = "0.7.1"
-error-chain = "0.12"
-log = "0.4"
+tokio = "0.1.19"
+parking_lot = "0.8.0"
+error-chain = "0.12.0"
+log = "0.4.6"
 rhododendron = { version = "0.5.0", features = ["codec"] }
-exit-future = "0.1"
+exit-future = "0.1.4"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }

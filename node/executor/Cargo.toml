@@ -6,8 +6,8 @@ description = "Substrate node implementation in Rust."
 edition = "2018"
 
 [dependencies]
-trie-root = "0.12"
-parity-codec = "3.3"
+trie-root = "0.12.2"
+parity-codec = "3.5.1"
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 state_machine = { package = "substrate-state-machine", path = "../../core/state-machine" }
 substrate-executor = { path = "../../core/executor" }
@@ -30,7 +30,7 @@ treasury = { package = "srml-treasury", path = "../../srml/treasury" }
 contract = { package = "srml-contract", path = "../../srml/contract" }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
-wabt = "~0.7.4"
+wabt = "0.7.4"
 
 [features]
 benchmarks = []

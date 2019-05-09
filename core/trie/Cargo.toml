@@ -21,10 +21,10 @@ memory-db = { version = "0.12.2", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 
 [dev-dependencies]
-trie-bench = { version = "0.12" }
-trie-standardmap = { version = "0.12" }
-keccak-hasher = { version = "0.12" }
-criterion = "0.2"
+trie-bench = "0.12.2"
+trie-standardmap = "0.12.2"
+keccak-hasher = "0.12.2"
+criterion = "0.2.11"
 hex-literal = "0.2.0"
 
 [features]

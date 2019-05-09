@@ -804,10 +804,10 @@ fn make_transcript(
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"genesis block hash", genesis_hash);
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
+	transcript.append_message(b"slot number", &slot_number.to_le_bytes());
+	transcript.append_message(b"genesis block hash", genesis_hash);
+	transcript.append_message(b"current epoch", &epoch.to_le_bytes());
+	transcript.append_message(b"chain randomness", randomness);
 	transcript
 }
 

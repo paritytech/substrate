@@ -5,12 +5,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-tempdir = "0.3"
-tokio = "0.1.7"
-futures = "0.1"
-log = "0.4"
-env_logger = "0.6"
-fdlimit = "0.1"
+tempdir = "0.3.7"
+tokio = "0.1.19"
+futures = "0.1.26"
+log = "0.4.6"
+env_logger = "0.6.1"
+fdlimit = "0.1.1"
 service = { package = "substrate-service", path = "../../../core/service" }
 network = { package = "substrate-network", path = "../../../core/network" }
 consensus = { package = "substrate-consensus-common", path = "../../../core/consensus/common" }

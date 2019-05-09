@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-error-chain = "0.12"
-parity-codec = "3.3"
+error-chain = "0.12.0"
+parity-codec = "3.5.1"
 runtime_io = { package = "sr-io", path = "../sr-io" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 trie = { package = "substrate-trie", path = "../trie" }
@@ -14,17 +14,17 @@ serializer = { package = "substrate-serializer", path = "../serializer" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
-wasmi = { version = "0.4.3" }
-byteorder = "1.1"
-lazy_static = "1.0"
-parking_lot = "0.7.1"
-log = "0.4"
-libsecp256k1 = "0.2.1"
+wasmi = "0.4.5"
+byteorder = "1.3.1"
+lazy_static = "1.3.0"
+parking_lot = "0.8.0"
+log = "0.4.6"
+libsecp256k1 = "0.2.2"
 tiny-keccak = "1.4.2"
 
 [dev-dependencies]
-assert_matches = "1.1"
-wabt = "~0.7.4"
+assert_matches = "1.3.0"
+wabt = "0.7.4"
 hex-literal = "0.2.0"
 
 [features]

@@ -6,17 +6,17 @@ description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
-crossbeam-channel = "0.3.4"
+crossbeam-channel = "0.3.8"
 libp2p = { version = "0.7.0", default-features = false }
-log = "0.4"
+log = "0.4.6"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-error-chain = "0.12"
-futures = "0.1"
+error-chain = "0.12.0"
+futures = "0.1.26"
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-tokio-timer = "0.2"
-parity-codec = { version = "3.3", features = ["derive"] }
+tokio-timer = "0.2.10"
+parity-codec = { version = "3.5.1", features = ["derive"] }
 
 [dev-dependencies]
 test_client = { package = "substrate-test-client", path = "../../test-client" }

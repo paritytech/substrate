@@ -808,7 +808,7 @@ fn store_functions_to_metadata (
 			pub struct #struct_name<#traitinstance, #instance #bound_instantiable #equal_default_instance>(pub #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
-			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::new();
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte for #struct_name<#traitinstance, #instance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {

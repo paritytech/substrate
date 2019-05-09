@@ -8,7 +8,7 @@ edition = "2018"
 http = { package = "jsonrpc-http-server", version = "10.0.1" }
 pubsub = { package = "jsonrpc-pubsub", version = "10.0.1" }
 ws = { package = "jsonrpc-ws-server", version = "10.0.1" }
-log = "0.4"
-serde = "1.0"
+log = "0.4.6"
+serde = "1.0.91"
 substrate-rpc = { path = "../rpc" }
 sr-primitives = { path = "../sr-primitives" }

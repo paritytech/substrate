@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true }
-parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+serde = { version = "1.0.91", optional = true }
+parity-codec = { version = "3.5.1", default-features = false, features = ["derive"] }
 sr-std = { path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }

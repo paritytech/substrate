@@ -10,13 +10,13 @@ build = "build.rs"
 edition = "2018"
 
 [dependencies]
-error-chain = "0.12"
+error-chain = "0.12.0"
 cli = { package = "node-cli", path = "node/cli" }
-futures = "0.1"
-ctrlc = { version = "3.0", features = ["termination"] }
+futures = "0.1.26"
+ctrlc = { version = "3.1.2", features = ["termination"] }
 
 [build-dependencies]
-vergen = "3"
+vergen = "3.0.4"
 
 [workspace]
 members = [

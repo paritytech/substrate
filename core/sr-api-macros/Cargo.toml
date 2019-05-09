@@ -9,9 +9,9 @@ proc-macro = true
 
 [dependencies]
 quote = "0.6.12"
-syn = { version = "^0.15.30", features = [ "full", "fold", "extra-traits", "visit" ] }
-proc-macro2 = "0.4"
-blake2-rfc = "0.2"
+syn = { version = "0.15.34", features = [ "full", "fold", "extra-traits", "visit" ] }
+proc-macro2 = "0.4.30"
+blake2-rfc = "0.2.18"
 proc-macro-crate = "0.1.3"
 
 [dev-dependencies]
@@ -21,7 +21,7 @@ state_machine = { package = "substrate-state-machine", path = "../state-machine"
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
 substrate-primitives = { path = "../primitives" }
-criterion = "0.2"
+criterion = "0.2.11"
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 codec = { package = "parity-codec", version = "3.5.1" }
 
