@@ -322,8 +322,20 @@ decl_storage! {
 		///
 		/// The first key serves no purpose. This field is declared as double_map just
 		/// for convenience of using `remove_prefix`.
+		///
+		/// All topic vectors have deterministic storage locations depending on the topic. This
+		/// allows light-clients to leverage the changes trie storage tracking mechanism and
+		/// in case of changes fetch the list of events of interest.
+		///
+		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+		/// the `EventIndex` then in case if the topic has the same contents on the next block
+		/// no notification will be triggered thus the event might be lost.
+		///
+		/// Possibly, we can improve it by using something like:
+		/// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
+		/// `EventTopics::append`.
 		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
-			=> Vec<EventIndex>;
+			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -427,9 +439,10 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
+		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(&(), topic, &[event_idx]).is_err() {
+			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
 				return;
 			}
 		}
