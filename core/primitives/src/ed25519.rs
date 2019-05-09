@@ -53,13 +53,6 @@ pub struct Public(pub [u8; 32]);
 pub struct Pair(signature::Ed25519KeyPair, Seed);
 
 #[cfg(feature = "std")]
-impl std::fmt::Debug for Pair {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		f.debug_tuple("Pair").field(self.0.public_key()).finish()
-	}
-}
-
-#[cfg(feature = "std")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair::from_seed(self.1.clone())
