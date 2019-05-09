@@ -18,7 +18,7 @@ do
     if [ -z "${FAIL}" ]
     then
       echo "|"
-      echo "| newly added changes contain lines longer than ${LINE_WIDTH} characters."
+      echo "| newly added changes contain lines longer than $(( ${LINE_WIDTH} - 1)) characters."
       echo "|"
       FAIL="true"
     fi
