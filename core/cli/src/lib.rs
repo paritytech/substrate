@@ -502,11 +502,7 @@ where
 	}
 
 	// Imply forced authoring on --dev
-	if cli.shared_params.dev {
-		config.force_authoring = true;
-	} else {
-		config.force_authoring = cli.force_authoring;
-	}
+	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
 	Ok(config)
 }
