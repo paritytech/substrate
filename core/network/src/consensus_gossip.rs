@@ -24,7 +24,7 @@ use std::time;
 use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
-use network_libp2p::{Severity, PeerId};
+use network_libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 use runtime_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
@@ -35,6 +35,15 @@ use crate::config::Roles;
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+/// Reputation change when a peer sends us a gossip message that we didn't know about.
+const GOSSIP_SUCCESS_REPUTATION_CHANGE: i32 = 1 << 4;
+/// Reputation change when a peer sends us a gossip message that we already knew about.
+const DUPLICATE_GOSSIP_REPUTATION_CHANGE: i32 = -(1 << 2);
+/// Reputation change when a peer sends us a gossip message for an unknown engine, whatever that
+/// means.
+const UNKNOWN_GOSSIP_REPUTATION_CHANGE: i32 = -(1 << 6);
+/// Reputation change when a peer sends a message from a topic it isn't registered on.
+const UNREGISTERED_TOPIC_REPUTATION_CHANGE: i32 = -(1 << 10);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
@@ -123,10 +132,10 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 	/// Send addressed message to a peer.
 	fn send_message(&mut self, who: &PeerId, message: Vec<u8>) {
-		self.protocol.send_message(who.clone(), Message::Consensus(ConsensusMessage {
+		self.protocol.send_consensus(who.clone(), ConsensusMessage {
 			engine_id: self.engine_id,
 			data: message,
-		}));
+		});
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -183,7 +192,7 @@ fn propagate<'a, B: BlockT, I>(
 			}
 			peer.known_messages.insert(message_hash.clone());
 			trace!(target: "gossip", "Propagating to {}: {:?}", id, message);
-			protocol.send_message(id.clone(), Message::Consensus(message.clone()));
+			protocol.send_consensus(id.clone(), message.clone());
 		}
 	}
 }
@@ -256,6 +265,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId, roles: Roles) {
+		// light nodes are not valid targets for consensus gossip messages
+		if !roles.intersects(Roles::FULL | Roles::AUTHORITY) {
+			return;
+		}
+
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
 		self.peers.insert(who.clone(), PeerConsensus {
 			known_messages: HashSet::new(),
@@ -389,6 +403,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		if self.known_messages.contains_key(&message_hash) {
 			trace!(target:"gossip", "Ignored already known message from {}", who);
+			protocol.report_peer(who.clone(), DUPLICATE_GOSSIP_REPUTATION_CHANGE);
 			return;
 		}
 
@@ -406,15 +421,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(ValidationResult::Discard) => None,
 			None => {
 				trace!(target:"gossip", "Unknown message engine id {:?} from {}", engine_id, who);
-				protocol.report_peer(
-					who,
-					Severity::Useless(format!("Sent unknown consensus engine id")),
-				);
+				protocol.report_peer(who.clone(), UNKNOWN_GOSSIP_REPUTATION_CHANGE);
+				protocol.disconnect_peer(who);
 				return;
 			}
 		};
 
 		if let Some((topic, keep)) = validation_result {
+			protocol.report_peer(who.clone(), GOSSIP_SUCCESS_REPUTATION_CHANGE);
 			if let Some(ref mut peer) = self.peers.get_mut(&who) {
 				peer.known_messages.insert(message_hash);
 				if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
@@ -437,6 +451,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				}
 			} else {
 				trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
+				protocol.report_peer(who.clone(), UNREGISTERED_TOPIC_REPUTATION_CHANGE);
 			}
 		} else {
 			trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
@@ -445,17 +460,28 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(&mut self, protocol: &mut Context<B>, who: &PeerId, topic: B::Hash, engine_id: ConsensusEngineId, force: bool) {
+		let validator = self.validators.get(&engine_id);
+		let mut message_allowed = match validator {
+			None => return, // treat all messages with no validator as not allowed
+			Some(validator) => validator.message_allowed(),
+		};
+
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+
 		if let Some(ref mut peer) = self.peers.get_mut(who) {
 			for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
 				if !force && peer.known_messages.contains(&entry.message_hash) {
 					continue
 				}
+				if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
+					continue
+				}
 				peer.known_messages.insert(entry.message_hash.clone());
 				trace!(target: "gossip", "Sending topic message to {}: {:?}", who, entry.message);
-				protocol.send_message(who.clone(), Message::Consensus(ConsensusMessage {
+				protocol.send_consensus(who.clone(), ConsensusMessage {
 					engine_id: engine_id.clone(),
 					data: entry.message.data.clone(),
-				}));
+				});
 			}
 		}
 	}
@@ -492,7 +518,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 
 		peer.known_messages.insert(message_hash);
-		protocol.send_message(who.clone(), Message::Consensus(message.clone()));
+		protocol.send_consensus(who.clone(), message.clone());
 	}
 }
 

@@ -621,9 +621,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				type Query = #value_type;
 
 				fn prefix_for(k1: &#k1ty) -> Vec<u8> {
+					use #scrate::storage::hashed::generator::StorageHasher;
+
 					let mut key = #as_double_map::prefix().to_vec();
 					#scrate::codec::Encode::encode_to(k1, &mut key);
-					#scrate::Hashable::#hasher(&key).to_vec()
+					#scrate::#hasher::hash(&key[..]).to_vec()
 				}
 
 				fn prefix() -> &'static [u8] {

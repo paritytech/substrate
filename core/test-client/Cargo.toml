@@ -14,5 +14,18 @@ consensus = { package = "substrate-consensus-common", path = "../consensus/commo
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
-runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
+runtime = { package = "substrate-test-runtime", path = "../test-runtime", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
+
+[features]
+default = [
+	"include-wasm-blob",
+	"std",
+]
+std = [
+	"runtime/std",
+]
+# If enabled, the WASM blob is added to the `GenesisConfig`.
+include-wasm-blob = [
+	"runtime/include-wasm-blob",
+]

@@ -31,6 +31,7 @@ peerset = { package = "substrate-peerset", path = "../../core/peerset" }
 tokio = "0.1.11"
 keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }
 test_client = { package = "substrate-test-client", path = "../../core/test-client", optional = true }
+void = "1.0"
 
 [dev-dependencies]
 env_logger = { version = "0.6" }
@@ -40,4 +41,4 @@ consensus = { package = "substrate-consensus-common", path = "../../core/consens
 
 [features]
 default = []
-test-helpers = ["keyring", "test_client"]
+test-helpers = ["keyring", "test_client", "consensus/test-helpers"]

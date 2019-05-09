@@ -23,7 +23,7 @@ use network::config::{ProtocolConfig, Roles};
 use network::consensus_gossip as network_gossip;
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
-use keyring::AuthorityKeyring;
+use keyring::ed25519::{Keyring as AuthorityKeyring};
 use client::{
 	BlockchainEvents, error::Result,
 	blockchain::Backend as BlockchainBackend,
@@ -36,7 +36,7 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{NativeOrEncoded, ExecutionContext};
+use substrate_primitives::{NativeOrEncoded, ExecutionContext, ed25519::Public as AuthorityId};
 
 use authorities::AuthoritySet;
 use communication::GRANDPA_ENGINE_ID;
@@ -290,7 +290,7 @@ impl Core<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<AuthorityId>>> {
+	) -> Result<NativeOrEncoded<Vec<substrate_primitives::sr25519::Public>>> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -306,6 +306,14 @@ impl ApiExt<Block> for RuntimeApi {
 	fn runtime_version_at(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
 		unimplemented!("Not required for testing!")
 	}
+
+	fn record_proof(&mut self) {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+		unimplemented!("Not required for testing!")
+	}
 }
 
 impl GrandpaApi<Block> for RuntimeApi {
@@ -315,7 +323,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
+	) -> Result<NativeOrEncoded<Vec<(substrate_primitives::ed25519::Public, u64)>>> {
 		if at == &BlockId::Number(0) {
 			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 		} else {
@@ -362,7 +370,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
-fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
 	keys.iter()
 		.map(|key| AuthorityId(key.to_raw_public()))
 		.map(|id| (id, 1))
@@ -726,7 +734,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
-	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
+	let new_authorities = vec![substrate_primitives::sr25519::Public::from_raw([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	net.sync();
 	let net = Arc::new(Mutex::new(net));

@@ -288,7 +288,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: Sized {
+pub trait Pair: Sized + 'static {
 	/// TThe type which is used to encode a public key.
 	type Public;
 

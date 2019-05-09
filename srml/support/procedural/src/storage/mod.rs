@@ -234,16 +234,6 @@ impl HasherKind {
 		}
 	}
 
-	fn into_hashable_fn(&self) -> TokenStream2 {
-		match self {
-			HasherKind::Blake2_256 => quote!( blake2_256 ),
-			HasherKind::Blake2_128 => quote!( blake2_128 ),
-			HasherKind::Twox256 => quote!( twox_256 ),
-			HasherKind::Twox128 => quote!( twox_128 ),
-			HasherKind::Twox64Concat => quote!( twox_64_concat),
-		}
-	}
-
 	fn into_metadata(&self) -> TokenStream2 {
 		match self {
 			HasherKind::Blake2_256 => quote!( StorageHasher::Blake2_256 ),

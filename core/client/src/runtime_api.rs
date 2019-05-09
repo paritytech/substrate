@@ -24,7 +24,10 @@ pub use state_machine::OverlayedChanges;
 pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Header as HeaderT, ApiRef, RuntimeApiInfo},
+	traits::{
+		AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
+		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
+	},
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
 #[doc(hidden)]
@@ -42,8 +45,16 @@ use crate::error;
 use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
-use std::panic::UnwindSafe;
+use std::{panic::UnwindSafe, cell::RefCell, rc::Rc};
 use rstd::vec::Vec;
+#[cfg(feature = "std")]
+use primitives::Hasher as HasherT;
+
+#[cfg(feature = "std")]
+/// A type that records all accessed trie nodes and generates a proof out of it.
+pub type ProofRecorder<B> = state_machine::ProofRecorder<
+	<<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher as HasherT>::Out
+>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -87,6 +98,35 @@ pub trait ApiExt<Block: BlockT> {
 
 	/// Returns the runtime version at the given block id.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion>;
+
+	/// Start recording all accessed trie nodes for generating proofs.
+	fn record_proof(&mut self);
+
+	/// Extract the recorded proof.
+	/// This stops the proof recording.
+	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>>;
+}
+
+/// Before calling any runtime api function, the runtime need to be initialized
+/// at the requested block. However, some functions like `execute_block` or
+/// `initialize_block` itself don't require to have the runtime initialized
+/// at the requested block.
+///
+/// `call_api_at` is instructed by this enum to do the initialization or to skip
+/// it.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy)]
+pub enum InitializeBlock<'a, Block: BlockT> {
+	/// Skip initializing the runtime for a given block.
+	///
+	/// This is used by functions who do the initialization by themself or don't
+	/// require it.
+	Skip,
+	/// Initialize the runtime for a given block.
+	///
+	/// If the stored `BlockId` is `Some(_)`, the runtime is currently initialized
+	/// at this block.
+	Do(&'a RefCell<Option<BlockId<Block>>>),
 }
 
 /// Something that can call into the runtime at a given block.
@@ -95,17 +135,21 @@ pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
 	fn call_api_at<
+		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		C: Core<Block>,
 	>(
 		&self,
+		core_api: &C,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
-		changes: &mut OverlayedChanges,
-		initialized_block: &mut Option<BlockId<Block>>,
+		changes: &RefCell<OverlayedChanges>,
+		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
+		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.
@@ -120,9 +164,12 @@ decl_runtime_apis! {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
+		#[skip_initialize_block]
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
+		#[skip_initialize_block]
+		#[initialize_block]
 		fn initialize_block(header: &<Block as BlockT>::Header);
 		/// Returns the authorities.
 		#[deprecated(since = "1.0", note = "Please switch to `AuthoritiesApi`.")]
