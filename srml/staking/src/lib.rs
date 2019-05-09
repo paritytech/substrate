@@ -237,7 +237,7 @@
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
-use rstd::{prelude::*, result};
+use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
@@ -247,7 +247,7 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, Saturating, Bounded};
+use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -256,7 +256,7 @@ mod mock;
 mod tests;
 mod phragmen;
 
-use phragmen::{elect, ElectionConfig};
+use phragmen::{elect, ACCURACY, ExtendedBalance};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -394,12 +394,19 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
+type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
+type ExpoMap<T> = BTreeMap::<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
+
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
+	/// TODO: #1377
+	/// The backward convert should be removed as the new Phragmen API returns ratio.
+	/// The post-processing needs it but will be moved to off-chain.
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
 	/// Some tokens minted.
@@ -927,20 +934,71 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value.
 	fn select_validators() -> BalanceOf<T> {
-		let maybe_elected_candidates = elect::<T, _, _, _>(
+		let maybe_elected_set = elect::<T, _, _, _>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			<Validators<T>>::enumerate(),
 			<Nominators<T>>::enumerate(),
 			Self::slashable_balance_of,
-			ElectionConfig::<BalanceOf<T>> {
-				equalize: false,
-				tolerance: <BalanceOf<T>>::sa(10 as u64),
-				iterations: 10,
-			}
 		);
 
-		if let Some(elected_candidates) = maybe_elected_candidates {
+		if let Some(elected_set) = maybe_elected_set {
+			let elected_stashes = elected_set.0;
+			let assignments = elected_set.1;
+
+			// helper closure.
+			let to_balance = |b: ExtendedBalance| <T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
+			let to_votes = |b: BalanceOf<T>| <T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
+
+			// The return value of this is safe to be converted to u64.
+			// The original balance, `b` is within the scope of u64. It is just extended to u128
+			// to be properly multiplied by a ratio, which will lead to another value
+			// less than u64 for sure. The result can then be safely passed to `to_balance`.
+			// For now the backward convert is used. A simple `TryFrom<u64>` is also safe.
+			let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
+
+			// Compute the actual stake from nominator's ratio.
+			let mut assignments_with_stakes = assignments.iter().map(|(n, a)|(
+				n.clone(),
+				Self::slashable_balance_of(n),
+				a.iter().map(|(acc, r)| (
+					acc.clone(),
+					*r,
+					to_balance(ratio_of(Self::slashable_balance_of(n), *r)),
+				))
+				.collect::<Vec<Assignment<T>>>()
+			)).collect::<Vec<(T::AccountId, BalanceOf<T>, Vec<Assignment<T>>)>>();
+
+			// update elected candidate exposures.
+			let mut exposures = <ExpoMap<T>>::new();
+			elected_stashes
+				.iter()
+				.map(|e| (e, Self::slashable_balance_of(e)))
+				.for_each(|(e, s)| {
+					exposures.insert(e.clone(), Exposure { own: s, total: s, ..Default::default() });
+				});
+
+			for (n, _, assignment) in &assignments_with_stakes {
+				for (c, _, s) in assignment {
+					if let Some(expo) = exposures.get_mut(c) {
+						// NOTE: simple example where this saturates:
+						// candidate with max_value stake. 1 nominator with max_value stake.
+						// Nuked. Sadly there is not much that we can do about this.
+						// See this test: phragmen_should_not_overflow_xxx()
+						expo.total = expo.total.saturating_add(*s);
+						expo.others.push( IndividualExposure { who: n.clone(), value: *s } );
+					}
+				}
+			}
+
+			// This optimization will most likely be only applied off-chain.
+			let do_equalise = false;
+			if do_equalise {
+				let tolerance = 10 as u128;
+				let iterations = 10 as usize;
+				phragmen::equalize::<T>(&mut assignments_with_stakes, &mut exposures, tolerance, iterations);
+			}
+
 			// Clear Stakers and reduce their slash_count.
 			for v in Self::current_elected().iter() {
 				<Stakers<T>>::remove(v);
@@ -951,17 +1009,16 @@ impl<T: Trait> Module<T> {
 			}
 
 			// Populate Stakers and figure out the minimum stake behind a slot.
-			let mut slot_stake = elected_candidates[0].exposure.total;
-			for c in &elected_candidates {
-				if c.exposure.total < slot_stake {
-					slot_stake = c.exposure.total;
+			let mut slot_stake = BalanceOf::<T>::max_value();
+			for (c, e) in exposures.iter() {
+				if e.total < slot_stake {
+					slot_stake = e.total;
 				}
-				<Stakers<T>>::insert(c.who.clone(), c.exposure.clone());
+				<Stakers<T>>::insert(c.clone(), e.clone());
 			}
 			<SlotStake<T>>::put(&slot_stake);
 
 			// Set the new validator set.
-			let elected_stashes = elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>();
 			<CurrentElected<T>>::put(&elected_stashes);
 			<session::Module<T>>::set_validators(
 				&elected_stashes.into_iter().map(|s| Self::bonded(s).unwrap_or_default()).collect::<Vec<_>>()
@@ -974,6 +1031,7 @@ impl<T: Trait> Module<T> {
 			// We should probably disable all functionality except for block production
 			// and let the chain keep producing blocks until we can decide on a sufficiently
 			// substantial set.
+			// TODO: #2494
 			Self::slot_stake()
 		}
 	}
@@ -983,8 +1041,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: This is called with the controller (not the stash) account id.
 	pub fn on_offline_validator(controller: T::AccountId, count: usize) {
-		use primitives::traits::CheckedShl;
-
 		if let Some(l) = Self::ledger(&controller) {
 			let stash = l.stash;
 
