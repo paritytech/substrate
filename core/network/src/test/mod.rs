@@ -34,14 +34,13 @@ use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
-use crossbeam_channel::{Sender, RecvError};
-use futures::Future;
-use futures::sync::{mpsc, oneshot};
+use crossbeam_channel::RecvError;
+use futures::{prelude::*, sync::{mpsc, oneshot}};
 use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId};
-use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
+use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -120,13 +119,13 @@ pub struct TestLink<S: NetworkSpecialization<Block>> {
 	link: NetworkLink<Block, S>,
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+	network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
 }
 
 impl<S: NetworkSpecialization<Block>> TestLink<S> {
 	fn new(
-		protocol_sender: Sender<ProtocolMsg<Block, S>>,
-		_network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
+		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
+		_network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
 		network_sender: NetworkChan<Block>
 	) -> TestLink<S> {
 		TestLink {
@@ -172,7 +171,7 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	fn synchronized(&self) {
 		trace!(target: "test_network", "Synchronizing");
-		drop(self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize))
+		drop(self.network_to_protocol_sender.unbounded_send(FromNetworkMsg::Synchronize))
 	}
 }
 
@@ -191,18 +190,29 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 
 type MessageFilter = Fn(&NetworkMsg<Block>) -> bool;
 
+enum FromNetworkMsg<B: BlockT> {
+	/// A peer connected, with debug info.
+	PeerConnected(PeerId, String),
+	/// A peer disconnected, with debug info.
+	PeerDisconnected(PeerId, String),
+	/// A custom message from another peer.
+	CustomMessage(PeerId, Message<B>),
+	/// Synchronization request.
+	Synchronize,
+}
+
 struct ProtocolChannel<S: NetworkSpecialization<Block>> {
 	buffered_messages: Mutex<VecDeque<NetworkMsg<Block>>>,
-	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
-	client_to_protocol_sender: Sender<ProtocolMsg<Block, S>>,
+	network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
+	client_to_protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
 	protocol_to_network_receiver: NetworkPort<Block>,
 }
 
 impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 	/// Create new buffered network port.
 	pub fn new(
-		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
-		client_to_protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
+		client_to_protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
 		protocol_to_network_receiver: NetworkPort<Block>,
 	) -> Self {
 		ProtocolChannel {
@@ -215,17 +225,17 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 
 	/// Send message from network to protocol.
 	pub fn send_from_net(&self, message: FromNetworkMsg<Block>) {
-		let _ = self.network_to_protocol_sender.send(message);
+		let _ = self.network_to_protocol_sender.unbounded_send(message);
 
-		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::Synchronize);
+		let _ = self.network_to_protocol_sender.unbounded_send(FromNetworkMsg::Synchronize);
 		let _ = self.wait_sync();
 	}
 
 	/// Send message from client to protocol.
 	pub fn send_from_client(&self, message: ProtocolMsg<Block, S>) {
-		let _ = self.client_to_protocol_sender.send(message);
+		let _ = self.client_to_protocol_sender.unbounded_send(message);
 
-		let _ = self.client_to_protocol_sender.send(ProtocolMsg::Synchronize);
+		let _ = self.client_to_protocol_sender.unbounded_send(ProtocolMsg::Synchronize);
 		let _ = self.wait_sync();
 	}
 
@@ -290,8 +300,8 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 		client: Arc<PeersClient>,
 		import_queue: Box<BasicQueue<Block>>,
-		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
-		protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_to_protocol_sender: mpsc::UnboundedSender<FromNetworkMsg<Block>>,
+		protocol_sender: mpsc::UnboundedSender<ProtocolMsg<Block, S>>,
 		network_sender: NetworkChan<Block>,
 		network_port: NetworkPort<Block>,
 		data: D,
@@ -642,14 +652,14 @@ pub trait TestNetFactory: Sized {
 		let (network_sender, network_port) = network_channel();
 
 		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
-		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let specialization = self::SpecializationFactory::create();
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
-		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
-			status_sinks,
+		let (network_to_protocol_sender, mut network_to_protocol_rx) = mpsc::unbounded();
+
+		let (mut protocol, protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			peers.clone(),
@@ -661,6 +671,29 @@ pub trait TestNetFactory: Sized {
 			tx_pool,
 			specialization,
 		).unwrap();
+
+		std::thread::spawn(move || {
+			tokio::run(futures::future::poll_fn(move || {
+				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
+					match msg {
+						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) =>
+							protocol.on_peer_connected(peer_id, debug_msg),
+						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) =>
+							protocol.on_peer_disconnected(peer_id, debug_msg),
+						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
+							protocol.on_custom_message(peer_id, message),
+						Some(FromNetworkMsg::Synchronize) => protocol.synchronize(),
+						None => return Ok(Async::Ready(()))
+					}
+				}
+
+				if let Async::Ready(_) = protocol.poll().unwrap() {
+					return Ok(Async::Ready(()))
+				}
+
+				Ok(Async::NotReady)
+			}));
+		});
 
 		let peer = Arc::new(Peer::new(
 			is_offline,
