@@ -11,7 +11,7 @@ Make sure that:
   - In particular, mind the maximal line length.
   - There is no commented code checked in unless necessary.
   - Any panickers have a proof or removed.
-- [ ] You bumped the runtime version if there are breaking changes.
+- [ ] You bumped the runtime version if there are breaking changes in the **runtime**.
 - [ ] You updated any rustdocs which may have changed
 
 After you've read this notice feel free to remove it
