@@ -65,7 +65,6 @@ impl<H> EquivocationProof<H> {
 }
 
 /// Check if the header is an equivocation and returns the proof in that case.
-/// Assumes all the headers in the same slot are signed by the same Signer.
 pub fn check_equivocation<C, H, P>(
 	backend: &Arc<C>,
 	slot: u64,
@@ -95,9 +94,7 @@ pub fn check_equivocation<C, H, P>(
 		}
 	}
 
-	// TODO: Having two vectors is super ugly, but I don't know a way around.
 	let mut keys_to_delete = vec![];
-	let mut keys_as_slice_to_delete = vec![];
 
 	if slot % PRUNING_BOUND == 0 {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
@@ -105,18 +102,10 @@ pub fn check_equivocation<C, H, P>(
 		let first_slot = slot - PRUNING_BOUND;
 		let last_slot = slot - MAX_SLOT_CAPACITY;
 
-		for _ in first_slot..last_slot {
-			keys_to_delete.push(prefix.clone());
-		}
-
-		let mut s = first_slot;
-		for p in keys_to_delete.iter_mut() {
+		for s in first_slot..last_slot {
+			let mut p = prefix.clone();
 			s.using_encoded(|s| p.extend(s));
-			s += 1;
-		}
-
-		for p in keys_to_delete.iter() {
-			keys_as_slice_to_delete.push(p.as_slice());
+			keys_to_delete.push(p);
 		}
 	}
 
@@ -124,7 +113,7 @@ pub fn check_equivocation<C, H, P>(
 
 	backend.insert_aux(
 		&[(&curr_slot_key[..], v.encode().as_slice())],
-		keys_as_slice_to_delete.as_slice(),
+		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
 	)?;
 
 	Ok(None)
