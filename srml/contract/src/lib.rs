@@ -252,7 +252,10 @@ where
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
+		let new_seed = <AccountCounter<T>>::mutate(|v| {
+			*v = v.wrapping_add(1);
+			*v
+		});
 
 		let mut buf = Vec::new();
 		buf.extend_from_slice(account_id.as_ref());
