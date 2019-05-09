@@ -1,4 +1,6 @@
-Make sure that:
+Thank you for your Pull Request!
+
+Before you submitting, please check that:
 
 - [ ] You added a brief description of the PR, e.g.:
   - What does it do?
@@ -14,6 +16,7 @@ Make sure that:
 - [ ] You bumped the runtime version if there are breaking changes in the **runtime**.
 - [ ] You updated any rustdocs which may have changed
 
-After you've read this notice feel free to remove it
+After you've read this notice feel free to remove it.
+Thank you!
 
 ✄ -----------------------------------------------------------------------------
