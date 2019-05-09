@@ -5,7 +5,7 @@
 
 
 BASE_BRANCH="origin/master"
-LINE_WIDTH="101"
+LINE_WIDTH="121"
 
 
 FAIL=""
