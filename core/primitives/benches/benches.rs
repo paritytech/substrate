@@ -67,23 +67,23 @@ fn bench_hash_128_dyn_size(c: &mut Criterion) {
 }
 
 fn bench_ed25519(c: &mut Criterion) {
-	c.bench_function("signing - ed25519 - 1MiB message", |b| {
-		let msg = (0..1024 * 1024)
+	c.bench_function_over_inputs("signing - ed25519", |b, &msg_size| {
+		let msg = (0..msg_size)
 			.map(|_| rand::random::<u8>())
 			.collect::<Vec<_>>();
 		let key = substrate_primitives::ed25519::Pair::generate();
 		b.iter(|| key.sign(&msg))
-	});
+	}, vec![32, 1024, 1024 * 1024]);
 
-	c.bench_function("verifying - ed25519 - 1MiB message", |b| {
-		let msg = (0..1024 * 1024)
+	c.bench_function_over_inputs("verifying - ed25519", |b, &msg_size| {
+		let msg = (0..msg_size)
 			.map(|_| rand::random::<u8>())
 			.collect::<Vec<_>>();
 		let key = substrate_primitives::ed25519::Pair::generate();
 		let sig = key.sign(&msg);
 		let public = key.public();
 		b.iter(|| substrate_primitives::ed25519::Pair::verify(&sig, &msg, &public))
-	});
+	}, vec![32, 1024, 1024 * 1024]);
 }
 
 criterion_group!{
