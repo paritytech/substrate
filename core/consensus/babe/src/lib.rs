@@ -548,7 +548,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 
 	let BabeSeal {
 		slot_num,
-		signature: LocalizedSignature {signer, signature },
+		signature: LocalizedSignature { signer, signature },
 		proof,
 		vrf_output,
 	} = digest_item.as_babe_seal().ok_or_else(|| {
@@ -583,10 +583,20 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			};
 				
 			if check(&inout, threshold) {
-				match check_equivocation(&client, slot_num, header.clone(), signer) {
+				match check_equivocation(&client, slot_num, header.clone(), signer.clone()) {
 					Ok(Some(equivocation_proof)) => {
-						// TODO: dispatch report here.
-						Err(format!("Slot author is equivocating with headers {:?} and {:?}",
+						info!(
+							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+							signer,
+							slot_num,
+							equivocation_proof.fst_header().hash(),
+							equivocation_proof.snd_header().hash(),
+						);
+
+						Err(format!(
+							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+							signer,
+							slot_num,
 							equivocation_proof.fst_header().hash(),
 							equivocation_proof.snd_header().hash(),
 						))

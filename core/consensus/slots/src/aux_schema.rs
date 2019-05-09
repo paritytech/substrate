@@ -64,7 +64,7 @@ impl<H> EquivocationProof<H> {
 	}
 }
 
-/// Check if the header is an equivocation and returns the proof in that case.
+/// Checks if the header is an equivocation and returns the proof in that case.
 pub fn check_equivocation<C, H, P>(
 	backend: &Arc<C>,
 	slot: u64,
@@ -79,10 +79,10 @@ pub fn check_equivocation<C, H, P>(
 	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
-	let mut v = load_decode::<_, Vec<(H, P)>>(backend.clone(), &curr_slot_key[..])?
+	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend.clone(), &curr_slot_key[..])?
 		.unwrap_or_else(Vec::new);
 
-	for (prev_header, prev_signer) in v.iter() {
+	for (prev_header, prev_signer) in headers_with_sig.iter() {
 		if *prev_signer == signer {
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
@@ -90,6 +90,8 @@ pub fn check_equivocation<C, H, P>(
 					fst_header: prev_header.clone(),
 					snd_header: header.clone(),
 				}));
+			} else {
+				return Ok(None)
 			}
 		}
 	}
@@ -109,10 +111,10 @@ pub fn check_equivocation<C, H, P>(
 		}
 	}
 
-	v.push((header, signer));
+	headers_with_sig.push((header, signer));
 
 	backend.insert_aux(
-		&[(&curr_slot_key[..], v.encode().as_slice())],
+		&[(&curr_slot_key[..], headers_with_sig.encode().as_slice())],
 		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
 	)?;
 

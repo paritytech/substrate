@@ -499,10 +499,25 @@ fn check_header<C, B: Block, P: Pair>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			match check_equivocation::<_, _, <P as Pair>::Public>(client, slot_num, header.clone(), public.clone()) {
+			match check_equivocation::<_, _, <P as Pair>::Public>(
+				client,
+				slot_num,
+				header.clone(),
+				public.clone()
+			) {
 				Ok(Some(equivocation_proof)) => {
-					// TODO: dispatch report here.
-					Err(format!("Slot author is equivocating with headers {:?} and {:?}",
+					info!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						public,
+						slot_num,
+						equivocation_proof.fst_header().hash(),
+						equivocation_proof.snd_header().hash(),
+					);
+
+					Err(format!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						public,
+						slot_num,
 						equivocation_proof.fst_header().hash(),
 						equivocation_proof.snd_header().hash(),
 					))
