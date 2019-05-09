@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Schema for stuff in the aux-db.
+//! Schema for slots in the aux-db.
 
-use std::collections::{BTreeMap, btree_map::Entry};
 use std::sync::Arc;
 use codec::{Encode, Decode};
 use client::backend::AuxStore;
@@ -27,7 +26,7 @@ const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 /// We keep at least this number of slots in database.
 pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
-pub const PRUNING_BOUND: usize = MAX_SLOT_CAPACITY as usize + 1000;
+pub const PRUNING_BOUND: u64 = MAX_SLOT_CAPACITY + 1000;
 
 fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
 	where
@@ -78,10 +77,10 @@ pub fn check_equivocation<C, H, P>(
 		C: AuxStore,
 		P: Encode + Decode + PartialEq,
 {
-	let mut key = SLOT_HEADER_MAP_KEY.to_vec();
-	slot.using_encoded(|s| key.extend(s));
+	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
+	slot.using_encoded(|s| curr_slot_key.extend(s));
 
-	let mut v = load_decode::<_, Vec<(H, P)>>(backend.clone(), &key[..])?
+	let mut v = load_decode::<_, Vec<(H, P)>>(backend.clone(), &curr_slot_key[..])?
 		.unwrap_or_else(Vec::new);
 
 	for (prev_header, prev_signer) in v.iter() {
@@ -96,45 +95,36 @@ pub fn check_equivocation<C, H, P>(
 		}
 	}
 
-	// match slot_header_map.entry(slot) {
-	// 	Entry::Vacant(vacant_entry) => {
-	// 		vacant_entry.insert(vec![(header, signer)]);
-	// 	},
-	// 	Entry::Occupied(occupied_entry) => {
-	// 		let v = occupied_entry.get();
-	// 		for (prev_header, prev_signer) in v.iter() {
-	// 			if *prev_signer == signer {
-	// 				if header.hash() != prev_header.hash() {
-	// 					return Ok(Some(EquivocationProof {
-	// 						slot,
-	// 						fst_header: prev_header.clone(),
-	// 						snd_header: header.clone(),
-	// 					}));
-	// 				}
-	// 			}
-	// 		}
-			// let fst_header = occupied_entry.get().clone();
-			// let snd_header = header;
-
-			// if fst_header.hash() != snd_header.hash() {
-			// 	return Ok(Some(EquivocationProof {
-			// 		slot,
-			// 		fst_header,
-			// 		snd_header,
-			// 	}));
-			// }
-	// 	},
-	// };
+	// TODO: Having two vectors is super ugly, but I don't know a way around.
+	let mut keys_to_delete = vec![];
+	let mut keys_as_slice_to_delete = vec![];
 
 	if slot % PRUNING_BOUND == 0 {
-		// slot_header_map = slot_header_map.split_off(&(slot - MAX_SLOT_CAPACITY));
+		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
+
+		let first_slot = slot - PRUNING_BOUND;
+		let last_slot = slot - MAX_SLOT_CAPACITY;
+
+		for _ in first_slot..last_slot {
+			keys_to_delete.push(prefix.clone());
+		}
+
+		let mut s = first_slot;
+		for p in keys_to_delete.iter_mut() {
+			s.using_encoded(|s| p.extend(s));
+			s += 1;
+		}
+
+		for p in keys_to_delete.iter() {
+			keys_as_slice_to_delete.push(p.as_slice());
+		}
 	}
 
 	v.push((header, signer));
 
 	backend.insert_aux(
-		&[(&key[..], v.encode().as_slice())],
-		&[],
+		&[(&curr_slot_key[..], v.encode().as_slice())],
+		keys_as_slice_to_delete.as_slice(),
 	)?;
 
 	Ok(None)
