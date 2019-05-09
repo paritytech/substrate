@@ -396,7 +396,7 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
 type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
-type ExpoMap<T> = BTreeMap::<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
+type ExpoMap<T> = BTreeMap<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.

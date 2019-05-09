@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, Zero};
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;
