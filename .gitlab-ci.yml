@@ -88,7 +88,7 @@ check-web-wasm:
     - /^[0-9]+$/
   script:
     # WASM support is in progress. As more and more crates support WASM, we
-    # should add entries here.
+    # should add entries here. See https://github.com/paritytech/substrate/issues/2416
     - time cargo web build -p sr-io
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
