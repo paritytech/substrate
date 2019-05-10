@@ -45,9 +45,43 @@ construct_simple_protocol! {
 }
 
 /// Intermediate Setup State
+///
+/// Background:
+/// - The current components infrastructure decouples parts of the system. The node macro assembles many layers
+/// of indirection in between, which are hard to penetrate. An intermediate setup state is required for all components,
+/// including GRANDPA, to wire up properly. The interim solution that was used to provide this intermediate state was
+/// inefficient, and involves storing `grandpa_import_setup` on `NodeConfig`.
+///
+/// Solution:
+/// - Add a custom/generic intermediate state struct/type for "configuration" in the node-cli package's service setup for use
+/// in the service setup.
+/// - Set the default value of the "configuration" to be empty `()`.
+/// - Allow the "configuration" state to be mutated (i.e. &mut) by each specific factory (i.e.
+/// `construct_service_factory` to provide state so we may store/retrieve (i.e. the `LinkHalf`)
+/// (instead of every specific implementation supplying it so it may be passed around to the service setup functions,
+/// but without allowing it to be mutated or its latest state to be retrieved).
+/// `LinkHalf` is a specific feature the GRANDPA consensus mechanism needs to pass from one setup stage to another
+/// so they can be "linked up" properly. At the moment, we do that through a clone of what's stored in `NodeConfig`
+/// but instead we want it designed to ensure that it is only ever being connected once.
+/// - Pass around the "configuration" state to all setup functions that are called from the core-service package to
+/// allow different systems that are setup to have direct access to a "configuration" state that they can rely on
+/// and so they may communicate it amongst each other. This requires incorporating the "configuration" state into
+/// `FullImportQueue` of the `construct_service_factory!` macro that's defined in node/cli/src/service.rs and
+/// core/service/src/lib.rs.
+/// - Allow the "configuration" state to be discarded after setup of the systems.
+///
+/// Glossary:
+/// - `ImportQueue` is the object that receives blocks from the network and checks them.
+/// - `LinkHalf` is provided when we create `ImportQueue`. It is the communication channel and the main object
+/// we need to hold onto during setup as both the `ImportQueue` and `AuthoritySetup` are otherwise totally
+/// disconnected from each other. In the specific consensus algorithm (GRANDPA) it informs the consensus making
+/// engine about blocks it imported. GRANDPA needs access to `LinkHalf` that was created during `import_queue`
+/// setup in order for the active consensus to run.
 pub struct SetupState<F: substrate_service::ServiceFactory> {
-	/// grandpa connection to import block
-	pub grandpa_import_setup: &mut Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+	/// GRANDPA connection to import block
+	///
+	/// It may be filled by the `ImportQueue`
+	grandpa_import_setup: &mut Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
 }
 
 impl<F> Default for SetupState<F> {
@@ -55,6 +89,17 @@ impl<F> Default for SetupState<F> {
 		SetupState {
 			grandpa_import_setup: (),
 		}
+	}
+
+	// Set the configuration state, which includes discarding it after the systems are setup
+	fn set_setup(&mut self, mut setup) {
+		// TODO
+	}
+
+	/// Allow the configuration to be taken by `AuthoritySetup` using `take()`
+	fn get_setup(&mut self) -> Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)> {
+		// FIXME
+		self.grandpa_import_setup.take()
 	}
 }
 
