@@ -95,7 +95,7 @@ use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
 use srml_support::for_each_tuple;
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
-use system::ensure_inherent;
+use system::ensure_none;
 use rstd::{result, ops::{Mul, Div}, cmp};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
@@ -221,7 +221,7 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be `Inherent`.
 		fn set(origin, #[compact] now: T::Moment) {
-			ensure_inherent(origin)?;
+			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
 				Self::now().is_zero() || now >= Self::now() + <MinimumPeriod<T>>::get(),
@@ -369,7 +369,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -384,8 +384,8 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
+			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
 		});
 	}
 
@@ -399,7 +399,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});
 	}
 }
