@@ -357,7 +357,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&self) -> serde_json::Value {
+	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.peerset.debug_info()
 	}
 
