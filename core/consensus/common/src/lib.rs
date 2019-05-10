@@ -40,6 +40,7 @@ pub use inherents::InherentData;
 pub mod offline_tracker;
 pub mod error;
 mod block_import;
+mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
 
@@ -50,6 +51,7 @@ pub use self::error::{Error, ErrorKind};
 pub use block_import::{
 	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, JustificationImport,
 };
+pub use select_chain::SelectChain;
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
