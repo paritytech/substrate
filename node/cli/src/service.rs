@@ -44,6 +44,21 @@ construct_simple_protocol! {
 	pub struct NodeProtocol where Block = Block { }
 }
 
+/// Intermediate Setup State
+pub struct SetupState<F: substrate_service::ServiceFactory> {
+	/// grandpa connection to import block
+	pub grandpa_import_setup: &mut Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+}
+
+impl<F> Default for SetupState<F> {
+	fn default() -> SetupState<F> {
+		SetupState {
+			grandpa_import_setup: (),
+		}
+	}
+}
+
+
 /// Node specific configuration
 ///
 /// Note that we can only use `[derive(Default)]` if all fields implement
@@ -56,7 +71,7 @@ construct_simple_protocol! {
 ///   https://doc.rust-lang.org/std/default/trait.Default.html
 #[derive(Default)]
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
-	inherent_data_providers: InherentDataProviders::new(),
+	inherent_data_providers: InherentDataProviders::new,
 }
 
 construct_service_factory! {
