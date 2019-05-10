@@ -20,13 +20,16 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup, Bounded, Saturating};
 use runtime_io::print;
 use srml_support::{
-	StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result,
-	decl_storage, decl_event, ensure, decl_module,
+	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap,
+	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, LockIdentifier, LockableCurrency, WithdrawReasons}
 };
 use democracy;
 use parity_codec::{Encode, Decode};
 use system::{self, ensure_signed};
+
+// TODO: explain voter_at() --> holes in voters.
+// TODO: replace u32 with bool.
 
 // no polynomial attacks:
 //
@@ -96,6 +99,7 @@ pub struct VoterActivity {
 
 const COUNCIL_SEATS_ID: LockIdentifier = *b"councilc";
 const VOTER_SET_SIZE: usize = 64;
+const APPROVAL_SET_SIZE: usize = 8;
 
 type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
@@ -161,7 +165,7 @@ decl_module! {
 
 			// will definitely kill one of reporter or who now.
 
-			let valid = !Self::approvals_of(&who).iter()
+			let valid = !Self::all_approvals_of(&who).iter()
 				.zip(Self::candidates().iter())
 				.any(|(&appr, addr)|
 					 appr &&
@@ -259,6 +263,7 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let voters = Self::all_voters();
+			// TODO: Most likely we prefer this bond to be proportional to `|voters| * |candidates|`
 			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(Self::voter_count() as u64);
 			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
@@ -278,8 +283,8 @@ decl_module! {
 						let now = Self::vote_index();
 						let offset = Self::get_offset(*stake, now - last_win);
 						let weight = *stake + offset + Self::offset_pot(voter).unwrap_or_default();
-						Self::approvals_of(voter).get(candidate_index as usize)
-							.and_then(|approved| if *approved { Some(weight) } else { None })
+						Self::approvals_of_at(voter, candidate_index as usize)
+							.and_then(|approved| if approved { Some(weight) } else { None })
 					},
 					_ => None,
 				})
@@ -343,7 +348,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Council {
 
-		// parameters
+		// ---- parameters
 		/// How much should be locked up in order to submit one's candidacy.
 		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = BalanceOf::<T>::sa(9);
 		/// How much should be locked up in order to be able to submit votes.
@@ -369,7 +374,7 @@ decl_storage! {
 		/// 0 will result in no weight being added at all (normal approval voting).
 		pub DecayRatio get(decay_ratio) config(decay_ratio): u32 = 24;
 
-		// permanent state (always relevant, changes only at the finalization of voting)
+		// ---- permanent state (always relevant, changes only at the finalization of voting)
 		/// The current council. When there's a vote going on, this should still be used for executive
 		/// matters. The block number (second element in the tuple) is the block that their position is
 		/// active until (calculated by the sum of the block number when the council member was elected
@@ -378,10 +383,11 @@ decl_storage! {
 		/// The total number of vote rounds that have happened or are in progress.
 		pub VoteCount get(vote_index): VoteIndex;
 
-		// persistent state (always relevant, changes constantly)
+		// ---- persistent state (always relevant, changes constantly)
 		/// A list of votes for each voter, respecting the last cleared vote index that this voter was
 		/// last active at.
-		pub ApprovalsOf get(approvals_of): map T::AccountId => Vec<bool>;
+		// NOTE: hashed with the default hasher for `map`, `blake2_256`.
+		pub ApprovalsOf get(approvals_of): double_map T::AccountId, blake2_256(SetIndex) => Vec<bool>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
 		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
@@ -402,7 +408,7 @@ decl_storage! {
 		/// Current number of active candidates
 		pub CandidateCount get(candidate_count): u32;
 
-		// temporary state (only relevant during finalization/presentation)
+		// ---- temporary state (only relevant during finalization/presentation)
 		/// The accounts holding the seats that will become free on the next tally.
 		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
 		/// Get the leaderboard if we're in the presentation phase. The first element is the weight of each entry;
@@ -493,15 +499,15 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a voter at a specified index from the system.
 	fn remove_voter(voter: &T::AccountId, index: usize) {
-		let (set_index, vec_index) = Self::split_index(index);
+		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let mut set = Self::voters(set_index);
-		// TODO: panics if index is out of bound or wrong. Index is most ofter user-provided.
+		// TODO: panics if index is out of bound or wrong. Index is most often user-provided.
 		set.swap_remove(vec_index);
 		// There is room for one new voter in the current set.
 		<NextVoterSet<T>>::put(set_index);
 		<Voters<T>>::insert(set_index, set);
 		<VoterCount<T>>::mutate(|c| *c = *c - 1);
-		<ApprovalsOf<T>>::remove(voter);
+		<ApprovalsOf<T>>::remove_prefix(voter);
 		<ActivityInfoOf<T>>::remove(voter);
 		<OffsetPotOf<T>>::remove(voter);
 	}
@@ -526,7 +532,9 @@ impl<T: Trait> Module<T> {
 			// TODO: this linear search is a an overhead as the consequence of the new locking.
 			// least that we can do is to enforce the user to submit their index as an input _if_
 			// they are already a voter.
-			if let Some((set_index, vec_index, mut set)) = Self::set_for(&who) {
+			// Can be fixed by accepting an index of voter from `set_approvals.` Indicate that it will be
+			// ignored if the voter does not have already any vote.
+			if let Some((set_index, vec_index, mut set)) = Self::voter_set_for(&who) {
 				// get previous stake of the voter. Might or might not differ with the current.
 				let (_, stake) = set[vec_index];
 				// update stake in local set
@@ -580,7 +588,7 @@ impl<T: Trait> Module<T> {
 			&who,
 			VoterActivity { last_active: index, last_win: index }
 		);
-		<ApprovalsOf<T>>::insert(&who, votes);
+		Self::set_approvals_chunked(&who, votes);
 
 		Ok(())
 	}
@@ -631,7 +639,7 @@ impl<T: Trait> Module<T> {
 			Self::all_voters()
 				.iter()
 				.map(|(a, _)| a)
-				.filter(|v| *Self::approvals_of(*v).get(index).unwrap_or(&false))
+				.filter(|v| Self::approvals_of_at(*v, index).unwrap_or(false))
 				.for_each(|v| <ActivityInfoOf<T>>::mutate(v, |a| {
 					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
 				}));
@@ -680,19 +688,18 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	/// Get the set and vector index of a global voter index.
+	fn split_index(index: usize, scale: usize) ->(SetIndex, usize) {
+		let set_index = SetIndex::sa(index / scale);
+		let vec_index = index % scale;
+		(set_index, vec_index)
+	}
+
 	/// Return a concatenated vector over all voter sets.
-	/// TODO: remove this or move to test module.
 	fn all_voters() -> Vec<(T::AccountId, BalanceOf<T>)> {
 		let mut all = <Voters<T>>::get(0);
 		<Voters<T>>::enumerate().skip(1).for_each(|(_, set)| all.extend(set));
 		all
-	}
-
-	/// Get the set and vector index of a global voter index.
-	fn split_index(index: usize) ->(SetIndex, usize) {
-		let set_index = SetIndex::sa(index / VOTER_SET_SIZE);
-		let vec_index = index % VOTER_SET_SIZE;
-		(set_index, vec_index)
 	}
 
 	/// Shorthand for fetching a voter at a specific (global) index.
@@ -702,7 +709,7 @@ impl<T: Trait> Module<T> {
 	/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in the
 	/// first `set_index` sets.
 	fn voter_at(index: usize) -> Option<(T::AccountId, BalanceOf<T>)> {
-		let (set_index, vec_index) = Self::split_index(index);
+		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let set = Self::voters(set_index);
 		if vec_index < set.len() {
 			Some(set[vec_index].clone())
@@ -712,13 +719,47 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Search for the set containing account id indicated by `who`.
-	fn set_for(who: &T::AccountId) -> Option<(SetIndex, usize, Vec<(T::AccountId, BalanceOf<T>)>)> {
+	/// TODO: This should and will be removed. O(voters).
+	fn voter_set_for(who: &T::AccountId) -> Option<(SetIndex, usize, Vec<(T::AccountId, BalanceOf<T>)>)> {
 		for (index, set) in <Voters<T>>::enumerate() {
 			if let Some(pos) = set.iter().position(|a| a.0 == *who) {
 				return Some((index, pos, set));
 			}
 		}
 		None
+	}
+
+	/// Sets the approval of a voter in a chunked manner.
+	fn set_approvals_chunked(who: &T::AccountId, approvals: Vec<bool>) {
+		approvals.chunks(APPROVAL_SET_SIZE)
+			.enumerate()
+			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert(who, SetIndex::sa(idx), slice.to_vec()));
+	}
+
+	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
+	fn approvals_of_at(who: &T::AccountId, index: usize) -> Option<bool> {
+		let (set_index, vec_index) = Self::split_index(index, APPROVAL_SET_SIZE);
+		let set = Self::approvals_of(who, set_index);
+		if vec_index < set.len() {
+			Some(set[vec_index].clone())
+		} else {
+			None
+		}
+	}
+
+	/// Return a concatenated vector over all approvals of a voter.
+	fn all_approvals_of(who: &T::AccountId) -> Vec<bool> {
+		let mut all: Vec<bool> = vec![];
+		// NOTE: There is sadly no way in StorageDoubleMap to get all values associated
+		// with one of the keys. This is best that we can do so far.
+		let mut index = 0_u32;
+		loop {
+			let chunk = Self::approvals_of(who, index);
+			if chunk.len() == 0 { break; }
+			all.extend(chunk);
+			index += 1;
+		}
+		all
 	}
 
 	/// Calculates the offset value (stored pot) of a stake, based on the distance
@@ -755,9 +796,15 @@ mod tests {
 		Council::all_voters().iter().map(|v| v.0.clone()).collect::<Vec<u64>>()
 	}
 
-	fn vote(i: u64) {
+	fn vote(i: u64, l: usize) {
 		let _ = Balances::deposit_creating(&i, 5); // voter bond = 2
-		assert_ok!(Council::set_approvals(Origin::signed(i), vec![true, true], 0));
+		assert_ok!(Council::set_approvals(Origin::signed(i), (0..l).map(|_| true).collect::<Vec<bool>>(), 0));
+	}
+
+	fn create_candidate(i: u64, idx: u32) {
+		let _ = Balances::deposit_creating(&i, 10); // candidacy bond = 3
+		assert_ok!(Council::submit_candidacy(Origin::signed(i), idx));
+
 	}
 
 	#[test]
@@ -790,7 +837,7 @@ mod tests {
 			assert_eq!(Council::voters(0), Vec::<(u64, u64)>::new());
 			assert_eq!(Council::voter_activity(1), None);
 			assert_eq!(Council::offset_pot(1), None);
-			assert_eq!(Council::approvals_of(1), vec![]);
+			assert_eq!(Council::all_approvals_of(&1), vec![]);
 		});
 	}
 
@@ -801,8 +848,7 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
 
 			// create 65. 64 (set0) + 1 (set1)
-			(1..=65).for_each(vote);
-
+			(1..=65).for_each(|i| vote(i, 2));
 			let set1 = Council::voters(0);
 			let set2 = Council::voters(1);
 
@@ -821,7 +867,7 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
 
-			(1..=129).for_each(vote);
+			(1..=129).for_each(|i| vote(i, 2));
 			assert_eq!(Council::next_voter_set(), 2);
 
 			// reclaim one slot (account 11)
@@ -839,7 +885,7 @@ mod tests {
 			assert_eq!(Council::next_voter_set(), 0);
 
 			// add one.
-			vote(130);
+			vote(130, 2);
 
 			// gap must have been filled by now.
 			assert_eq!(Council::voters(0).len(), 64);
@@ -854,17 +900,43 @@ mod tests {
 	}
 
 	#[test]
+	fn approvals_set_growth_works() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			// create candidates
+			(1..=65).for_each(|i| create_candidate(i, (i-1) as u32));
+
+			// create 65. 64 (set0) + 1 (set1)
+			(1..=65).for_each(|i| vote(i, i as usize));
+
+			// all approvals of should return the exact expected vector.
+			assert_eq!(Council::all_approvals_of(&42), (0..42).map(|_| true).collect::<Vec<bool>>());
+
+			// NOTE: assuming that APPROVAL_SET_SIZE is more or less small-ish. Might fail otherwise.
+			let full_sets = 42 / APPROVAL_SET_SIZE;
+			let left_over = 42 % APPROVAL_SET_SIZE;
+
+			// grab and check the last full set.
+			assert_eq!(Council::approvals_of(42, SetIndex::sa(full_sets-1)), (0..APPROVAL_SET_SIZE).map(|_| true).collect::<Vec<bool>>());
+
+			// grab and check the last, half-empty, set.
+			if left_over > 0 {
+				assert_eq!(Council::approvals_of(42, SetIndex::sa(full_sets)), (0..left_over).map(|_| true).collect::<Vec<bool>>());
+			}
+		})
+	}
+
+	#[test]
 	fn voter_set_for_works() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
 
 			// create 65. 64 (set0) + 1 (set1)
-			(1..=65).for_each(vote);
+			(1..=65).for_each(|i| vote(i, 2));
 
-			assert_eq!(Council::set_for(&1).unwrap().0, 0);
-			assert_eq!(Council::set_for(&64).unwrap().0, 0);
-			assert_eq!(Council::set_for(&65).unwrap().0, 1);
+			assert_eq!(Council::voter_set_for(&1).unwrap().0, 0);
+			assert_eq!(Council::voter_set_for(&64).unwrap().0, 0);
+			assert_eq!(Council::voter_set_for(&65).unwrap().0, 1);
 		})
 	}
 
@@ -1266,8 +1338,10 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(1), vec![true], 0));
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true], 0));
 
-			assert_eq!(Council::approvals_of(1), vec![true]);
-			assert_eq!(Council::approvals_of(4), vec![true]);
+			assert_eq!(Council::all_approvals_of(&
+			1), vec![true]);
+			assert_eq!(Council::all_approvals_of(&
+			4), vec![true]);
 			assert_eq!(voter_ids(), vec![1, 4]);
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 1));
@@ -1276,10 +1350,10 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![false, true, true], 0));
 			assert_ok!(Council::set_approvals(Origin::signed(3), vec![false, true, true], 0));
 
-			assert_eq!(Council::approvals_of(1), vec![true]);
-			assert_eq!(Council::approvals_of(4), vec![true]);
-			assert_eq!(Council::approvals_of(2), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&1), vec![true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true]);
+			assert_eq!(Council::all_approvals_of(&2), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&3), vec![false, true, true]);
 
 			assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
 		});
@@ -1299,8 +1373,8 @@ mod tests {
 			assert_ok!(Council::proxy_set_approvals(Origin::signed(11), vec![true], 0));
 			assert_ok!(Council::proxy_set_approvals(Origin::signed(14), vec![true], 0));
 
-			assert_eq!(Council::approvals_of(1), vec![true]);
-			assert_eq!(Council::approvals_of(4), vec![true]);
+			assert_eq!(Council::all_approvals_of(&1), vec![true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true]);
 			assert_eq!(voter_ids(), vec![1, 4]);
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 1));
@@ -1309,10 +1383,10 @@ mod tests {
 			assert_ok!(Council::proxy_set_approvals(Origin::signed(12), vec![false, true, true], 0));
 			assert_ok!(Council::proxy_set_approvals(Origin::signed(13), vec![false, true, true], 0));
 
-			assert_eq!(Council::approvals_of(1), vec![true]);
-			assert_eq!(Council::approvals_of(4), vec![true]);
-			assert_eq!(Council::approvals_of(2), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&1), vec![true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true]);
+			assert_eq!(Council::all_approvals_of(&2), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&3), vec![false, true, true]);
 
 			assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
 		});
@@ -1349,14 +1423,14 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0));
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true], 0));
 
-			assert_eq!(Council::approvals_of(4), vec![true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true]);
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 1));
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 2));
 			assert_eq!(Council::candidates().len(), 3);
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true, false, true], 0));
 
-			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true, false, true]);
 		});
 	}
 
@@ -1376,34 +1450,34 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true, false, true], 0));
 
 			assert_eq!(voter_ids(), vec![1, 2, 3, 4]);
-			assert_eq!(Council::approvals_of(1), vec![true]);
-			assert_eq!(Council::approvals_of(2), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
+			assert_eq!(Council::all_approvals_of(&1), vec![true]);
+			assert_eq!(Council::all_approvals_of(&2), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&3), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true, false, true]);
 
 			assert_ok!(Council::retract_voter(Origin::signed(1), 0));
 
 			assert_eq!(voter_ids(), vec![4, 2, 3]);
-			assert_eq!(Council::approvals_of(1), Vec::<bool>::new());
-			assert_eq!(Council::approvals_of(2), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
+			assert_eq!(Council::all_approvals_of(&1), Vec::<bool>::new());
+			assert_eq!(Council::all_approvals_of(&2), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&3), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true, false, true]);
 
 			assert_ok!(Council::retract_voter(Origin::signed(2), 1));
 
 			assert_eq!(voter_ids(), vec![4, 3]);
-			assert_eq!(Council::approvals_of(1), Vec::<bool>::new());
-			assert_eq!(Council::approvals_of(2), Vec::<bool>::new());
-			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
-			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
+			assert_eq!(Council::all_approvals_of(&1), Vec::<bool>::new());
+			assert_eq!(Council::all_approvals_of(&2), Vec::<bool>::new());
+			assert_eq!(Council::all_approvals_of(&3), vec![false, true, true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true, false, true]);
 
 			assert_ok!(Council::retract_voter(Origin::signed(3), 1));
 
 			assert_eq!(voter_ids(), vec![4]);
-			assert_eq!(Council::approvals_of(1), Vec::<bool>::new());
-			assert_eq!(Council::approvals_of(2), Vec::<bool>::new());
-			assert_eq!(Council::approvals_of(3), Vec::<bool>::new());
-			assert_eq!(Council::approvals_of(4), vec![true, false, true]);
+			assert_eq!(Council::all_approvals_of(&1), Vec::<bool>::new());
+			assert_eq!(Council::all_approvals_of(&2), Vec::<bool>::new());
+			assert_eq!(Council::all_approvals_of(&3), Vec::<bool>::new());
+			assert_eq!(Council::all_approvals_of(&4), vec![true, false, true]);
 		});
 	}
 
@@ -1450,8 +1524,8 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true, false], 0));
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true], 0));
 			assert_eq!(voter_ids(), vec![2, 5]);
-			assert_eq!(Council::approvals_of(2), vec![true, false]);
-			assert_eq!(Council::approvals_of(5), vec![false, true]);
+			assert_eq!(Council::all_approvals_of(&2), vec![true, false]);
+			assert_eq!(Council::all_approvals_of(&5), vec![false, true]);
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
@@ -1572,7 +1646,7 @@ mod tests {
 			));
 
 			assert_eq!(voter_ids(), vec![5]);
-			assert_eq!(Council::approvals_of(2).len(), 0);
+			assert_eq!(Council::all_approvals_of(&2).len(), 0);
 			assert_eq!(Balances::total_balance(&2), 18);
 			assert_eq!(Balances::total_balance(&5), 52);
 		});
@@ -1633,7 +1707,7 @@ mod tests {
 			));
 
 			assert_eq!(voter_ids(), vec![5]);
-			assert_eq!(Council::approvals_of(2).len(), 0);
+			assert_eq!(Council::all_approvals_of(&2).len(), 0);
 			assert_eq!(Balances::total_balance(&2), 18);
 			assert_eq!(Balances::total_balance(&5), 52);
 		});
@@ -1740,7 +1814,7 @@ mod tests {
 			));
 
 			assert_eq!(voter_ids(), vec![2, 3, 5]);
-			assert_eq!(Council::approvals_of(4).len(), 0);
+			assert_eq!(Council::all_approvals_of(&4).len(), 0);
 			assert_eq!(Balances::total_balance(&4), 38);
 		});
 	}
