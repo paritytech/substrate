@@ -37,14 +37,14 @@ mod tests {
 	use primitives::{twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
 		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
-	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Digest, DigestItem};
+	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, indices, session, system, staking, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
+		SystemConfig, GrandpaConfig, IndicesConfig, Event};
 	use wabt;
 	use primitives::map;
 
@@ -442,8 +442,10 @@ mod tests {
 			]
 		);
 
-		let digest = generic::Digest::<Log>::default();
-		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
+		// session change => consensus authorities change => authorities change digest item appears
+		let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
+		assert_eq!(digest.logs().len(), 1);
+		assert!(digest.logs()[0].as_authorities_change().is_some());
 
 		(block1, block2)
 	}
@@ -569,10 +571,6 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::session(session::RawEvent::NewSession(1))
-				},
-				EventRecord {
-					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Spending(0))
 				},
 				EventRecord {
@@ -582,6 +580,10 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::session(session::RawEvent::NewSession(1))
 				},
 			]);
 		});
