@@ -851,7 +851,9 @@ fn claim_slot(
 }
 
 #[cfg(test)]
-#[allow(dead_code, unused_imports, deprecated)] //FIXME
+#[allow(dead_code, unused_imports, deprecated)]
+// FIXME #2532: need to allow deprecated until refactor is done https://github.com/paritytech/substrate/issues/2532
+
 mod tests {
 	use super::*;
 

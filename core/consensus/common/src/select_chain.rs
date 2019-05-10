@@ -21,7 +21,7 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 /// The SelectChain trait defines the strategy upon which the head is chosen
 /// if multiple forks are present for an opaque definition of "best" in the 
 /// specific chain build.
-////
+///
 /// The Strategy can be customised for the two use cases of authoring new blocks
 /// upon the best chain or which fork to finalise. Unless implemented differently
 /// by default finalisation methods fall back to use authoring, so as a minimum
@@ -42,8 +42,8 @@ pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 	/// best chain to author new blocks upon and probably finalize.
 	fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
 
-	/// Get the most recent block hash of the best chain that contain block
-	/// with the given `target_hash` for finalisation
+	/// Get the best ancestor of `target_hash` that we should attempt
+	/// to finalize next.
 	fn finality_target(
 		&self,
 		target_hash: <Block as BlockT>::Hash,

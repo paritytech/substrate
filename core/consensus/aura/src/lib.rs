@@ -920,7 +920,7 @@ mod tests {
 			let client = net.lock().peer(*peer_id).client().clone();
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
-				client.import_lock().clone()
+				client.import_lock().clone(),
 			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(

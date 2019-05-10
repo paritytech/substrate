@@ -418,11 +418,6 @@ fn run_to_completion_with<F>(
 			)
 		};
 
-		// let select_chain = LongestChain::new(
-		// 	client.backend().clone(),
-		// 	client.import_lock().clone()
-		// );
-
 		wait_for.push(
 			Box::new(
 				client.finality_notification_stream()
