@@ -24,7 +24,7 @@ do
     fi
     echo "| file: ${file}"
     git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} \
-      | grep -n "^+.\{${LINE_WIDTH}\}" ${file}
+      | grep -n "^+.\{${LINE_WIDTH}\}"
     echo "|"
   else
     if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} | grep -q "^+.\{${GOOD_LINE_WIDTH}\}"
@@ -39,7 +39,7 @@ do
       fi
       echo "| file: ${file}"
       git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} \
-        | grep -n "^+.\{${LINE_WIDTH}\}" ${file}
+        | grep -n "^+.\{${LINE_WIDTH}\}"
       echo "|"
     fi
   fi
