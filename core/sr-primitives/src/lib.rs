@@ -128,7 +128,7 @@ impl Permill {
 	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Permill
+impl<N> ops::Mul<N> for Permill
 where
 	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
 		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
@@ -216,7 +216,7 @@ impl Perbill {
 	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
 }
 
-impl<N> rstd::ops::Mul<N> for Perbill
+impl<N> ops::Mul<N> for Perbill
 where
 	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
 		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
