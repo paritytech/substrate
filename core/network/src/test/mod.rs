@@ -47,7 +47,6 @@ use runtime_primitives::{Justification, ConsensusEngineId};
 use crate::service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
-use log::debug;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
