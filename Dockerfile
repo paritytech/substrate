@@ -1,3 +1,6 @@
+# Note: We don't use Alpine and its packaged Rust/Cargo because they're too often out of date,
+# preventing them from being used to build Substrate/Polkadot.
+
 FROM phusion/baseimage:0.10.2 as builder
 LABEL maintainer="chevdor@gmail.com"
 LABEL description="This is the build stage for Substrate. Here we create the binary."
