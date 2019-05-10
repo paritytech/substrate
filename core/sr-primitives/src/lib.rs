@@ -143,7 +143,7 @@ where
 		// `rem` is inferior to one million, thus it fits into u64
 		let rem_u64: u64 = rem.as_();
 
-		// `self` is inferior to one million, thus the product fits into u64
+		// `self` and `rem` are inferior to one million, thus the product fits into u64
 		let rem_multiplied = rem_u64 * self.0 as u64;
 
 		let rem_multiplied_divided = rem_multiplied / 1_000_000;
@@ -231,7 +231,7 @@ where
 		// `rem` is inferior to one billion, thus it fits into u64
 		let rem_u64: u64 = rem.as_();
 
-		// `self` is inferior to one billion, thus the product fits into u64
+		// `self` and `rem` are inferior to one billion, thus the product fits into u64
 		let rem_multiplied = rem_u64 * self.0 as u64;
 
 		let rem_multiplied_divided = rem_multiplied / 1_000_000_000;
