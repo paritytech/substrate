@@ -52,6 +52,8 @@ pub mod metadata;
 mod runtime;
 #[macro_use]
 pub mod inherent;
+#[macro_use]
+pub mod unsigned;
 mod double_map;
 pub mod traits;
 
