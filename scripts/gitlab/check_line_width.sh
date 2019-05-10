@@ -13,38 +13,37 @@ FAIL=""
 
 git diff --name-only ${BASE_BRANCH}...${CI_COMMIT_SHA} \*.rs | while read file
 do
-  if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} | grep -q "^.\{${LINE_WIDTH}\}" ${file}
+  if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} | grep -q "^+.\{${LINE_WIDTH}\}" ${file}
   then
     if [ -z "${FAIL}" ]
     then
       echo "| warning!"
-	  echo "| Lines should not be longer than 120 characters."
-	  echo "| "
-	  echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
+      echo "| Lines should not be longer than 120 characters."
+      echo "| "
+      echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
       echo "|"
       FAIL="true"
     fi
     echo "| file: ${file}"
-    git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} \
-      | grep -n "^.\{${LINE_WIDTH}\}" ${file}
+    git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} \
+      | grep -n "^+.\{${LINE_WIDTH}\}" ${file}
     echo "|"
   else
-  if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} | grep -q "^.\{${GOOD_LINE_WIDTH}\}" ${file}
-  then
-    if [ -z "${FAIL}" ]
+    if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} | grep -q "^+.\{${GOOD_LINE_WIDTH}\}" ${file}
     then
-      echo "| warning!"
-	  echo "| Lines should be longer than 100 characters only in exceptional circumstances!"
-	  echo "| "
-	  echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
+      if [ -z "${FAIL}" ]
+      then
+        echo "| warning!"
+        echo "| Lines should be longer than 100 characters only in exceptional circumstances!"
+        echo "| "
+        echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
+        echo "|"
+      fi
+      echo "| file: ${file}"
+      git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} \
+        | grep -n "^+.\{${LINE_WIDTH}\}" ${file}
       echo "|"
     fi
-    echo "| file: ${file}"
-    git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} \
-      | grep -n "^.\{${LINE_WIDTH}\}" ${file}
-    echo "|"
-  fi
-  
   fi
 done
 
