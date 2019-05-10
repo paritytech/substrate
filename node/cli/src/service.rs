@@ -56,9 +56,6 @@ construct_simple_protocol! {
 ///   https://doc.rust-lang.org/std/default/trait.Default.html
 #[derive(Default)]
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
-	// /// grandpa connection to import block
-	// // FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
-	// pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders::new(),
 }
 
