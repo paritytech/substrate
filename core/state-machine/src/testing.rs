@@ -211,7 +211,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 
 			self.backend.child_storage_root(storage_key, delta)
 		};
-
+		self.overlay.set_storage(storage_key.into(), Some(root.clone()));
 		root
 	}
 
