@@ -45,17 +45,28 @@ construct_simple_protocol! {
 }
 
 /// Node specific configuration
+///
+/// Note that we can only use `[derive(Default)]` if all fields implement
+/// Default themselves, however previously we were using `Option<Arc<...`,
+/// which does not, so the derive macro would fail and we had to implement
+/// the `Default` trait manually below.
+///
+/// Reference: https://doc.rust-lang.org/std/default/trait.Default.html#derivable
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
-	/// grandpa connection to import block
-	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
-	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
-	inherent_data_providers: InherentDataProviders,
+	// /// grandpa connection to import block
+	// // FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
+	// pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+	inherent_data_providers: Option<InherentDataProviders>,
 }
 
+
+/// Implement the `Default` trait for the `NodeConfig` struct to provide default values
+///
+/// Reference: https://doc.rust-lang.org/std/default/trait.Default.html
 impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 	fn default() -> NodeConfig<F> {
 		NodeConfig {
-			grandpa_import_setup: None,
+			// grandpa_import_setup: None,
 			inherent_data_providers: InherentDataProviders::new(),
 		}
 	}
