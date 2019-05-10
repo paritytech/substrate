@@ -9,11 +9,9 @@ LINE_WIDTH="121"
 GOOD_LINE_WIDTH="101"
 
 
-FAIL=""
-
-git diff --name-only ${BASE_BRANCH}...${CI_COMMIT_SHA} \*.rs | while read file
+git diff --name-only ${BASE_BRANCH}...${CI_COMMIT_SHA} \*.rs | ( while read file
 do
-  if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} | grep -q "^+.\{${LINE_WIDTH}\}" ${file}
+  if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} | grep -q "^+.\{${LINE_WIDTH}\}"
   then
     if [ -z "${FAIL}" ]
     then
@@ -29,7 +27,7 @@ do
       | grep -n "^+.\{${LINE_WIDTH}\}" ${file}
     echo "|"
   else
-    if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} | grep -q "^+.\{${GOOD_LINE_WIDTH}\}" ${file}
+    if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} | grep -q "^+.\{${GOOD_LINE_WIDTH}\}"
     then
       if [ -z "${FAIL}" ]
       then
@@ -47,5 +45,5 @@ do
   fi
 done
 
-test "${FAIL}" && exit 1
-
+test -z "${FAIL}"
+)
