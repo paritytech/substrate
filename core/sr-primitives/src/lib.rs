@@ -30,6 +30,7 @@ pub use serde;
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
+use rstd::ops;
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -129,11 +130,25 @@ impl Permill {
 
 impl<N> ::rstd::ops::Mul<N> for Permill
 where
-	N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>
+	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
+		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000)
+		let million = <N as traits::As<u64>>::sa(1_000_000);
+		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+
+		let rem = b.clone().rem(million.clone());
+
+		// `rem` is inferior to one million, thus it fits into u64
+		let rem_u64: u64 = rem.as_();
+
+		// `self` is inferior to one million, thus the product fits into u64
+		let rem_multiplied = rem_u64 * self.0 as u64;
+
+		let rem_multiplied_divided = rem_multiplied / 1_000_000;
+
+		(b / million) * part + traits::As::sa(rem_multiplied_divided)
 	}
 }
 
@@ -201,13 +216,27 @@ impl Perbill {
 	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Perbill
+impl<N> rstd::ops::Mul<N> for Perbill
 where
-	N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>
+	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
+		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
+		let billion = <N as traits::As<u64>>::sa(1_000_000_000);
+		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+
+		let rem = b.clone().rem(billion.clone());
+
+		// `rem` is inferior to one billion, thus it fits into u64
+		let rem_u64: u64 = rem.as_();
+
+		// `self` is inferior to one billion, thus the product fits into u64
+		let rem_multiplied = rem_u64 * self.0 as u64;
+
+		let rem_multiplied_divided = rem_multiplied / 1_000_000_000;
+
+		(b / billion) * part + traits::As::sa(rem_multiplied_divided)
 	}
 }
 
@@ -820,7 +849,18 @@ mod tests {
 
 	#[test]
 	fn saturating_mul() {
-		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
-		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
+		use primitive_types::U256;
+
+		assert_eq!(super::Perbill::one() * std::u128::MAX, std::u128::MAX);
+		assert_eq!(
+			super::Perbill::from_billionths(999_999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
+		);
+
+		assert_eq!(super::Permill::from_percent(100) * std::u128::MAX, std::u128::MAX);
+		assert_eq!(
+			super::Permill::from_millionths(999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
+		);
 	}
 }
