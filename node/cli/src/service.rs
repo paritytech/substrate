@@ -91,16 +91,16 @@ impl<F> Default for SetupState<F> {
 		}
 	}
 
-	// Set the configuration state, which includes discarding it after the systems are setup
-	fn set_setup(&mut self, mut setup) {
-		// TODO
-	}
+	// // Set the configuration state, which includes discarding it after the systems are setup
+	// fn set_setup(&mut self, mut setup) {
+	// 	// TODO
+	// }
 
-	/// Allow the configuration to be taken by `AuthoritySetup` using `take()`
-	fn get_setup(&mut self) -> Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)> {
-		// FIXME
-		self.grandpa_import_setup.take()
-	}
+	// /// Allow the configuration to be taken by `AuthoritySetup` using `take()`
+	// fn get_setup(&mut self) -> Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)> {
+	// 	// FIXME
+	// 	self.grandpa_import_setup.take()
+	// }
 }
 
 
@@ -110,6 +110,8 @@ impl<F> Default for SetupState<F> {
 /// Default themselves, however previously we were using `Option<Arc<...`,
 /// which does not, so the derive macro would fail and we had to implement
 /// the `Default` trait manually below.
+///
+/// Inherents may be attached by the runtime to blocks that are produced
 ///
 /// References:
 ///   https://doc.rust-lang.org/std/default/trait.Default.html#derivable
