@@ -27,7 +27,7 @@
 //! far in the future they are.
 #![deny(warnings)]
 #![forbid(missing_docs, unsafe_code)]
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
+use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::{Debug, Display}};
 
 use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
@@ -43,16 +43,19 @@ use client::{
 	error::Result as CResult,
 	backend::AuxStore,
 };
-use aura_primitives::AURA_ENGINE_ID;
-use runtime_primitives::{generic, generic::BlockId, Justification};
+
+use runtime_primitives::{generic::{self, BlockId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	SimpleBitOps,
 };
+use runtime_support::serde::{Serialize, Deserialize};
+
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use authorities::AuthoritiesApi;
 
-use futures::{Future, IntoFuture, future, stream::Stream};
+use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
 
@@ -67,24 +70,10 @@ use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now};
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
 
+mod digest;
+use digest::CompatibleDigestItem;
+
 type AuthorityId<P> = <P as Pair>::Public;
-type Signature<P> = <P as Pair>::Signature;
-
-/// A handle to the network. This is generally implemented by providing some
-/// handle to a gossip service or similar.
-///
-/// Intended to be a lightweight handle such as an `Arc`.
-#[deprecated(
-	since = "1.0.1",
-	note = "This is dead code and will be removed in a future release",
-)]
-pub trait Network: Clone {
-	/// A stream of input messages for a topic.
-	type In: Stream<Item=Vec<u8>,Error=()>;
-
-	/// Send a message at a specific round out.
-	fn send_message(&self, slot: u64, message: Vec<u8>);
-}
 
 /// A slot duration. Create with `get_or_compute`.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
@@ -125,48 +114,6 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 	consensus_common::ErrorKind::InherentData(err.into()).into()
 }
 
-/// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<T: Pair>: Sized {
-	/// Construct a digest item which contains a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_num: u64, signature: Signature<T>) -> Self;
-
-	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)>;
-
-	/// Return `true` if this seal type is deprecated.  Otherwise, return
-	/// `false`.
-	fn is_deprecated(&self) -> bool;
-}
-
-impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P::Signature>
-	where P: Pair, P::Signature: Clone + Encode + Decode,
-{
-	/// Construct a digest item which is a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature<P>) -> Self {
-		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
-	}
-
-	/// If this item is an Aura seal, return the slot number and signature.
-	#[allow(deprecated)]
-	fn as_aura_seal(&self) -> Option<(u64, Signature<P>)> {
-		match self {
-			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-			_ => None,
-		}
-	}
-
-	#[allow(deprecated)]
-	fn is_deprecated(&self) -> bool {
-		match self {
-			generic::DigestItem::Seal(_, _) => true,
-			_ => false,
-		}
-	}
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct AuraSlotCompatible;
 
@@ -180,58 +127,21 @@ impl SlotCompatible for AuraSlotCompatible {
 	}
 }
 
-/// Start the aura worker in a separate thread.
-#[deprecated(since = "1.1", note = "Please spawn a thread manually")]
-pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
-	slot_duration: SlotDuration,
-	local_key: Arc<P>,
-	client: Arc<C>,
-	block_import: Arc<I>,
-	env: Arc<E>,
-	sync_oracle: SO,
-	on_exit: OnExit,
-	inherent_data_providers: InherentDataProviders,
-	force_authoring: bool,
-) -> Result<(), consensus_common::Error> where
-	B: Block + 'static,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
-	C::Api: AuthoritiesApi<B>,
-	E: Environment<B, Error=Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
-	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
-	Error: From<I::Error> + 'static,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Encode + Decode + Eq + Clone + Debug + Hash + Send + Sync + 'static,
-	P::Signature: Encode,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
-	OnExit: Future<Item=(), Error=()> + Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>> + 'static,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
-{
-	let worker = AuraWorker {
-		client: client.clone(),
-		block_import,
-		env,
-		local_key,
-		inherent_data_providers: inherent_data_providers.clone(),
-		sync_oracle: sync_oracle.clone(),
-		force_authoring,
-	};
-
-	#[allow(deprecated)]	// The function we are in is also deprecated.
-	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, u64, _>(
-		slot_duration.0,
-		client,
-		Arc::new(worker),
-		sync_oracle,
-		on_exit,
-		inherent_data_providers
-	)
-}
-
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
+pub fn start_aura<
+	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
+		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
+		std::hash::Hash + Display + Send + Sync + 'static,
+	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=HashT>,
+	B: Block<Header=H, Hash=HashT>,
+	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
+	E: Environment<B, Error=Error>,
+	I: BlockImport<B> + Send + Sync + 'static,
+	P: Pair + Send + Sync + 'static,
+	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
+	OnExit: Future<Item=(), Error=()>,
+>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
@@ -242,20 +152,13 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
-	B: Block,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
+	generic::DigestItem<HashT, P::Public, P::Signature>: DigestItem<Hash=HashT>,
 	C::Api: AuthoritiesApi<B>,
-	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
-	P::Signature: Encode,
-	SO: SyncOracle + Send + Sync + Clone,
+	P::Public: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
+	P::Signature: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
-	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
@@ -286,7 +189,12 @@ struct AuraWorker<C, E, I, P, SO> {
 	force_authoring: bool,
 }
 
-impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+impl<
+	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
+		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
+		std::hash::Hash + Display + Send + Sync + 'static,
+	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=B::Hash>,
+	B: Block<Header=H, Hash=Hash>, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
@@ -294,10 +202,10 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
-	P::Signature: Encode,
+	P::Public: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
+	P::Signature: Encode + Decode + Eq + Send + Sync + Debug + Clone,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -377,7 +285,11 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 					proposer.propose(
 						slot_info.inherent_data,
 						remaining_duration,
-						Default::default(),
+						generic::Digest {
+							logs: vec![
+								<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_num),
+							],
+						},
 					).into_future(),
 					remaining_duration,
 				)
@@ -386,70 +298,85 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 			}
 		};
 
-		Box::new(
-			proposal_work
-				.map(move |b| {
-					// minor hack since we don't have access to the timestamp
-					// that is actually set by the proposer.
-					let slot_after_building = slot_now(slot_duration);
-					if slot_after_building != Some(slot_num) {
-						info!(
-							"Discarding proposal for slot {}; block production took too long",
-							slot_num
-						);
-						telemetry!(CONSENSUS_INFO; "aura.discarding_proposal_took_too_long";
-							"slot" => slot_num
-						);
-						return
-					}
+		Box::new(proposal_work.map(move |b| {
+			// minor hack since we don't have access to the timestamp
+			// that is actually set by the proposer.
+			let slot_after_building = slot_now(slot_duration);
+			if slot_after_building != Some(slot_num) {
+				info!(
+					"Discarding proposal for slot {}; block production took too long",
+					slot_num
+				);
+				telemetry!(CONSENSUS_INFO; "aura.discarding_proposal_took_too_long";
+					"slot" => slot_num
+				);
+				return
+			}
 
-					let (header, body) = b.deconstruct();
-					let header_num = header.number().clone();
-					let pre_hash = header.hash();
-					let parent_hash = header.parent_hash().clone();
+			let (mut header, body) = b.deconstruct();
+			match header.digest().logs().len() {
+				0 => {
+					warn!(target: "aura", "Runtime stripped our digest!  Re-adding it.");
+					header.set_digest(generic::Digest {
+						logs: vec![
+							generic::DigestItem::aura_pre_digest(slot_num)
+						],
+					})
+				}
+				1 => trace!(target: "aura", "Got correct number of seals.  Good!"),
+				_ => {
+					unimplemented!()
+				}
+			};
+			let header_num = header.number().clone();
+			let pre_hash = header.hash();
+			let parent_hash = header.parent_hash().clone();
 
-					// sign the pre-sealed hash of the block and then
-					// add it to a digest item.
-					let to_sign = (slot_num, pre_hash).encode();
-					let signature = pair.sign(&to_sign[..]);
-					let item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(
-						slot_num,
-						signature,
-					);
+			// sign the pre-sealed hash of the block and then
+			// add it to a digest item.
+			let to_sign = (slot_num, pre_hash).encode();
+			let signature = pair.sign(&to_sign[..]);
+			let item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
-					let import_block: ImportBlock<B> = ImportBlock {
-						origin: BlockOrigin::Own,
-						header,
-						justification: None,
-						post_digests: vec![item],
-						body: Some(body),
-						finalized: false,
-						auxiliary: Vec::new(),
-						fork_choice: ForkChoiceStrategy::LongestChain,
-					};
+			let import_block: ImportBlock<B> = ImportBlock {
+				origin: BlockOrigin::Own,
+				header,
+				justification: None,
+				post_digests: vec![item],
+				body: Some(body),
+				finalized: false,
+				auxiliary: Vec::new(),
+				fork_choice: ForkChoiceStrategy::LongestChain,
+			};
 
-					info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
-						  header_num,
-						  import_block.post_header().hash(),
-						  pre_hash
-					);
-					telemetry!(CONSENSUS_INFO; "aura.pre_sealed_block";
-						"header_num" => ?header_num,
-						"hash_now" => ?import_block.post_header().hash(),
-						"hash_previously" => ?pre_hash
-					);
+			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+					header_num,
+					import_block.post_header().hash(),
+					pre_hash
+			);
+			telemetry!(CONSENSUS_INFO; "aura.pre_sealed_block";
+				"header_num" => ?header_num,
+				"hash_now" => ?import_block.post_header().hash(),
+				"hash_previously" => ?pre_hash
+			);
 
-					if let Err(e) = block_import.import_block(import_block, Default::default()) {
-						warn!(target: "aura", "Error with block built on {:?}: {:?}",
-							  parent_hash, e);
-						telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
-							"hash" => ?parent_hash, "err" => ?e
-						);
-					}
-				})
-				.map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into())
-		)
+			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+				warn!(target: "aura", "Error with block built on {:?}: {:?}",
+						parent_hash, e);
+				telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
+					"hash" => ?parent_hash, "err" => ?e
+				);
+			}
+		}).map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()))
 	}
+}
+
+macro_rules! aura_err {
+	($($i: expr),+) => {
+		{ debug!(target: "aura", $($i),+)
+		; format!($($i),+)
+		}
+	};
 }
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
@@ -463,29 +390,41 @@ fn check_header<B: Block, P: Pair>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-	allow_old_seals: bool,
-) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
+) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Public: AsRef<P::Public>,
 		P::Signature: Decode,
 {
-	let digest_item = match header.digest_mut().pop() {
+	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
 
-	if !allow_old_seals && digest_item.is_deprecated() {
-		debug!(target: "aura", "Header {:?} uses old seal format, rejecting", hash);
-		return Err(format!("Header {:?} uses old seal format, rejecting", hash))
-	}
-
-	let (slot_num, sig) = digest_item.as_aura_seal().ok_or_else(|| {
-		debug!(target: "aura", "Header {:?} is unsealed", hash);
-		format!("Header {:?} is unsealed", hash)
+	let sig = seal.as_aura_seal().ok_or_else(|| {
+		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
+	let mut pre_digest: Option<u64> = None;
+	let mut num_logs = 0;
+	for i in header.digest().logs() {
+		num_logs += 1;
+		trace!(target: "aura", "Checking log {:?} in header {:?}", i, hash);
+		match i.as_aura_pre_digest() {
+			s @ Some(_) => if pre_digest.is_some() {
+				return Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting header {:?}", hash))
+			} else {
+				pre_digest = s
+			},
+			None => trace!(target: "aura", "Ignoring digest not meant for us"),
+		}
+	}
+
+	trace!(target: "aura", "Header {:?} has {:?} pre-runtime digests", hash, num_logs);
+
+	let slot_num = pre_digest.ok_or_else(|| aura_err!("Header {:?} has no AuRa pre-digest", hash))?;
+
 	if slot_num > slot_now {
-		header.digest_mut().push(digest_item);
+		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else {
 		// check the signature is valid under the expected authority and
@@ -499,8 +438,8 @@ fn check_header<B: Block, P: Pair>(
 		let to_sign = (slot_num, pre_hash).encode();
 		let public = expected_author;
 
-		if P::verify(&sig, &to_sign[..], public) {
-			Ok(CheckedHeader::Checked(header, digest_item))
+		if P::verify(sig, &to_sign[..], public) {
+			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -513,7 +452,6 @@ pub struct AuraVerifier<C, E, P> {
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
-	allow_old_seals: bool,
 }
 
 impl<C, E, P> AuraVerifier<C, E, P>
@@ -618,13 +556,9 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 			header,
 			hash,
 			&authorities[..],
-			self.allow_old_seals,
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, seal) => {
-				let (slot_num, _) = seal.as_aura_seal()
-					.expect("check_header always returns a seal digest item; qed");
-
+			CheckedHeader::Checked(pre_header, (slot_num, seal)) => {
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
@@ -754,43 +688,6 @@ pub fn import_queue<B, C, E, P>(
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
-			allow_old_seals: false,
-		}
-	);
-	Ok(BasicQueue::new(verifier, block_import, justification_import))
-}
-
-/// Start an import queue for the Aura consensus algorithm with backwards compatibility.
-#[deprecated(
-	since = "1.0.1",
-	note = "should not be used unless backwards compatibility with an older chain is needed.",
-)]
-pub fn import_queue_accept_old_seals<B, C, E, P>(
-	slot_duration: SlotDuration,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	client: Arc<C>,
-	extra: E,
-	inherent_data_providers: InherentDataProviders,
-) -> Result<AuraImportQueue<B>, consensus_common::Error> where
-	B: Block,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
-	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	E: 'static + ExtraVerification<B>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
-	P::Signature: Encode + Decode,
-{
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
-
-	let verifier = Arc::new(
-		AuraVerifier {
-			client: client.clone(),
-			extra,
-			inherent_data_providers,
-			phantom: PhantomData,
-			allow_old_seals: true,
 		}
 	);
 	Ok(BasicQueue::new(verifier, block_import, justification_import))
@@ -810,6 +707,7 @@ mod tests {
 	use primitives::sr25519;
 	use client::BlockchainEvents;
 	use test_client;
+	use futures::stream::Stream;
 
 	type Error = client::error::Error;
 
@@ -876,7 +774,6 @@ mod tests {
 				extra: NothingExtra,
 				inherent_data_providers,
 				phantom: Default::default(),
-				allow_old_seals: false,
 			})
 		}
 
@@ -935,7 +832,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, sr25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),

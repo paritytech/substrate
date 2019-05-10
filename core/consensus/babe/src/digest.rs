@@ -89,10 +89,13 @@ impl Decode for BabePreDigest {
 /// A digest item which is usable with BABE consensus.
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a BABE pre-digest.
-	fn babe_seal(signature: BabePreDigest) -> Self;
+	fn babe_pre_digest(seal: BabePreDigest) -> Self;
 
 	/// If this item is an BABE pre-digest, return it.
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
+
+	/// Construct a digest item which contains a BABE seal.
+	fn babe_seal(signature: Signature) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
 	fn as_babe_seal(&self) -> Option<&Signature>;
@@ -100,8 +103,8 @@ pub trait CompatibleDigestItem: Sized {
 
 impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
 {
-	fn babe_seal(signature: BabePreDigest) -> Self {
-		DigestItem::PreRuntime(BABE_ENGINE_ID, signature.encode())
+	fn babe_pre_digest(digest: BabePreDigest) -> Self {
+		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
@@ -120,6 +123,10 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
 				None
 			}
 		}
+	}
+
+	fn babe_seal(signature: Signature) -> Self {
+		DigestItem::Seal2(BABE_ENGINE_ID, signature)
 	}
 
 	fn as_babe_seal(&self) -> Option<&Signature> {

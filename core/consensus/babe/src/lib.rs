@@ -166,10 +166,6 @@ pub struct BabeParams<C, E, I, SO, OnExit> {
 pub fn start_babe<
 	B: Block<Header=H>,
 	H: Header<Digest=generic::Digest<generic::DigestItem<<B as Block>::Hash, Public, Signature>>, Hash=<B as Block>::Hash>,
-	/*D: Digest<
-		Item=generic::DigestItem<<B as Block>::Hash, Public, Signature>,
-		Hash=<B as Block>::Hash,
-	> + Encode + Decode,*/
 	C,
 	E,
 	I,
@@ -348,7 +344,7 @@ impl<
 					remaining_duration,
 					generic::Digest {
 						logs: vec![
-							generic::DigestItem::babe_seal(inherent_digest.clone()),
+							generic::DigestItem::babe_pre_digest(inherent_digest.clone()),
 						],
 					},
 				).into_future(),
@@ -380,7 +376,7 @@ impl<
 					warn!(target: "babe", "Runtime stripped our digest!  Re-adding it.");
 					header.set_digest(generic::Digest {
 						logs: vec![
-							generic::DigestItem::babe_seal(inherent_digest)
+							generic::DigestItem::babe_pre_digest(inherent_digest)
 						],
 					})
 				}
@@ -388,7 +384,6 @@ impl<
 				_ => {
 					unimplemented!()
 				}
-
 			};
 			let header_num = header.number().clone();
 			let pre_hash = header.hash();
@@ -397,7 +392,7 @@ impl<
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(pre_hash.as_ref());
-			let signature_digest_item = generic::DigestItem::Seal2(BABE_ENGINE_ID, signature);
+			let signature_digest_item = generic::DigestItem::babe_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -462,10 +457,15 @@ fn check_header<
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => {
-			info!(target: "babe", "Header {:?} is unsealed", hash);
+			debug!(target: "babe", "Header {:?} is unsealed", hash);
 			return Err(format!("Header {:?} is unsealed", hash))
 		}
 	};
+
+	let signature = digest_item.as_babe_seal().ok_or_else(|| {
+		debug!(target: "babe", "Header {:?} has a bad seal", hash);
+		format!("Header {:?} has a bad seal", hash)
+	})?;
 
 	let mut pre_digest_seal: Option<BabePreDigest> = None;
 	let mut num_logs = 0;
@@ -479,7 +479,7 @@ fn check_header<
 			} else {
 				pre_digest_seal = s
 			},
-			None => debug!(target: "babe", "Ignoring digest not meant for us"),
+			None => trace!(target: "babe", "Ignoring digest not meant for us"),
 		}
 	}
 	trace!(target: "babe", "Header {:?} has {:?} pre-runtime digests", hash, num_logs);
@@ -492,11 +492,6 @@ fn check_header<
 	} = pre_digest_seal.ok_or_else(|| {
 		debug!(target: "babe", "Header {:?} has no BABE pre-digest", hash);
 		format!("Header {:?} has no BABE pre-digest", hash)
-	})?;
-
-	let signature = digest_item.as_babe_seal().ok_or_else(|| {
-		debug!(target: "babe", "Header {:?} has a bad seal", hash);
-		format!("Header {:?} has a bad seal", hash)
 	})?;
 
 	if slot_num > slot_now {
@@ -525,7 +520,7 @@ fn check_header<
 				})?
 			};
 			if check(&inout, threshold) {
-				let pre_digest = CompatibleDigestItem::babe_seal(BabePreDigest {
+				let pre_digest = CompatibleDigestItem::babe_pre_digest(BabePreDigest {
 					slot_num,
 					author,
 					vrf_output,

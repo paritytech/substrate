@@ -38,6 +38,7 @@ storage_items! {
 	Number: b"sys:num" => BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
+	StorageDigest: b"sys:digest" => Digest;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -99,18 +100,19 @@ pub fn polish_block(block: &mut Block) {
 	header.state_root = storage_root().into();
 
 	// check digest
-	let mut digest = Digest::default();
+	let ref mut digest = header.digest;
+	let popped = digest.pop().expect("We are given a digest!");
+	digest.push(popped);
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
-	header.digest = digest;
 }
 
-pub fn execute_block(block: Block) {
-	let ref header = block.header;
+pub fn execute_block(mut block: Block) {
+	let ref mut header = block.header;
 
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
@@ -132,15 +134,15 @@ pub fn execute_block(block: Block) {
 	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
 
 	// check digest
-	let mut digest = Digest::default();
+	let ref mut digest = header.digest;
+	let popped = digest.pop().expect("We are given a digest!");
+	digest.push(popped);
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
-	//assert!(digest == header.digest, "Header digest items must match that calculated.");
-	drop(digest)
 }
 
 /// The block executor.

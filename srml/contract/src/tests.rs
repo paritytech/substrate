@@ -707,7 +707,7 @@ fn deduct_blocks() {
 			assert_eq!(bob_contract.rent_allowance, 1_000);
 
 			// Advance 4 blocks
-			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -722,7 +722,7 @@ fn deduct_blocks() {
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
 
 			// Advance 7 blocks more
-			System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -796,7 +796,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 			));
 
 			// Advance blocks
-			System::initialize(&blocks, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&blocks, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert!(trigger_call());
@@ -836,14 +836,14 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 
 			// Advance blocks
-			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
 			// Advance blocks
-			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent must have no effect
 			assert!(trigger_call());
@@ -870,14 +870,14 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 100);
 
 			// Advance blocks
-			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 
 			// Advance blocks
-			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent must have no effect
 			assert!(trigger_call());
@@ -908,14 +908,14 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			assert_eq!(super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 
 			// Advance blocks
-			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&10, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert!(trigger_call());
 			assert!(super::ContractInfoOf::<Test>::get(BOB).is_none());
 
 			// Advance blocks
-			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&20, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent must have no effect
 			assert!(trigger_call());
@@ -998,7 +998,7 @@ fn default_rent_allowance_on_create() {
 			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
 
 			// Advance blocks
-			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), None);
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 
 			// Trigger rent through call
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
