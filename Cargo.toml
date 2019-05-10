@@ -85,12 +85,12 @@ members = [
 	"node/runtime",
 	"node-template",
 	"subkey",
+	"test-utils/chain-spec-builder",
 ]
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
 	"core/test-runtime/wasm",
-	"test-utils/chain-spec-builder"
 ]
 
 [badges]

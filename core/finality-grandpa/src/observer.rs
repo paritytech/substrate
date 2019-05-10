@@ -24,6 +24,7 @@ use grandpa::{
 };
 use log::{debug, info, warn};
 
+use consensus_common::SelectChain;
 use client::{CallExecutor, Client, backend::Backend};
 use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use substrate_primitives::{ed25519::Public as AuthorityId, H256, Blake2Hasher};
@@ -143,9 +144,9 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
+pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	config: Config,
-	link: LinkHalf<B, E, Block, RA>,
+	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
@@ -153,11 +154,13 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
+	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
 {
 	let LinkHalf {
 		client,
+		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
 	} = link;

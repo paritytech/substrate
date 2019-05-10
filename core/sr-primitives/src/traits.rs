@@ -23,6 +23,7 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, HasCompact};
+use crate::transaction_validity::TransactionValidity;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -785,4 +786,18 @@ pub trait RuntimeApiInfo {
 	const ID: [u8; 8];
 	/// The version of the runtime api.
 	const VERSION: u32;
+}
+
+/// Something that can validate unsigned extrinsics.
+pub trait ValidateUnsigned {
+	/// The call to validate
+	type Call;
+
+	/// Return the validity of the call
+	///
+	/// This doesn't execute any side-effects; it merely checks
+	/// whether the transaction would panic if it were included or not.
+	///
+	/// Changes made to storage should be discarded by caller.
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
