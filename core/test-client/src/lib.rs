@@ -303,6 +303,13 @@ impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {
 		unimplemented!("not (yet) used in tests")
 	}
 
+	fn remote_read_child(
+		&self,
+		_request: client::light::fetcher::RemoteReadChildRequest<Block::Header>,
+	) -> Self::RemoteReadResult {
+		unimplemented!("not (yet) used in tests")
+	}
+
 	fn remote_call(
 		&self,
 		_request: client::light::fetcher::RemoteCallRequest<Block::Header>,

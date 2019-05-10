@@ -29,7 +29,7 @@ use srml_support::StorageValue;
 use primitives::traits::{As, One, Zero};
 use rstd::{prelude::*, result, cmp, vec};
 use parity_codec::Decode;
-use srml_system::{ensure_inherent, Trait as SystemTrait};
+use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
 use parity_codec::Encode;
@@ -117,7 +117,7 @@ decl_module! {
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
-			ensure_inherent(origin)?;
+			ensure_none(origin)?;
 			assert!(!<Self as Store>::Update::exists(), "Final hint must be updated only once in the block");
 			assert!(
 				srml_system::Module::<T>::block_number() >= hint,
@@ -372,7 +372,7 @@ mod tests {
 				System::initialize(&i, &parent_hash, &Default::default());
 				assert_ok!(FinalityTracker::dispatch(
 					Call::final_hint(i-1),
-					Origin::INHERENT,
+					Origin::NONE,
 				));
 				FinalityTracker::on_finalize(i);
 				let hdr = System::finalize();

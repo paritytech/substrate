@@ -29,7 +29,7 @@ pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatal
 ///
 /// ```nocompile
 /// impl_outer_inherent! {
-///     pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
+///     impl Inherents where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
 ///         timestamp: Timestamp,
 ///         consensus: Consensus,
 ///         /// Aura module using the `Timestamp` call.

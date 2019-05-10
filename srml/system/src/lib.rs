@@ -76,9 +76,12 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
+};
+#[cfg(any(feature = "std", test))]
+use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
@@ -227,15 +230,17 @@ pub enum RawOrigin<AccountId> {
 	Root,
 	/// It is signed by some public key and we provide the `AccountId`.
 	Signed(AccountId),
-	/// It is signed by nobody but included and agreed upon by the validators anyway: it's "inherently" true.
-	Inherent,
+	/// It is signed by nobody, can be either:
+	/// * included and agreed upon by the validators anyway,
+	/// * or unsigned transaction validated by a module.
+	None,
 }
 
 impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
 		match s {
 			Some(who) => RawOrigin::Signed(who),
-			None => RawOrigin::Inherent,
+			None => RawOrigin::None,
 		}
 	}
 }
@@ -384,12 +389,12 @@ pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'stati
 }
 
 /// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
-pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
 	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
 {
 	match o.into() {
-		Some(RawOrigin::Inherent) => Ok(()),
-		_ => Err("bad origin: expected to be an inherent origin"),
+		Some(RawOrigin::None) => Ok(()),
+		_ => Err("bad origin: expected to be no origin"),
 	}
 }
 
