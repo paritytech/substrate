@@ -582,7 +582,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Spending(0))
+					event: Event::treasury(treasury::RawEvent::Spending(0)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -597,7 +597,8 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::session(session::RawEvent::NewSession(1))
+					event: Event::session(session::RawEvent::NewSession(1)),
+					topics: vec![],
 				},
 			]);
 		});
