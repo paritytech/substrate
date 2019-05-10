@@ -91,6 +91,8 @@ check-web-wasm:
     - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
+  tags:
+    - linux-docker
 
 .build-only:                      &build-only
   only:
@@ -175,7 +177,7 @@ publish-docker-release:
     # DOCKERFILE:                  scripts/docker/Dockerfile
     CONTAINER_IMAGE:               parity/substrate
   before_script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" 
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
