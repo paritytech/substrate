@@ -623,13 +623,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 	{
 		let mut broadcast_topics = Vec::new();
 		let action = {
-			let mut inner = self.inner.write();
 			match GossipMessage::<Block>::decode(&mut data) {
 				Some(GossipMessage::VoteOrPrecommit(ref message))
-					=> inner.validate_round_message(who, message),
-				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(who, message),
+					=> self.inner.write().validate_round_message(who, message),
+				Some(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
 				Some(GossipMessage::Neighbor(update)) => {
-					let (topics, action) = inner.import_neighbor_message(
+					let (topics, action) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
 					);
