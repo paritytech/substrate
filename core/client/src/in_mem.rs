@@ -26,7 +26,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
@@ -712,7 +712,7 @@ impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage
 }
 
 impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> {
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}
 }

@@ -23,3 +23,17 @@ lto = true
 
 [workspace]
 members = []
+
+[patch.crates-io]
+trie-db = { git = "https://github.com/cheme/trie.git", branch = "simple-codec" }
+trie-root = { git = "https://github.com/cheme/trie.git", branch = "simple-codec" }
+hash-db = { git = "https://github.com/cheme/trie.git", branch = "simple-codec" }
+memory-db = { git = "https://github.com/cheme/trie.git", branch = "simple-codec" }
+keccak-hasher = { git = "https://github.com/cheme/trie.git", branch = "simple-codec" }
+
+#[patch.crates-io]
+#trie-db = { path = "../../../../parity-trie/trie-db" }
+#trie-root = { path = "../../../../parity-trie/trie-root" }
+#hash-db = { path = "../../../../parity-trie/hash-db" }
+#memory-db = { path = "../../../../parity-trie/memory-db" }
+#keccak-hasher = { path = "../../../../parity-trie/test-support/keccak-hasher" }

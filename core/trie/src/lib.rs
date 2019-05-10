@@ -33,9 +33,23 @@ pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
-pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
+pub use trie_db::{Trie, TrieMut, DBValue, Recorder, 
+	Query, TrieLayOut, NibbleHalf, Cache16, NibbleOps};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::{KeyFunction, prefixed_key};
+
+
+#[derive(Default)]
+/// substrate trie layout
+pub struct Layout<H>(rstd::marker::PhantomData<H>);
+
+impl<H: Hasher> TrieLayOut for Layout<H> {
+	const USE_EXTENSION: bool = false;
+	type H = H;
+	type C = NodeCodec<Self::H, Self::N, node_codec::BitMap16>;
+	type N = NibbleHalf;
+	type CB = Cache16;
+}
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -54,11 +68,11 @@ pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DB
 pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
 
 /// Persistent trie database read-access interface for the a given hasher.
-pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
+pub type TrieDB<'a, H> = trie_db::TrieDB<'a, Layout<H>>;
 /// Persistent trie database write-access interface for the a given hasher.
-pub type TrieDBMut<'a, H> = trie_db::TrieDBMut<'a, H, NodeCodec<H>>;
+pub type TrieDBMut<'a, H> = trie_db::TrieDBMut<'a, Layout<H>>;
 /// Querying interface, as in `trie_db` but less generic.
-pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, H, NodeCodec<H>, Q>;
+pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, Layout<H>, Q>;
 
 /// Determine a trie root given its ordered contents, closed form.
 pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
@@ -276,54 +290,13 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 	Ok(TrieDB::<H>::new(&*db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
-// Utilities (not exported):
-
-const EMPTY_TRIE: u8 = 0;
-const LEAF_NODE_OFFSET: u8 = 1;
-const LEAF_NODE_BIG: u8 = 127;
-const EXTENSION_NODE_OFFSET: u8 = 128;
-const EXTENSION_NODE_BIG: u8 = 253;
-const BRANCH_NODE_NO_VALUE: u8 = 254;
-const BRANCH_NODE_WITH_VALUE: u8 = 255;
-const LEAF_NODE_THRESHOLD: u8 = LEAF_NODE_BIG - LEAF_NODE_OFFSET;
-const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;	//125
-const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
-const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
-
-fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
-	if input.len() < count {
-		return None
-	}
-	let r = &(*input)[..count];
-	*input = &(*input)[count..];
-	Some(r)
-}
-
-fn partial_to_key(partial: &[u8], offset: u8, big: u8) -> Vec<u8> {
-	let nibble_count = (partial.len() - 1) * 2 + if partial[0] & 16 == 16 { 1 } else { 0 };
-	let (first_byte_small, big_threshold) = (offset, (big - offset) as usize);
-	let mut output = [first_byte_small + nibble_count.min(big_threshold) as u8].to_vec();
-	if nibble_count >= big_threshold { output.push((nibble_count - big_threshold) as u8) }
-	if nibble_count % 2 == 1 {
-		output.push(partial[0] & 0x0f);
-	}
-	output.extend_from_slice(&partial[1..]);
-	output
-}
-
-fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
-	let first = if has_value {
-		BRANCH_NODE_WITH_VALUE
-	} else {
-		BRANCH_NODE_NO_VALUE
-	};
-	let mut bitmap: u16 = 0;
-	let mut cursor: u16 = 1;
-	for v in has_children {
-		if v { bitmap |= cursor }
-		cursor <<= 1;
-	}
-	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
+/// constants used with trie simplification codec
+mod s_cst {
+	pub const EMPTY_TRIE: u8 = 0;
+	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
+	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
+	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
+	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
 }
 
 #[cfg(test)]
@@ -332,9 +305,16 @@ mod tests {
 	use codec::{Encode, Compact};
 	use substrate_primitives::Blake2Hasher;
 	use hash_db::{HashDB, Hasher};
-	use trie_db::{DBValue, TrieMut, Trie};
+	use trie_db::{DBValue, TrieMut, Trie, TrieLayOut, NodeCodec as NodeCodecT};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
 	use hex_literal::hex;
+
+  type Layout = super::Layout<Blake2Hasher>;
+
+  fn hashed_null_node() -> <Blake2Hasher as Hasher>::Out {
+    <NodeCodec<Blake2Hasher, <Layout as TrieLayOut>::N, trie_db::BitMap<Layout>>
+      as NodeCodecT<_, <Layout as TrieLayOut>::N>>::hashed_null_node()
+  }
 
 	fn check_equivalent(input: &Vec<(&[u8], &[u8])>) {
 		{
@@ -523,15 +503,15 @@ mod tests {
 			assert_eq!(*memtrie.root(), real);
 			unpopulate_trie(&mut memtrie, &x);
 			memtrie.commit();
-			if *memtrie.root() != <NodeCodec<Blake2Hasher> as trie_db::NodeCodec<Blake2Hasher>>::hashed_null_node() {
+			if *memtrie.root() != hashed_null_node() {
 				println!("- TRIE MISMATCH");
 				println!("");
-				println!("{:?} vs {:?}", memtrie.root(), <NodeCodec<Blake2Hasher> as trie_db::NodeCodec<Blake2Hasher>>::hashed_null_node());
+				println!("{:?} vs {:?}", memtrie.root(), hashed_null_node());
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);
 				}
 			}
-			assert_eq!(*memtrie.root(), <NodeCodec<Blake2Hasher> as trie_db::NodeCodec<Blake2Hasher>>::hashed_null_node());
+			assert_eq!(*memtrie.root(), hashed_null_node());
 		}
 	}
 

@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use futures::IntoFuture;
 
-use hash_db::{HashDB, Hasher};
+use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
@@ -281,7 +281,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				// we share the storage for multiple checks, do it here
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-				if !storage.contains(&cht_root, &[]) {
+				if !storage.contains(&cht_root, EMPTY_PREFIX) {
 					return Err(ClientError::InvalidCHTProof.into());
 				}
 

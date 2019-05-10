@@ -46,7 +46,7 @@ pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
 use primitives;
 use crate::changes_trie::build::prepare_input;
@@ -76,7 +76,7 @@ pub trait RootsStorage<H: Hasher>: Send + Sync {
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher>: RootsStorage<H> {
 	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }
 
 /// Changes trie configuration.

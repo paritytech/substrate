@@ -18,8 +18,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 use log::debug;
-use hash_db::Hasher;
-use hash_db::HashDB;
+use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use trie::{
 	MemoryDB, PrefixedMemoryDB, TrieError, default_child_trie_root,
 	read_trie_value_with, read_child_trie_value_with, record_all_keys
@@ -195,7 +194,7 @@ where
 {
 	let db = create_proof_check_backend_storage(proof);
 
-	if !db.contains(&root, &[]) {
+	if !db.contains(&root, EMPTY_PREFIX) {
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
@@ -211,7 +210,7 @@ where
 {
 	let mut db = MemoryDB::default();
 	for item in proof {
-		db.insert(&[], &item);
+		db.insert(EMPTY_PREFIX, &item);
 	}
 	db
 }
