@@ -414,11 +414,11 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				let response = response
 					.blocks
 					.into_iter()
-					.take(1)
 					.map(|b| match (b.body, b.header) {
 						(Some(b), Some(h)) => Some((b, h)),
 						_ => None
-					}).nth(0);
+					})
+					.nth(0);
 
 				// Body and Header should included in valid `RemoteBodyResponses`
 				let (body, header) = match response {
