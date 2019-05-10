@@ -17,8 +17,11 @@ do
   then
     if [ -z "${FAIL}" ]
     then
-      echo "|"
-      echo "| newly added changes contain lines longer than $(( ${LINE_WIDTH} - 1)) characters."
+      echo "| warning!"
+	  echo "| Lines should be longer than 100 characters long only in exceptional circumstances and\
+ certainly no longer than 120."
+	  echo "| "
+	  echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
       echo "|"
       FAIL="true"
     fi
