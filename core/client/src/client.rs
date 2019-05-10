@@ -52,7 +52,7 @@ use primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
-	ExecutionStrategy, ExecutionManager, prove_read,
+	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
@@ -370,6 +370,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
 			.and_then(|state| prove_read(state, key)
+				.map(|(_, proof)| proof)
+				.map_err(Into::into))
+	}
+
+	/// Reads child storage value at a given block + storage_key + key, returning
+	/// read proof.
+	pub fn read_child_proof(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> error::Result<Vec<Vec<u8>>> {
+		self.state_at(id)
+			.and_then(|state| prove_child_read(state, storage_key, key)
 				.map(|(_, proof)| proof)
 				.map_err(Into::into))
 	}
