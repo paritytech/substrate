@@ -86,8 +86,8 @@ macro_rules! ensure {
 	}}
 }
 
-/// Evaluate an expression, assert it returns the expected error and check
-/// runtime storage root hasn't change (i.e. expression is no operation on storage).
+/// Evaluate an expression, assert it returns an expected `Err` value and that
+/// runtime storage has not been mutated (i.e. expression is a no-operation).
 ///
 /// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
 #[macro_export]
@@ -100,6 +100,10 @@ macro_rules! assert_noop {
 	}
 }
 
+/// Panic if an expression doesn't evaluate to an `Err`.
+///
+/// Used as `assert_err!(expression_to_assert, expected_err_expression)`.
+
 /// Assert an expression returns an error specified.
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
@@ -111,10 +115,10 @@ macro_rules! assert_err {
 	}
 }
 
-/// Assert an expression is specified Ok
+/// Panic if an expression doesn't evaluate to `Ok`.
 ///
 /// Used as `assert_ok!(expression_to_assert, expected_ok_expression)`,
-/// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`
+/// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`.
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
