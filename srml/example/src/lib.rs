@@ -107,9 +107,9 @@
 //!
 //! \### Supported Origins
 //!
-//! // What origins are used and supported in this module (root, signed, inherent)
+//! // What origins are used and supported in this module (root, signed, none)
 //! // i.e. root when <code>\`ensure_root\`</code> used
-//! // i.e. inherent when <code>\`ensure_inherent\`</code> used
+//! // i.e. none when <code>\`ensure_none\`</code> used
 //! // i.e. signed when <code>\`ensure_signed\`</code> used
 //!
 //! <code>\`inherent\`</code> <INSERT_DESCRIPTION>
@@ -322,7 +322,9 @@ decl_event!(
 // Generally you'll want to split these into three groups:
 // - Public calls that are signed by an external account.
 // - Root calls that are allowed to be made only by the governance system.
-// - Inherent calls that are allowed to be made only by the block authors and validators.
+// - Unsigned calls that can be of two kinds:
+//   * "Inherent extrinsics" that are opinions generally held by the block authors that build child blocks.
+//   * Unsigned Transactions that are of intrinsic recognisable utility to the network, and are validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
@@ -337,10 +339,10 @@ decl_event!(
 // `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
 //
 // There are three entries in the `system::Origin` enum that correspond
-// to the above bullets: `::Signed(AccountId)`, `::Root` and `::Inherent`. You should always match
+// to the above bullets: `::Signed(AccountId)`, `::Root` and `::None`. You should always match
 // against them as the first thing you do in your function. There are three convenience calls
 // in system that do the matching for you and return a convenient result: `ensure_signed`,
-// `ensure_root` and `ensure_inherent`.
+// `ensure_root` and `ensure_none`.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -448,7 +450,7 @@ decl_module! {
 		// For instance you can generate extrinsics for the upcoming produced block.
 		fn offchain_worker(_n: T::BlockNumber) {
 			// We don't do anything here.
-			// but we could dispatch extrinsic (transaction/inherent) using
+			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
 			// runtime_io::submit_extrinsic
 		}
 	}

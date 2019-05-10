@@ -28,6 +28,7 @@ use client::{
 	BlockchainEvents, error::Result,
 	blockchain::Backend as BlockchainBackend,
 	runtime_api::{Core, RuntimeVersion, ApiExt},
+	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
@@ -50,6 +51,7 @@ type PeerData =
 				test_client::Executor,
 				Block,
 				test_client::runtime::RuntimeApi,
+				LongestChain<test_client::Backend, Block>
 			>
 		>
 	>;
@@ -106,9 +108,15 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_block_import(&self, client: Arc<PeersClient>)
 		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, PeerData)
 	{
+		
+		let select_chain = LongestChain::new(
+			client.backend().clone(),
+			client.import_lock().clone()
+		);
 		let (import, link) = block_import(
 			client,
-			Arc::new(self.test_config.clone())
+			Arc::new(self.test_config.clone()),
+			select_chain,
 		).expect("Could not create block import for fresh peer.");
 		let shared_import = Arc::new(import);
 		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
@@ -679,6 +687,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				link,
 			)
 		};
+
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| Ok(n.header.number() < &30))
