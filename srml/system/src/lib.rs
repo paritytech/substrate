@@ -755,7 +755,9 @@ mod tests {
 	#[test]
 	fn deposit_event_topics() {
 		with_externalities(&mut new_test_ext(), || {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into());
+			const BLOCK_NUMBER: u64 = 1;
+
+			System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &[0u8; 32].into());
 			System::note_finished_extrinsics();
 
 			let topics = vec![
@@ -797,15 +799,15 @@ mod tests {
 			// Note that these are indexes of the events.
 			assert_eq!(
 				System::event_topics(&(), &topics[0]),
-				vec![0, 1],
+				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
 			);
 			assert_eq!(
 				System::event_topics(&(), &topics[1]),
-				vec![0, 2],
+				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
 			);
 			assert_eq!(
 				System::event_topics(&(), &topics[2]),
-				vec![0],
+				vec![(BLOCK_NUMBER, 0)],
 			);
 		});
 	}
