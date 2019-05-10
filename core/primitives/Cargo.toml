@@ -16,8 +16,7 @@ impl-serde = { version = "0.1", optional = true }
 wasmi = { version = "0.4.3", optional = true }
 hash-db = { version = "0.12", default-features = false }
 hash256-std-hasher = { version = "0.12", default-features = false }
-ring = { version = "0.14", optional = true }
-untrusted = { version = "0.6", optional = true }
+ed25519-dalek = { version = "1.0.0-pre.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
 schnorrkel = { version = "0.1", optional = true }
@@ -61,8 +60,7 @@ std = [
 	"rustc-hex/std",
 	"twox-hash",
 	"blake2-rfc",
-	"ring",
-	"untrusted",
+	"ed25519-dalek",
 	"hex",
 	"base58",
 	"substrate-bip39",

@@ -136,7 +136,7 @@ use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, Member};
 use substrate_primitives::storage::well_known_keys;
-use system::{ensure_signed, ensure_inherent};
+use system::{ensure_signed, ensure_none};
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
@@ -298,7 +298,7 @@ decl_module! {
 
 		/// Note that the previous block's validator missed its opportunity to propose a block.
 		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) {
-			ensure_inherent(origin)?;
+			ensure_none(origin)?;
 
 			T::InherentOfflineReport::handle_report(offline);
 		}
