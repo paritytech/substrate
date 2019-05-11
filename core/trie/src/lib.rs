@@ -80,7 +80,7 @@ pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
 {
-	trie_root::trie_root::<H, TrieStream, _, _, _>(input)
+	trie_root::trie_root_no_ext::<H, TrieStream, _, _, _>(input)
 }
 
 /// Determine a trie root given a hash DB and delta values.
@@ -133,7 +133,7 @@ pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
 {
-	trie_root::unhashed_trie::<H, TrieStream, _, _, _>(input)
+	trie_root::unhashed_trie_no_ext::<H, TrieStream, _, _, _>(input)
 }
 
 /// A trie root formed from the items, with keys attached according to their
@@ -534,9 +534,8 @@ mod tests {
 		];
 		let trie = unhashed_trie::<Blake2Hasher, _, _, _>(input);
 		println!("trie: {:#x?}", trie);
-
 		assert_eq!(trie, vec![
-			0x03,					// leaf (0x01) with (+) key of 2 nibbles (0x02)
+			0x42,					// leaf 0x40 (2^6) with (+) key of 2 nibbles (0x02)
 			0xaa,					// key data
 			to_compact(1),			// length of value in bytes as Compact
 			0xbb					// value data
@@ -548,19 +547,18 @@ mod tests {
 		let input = vec![(&[0x48, 0x19], &[0xfe]), (&[0x13, 0x14], &[0xff])];
 		let trie = unhashed_trie::<Blake2Hasher, _, _, _>(input);
 		println!("trie: {:#x?}", trie);
-
 		let mut ex = Vec::<u8>::new();
-		ex.push(0xfe);									// branch, no value
+		ex.push(0x80);									// branch, no value (0b_10..) no nibble
 		ex.push(0x12);									// slots 1 & 4 are taken from 0-7
 		ex.push(0x00);									// no slots from 8-15
 		ex.push(to_compact(0x05));						// first slot: LEAF, 5 bytes long.
-		ex.push(0x04);									// leaf with 3 nibbles
+		ex.push(0x43);									// leaf 0x40 with 3 nibbles
 		ex.push(0x03);									// first nibble
 		ex.push(0x14);									// second & third nibble
 		ex.push(to_compact(0x01));						// 1 byte data
 		ex.push(0xff);									// value data
 		ex.push(to_compact(0x05));						// second slot: LEAF, 5 bytes long.
-		ex.push(0x04);									// leaf with 3 nibbles
+		ex.push(0x43);									// leaf with 3 nibbles
 		ex.push(0x08);									// first nibble
 		ex.push(0x19);									// second & third nibble
 		ex.push(to_compact(0x01));						// 1 byte data
