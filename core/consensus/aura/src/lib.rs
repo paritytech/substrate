@@ -25,18 +25,16 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-#![deny(warnings)]
 #![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::{Debug, Display}};
 
 use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
+	SelectChain, well_known_cache_keys
 };
-use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::{
-	ChainHead,
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
 	runtime_api::{ApiExt, Core as CoreApi},
@@ -145,6 +143,7 @@ pub fn start_aura<
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
+	select_chain: SC,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -171,7 +170,7 @@ pub fn start_aura<
 	};
 	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
-		client,
+		select_chain,
 		Arc::new(worker),
 		sync_oracle,
 		on_exit,
@@ -705,7 +704,7 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
 	use primitives::sr25519;
-	use client::BlockchainEvents;
+	use client::{LongestChain, BlockchainEvents};
 	use test_client;
 	use futures::stream::Stream;
 
@@ -817,6 +816,10 @@ mod tests {
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
 			let client = net.lock().peer(*peer_id).client().clone();
+			let select_chain = LongestChain::new(
+				client.backend().clone(),
+				client.import_lock().clone(),
+			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
@@ -836,6 +839,7 @@ mod tests {
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
+				select_chain,
 				client,
 				environ.clone(),
 				DummyOracle,

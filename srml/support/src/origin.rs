@@ -101,7 +101,7 @@ macro_rules! impl_outer_origin {
 		}
 		#[allow(dead_code)]
 		impl $name {
-			pub const INHERENT: Self = $name::system($system::RawOrigin::Inherent);
+			pub const NONE: Self = $name::system($system::RawOrigin::None);
 			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
 				$name::system($system::RawOrigin::Signed(by))
@@ -156,14 +156,14 @@ mod tests {
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
-			Inherent,
+			None,
 		}
 
 		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
 				match s {
 					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::Inherent,
+					None => RawOrigin::None,
 				}
 			}
 		}

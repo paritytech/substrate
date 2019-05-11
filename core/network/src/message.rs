@@ -23,7 +23,7 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
-	FromBlock
+	FromBlock, RemoteReadChildRequest,
 };
 
 /// A unique ID of a request.
@@ -129,8 +129,8 @@ pub mod generic {
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
-		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
-		RequestId, Transactions, Direction, ConsensusEngineId,
+		RemoteReadResponse, Transactions, Direction,
+		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -198,6 +198,8 @@ pub mod generic {
 		RemoteChangesRequest(RemoteChangesRequest<Hash>),
 		/// Remote changes reponse.
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
+		/// Remote child storage read request.
+		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -287,6 +289,19 @@ pub mod generic {
 		pub id: RequestId,
 		/// Block at which to perform call.
 		pub block: H,
+		/// Storage key.
+		pub key: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote storage read child request.
+	pub struct RemoteReadChildRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block at which to perform call.
+		pub block: H,
+		/// Child Storage key.
+		pub storage_key: Vec<u8>,
 		/// Storage key.
 		pub key: Vec<u8>,
 	}

@@ -61,10 +61,9 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
-use consensus_common::well_known_cache_keys;
+use consensus_common::{SelectChain, well_known_cache_keys};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
-	ChainHead,
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
 	runtime_api::ApiExt,
@@ -131,7 +130,7 @@ impl SlotCompatible for BabeSlotCompatible {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<C, E, I, SO, OnExit> {
+pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 
 	/// The configuration for BABE.  Includes the slot duration, threshold, and
 	/// other parameters.
@@ -142,6 +141,9 @@ pub struct BabeParams<C, E, I, SO, OnExit> {
 
 	/// The client to use
 	pub client: Arc<C>,
+
+	/// The SelectChain Strategy
+	pub select_chain: SC,
 
 	/// A block importer
 	pub block_import: Arc<I>,
@@ -176,23 +178,25 @@ pub fn start_babe<
 	config,
 	local_key,
 	client,
+	select_chain,
 	block_import,
 	env,
 	sync_oracle,
 	on_exit,
 	inherent_data_providers,
 	force_authoring,
-}: BabeParams<C, E, I, SO, OnExit>) -> Result<
+}: BabeParams<C, E, I, SO, SC, OnExit>) -> Result<
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
+	SC: SelectChain<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	OnExit: Future<Item=(), Error=()>,
@@ -210,7 +214,7 @@ pub fn start_babe<
 	};
 	slots::start_slot_worker::<_, _, _, _, _, BabeSlotCompatible, _>(
 		config.0,
-		client,
+		select_chain,
 		Arc::new(worker),
 		sync_oracle,
 		on_exit,
@@ -794,10 +798,13 @@ fn claim_slot(
 }
 
 #[cfg(test)]
-#[allow(dead_code, unused_imports)]
+#[allow(dead_code, unused_imports, deprecated)]
+// FIXME #2532: need to allow deprecated until refactor is done https://github.com/paritytech/substrate/issues/2532
+
 mod tests {
 	use super::*;
 
+	use client::LongestChain;
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
@@ -962,6 +969,7 @@ mod tests {
 				config,
 				local_key: Arc::new(key.clone().into()),
 				block_import: client.clone(),
+				select_chain: LongestChain::new(client.backend().clone(), client.import_lock().clone()),
 				client,
 				env: environ.clone(),
 				sync_oracle: DummyOracle,

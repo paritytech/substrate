@@ -754,7 +754,7 @@ fn call_contract_removals() {
 
 #[test]
 fn inherent_claim_surcharge_contract_removals() {
-	removals(|| Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok());
+	removals(|| Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok());
 }
 
 #[test]
@@ -765,10 +765,10 @@ fn signed_claim_surcharge_contract_removals() {
 #[test]
 fn claim_surcharge_malus() {
 	// Test surcharge malus for inherent
-	claim_surcharge(4, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(3, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(2, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(1, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), false);
+	claim_surcharge(4, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(3, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(2, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(1, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), false);
 
 	// Test surcharge malus for signed
 	claim_surcharge(4, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);

@@ -188,6 +188,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
+	use parity_codec::Encode;
 	use trie::{TrieMut, TrieDBMut, PrefixedMemoryDB};
 	use super::*;
 
@@ -196,6 +197,15 @@ pub mod tests {
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(b"value3", &[142]).expect("insert failed");
+			trie.insert(b"value4", &[124]).expect("insert failed");
+		};
+
+		{
+			let mut sub_root = Vec::new();
+			root.encode_to(&mut sub_root);
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(b":child_storage:default:sub1", &sub_root).expect("insert failed");
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
