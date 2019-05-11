@@ -38,6 +38,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
 use rstd::prelude::*;
 
 pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};
