@@ -272,7 +272,7 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let voters = Self::all_voters();
-			// TODO: Most likely we prefer this bond to be proportional to `|voters| * |candidates|`
+			// TODO: Most likely we prefer this bond to be proportional to `|voters| * |candidates|`.
 			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(Self::voter_count() as u64);
 			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
