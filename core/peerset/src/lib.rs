@@ -260,13 +260,13 @@ impl Peerset {
 				// We use `k = 0.98`, so we divide by `50`. With that value, it takes 34.3 seconds
 				// to reduce the reputation by half.
 				fn reput_tick(reput: i32) -> i32 {
-					let mut diff = -reput / 50;
+					let mut diff = reput / 50;
 					if diff == 0 && reput < 0 {
-						diff = 1;
-					} else if diff == 0 && reput > 0 {
 						diff = -1;
+					} else if diff == 0 && reput > 0 {
+						diff = 1;
 					}
-					reput.saturating_add(diff)
+					reput.saturating_sub(diff)
 				}
 				match self.data.peer(&peer) {
 					peersstate::Peer::Connected(mut peer) =>
