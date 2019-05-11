@@ -288,56 +288,39 @@ pub trait OffchainWorker<BlockNumber> {
 impl<N> OffchainWorker<N> for () {}
 
 macro_rules! tuple_impl {
-	($one:ident,) => {
-		impl<Number: Copy, $one: OnFinalize<Number>> OnFinalize<Number> for ($one,) {
+	($first:ident, $($rest:ident,)+) => {
+		tuple_impl!([$first] [$first] [$($rest)+]);
+	};
+	([$($direct:ident)+] [$($reverse:ident)+] []) => {
+		impl<
+			Number: Copy,
+			$($direct: OnFinalize<Number>),+
+		> OnFinalize<Number> for ($($direct),+,) {
 			fn on_finalize(n: Number) {
-				$one::on_finalize(n);
+				$($reverse::on_finalize(n);)+
 			}
 		}
-		impl<Number: Copy, $one: OnInitialize<Number>> OnInitialize<Number> for ($one,) {
+		impl<
+			Number: Copy,
+			$($direct: OnInitialize<Number>),+
+		> OnInitialize<Number> for ($($direct),+,) {
 			fn on_initialize(n: Number) {
-				$one::on_initialize(n);
+				$($direct::on_initialize(n);)+
 			}
 		}
-		impl<Number: Copy, $one: OffchainWorker<Number>> OffchainWorker<Number> for ($one,) {
+		impl<
+			Number: Copy,
+			$($direct: OffchainWorker<Number>),+
+		> OffchainWorker<Number> for ($($direct),+,) {
 			fn generate_extrinsics(n: Number) {
-				$one::generate_extrinsics(n);
+				$($direct::generate_extrinsics(n);)+
 			}
 		}
 	};
-	($first:ident, $($rest:ident,)+) => {
-		impl<
-			Number: Copy,
-			$first: OnFinalize<Number>,
-			$($rest: OnFinalize<Number>),+
-		> OnFinalize<Number> for ($first, $($rest),+) {
-			fn on_finalize(n: Number) {
-				$first::on_finalize(n);
-				$($rest::on_finalize(n);)+
-			}
-		}
-		impl<
-			Number: Copy,
-			$first: OnInitialize<Number>,
-			$($rest: OnInitialize<Number>),+
-		> OnInitialize<Number> for ($first, $($rest),+) {
-			fn on_initialize(n: Number) {
-				$first::on_initialize(n);
-				$($rest::on_initialize(n);)+
-			}
-		}
-		impl<
-			Number: Copy,
-			$first: OffchainWorker<Number>,
-			$($rest: OffchainWorker<Number>),+
-		> OffchainWorker<Number> for ($first, $($rest),+) {
-			fn generate_extrinsics(n: Number) {
-				$first::generate_extrinsics(n);
-				$($rest::generate_extrinsics(n);)+
-			}
-		}
-		tuple_impl!($($rest,)+);
-	}
+	([$($direct:ident)+] [$($reverse:ident)+] [$first:ident $($rest:ident)*]) => {
+		tuple_impl!([$($direct)+] [$($reverse)+] []);
+		tuple_impl!([$($direct)+ $first] [$first $($reverse)+] [$($rest)*]);
+	};
 }
 
 #[allow(non_snake_case)]

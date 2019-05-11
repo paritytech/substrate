@@ -3,7 +3,7 @@ description = "Connectivity manager based on reputation"
 homepage = "http://parity.io"
 license = "GPL-3.0"
 name = "substrate-peerset"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
