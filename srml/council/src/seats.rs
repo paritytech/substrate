@@ -29,7 +29,6 @@ use parity_codec::{Encode, Decode};
 use system::{self, ensure_signed};
 
 // TODO: replace u32 with bool.
-// TODO: is the reclaim strategy enough?
 // TODO: double check offset and pot
 
 // no polynomial attacks:
@@ -726,6 +725,10 @@ impl<T: Trait> Module<T> {
 	/// This means that any account submitting an index at any point in time should submit:
 	/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in the
 	/// first `set_index` sets.
+	///
+	/// Moreover, if a voter is stored in the last element of a set, any retraction or reap of a
+	/// voter in that set can lead to the last voter to be swapped over to that particular index.
+	// TODO: usage of `swap_remove` might be worth re-considering.
 	fn voter_at(index: usize) -> Option<(T::AccountId, BalanceOf<T>)> {
 		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let set = Self::voters(set_index);
@@ -1351,7 +1354,8 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true, false], 1, 0));
 			// give 1 some new high balance
 			let _ = Balances::make_free_balance_be(&1, 995); // + 5 reserved => 1000
-			assert_ok!(Council::set_approvals(Origin::signed(1), vec![false, false, true], 1, 0)); // TODO: perfect example of voter holes.
+			// NOTE: this happens due to index change
+			assert_ok!(Council::set_approvals(Origin::signed(1), vec![false, false, true], 1, 0));
 			assert_eq!(Council::offset_pot(1).unwrap(), Council::get_offset(100, 1));
 			assert_ok!(Council::end_block(System::block_number()));
 
