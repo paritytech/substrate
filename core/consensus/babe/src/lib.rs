@@ -187,7 +187,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, HashT, H>(BabeParams {
 	generic::DigestItem<HashT, Public, Signature>: DigestItem<Hash=HashT>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Signature>,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,

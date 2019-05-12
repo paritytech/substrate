@@ -835,7 +835,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, _, sr25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
