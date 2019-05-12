@@ -23,7 +23,7 @@ mod sync;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use log::trace;
 use client;
@@ -40,7 +40,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg};
+use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg, CustomMessageOutcome};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -427,11 +427,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		*finalized_hash = Some(info.chain.finalized_hash);
 	}
 
-	/// Restart sync for a peer.
-	fn restart_sync(&self) {
-		self.net_proto_channel.send_from_client(ProtocolMsg::Abort);
-	}
-
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(
@@ -654,36 +649,55 @@ pub trait TestNetFactory: Sized {
 		let (network_to_protocol_sender, mut network_to_protocol_rx) = mpsc::unbounded();
 
 		let (mut protocol, protocol_sender) = Protocol::new(
-			is_offline.clone(),
-			is_major_syncing.clone(),
 			peers.clone(),
 			network_sender.clone(),
 			config.clone(),
 			client.clone(),
-			import_queue.clone(),
 			None,
 			tx_pool,
 			specialization,
 		).unwrap();
 
+		let is_offline2 = is_offline.clone();
+		let is_major_syncing2 = is_major_syncing.clone();
+		let import_queue2 = import_queue.clone();
+
 		std::thread::spawn(move || {
 			tokio::runtime::current_thread::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
-					match msg {
-						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) =>
-							protocol.on_peer_connected(peer_id, debug_msg),
-						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) =>
-							protocol.on_peer_disconnected(peer_id, debug_msg),
+					let outcome = match msg {
+						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
+							protocol.on_peer_connected(peer_id, debug_msg);
+							CustomMessageOutcome::None
+						},
+						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
+							protocol.on_peer_disconnected(peer_id, debug_msg);
+							CustomMessageOutcome::None
+						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
 							protocol.on_custom_message(peer_id, message),
-						Some(FromNetworkMsg::Synchronize) => protocol.synchronize(),
+						Some(FromNetworkMsg::Synchronize) => {
+							protocol.synchronize();
+							CustomMessageOutcome::None
+						},
 						None => return Ok(Async::Ready(()))
+					};
+
+					match outcome {
+						CustomMessageOutcome::BlockImport(origin, blocks) =>
+							import_queue2.import_blocks(origin, blocks),
+						CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
+							import_queue2.import_justification(origin, hash, nb, justification),
+						CustomMessageOutcome::None => {}
 					}
 				}
 
 				if let Async::Ready(_) = protocol.poll().unwrap() {
 					return Ok(Async::Ready(()))
 				}
+
+				is_offline2.store(protocol.is_offline(), Ordering::Relaxed);
+				is_major_syncing2.store(protocol.is_major_syncing(), Ordering::Relaxed);
 
 				Ok(Async::NotReady)
 			}));
@@ -801,11 +815,6 @@ pub trait TestNetFactory: Sized {
 	/// Send block finalization notifications for all peers.
 	fn send_finality_notifications(&mut self) {
 		self.peers().iter().for_each(|peer| peer.send_finality_notifications())
-	}
-
-	/// Restart sync for a peer.
-	fn restart_peer(&mut self, i: usize) {
-		self.peers()[i].restart_sync();
 	}
 
 	/// Perform synchronization until complete, if provided the
