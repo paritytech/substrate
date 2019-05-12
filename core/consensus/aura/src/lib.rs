@@ -126,20 +126,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<
-	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
-		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
-		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=HashT>,
-	B: Block<Header=H, Hash=HashT>,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
-	E: Environment<B, Error=Error>,
-	I: BlockImport<B> + Send + Sync + 'static,
-	P: Pair + Send + Sync + 'static,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	OnExit: Future<Item=(), Error=()>,
->(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, HashT, H>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
@@ -151,13 +138,26 @@ pub fn start_aura<
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
-	generic::DigestItem<HashT, P::Public, P::Signature>: DigestItem<Hash=HashT>,
+	B: Block<Header=H, Hash=HashT>,
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
+	SC: SelectChain<B>,
+	generic::DigestItem<HashT, P::Public, P::Signature>: DigestItem<Hash=HashT>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	P: Pair + Send + Sync + 'static,
 	P::Public: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	P::Signature: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
+	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
+		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
+		std::hash::Hash + Display + Send + Sync + 'static,
+	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=HashT>,
+	E: Environment<B, Error=Error>,
+	I: BlockImport<B> + Send + Sync + 'static,
+	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
+	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
