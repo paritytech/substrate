@@ -16,40 +16,61 @@
 
 //! # Treasury Module
 //!
-//! The Treasury module keeps account of currency in a pot and manages the subsequent
-//! deployment of these funds.
+//! The Treasury module manages the collection and deployment of a pot of currency.
 //!
 //! - [`treasury::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
 //!
-//! Treasury funds can be used to pay for developers who provide software updates,
-//! any changes decided by referenda, and to generally keep the system running smoothly.
-//! Treasury can be used with other modules, such as to tax validator rewards in the Staking module.
+//! Treasury funds can be used to pay for developers who provide software updates, changes
+//! decided by referenda, general system maintenance. Treasury works nicely with other modules, for example, to tax validator rewards in the Staking module.
 //!
-//!
-//! Funds for treasury are raised in two ways:
-//! 1. By minting new tokens, leading to inflation, and
-//! 2. By channeling tokens from transaction fees and slashing.
+//! Funds can be raised by:
+//! 1. Minting new tokens, leading to inflation.
+//! 2. Collecting tokens from transaction, validator taxes, or slashing.
 //!
 //!
 //! ### Terminology
 //!
+//! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
+//! - **Beneficiary:** An account who will receive the funds from a proposal iff
+//! the proposal is approved.
+//! approves
+//! - **Deposit:** Funds that a proposer must lock when making a deposit. The
+//! deposit will be returned or burned if the proposal is approved or rejected
+//! respectively.
+//! - **Pot:** Unspent funds accumulated by the treasury module.
+//!
 //! ### Implementations
 //!
 //! The treasury module provides an implementation for the following trait:
+//!
 //! - `OnDilution` - Mint extra funds upon dilution; maintain the ratio of `portion` diluted to `total_issuance`.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! - `propose_spend` - Propose a spending proposal and stake a proposal deposit.
+//! - `propose_spend` - Make a spending proposal and stake the required deposit.
 //! - `set_pot` - Set the spendable balance of funds.
 //! - `configure` - Configure the module's proposal requirements.
-//! - `reject_proposal` - Reject a proposal and slash the deposit.
-//! - `approve_proposal` - Accept the proposal and return the deposit.
+//! - `reject_proposal` - Reject a proposal, slashing the deposit.
+//! - `approve_proposal` - Accept the proposal, returning the deposit.
+//!
+//! ## Usage
+//!
+//! ```
+//!
+//! // Propose a spend
+//!
+//! // Proposal gets rejected
+//!
+//! # fn main() {
+//!   //TODO Why doesn't this actually print anything?
+//!   println!("Hello")
+//! }
+//! ```
 //!
 //! ## GenesisConfig
 //!
@@ -179,8 +200,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 		// Config...
 
-		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
-		/// proposal gets these back. A rejected proposal doesn't.
+		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
+		/// An accepted proposal gets these back. A rejected proposal does not.
 		ProposalBond get(proposal_bond) config(): Permill;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
