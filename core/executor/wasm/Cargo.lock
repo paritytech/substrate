@@ -108,11 +108,11 @@ dependencies = [
 
 [[package]]
 name = "runtime-test"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
- "sr-io 1.0.0",
- "sr-sandbox 1.0.0",
- "substrate-primitives 1.0.0",
+ "sr-io 2.0.0",
+ "sr-sandbox 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
@@ -148,28 +148,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "sr-io"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-std 1.0.0",
- "substrate-primitives 1.0.0",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
 name = "sr-sandbox"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-std 1.0.0",
- "substrate-primitives 1.0.0",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
 name = "sr-std"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -181,7 +181,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "substrate-primitives"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -189,7 +189,7 @@ dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-std 1.0.0",
+ "sr-std 2.0.0",
 ]
 
 [[package]]

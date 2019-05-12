@@ -66,6 +66,7 @@
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
 ///                             inherent.
+/// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
 ///
 /// # Note
 ///
@@ -285,6 +286,13 @@ macro_rules! construct_runtime {
 			$(
 				$name: $module::{ $( $modules $( ( $( $modules_args ),* ) )* ),* }
 			),*;
+		);
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{};
+			$(
+				$name: $module::{ $( $modules $( ( $( $modules_args )* ) )* )* }
+			)*
 		);
 	}
 }
@@ -945,5 +953,67 @@ macro_rules! __decl_instance_import {
 		$crate::paste::item! {
 			$(use $module as [< $module _ $instance >];)*
 		}
+	};
+}
+
+/// A private macro that calls impl_outer_validate_unsigned for Call.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_outer_validate_unsigned {
+	(
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
+			ValidateUnsigned $( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
+		}
+		$( $rest:tt )*
+	) => {
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{ $( $parsed )* $name };
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
+			$ignore:ident $( ( $( $args_ignore:ident )* ) )*
+			$( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
+		}
+		$( $rest:tt )*
+	) => {
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{ $( $parsed )* };
+			$name: $module:: $(<$module_instance>::)? {
+				$( $modules $( ( $( $modules_args )* ) )* )*
+			}
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {}
+		$( $rest:tt )*
+	) => {
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{ $( $parsed )* };
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		{ $(
+			$parsed_modules:ident
+		)* };
+	) => {
+		$crate::impl_outer_validate_unsigned!(
+			impl ValidateUnsigned for $runtime {
+				$( $parsed_modules )*
+			}
+		);
 	};
 }

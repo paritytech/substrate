@@ -3,7 +3,7 @@ description = "libp2p implementation of the ethcore network library"
 homepage = "http://parity.io"
 license = "GPL-3.0"
 name = "substrate-network-libp2p"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 

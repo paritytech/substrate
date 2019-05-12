@@ -1,7 +1,7 @@
 [package]
 name = "chain-spec-builder"
-version = "0.1.0"
-authors = ["haydn dufrene <haydn.dufrene@gmail.com>"]
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]

@@ -17,33 +17,16 @@
 //! Peer Set Manager (PSM). Contains the strategy for choosing which nodes the network should be
 //! connected to.
 
-mod slots;
+mod peersstate;
 
-use std::collections::VecDeque;
+use std::{collections::HashMap, collections::VecDeque, time::Instant};
 use futures::{prelude::*, sync::mpsc, try_ready};
 use libp2p::PeerId;
-use log::trace;
-use lru_cache::LruCache;
-use slots::{SlotType, SlotState, Slots};
+use log::{debug, error, trace};
 use serde_json::json;
 
-const PEERSET_SCORES_CACHE_SIZE: usize = 1000;
-const DISCOVERED_NODES_LIMIT: u32 = 1000;
-
-#[derive(Debug)]
-struct PeersetData {
-	/// List of nodes that we know exist, but we are not connected to.
-	/// Elements in this list must never be in `out_slots` or `in_slots`.
-	discovered: Slots,
-	/// If true, we only accept reserved nodes.
-	reserved_only: bool,
-	/// Node slots for outgoing connections.
-	out_slots: Slots,
-	/// Node slots for incoming connections.
-	in_slots: Slots,
-	/// List of node scores.
-	scores: LruCache<PeerId, i32>,
-}
+/// Reputation change for a node when we get disconnected from it.
+const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
 
 #[derive(Debug)]
 enum Action {
@@ -147,9 +130,15 @@ pub struct PeersetConfig {
 /// errors.
 #[derive(Debug)]
 pub struct Peerset {
-	data: PeersetData,
+	data: peersstate::PeersState,
+	/// If true, we only accept reserved nodes.
+	reserved_only: bool,
 	rx: mpsc::UnboundedReceiver<Action>,
 	message_queue: VecDeque<Message>,
+	/// When the `Peerset` was created.
+	created: Instant,
+	/// Last time when we updated the reputations of connected nodes.
+	latest_time_update: Instant,
 }
 
 impl Peerset {
@@ -157,30 +146,33 @@ impl Peerset {
 	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
 		let (tx, rx) = mpsc::unbounded();
 
-		let data = PeersetData {
-			discovered: Slots::new(DISCOVERED_NODES_LIMIT),
-			reserved_only: config.reserved_only,
-			out_slots: Slots::new(config.out_peers),
-			in_slots: Slots::new(config.in_peers),
-			scores: LruCache::new(PEERSET_SCORES_CACHE_SIZE),
-		};
-
 		let handle = PeersetHandle {
 			tx,
 		};
 
 		let mut peerset = Peerset {
-			data,
+			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
 			rx,
+			reserved_only: config.reserved_only,
 			message_queue: VecDeque::new(),
+			created: Instant::now(),
+			latest_time_update: Instant::now(),
 		};
 
 		for peer_id in config.reserved_nodes {
-			peerset.data.discovered.add_peer(peer_id, SlotType::Reserved);
+			if let peersstate::Peer::Unknown(entry) = peerset.data.peer(&peer_id) {
+				entry.discover().set_reserved(true);
+			} else {
+				debug!(target: "peerset", "Duplicate reserved node in config: {:?}", peer_id);
+			}
 		}
 
 		for peer_id in config.bootnodes {
-			peerset.data.discovered.add_peer(peer_id, SlotType::Common);
+			if let peersstate::Peer::Unknown(entry) = peerset.data.peer(&peer_id) {
+				entry.discover();
+			} else {
+				debug!(target: "peerset", "Duplicate bootnode in config: {:?}", peer_id);
+			}
 		}
 
 		peerset.alloc_slots();
@@ -188,115 +180,131 @@ impl Peerset {
 	}
 
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
-		// Nothing more to do if we're already connected.
-		if self.data.in_slots.contains(&peer_id) {
-			self.data.in_slots.mark_reserved(&peer_id);
-			return;
-		}
+		let mut entry = match self.data.peer(&peer_id) {
+			peersstate::Peer::Connected(mut connected) => {
+				connected.set_reserved(true);
+				return
+			}
+			peersstate::Peer::NotConnected(entry) => entry,
+			peersstate::Peer::Unknown(entry) => entry.discover(),
+		};
 
-		match self.data.out_slots.add_peer(peer_id, SlotType::Reserved) {
-			SlotState::Added(peer_id) => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&peer_id);
-
-				// notify that connection has been made
-				trace!(target: "peerset", "Connecting to new reserved peer {}", peer_id);
-				self.message_queue.push_back(Message::Connect(peer_id));
-				return;
-			},
-			SlotState::Swaped { removed, added } => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&added);
-				// let's add the peer we disconnected from to the discovered list again
-				self.data.discovered.add_peer(removed.clone(), SlotType::Common);
-				// swap connections
-				trace!(target: "peerset", "Connecting to new reserved peer {}, dropping {}", added, removed);
-				self.message_queue.push_back(Message::Drop(removed));
-				self.message_queue.push_back(Message::Connect(added));
-			}
-			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
-				return;
-			}
-			SlotState::MaxCapacity(peer_id) => {
-				self.data.discovered.add_peer(peer_id, SlotType::Reserved);
-				return;
-			}
-		}
+		// We reach this point if and only if we were not connected to the node.
+		entry.set_reserved(true);
+		entry.force_outgoing();
+		self.message_queue.push_back(Message::Connect(peer_id));
 	}
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
-		self.data.in_slots.mark_not_reserved(&peer_id);
-		self.data.out_slots.mark_not_reserved(&peer_id);
-		self.data.discovered.mark_not_reserved(&peer_id);
-		if self.data.reserved_only {
-			if self.data.in_slots.remove_peer(&peer_id) || self.data.out_slots.remove_peer(&peer_id) {
-				// insert peer back into discovered list
-				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
-				self.message_queue.push_back(Message::Drop(peer_id));
-				// call alloc_slots again, cause we may have some reserved peers in discovered list
-				// waiting for the slot that was just cleared
-				self.alloc_slots();
+		match self.data.peer(&peer_id) {
+			peersstate::Peer::Connected(mut peer) => {
+				peer.set_reserved(false);
+				if self.reserved_only {
+					peer.disconnect();
+					self.message_queue.push_back(Message::Drop(peer_id));
+				}
 			}
+			peersstate::Peer::NotConnected(mut peer) => peer.set_reserved(false),
+			peersstate::Peer::Unknown(_) => {}
 		}
 	}
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
 		// Disconnect non-reserved nodes.
-		self.data.reserved_only = reserved_only;
-		if self.data.reserved_only {
-			for peer_id in self.data.in_slots.clear_common_slots().into_iter().chain(self.data.out_slots.clear_common_slots().into_iter()) {
-				// insert peer back into discovered list
-				self.data.discovered.add_peer(peer_id.clone(), SlotType::Common);
-				self.message_queue.push_back(Message::Drop(peer_id));
+		self.reserved_only = reserved_only;
+		if self.reserved_only {
+			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
+				let peer = self.data.peer(&peer_id).into_connected()
+					.expect("We are enumerating connected peers, therefore the peer is connected; qed");
+				if !peer.is_reserved() {
+					peer.disconnect();
+					self.message_queue.push_back(Message::Drop(peer_id));
+				}
 			}
+
 		} else {
 			self.alloc_slots();
 		}
 	}
 
 	fn on_report_peer(&mut self, peer_id: PeerId, score_diff: i32) {
-		let score = match self.data.scores.get_mut(&peer_id) {
-			Some(score) => {
-				*score = score.saturating_add(score_diff);
-				*score
-			},
-			None => {
-				self.data.scores.insert(peer_id.clone(), score_diff);
-				score_diff
-			}
+		// We want reputations to be up-to-date before adjusting them.
+		self.update_time();
+
+		match self.data.peer(&peer_id) {
+			peersstate::Peer::Connected(mut peer) => peer.add_reputation(score_diff),
+			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(score_diff),
+			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(score_diff),
+		}
+	}
+
+	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
+	/// over time, such as reputation increases for staying connected.
+	fn update_time(&mut self) {
+		// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do it
+		// we know that we're not going to miss seconds because of rounding to integers.
+		let secs_diff = {
+			let now = Instant::now();
+			let elapsed_latest = self.latest_time_update - self.created;
+			let elapsed_now = now - self.created;
+			self.latest_time_update = now;
+			elapsed_now.as_secs() - elapsed_latest.as_secs()
 		};
 
-		if score < 0 {
-			// peer will be removed from `in_slots` or `out_slots` in `on_dropped` method
-			if self.data.in_slots.contains(&peer_id) || self.data.out_slots.contains(&peer_id) {
-				self.data.in_slots.remove_peer(&peer_id);
-				self.data.out_slots.remove_peer(&peer_id);
-				self.message_queue.push_back(Message::Drop(peer_id));
+		// For each elapsed second, move the node reputation towards zero.
+		// If we multiply each second the reputation by `k` (where `k` is between 0 and 1), it
+		// takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half. Use this formula to
+		// empirically determine a value of `k` that looks correct.
+		for _ in 0..secs_diff {
+			for peer in self.data.peers().cloned().collect::<Vec<_>>() {
+				// We use `k = 0.98`, so we divide by `50`. With that value, it takes 34.3 seconds
+				// to reduce the reputation by half.
+				fn reput_tick(reput: i32) -> i32 {
+					let mut diff = reput / 50;
+					if diff == 0 && reput < 0 {
+						diff = -1;
+					} else if diff == 0 && reput > 0 {
+						diff = 1;
+					}
+					reput.saturating_sub(diff)
+				}
+				match self.data.peer(&peer) {
+					peersstate::Peer::Connected(mut peer) =>
+						peer.set_reputation(reput_tick(peer.reputation())),
+					peersstate::Peer::NotConnected(mut peer) =>
+						peer.set_reputation(reput_tick(peer.reputation())),
+					peersstate::Peer::Unknown(_) => unreachable!("We iterate over known peers; qed")
+				}
 			}
 		}
 	}
 
+	/// Try to fill available out slots with nodes.
 	fn alloc_slots(&mut self) {
-		while let Some((peer_id, slot_type)) = self.data.discovered.pop_most_important_peer(self.data.reserved_only) {
-			match self.data.out_slots.add_peer(peer_id, slot_type) {
-				SlotState::Added(peer_id) => {
-					trace!(target: "peerset", "Connecting to new peer {}", peer_id);
-					self.message_queue.push_back(Message::Connect(peer_id));
-				},
-				SlotState::Swaped { removed, added } => {
-					// insert peer back into discovered list
-					trace!(target: "peerset", "Connecting to new peer {}, dropping {}", added, removed);
-					self.data.discovered.add_peer(removed.clone(), SlotType::Common);
-					self.message_queue.push_back(Message::Drop(removed));
-					self.message_queue.push_back(Message::Connect(added));
+		self.update_time();
+
+		loop {
+			// Try to grab the next node to attempt to connect to.
+			let next = match self.data.reserved_not_connected_peer() {
+				Some(p) => p,
+				None => if self.reserved_only {
+					break	// No known node to add.
+				} else {
+					match self.data.highest_not_connected_peer() {
+						Some(p) => p,
+						None => break,	// No known node to add.
+					}
 				}
-				SlotState::Upgraded(_) | SlotState::AlreadyExists(_) => {
-					// TODO: we should never reach this point
-				},
-				SlotState::MaxCapacity(peer_id) => {
-					self.data.discovered.add_peer(peer_id, slot_type);
-					break;
-				},
+			};
+
+			// Don't connect to nodes with an abysmal reputation.
+			if next.reputation() == i32::min_value() {
+				break;
+			}
+
+			match next.try_outgoing() {
+				Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
+				Err(_) => break,	// No more slots available.
 			}
 		}
 	}
@@ -305,60 +313,24 @@ impl Peerset {
 	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
 	///
 	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
-	/// connection implicitely means `Accept`, but incoming connections aren't cancelled by
+	/// connection implicitely means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
 	///
 	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
 	/// peerset is already connected to, in which case it must not answer.
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
-		trace!(
-			target: "peerset",
-			"Incoming {:?}\nin_slots={:?}\nout_slots={:?}",
-			peer_id, self.data.in_slots, self.data.out_slots
-		);
-		// if `reserved_only` is set, but this peer is not a part of our discovered list,
-		// a) it is not reserved, so we reject the connection
-		// b) we are already connected to it, so we reject the connection
-		if self.data.reserved_only && !self.data.discovered.is_reserved(&peer_id) {
-			self.message_queue.push_back(Message::Reject(index));
-			return;
-		}
+		trace!(target: "peerset", "Incoming {:?}", peer_id);
 
-		// check if we are already connected to this peer
-		if self.data.out_slots.contains(&peer_id) {
-			// we are already connected. in this case we do not answer
-			return;
-		}
-
-		let slot_type = if self.data.reserved_only {
-			SlotType::Reserved
-		} else {
-			SlotType::Common
+		let not_connected = match self.data.peer(&peer_id) {
+			// If we're already connected, don't answer, as the docs mention.
+			peersstate::Peer::Connected(_) => return,
+			peersstate::Peer::NotConnected(entry) => entry,
+			peersstate::Peer::Unknown(entry) => entry.discover(),
 		};
 
-		match self.data.in_slots.add_peer(peer_id, slot_type) {
-			SlotState::Added(peer_id) => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&peer_id);
-				self.message_queue.push_back(Message::Accept(index));
-				return;
-			},
-			SlotState::Swaped { removed, added } => {
-				// reserved node may have been previously stored as normal node in discovered list
-				self.data.discovered.remove_peer(&added);
-				// swap connections.
-				self.message_queue.push_back(Message::Drop(removed));
-				self.message_queue.push_back(Message::Accept(index));
-			},
-			SlotState::AlreadyExists(_) | SlotState::Upgraded(_) => {
-				// we are already connected. in this case we do not answer
-				return;
-			},
-			SlotState::MaxCapacity(peer_id) => {
-				self.data.discovered.add_peer(peer_id, slot_type);
-				self.message_queue.push_back(Message::Reject(index));
-				return;
-			},
+		match not_connected.try_accept_incoming() {
+			Ok(_) => self.message_queue.push_back(Message::Accept(index)),
+			Err(_) => self.message_queue.push_back(Message::Reject(index)),
 		}
 	}
 
@@ -367,24 +339,21 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, peer_id: PeerId) {
-		trace!(
-			target: "peerset",
-			"Dropping {:?}\nin_slots={:?}\nout_slots={:?}",
-			peer_id, self.data.in_slots, self.data.out_slots
-		);
-		// Automatically connect back if reserved.
-		if self.data.in_slots.is_reserved(&peer_id) || self.data.out_slots.is_reserved(&peer_id) {
-			self.message_queue.push_back(Message::Connect(peer_id));
-			return;
+		trace!(target: "peerset", "Dropping {:?}", peer_id);
+
+		// We want reputations to be up-to-date before adjusting them.
+		self.update_time();
+
+		match self.data.peer(&peer_id) {
+			peersstate::Peer::Connected(mut entry) => {
+				// Decrease the node's reputation so that we don't try it again and again and again.
+				entry.add_reputation(DISCONNECT_REPUTATION_CHANGE);
+				entry.disconnect();
+			}
+			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
+				error!(target: "peerset", "Received dropped() for non-connected node"),
 		}
 
-		// Otherwise, free the slot.
-		self.data.in_slots.remove_peer(&peer_id);
-		self.data.out_slots.remove_peer(&peer_id);
-
-		// Note: in this dummy implementation we consider that peers never expire. As soon as we
-		// are disconnected from a peer, we try again.
-		self.data.discovered.add_peer(peer_id, SlotType::Common);
 		self.alloc_slots();
 	}
 
@@ -393,28 +362,42 @@ impl Peerset {
 	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
 	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
 	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
+		let mut discovered_any = false;
+
 		for peer_id in peer_ids {
-			if !self.data.in_slots.contains(&peer_id) && !self.data.out_slots.contains(&peer_id) && !self.data.discovered.contains(&peer_id) {
-				trace!(target: "peerset", "Discovered new peer: {:?}", peer_id);
-				self.data.discovered.add_peer(peer_id, SlotType::Common);
-			} else {
-				trace!(target: "peerset", "Discovered known peer: {:?}", peer_id);
+			if let peersstate::Peer::Unknown(entry) = self.data.peer(&peer_id) {
+				entry.discover();
+				discovered_any = true;
 			}
 		}
 
-		self.alloc_slots();
+		if discovered_any {
+			self.alloc_slots();
+		}
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
-	pub fn debug_info(&self) -> serde_json::Value {
+	pub fn debug_info(&mut self) -> serde_json::Value {
+		self.update_time();
+
 		json!({
-			"data": {
-				// add scores
-				"discovered": self.data.discovered.debug_info(),
-				"reserved_only": self.data.reserved_only,
-				"out_slots": self.data.out_slots.debug_info(),
-				"in_slots": self.data.in_slots.debug_info()
-			},
+			"nodes": self.data.peers().cloned().collect::<Vec<_>>().into_iter().map(|peer_id| {
+				let state = match self.data.peer(&peer_id) {
+					peersstate::Peer::Connected(entry) => json!({
+						"connected": true,
+						"reputation": entry.reputation()
+					}),
+					peersstate::Peer::NotConnected(entry) => json!({
+						"connected": false,
+						"reputation": entry.reputation()
+					}),
+					peersstate::Peer::Unknown(_) =>
+						unreachable!("We iterate over the known peers; QED")
+				};
+
+				(peer_id.to_base58(), state)
+			}).collect::<HashMap<_, _>>(),
+			"reserved_only": self.reserved_only,
 			"message_queue": self.message_queue.len(),
 		})
 	}
@@ -454,7 +437,7 @@ mod tests {
 			assert_eq!(message, expected_message);
 			peerset = p;
 		}
-		assert!(peerset.message_queue.is_empty());
+		assert!(peerset.message_queue.is_empty(), peerset.message_queue);
 		peerset
 	}
 
@@ -464,49 +447,6 @@ mod tests {
 			.map_err(|_| ())?;
 		let message = next.ok_or_else(|| ())?;
 		Ok((message, peerset))
-	}
-
-	#[test]
-	fn test_peerset_from_config_with_bootnodes() {
-		let bootnode = PeerId::random();
-		let bootnode2 = PeerId::random();
-		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 2,
-			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
-			reserved_only: false,
-			reserved_nodes: Vec::new(),
-		};
-
-		let (peerset, _handle) = Peerset::from_config(config);
-
-		assert_messages(peerset, vec![
-			Message::Connect(bootnode),
-			Message::Connect(bootnode2),
-		]);
-	}
-
-	#[test]
-	fn test_peerset_from_config_with_reserved_nodes() {
-		let bootnode = PeerId::random();
-		let bootnode2 = PeerId::random();
-		let reserved_peer = PeerId::random();
-		let reserved_peer2 = PeerId::random();
-		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 3,
-			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
-			reserved_only: false,
-			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
-		};
-
-		let (peerset, _handle) = Peerset::from_config(config);
-
-		assert_messages(peerset, vec![
-			Message::Connect(reserved_peer),
-			Message::Connect(reserved_peer2),
-			Message::Connect(bootnode)
-		]);
 	}
 
 	#[test]
@@ -529,87 +469,6 @@ mod tests {
 		assert_messages(peerset, vec![
 			Message::Connect(reserved_peer),
 			Message::Connect(reserved_peer2)
-		]);
-	}
-
-	#[test]
-	fn test_peerset_remove_reserved_peer() {
-		let reserved_peer = PeerId::random();
-		let reserved_peer2 = PeerId::random();
-		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 2,
-			bootnodes: vec![],
-			reserved_only: false,
-			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
-		};
-
-		let (peerset, handle) = Peerset::from_config(config);
-		handle.remove_reserved_peer(reserved_peer.clone());
-
-		let peerset = assert_messages(peerset, vec![
-			Message::Connect(reserved_peer.clone()),
-			Message::Connect(reserved_peer2.clone()),
-		]);
-
-		handle.set_reserved_only(true);
-		handle.remove_reserved_peer(reserved_peer2.clone());
-
-		assert_messages(peerset, vec![
-			Message::Drop(reserved_peer),
-			Message::Drop(reserved_peer2),
-		]);
-	}
-
-	#[test]
-	fn test_peerset_set_reserved_only() {
-		let bootnode = PeerId::random();
-		let bootnode2 = PeerId::random();
-		let reserved_peer = PeerId::random();
-		let reserved_peer2 = PeerId::random();
-		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 4,
-			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
-			reserved_only: false,
-			reserved_nodes: vec![reserved_peer.clone(), reserved_peer2.clone()],
-		};
-
-		let (peerset, handle) = Peerset::from_config(config);
-		handle.set_reserved_only(true);
-		handle.set_reserved_only(false);
-
-		assert_messages(peerset, vec![
-			Message::Connect(reserved_peer),
-			Message::Connect(reserved_peer2),
-			Message::Connect(bootnode.clone()),
-			Message::Connect(bootnode2.clone()),
-			Message::Drop(bootnode.clone()),
-			Message::Drop(bootnode2.clone()),
-			Message::Connect(bootnode),
-			Message::Connect(bootnode2),
-		]);
-	}
-
-	#[test]
-	fn test_peerset_report_peer() {
-		let bootnode = PeerId::random();
-		let bootnode2 = PeerId::random();
-		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 1,
-			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
-			reserved_only: false,
-			reserved_nodes: Vec::new(),
-		};
-
-		let (peerset, handle) = Peerset::from_config(config);
-		handle.report_peer(bootnode2, -1);
-		handle.report_peer(bootnode.clone(), -1);
-
-		assert_messages(peerset, vec![
-			Message::Connect(bootnode.clone()),
-			Message::Drop(bootnode)
 		]);
 	}
 
@@ -642,35 +501,6 @@ mod tests {
 			Message::Accept(ii),
 			Message::Accept(ii2),
 			Message::Reject(ii3),
-		]);
-	}
-
-	#[test]
-	fn test_peerset_dropped() {
-		let bootnode = PeerId::random();
-		let bootnode2 = PeerId::random();
-		let reserved_peer = PeerId::random();
-		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 2,
-			bootnodes: vec![bootnode.clone(), bootnode2.clone()],
-			reserved_only: false,
-			reserved_nodes: vec![reserved_peer.clone()],
-		};
-
-		let (peerset, _handle) = Peerset::from_config(config);
-
-		let mut peerset = assert_messages(peerset, vec![
-			Message::Connect(reserved_peer.clone()),
-			Message::Connect(bootnode.clone()),
-		]);
-
-		peerset.dropped(reserved_peer.clone());
-		peerset.dropped(bootnode);
-
-		let _peerset = assert_messages(peerset, vec![
-			Message::Connect(reserved_peer),
-			Message::Connect(bootnode2),
 		]);
 	}
 
