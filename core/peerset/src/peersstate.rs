@@ -268,11 +268,13 @@ impl<'a> ConnectedPeer<'a> {
 	pub fn disconnect(self) -> NotConnectedPeer<'a> {
 		let connec_state = &mut self.state.connection_state;
 
-		match *connec_state {
-			ConnectionState::In => *self.num_in -= 1,
-			ConnectionState::Out => *self.num_out -= 1,
-			ConnectionState::NotConnected =>
-				debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
+		if !self.state.reserved {
+			match *connec_state {
+				ConnectionState::In => *self.num_in -= 1,
+				ConnectionState::Out => *self.num_out -= 1,
+				ConnectionState::NotConnected =>
+					debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
+			}
 		}
 
 		*connec_state = ConnectionState::NotConnected;
@@ -582,5 +584,15 @@ mod tests {
 		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
 		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(-100);
 		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
+	}
+
+	#[test]
+	fn disconnect_reserved_doesnt_panic() {
+		let mut peers_state = PeersState::new(1, 1);
+		let id = PeerId::random();
+		let mut peer = peers_state.peer(&id).into_unknown().unwrap().discover()
+			.force_outgoing();
+		peer.set_reserved(true);
+		peer.disconnect();
 	}
 }
