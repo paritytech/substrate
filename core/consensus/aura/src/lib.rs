@@ -25,18 +25,16 @@
 //!
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
-#![deny(warnings)]
 #![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
+	SelectChain, well_known_cache_keys
 };
-use consensus_common::well_known_cache_keys;
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::{
-	ChainHead,
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::ProvideCache,
 	runtime_api::{ApiExt, Core as CoreApi},
@@ -182,10 +180,11 @@ impl SlotCompatible for AuraSlotCompatible {
 
 /// Start the aura worker in a separate thread.
 #[deprecated(since = "1.1", note = "Please spawn a thread manually")]
-pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
+pub fn start_aura_thread<B, C, SC, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
+	select_chain: SC,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -194,8 +193,9 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<(), consensus_common::Error> where
 	B: Block + 'static,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
+	C: ProvideRuntimeApi + ProvideCache<B> + Send + Sync + 'static,
 	C::Api: AuthoritiesApi<B>,
+	SC: SelectChain<B> + Clone + 'static,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -222,7 +222,7 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 	#[allow(deprecated)]	// The function we are in is also deprecated.
 	slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, u64, _>(
 		slot_duration.0,
-		client,
+		select_chain,
 		Arc::new(worker),
 		sync_oracle,
 		on_exit,
@@ -231,10 +231,11 @@ pub fn start_aura_thread<B, C, E, I, P, SO, Error, OnExit>(
 }
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
+	select_chain: SC,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
@@ -243,8 +244,9 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block,
-	C: ChainHead<B> + ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
+	SC: SelectChain<B> + Clone,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
@@ -268,7 +270,7 @@ pub fn start_aura<B, C, E, I, P, SO, Error, OnExit>(
 	};
 	slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
-		client,
+		select_chain,
 		Arc::new(worker),
 		sync_oracle,
 		on_exit,
@@ -804,7 +806,7 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
 	use primitives::sr25519;
-	use client::BlockchainEvents;
+	use client::{LongestChain, BlockchainEvents};
 	use test_client;
 
 	type Error = client::error::Error;
@@ -916,6 +918,10 @@ mod tests {
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
 			let client = net.lock().peer(*peer_id).client().clone();
+			let select_chain = LongestChain::new(
+				client.backend().clone(),
+				client.import_lock().clone(),
+			);
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
@@ -931,10 +937,11 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, sr25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),
+				select_chain,
 				client,
 				environ.clone(),
 				DummyOracle,
