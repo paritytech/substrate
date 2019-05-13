@@ -322,6 +322,12 @@ decl_storage! {
 		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
 		EventCount get(event_count): EventIndex;
+
+		// TODO: https://github.com/paritytech/substrate/issues/2553
+		// Possibly, we can improve it by using something like:
+		// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
+		// `EventTopics::append`.
+
 		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
 		/// of events in the `<Events<T>>` list.
 		///
@@ -335,10 +341,6 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		///
-		/// Possibly, we can improve it by using something like:
-		/// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
-		/// `EventTopics::append`.
 		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
 			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
@@ -432,15 +434,9 @@ impl<T: Trait> Module<T> {
 		// We perform early return if we've reached the maximum capacity of the event list,
 		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
 		// (since the event list is cleared at the block initialization).
-		// The most sensible thing to do here is to just ignore this event and wait until the
-		// new block.
 		if <Events<T>>::append(&[event]).is_err() {
-			// TODO(reviewers): debug_assert!(false) is tempting here, since we want to be safe in
-			// the production version but it would be nice to catch these kind of issues at the
-			// development time. We even have -Cdebug-assertion=y on CI and it seems
-			// we are building wasm with this flag enabled.
-			//
-			// However, there no prior precedents of using it.
+			// The most sensible thing to do here is to just ignore this event and wait until the
+			// new block.
 			return;
 		}
 
