@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{prelude::*, sync::mpsc};
+use futures::prelude::*;
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
@@ -77,7 +77,6 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	network_chan: NetworkChan<B>,
-	port: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	/// Interval at which we call `tick`.
 	tick_timeout: tokio::timer::Interval,
 	/// Interval at which we call `propagate_extrinsics`.
@@ -239,70 +238,6 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 }
 
-/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>> {
-	fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
-}
-
-impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
-	fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
-		(*self)(spec, context)
-	}
-}
-
-/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
-pub trait GossipTask<B: BlockT> {
-	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
-}
-
-impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
-	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
-		(*self)(gossip, context)
-	}
-}
-
-/// Messages sent to Protocol from elsewhere inside the system.
-pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
-	/// A batch of blocks has been processed, with or without errors.
-	BlocksProcessed(Vec<B::Hash>, bool),
-	/// Tell protocol to restart sync.
-	RestartSync,
-	/// Tell protocol to propagate extrinsics.
-	PropagateExtrinsics,
-	/// Tell protocol that a block was imported (sent by the import-queue).
-	BlockImportedSync(B::Hash, NumberFor<B>),
-	/// Tell protocol to clear all pending justification requests.
-	ClearJustificationRequests,
-	/// Tell protocol to request justification for a block.
-	RequestJustification(B::Hash, NumberFor<B>),
-	/// Inform protocol whether a justification was successfully imported.
-	JustificationImportResult(B::Hash, NumberFor<B>, bool),
-	/// Set finality proof request builder.
-	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
-	/// Tell protocol to request finality proof for a block.
-	RequestFinalityProof(B::Hash, NumberFor<B>),
-	/// Inform protocol whether a finality proof was successfully imported.
-	FinalityProofImportResult((B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
-	/// Propagate a block to peers.
-	AnnounceBlock(B::Hash),
-	/// A block has been imported (sent by the client).
-	BlockImported(B::Hash, B::Header),
-	/// A block has been finalized (sent by the client).
-	BlockFinalized(B::Hash, B::Header),
-	/// Execute a closure with the chain-specific network specialization.
-	ExecuteWithSpec(Box<SpecTask<B, S> + Send + 'static>),
-	/// Execute a closure with the consensus gossip.
-	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
-	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	/// Tell protocol to perform regular maintenance.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Tick,
-	/// Synchronization request.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Synchronize,
-}
-
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
@@ -314,13 +249,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<(Protocol<B, S, H>, mpsc::UnboundedSender<ProtocolMsg<B, S>>)> {
-		let (protocol_sender, port) = mpsc::unbounded();
+	) -> error::Result<Protocol<B, S, H>> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info);
-		let protocol = Protocol {
+		Ok(Protocol {
 			network_chan,
-			port,
 			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
 			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
 			config: config,
@@ -337,9 +270,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			handshaking_peers: HashMap::new(),
 			connected_peers,
 			transaction_pool: transaction_pool,
-		};
-
-		Ok((protocol, protocol_sender))
+		})
 	}
 
 	/// Returns an object representing the status of the protocol.
@@ -378,80 +309,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, 
 			self.propagate_extrinsics();
 		}
 
-		loop {
-			match self.port.poll() {
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
-				Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
-					return Ok(Async::Ready(()))
-				}
-				Ok(Async::NotReady) => break,
-			}
-		}
-
 		Ok(Async::NotReady)
 	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
-	fn handle_client_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
-		match msg {
-			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
-			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
-			ProtocolMsg::ExecuteWithSpec(task) => {
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				task.call_box(&mut self.specialization, &mut context);
-			},
-			ProtocolMsg::ExecuteWithGossip(task) => {
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				task.call_box(&mut self.consensus_gossip, &mut context);
-			}
-			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) => {
-				self.gossip_consensus_message(topic, engine_id, message, recipient)
-			}
-			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
-				self.sync.blocks_processed(hashes, has_error);
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				self.sync.maintain_sync(&mut context);
-			},
-			ProtocolMsg::RestartSync => {
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				self.sync.restart(&mut context);
-			}
-			ProtocolMsg::AnnounceBlock(hash) => self.announce_block(hash),
-			ProtocolMsg::BlockImportedSync(hash, number) => self.sync.block_imported(&hash, number),
-			ProtocolMsg::ClearJustificationRequests => self.sync.clear_justification_requests(),
-			ProtocolMsg::RequestJustification(hash, number) => {
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				self.sync.request_justification(&hash, number, &mut context);
-			},
-			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
-			ProtocolMsg::SetFinalityProofRequestBuilder(builder) => self.sync.set_finality_proof_request_builder(builder),
-			ProtocolMsg::RequestFinalityProof(hash, number) => {
-				let mut context =
-					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				self.sync.request_finality_proof(&hash, number, &mut context);
-			},
-			ProtocolMsg::FinalityProofImportResult(
-				requested_block,
-				finalziation_result,
-			) => self.sync.finality_proof_import_result(requested_block, finalziation_result),
-			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
-			#[cfg(any(test, feature = "test-helpers"))]
-			ProtocolMsg::Tick => self.tick(),
-			#[cfg(any(test, feature = "test-helpers"))]
-			ProtocolMsg::Synchronize => {
-				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
-				self.network_chan.send(NetworkMsg::Synchronized)
-			}
-		}
-		true
-	}
-
 	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>) -> Option<message::BlockRequest<B>> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			if let Some(_) = peer.obsolete_requests.remove(&response.id) {
@@ -538,7 +400,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(
+	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
+	pub fn consensus_gossip_lock<'a>(&'a mut self) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
+		let context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		(context, &mut self.consensus_gossip)
+	}
+
+	/// Locks `self` and returns a context plus the network specialization.
+	pub fn specialization_lock<'a>(&'a mut self) -> (impl Context<B> + 'a, &'a mut S) {
+		let context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		(context, &mut self.specialization)
+	}
+
+	/// Gossip a consensus message to the network.
+	pub fn gossip_consensus_message(
 		&mut self,
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
@@ -714,7 +589,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Perform time based maintenance.
-	fn tick(&mut self) {
+	///
+	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
+	pub fn tick(&mut self) {
 		self.consensus_gossip.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
@@ -860,8 +737,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	/// Called when we propagate ready extrinsics to peers.
-	fn propagate_extrinsics(&mut self) {
+	/// Call when we must propagate ready extrinsics to peers.
+	pub fn propagate_extrinsics(&mut self) {
 		debug!(target: "sync", "Propagating extrinsics");
 
 		// Accept transactions only when fully synced
@@ -896,7 +773,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	fn announce_block(&mut self, hash: B::Hash) {
+	pub fn announce_block(&mut self, hash: B::Hash) {
 		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
@@ -954,7 +831,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
+	/// Call this when a block has been imported in the import queue and we should announce it on
+	/// the network.
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
 		self.sync.update_chain_info(header);
 		self.specialization.on_block_imported(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
@@ -979,7 +858,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
+	/// Call this when a block has been finalized. The sync layer may have some additional
+	/// requesting to perform.
+	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
 		self.sync.on_block_finalized(
 			&hash,
 			*header.number(),
@@ -1014,6 +895,68 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				proof,
 			}),
 		);
+	}
+
+	/// Request a justification for the given block.
+	///
+	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
+	/// requests.
+	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		let mut context =
+			ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		self.sync.request_justification(&hash, number, &mut context);
+	}
+
+	/// Clears all pending justification requests.
+	pub fn clear_justification_requests(&mut self) {
+		self.sync.clear_justification_requests()
+	}
+
+	/// A batch of blocks have been processed, with or without errors.
+	/// Call this when a batch of blocks have been processed by the import queue, with or without
+	/// errors.
+	pub fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		self.sync.blocks_processed(processed_blocks, has_error);
+		let mut context =
+			ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		self.sync.maintain_sync(&mut context);
+	}
+
+	/// Restart the sync process.
+	pub fn restart(&mut self) {
+		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		self.sync.restart(&mut context);
+	}
+
+	/// Notify about successful import of the given block.
+	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		self.sync.block_imported(hash, number)
+	}
+
+	pub fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
+		self.sync.set_finality_proof_request_builder(request_builder)
+	}
+
+	/// Call this when a justification has been processed by the import queue, with or without
+	/// errors.
+	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
+		self.sync.justification_import_result(hash, number, success)
+	}
+
+	/// Request a finality proof for the given block.
+	///
+	/// Queues a new finality proof request and tries to dispatch all pending requests.
+	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		let mut context = ProtocolContext::new(&mut self.context_data, &self.network_chan);
+		self.sync.request_finality_proof(&hash, number, &mut context);
+	}
+
+	pub fn finality_proof_import_result(
+		&mut self,
+		request_block: (B::Hash, NumberFor<B>),
+		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
+	) {
+		self.sync.finality_proof_import_result(request_block, finalization_result)
 	}
 
 	fn on_remote_call_response(&mut self, who: PeerId, response: message::RemoteCallResponse) {
