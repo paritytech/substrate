@@ -302,6 +302,11 @@ fn benchmark_add_one(i: u64) -> u64 {
 #[cfg(not(feature = "std"))]
 static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction::new(benchmark_add_one);
 
+#[test] // TODO EMCH delete
+fn use_trie_function2() {
+	assert_eq!(code_using_trie(), 5 + 2);
+}
+
 fn code_using_trie() -> u64 {
 	let pairs = [
 		(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
@@ -329,7 +334,7 @@ fn code_using_trie() -> u64 {
 		let (key, value) = pair.expect("on memory with static content");
 		iter_pairs.push((key, value.to_vec()));
 	}
-	iter_pairs.len() as u64
+	5 + iter_pairs.len() as u64
 }
 
 cfg_if! {

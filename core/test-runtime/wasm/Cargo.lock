@@ -688,7 +688,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.12.2"
-source = "git+https://github.com/cheme/trie.git?branch=simple-codec#57bb429b0fb5b1e02d6c0a4fb5f10b14cb430557"
+source = "git+https://github.com/cheme/trie.git?branch=simple-codec#bce5c660a462804191d533ce77ecc8cb3a5038a3"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -1255,7 +1255,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "memory-db"
 version = "0.12.2"
-source = "git+https://github.com/cheme/trie.git?branch=simple-codec#57bb429b0fb5b1e02d6c0a4fb5f10b14cb430557"
+source = "git+https://github.com/cheme/trie.git?branch=simple-codec#bce5c660a462804191d533ce77ecc8cb3a5038a3"
 dependencies = [
  "hash-db 0.12.2 (git+https://github.com/cheme/trie.git?branch=simple-codec)",
  "hashmap_core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2946,7 +2946,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.12.2"
-source = "git+https://github.com/cheme/trie.git?branch=simple-codec#57bb429b0fb5b1e02d6c0a4fb5f10b14cb430557"
+source = "git+https://github.com/cheme/trie.git?branch=simple-codec#bce5c660a462804191d533ce77ecc8cb3a5038a3"
 dependencies = [
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.12.2 (git+https://github.com/cheme/trie.git?branch=simple-codec)",
@@ -2958,7 +2958,7 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.12.2"
-source = "git+https://github.com/cheme/trie.git?branch=simple-codec#57bb429b0fb5b1e02d6c0a4fb5f10b14cb430557"
+source = "git+https://github.com/cheme/trie.git?branch=simple-codec#bce5c660a462804191d533ce77ecc8cb3a5038a3"
 dependencies = [
  "hash-db 0.12.2 (git+https://github.com/cheme/trie.git?branch=simple-codec)",
 ]
@@ -3283,7 +3283,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[patch.unused]]
 name = "keccak-hasher"
 version = "0.12.2"
-source = "git+https://github.com/cheme/trie.git?branch=simple-codec#57bb429b0fb5b1e02d6c0a4fb5f10b14cb430557"
+source = "git+https://github.com/cheme/trie.git?branch=simple-codec#bce5c660a462804191d533ce77ecc8cb3a5038a3"
 
 [metadata]
 "checksum aes-ctr 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d2e5b0458ea3beae0d1d8c0f3946564f8e10f90646cf78c06b4351052058d1ee"
