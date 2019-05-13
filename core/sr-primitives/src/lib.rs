@@ -138,17 +138,22 @@ where
 		let million = <N as traits::As<u64>>::sa(1_000_000);
 		let part = <N as traits::As<u64>>::sa(self.0 as u64);
 
-		let rem = b.clone().rem(million.clone());
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(million.clone());
 
-		// `rem` is inferior to one million, thus it fits into u64
-		let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one million, thus it fits into u64
+			let rem_u64: u64 = rem.as_();
 
-		// `self` and `rem` are inferior to one million, thus the product fits into u64
-		let rem_multiplied = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one million, thus the product fits into u64
+			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
 
-		let rem_multiplied_divided = rem_multiplied / 1_000_000;
+			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000;
 
-		(b / million) * part + traits::As::sa(rem_multiplied_divided)
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			traits::As::sa(rem_multiplied_divided_u64)
+		};
+
+		(b / million) * part + rem_multiplied_divided
 	}
 }
 
@@ -226,17 +231,22 @@ where
 		let billion = <N as traits::As<u64>>::sa(1_000_000_000);
 		let part = <N as traits::As<u64>>::sa(self.0 as u64);
 
-		let rem = b.clone().rem(billion.clone());
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(billion.clone());
 
-		// `rem` is inferior to one billion, thus it fits into u64
-		let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one billion, thus it fits into u64
+			let rem_u64: u64 = rem.as_();
 
-		// `self` and `rem` are inferior to one billion, thus the product fits into u64
-		let rem_multiplied = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one billion, thus the product fits into u64
+			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
 
-		let rem_multiplied_divided = rem_multiplied / 1_000_000_000;
+			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000_000;
 
-		(b / billion) * part + traits::As::sa(rem_multiplied_divided)
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			traits::As::sa(rem_multiplied_divided_u64)
+		};
+
+		(b / billion) * part + rem_multiplied_divided
 	}
 }
 
