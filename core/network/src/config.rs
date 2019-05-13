@@ -19,7 +19,7 @@
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfig, Secret};
 
 use bitflags::bitflags;
-use crate::chain::Client;
+use crate::chain::{Client, FinalityProofProvider};
 use parity_codec;
 use crate::on_demand::OnDemandService;
 use runtime_primitives::traits::{Block as BlockT};
@@ -34,6 +34,8 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub network_config: NetworkConfiguration,
 	/// Substrate relay chain access point.
 	pub chain: Arc<Client<B>>,
+	/// Finality proof provider.
+	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemandService<B>>>,
 	/// Transaction pool.

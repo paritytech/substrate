@@ -58,12 +58,13 @@ pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	BlockImportNotification, Client, ClientInfo, ChainHead, ExecutionStrategies,
+	BlockImportNotification, Client, ClientInfo, ExecutionStrategies,
+	LongestChain
 };
 #[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 #[cfg(feature = "std")]
-pub use state_machine::ExecutionStrategy;
+pub use state_machine::{ExecutionStrategy, NeverOffchainExt};
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
 
