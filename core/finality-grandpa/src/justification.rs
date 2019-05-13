@@ -95,17 +95,16 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	/// Decode a GRANDPA justification and validate the commit and the votes'
 	/// ancestry proofs finalize the given block.
 	pub(crate) fn decode_and_verify_finalizes(
-		encoded: Vec<u8>,
+		encoded: &[u8],
 		finalized_target: (Block::Hash, NumberFor<Block>),
 		set_id: u64,
 		voters: &VoterSet<AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
-		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(|| {
-			let msg = "failed to decode grandpa justification".to_string();
-			ClientError::from(ClientError::BadJustification(msg))
-		})?;
+
+		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
+			.ok_or(ClientError::JustificationDecode)?;
 
 		if (justification.commit.target_hash, justification.commit.target_number) != finalized_target {
 			let msg = "invalid commit target in grandpa justification".to_string();

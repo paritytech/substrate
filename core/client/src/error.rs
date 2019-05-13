@@ -55,7 +55,10 @@ pub enum Error {
 	/// Genesis config is invalid.
 	#[display(fmt = "Genesis config provided is invalid")]
 	GenesisInvalid,
-	/// Bad justification for header.
+	/// Error decoding header justification.
+	#[display(fmt = "error decoding justification for header")]
+	JustificationDecode,
+	/// Justification for header is correctly encoded, but invalid.
 	#[display(fmt = "bad justification for header: {}", _0)]
 	BadJustification(String),
 	/// Not available on light client.

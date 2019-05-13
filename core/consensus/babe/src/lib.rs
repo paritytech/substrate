@@ -914,7 +914,7 @@ mod tests {
 
 	impl TestNetFactory for BabeTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = BabeVerifier<PeersClient, NothingExtra>;
+		type Verifier = BabeVerifier<PeersFullClient, NothingExtra>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -926,9 +926,10 @@ mod tests {
 			}
 		}
 
-		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
+		fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
 			-> Arc<Self::Verifier>
 		{
+			let client = client.as_full().expect("only full clients are used in test");
 			trace!(target: "babe", "Creating a verifier");
 			let config = Config::get_or_compute(&*client)
 				.expect("slot duration available");
@@ -1001,7 +1002,7 @@ mod tests {
 		debug!(target: "babe", "checkpoint 4");
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let client = net.lock().peer(*peer_id).client().clone();
+			let client = net.lock().peer(*peer_id).client().as_full().unwrap();
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
