@@ -52,17 +52,16 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
-.test:                             &test
+test-linux-stable:                 &test
   stage:                           test
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.&test
+    # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
-  dependencies:                    []
-  before_script:
-    - sccache -s
+  tags:
+    - linux-docker
   only:
     - tags
     - master
@@ -72,16 +71,6 @@ check-runtime:
   except:
     variables:
       - $DEPLOY_TAG
-  tags:
-    - linux-docker
-
-cargo-audit:
-  <<:                              *test
-  script:
-    - cargo audit
-    
-test-linux-stable:
-  <<:                              *test
   before_script:
     - sccache -s
     - ./scripts/build.sh
@@ -152,7 +141,7 @@ build-rust-doc-release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  # <<:                              *build-only
+  <<:                              *build-only
   tags:
     - linux-docker
   before_script:
