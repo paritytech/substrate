@@ -52,16 +52,17 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
-test-linux-stable:                 &test
+.test:                             &test
   stage:                           test
   variables:
     RUST_TOOLCHAIN: stable
     # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
+    # but still want to have debug assertions.&test
     RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
-  tags:
-    - linux-docker
+  dependencies:                    []
+  before_script:
+    - sccache -s
   only:
     - tags
     - master
@@ -71,6 +72,16 @@ test-linux-stable:                 &test
   except:
     variables:
       - $DEPLOY_TAG
+  tags:
+    - linux-docker
+
+cargo-audit:
+  <<:                              *test
+  script:
+    - cargo audit
+    
+test-linux-stable:
+  <<:                              *test
   before_script:
     - sccache -s
     - ./scripts/build.sh
