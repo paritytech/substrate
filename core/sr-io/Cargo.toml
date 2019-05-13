@@ -1,6 +1,6 @@
 [package]
 name = "sr-io"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 edition = "2018"

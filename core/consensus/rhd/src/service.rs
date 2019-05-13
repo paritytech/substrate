@@ -22,7 +22,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-use client::{BlockchainEvents, ChainHead, BlockBody};
+use client::{BlockchainEvents, BlockBody};
 use futures::prelude::*;
 use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
@@ -33,7 +33,7 @@ use tokio::runtime::current_thread::Runtime as LocalRuntime;
 use tokio::timer::Interval;
 
 use parking_lot::RwLock;
-use consensus::offline_tracker::OfflineTracker;
+use consensus::{self, offline_tracker::OfflineTracker};
 
 use super::{Network, ProposerFactory, AuthoringApi};
 use {consensus, primitives, ed25519, error, BftService, LocalProposer};
@@ -87,9 +87,9 @@ impl Service {
 			A: AuthoringApi + BlockNumberToHash + 'static,
 			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
-				+ ChainHead<<A as AuthoringApi>::Block>
-				+ BlockBody<<A as AuthoringApi>::Block>,
-			C: consensus::BlockImport<<A as AuthoringApi>::Block>
+				+ BlockBody<<A as AuthoringApi>::Block>
+				+ consensus::SelectChain<<A as AuthoringApi>::Block>
+				+ consensus::BlockImport<<A as AuthoringApi>::Block>
 				+ consensus::Authorities<<A as AuthoringApi>::Block> + Send + Sync + 'static,
 			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
 			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,

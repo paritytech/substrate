@@ -25,7 +25,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use runtime_primitives::traits::Zero;
+use runtime_primitives::traits::{Bounded, Zero};
 use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
 use system;
@@ -123,7 +123,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						storage_size: <Module<T>>::storage_size_offset(),
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 						deduct_block: <system::Module<T>>::block_number(),
-						rent_allowance: <BalanceOf<T>>::zero(),
+						rent_allowance: <BalanceOf<T>>::max_value(),
 					}
 				} else {
 					// No contract exist and no code_hash provided
@@ -213,7 +213,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		let contract = local.entry(account.clone()).or_insert_with(|| Default::default());
 
 		contract.code_hash = Some(code_hash);
-		contract.rent_allowance = Some(<BalanceOf<T>>::zero());
+		contract.rent_allowance = Some(<BalanceOf<T>>::max_value());
 
 		Ok(())
 	}
