@@ -18,6 +18,7 @@ extern crate criterion;
 
 use criterion::{Criterion, black_box, Bencher, Fun};
 use std::time::Duration;
+use substrate_primitives::crypto::Pair as _;
 use substrate_primitives::hashing::{twox_128, blake2_128};
 
 const MAX_KEY_SIZE: u32 = 32;
@@ -65,9 +66,29 @@ fn bench_hash_128_dyn_size(c: &mut Criterion) {
 	c.bench_function_over_inputs("dyn size hashing - twox", |b, key| bench_twox_128(b, &key), keys);
 }
 
+fn bench_ed25519(c: &mut Criterion) {
+	c.bench_function_over_inputs("signing - ed25519", |b, &msg_size| {
+		let msg = (0..msg_size)
+			.map(|_| rand::random::<u8>())
+			.collect::<Vec<_>>();
+		let key = substrate_primitives::ed25519::Pair::generate();
+		b.iter(|| key.sign(&msg))
+	}, vec![32, 1024, 1024 * 1024]);
+
+	c.bench_function_over_inputs("verifying - ed25519", |b, &msg_size| {
+		let msg = (0..msg_size)
+			.map(|_| rand::random::<u8>())
+			.collect::<Vec<_>>();
+		let key = substrate_primitives::ed25519::Pair::generate();
+		let sig = key.sign(&msg);
+		let public = key.public();
+		b.iter(|| substrate_primitives::ed25519::Pair::verify(&sig, &msg, &public))
+	}, vec![32, 1024, 1024 * 1024]);
+}
+
 criterion_group!{
     name = benches;
     config = Criterion::default().warm_up_time(Duration::from_millis(500)).without_plots();
-    targets = bench_hash_128_fix_size, bench_hash_128_dyn_size
+    targets = bench_hash_128_fix_size, bench_hash_128_dyn_size, bench_ed25519
 }
 criterion_main!(benches);

@@ -28,9 +28,8 @@ mod aux_schema;
 pub use slots::{slot_now, SlotInfo, Slots};
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-use client::ChainHead;
 use codec::{Decode, Encode};
-use consensus_common::SyncOracle;
+use consensus_common::{SyncOracle, SelectChain};
 use futures::prelude::*;
 use futures::{
 	future::{self, Either},
@@ -75,7 +74,7 @@ pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_comm
 #[deprecated(since = "1.1", note = "Please spawn a thread manually")]
 pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
 	slot_duration: SlotDuration<T>,
-	client: Arc<C>,
+	select_chain: C,
 	worker: Arc<W>,
 	sync_oracle: SO,
 	on_exit: OnExit,
@@ -83,7 +82,7 @@ pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(
 ) -> Result<(), consensus_common::Error>
 where
 	B: Block + 'static,
-	C: ChainHead<B> + Send + Sync + 'static,
+	C: SelectChain<B> + Clone + 'static,
 	W: SlotWorker<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
 	SC: SlotCompatible + 'static,
@@ -103,9 +102,9 @@ where
 			}
 		};
 
-		let slot_worker_future = match start_slot_worker::<_, _, _, _, _, SC, _>(
+		let slot_worker_future = match start_slot_worker::<_, _, _, T, _, SC, _>(
 			slot_duration.clone(),
-			client,
+			select_chain,
 			worker,
 			sync_oracle,
 			on_exit,
@@ -136,7 +135,7 @@ where
 /// Start a new slot worker.
 pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 	slot_duration: SlotDuration<T>,
-	client: Arc<C>,
+	client: C,
 	worker: Arc<W>,
 	sync_oracle: SO,
 	on_exit: OnExit,
@@ -144,7 +143,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, OnExit>(
 ) -> Result<impl Future<Item = (), Error = ()>, consensus_common::Error>
 where
 	B: Block,
-	C: ChainHead<B>,
+	C: SelectChain<B> + Clone,
 	W: SlotWorker<B>,
 	SO: SyncOracle + Send + Clone,
 	SC: SlotCompatible,
@@ -175,7 +174,7 @@ where
 				}
 
 				let slot_num = slot_info.number;
-				let chain_head = match client.best_block_header() {
+				let chain_head = match client.best_chain() {
 					Ok(x) => x,
 					Err(e) => {
 						warn!(target: "slots", "Unable to author block in slot {}. \

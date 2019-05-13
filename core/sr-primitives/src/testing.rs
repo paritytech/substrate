@@ -199,7 +199,10 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
-/// Test transaction
+/// Test transaction, tuple of (sender, index, call)
+/// with index only used if sender is some.
+///
+/// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
@@ -222,7 +225,7 @@ impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 }
 impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
 	fn is_signed(&self) -> Option<bool> {
-		None
+		Some(self.0.is_some())
 	}
 }
 impl<Call> Applyable for TestXt<Call> where

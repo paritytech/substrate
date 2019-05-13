@@ -8,20 +8,24 @@ fn genesis_constructor() -> chain_spec::GenesisConfig {
 	let matches = App::from_yaml(yaml).get_matches();
 	let authorities = matches.values_of("initial_authority_seed")
 		.unwrap()
-		.map(chain_spec::get_authority_id_from_seed)
+		.map(chain_spec::get_authority_keys_from_seed)
 		.collect();
 
 	let endowed_accounts = matches.values_of("endowed_account_seed")
 		.unwrap()
-		.map(chain_spec::get_authority_id_from_seed)
+		.map(chain_spec::get_account_id_from_seed)
 		.collect();
 
 	let sudo_key_seed = matches.value_of("sudo_key_seed").unwrap();
-	let sudo_key = chain_spec::get_authority_id_from_seed(sudo_key_seed);
+	let sudo_key = chain_spec::get_account_id_from_seed(sudo_key_seed);
+
+	let enable_println = true;
+
 	chain_spec::testnet_genesis(
 		authorities,
 		sudo_key.into(),
 		Some(endowed_accounts),
+		enable_println,
 	)
 }
 
@@ -31,6 +35,7 @@ fn generate_chain_spec() -> String {
 		"custom",
 		genesis_constructor,
 		vec![],
+		None,
 		None,
 		None,
 		None,
