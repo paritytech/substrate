@@ -20,7 +20,11 @@ use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
-use crate::message::{self, BlockRequest as BlockRequestMessage, Message};
+use consensus::import_queue::SharedFinalityProofRequestBuilder;
+use crate::message::{
+	self, BlockRequest as BlockRequestMessage,
+	FinalityProofRequest as FinalityProofRequestMessage, Message,
+};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::OnDemandService;
@@ -34,7 +38,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
-use crate::chain::Client;
+use crate::chain::{Client, FinalityProofProvider};
 use client::light::fetcher::ChangesProof;
 use crate::{error, util::LruHashSet};
 
@@ -163,6 +167,9 @@ pub trait Context<B: BlockT> {
 	/// Request a block from a peer.
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>);
 
+	/// Request a finality proof from a peer.
+	fn send_finality_proof_request(&mut self, who: PeerId, request: FinalityProofRequestMessage<B::Hash>);
+
 	/// Send a consensus message to a peer.
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
 
@@ -205,6 +212,12 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 		)
 	}
 
+	fn send_finality_proof_request(&mut self, who: PeerId, request: FinalityProofRequestMessage<B::Hash>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::FinalityProofRequest(request)
+		)
+	}
+
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who,
 			GenericMessage::Consensus(consensus)
@@ -223,6 +236,7 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
 	pub chain: Arc<Client<B>>,
+	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 }
 
 /// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
@@ -263,6 +277,12 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a justification was successfully imported.
 	JustificationImportResult(B::Hash, NumberFor<B>, bool),
+	/// Set finality proof request builder.
+	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
+	/// Tell protocol to request finality proof for a block.
+	RequestFinalityProof(B::Hash, NumberFor<B>),
+	/// Inform protocol whether a finality proof was successfully imported.
+	FinalityProofImportResult((B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	/// Propagate a block to peers.
 	AnnounceBlock(B::Hash),
 	/// A block has been imported (sent by the client).
@@ -290,6 +310,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
+		finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -306,6 +327,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			context_data: ContextData {
 				peers: HashMap::new(),
 				chain,
+				finality_proof_provider,
 			},
 			on_demand,
 			genesis_hash: info.chain.genesis_hash,
@@ -408,6 +430,16 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.sync.request_justification(&hash, number, &mut context);
 			},
 			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
+			ProtocolMsg::SetFinalityProofRequestBuilder(builder) => self.sync.set_finality_proof_request_builder(builder),
+			ProtocolMsg::RequestFinalityProof(hash, number) => {
+				let mut context =
+					ProtocolContext::new(&mut self.context_data, &self.network_chan);
+				self.sync.request_finality_proof(&hash, number, &mut context);
+			},
+			ProtocolMsg::FinalityProofImportResult(
+				requested_block,
+				finalziation_result,
+			) => self.sync.finality_proof_import_result(requested_block, finalziation_result),
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Tick => self.tick(),
@@ -476,6 +508,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
+			GenericMessage::FinalityProofRequest(request) => self.on_finality_proof_request(who, request),
+			GenericMessage::FinalityProofResponse(response) => return self.on_finality_proof_response(who, response),
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
@@ -1099,6 +1133,53 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			.as_ref()
 			.map(|s| s.on_remote_changes_response(who, response));
 	}
+
+	fn on_finality_proof_request(
+		&mut self,
+		who: PeerId,
+		request: message::FinalityProofRequest<B::Hash>,
+	) {
+		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
+		let finality_proof = self.context_data.finality_proof_provider.as_ref()
+			.ok_or_else(|| String::from("Finality provider is not configured"))
+			.and_then(|provider| provider.prove_finality(request.block, &request.request)
+				.map_err(|e| e.to_string()));
+		let finality_proof = match finality_proof {
+			Ok(finality_proof) => finality_proof,
+			Err(error) => {
+				trace!(target: "sync", "Finality proof request from {} for {} failed with: {}",
+					who, request.block, error);
+				None
+			},
+		};
+ 		self.send_message(
+			who,
+			GenericMessage::FinalityProofResponse(message::FinalityProofResponse {
+				id: 0,
+				block: request.block,
+				proof: finality_proof,
+			}),
+		);
+	}
+
+	fn on_finality_proof_response(
+		&mut self,
+		who: PeerId,
+		response: message::FinalityProofResponse<B::Hash>,
+	) -> CustomMessageOutcome<B> {
+		trace!(target: "sync", "Finality proof response from {} for {}", who, response.block);
+		let outcome = self.sync.on_block_finality_proof_data(
+			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+			who,
+			response,
+		);
+
+		if let Some((origin, hash, nb, proof)) = outcome {
+			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof)
+		} else {
+			CustomMessageOutcome::None
+		}
+	}
 }
 
 /// Outcome of an incoming custom message.
@@ -1106,6 +1187,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
+	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	None,
 }
 
