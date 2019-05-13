@@ -319,7 +319,7 @@ impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeC
 
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin { // Lines should be longer than 100 characters long only in exceptional circumstances and certainly no longer than 120.
+	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;
 
 		/// Updates the schedule for metering contracts.
