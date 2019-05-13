@@ -144,9 +144,9 @@ build-rust-doc-release:            &build
   # <<:                              *build-only
   tags:
     - linux-docker
-  # before_script:
-  #   - sccache -s
-  #   - ./scripts/build.sh
+  before_script:
+    - sccache -s
+    - ./scripts/build.sh
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - time cargo +nightly doc --release --verbose
@@ -177,7 +177,7 @@ publish-docker-release:
     # DOCKERFILE:                  scripts/docker/Dockerfile
     CONTAINER_IMAGE:               parity/substrate
   before_script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" 
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
