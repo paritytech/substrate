@@ -17,9 +17,10 @@
 use futures::{prelude::*, sync::mpsc};
 use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
-use runtime_primitives::{generic::BlockId, ConsensusEngineId};
+use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
+use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
-use consensus::import_queue::{ImportQueue, SharedFinalityProofRequestBuilder};
+use consensus::import_queue::SharedFinalityProofRequestBuilder;
 use crate::message::{
 	self, BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
@@ -35,7 +36,6 @@ use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
@@ -295,10 +295,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	/// Tell protocol to abort sync (does not stop protocol).
-	/// Only used in tests.
-	#[cfg(any(test, feature = "test-helpers"))]
-	Abort,
 	/// Tell protocol to perform regular maintenance.
 	#[cfg(any(test, feature = "test-helpers"))]
 	Tick,
@@ -310,21 +306,18 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
 		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
 		finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
-		import_queue: Box<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
 	) -> error::Result<(Protocol<B, S, H>, mpsc::UnboundedSender<ProtocolMsg<B, S>>)> {
 		let (protocol_sender, port) = mpsc::unbounded();
 		let info = chain.info()?;
-		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
+		let sync = ChainSync::new(config.roles, &info);
 		let protocol = Protocol {
 			network_chan,
 			port,
@@ -362,6 +355,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.count(),
 		}
 	}
+
+	pub fn is_major_syncing(&self) -> bool {
+		self.sync.status().is_major_syncing()
+	}
+
+	pub fn is_offline(&self) -> bool {
+		self.sync.status().is_offline()
+	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, S, H> {
@@ -379,10 +380,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, 
 
 		loop {
 			match self.port.poll() {
-				Ok(Async::Ready(None)) | Err(_) => {
-					self.stop();
-					return Ok(Async::Ready(()))
-				}
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 				Ok(Async::Ready(Some(msg))) => if !self.handle_client_msg(msg) {
 					return Ok(Async::Ready(()))
 				}
@@ -446,8 +444,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Tick => self.tick(),
 			#[cfg(any(test, feature = "test-helpers"))]
-			ProtocolMsg::Abort => self.abort(),
-			#[cfg(any(test, feature = "test-helpers"))]
 			ProtocolMsg::Synchronize => {
 				trace!(target: "sync", "handle_client_msg: received Synchronize msg");
 				self.network_chan.send(NetworkMsg::Synchronized)
@@ -488,14 +484,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	pub fn on_custom_message(&mut self, who: PeerId, message: Message<B>) {
+	pub fn on_custom_message(&mut self, who: PeerId, message: Message<B>) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				if let Some(request) = self.handle_response(who.clone(), &r) {
-					self.on_block_response(who.clone(), request, r);
+					let outcome = self.on_block_response(who.clone(), request, r);
 					self.update_peer_info(&who);
+					return outcome
 				}
 			},
 			GenericMessage::BlockAnnounce(announce) => {
@@ -512,7 +509,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
 			GenericMessage::FinalityProofRequest(request) => self.on_finality_proof_request(who, request),
-			GenericMessage::FinalityProofResponse(response) => self.on_finality_proof_response(who, response),
+			GenericMessage::FinalityProofResponse(response) => return self.on_finality_proof_response(who, response),
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
@@ -528,6 +525,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				&mut Some(other),
 			),
 		}
+
+		CustomMessageOutcome::None
 	}
 
 	fn send_message(&mut self, who: PeerId, message: Message<B>) {
@@ -676,7 +675,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		peer: PeerId,
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
-	) {
+	) -> CustomMessageOutcome<B> {
 		let blocks_range = match (
 				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 				response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
@@ -691,14 +690,26 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// TODO [andre]: move this logic to the import queue so that
 		// justifications are imported asynchronously (#1482)
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
-			self.sync.on_block_justification_data(
+			let outcome = self.sync.on_block_justification_data(
 				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 				peer,
 				request,
 				response,
 			);
+
+			if let Some((origin, hash, nb, just)) = outcome {
+				CustomMessageOutcome::JustificationImport(origin, hash, nb, just)
+			} else {
+				CustomMessageOutcome::None
+			}
+
 		} else {
-			self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response);
+			let outcome = self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response);
+			if let Some((origin, blocks)) = outcome {
+				CustomMessageOutcome::BlockImport(origin, blocks)
+			} else {
+				CustomMessageOutcome::None
+			}
 		}
 	}
 
@@ -922,22 +933,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			};
 			self.send_message(who, GenericMessage::Status(status))
 		}
-	}
-
-	fn abort(&mut self) {
-		self.sync.clear();
-		self.specialization.on_abort();
-		self.context_data.peers.clear();
-		self.handshaking_peers.clear();
-		self.consensus_gossip.abort();
-	}
-
-	fn stop(&mut self) {
-		// stop processing import requests first (without holding a sync lock)
-		self.sync.stop();
-
-		// and then clear all the sync data
-		self.abort();
 	}
 
 	fn on_block_announce(&mut self, who: PeerId, announce: message::BlockAnnounce<B::Header>) {
@@ -1171,14 +1166,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		&mut self,
 		who: PeerId,
 		response: message::FinalityProofResponse<B::Hash>,
-	) {
+	) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "Finality proof response from {} for {}", who, response.block);
-		self.sync.on_block_finality_proof_data(
+		let outcome = self.sync.on_block_finality_proof_data(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			who,
 			response,
 		);
+
+		if let Some((origin, hash, nb, proof)) = outcome {
+			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof)
+		} else {
+			CustomMessageOutcome::None
+		}
 	}
+}
+
+/// Outcome of an incoming custom message.
+#[derive(Debug)]
+pub enum CustomMessageOutcome<B: BlockT> {
+	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
+	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
+	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	None,
 }
 
 fn send_message<B: BlockT, H: ExHashT>(

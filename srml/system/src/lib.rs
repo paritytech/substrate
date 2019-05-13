@@ -76,9 +76,12 @@ use serde::Serialize;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
+};
+#[cfg(any(feature = "std", test))]
+use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;

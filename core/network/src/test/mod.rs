@@ -23,7 +23,7 @@ mod sync;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use log::trace;
 use crate::chain::FinalityProofProvider;
@@ -45,7 +45,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg};
+use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg, CustomMessageOutcome};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -521,11 +521,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		*finalized_hash = Some(info.chain.finalized_hash);
 	}
 
-	/// Restart sync for a peer.
-	fn restart_sync(&self) {
-		self.net_proto_channel.send_from_client(ProtocolMsg::Abort);
-	}
-
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(
@@ -746,6 +741,9 @@ pub trait TestNetFactory: Sized {
 	/// Add created peer.
 	fn add_peer(
 		&mut self,
+		is_offline: Arc<AtomicBool>,
+		is_major_syncing: Arc<AtomicBool>,
+		import_queue: Box<BasicQueue<Block>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
 		peer: Arc<Peer<Self::PeerData, Self::Specialization>>,
@@ -753,21 +751,42 @@ pub trait TestNetFactory: Sized {
 		std::thread::spawn(move || {
 			tokio::runtime::current_thread::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
-					match msg {
-						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) =>
-							protocol.on_peer_connected(peer_id, debug_msg),
-						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) =>
-							protocol.on_peer_disconnected(peer_id, debug_msg),
+					let outcome = match msg {
+						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
+							protocol.on_peer_connected(peer_id, debug_msg);
+							CustomMessageOutcome::None
+						},
+						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
+							protocol.on_peer_disconnected(peer_id, debug_msg);
+							CustomMessageOutcome::None
+						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
 							protocol.on_custom_message(peer_id, message),
-						Some(FromNetworkMsg::Synchronize) => protocol.synchronize(),
+						Some(FromNetworkMsg::Synchronize) => {
+							protocol.synchronize();
+							CustomMessageOutcome::None
+						},
 						None => return Ok(Async::Ready(())),
+					};
+
+					match outcome {
+						CustomMessageOutcome::BlockImport(origin, blocks) =>
+							import_queue.import_blocks(origin, blocks),
+						CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
+							import_queue.import_justification(origin, hash, nb, justification),
+						CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
+							import_queue.import_finality_proof(origin, hash, nb, proof),
+						CustomMessageOutcome::None => {}
 					}
 				}
 
 				if let Async::Ready(_) = protocol.poll().unwrap() {
 					return Ok(Async::Ready(()))
 				}
+
+
+				is_offline.store(protocol.is_offline(), Ordering::Relaxed);
+				is_major_syncing.store(protocol.is_major_syncing(), Ordering::Relaxed);
 
 				Ok(Async::NotReady)
 			}));
@@ -810,31 +829,35 @@ pub trait TestNetFactory: Sized {
 		let (network_to_protocol_sender, network_to_protocol_rx) = mpsc::unbounded();
 
 		let (protocol, protocol_sender) = Protocol::new(
-			is_offline.clone(),
-			is_major_syncing.clone(),
 			peers.clone(),
 			network_sender.clone(),
 			config.clone(),
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
-			import_queue.clone(),
 			None,
 			tx_pool,
 			specialization,
 		).unwrap();
 
-		self.add_peer(protocol, network_to_protocol_rx, Arc::new(Peer::new(
-			is_offline,
-			is_major_syncing,
-			peers,
-			PeersClient::Full(client),
-			import_queue,
-			network_to_protocol_sender,
-			protocol_sender,
-			network_sender,
-			network_port,
-			data,
-		)));
+		self.add_peer(
+			is_offline.clone(),
+			is_major_syncing.clone(),
+			import_queue.clone(),
+			protocol,
+			network_to_protocol_rx,
+			Arc::new(Peer::new(
+				is_offline,
+				is_major_syncing,
+				peers,
+				PeersClient::Full(client),
+				import_queue,
+				network_to_protocol_sender,
+				protocol_sender,
+				network_sender,
+				network_port,
+				data,
+			)),
+		);
 	}
 
 	/// Add a light peer.
@@ -864,31 +887,35 @@ pub trait TestNetFactory: Sized {
 		let (network_to_protocol_sender, network_to_protocol_rx) = mpsc::unbounded();
 
 		let (protocol, protocol_sender) = Protocol::new(
-			is_offline.clone(),
-			is_major_syncing.clone(),
 			peers.clone(),
 			network_sender.clone(),
 			config,
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
-			import_queue.clone(),
 			None,
 			tx_pool,
 			specialization,
 		).unwrap();
 
-		self.add_peer(protocol, network_to_protocol_rx, Arc::new(Peer::new(
-			is_offline,
-			is_major_syncing,
-			peers,
-			PeersClient::Light(client),
-			import_queue,
-			network_to_protocol_sender,
-			protocol_sender,
-			network_sender,
-			network_port,
-			data,
-		)));
+		self.add_peer(
+			is_offline.clone(),
+			is_major_syncing.clone(),
+			import_queue.clone(),
+			protocol,
+			network_to_protocol_rx,
+			Arc::new(Peer::new(
+				is_offline,
+				is_major_syncing,
+				peers,
+				PeersClient::Light(client),
+				import_queue,
+				network_to_protocol_sender,
+				protocol_sender,
+				network_sender,
+				network_port,
+				data,
+			)),
+		);
 	}
 
 	/// Start network.
@@ -987,16 +1014,6 @@ pub trait TestNetFactory: Sized {
 		self.peers().iter().for_each(|peer| peer.send_finality_notifications())
 	}
 
-	/// Restart sync for a peer.
-	fn restart_peer(&mut self, i: usize) {
-		self.peers()[i].restart_sync();
-	}
-
-	/// Maintain sync for a peer.
-	fn tick_peer(&mut self, i: usize) {
-		self.peers()[i].sync_step();
-	}
-
 	/// Perform synchronization until complete, if provided the
 	/// given nodes set are excluded from sync.
 	fn sync_with(&mut self, disconnect: bool, disconnected: Option<HashSet<usize>>) {
@@ -1010,6 +1027,11 @@ pub trait TestNetFactory: Sized {
 	/// Deliver at most 1 pending message from every peer.
 	fn sync_step(&mut self) {
 		self.route_single(true, None, &|_| true);
+	}
+
+	/// Maintain sync for a peer.
+	fn tick_peer(&mut self, i: usize) {
+		self.peers()[i].sync_step();
 	}
 
 	/// Deliver pending messages until there are no more.

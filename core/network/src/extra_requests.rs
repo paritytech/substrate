@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 use log::{trace, warn};
 use client::error::Error as ClientError;
-use consensus::import_queue::{ImportQueue, SharedFinalityProofRequestBuilder};
+use consensus::import_queue::SharedFinalityProofRequestBuilder;
 use fork_tree::ForkTree;
 use network_libp2p::PeerId;
 use runtime_primitives::Justification;
@@ -41,14 +41,6 @@ pub(crate) trait ExtraRequestsEssence<B: BlockT> {
 	fn type_name(&self) -> &'static str;
 	/// Send network message corresponding to the request.
 	fn send_network_request(&self, protocol: &mut Context<B>, peer: PeerId, request: ExtraRequest<B>);
-	/// Accept response.
-	fn import_response(
-		&self,
-		import_queue: &ImportQueue<B>,
-		who: PeerId,
-		request: ExtraRequest<B>,
-		response: Self::Response,
-	);
 	/// Create peer state for peer that is downloading extra data.
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B>;
 }
@@ -102,12 +94,6 @@ impl<B: BlockT> ExtraRequestsAggregator<B> {
 	pub(crate) fn peer_disconnected(&mut self, who: PeerId) {
 		self.justifications.peer_disconnected(&who);
 		self.finality_proofs.peer_disconnected(&who);
-	}
-
-	/// Clear all data.
-	pub(crate) fn clear(&mut self) {
-		self.justifications.clear();
-		self.finality_proofs.clear();
 	}
 }
 
@@ -280,16 +266,14 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		&mut self,
 		who: PeerId,
 		response: Option<Essence::Response>,
-		import_queue: &ImportQueue<B>,
-	) {
+	) -> Option<(PeerId, B::Hash, NumberFor<B>, Essence::Response)> {
 		// we assume that the request maps to the given response, this is
 		// currently enforced by the outer network protocol before passing on
 		// messages to chain sync.
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(response) = response {
-				self.essence.import_response(import_queue, who.clone(), request, response);
 				self.importing_requests.insert(request);
-				return;
+				return Some((who, request.0, request.1, response));
 			}
 
 			self.previous_requests
@@ -298,6 +282,8 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 				.push((who, Instant::now()));
 			self.pending_requests.push_front(request);
 		}
+
+		None
 	}
 
 	/// Removes any pending extra requests for blocks lower than the
@@ -401,10 +387,6 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 		})
 	}
 
-	fn import_response(&self, import_queue: &ImportQueue<B>, who: PeerId, request: ExtraRequest<B>, response: Self::Response) {
-		import_queue.import_justification(who, request.0, request.1, response)
-	}
-
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B> {
 		PeerSyncState::DownloadingJustification(block)
 	}
@@ -427,10 +409,6 @@ impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence<B> {
 				.map(|builder| builder.build_request_data(&request.0))
 				.unwrap_or_default(),
 		})
-	}
-
-	fn import_response(&self, import_queue: &ImportQueue<B>, who: PeerId, request: ExtraRequest<B>, response: Self::Response) {
-		import_queue.import_finality_proof(who, request.0, request.1, response)
 	}
 
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B> {

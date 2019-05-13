@@ -32,7 +32,6 @@ fn test_ancestor_search_when_common_is(n: usize) {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
@@ -95,6 +94,7 @@ fn sync_cycle_from_offline_to_syncing_to_offline() {
 				net.peer(peer).on_disconnect(net.peer(other));
 			}
 		}
+		net.sync();
 		assert!(net.peer(peer).is_offline());
 		assert!(!net.peer(peer).is_major_syncing());
 	}
@@ -118,6 +118,7 @@ fn syncing_node_not_major_syncing_when_disconnected() {
 	net.peer(1).on_disconnect(net.peer(2));
 
 	// Peer 1 is not major-syncing.
+	net.sync();
 	assert!(!net.peer(1).is_major_syncing());
 }
 
@@ -140,7 +141,6 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
@@ -155,7 +155,6 @@ fn ancestry_search_works_when_backoff_is_one() {
 	net.peer(1).push_blocks(2, false);
 	net.peer(2).push_blocks(2, false);
 
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
@@ -170,7 +169,6 @@ fn ancestry_search_works_when_ancestor_is_genesis() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 
-	net.restart_peer(0);
 	net.sync();
 	assert!(net.peer(0).client.as_in_memory_backend().blockchain()
 		.canon_equals_to(net.peer(1).client.as_in_memory_backend().blockchain()));
