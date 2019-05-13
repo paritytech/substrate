@@ -34,7 +34,7 @@ use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 use log::{debug, trace, info, warn};
-use crate::protocol::Context;
+use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use fork_tree::ForkTree;
 use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
@@ -66,6 +66,25 @@ const BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE: i32 = -(1 << 16);
 const ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE: i32 = -(1 << 9);
 /// Reputation change when a peer sent us a status message with a different genesis than us.
 const GENESIS_MISMATCH_REPUTATION_CHANGE: i32 = i32::min_value() + 1;
+
+/// Context for a network-specific handler.
+pub trait Context<B: BlockT> {
+	/// Get a reference to the client.
+	fn client(&self) -> &crate::chain::Client<B>;
+
+	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
+	/// irresponsible or appeared lazy.
+	fn report_peer(&mut self, who: PeerId, reputation: i32);
+
+	/// Force disconnecting from a peer. Use this when a peer misbehaved.
+	fn disconnect_peer(&mut self, who: PeerId);
+
+	/// Get peer info.
+	fn peer_info(&self, peer: &PeerId) -> Option<ProtocolPeerInfo<B>>;
+
+	/// Request a block from a peer.
+	fn send_block_request(&mut self, who: PeerId, request: message::BlockRequest<B>);
+}
 
 #[derive(Debug)]
 struct PeerSync<B: BlockT> {
