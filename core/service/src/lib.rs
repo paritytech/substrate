@@ -42,6 +42,7 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use substrate_executor::NativeExecutor;
+use consensus_common::SelectChain;
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
@@ -64,7 +65,7 @@ use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::OnDemand;
+pub use network::{FinalityProofProvider, OnDemand};
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 
@@ -73,6 +74,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
+	select_chain: <Components as components::Components>::SelectChain,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
@@ -150,8 +152,14 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
-		let best_header = client.best_block_header()?;
+		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+		let import_queue = Box::new(Components::build_import_queue(
+			&mut config,
+			client.clone(),
+			select_chain.clone(),
+		)?);
+		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
+		let best_header = select_chain.best_chain()?;
 
 		let version = config.full_version();
 		info!("Best block: #{}", best_header.number());
@@ -171,6 +179,7 @@ impl<Components: components::Components> Service<Components> {
 			config: network::config::ProtocolConfig { roles: config.roles },
 			network_config: config.network.clone(),
 			chain: client.clone(),
+			finality_proof_provider,
 			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
@@ -357,6 +366,7 @@ impl<Components: components::Components> Service<Components> {
 		Ok(Service {
 			client,
 			network: Some(network),
+			select_chain,
 			transaction_pool,
 			inherents_pool,
 			signal: Some(signal),
@@ -393,6 +403,11 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
+	}
+
+	/// Get clone of select chain.
+	pub fn select_chain(&self) -> <Components as components::Components>::SelectChain {
+		self.select_chain.clone()
 	}
 
 	/// Get shared network instance.
@@ -578,6 +593,9 @@ macro_rules! construct_service_factory {
 				{ $( $full_import_queue_init:tt )* },
 			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
+			SelectChain = $select_chain:ty
+				{ $( $select_chain_init:tt )* },
+			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -597,6 +615,7 @@ macro_rules! construct_service_factory {
 			type LightService = $light_service;
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
+			type SelectChain = $select_chain;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -620,11 +639,19 @@ macro_rules! construct_service_factory {
 				( $( $protocol_init )* ) (config)
 			}
 
+			fn build_select_chain(
+				config: &mut $crate::FactoryFullConfiguration<Self>,
+				client: Arc<$crate::FullClient<Self>>
+			) -> $crate::Result<Self::SelectChain, $crate::Error> {
+				( $( $select_chain_init )* ) (config, client)
+			}
+
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
+				select_chain: Self::SelectChain
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client)
+				( $( $full_import_queue_init )* ) (config, client, select_chain)
 			}
 
 			fn build_light_import_queue(
@@ -632,6 +659,12 @@ macro_rules! construct_service_factory {
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
+			}
+
+			fn build_finality_proof_provider(
+				client: Arc<$crate::FullClient<Self>>
+			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
+				( $( $finality_proof_provider_init )* ) (client)
 			}
 
 			fn new_light(

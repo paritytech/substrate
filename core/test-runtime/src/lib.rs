@@ -302,11 +302,6 @@ fn benchmark_add_one(i: u64) -> u64 {
 #[cfg(not(feature = "std"))]
 static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction::new(benchmark_add_one);
 
-#[test] // TODO EMCH delete
-fn use_trie_function2() {
-	assert_eq!(code_using_trie(), 5 + 2);
-}
-
 fn code_using_trie() -> u64 {
 	let pairs = [
 		(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
@@ -321,20 +316,26 @@ fn code_using_trie() -> u64 {
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
-			t.insert(key, val).expect("static input");
+			if !t.insert(key, val).is_ok() {
+				return 101;
+			}
 		}
 		t
 	};
 
-	let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).expect("on memory with static content");
-
-	let iter = trie.iter().expect("static input");
-	let mut iter_pairs = Vec::new();
-	for pair in iter {
-		let (key, value) = pair.expect("on memory with static content");
-		iter_pairs.push((key, value.to_vec()));
+	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
+		if let Ok(iter) = trie.iter() {
+			let mut iter_pairs = Vec::new();
+			for pair in iter {
+				if let Ok((key, value)) = pair {
+					iter_pairs.push((key, value.to_vec()));
+				}
+			}
+			iter_pairs.len() as u64
+		} else { 102 }
+	} else {
+		103
 	}
-	5 + iter_pairs.len() as u64
 }
 
 cfg_if! {

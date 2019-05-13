@@ -245,7 +245,7 @@ decl_storage! {
 		/// How often (in blocks) to check for new votes.
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
-		/// The next free referendum index, aka the number of referendums started so far.
+		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// The next referendum index that should be tallied.
 		pub NextTally get(next_tally) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -298,8 +298,8 @@ impl<T: Trait> Module<T> {
 		<ReferendumInfoOf<T>>::exists(ref_index)
 	}
 
-	/// Get all referendums currently active.
-	pub fn active_referendums() -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
+	/// Get all referenda currently active.
+	pub fn active_referenda() -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
 		(next..last).into_iter()
@@ -307,8 +307,8 @@ impl<T: Trait> Module<T> {
 			.collect()
 	}
 
-	/// Get all referendums ready for tally at block `n`.
-	pub fn maturing_referendums_at(n: T::BlockNumber) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
+	/// Get all referenda ready for tally at block `n`.
+	pub fn maturing_referenda_at(n: T::BlockNumber) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
 		(next..last).into_iter()
@@ -498,7 +498,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// tally up votes for any expiring referenda.
-		for (index, info) in Self::maturing_referendums_at(now).into_iter() {
+		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
 			Self::bake_referendum(now.clone(), index, info)?;
 		}
 
