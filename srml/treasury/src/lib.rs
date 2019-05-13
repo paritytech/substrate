@@ -45,7 +45,11 @@
 //!
 //! The treasury module provides an implementation for the following trait:
 //!
-//! - `OnDilution` - Mint extra funds upon dilution; maintain the ratio of `portion` diluted to `total_issuance`.
+//! - `OnDilution` - When new funds are minted to reward the deployment of other existing funds,
+//! a corresponding amount of tokens are minted into the treasury so that the tokens being rewarded
+//! do not represent a higher portion of total supply. For example, in the default substrate node,
+//! when validators are rewarded new tokens for staking, they do not hold a higher portion of total
+//! tokens. Rather, tokens are added to the treasury to keep the portion of tokens staked constant.
 //!
 //! ## Interface
 //!
