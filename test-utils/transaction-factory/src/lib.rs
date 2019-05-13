@@ -29,7 +29,7 @@ use log::info;
 
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
-use consensus_common::{BlockOrigin, ImportBlock, ForkChoiceStrategy};
+use consensus_common::{BlockOrigin, ImportBlock, ForkChoiceStrategy, SelectChain};
 use consensus_common::block_import::BlockImport;
 use parity_codec::{Decode, Encode};
 use serde::Serialize;
@@ -97,7 +97,7 @@ pub struct FactoryState {
 /// Manufactures transactions. The exact amount depends on
 /// `mode`, `num` and `rounds`.
 pub fn factory<F, RA>(
-	config: FactoryFullConfiguration<F>,
+	mut config: FactoryFullConfiguration<F>,
 	mode: Mode,
 	num: u64,
 	rounds: u64,
@@ -119,7 +119,10 @@ where
 {
 	let client = new_client::<F>(&config)?;
 
-	let mut prior_block_hash: RA::Hash = client.best_block_header()?.hash().into();
+	let select_chain = F::build_select_chain(&mut config, client.clone())?;
+	let best_header = select_chain.best_chain().expect("Failed to fetch best header");
+	let mut prior_block_hash: RA::Hash = best_header.hash().into();
+
 	let mut last_ts = RA::extract_timestamp(prior_block_hash);
 
 	let start_number: u64 = client.info()?.chain.best_number.as_();
