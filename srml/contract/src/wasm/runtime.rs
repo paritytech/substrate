@@ -624,7 +624,8 @@ define_env!(Env, <E: Ext>,
 		}
 
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
-		ctx.ext.deposit_event(event_data);
+		let topics = Vec::new();
+		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
 	},

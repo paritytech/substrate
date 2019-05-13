@@ -279,7 +279,7 @@ mod tests {
 			&self.random_seed
 		}
 
-		fn deposit_event(&mut self, data: Vec<u8>) {
+		fn deposit_event(&mut self, _topics: Vec<H256>, data: Vec<u8>) {
 			self.events.push(data)
 		}
 
