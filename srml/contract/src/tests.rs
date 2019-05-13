@@ -134,8 +134,8 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 		let mut res = vec![];
 		res.extend_from_slice(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
 		res.extend_from_slice(b"default:");
+		res.extend_from_slice(&new_seed.to_le_bytes());
 		res.extend_from_slice(&account_id.to_le_bytes());
-		res.extend_from_slice(&new_seed.to_be_bytes());
 		res
 	}
 }
@@ -1126,8 +1126,11 @@ fn restoration(failing_test: bool) {
 				<Test as balances::Trait>::Balance::sa(0u64).encode()
 			));
 
+
+			// One Id has been generated in `Contract::create` call,
+			// revert to previous state to retrieve the trie_id generated.
+			<super::AccountCounter<Test>>::mutate(|v| *v -= 1);
 			let mut django_trie_id = <Test as Trait>::TrieIdGenerator::trie_id(&DJANGO);
-			*django_trie_id.last_mut().unwrap() -= 1;
 
 			if failing_test {
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
