@@ -628,7 +628,8 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Deposit a contract event with the data buffer and optional list of topics.
+	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
+	// on the maximum number of topics specified by `max_event_topics`.
 	//
 	// - topics_ptr - a pointer to the buffer of topics encoded as `Vec<T::Hash>`. The value of this
 	//   is ignored if `topics_len` is set to 0. The topics list can't contain duplicates.
@@ -645,6 +646,12 @@ define_env!(Env, <E: Ext>,
 				// TODO: ensure there are no duplicates
 			}
 		};
+
+		// If there are more than `max_event_topics`, then trap.
+		if topics.len() > ctx.schedule.max_event_topics as usize {
+			return Err(sandbox::HostError);
+		}
+
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
 
 		match ctx

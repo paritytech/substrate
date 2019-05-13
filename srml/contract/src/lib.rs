@@ -675,6 +675,9 @@ pub struct Schedule<Gas> {
 	/// Gas cost per one byte written to the sandbox memory.
 	pub sandbox_data_write_cost: Gas,
 
+	/// The maximum number of topics supported by an event.
+	pub max_event_topics: u32,
+
 	/// Maximum allowed stack height.
 	///
 	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
@@ -702,6 +705,7 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			event_base_cost: Gas::sa(1),
 			sandbox_data_read_cost: Gas::sa(1),
 			sandbox_data_write_cost: Gas::sa(1),
+			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 			enable_println: false,
