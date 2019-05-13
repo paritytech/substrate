@@ -23,7 +23,7 @@ use substrate_peerset::{IncomingIndex, Message, PeersetConfig, Peerset};
 
 #[test]
 fn run() {
-	for _ in 0..25 {
+	for _ in 0..50 {
 		test_once();
 	}
 }
@@ -66,7 +66,7 @@ fn test_once() {
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
-		for _ in 0 .. 1000 {
+		for _ in 0 .. 2500 {
 			// Each of these weights corresponds to an action that we may perform.
 			let action_weights = [150, 90, 90, 30, 30, 1, 1, 4, 4];
 			match WeightedIndex::new(&action_weights).unwrap().sample(&mut rng) {
