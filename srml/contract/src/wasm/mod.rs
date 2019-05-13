@@ -1223,9 +1223,9 @@ mod tests {
 		]);
 
 		assert_eq!(gas_meter.gas_left(), 50_000
-			- 6          // Explicit
-			- 13 - 1     // Deposit event
-			- (13 + 33)  // read memory
+			- 6            // Explicit
+			- 13 - 1 - 1   // Deposit event
+			- (13 + 33)    // read memory
 		);
 	}
 }

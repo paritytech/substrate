@@ -111,9 +111,9 @@ pub enum RuntimeToken<Gas> {
 	ReturnData(u32),
 	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
 	ComputedDispatchFee(Gas),
-	/// The given number of bytes is read from the sandbox memory and
-	/// deposit in as an event.
-	DepositEvent(u32),
+	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
+	/// given number of topics.
+	DepositEvent(u32, u32),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
@@ -132,10 +132,25 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			DepositEvent(byte_count) => metadata
-				.event_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))
-				.and_then(|e| e.checked_add(&metadata.event_data_base_cost)),
+			DepositEvent(topic_count, data_byte_count) => {
+				let data_cost = metadata
+					.event_data_per_byte_cost
+					.checked_mul(&<T::Gas as As<u32>>::sa(data_byte_count));
+
+				let topics_cost = metadata
+					.event_per_topic_cost
+					.checked_mul(&<T::Gas as As<u32>>::sa(topic_count));
+
+				data_cost
+					.and_then(|data_cost| {
+						topics_cost.and_then(|topics_cost| {
+							data_cost.checked_add(&topics_cost)
+						})
+					})
+					.and_then(|data_and_topics_cost|
+						data_and_topics_cost.checked_add(&metadata.event_base_cost)
+					)
+			},
 			ComputedDispatchFee(gas) => Some(gas),
 		};
 
@@ -621,17 +636,6 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
-		match ctx
-			.gas_meter
-			.charge(
-				ctx.schedule,
-				RuntimeToken::DepositEvent(data_len)
-			)
-		{
-			GasMeterResult::Proceed => (),
-			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
-		}
-
 		let topics = match topics_len {
 			0 => Vec::new(),
 			_ => {
@@ -639,10 +643,20 @@ define_env!(Env, <E: Ext>,
 				Vec::<TopicOf<<E as Ext>::T>>::decode(&mut &topics_buf[..])
 					.ok_or_else(|| sandbox::HostError)?
 				// TODO: ensure there are no duplicates
-				// TODO: proper payment
 			}
 		};
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
+
+		match ctx
+			.gas_meter
+			.charge(
+				ctx.schedule,
+				RuntimeToken::DepositEvent(topics.len() as u32, data_len)
+			)
+		{
+			GasMeterResult::Proceed => (),
+			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
+		}
 		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
