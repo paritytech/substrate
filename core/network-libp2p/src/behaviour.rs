@@ -128,7 +128,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	/// Returns a mutable reference to the user protocol.
 	pub fn user_protocol_mut(&mut self) -> &mut TBehaviour {
 		&mut self.user_protocol.0
-  }
+	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
@@ -273,27 +273,27 @@ pub struct UserEventWrap<TInner>(TInner);
 impl<TInner: NetworkBehaviour> NetworkBehaviour for UserBehaviourWrap<TInner> {
 	type ProtocolsHandler = TInner::ProtocolsHandler;
 	type OutEvent = UserEventWrap<TInner::OutEvent>;
-    fn new_handler(&mut self) -> Self::ProtocolsHandler { self.0.new_handler() }
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+	fn new_handler(&mut self) -> Self::ProtocolsHandler { self.0.new_handler() }
+	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
 		self.0.addresses_of_peer(peer_id)
 	}
-    fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
+	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
 		self.0.inject_connected(peer_id, endpoint)
 	}
-    fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
 		self.0.inject_disconnected(peer_id, endpoint)
 	}
-    fn inject_node_event(
-        &mut self,
-        peer_id: PeerId,
-        event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
-    ) {
+	fn inject_node_event(
+				&mut self,
+				peer_id: PeerId,
+				event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
+		) {
 		self.0.inject_node_event(peer_id, event)
 	}
-    fn poll(
-        &mut self,
-        params: &mut PollParameters
-    ) -> Async<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>> {
+	fn poll(
+		&mut self,
+		params: &mut PollParameters
+	) -> Async<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>> {
 		match self.0.poll(params) {
 			Async::NotReady => Async::NotReady,
 			Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) =>
@@ -308,22 +308,22 @@ impl<TInner: NetworkBehaviour> NetworkBehaviour for UserBehaviourWrap<TInner> {
 				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 		}
 	}
-    fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
+	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
 		self.0.inject_replaced(peer_id, closed_endpoint, new_endpoint)
 	}
-    fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn std::error::Error) {
+	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn std::error::Error) {
 		self.0.inject_addr_reach_failure(peer_id, addr, error)
 	}
-    fn inject_dial_failure(&mut self, peer_id: &PeerId) {
+	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
 		self.0.inject_dial_failure(peer_id)
 	}
-    fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
+	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
 		self.0.inject_new_listen_addr(addr)
 	}
-    fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
+	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
 		self.0.inject_expired_listen_addr(addr)
 	}
-    fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
+	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.0.inject_new_external_addr(addr)
 	}
 }
