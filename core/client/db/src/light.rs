@@ -34,7 +34,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor, Digest, DigestItem};
 use consensus_common::well_known_cache_keys;
-use crate::cache::{DbCacheSync, DbCache, ComplexBlockId};
+use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
@@ -91,6 +91,7 @@ impl<Block> LightStorage<Block>
 			columns::KEY_LOOKUP,
 			columns::HEADER,
 			columns::CACHE,
+			meta.genesis_hash,
 			ComplexBlockId::new(meta.finalized_hash, meta.finalized_number),
 		);
 
@@ -406,6 +407,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let is_genesis = number.is_zero();
 		if is_genesis {
+			self.cache.0.write().set_genesis_hash(hash);
 			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 		}
 
@@ -434,7 +436,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
 					ComplexBlockId::new(hash, number),
 					cache_at,
-					finalized,
+					if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
 				)?
 				.into_ops();
 
@@ -1039,5 +1041,25 @@ pub(crate) mod tests {
 
 		// leaves at same height stay. Leaves at lower heights pruned.
 		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c]);
+	}
+
+	#[test]
+	fn cache_can_be_initialized_after_genesis_inserted() {
+		let db = LightStorage::<Block>::new_test();
+
+		// before cache is initialized => None
+		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+
+		// insert genesis block (no value for cache is provided)
+		insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
+
+		// after genesis is inserted => None
+		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+
+		// initialize cache
+		db.cache().initialize(b"test", vec![42]).unwrap();
+
+		// after genesis is inserted + cache is initialized => Some
+		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), Some(vec![42]));
 	}
 }

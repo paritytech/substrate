@@ -93,15 +93,17 @@ mod environment;
 mod finality_proof;
 mod import;
 mod justification;
+mod light_import;
 mod observer;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
 mod service_integration;
 #[cfg(feature="service-integration")]
-pub use service_integration::{LinkHalfForService, BlockImportForService};
+pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 pub use communication::Network;
-pub use finality_proof::{prove_finality, check_finality_proof};
+pub use finality_proof::FinalityProofProvider;
+pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 
 use aux_schema::PersistentData;
@@ -300,7 +302,7 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
-	select_chain: SC
+	select_chain: SC,
 ) -> Result<(
 		GrandpaBlockImport<B, E, Block, RA, PRA, SC>,
 		LinkHalf<B, E, Block, RA, SC>

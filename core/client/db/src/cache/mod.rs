@@ -25,9 +25,9 @@ use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use crate::utils::{self, COLUMN_META};
+use crate::utils::{self, COLUMN_META, db_err};
 
 use self::list_cache::ListCache;
 
@@ -37,6 +37,17 @@ mod list_storage;
 
 /// Minimal post-finalization age age of finalized blocks before they'll pruned.
 const PRUNE_DEPTH: u64 = 1024;
+
+/// The type of entry that is inserted to the cache.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EntryType {
+	/// Non-final entry.
+	NonFinal,
+	/// Final entry.
+	Final,
+	/// Genesis entry (inserted during cache initialization).
+	Genesis,
+}
 
 /// Block identifier that holds both hash and number.
 #[derive(Clone, Debug, Encode, Decode, PartialEq)]
@@ -70,6 +81,7 @@ pub struct DbCache<Block: BlockT> {
 	key_lookup_column: Option<u32>,
 	header_column: Option<u32>,
 	authorities_column: Option<u32>,
+	genesis_hash: Block::Hash,
 	best_finalized_block: ComplexBlockId<Block>,
 }
 
@@ -80,6 +92,7 @@ impl<Block: BlockT> DbCache<Block> {
 		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		authorities_column: Option<u32>,
+		genesis_hash: Block::Hash,
 		best_finalized_block: ComplexBlockId<Block>,
 	) -> Self {
 		Self {
@@ -88,8 +101,14 @@ impl<Block: BlockT> DbCache<Block> {
 			key_lookup_column,
 			header_column,
 			authorities_column,
+			genesis_hash,
 			best_finalized_block,
 		}
+	}
+
+	/// Set genesis block hash.
+	pub fn set_genesis_hash(&mut self, genesis_hash: Block::Hash) {
+		self.genesis_hash = genesis_hash;
 	}
 
 	/// Begin cache transaction.
@@ -182,7 +201,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
 		data_at: HashMap<CacheKeyId, Vec<u8>>,
-		is_final: bool,
+		entry_type: EntryType,
 	) -> ClientResult<Self> {
 		assert!(self.cache_at_op.is_empty());
 
@@ -203,7 +222,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				parent.clone(),
 				block.clone(),
 				value.or(cache.value_at_block(&parent)?),
-				is_final,
+				entry_type,
 			)?;
 			if let Some(op) = op {
 				self.cache_at_op.insert(name, op);
@@ -214,8 +233,10 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		data_at.into_iter().try_for_each(|(name, data)| insert_op(name, Some(data)))?;
 		missed_caches.into_iter().try_for_each(|name| insert_op(name, None))?;
 
-		if is_final {
-			self.best_finalized_block = Some(block);
+		match entry_type {
+			EntryType::Final | EntryType::Genesis =>
+				self.best_finalized_block = Some(block),
+			EntryType::NonFinal => (),
 		}
 
 		Ok(self)
@@ -254,6 +275,25 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
+	fn initialize(&self, key: &CacheKeyId, data: Vec<u8>) -> ClientResult<()> {
+		let mut cache = self.0.write();
+		let genesis_hash = cache.genesis_hash;
+		let cache_contents = vec![(*key, data)].into_iter().collect();
+		let db = cache.db.clone();
+		let mut dbtx = DBTransaction::new();
+		let tx = cache.transaction(&mut dbtx);
+		let tx = tx.on_block_insert(
+			ComplexBlockId::new(Default::default(), Zero::zero()),
+			ComplexBlockId::new(genesis_hash, Zero::zero()),
+			cache_contents,
+			EntryType::Genesis,
+		)?;
+		let tx_ops = tx.into_ops();
+		db.write(dbtx).map_err(db_err)?;
+		cache.commit(tx_ops);
+		Ok(())
+	}
+
 	fn get_at(&self, key: &CacheKeyId, at: &BlockId<Block>) -> Option<Vec<u8>> {
 		let cache = self.0.read();
 		let storage = cache.cache_at.get(key)?.storage();
