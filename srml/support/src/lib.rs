@@ -61,7 +61,7 @@ pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorage
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::print;
+pub use runtime_io::{print, storage_root};
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
@@ -96,9 +96,9 @@ macro_rules! ensure {
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
-		let h = runtime_io::storage_root();
+		let h = $crate::storage_root();
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, runtime_io::storage_root());
+		assert_eq!(h, $crate::storage_root());
 	}
 }
 
