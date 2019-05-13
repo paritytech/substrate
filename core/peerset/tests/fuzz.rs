@@ -78,10 +78,7 @@ fn test_once() {
 						}
 						assert!(connected_nodes.insert(id));
 					}
-					Async::Ready(Some(Message::Drop(id))) => {
-						assert!(incoming_nodes.iter().all(|(_, v)| *v != id));
-						connected_nodes.remove(&id);
-					},
+					Async::Ready(Some(Message::Drop(id))) => { connected_nodes.remove(&id); }
 					Async::Ready(Some(Message::Accept(n))) =>
 						assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap())),
 					Async::Ready(Some(Message::Reject(n))) =>
