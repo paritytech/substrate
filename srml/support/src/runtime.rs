@@ -22,8 +22,9 @@
 /// Construct a runtime, with the given name and the given modules.
 ///
 /// The parameters here are specific types for Block, NodeBlock and InherentData
-/// (TODO: describe the difference between Block and NodeBlock)
-///	and the modules that are used by the runtime.
+/// and the modules that are used by the runtime.
+/// Block is the block type that is used in the runtime and NodeBlock is the block type
+/// that is used in the node. For instance they can differ in the extrinsics type.
 ///
 /// # Example:
 ///
