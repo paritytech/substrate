@@ -155,6 +155,11 @@ impl<B: BlockT> OnDemand<B> where
 		}
 	}
 
+	/// Get checker reference.
+	pub fn checker(&self) -> &Arc<FetchChecker<B>> {
+		&self.checker
+	}
+
 	/// Sets weak reference to network service.
 	pub fn set_network_sender(&self, network_sender: NetworkChan<B>) {
 		self.network_sender.lock().replace(network_sender);
