@@ -18,7 +18,7 @@ use crate::{
 	behaviour::Behaviour, behaviour::BehaviourOut,
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
-use crate::custom_proto::{CustomMessage, RegisteredProtocol};
+use crate::custom_proto::{CustomProto, CustomProtoOut, CustomMessage, RegisteredProtocol};
 use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
@@ -89,7 +89,8 @@ where TMessage: CustomMessage + Send + 'static {
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
-		let behaviour = Behaviour::new(user_agent, local_public, registered_custom, known_addresses, peerset, config.enable_mdns);
+		let proto = CustomProto::new(registered_custom, peerset);
+		let behaviour = Behaviour::new(proto, user_agent, local_public, known_addresses, config.enable_mdns);
 		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
@@ -157,7 +158,7 @@ pub enum ServiceEvent<TMessage> {
 /// Network service. Must be polled regularly in order for the networking to work.
 pub struct Service<TMessage> where TMessage: CustomMessage {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<TMessage, Substream<StreamMuxerBox>>>,
+	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<CustomProto<TMessage, Substream<StreamMuxerBox>>, CustomProtoOut<TMessage>, Substream<StreamMuxerBox>>>,
 
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
@@ -194,8 +195,8 @@ where TMessage: CustomMessage + Send + 'static {
 					endpoint: info.endpoint.clone().into(),
 					version_string: info.client_version.clone(),
 					latest_ping_time: info.latest_ping,
-					enabled: swarm.is_enabled(&peer_id),
-					open: swarm.is_open(&peer_id),
+					enabled: swarm.user_protocol().is_enabled(&peer_id),
+					open: swarm.user_protocol().is_open(&peer_id),
 					known_addresses,
 				})
 			}).collect()
@@ -222,7 +223,7 @@ where TMessage: CustomMessage + Send + 'static {
 			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
 			connected_peers,
 			not_connected_peers,
-			peerset: self.swarm.peerset_debug_info(),
+			peerset: self.swarm.user_protocol_mut().peerset_debug_info(),
 		}
 	}
 
@@ -277,7 +278,7 @@ where TMessage: CustomMessage + Send + 'static {
 		peer_id: &PeerId,
 		message: TMessage
 	) {
-		self.swarm.send_custom_message(peer_id, message);
+		self.swarm.user_protocol_mut().send_packet(peer_id, message);
 	}
 
 	/// Disconnects a peer.
@@ -288,7 +289,7 @@ where TMessage: CustomMessage + Send + 'static {
 		if let Some(info) = self.nodes_info.get(peer_id) {
 			debug!(target: "sub-libp2p", "Dropping {:?} on purpose ({:?}, {:?})",
 				peer_id, info.endpoint, info.client_version);
-			self.swarm.drop_node(peer_id);
+			self.swarm.user_protocol_mut().disconnect_peer(peer_id);
 		}
 	}
 
@@ -310,7 +311,7 @@ where TMessage: CustomMessage + Send + 'static {
 	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { peer_id, version, endpoint }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::CustomProtocolOpen { peer_id, version, endpoint })))) => {
 					self.nodes_info.insert(peer_id.clone(), NodeInfo {
 						endpoint,
 						client_version: None,
@@ -323,7 +324,7 @@ where TMessage: CustomMessage + Send + 'static {
 						debug_info,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { peer_id, .. }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::CustomProtocolClosed { peer_id, .. })))) => {
 					let debug_info = self.peer_debug_info(&peer_id);
 					self.nodes_info.remove(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
@@ -331,13 +332,13 @@ where TMessage: CustomMessage + Send + 'static {
 						debug_info,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::CustomMessage { peer_id, message }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::CustomMessage { peer_id, message })))) => {
 					break Ok(Async::Ready(Some(ServiceEvent::CustomMessage {
 						peer_id,
 						message,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::Clogged { peer_id, messages }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::Clogged { peer_id, messages })))) => {
 					break Ok(Async::Ready(Some(ServiceEvent::Clogged {
 						peer_id,
 						messages,
