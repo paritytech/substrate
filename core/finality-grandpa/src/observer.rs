@@ -20,7 +20,8 @@ use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
 use grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet
+	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet,
+	HistoricalVotes,
 };
 use log::{debug, info, warn};
 
@@ -227,7 +228,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 							number: 0,
 							state: genesis_state,
 							base: (new.canon_hash, new.canon_number),
-							votes: Vec::new(),
+							votes: HistoricalVotes::new(),
 						}),
 						current_round: HasVoted::No,
 					};

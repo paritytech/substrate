@@ -77,7 +77,7 @@ use serde_json;
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
+use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet, HistoricalVotes};
 
 use std::fmt;
 use std::sync::Arc;
@@ -640,7 +640,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 							number: 0,
 							state: genesis_state,
 							base: (new.canon_hash, new.canon_number),
-							votes: Vec::new(),
+							votes: HistoricalVotes::new(),
 						}),
 						current_round: HasVoted::No,
 					};

@@ -30,7 +30,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	voter, voter_set::VoterSet, HistoricalVotes,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -41,7 +41,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	PrimaryPropose, NewAuthoritySet, VoterCommand,
 };
 
 use consensus_common::SelectChain;
@@ -63,7 +63,7 @@ pub struct CompletedRound<Block: BlockT> {
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
 	/// All the votes observed in the round.
-	pub votes: Vec<SignedMessage<Block>>,
+	pub votes: HistoricalVotes<Block::Hash, NumberFor<Block>>,
 }
 
 // Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
@@ -610,7 +610,7 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: Vec<SignedMessage<Block>>,
+		votes: &HistoricalVotes<Block::Hash, NumberFor<Block>>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
@@ -629,7 +629,7 @@ where
 				number: round,
 				state: state.clone(),
 				base,
-				votes,
+				votes: votes.clone(),
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));

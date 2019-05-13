@@ -22,7 +22,7 @@ use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
-use grandpa::round::State as RoundState;
+use grandpa::{round::State as RoundState, HistoricalVotes};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -158,7 +158,7 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 			completed_rounds: CompletedRounds::new(CompletedRound {
 				number: last_round_number,
 				state: last_round_state,
-				votes: Vec::new(),
+				votes: HistoricalVotes::new(),
 				base,
 			}),
 			current_round: HasVoted::No,
@@ -201,7 +201,7 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: last_round_number,
 						state: set_state,
-						votes: Vec::new(),
+						votes: HistoricalVotes::new(),
 						base,
 					}),
 				}
@@ -214,7 +214,7 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: last_round_number,
 						state: set_state,
-						votes: Vec::new(),
+						votes: HistoricalVotes::new(),
 						base,
 					}),
 					current_round: HasVoted::No,
@@ -229,7 +229,7 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: 0,
 						state: set_state,
-						votes: Vec::new(),
+						votes: HistoricalVotes::new(),
 						base,
 					}),
 					current_round: HasVoted::No,
@@ -300,7 +300,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 						VoterSetState::Live {
 							completed_rounds: CompletedRounds::new(CompletedRound {
 								number: 0,
-								votes: Vec::new(),
+								votes: HistoricalVotes::new(),
 								base,
 								state,
 							}),
@@ -333,7 +333,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	let genesis_state = VoterSetState::Live {
 		completed_rounds: CompletedRounds::new(CompletedRound {
 			number: 0,
-			votes: Vec::new(),
+			votes: HistoricalVotes::new(),
 			state,
 			base,
 		}),
@@ -388,7 +388,7 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 			completed_rounds: CompletedRounds::new(CompletedRound {
 				number: 0,
 				state: round_state,
-				votes: Vec::new(),
+				votes: HistoricalVotes::new(),
 				base: (new_set.canon_hash, new_set.canon_number),
 			}),
 			current_round: HasVoted::No,
@@ -514,7 +514,7 @@ mod test {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.unwrap(),
-					votes: vec![],
+					votes: HistoricalVotes::new(),
 				}),
 				current_round: HasVoted::No,
 			},
@@ -597,7 +597,7 @@ mod test {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.unwrap(),
-					votes: vec![],
+					votes: HistoricalVotes::new(),
 				}),
 				current_round: HasVoted::No,
 			},
