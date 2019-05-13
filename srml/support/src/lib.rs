@@ -238,6 +238,7 @@ mod tests {
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
 			pub GenericDataDM: double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
 			pub GenericData2DM: double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
+			pub AppendableDM: double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
 		}
 	}
 
@@ -367,6 +368,21 @@ mod tests {
 			assert_eq!(DoubleMap::get(key1, key2+1), 0u64);
 			assert_eq!(DoubleMap::get(key1+1, key2), 4u64);
 			assert_eq!(DoubleMap::get(key1+1, key2+1), 4u64);
+
+		});
+	}
+
+	#[test]
+	fn double_map_append_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			type DoubleMap = AppendableDM<Test>;
+
+			let key1 = 17u32;
+			let key2 = 18u32;
+
+			DoubleMap::insert(key1, key2, vec![1]);
+			DoubleMap::append(key1, key2, &[2, 3]);
+			assert_eq!(DoubleMap::get(key1, key2), vec![1, 2, 3]);
 		});
 	}
 
@@ -447,6 +463,21 @@ mod tests {
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
 					key2_hasher: DecodeDifferent::Encode("twox_256"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("AppendableDM"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::DoubleMap{
+					hasher: StorageHasher::Blake2_256,
+					key1: DecodeDifferent::Encode("u32"),
+					key2: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("Vec<u32>"),
+					key2_hasher: DecodeDifferent::Encode("blake2_256"),
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))

@@ -490,7 +490,8 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess)
+					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -499,23 +500,28 @@ mod tests {
 						bob().into(),
 						69,
 						0
-					))
+					)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess)
+					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Spending(0))
+					event: Event::treasury(treasury::RawEvent::Spending(0)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Burnt(0))
+					event: Event::treasury(treasury::RawEvent::Burnt(0)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Rollover(0))
+					event: Event::treasury(treasury::RawEvent::Rollover(0)),
+					topics: vec![],
 				},
 			]);
 		});
@@ -537,7 +543,8 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess)
+					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -548,11 +555,13 @@ mod tests {
 							5,
 							0
 						)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess)
+					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
@@ -563,27 +572,33 @@ mod tests {
 							15,
 							0
 						)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::system(system::Event::ExtrinsicSuccess)
+					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Spending(0))
+					event: Event::treasury(treasury::RawEvent::Spending(0)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Burnt(0))
+					event: Event::treasury(treasury::RawEvent::Burnt(0)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::treasury(treasury::RawEvent::Rollover(0))
+					event: Event::treasury(treasury::RawEvent::Rollover(0)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: Event::session(session::RawEvent::NewSession(1))
+					event: Event::session(session::RawEvent::NewSession(1)),
+					topics: vec![],
 				},
 			]);
 		});
