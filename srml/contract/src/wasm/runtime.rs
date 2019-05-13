@@ -17,7 +17,10 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey};
+use crate::exec::{
+	Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey,
+	TopicOf,
+};
 use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
@@ -610,8 +613,14 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Deposit a contract event with the data buffer.
-	ext_deposit_event(ctx, data_ptr: u32, data_len: u32) => {
+	// Deposit a contract event with the data buffer and optional list of topics.
+	//
+	// - topics_ptr - a pointer to the buffer of topics encoded as `Vec<T::Hash>`. The value of this
+	//   is ignored if `topics_len` is set to 0. The topics list can't contain duplicates.
+	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
+	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
+	// - data_len - the length of the data buffer.
+	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
 		match ctx
 			.gas_meter
 			.charge(
@@ -623,8 +632,17 @@ define_env!(Env, <E: Ext>,
 			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
 		}
 
+		let topics = match topics_len {
+			0 => Vec::new(),
+			_ => {
+				let topics_buf = read_sandbox_memory(ctx, topics_ptr, topics_len)?;
+				Vec::<TopicOf<<E as Ext>::T>>::decode(&mut &topics_buf[..])
+					.ok_or_else(|| sandbox::HostError)?
+				// TODO: ensure there are no duplicates
+				// TODO: proper payment
+			}
+		};
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
-		let topics = Vec::new();
 		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
