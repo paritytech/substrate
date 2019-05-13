@@ -129,11 +129,6 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	pub fn user_protocol_mut(&mut self) -> &mut TBehaviour {
 		&mut self.user_protocol.0
 	}
-
-	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
-		self.custom_protocols.peerset_debug_info()
-	}
 }
 
 /// Event that can be emitted by the behaviour.

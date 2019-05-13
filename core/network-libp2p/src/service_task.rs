@@ -223,7 +223,7 @@ where TMessage: CustomMessage + Send + 'static {
 			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
 			connected_peers,
 			not_connected_peers,
-			peerset: self.swarm.user_protocol().peerset_debug_info(),
+			peerset: self.swarm.user_protocol_mut().peerset_debug_info(),
 		}
 	}
 
