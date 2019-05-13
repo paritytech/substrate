@@ -29,7 +29,7 @@ use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::OnDemandService;
 use crate::specialization::NetworkSpecialization;
-use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
+use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{NetworkChan, NetworkMsg, TransactionPool, ExHashT};
 use crate::config::{ProtocolConfig, Roles};
 use parking_lot::RwLock;
@@ -151,24 +151,12 @@ pub struct PeerInfo<B: BlockT> {
 
 /// Context for a network-specific handler.
 pub trait Context<B: BlockT> {
-	/// Get a reference to the client.
-	fn client(&self) -> &crate::chain::Client<B>;
-
 	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
 	/// irresponsible or appeared lazy.
 	fn report_peer(&mut self, who: PeerId, reputation: i32);
 
 	/// Force disconnecting from a peer. Use this when a peer misbehaved.
 	fn disconnect_peer(&mut self, who: PeerId);
-
-	/// Get peer info.
-	fn peer_info(&self, peer: &PeerId) -> Option<PeerInfo<B>>;
-
-	/// Request a block from a peer.
-	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>);
-
-	/// Request a finality proof from a peer.
-	fn send_finality_proof_request(&mut self, who: PeerId, request: FinalityProofRequestMessage<B::Hash>);
 
 	/// Send a consensus message to a peer.
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
@@ -198,26 +186,6 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 		self.network_chan.send(NetworkMsg::DisconnectPeer(who))
 	}
 
-	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(who).map(|p| p.info.clone())
-	}
-
-	fn client(&self) -> &Client<B> {
-		&*self.context_data.chain
-	}
-
-	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who,
-			GenericMessage::BlockRequest(request)
-		)
-	}
-
-	fn send_finality_proof_request(&mut self, who: PeerId, request: FinalityProofRequestMessage<B::Hash>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who,
-			GenericMessage::FinalityProofRequest(request)
-		)
-	}
-
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who,
 			GenericMessage::Consensus(consensus)
@@ -227,6 +195,36 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
 		send_message(&mut self.context_data.peers, &self.network_chan, who,
 			GenericMessage::ChainSpecific(message)
+		)
+	}
+}
+
+impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a, B, H> {
+	fn report_peer(&mut self, who: PeerId, reputation: i32) {
+		self.network_chan.send(NetworkMsg::ReportPeer(who, reputation))
+	}
+
+	fn disconnect_peer(&mut self, who: PeerId) {
+		self.network_chan.send(NetworkMsg::DisconnectPeer(who))
+	}
+
+	fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
+		self.context_data.peers.get(who).map(|p| p.info.clone())
+	}
+
+	fn client(&self) -> &Client<B> {
+		&*self.context_data.chain
+	}
+
+	fn send_finality_proof_request(&mut self, who: PeerId, request: FinalityProofRequestMessage<B::Hash>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::FinalityProofRequest(request)
+		)
+	}
+
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>) {
+		send_message(&mut self.context_data.peers, &self.network_chan, who,
+			GenericMessage::BlockRequest(request)
 		)
 	}
 }
