@@ -129,7 +129,7 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 		// TODO get correct timestamp from inherent
 		let now = SystemTime::now();
 		now.duration_since(UNIX_EPOCH)
-			.expect("Time went backwards").as_secs()
+			.expect("now always later than unix epoch; qed").as_secs()
 	}
 
 	fn extract_index(_account_id: Self::AccountId, _block_hash: Self::Hash) -> Self::Index {
