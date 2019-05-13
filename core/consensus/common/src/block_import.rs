@@ -22,6 +22,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use crate::well_known_cache_keys;
 
+use crate::import_queue::Verifier;
+
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
@@ -44,6 +46,8 @@ pub struct ImportedAux {
 	pub needs_justification: bool,
 	/// Received a bad justification.
 	pub bad_justification: bool,
+	/// Request a finality proof for the given block.
+	pub needs_finality_proof: bool,
 }
 
 impl Default for ImportedAux {
@@ -52,6 +56,7 @@ impl Default for ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
 			bad_justification: false,
+			needs_finality_proof: false,
 		}
 	}
 }
@@ -201,4 +206,27 @@ pub trait JustificationImport<B: BlockT> {
 		number: NumberFor<B>,
 		justification: Justification,
 	) -> Result<(), Self::Error>;
+}
+
+/// Finality proof import trait.
+pub trait FinalityProofImport<B: BlockT> {
+	type Error: ::std::error::Error + Send + 'static;
+
+	/// Called by the import queue when it is started.
+	fn on_start(&self, _link: &crate::import_queue::Link<B>) { }
+
+	/// Import a Block justification and finalize the given block. Returns finalized block or error.
+	fn import_finality_proof(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		finality_proof: Vec<u8>,
+		verifier: &Verifier<B>,
+	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
+}
+
+/// Finality proof request builder.
+pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
+	/// Build data blob, associated with the request.
+	fn build_request_data(&self, hash: &B::Hash) -> Vec<u8>;
 }
