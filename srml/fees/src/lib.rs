@@ -27,13 +27,16 @@ use parity_codec::{HasCompact, Encode, Decode};
 //use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnFreeBalanceZero, OnUnbalanced, Imbalance,
+	Currency, OnFreeBalanceZero, OnUnbalanced, Imbalance
 };
-use primitives::Permill;
-use primitives::sr25519; // hack to get an account id, remove when we have working get_block_author
+use system;
+use primitives::{Permill, traits::Zero};
+// use substrate_primitives::sr25519; // hack to get an account id, remove when we have working get_block_author
 
 // we will need the `BalanceOf` type for account balances
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 // Only used to inform the final Event if the issuance changed and in what direction
 enum BurnOrMint {
@@ -44,28 +47,34 @@ enum BurnOrMint {
 
 pub trait Trait: system::Trait {
 	/// Currency
-	pub type Currency: Currency<Self::AccountId>;
+	type Currency: Currency<Self::AccountId>;
 
-	/// Type that determines how many funds go to the block author.
-	pub type ToBlockAuthor: BlockPayout<BalanceOf>;
+	// /// Type that determines how many funds go to the block author.
+	// type ToBlockAuthor: BlockPayout<BalanceOf>;
 
-	/// Handler for the unbalanced reduction when taking transaction fees.
-	type TransactionPayment: OnUnbalanced<NegativeImbalance<Self>>;
+	// /// Handler for the unbalanced reduction when taking transaction fees.
+	// type TransactionPayment: OnUnbalanced<NegativeImbalance<Self>>;
 
-	/// Handler for the unbalanced reduction when taking fees associated with balance
-	/// transfer (which may also include account creation).
-	type TransferPayment: OnUnbalanced<NegativeImbalance<Self>>;
+	/// Handler for the unbalanced addition when minting new tokens.
+	type Mint: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
-	/// Handler for the unbalanced reduction when removing a dust account.
-	type DustRemoval: OnUnbalanced<NegativeImbalance<Self>>;
+	/// Handler for the unbalanced reduction when burning tokens.
+	type Burn: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// The overarching event type.
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
+	pub enum Event<T>
+	where
+		Balance = BalanceOf<T>,
+		<T as system::Trait>::AccountId
+	{
 
 		/// The block has been finalized and fees distributed. `BalanceOf` to `AccountId` (block author),
 		/// `BalanceOf` burned or minted.
-		Distribution(AccountId, BalanceOf, BalanceOf, BurnOrMint),
+		Distribution(AccountId, Balance, Balance, BurnOrMint),
 	}
 );
 
@@ -77,29 +86,29 @@ decl_storage! {
 		/// Fees will be added to this until the block is finalized, at which point
 		/// one portion of the fees will go to the block author, one portion will
 		/// go to the Treasury (if implemented), and the remainder will be burned.
-		TotalBlockFees get(total_block_fees): map T::BlockNumber => T::BalanceOf;
+		TotalBlockFees get(total_block_fees): map T::BlockNumber => BalanceOf<T>;
 
 		/// Cumulative new issuance for a block.
 		///
 		/// When new units are minted (e.g. for rewarding a validator), they will
 		/// get added to this storage item. When a block is finalized, its issuance
 		/// will be updated accordingly.
-		TotalBlockMint get(block_new_issuance): map T::BlockNumber => T::BalanceOf;
+		TotalBlockMint get(block_new_issuance): map T::BlockNumber => BalanceOf<T>;
 
 		/// Proportion of fees that will go to the block author when a block is finalized.
 		pub FeesToBlockAuthor get(fees_to_block_author) config(): Permill;
 	}
-	add_extra_genesis {
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
-			with_storage(storage, || {
-				ensure!(config::fees_to_block_author() < Permill::from_percent(100));
-			};
-		};
-	}
+	// add_extra_genesis {
+	// 	build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+	// 		with_storage(storage, || {
+	// 			ensure!(config::fees_to_block_author() < Permill::from_percent(100));
+	// 		};
+	// 	};
+	// }
 }
 
 decl_module! {
-	pub struct Module<T::Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 
 		fn deposit_event<T>() = default;
 
@@ -120,7 +129,7 @@ decl_module! {
 			let fees_to_author = Self::fees_to_block_author().mul(total_fees);
 
 			// Author
-			let author = get_block_author(n);
+			let author = Self::get_block_author(n);
 			let author_balance = Self::free_balance(author);
 			let would_create = author_balance.is_zero(); // Impossible, but safe
 			let new_author_balance = author_balance.saturating_add(fees_to_author);
@@ -137,18 +146,21 @@ decl_module! {
 			// Burn or mint tokens
 			let units2mint = Self::block_new_issuance(n);
 
+			let mut imbalance_mag = Zero::zero();
+			let mut imbalance = T::Mint::new(imbalance_mag);
+			let mut bm = BurnOrMint::Null;
+
 			if units2burn > units2mint {
-				let imbalance = NegativeImbalance::new(units2burn.saturating_sub(units2mint));
-				let bm = BurnOrMint::Burn;
+				imbalance_mag = units2burn.saturating_sub(units2mint);
+				imbalance = T::Burn::new(imbalance_mag);
+				bm = BurnOrMint::Burn;
 			} else if units2mint > units2burn {
-				let imbalance = PositiveImbalance::new(units2mint.saturating_sub(units2burn));
-				let bm = BurnOrMint::Mint;
-			} else {
-				let imbalance = PositiveImbalance::new(Zero::zero());
-				let bm = BurnOrMint::Null;
+				imbalance_mag = units2mint.saturating_sub(units2burn);
+				imbalance = T::Mint::new(imbalance_mag);
+				bm = BurnOrMint::Mint;
 			}
 
-			let imbalance_mag = imbalance.peek();
+			// Storage mutations, must be infallible from here.
 
 			// Send fees to author
 			T::BlockPayout::pay_block_author(author, new_author_balance);
@@ -167,29 +179,29 @@ decl_module! {
 	}
 }
 
-impl Module {
+impl<T: Trait> Module<T> {
 	/// Take a transaction fee. This will add it to the fees for the block.
-	pub fn take_fee(n: T::BlockNumber, fee: T::BalanceOf) {
-		let current_block_fees = Self::total_block_fees(n);
-		let new_block_fees = current_block_fees + fee;
-		<TotalBlockFees<T>>::insert(n, new_block_fees);
-	}
+	// pub fn take_fee(n: T::BlockNumber, fee: BalanceOf<T>) {
+	// 	let current_block_fees = Self::total_block_fees(n);
+	// 	let new_block_fees = current_block_fees + fee;
+	// 	<TotalBlockFees<T>>::insert(n, new_block_fees);
+	// }
 
-	/// Account for new tokens minted, e.g. a reward
-	pub fn issue_units(n: T::BlockNumber, units: T::BalanceOf) {
-		let current_new_issuance = Self::block_new_issuance(n);
-		let new_units_minted = current_new_issuance + units;
-		<TotalBlockMint<T>>::insert(n, new_units_minted)
-	}
+	/// Account for new tokens minted, e.g. a reward.
+	// pub fn issue_units(n: T::BlockNumber, units: BalanceOf<T>) {
+	// 	let current_new_issuance = Self::block_new_issuance(n);
+	// 	let new_units_minted = current_new_issuance + units;
+	// 	<TotalBlockMint<T>>::insert(n, new_units_minted)
+	// }
 
 	// https://github.com/paritytech/substrate/issues/2232
 	// Currently a hack to get an AccountId into the dispatchable.
 	// Will need to write a real function here.
 	fn get_block_author(n: T::BlockNumber) -> T::AccountId {
-		let s = "dummy author account";
-		sr25519::Pair::from_string(&format!("//{}", s), None)
-			.expect("static values are valid; qed")
-			.public()
+		T::AccountId::default()
+		// sr25519::Pair::from_string("//Alice", None)
+		// 	.expect("static values are valid; qed")
+		// 	.public()
 	}
 }
 
@@ -219,8 +231,8 @@ impl Module {
 
 */
 
-/// Opaque, move-only struct with private fields that serves as a token denoting that
-/// funds have been created without any equal and opposite accounting.
+// /// Opaque, move-only struct with private fields that serves as a token denoting that
+// /// funds have been created without any equal and opposite accounting.
 // #[must_use]
 // pub struct PositiveImbalance<T: Trait<I>, I: Instance=DefaultInstance>(T::BalanceOf);
 

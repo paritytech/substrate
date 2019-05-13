@@ -1383,6 +1383,7 @@ dependencies = [
  "srml-council 1.0.0",
  "srml-democracy 1.0.0",
  "srml-executive 1.0.0",
+ "srml-fees 1.0.0",
  "srml-finality-tracker 1.0.0",
  "srml-grandpa 1.0.0",
  "srml-indices 1.0.0",
@@ -2381,6 +2382,17 @@ dependencies = [
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 1.0.0",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
+ "srml-support 1.0.0",
+ "srml-system 1.0.0",
+]
+
+[[package]]
+name = "srml-fees"
+version = "1.0.0"
+dependencies = [
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 1.0.0",
  "sr-std 1.0.0",
  "srml-support 1.0.0",

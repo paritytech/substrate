@@ -819,19 +819,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fees"
-version = "1.0.0"
-dependencies = [
- "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 1.0.0",
- "sr-primitives 1.0.0",
- "sr-std 1.0.0",
- "srml-support 1.0.0",
- "srml-system 1.0.0",
- "substrate-primitives 1.0.0",
-]
-
-[[package]]
 name = "finality-grandpa"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2084,6 +2071,7 @@ dependencies = [
  "srml-council 1.0.0",
  "srml-democracy 1.0.0",
  "srml-executive 1.0.0",
+ "srml-fees 1.0.0",
  "srml-finality-tracker 1.0.0",
  "srml-grandpa 1.0.0",
  "srml-indices 1.0.0",
@@ -2145,6 +2133,7 @@ dependencies = [
  "srml-balances 1.0.0",
  "srml-consensus 1.0.0",
  "srml-executive 1.0.0",
+ "srml-fees 1.0.0",
  "srml-indices 1.0.0",
  "srml-sudo 1.0.0",
  "srml-support 1.0.0",
@@ -3405,6 +3394,19 @@ dependencies = [
  "sr-std 1.0.0",
  "srml-balances 1.0.0",
  "srml-indices 1.0.0",
+ "srml-support 1.0.0",
+ "srml-system 1.0.0",
+ "substrate-primitives 1.0.0",
+]
+
+[[package]]
+name = "srml-fees"
+version = "1.0.0"
+dependencies = [
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 1.0.0",
+ "sr-primitives 1.0.0",
+ "sr-std 1.0.0",
  "srml-support 1.0.0",
  "srml-system 1.0.0",
  "substrate-primitives 1.0.0",

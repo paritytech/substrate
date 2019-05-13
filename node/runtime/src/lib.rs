@@ -49,6 +49,7 @@ pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
+pub use fees::Call as FeesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
@@ -205,6 +206,10 @@ impl grandpa::Trait for Runtime {
 
 impl finality_tracker::Trait for Runtime {
 	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
+}
+
+impl fees::Trait for Runtime {
+	type Event = Event;
 }
 
 construct_runtime!(
