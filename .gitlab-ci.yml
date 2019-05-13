@@ -52,6 +52,18 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
+
+check-line-width:
+  stage:                           test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./scripts/gitlab/check_line_width.sh
+  allow_failure:                   false
+
+
 test-linux-stable:                 &test
   stage:                           test
   variables:
@@ -81,7 +93,7 @@ test-linux-stable:                 &test
 check-web-wasm:
   stage:                           test
   image:                           tomaka/cargo-web:latest
-  allow_failure: true
+  allow_failure:                   true
   only:
     - master
     - /^[0-9]+$/
