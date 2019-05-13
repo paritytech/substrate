@@ -16,20 +16,19 @@
 
 //! # Treasury Module
 //!
-//! The Treasury module manages the collection and deployment of a pot of currency.
+//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the system and a structure for making spending proposals from this pot.
 //!
 //! - [`treasury::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
 //!
-//! Treasury funds can be used to pay for developers who provide software updates, changes
-//! decided by referenda, general system maintenance. Treasury works nicely with other modules, for example, to tax validator rewards in the Staking module.
+//! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
+//! propose, approve, and deny expendatures.  The chain will need to provide a method (e.g.
+//! inflation, fees) for collecting funds.
 //!
-//! Funds can be raised by:
-//! 1. Minting new tokens, leading to inflation.
-//! 2. Collecting tokens from transaction, validator taxes, or slashing.
-//!
+//! By way of example, the Council could vote to fund the Treasury with a portion of the block
+//! reward and use the funds to pay developers.
 //!
 //! ### Terminology
 //!
@@ -37,7 +36,7 @@
 //! - **Beneficiary:** An account who will receive the funds from a proposal iff
 //! the proposal is approved.
 //! approves
-//! - **Deposit:** Funds that a proposer must lock when making a deposit. The
+//! - **Deposit:** Funds that a proposer must lock when making a proposal. The
 //! deposit will be returned or burned if the proposal is approved or rejected
 //! respectively.
 //! - **Pot:** Unspent funds accumulated by the treasury module.
@@ -57,20 +56,6 @@
 //! - `configure` - Configure the module's proposal requirements.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
 //! - `approve_proposal` - Accept the proposal, returning the deposit.
-//!
-//! ## Usage
-//!
-//! ```
-//!
-//! // Propose a spend
-//!
-//! // Proposal gets rejected
-//!
-//! # fn main() {
-//!   //TODO Why doesn't this actually print anything?
-//!   println!("Hello")
-//! }
-//! ```
 //!
 //! ## GenesisConfig
 //!
