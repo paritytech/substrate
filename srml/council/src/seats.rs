@@ -28,7 +28,6 @@ use democracy;
 use parity_codec::{Encode, Decode};
 use system::{self, ensure_signed};
 
-// TODO: replace u32 with bool.
 // TODO: double check offset and pot
 
 // no polynomial attacks:
@@ -105,6 +104,11 @@ type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system:
 type NegativeImbalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 type SetIndex = u32;
 
+// all three must be in sync.
+type ApprovalFlag = u32;
+const APPROVAL_FLAG_LEN: usize = 32;
+const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
+
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
@@ -128,6 +132,10 @@ decl_module! {
 		/// `voter_index`argument is only used when the call is being used to re-set approvals. In this case,
 		/// the index must be valid. Otherwise, on the first call to this function, the argument will be ignored
 		/// and can be filled with any arbitrary value.
+		///
+		/// Note that any trailing `false` votes in `votes` is ignored; In approval voting, not voting for a candidate
+		/// and voting false is equal. Likewise, once all approvals are fetched via `all_approvals_of()`,
+		/// the trailing zeros are removed.
 		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex, voter_index: SetIndex) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, voter_index)
@@ -393,10 +401,19 @@ decl_storage! {
 		pub VoteCount get(vote_index): VoteIndex;
 
 		// ---- persistent state (always relevant, changes constantly)
-		/// A list of votes for each voter, respecting the last cleared vote index that this voter was
-		/// last active at.
-		// NOTE: hashed with the default hasher for `map`, `blake2_256`.
-		pub ApprovalsOf get(approvals_of): double_map T::AccountId, blake2_256(SetIndex) => Vec<bool>;
+		/// A list of votes for each voter. The votes are stored as numeric values and parsed in a bit-wise fashio.
+		/// Example:
+		///
+		/// ```nocomplile
+		/// // assuming that the scalar type used us u8
+		/// [true, true, false, false, true] ~ 00011001 ~ 0x19 ~ 25.
+		/// ```
+		///
+		/// In order to get a human-readable representation, use [`all_approvals_of`].
+		///
+		/// Furthermore, each vector of scalars is chunked with the cap of `APPROVAL_SET_SIZE`.
+		/// The second key of the `double_map` represents which chunk to read from memory.
+		pub ApprovalsOf get(approvals_of): double_map T::AccountId, blake2_256(SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
 		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
@@ -508,7 +525,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a voter at a specified index from the system.
 	fn remove_voter(voter: &T::AccountId, index: usize) {
-		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
+		let (set_index, vec_index) = Self::split_index::<SetIndex>(index, VOTER_SET_SIZE);
 		let mut set = Self::voters(set_index);
 		// TODO: panics if index is out of bound or wrong. Index is most often user-provided.
 		set.swap_remove(vec_index);
@@ -550,7 +567,7 @@ impl<T: Trait> Module<T> {
 			ensure!(voter == who, "wrong voter index.");
 
 			// already a voter - update pot. O(voters)
-			let (set_index, vec_index) = Self::split_index(voter_index, VOTER_SET_SIZE);
+			let (set_index, vec_index) = Self::split_index::<SetIndex>(voter_index, VOTER_SET_SIZE);
 			let mut set = Self::voters(set_index);
 			// update stake in local set
 			set[vec_index] = (who.clone(), locked_balance);
@@ -706,8 +723,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// Note that this function does not take holes into account.
 	/// See [`voter_at`].
-	fn split_index(index: usize, scale: usize) ->(SetIndex, usize) {
-		let set_index = SetIndex::sa(index / scale);
+	fn split_index<R: As<usize>>(index: usize, scale: usize) ->(R, usize) {
+		let set_index = R::sa(index / scale);
 		let vec_index = index % scale;
 		(set_index, vec_index)
 	}
@@ -730,7 +747,7 @@ impl<T: Trait> Module<T> {
 	/// voter in that set can lead to the last voter to be swapped over to that particular index.
 	// TODO: usage of `swap_remove` might be worth re-considering.
 	fn voter_at(index: usize) -> Option<(T::AccountId, BalanceOf<T>)> {
-		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
+		let (set_index, vec_index) = Self::split_index::<SetIndex>(index, VOTER_SET_SIZE);
 		let set = Self::voters(set_index);
 		if vec_index < set.len() {
 			Some(set[vec_index].clone())
@@ -741,7 +758,8 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the approval of a voter in a chunked manner.
 	fn set_approvals_chunked(who: &T::AccountId, approvals: Vec<bool>) {
-		approvals
+		let approvals_flag_vec = Self::b2f(approvals);
+		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
 			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert(who, SetIndex::sa(idx), slice.to_vec()));
@@ -749,16 +767,53 @@ impl<T: Trait> Module<T> {
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
 	fn approvals_of_at(who: &T::AccountId, index: usize) -> Option<bool> {
-		let (set_index, vec_index) = Self::split_index(index, APPROVAL_SET_SIZE);
+		let (flag_index, bit) = Self::split_index(index, APPROVAL_FLAG_LEN);
+		let (set_index, vec_index) = Self::split_index::<SetIndex>(flag_index, APPROVAL_SET_SIZE);
 		let set = Self::approvals_of(who, set_index);
 		if vec_index < set.len() {
-			Some(set[vec_index].clone())
+			Some(Self::bit_at(set[vec_index], bit))
 		} else {
 			None
 		}
 	}
 
-	/// Return a concatenated vector over all approvals of a voter.
+	/// Return true of the bit `n` of scalar `x` is set to `1` and false otherwise.
+	/// Note that the order is MSB -> LSB.
+	fn bit_at(x: ApprovalFlag, n: usize) -> bool {
+		if n < APPROVAL_FLAG_LEN {
+			x & ( APPROVAL_FLAG_MASK >> n ) != 0
+		} else {
+			false
+		}
+	}
+
+	/// Convert a vec of boolean approval flags to a vec of integers, as denoted by
+	/// the type `ApprovalFlag`.
+	pub fn b2f(x: Vec<bool>) -> Vec<ApprovalFlag> {
+		let mut r: Vec<ApprovalFlag> = Vec::with_capacity(x.len() / APPROVAL_FLAG_LEN);
+		if x.len() == 0 {
+			return r;
+		}
+		r.push(0);
+		let mut idx = 0;
+		let mut c = APPROVAL_FLAG_LEN;
+		loop {
+			c -= 1;
+			let i = APPROVAL_FLAG_LEN - c - 1 ;
+			let j = i + idx * APPROVAL_FLAG_LEN;
+			r[idx] += (if x[j] { 1 } else { 0 }) << c;
+			if j >= x.len() - 1 { break; }
+			if c == 0 {
+				r.push(0);
+				idx += 1;
+				c = APPROVAL_FLAG_LEN;
+			}
+		}
+		r
+	}
+
+	/// Return a concatenated vector over all approvals of a voter as boolean.
+	/// TODO: new test for this in large nunbers.
 	fn all_approvals_of(who: &T::AccountId) -> Vec<bool> {
 		let mut all: Vec<bool> = vec![];
 		// NOTE: There is sadly no way in StorageDoubleMap to get all values associated
@@ -767,7 +822,15 @@ impl<T: Trait> Module<T> {
 		loop {
 			let chunk = Self::approvals_of(who, index);
 			if chunk.len() == 0 { break; }
-			all.extend(chunk);
+			chunk.into_iter()
+				.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
+				.for_each(|c| {
+					let last_approve = match c.iter().rposition(|n| *n) {
+						Some(idx) => idx + 1,
+						None => 0
+					};
+					all.extend(c.into_iter().take(last_approve));
+				});
 			index += 1;
 		}
 		all
@@ -815,7 +878,27 @@ mod tests {
 	fn create_candidate(i: u64, idx: u32) {
 		let _ = Balances::deposit_creating(&i, 10); // candidacy bond = 3
 		assert_ok!(Council::submit_candidacy(Origin::signed(i), idx));
+	}
 
+
+	#[test]
+	fn b2f_should_work() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_eq!(
+				Council::b2f(vec![
+					true, false, false, true, // 0x9
+					false, true, true, false, // 0x6
+				]),
+				vec![0x96_00_00_00_u32] // 32 bit.
+			);
+			assert_eq!(
+				Council::b2f(vec![
+					false, false, false, true, // 0x1s
+					false, true, true, false, // 0x6
+				]),
+				vec![0x16_00_00_00_u32] // 32 bit.
+			);
+		})
 	}
 
 	#[test]
@@ -853,7 +936,7 @@ mod tests {
 	}
 
 	#[test]
-	fn voter_set_growth_works() {
+	fn voter_set_growth_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
@@ -873,7 +956,7 @@ mod tests {
 	}
 
 	#[test]
-	fn voter_set_reclaim_works() {
+	fn voter_set_reclaim_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
@@ -919,27 +1002,40 @@ mod tests {
 	}
 
 	#[test]
-	fn approvals_set_growth_works() {
+	fn approvals_set_growth_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			// create candidates
-			(1..=65).for_each(|i| create_candidate(i, (i-1) as u32));
-
-			// create 65. 64 (set0) + 1 (set1)
-			(1..=65).for_each(|i| vote(i, i as usize));
+			// create candidates and voters.
+			(1..=250).for_each(|i| create_candidate(i, (i-1) as u32));
+			(1..=250).for_each(|i| vote(i, i as usize));
 
 			// all approvals of should return the exact expected vector.
-			assert_eq!(Council::all_approvals_of(&42), (0..42).map(|_| true).collect::<Vec<bool>>());
+			assert_eq!(Council::all_approvals_of(&180), (0..180).map(|_| true).collect::<Vec<bool>>());
+
+			assert_eq!(Council::all_approvals_of(&32), (0..32).map(|_| true).collect::<Vec<bool>>());
+			assert_eq!(Council::all_approvals_of(&8), (0..8).map(|_| true).collect::<Vec<bool>>());
+			assert_eq!(Council::all_approvals_of(&64), (0..64).map(|_| true).collect::<Vec<bool>>());
+			assert_eq!(Council::all_approvals_of(&65), (0..65).map(|_| true).collect::<Vec<bool>>());
+			assert_eq!(Council::all_approvals_of(&63), (0..63).map(|_| true).collect::<Vec<bool>>());
 
 			// NOTE: assuming that APPROVAL_SET_SIZE is more or less small-ish. Might fail otherwise.
-			let full_sets = 42 / APPROVAL_SET_SIZE;
-			let left_over = 42 % APPROVAL_SET_SIZE;
+			let full_sets = (180 / APPROVAL_FLAG_LEN) / APPROVAL_SET_SIZE;
+			let left_over = (180 / APPROVAL_FLAG_LEN) / APPROVAL_SET_SIZE;
+			let rem = 180 % APPROVAL_FLAG_LEN;
 
-			// grab and check the last full set.
-			assert_eq!(Council::approvals_of(42, SetIndex::sa(full_sets-1)), (0..APPROVAL_SET_SIZE).map(|_| true).collect::<Vec<bool>>());
+			// grab and check the last full set, if it exists.
+			if full_sets > 0 {
+				assert_eq!(
+					Council::approvals_of(180, SetIndex::sa(full_sets-1)),
+					Council::b2f((0..APPROVAL_SET_SIZE * APPROVAL_FLAG_LEN).map(|_| true).collect::<Vec<bool>>())
+				);
+			}
 
 			// grab and check the last, half-empty, set.
 			if left_over > 0 {
-				assert_eq!(Council::approvals_of(42, SetIndex::sa(full_sets)), (0..left_over).map(|_| true).collect::<Vec<bool>>());
+				assert_eq!(
+					Council::approvals_of(180, SetIndex::sa(full_sets)),
+					Council::b2f((0..left_over * APPROVAL_FLAG_LEN + rem).map(|_| true).collect::<Vec<bool>>())
+				);
 			}
 		})
 	}
@@ -1157,7 +1253,7 @@ mod tests {
 	}
 
 	#[test]
-	fn accumulating_weight_and_decaying_works() {
+	fn accumulating_weight_and_decaying_should_work() {
 		with_externalities(&mut ExtBuilder::default().balance_factor(10).build(), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
@@ -1374,7 +1470,7 @@ mod tests {
 	}
 
 	#[test]
-	fn get_offset_works() {
+	fn get_offset_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_eq!(Council::get_offset(100, 0), 0);
 			assert_eq!(Council::get_offset(100, 1), 96);
@@ -1416,10 +1512,8 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(1), vec![true], 0, 0));
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true], 0, 1));
 
-			assert_eq!(Council::all_approvals_of(&
-			1), vec![true]);
-			assert_eq!(Council::all_approvals_of(&
-			4), vec![true]);
+			assert_eq!(Council::all_approvals_of(&1), vec![true]);
+			assert_eq!(Council::all_approvals_of(&4), vec![true]);
 			assert_eq!(voter_ids(), vec![1, 4]);
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 1));
@@ -1592,6 +1686,26 @@ mod tests {
 	}
 
 	#[test]
+	fn approval_storage_should_work() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
+			assert_ok!(Council::submit_candidacy(Origin::signed(3), 1));
+
+			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
+			assert_ok!(Council::set_approvals(Origin::signed(3), vec![false, false], 0, 0));
+			assert_ok!(Council::set_approvals(Origin::signed(4), vec![], 0, 0));
+
+			assert_eq!(Council::all_approvals_of(&2), vec![true]);
+			// NOTE: these two are stored in mem differently though.
+			assert_eq!(Council::all_approvals_of(&3), vec![]);
+			assert_eq!(Council::all_approvals_of(&4), vec![]);
+
+			assert_eq!(Council::approvals_of(&3, 0), vec![0]);
+			assert_eq!(Council::approvals_of(&4, 0), vec![]);
+		});
+	}
+
+	#[test]
 	fn simple_tally_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			System::set_block_number(4);
@@ -1599,10 +1713,10 @@ mod tests {
 
 			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0));
 			assert_ok!(Council::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
+			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![false, true], 0, 0));
 			assert_eq!(voter_ids(), vec![2, 5]);
-			assert_eq!(Council::all_approvals_of(&2), vec![true, false]);
+			assert_eq!(Council::all_approvals_of(&2), vec![true]);
 			assert_eq!(Council::all_approvals_of(&5), vec![false, true]);
 			assert_ok!(Council::end_block(System::block_number()));
 
