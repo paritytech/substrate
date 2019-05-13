@@ -62,7 +62,7 @@ Sign a transaction from an encoded `Call`.
 subkey sign-transaction \
 	--call <call-as-hex> \
 	--nonce 0 \
-	--suri <suri> \
+	--suri <secret-uri> \
 	--password <password> \
 	--prior-block-hash <prior-block-hash-as-hex>
 ```
