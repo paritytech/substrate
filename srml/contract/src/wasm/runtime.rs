@@ -643,12 +643,16 @@ define_env!(Env, <E: Ext>,
 				let topics_buf = read_sandbox_memory(ctx, topics_ptr, topics_len)?;
 				Vec::<TopicOf<<E as Ext>::T>>::decode(&mut &topics_buf[..])
 					.ok_or_else(|| sandbox::HostError)?
-				// TODO: ensure there are no duplicates
 			}
 		};
 
 		// If there are more than `max_event_topics`, then trap.
 		if topics.len() > ctx.schedule.max_event_topics as usize {
+			return Err(sandbox::HostError);
+		}
+
+		// Check for duplicate topics. If there are any, then trap.
+		if (1..topics.len()).any(|i| topics[i..].contains(&topics[i - 1])) {
 			return Err(sandbox::HostError);
 		}
 

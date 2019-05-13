@@ -1273,4 +1273,48 @@ mod tests {
 			Err("during execution"),
 		);
 	}
+
+	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
+(module
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 129) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
+	(data (i32.const 32) "\10"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
+)
+"#;
+
+	#[test]
+	fn deposit_event_duplicates() {
+		// Checks that the runtime traps if there are duplicates.
+		let mut mock_ext = MockExt::default();
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+
+		assert_eq!(
+			execute(
+				CODE_DEPOSIT_EVENT_DUPLICATES,
+				&[],
+				&mut Vec::new(),
+				&mut mock_ext,
+				&mut gas_meter
+			),
+			Err("during execution"),
+		);
+	}
 }
