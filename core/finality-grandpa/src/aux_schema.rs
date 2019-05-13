@@ -18,6 +18,8 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::collections::VecDeque;
+use std::iter::FromIterator;
 use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
@@ -30,7 +32,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState};
-use crate::NewAuthoritySet;
+use crate::{NewAuthoritySet, SignedMessage};
 
 use substrate_primitives::ed25519::Public as AuthorityId;
 
@@ -39,7 +41,64 @@ const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
+
+/// Data about a completed round.
+#[derive(Debug, Clone, Decode, Encode, PartialEq)]
+pub struct V2CompletedRound<Block: BlockT> {
+	/// The round number.
+	pub number: u64,
+	/// The round state (prevote ghost, estimate, finalized, etc.)
+	pub state: RoundState<Block::Hash, NumberFor<Block>>,
+	/// The target block base used for voting in the round.
+	pub base: (Block::Hash, NumberFor<Block>),
+	/// All the votes observed in the round.
+	pub votes: Vec<SignedMessage<Block>>,
+}
+
+// Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
+// contains data about at least one round (genesis).
+#[derive(Debug, Clone, PartialEq)]
+pub struct V2CompletedRounds<Block: BlockT> {
+	pub inner: VecDeque<V2CompletedRound<Block>>,
+}
+
+
+impl<Block: BlockT> Encode for V2CompletedRounds<Block> {
+	fn encode(&self) -> Vec<u8> {
+		Vec::from_iter(&self.inner).encode()
+	}
+}
+
+impl<Block: BlockT> Decode for V2CompletedRounds<Block> {
+	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+		Vec::<V2CompletedRound<Block>>::decode(value)
+			.map(|completed_rounds| V2CompletedRounds {
+				inner: completed_rounds.into(),
+			})
+	}
+}
+
+// The state of the current voter set, whether it is currently active or not
+/// and information related to the previously completed rounds. Current round
+/// voting status is used when restarting the voter, i.e. it will re-use the
+/// previous votes for a given round if appropriate (same round and same local
+/// key).
+#[derive(Debug, Decode, Encode, PartialEq)]
+pub enum V2VoterSetState<Block: BlockT> {
+	/// The voter is live, i.e. participating in rounds.
+	Live {
+		/// The previously completed rounds.
+		completed_rounds: V2CompletedRounds<Block>,
+		/// Vote status for the current round.
+		current_round: HasVoted<Block>,
+	},
+	/// The voter is paused, i.e. not casting or importing any votes.
+	Paused {
+		/// The previously completed rounds.
+		completed_rounds: V2CompletedRounds<Block>,
+	},
+}
 
 /// The voter set state.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -245,6 +304,57 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 	Ok(None)
 }
 
+
+fn migrate_from_version2<Block: BlockT, B, G>(
+	backend: &B,
+	genesis_round: &G,
+) -> ClientResult<Option<(
+	AuthoritySet<Block::Hash, NumberFor<Block>>,
+	VoterSetState<Block>,
+)>> where B: AuxStore,
+		  G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+{
+	CURRENT_VERSION.using_encoded(|s|
+		backend.insert_aux(&[(VERSION_KEY, s)], &[])
+	)?;
+
+	if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
+		backend,
+		AUTHORITY_SET_KEY,
+	)? {
+		let set_state = match load_decode::<_, V2VoterSetState<Block>>(
+			backend,
+			SET_STATE_KEY,
+		)? {
+			Some(v2_voter_set_state) => {
+				VoterSetState::from(v2_voter_set_state)
+			},
+			None => {
+				let set_state = genesis_round();
+				let base = set_state.prevote_ghost
+					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
+
+				VoterSetState::Live {
+					completed_rounds: CompletedRounds::new(CompletedRound {
+						number: 0,
+						state: set_state,
+						votes: HistoricalVotes::new(),
+						base,
+					}),
+					current_round: HasVoted::No,
+				}
+			},
+		};
+
+		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
+
+		return Ok(Some((set, set_state)));
+	}
+
+	Ok(None)
+}
+
+
 /// Load or initialize persistent data from backend.
 pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	backend: &B,
@@ -283,6 +393,15 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			}
 		},
 		Some(2) => {
+			if let Some((new_set, set_state)) = migrate_from_version2::<Block, _, _>(backend, &make_genesis_round)? {
+				return Ok(PersistentData {
+					authority_set: new_set.into(),
+					consensus_changes: Arc::new(consensus_changes.into()),
+					set_state: set_state.into(),
+				});
+			}
+		},
+		Some(3) => {
 			if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
 				backend,
 				AUTHORITY_SET_KEY,
@@ -315,7 +434,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 					set_state: set_state.into(),
 				});
 			}
-		}
+		},
 		Some(other) => return Err(ClientError::Backend(
 			format!("Unsupported GRANDPA DB version: {:?}", other)
 		).into()),

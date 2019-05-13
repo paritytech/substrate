@@ -77,7 +77,7 @@ use serde_json;
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet, HistoricalVotes};
+use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
 
 use std::fmt;
 use std::sync::Arc;
@@ -118,6 +118,7 @@ mod tests;
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A signed message.
 pub type SignedMessage<Block> = grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
@@ -126,12 +127,23 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	AuthorityId,
 >;
 
+/// An ordered set of historical votes.
+pub type HistoricalVotes<Block> = grandpa::HistoricalVotes<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
 /// A primary propose message for this chain's block type.
 pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A precommit message for this chain's block type.
 pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A commit message for this chain's block type.
 pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
@@ -640,7 +652,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 							number: 0,
 							state: genesis_state,
 							base: (new.canon_hash, new.canon_number),
-							votes: HistoricalVotes::new(),
+							votes: HistoricalVotes::<Block>::new(),
 						}),
 						current_round: HasVoted::No,
 					};

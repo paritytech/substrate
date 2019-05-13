@@ -30,7 +30,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet, HistoricalVotes,
+	voter, voter_set::VoterSet,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -38,13 +38,13 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use consensus_common::SelectChain;
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
 	PrimaryPropose, NewAuthoritySet, VoterCommand,
+	aux_schema::{V2VoterSetState, V2CompletedRound}, HistoricalVotes,
 };
-
-use consensus_common::SelectChain;
 
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
@@ -62,8 +62,8 @@ pub struct CompletedRound<Block: BlockT> {
 	pub state: RoundState<Block::Hash, NumberFor<Block>>,
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
-	/// All the votes observed in the round.
-	pub votes: HistoricalVotes<Block::Hash, NumberFor<Block>>,
+	/// All the votes observed in the round (sorted by order of reception).
+	pub votes: HistoricalVotes<Block>,
 }
 
 // Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
@@ -72,6 +72,7 @@ pub struct CompletedRound<Block: BlockT> {
 pub struct CompletedRounds<Block: BlockT> {
 	inner: VecDeque<CompletedRound<Block>>,
 }
+
 
 // NOTE: the current strategy for persisting completed rounds is very naive
 // (update everything) and we also rely on cloning to do atomic updates,
@@ -153,6 +154,46 @@ impl<Block: BlockT> VoterSetState<Block> {
 				completed_rounds.clone(),
 			VoterSetState::Paused { completed_rounds } =>
 				completed_rounds.clone(),
+		}
+	}
+}
+
+impl<Block: BlockT> From<V2VoterSetState<Block>> for VoterSetState<Block> {
+	fn from(voter_set_state_v2: V2VoterSetState<Block>) -> Self {
+		match voter_set_state_v2 {
+			V2VoterSetState::Paused { completed_rounds } => {
+				VoterSetState::Paused {
+					completed_rounds: CompletedRounds { 
+						inner: completed_rounds.inner.into_iter().map(
+							| V2CompletedRound { number, state, base, votes } | {
+								CompletedRound {
+									number,
+									state,
+									base,
+									votes: HistoricalVotes::<Block>::new_with_votes(votes),
+								}
+							}
+						).collect::<VecDeque<CompletedRound<Block>>>()
+					}
+				}
+			},
+			V2VoterSetState::Live { completed_rounds, current_round } => {
+				VoterSetState::Live {
+					completed_rounds: CompletedRounds { 
+						inner: completed_rounds.inner.into_iter().map(
+							| V2CompletedRound { number, state, base, votes } | {
+								CompletedRound {
+									number,
+									state,
+									base,
+									votes: HistoricalVotes::<Block>::new_with_votes(votes),
+								}
+							}
+						).collect::<VecDeque<CompletedRound<Block>>>()
+					},
+					current_round,
+				}
+			},
 		}
 	}
 }
@@ -610,7 +651,7 @@ where
 		round: u64,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
-		votes: &HistoricalVotes<Block::Hash, NumberFor<Block>>,
+		votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
 			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
