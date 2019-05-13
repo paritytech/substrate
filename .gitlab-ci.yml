@@ -18,7 +18,6 @@ variables:
   GIT_STRATEGY:                    fetch
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
-  SCCACHE_CACHE_SIZE:              50G
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
@@ -102,6 +101,8 @@ check-web-wasm:
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
     - time cargo web build -p substrate-trie
+  tags:
+    - linux-docker
 
 .build-only:                      &build-only
   only:
