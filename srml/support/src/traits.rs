@@ -19,7 +19,7 @@
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic, As
+	MaybeSerializeDebug, SimpleArithmetic
 };
 
 /// The account with the given id was killed.
@@ -195,7 +195,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default,
+	B: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -230,7 +230,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
