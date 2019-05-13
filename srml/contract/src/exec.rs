@@ -189,6 +189,14 @@ impl VmExecResult {
 	}
 }
 
+/// Struct that records a request to deposit an event with a list of topics.
+pub struct IndexedEvent<T: Trait> {
+	/// A list of topics this event will be deposited with.
+	pub topics: Vec<T::Hash>,
+	/// The event to deposit.
+	pub event: Event<T>,
+}
+
 /// A trait that represent a virtual machine.
 ///
 /// You can view a virtual machine as something that takes code, an input data buffer,
@@ -238,7 +246,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
-	pub events: Vec<Event<T>>,
+	pub events: Vec<IndexedEvent<T>>,
 	pub calls: Vec<(T::AccountId, T::Call)>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
@@ -418,7 +426,10 @@ where
 				.into_result()?;
 
 			// Deposit an instantiation event.
-			nested.events.push(RawEvent::Instantiated(self.self_account.clone(), dest.clone()));
+			nested.events.push(IndexedEvent {
+				event: RawEvent::Instantiated(self.self_account.clone(), dest.clone()),
+				topics: Vec::new(),
+			});
 
 			(nested.overlay.into_change_set(), nested.events, nested.calls)
 		};
@@ -545,8 +556,10 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if transactor != dest {
 		ctx.overlay.set_balance(transactor, new_from_balance);
 		ctx.overlay.set_balance(dest, new_to_balance);
-		ctx.events
-			.push(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
+		ctx.events.push(IndexedEvent {
+			event: RawEvent::Transfer(transactor.clone(), dest.clone(), value),
+			topics: Vec::new(),
+		});
 	}
 
 	Ok(())
@@ -632,7 +645,10 @@ where
 	}
 
 	fn deposit_event(&mut self, data: Vec<u8>) {
-		self.ctx.events.push(RawEvent::Contract(self.ctx.self_account.clone(), data));
+		self.ctx.events.push(IndexedEvent {
+			topics: Vec::new(),
+			event: RawEvent::Contract(self.ctx.self_account.clone(), data),
+		});
 	}
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {

@@ -393,7 +393,12 @@ decl_module! {
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
-				ctx.events.into_iter().for_each(Self::deposit_event);
+				ctx.events.into_iter().for_each(|indexed_event| {
+					<system::Module<T>>::deposit_event_indexed(
+						&*indexed_event.topics,
+						<T as Trait>::Event::from(indexed_event.event).into(),
+					);
+				});
 			}
 
 			// Refund cost of the unused gas.
@@ -447,7 +452,12 @@ decl_module! {
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
-				ctx.events.into_iter().for_each(Self::deposit_event);
+				ctx.events.into_iter().for_each(|indexed_event| {
+					<system::Module<T>>::deposit_event_indexed(
+						&*indexed_event.topics,
+						<T as Trait>::Event::from(indexed_event.event).into(),
+					);
+				});
 			}
 
 			// Refund cost of the unused gas.
