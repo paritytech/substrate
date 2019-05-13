@@ -18,7 +18,7 @@
 
 use std::{error, fmt, cmp::Ord};
 use log::warn;
-use crate::backend::{Backend, Consolidate};
+use crate::backend::Backend;
 use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
 use crate::{Externalities, OverlayedChanges, OffchainExt, ChildStorageKey};
 use hash_db::Hasher;
@@ -134,30 +134,6 @@ where
 		self.storage_transaction = None;
 	}
 
-	/// Fetch child storage root together with its transaction.
-	fn child_storage_root_transaction(&mut self, storage_key: &[u8]) -> (Vec<u8>, B::Transaction) {
-		self.mark_dirty();
-
-		let (root, is_default, transaction) = {
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
-
-			self.backend.child_storage_root(storage_key, delta)
-		};
-
-		let root_val = if is_default {
-			None
-		} else {
-			Some(root.clone())
-		};
-		self.overlay.sync_child_storage_root(storage_key, root_val);
-
-		(root, transaction)
-	}
 }
 
 #[cfg(test)]
@@ -288,21 +264,24 @@ where
 			return root.clone();
 		}
 
-		let mut transaction = B::Transaction::default();
-		let child_storage_keys: std::collections::BTreeSet<_> = self.overlay.prospective.children.keys().cloned()
-			.chain(self.overlay.committed.children.keys().cloned()).collect();
+		let child_storage_keys =
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
 
-		for key in child_storage_keys {
-			let (_, t) = self.child_storage_root_transaction(&key);
-			transaction.consolidate(t);
-		}
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
+
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let (root, t) = self.backend.storage_root(delta);
-		transaction.consolidate(t);
+		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
 		self.storage_transaction = Some((transaction, root));
 		root
 	}
@@ -316,7 +295,21 @@ where
 					default_child_trie_root::<H>(storage_key.as_ref())
 				)
 		} else {
-			self.child_storage_root_transaction(storage_key.as_ref()).0
+			let storage_key = storage_key.as_ref();
+
+			let delta = self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+						.into_iter()
+						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+
+			let root = self.backend.child_storage_root(storage_key, delta).0;
+
+			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
+
+			root
+
 		}
 	}
 

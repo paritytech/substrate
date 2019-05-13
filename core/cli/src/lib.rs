@@ -501,7 +501,8 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
-	config.force_authoring = cli.force_authoring;
+	// Imply forced authoring on --dev
+	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
 	Ok(config)
 }

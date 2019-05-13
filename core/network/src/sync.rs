@@ -14,6 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Contains the state of the chain synchronization process
+//!
+//! At any given point in time, a running node tries as much as possible to be at the head of the
+//! chain. This module handles the logic of which blocks to request from remotes, and processing
+//! responses. It yields blocks to check and potentially move to the database.
+//!
+//! # Usage
+//!
+//! The `ChainSync` struct maintains the state of the block requests. Whenever something happens on
+//! the network, or whenever a block has been successfully verified, call the appropriate method in
+//! order to update it. You must also regularly call `tick()`.
+//!
+//! To each of these methods, you must pass a `Context` object that the `ChainSync` will use to
+//! send its new outgoing requests.
+//!
+
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -22,8 +38,7 @@ use crate::protocol::Context;
 use fork_tree::ForkTree;
 use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
-use consensus::BlockOrigin;
-use consensus::import_queue::{ImportQueue, IncomingBlock};
+use consensus::{BlockOrigin, import_queue::IncomingBlock};
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
 use runtime_primitives::Justification;
@@ -32,8 +47,6 @@ use runtime_primitives::generic::BlockId;
 use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -285,20 +298,21 @@ impl<B: BlockT> PendingJustifications<B> {
 	/// Processes the response for the request previously sent to the given
 	/// peer. Queues a retry in case the given justification
 	/// was `None`.
+	///
+	/// Returns `Some` if this produces a justification that must be imported in the import queue.
+	#[must_use]
 	fn on_response(
 		&mut self,
 		who: PeerId,
 		justification: Option<Justification>,
-		import_queue: &ImportQueue<B>,
-	) {
+	) -> Option<(PeerId, B::Hash, NumberFor<B>, Justification)> {
 		// we assume that the request maps to the given response, this is
 		// currently enforced by the outer network protocol before passing on
 		// messages to chain sync.
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(justification) = justification {
-				import_queue.import_justification(who.clone(), request.0, request.1, justification);
 				self.importing_requests.insert(request);
-				return
+				return Some((who, request.0, request.1, justification))
 			}
 
 			self.previous_requests
@@ -308,6 +322,8 @@ impl<B: BlockT> PendingJustifications<B> {
 
 			self.pending_requests.push_front(request);
 		}
+
+		None
 	}
 
 	/// Removes any pending justification requests for blocks lower than the
@@ -355,12 +371,8 @@ pub struct ChainSync<B: BlockT> {
 	best_queued_hash: B::Hash,
 	required_block_attributes: message::BlockAttributes,
 	justifications: PendingJustifications<B>,
-	import_queue: Box<ImportQueue<B>>,
 	queue_blocks: HashSet<B::Hash>,
 	best_importing_number: NumberFor<B>,
-	is_stopping: AtomicBool,
-	is_offline: Arc<AtomicBool>,
-	is_major_syncing: Arc<AtomicBool>,
 }
 
 /// Reported sync state.
@@ -400,13 +412,10 @@ impl<B: BlockT> Status<B> {
 }
 
 impl<B: BlockT> ChainSync<B> {
-	/// Create a new instance.
+	/// Create a new instance. Pass the initial known state of the chain.
 	pub(crate) fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
 		role: Roles,
 		info: &ClientInfo<B>,
-		import_queue: Box<ImportQueue<B>>
 	) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
@@ -421,12 +430,8 @@ impl<B: BlockT> ChainSync<B> {
 			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
 			justifications: PendingJustifications::new(),
 			required_block_attributes,
-			import_queue,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			is_stopping: Default::default(),
-			is_offline,
-			is_major_syncing,
 		}
 	}
 
@@ -441,7 +446,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Returns peer sync status (if any).
+	/// Returns the state of the sync of the given peer. Returns `None` if the peer is unknown.
 	pub(crate) fn peer_info(&self, who: &PeerId) -> Option<PeerInfo<B>> {
 		self.peers.get(who).map(|peer| {
 			PeerInfo {
@@ -462,15 +467,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Handle new connected peer.
+	/// Handle new connected peer. Call this method whenever we connect to a new peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId) {
-		// Initialize some variables to determine if
-		// is_offline or is_major_syncing should be updated
-		// after processing this new peer.
-		let previous_len = self.peers.len();
-		let previous_best_seen = self.best_seen_block();
-		let previous_state = self.state(&previous_best_seen);
-
 		if let Some(info) = protocol.peer_info(&who) {
 			let status = block_status(&*protocol.client(), &self.queue_blocks, info.best_hash);
 			match (status, info.best_number) {
@@ -538,22 +536,6 @@ impl<B: BlockT> ChainSync<B> {
 				}
 			}
 		}
-
-		let current_best_seen = self.best_seen_block();
-		let current_state = self.state(&current_best_seen);
-		let current_len = self.peers.len();
-		if previous_len == 0 && current_len > 0 {
-			// We were offline, and now we're connected to at least one peer.
-			self.is_offline.store(false, Ordering::Relaxed);
-		}
-		if previous_len < current_len {
-			// We added a peer, let's see if major_syncing should be updated.
-			match (previous_state, current_state) {
-				(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.store(true, Ordering::Relaxed),
-				(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
-				_ => {},
-			}
-		}
 	}
 
 	fn handle_ancestor_search_state(
@@ -594,14 +576,20 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Handle new block data.
+	/// Handle a response from the remote to a block request that we made.
+	///
+	/// `request` must be the original request that triggered `response`.
+	///
+	/// If this corresponds to a valid block, this outputs the block that must be imported in the
+	/// import queue.
+	#[must_use]
 	pub(crate) fn on_block_data(
 		&mut self,
 		protocol: &mut Context<B>,
 		who: PeerId,
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>
-	) {
+	) -> Option<(BlockOrigin, Vec<IncomingBlock<B>>)> {
 		let new_blocks: Vec<IncomingBlock<B>> = if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			let mut blocks = response.blocks;
 			if request.direction == message::Direction::Descending {
@@ -649,13 +637,13 @@ impl<B: BlockT> ChainSync<B> {
 							debug!(target: "sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who.clone(), i32::min_value());
 							protocol.disconnect_peer(who);
-							return;
+							return None
 						},
 						(_, Err(e)) => {
 							info!("Error answering legitimate blockchain query: {:?}", e);
 							protocol.report_peer(who.clone(), ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE);
 							protocol.disconnect_peer(who);
-							return;
+							return None
 						},
 					};
 					if block_hash_match && peer.common_number < num {
@@ -665,12 +653,12 @@ impl<B: BlockT> ChainSync<B> {
 						trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
 						protocol.report_peer(who.clone(), GENESIS_MISMATCH_REPUTATION_CHANGE);
 						protocol.disconnect_peer(who);
-						return;
+						return None
 					}
 					if let Some((next_state, next_block_num)) = Self::handle_ancestor_search_state(state, num, block_hash_match) {
 						peer.state = PeerSyncState::AncestorSearch(next_block_num, next_state);
 						Self::request_ancestry(protocol, who, next_block_num);
-						return;
+						return None
 					} else {
 						peer.state = PeerSyncState::Available;
 						vec![]
@@ -702,17 +690,23 @@ impl<B: BlockT> ChainSync<B> {
 		self.queue_blocks
 			.extend(new_blocks.iter().map(|b| b.hash.clone()));
 		self.best_importing_number = max(new_best_importing_number, self.best_importing_number);
-		self.import_queue.import_blocks(origin, new_blocks);
+		Some((origin, new_blocks))
 	}
 
-	/// Handle new justification data.
+	/// Handle a response from the remote to a justification request that we made.
+	///
+	/// `request` must be the original request that triggered `response`.
+	///
+	/// Returns `Some` if this produces a justification that must be imported into the import
+	/// queue.
+	#[must_use]
 	pub(crate) fn on_block_justification_data(
 		&mut self,
 		protocol: &mut Context<B>,
 		who: PeerId,
 		_request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
-	) {
+	) -> Option<(PeerId, B::Hash, NumberFor<B>, Justification)> {
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			if let PeerSyncState::DownloadingJustification(hash) = peer.state {
 				peer.state = PeerSyncState::Available;
@@ -725,13 +719,12 @@ impl<B: BlockT> ChainSync<B> {
 								who, hash, response.hash);
 							protocol.report_peer(who.clone(), i32::min_value());
 							protocol.disconnect_peer(who);
-							return;
+							return None;
 						}
 
-						self.justifications.on_response(
+						return self.justifications.on_response(
 							who,
 							response.justification,
-							&*self.import_queue,
 						);
 					},
 					None => {
@@ -741,16 +734,18 @@ impl<B: BlockT> ChainSync<B> {
 							who,
 							hash,
 						);
-						return;
+						return None;
 					},
 				}
 			}
 		}
 
 		self.maintain_sync(protocol);
+		None
 	}
 
-	/// A batch of blocks have been processed, with or without errors.
+	/// Call this when a batch of blocks have been processed by the import queue, with or without
+	/// errors.
 	pub fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
 		for hash in processed_blocks {
 			self.queue_blocks.remove(&hash);
@@ -762,9 +757,6 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
-		if self.is_stopping.load(Ordering::SeqCst) {
-			return
-		}
 		let peers: Vec<PeerId> = self.peers.keys().map(|p| p.clone()).collect();
 		for peer in peers {
 			self.download_new(protocol, peer);
@@ -772,14 +764,16 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
-	/// Called periodically to perform any time-based actions.
+	/// Called periodically to perform any time-based actions. Must be called at a regular
+	/// interval.
 	pub fn tick(&mut self, protocol: &mut Context<B>) {
 		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Request a justification for the given block.
 	///
-	/// Queues a new justification request and tries to dispatch all pending requests.
+	/// Uses `protocol` to queue a new justification request and tries to dispatch all pending
+	/// requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.justifications.queue_request(
 			&(*hash, number),
@@ -794,13 +788,10 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.clear();
 	}
 
+	/// Call this when a justification has been processed by the import queue, with or without
+	/// errors.
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		self.justifications.justification_import_result(hash, number, success);
-	}
-
-	pub fn stop(&self) {
-		self.is_stopping.store(true, Ordering::SeqCst);
-		self.import_queue.stop();
 	}
 
 	/// Notify about successful import of the given block.
@@ -820,18 +811,9 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let best_seen = self.best_seen_block();
-		let previous_state = self.state(&best_seen);
 		if number > self.best_queued_number {
 			self.best_queued_number = number;
 			self.best_queued_hash = *hash;
-		}
-		let current_state = self.state(&best_seen);
-		// If the latest queued block changed our state, update is_major_syncing.
-		match (previous_state, current_state) {
-			(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.store(true, Ordering::Relaxed),
-			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
-			_ => {},
 		}
 		// Update common blocks
 		for (n, peer) in self.peers.iter_mut() {
@@ -848,12 +830,13 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Sets the new head of chain.
 	pub(crate) fn update_chain_info(&mut self, best_header: &B::Header) {
 		let hash = best_header.hash();
 		self.block_queued(&hash, best_header.number().clone())
 	}
 
-	/// Handle new block announcement.
+	/// Call when a node announces a new block.
 	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context<B>, who: PeerId, hash: B::Hash, header: &B::Header) {
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement with number {:?}", number);
@@ -929,23 +912,10 @@ impl<B: BlockT> ChainSync<B> {
 		block_status(&*protocol.client(), &self.queue_blocks, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
-	/// Handle disconnected peer.
+	/// Call when a peer has disconnected.
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, who: PeerId) {
-		let previous_best_seen = self.best_seen_block();
-		let previous_state = self.state(&previous_best_seen);
 		self.blocks.clear_peer_download(&who);
 		self.peers.remove(&who);
-		if self.peers.len() == 0 {
-			// We're not connected to any peer anymore.
-			self.is_offline.store(true, Ordering::Relaxed);
-		}
-		let current_best_seen = self.best_seen_block();
-		let current_state = self.state(&current_best_seen);
-		// We removed a peer, let's see if this put us in idle state and is_major_syncing should be updated.
-		match (previous_state, current_state) {
-			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
-			_ => {},
-		}
 		self.justifications.peer_disconnected(who);
 		self.maintain_sync(protocol);
 	}
@@ -971,12 +941,6 @@ impl<B: BlockT> ChainSync<B> {
 		for id in ids {
 			self.new_peer(protocol, id);
 		}
-	}
-
-	/// Clear all sync data.
-	pub(crate) fn clear(&mut self) {
-		self.blocks.clear();
-		self.peers.clear();
 	}
 
 	// Download old block with known parent.

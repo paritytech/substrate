@@ -159,7 +159,7 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&self) -> serde_json::Value {
+	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.custom_protocols.peerset_debug_info()
 	}
 }
@@ -261,8 +261,10 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 					warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
 				}
 				if info.listen_addrs.len() > 30 {
-					warn!(target: "sub-libp2p", "Node {:?} id reported more than 30 addresses",
-						peer_id);
+					warn!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
+						it is identified by {:?} and {:?}", peer_id, info.protocol_version,
+						info.agent_version
+					);
 					info.listen_addrs.truncate(30);
 				}
 				for addr in &info.listen_addrs {
