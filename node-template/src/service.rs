@@ -92,6 +92,8 @@ construct_service_factory! {
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
+						None,
+						None,
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
@@ -105,6 +107,8 @@ construct_service_factory! {
 					import_queue::<_, _, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
+						None,
+						None,
 						None,
 						client,
 						NothingExtra,
@@ -120,5 +124,8 @@ construct_service_factory! {
 				))
 			}
 		},
+		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {
+			Ok(None)
+		}},
 	}
 }

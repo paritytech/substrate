@@ -30,6 +30,7 @@ mod protocol;
 mod chain;
 mod blocks;
 mod on_demand;
+mod extra_requests;
 mod util;
 pub mod config;
 pub mod consensus_gossip;
@@ -40,7 +41,7 @@ pub mod specialization;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test;
 
-pub use chain::Client as ClientHandle;
+pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
 	Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg,
 	SyncProvider, ExHashT, ReportHandle,
