@@ -83,7 +83,10 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, 
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
 use substrate_primitives::storage::well_known_keys;
-use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{
+	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue,
+	StorageMap, Parameter,
+};
 use safe_mix::TripletMix;
 use parity_codec::{Encode, Decode};
 
@@ -182,18 +185,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposits an event into this block's event record.
 		pub fn deposit_event(event: T::Event) {
-			let extrinsic_index = Self::extrinsic_index();
-			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-			let event = EventRecord { phase, event };
-
-			// Appending can only fail if `Events<T>` can not be decoded or
-			// when we try to insert more than `u32::max_value()` events.
-			// If one of these conditions is met, we just insert the new event.
-			let events = [event];
-			if <Events<T>>::append(&events).is_err() {
-				let [event] = events;
-				<Events<T>>::put(vec![event]);
-			}
+			Self::deposit_event_indexed(&[], event);
 		}
 	}
 }
@@ -211,11 +203,13 @@ pub enum Phase {
 /// Record of an event happening.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
-pub struct EventRecord<E: Parameter + Member> {
+pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
 	/// The event itself.
 	pub event: E,
+	/// The list of the topics this event has.
+	pub topics: Vec<T>,
 }
 
 decl_event!(
@@ -295,6 +289,12 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	h
 }
 
+/// This type alias represents an index of an event.
+///
+/// We use `u32` here because this index is used as index for `Events<T>`
+/// which can't contain more than `u32::max_value()` items.
+type EventIndex = u32;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
@@ -319,7 +319,30 @@ decl_storage! {
 		/// Digest of the current block, also part of the block header.
 		Digest get(digest): T::Digest;
 		/// Events deposited for the current block.
-		Events get(events): Vec<EventRecord<T::Event>>;
+		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
+		/// The number of events in the `Events<T>` list.
+		EventCount get(event_count): EventIndex;
+
+		// TODO: https://github.com/paritytech/substrate/issues/2553
+		// Possibly, we can improve it by using something like:
+		// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
+		// `EventTopics::append`.
+
+		/// Mapping between a topic (represented by T::Hash) and a vector of indexes
+		/// of events in the `<Events<T>>` list.
+		///
+		/// The first key serves no purpose. This field is declared as double_map just
+		/// for convenience of using `remove_prefix`.
+		///
+		/// All topic vectors have deterministic storage locations depending on the topic. This
+		/// allows light-clients to leverage the changes trie storage tracking mechanism and
+		/// in case of changes fetch the list of events of interest.
+		///
+		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+		/// the `EventIndex` then in case if the topic has the same contents on the next block
+		/// no notification will be triggered thus the event might be lost.
+		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
+			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -378,6 +401,54 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'stati
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposits an event into this block's event record adding this event
+	/// to the corresponding topic indexes.
+	///
+	/// This will update storage entries that correpond to the specified topics.
+	/// It is expected that light-clients could subscribe to this topics.
+	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		let extrinsic_index = Self::extrinsic_index();
+		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let event = EventRecord {
+			phase,
+			event,
+			topics: topics.iter().cloned().collect::<Vec<_>>(),
+		};
+
+		// Index of the to be added event.
+		let event_idx = {
+			let old_event_count = <EventCount<T>>::get();
+			let new_event_count = match old_event_count.checked_add(1) {
+				// We've reached the maximum number of events at this block, just
+				// don't do anything and leave the event_count unaltered.
+				None => return,
+				Some(nc) => nc,
+			};
+			<EventCount<T>>::put(new_event_count);
+			old_event_count
+		};
+
+		// Appending can only fail if `Events<T>` can not be decoded or
+		// when we try to insert more than `u32::max_value()` events.
+		//
+		// We perform early return if we've reached the maximum capacity of the event list,
+		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
+		// (since the event list is cleared at the block initialization).
+		if <Events<T>>::append(&[event]).is_err() {
+			// The most sensible thing to do here is to just ignore this event and wait until the
+			// new block.
+			return;
+		}
+
+		let block_no = Self::block_number();
+		for topic in topics {
+			// The same applies here.
+			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
+				return;
+			}
+		}
+	}
+
 	/// Gets the index of extrinsic that is currently executing.
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
@@ -408,6 +479,8 @@ impl<T: Trait> Module<T> {
 			*index = (*index + 1) % 81;
 		});
 		<Events<T>>::kill();
+		<EventCount<T>>::kill();
+		<EventTopics<T>>::remove_prefix(&());
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -430,7 +503,13 @@ impl<T: Trait> Module<T> {
 			digest.push(item);
 		}
 
-		// <Events<T>> stays to be inspected by the client.
+		// The following fields
+		//
+		// - <Events<T>>
+		// - <EventCount<T>>
+		// - <EventTopics<T>>
+		//
+		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
@@ -649,7 +728,13 @@ mod tests {
 			System::finalize();
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]
+				vec![
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 1u16,
+						topics: vec![],
+					}
+				]
 			);
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into());
@@ -660,11 +745,71 @@ mod tests {
 			System::deposit_event(3u16);
 			System::finalize();
 			assert_eq!(System::events(), vec![
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16 },
-				EventRecord { phase: Phase::Finalization, event: 3u16 }
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
+				EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
 			]);
+		});
+	}
+
+	#[test]
+	fn deposit_event_topics() {
+		with_externalities(&mut new_test_ext(), || {
+			const BLOCK_NUMBER: u64 = 1;
+
+			System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &[0u8; 32].into());
+			System::note_finished_extrinsics();
+
+			let topics = vec![
+				H256::repeat_byte(1),
+				H256::repeat_byte(2),
+				H256::repeat_byte(3),
+			];
+
+			// We deposit a few events with different sets of topics.
+			System::deposit_event_indexed(&topics[0..3], 1u16);
+			System::deposit_event_indexed(&topics[0..1], 2u16);
+			System::deposit_event_indexed(&topics[1..2], 3u16);
+
+			System::finalize();
+
+			// Check that topics are reflected in the event record.
+			assert_eq!(
+				System::events(),
+				vec![
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 1u16,
+						topics: topics[0..3].to_vec(),
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 2u16,
+						topics: topics[0..1].to_vec(),
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: 3u16,
+						topics: topics[1..2].to_vec(),
+					}
+				]
+			);
+
+			// Check that the topic-events mapping reflects the deposited topics.
+			// Note that these are indexes of the events.
+			assert_eq!(
+				System::event_topics(&(), &topics[0]),
+				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
+			);
+			assert_eq!(
+				System::event_topics(&(), &topics[1]),
+				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
+			);
+			assert_eq!(
+				System::event_topics(&(), &topics[2]),
+				vec![(BLOCK_NUMBER, 0)],
+			);
 		});
 	}
 }

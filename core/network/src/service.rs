@@ -177,6 +177,8 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	is_major_syncing: Arc<AtomicBool>,
 	/// Peers whom we are connected with.
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
+	/// Channel for networking messages processed by the background thread.
+	network_chan: NetworkChan<B>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
@@ -196,7 +198,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: Box<ImportQueue<B>>,
-	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
+	) -> Result<Arc<Service<B, S>>, Error> {
 		let (network_chan, network_port) = network_channel();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		// Start in off-line mode, since we're not connected to any nodes yet.
@@ -230,6 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			status_sinks,
 			is_offline,
 			is_major_syncing,
+			network_chan: network_chan.clone(),
 			peers,
 			peerset,
 			network,
@@ -240,12 +243,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		// connect the import-queue to the network service.
 		let link = NetworkLink {
 			protocol_sender,
-			network_sender: network_chan.clone(),
+			network_sender: network_chan,
 		};
 
 		import_queue.start(Box::new(link))?;
 
-		Ok((service, network_chan))
+		Ok(service)
 	}
 
 	/// Returns the downloaded bytes per second averaged over the past few seconds.
@@ -311,6 +314,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	/// given scalar.
 	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
 		self.peerset.report_peer(who, cost_benefit);
+	}
+
+	/// Send a message to the given peer. Has no effect if we're not connected to this peer.
+	///
+	/// This method is extremely poor in terms of API and should be eventually removed.
+	pub fn disconnect_peer(&self, who: PeerId) {
+		let _ = self.network_chan.send(NetworkMsg::DisconnectPeer(who));
+	}
+
+	/// Send a message to the given peer. Has no effect if we're not connected to this peer.
+	///
+	/// This method is extremely poor in terms of API and should be eventually removed.
+	pub fn send_request(&self, who: PeerId, message: Message<B>) {
+		let _ = self.network_chan.send(NetworkMsg::Outgoing(who, message));
 	}
 
 	/// Execute a closure with the chain-specific network specialization.

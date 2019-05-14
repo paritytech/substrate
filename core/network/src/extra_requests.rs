@@ -24,8 +24,7 @@ use network_libp2p::PeerId;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::message;
-use crate::protocol::Context;
-use crate::sync::{PeerSync, PeerSyncState};
+use crate::sync::{Context, PeerSync, PeerSyncState};
 
 // Time to wait before trying to get the same extra data from the same peer.
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);

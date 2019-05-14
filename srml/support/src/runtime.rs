@@ -17,13 +17,14 @@
 //! Macros to define a runtime. A runtime is basically all your logic running in Substrate,
 //! consisting of selected SRML modules and maybe some of your own modules.
 //! A lot of supporting logic is automatically generated for a runtime,
-//! mostly for to combine data types and metadata of the included modules.
+//! mostly to combine data types and metadata of the included modules.
 
 /// Construct a runtime, with the given name and the given modules.
 ///
-/// The parameters here are specific types for Block, NodeBlock and InherentData
-/// (TODO: describe the difference between Block and NodeBlock)
-///	and the modules that are used by the runtime.
+/// The parameters here are specific types for `Block`, `NodeBlock`, and `InherentData`
+/// and the modules that are used by the runtime.
+/// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
+/// that is used in the node. For instance they can differ in the extrinsics type.
 ///
 /// # Example:
 ///
@@ -56,6 +57,7 @@
 /// `Test2: test_with_long_module::{Module}`.
 ///
 /// We provide support for the following types in a module:
+///
 /// - `Module`
 /// - `Call`
 /// - `Storage`
@@ -71,7 +73,8 @@
 /// # Note
 ///
 /// The population of the genesis storage depends on the order of modules. So, if one of your
-/// modules depends on another module. The dependent module need to come before the module depending on it.
+/// modules depends on another module, the module that is depended upon needs to come before
+/// the module depending on it.
 #[macro_export]
 macro_rules! construct_runtime {
 
