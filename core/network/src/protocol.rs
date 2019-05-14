@@ -570,20 +570,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 
-		message::generic::BlockResponse {
+		let response = message::generic::BlockResponse {
 			id: request.id,
 			blocks: blocks,
-		}
-	}
+		};
 
-	fn on_block_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
-		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
-			request.id,
-			peer,
-			request.from,
-			request.to,
-			request.max);
-		let response = self.create_block_response(request);
 		trace!(target: "sync", "Sending BlockResponse with {} blocks", response.blocks.len());
 		self.send_message(peer, GenericMessage::BlockResponse(response))
 	}
@@ -1221,17 +1212,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		} else {
 			CustomMessageOutcome::None
 		}
-	}
-
-	fn on_remote_body_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
-		trace!(target: "on_demand", "RemoteBodyRequest {} from {}: from {:?} to {:?} max {:?}",
-			request.id,
-			peer,
-			request.from,
-			request.to,
-			request.max);
-		let response = self.create_block_response(request);
-		self.send_message(peer, GenericMessage::RemoteBodyResponse(response))
 	}
 
 	fn on_remote_body_response(&self, peer: PeerId, response: message::BlockResponse<B>) {

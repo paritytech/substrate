@@ -430,7 +430,12 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 													RequestData::RemoteBody(request, sender)),
 				};
 
-				if request.header.extrinsics_root() == header.extrinsics_root() {
+				// TODO(svyatonik/niklasad1): ideally we should fetch only:
+				// Body + HashFor::<Block>::ordered_trie_root(body) + checking it against local header.extrinsic_root()
+				//
+				// However, because the `runtime` don't guarantee that `ordereed_trie_root(body)` ==
+				// `Header::extrinsic_root, just compare the hashes for now!
+				if request.header == header.hash() {
 					let _ = sender.send(Ok(Some(body)));
 					Accept::Ok
 				} else {
@@ -637,7 +642,7 @@ impl<Block: BlockT> Request<Block> {
 			RequestData::RemoteReadChild(ref data, _) => *data.header.number(),
 			RequestData::RemoteCall(ref data, _) => *data.header.number(),
 			RequestData::RemoteChanges(ref data, _) => data.max_block.0,
-			RequestData::RemoteBody(ref data, _) => *data.header.number()
+			RequestData::RemoteBody(ref data, _) => data.number,
 		}
 	}
 
@@ -682,7 +687,7 @@ impl<Block: BlockT> Request<Block> {
 				message::generic::Message::BlockRequest(message::BlockRequest::<Block> {
 					id: self.id,
 					fields: message::BlockAttributes::BODY | message::BlockAttributes::HEADER,
-					from: message::FromBlock::Hash(data.header.hash()),
+					from: message::FromBlock::Hash(data.header),
 					to: None,
 					direction: message::Direction::Ascending,
 					max: Some(1),

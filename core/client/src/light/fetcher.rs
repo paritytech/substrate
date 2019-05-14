@@ -127,8 +127,10 @@ pub struct ChangesProof<Header: HeaderT> {
 /// Remote block body request
 #[derive(Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct RemoteBodyRequest<Header: HeaderT> {
-	/// Header of the requested block body
-	pub header: Header,
+	/// Hash the header of the requested block body
+	pub header: Header::Hash,
+	/// Header number of the requested block body
+	pub number: Header::Number,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
 	pub retry_count: Option<usize>,
 }
