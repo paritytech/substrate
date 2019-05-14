@@ -31,7 +31,7 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
-use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
+use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crate::error::Error;
 use crate::specialization::NetworkSpecialization;
@@ -200,12 +200,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		import_queue: Box<ImportQueue<B>>,
 	) -> Result<Arc<Service<B, S>>, Error> {
 		let (network_chan, network_port) = network_channel();
+		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
-		let (protocol, protocol_sender) = Protocol::new(
+		let protocol = Protocol::new(
 			peers.clone(),
 			network_chan.clone(),
 			params.config,
@@ -223,6 +224,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			protocol,
 			import_queue.clone(),
 			network_port,
+			protocol_rx,
 			status_sinks.clone(),
 			params.network_config,
 			registered,
@@ -520,6 +522,70 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 	Synchronized,
 }
 
+/// Messages sent to Protocol from elsewhere inside the system.
+pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
+	/// A batch of blocks has been processed, with or without errors.
+	BlocksProcessed(Vec<B::Hash>, bool),
+	/// Tell protocol to restart sync.
+	RestartSync,
+	/// Tell protocol to propagate extrinsics.
+	PropagateExtrinsics,
+	/// Tell protocol that a block was imported (sent by the import-queue).
+	BlockImportedSync(B::Hash, NumberFor<B>),
+	/// Tell protocol to clear all pending justification requests.
+	ClearJustificationRequests,
+	/// Tell protocol to request justification for a block.
+	RequestJustification(B::Hash, NumberFor<B>),
+	/// Inform protocol whether a justification was successfully imported.
+	JustificationImportResult(B::Hash, NumberFor<B>, bool),
+	/// Set finality proof request builder.
+	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
+	/// Tell protocol to request finality proof for a block.
+	RequestFinalityProof(B::Hash, NumberFor<B>),
+	/// Inform protocol whether a finality proof was successfully imported.
+	FinalityProofImportResult((B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
+	/// Propagate a block to peers.
+	AnnounceBlock(B::Hash),
+	/// A block has been imported (sent by the client).
+	BlockImported(B::Hash, B::Header),
+	/// A block has been finalized (sent by the client).
+	BlockFinalized(B::Hash, B::Header),
+	/// Execute a closure with the chain-specific network specialization.
+	ExecuteWithSpec(Box<SpecTask<B, S> + Send + 'static>),
+	/// Execute a closure with the consensus gossip.
+	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
+	/// Incoming gossip consensus message.
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
+	/// Tell protocol to perform regular maintenance.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Tick,
+	/// Synchronization request.
+	#[cfg(any(test, feature = "test-helpers"))]
+	Synchronize,
+}
+
+/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
+pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>> {
+	fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
+}
+
+impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
+	fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
+		(*self)(spec, context)
+	}
+}
+
+/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
+pub trait GossipTask<B: BlockT> {
+	fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
+}
+
+impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
+	fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
+		(*self)(gossip, context)
+	}
+}
+
 /// Starts the background thread that handles the networking.
 fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_offline: Arc<AtomicBool>,
@@ -527,6 +593,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	protocol: Protocol<B, S, H>,
 	import_queue: Box<ImportQueue<B>>,
 	network_port: NetworkPort<B>,
+	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
@@ -545,7 +612,17 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(is_offline, is_major_syncing, protocol, service_clone, import_queue, network_port, status_sinks, peerset_clone)
+		let fut = run_thread(
+			is_offline,
+			is_major_syncing,
+			protocol,
+			service_clone,
+			import_queue,
+			network_port,
+			protocol_rx,
+			status_sinks,
+			peerset_clone
+		)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -569,6 +646,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
 	network_port: NetworkPort<B>,
+	mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	peerset: PeersetHandle,
 ) -> impl Future<Item = (), Error = io::Error> {
@@ -600,6 +678,56 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 				Ok(Some(NetworkMsg::Synchronized)) => {}
 
 				Err(_) => return Ok(Async::Ready(())),
+			}
+		}
+
+		loop {
+			let msg = match protocol_rx.poll() {
+				Ok(Async::Ready(Some(msg))) => msg,
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
+				Ok(Async::NotReady) => break,
+			};
+
+			match msg {
+				ProtocolMsg::BlockImported(hash, header) =>
+					protocol.on_block_imported(hash, &header),
+				ProtocolMsg::BlockFinalized(hash, header) =>
+					protocol.on_block_finalized(hash, &header),
+				ProtocolMsg::ExecuteWithSpec(task) => {
+					let (mut context, spec) = protocol.specialization_lock();
+					task.call_box(spec, &mut context);
+				},
+				ProtocolMsg::ExecuteWithGossip(task) => {
+					let (mut context, gossip) = protocol.consensus_gossip_lock();
+					task.call_box(gossip, &mut context);
+				}
+				ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
+					protocol.gossip_consensus_message(topic, engine_id, message, recipient),
+				ProtocolMsg::BlocksProcessed(hashes, has_error) =>
+					protocol.blocks_processed(hashes, has_error),
+				ProtocolMsg::RestartSync => 
+					protocol.restart(),
+				ProtocolMsg::AnnounceBlock(hash) =>
+					protocol.announce_block(hash),
+				ProtocolMsg::BlockImportedSync(hash, number) =>
+					protocol.block_imported(&hash, number),
+				ProtocolMsg::ClearJustificationRequests =>
+					protocol.clear_justification_requests(),
+				ProtocolMsg::RequestJustification(hash, number) =>
+					protocol.request_justification(&hash, number),
+				ProtocolMsg::JustificationImportResult(hash, number, success) =>
+					protocol.justification_import_result(hash, number, success),
+				ProtocolMsg::SetFinalityProofRequestBuilder(builder) =>
+					protocol.set_finality_proof_request_builder(builder),
+				ProtocolMsg::RequestFinalityProof(hash, number) =>
+					protocol.request_finality_proof(&hash, number),
+				ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
+					protocol.finality_proof_import_result(requested_block, finalziation_result),
+				ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(),
+				#[cfg(any(test, feature = "test-helpers"))]
+				ProtocolMsg::Tick => protocol.tick(),
+				#[cfg(any(test, feature = "test-helpers"))]
+				ProtocolMsg::Synchronize => protocol.synchronize(),
 			}
 		}
 
