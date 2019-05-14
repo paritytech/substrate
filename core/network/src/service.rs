@@ -596,7 +596,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 		}
 
 		match protocol.poll(&mut Ctxt(&mut network_service.lock(), &peerset)) {
-			Ok(Async::Ready(())) => return Ok(Async::Ready(())),
+			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
 		}

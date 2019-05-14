@@ -316,7 +316,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.status().is_offline()
 	}
 
-	pub fn poll(&mut self, network_out: &mut dyn NetworkOut<B>) -> Poll<(), void::Void> {
+	pub fn poll(&mut self, network_out: &mut dyn NetworkOut<B>) -> Poll<void::Void, void::Void> {
 		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
 			self.tick(network_out);
 		}
