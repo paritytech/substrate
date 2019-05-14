@@ -1057,7 +1057,8 @@ const CODE_RESTORATION: &str = r#"
 	)
 
 	(data (i32.const 0) "\28")
-	(data (i32.const 68) "\01\05\02\00\00\00\00\00\00\00\21\d6\b1\d5\9a\a6\03\8f\ca\d6\32\48\8e\90\26\89\3a\1b\bb\48\58\17\74\c7\71\b8\f2\43\20\69\7f\05\32\00\00\00\00\00\00\00")
+	(data (i32.const 68) "\01\05\02\00\00\00\00\00\00\00\21\d6\b1\d5\9a\a6\03\8f\ca\d6\32\48\8e\90"
+		"\26\89\3a\1b\bb\48\58\17\74\c7\71\b8\f2\43\20\69\7f\05\32\00\00\00\00\00\00\00")
 )
 "#;
 const HASH_RESTORATION: [u8; 32] = hex!("47943ae9394cf62824b8567b49f33ec2fda638198fd6ba084de81ad8d01ce740");
@@ -1080,8 +1081,12 @@ fn restoration(failing_test: bool) {
 		HASH_SET_RENT.into(),
 		<Test as balances::Trait>::Balance::sa(50u64),
 	)));
-	assert_eq!(&encoded[..], &hex!("0105020000000000000021d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f24320697f053200000000000000")[..]);
-	assert_eq!(50, hex!("01050200000000000000a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef3200000000000000").len());
+
+	let literal = hex!("0105020000000000000021d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f24
+		320697f053200000000000000");
+
+	assert_eq!(&encoded[..], &literal[..]);
+	assert_eq!(50, literal.len());
 
 	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
 	let set_rent_wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
