@@ -64,7 +64,7 @@ impl_outer_dispatch! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -313,14 +313,16 @@ fn account_removal_removes_storage() {
 const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
-	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32)))
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
 		(call $ext_deposit_event
-			(i32.const 8)
-			(i32.const 4)
+			(i32.const 0) ;; The topics buffer
+			(i32.const 0) ;; The topics buffer's length
+			(i32.const 8) ;; The data buffer
+			(i32.const 4) ;; The data buffer's length
 		)
 		(call $ext_return
 			(i32.const 8)
@@ -337,7 +339,7 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
-const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("abb4194bdea47b2904fe90b4fd674bd40d96f423956627df8c39d2b1a791ab9d");
+const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("66c45bd7c473a1746e1d241176166ef53b1f207f56c5e87d1b6650140704181b");
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {

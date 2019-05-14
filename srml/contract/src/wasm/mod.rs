@@ -204,7 +204,8 @@ mod tests {
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
-		events: Vec<Vec<u8>>,
+		// (topics, data)
+		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
 		random_seed: H256,
 	}
@@ -279,8 +280,8 @@ mod tests {
 			&self.random_seed
 		}
 
-		fn deposit_event(&mut self, data: Vec<u8>) {
-			self.events.push(data)
+		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
+			self.events.push((topics, data))
 		}
 
 		fn set_rent_allowance(&mut self, rent_allowance: u64) {
@@ -1182,26 +1183,29 @@ mod tests {
 
 	const CODE_DEPOSIT_EVENT: &str = r#"
 (module
-	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32)))
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
 		(call $ext_deposit_event
-			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 33) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
 			(i32.const 13) ;; Length of the buffer
 		)
 	)
 	(func (export "deploy"))
 
 	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 33 bytes.
+	(data (i32.const 32) "\04\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33\33"
+	"\33\33\33\33\33\33\33\33\33")
 )
 "#;
 
 	#[test]
 	fn deposit_event() {
-		// This test can fail due to the encoding changes. In case it becomes too annoying
-		// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-
 		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 		execute(
@@ -1212,11 +1216,105 @@ mod tests {
 			&mut gas_meter
 		)
 		.unwrap();
+
+		assert_eq!(mock_ext.events, vec![
+			(vec![H256::repeat_byte(0x33)],
+			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
+		]);
+
 		assert_eq!(gas_meter.gas_left(), 50_000
-			- 4      // Explicit
-			- 13 - 1 // Deposit event
-			- 13     // read memory
+			- 6            // Explicit
+			- 13 - 1 - 1   // Deposit event
+			- (13 + 33)    // read memory
 		);
-		assert_eq!(mock_ext.events, vec![vec![0, 1, 42, 0, 0, 0, 0, 0, 0, 0, 229, 20, 0]]);
+	}
+
+	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
+(module
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 161) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 161 bytes.
+	(data (i32.const 32) "\14"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03\03"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04"
+"\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05\05")
+)
+"#;
+
+	#[test]
+	fn deposit_event_max_topics() {
+		// Checks that the runtime traps if there are more than `max_topic_events` topics.
+		let mut mock_ext = MockExt::default();
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+
+		assert_eq!(
+			execute(
+				CODE_DEPOSIT_EVENT_MAX_TOPICS,
+				&[],
+				&mut Vec::new(),
+				&mut mock_ext,
+				&mut gas_meter
+			),
+			Err("during execution"),
+		);
+	}
+
+	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
+(module
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_deposit_event
+			(i32.const 32) ;; Pointer to the start of topics buffer
+			(i32.const 129) ;; The length of the topics buffer.
+			(i32.const 8) ;; Pointer to the start of the data buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+
+	;; Encoded Vec<TopicOf<T>>, the buffer has length of 129 bytes.
+	(data (i32.const 32) "\10"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+"\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04\04")
+)
+"#;
+
+	#[test]
+	fn deposit_event_duplicates() {
+		// Checks that the runtime traps if there are duplicates.
+		let mut mock_ext = MockExt::default();
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+
+		assert_eq!(
+			execute(
+				CODE_DEPOSIT_EVENT_DUPLICATES,
+				&[],
+				&mut Vec::new(),
+				&mut mock_ext,
+				&mut gas_meter
+			),
+			Err("during execution"),
+		);
 	}
 }
