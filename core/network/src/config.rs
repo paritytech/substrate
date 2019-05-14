@@ -73,6 +73,18 @@ bitflags! {
 	}
 }
 
+impl Roles {
+	/// Does this role represents a client that holds full chain data locally?
+	pub fn is_full(&self) -> bool {
+		self.intersects(Roles::FULL | Roles::AUTHORITY)
+	}
+
+	/// Does this role represents a client that does not hold full chain data locally?
+	pub fn is_light(&self) -> bool {
+		!self.is_full()
+	}
+}
+
 impl parity_codec::Encode for Roles {
 	fn encode_to<T: parity_codec::Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
