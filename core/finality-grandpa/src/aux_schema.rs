@@ -555,7 +555,9 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, ed25519::Signature};
+	use crate::{Prevote, SignedMessage, environment::Vote};
+	use grandpa::Message;
 	use test_client;
 	use super::*;
 
@@ -719,6 +721,124 @@ mod test {
 					votes: HistoricalVotes::new(),
 				}),
 				current_round: HasVoted::No,
+			},
+		);
+	}
+
+	#[test]
+	fn load_decode_from_v2_migrates_data_format() {
+		let client = test_client::new();
+
+		let authorities = vec![(AuthorityId::default(), 100)];
+		let set_id = 3;
+		let round_number: u64 = 42;
+		let h = H256::random();
+		let n = 32;
+
+		let round_state = RoundState::<H256, u64> {
+			prevote_ghost: Some((h.clone(), n.clone())),
+			finalized: None,
+			estimate: None,
+			completable: false,
+		};
+
+		let prevote = Prevote::<test_client::runtime::Block>::new(h.clone(), n.clone());
+
+		let sig_msg = SignedMessage::<test_client::runtime::Block> {
+			message: Message::Prevote(prevote.clone()),
+			signature: Signature::default(),
+			id: AuthorityId::default(),
+		};
+
+		let vote = Vote::Prevote(None, prevote);
+
+		{
+			let current_round = HasVoted::Yes(AuthorityId::default(), vote.clone());
+
+			let authority_set = AuthoritySet::<H256, u64> {
+				current_authorities: authorities.clone(),
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			};
+
+			let mut rounds = VecDeque::new();
+
+			let mut signed_messages = Vec::new();
+			signed_messages.push(sig_msg.clone());
+
+			let round = V2CompletedRound::<test_client::runtime::Block> {
+				number: round_number,
+				state: round_state.clone(),
+				base: round_state.prevote_ghost.expect("Because I added the ghost; qed"),
+				votes: signed_messages,
+			};
+			rounds.push_back(round);
+
+			let completed_rounds = V2CompletedRounds {
+				inner: rounds
+			};
+
+			let voter_set_state = V2VoterSetState::Live {
+				completed_rounds,
+				current_round,
+			};
+
+			client.insert_aux(
+				&[
+					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+					(VERSION_KEY, 2u32.encode().as_slice()),
+				],
+				&[],
+			).unwrap();
+		}
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(2),
+		);
+
+		// should perform the migration
+		load_persistent::<test_client::runtime::Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(3),
+		);
+
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			*authority_set.inner().read(),
+			AuthoritySet {
+				current_authorities: authorities,
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+				set_id,
+			},
+		);
+
+		assert_eq!(
+			&*set_state.read(),
+			&VoterSetState::Live {
+				completed_rounds: CompletedRounds::new(CompletedRound {
+					number: round_number,
+					state: round_state.clone(),
+					base: round_state.prevote_ghost.expect("Because I added the ghost; qed"),
+					votes: HistoricalVotes::new_with_votes(vec![sig_msg]),
+				}),
+				current_round: HasVoted::Yes(AuthorityId::default(), vote),
 			},
 		);
 	}
