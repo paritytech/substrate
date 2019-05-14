@@ -23,7 +23,6 @@ mod sync;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use log::trace;
 use crate::chain::FinalityProofProvider;
@@ -45,7 +44,9 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolMsg, CustomMessageOutcome};
+use crate::protocol::{
+	ConnectedPeer, Context, Protocol, ProtocolStatus, ProtocolMsg, CustomMessageOutcome,
+};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -268,12 +269,11 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 }
 
 pub struct Peer<D, S: NetworkSpecialization<Block>> {
-	pub is_offline: Arc<AtomicBool>,
-	pub is_major_syncing: Arc<AtomicBool>,
 	pub peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 	pub peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
+	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 	pub import_queue: Box<BasicQueue<Block>>,
 	pub data: D,
 	best_hash: Mutex<Option<H256>>,
@@ -385,8 +385,7 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
+		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 		client: PeersClient,
 		import_queue: Box<BasicQueue<Block>>,
@@ -408,8 +407,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		);
 		import_queue.start(Box::new(network_link)).expect("Test ImportQueue always starts");
 		Peer {
-			is_offline,
-			is_major_syncing,
+			protocol_status,
 			peers,
 			peer_id: PeerId::random(),
 			client,
@@ -443,13 +441,18 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// SyncOracle: are we connected to any peer?
 	#[cfg(test)]
 	pub fn is_offline(&self) -> bool {
-		self.is_offline.load(std::sync::atomic::Ordering::Relaxed)
+		self.protocol_status.read().sync.is_offline()
 	}
 
 	/// SyncOracle: are we in the process of catching-up with the chain?
 	#[cfg(test)]
 	pub fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(std::sync::atomic::Ordering::Relaxed)
+		self.protocol_status.read().sync.is_major_syncing()
+	}
+
+	/// Get protocol status.
+	pub fn protocol_status(&self) -> ProtocolStatus<Block> {
+		self.protocol_status.read().clone()
 	}
 
 	/// Called on connection to other indicated peer.
@@ -741,8 +744,7 @@ pub trait TestNetFactory: Sized {
 	/// Add created peer.
 	fn add_peer(
 		&mut self,
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
+		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
@@ -784,9 +786,7 @@ pub trait TestNetFactory: Sized {
 					return Ok(Async::Ready(()))
 				}
 
-
-				is_offline.store(protocol.is_offline(), Ordering::Relaxed);
-				is_major_syncing.store(protocol.is_major_syncing(), Ordering::Relaxed);
+				*protocol_status.write() = protocol.status();
 
 				Ok(Async::NotReady)
 			}));
@@ -821,8 +821,6 @@ pub trait TestNetFactory: Sized {
 			finality_proof_import,
 			finality_proof_request_builder,
 		));
-		let is_offline = Arc::new(AtomicBool::new(true));
-		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let specialization = self::SpecializationFactory::create();
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
@@ -839,15 +837,14 @@ pub trait TestNetFactory: Sized {
 			specialization,
 		).unwrap();
 
+		let protocol_status = Arc::new(RwLock::new(protocol.status()));
 		self.add_peer(
-			is_offline.clone(),
-			is_major_syncing.clone(),
+			protocol_status.clone(),
 			import_queue.clone(),
 			protocol,
 			network_to_protocol_rx,
 			Arc::new(Peer::new(
-				is_offline,
-				is_major_syncing,
+				protocol_status,
 				peers,
 				PeersClient::Full(client),
 				import_queue,
@@ -879,8 +876,6 @@ pub trait TestNetFactory: Sized {
 			finality_proof_import,
 			finality_proof_request_builder,
 		));
-		let is_offline = Arc::new(AtomicBool::new(true));
-		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let specialization = self::SpecializationFactory::create();
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
@@ -897,15 +892,14 @@ pub trait TestNetFactory: Sized {
 			specialization,
 		).unwrap();
 
+		let protocol_status = Arc::new(RwLock::new(protocol.status()));
 		self.add_peer(
-			is_offline.clone(),
-			is_major_syncing.clone(),
+			protocol_status.clone(),
 			import_queue.clone(),
 			protocol,
 			network_to_protocol_rx,
 			Arc::new(Peer::new(
-				is_offline,
-				is_major_syncing,
+				protocol_status,
 				peers,
 				PeersClient::Light(client),
 				import_queue,
