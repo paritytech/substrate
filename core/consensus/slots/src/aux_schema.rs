@@ -23,10 +23,12 @@ use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
+const SLOT_HEADER_START: &[u8] = b"slot_header_start";
+
 /// We keep at least this number of slots in database.
 pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
-pub const PRUNING_BOUND: u64 = MAX_SLOT_CAPACITY + 1000;
+pub const PRUNING_BOUND: u64 = 2 * MAX_SLOT_CAPACITY;
 
 fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
 	where
@@ -87,11 +89,18 @@ pub fn check_equivocation<C, H, P>(
 		return Ok(None)
 	}
 
+	// Key for this slot.
 	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
+	// Get headers of this slot.
 	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend.clone(), &curr_slot_key[..])?
 		.unwrap_or_else(Vec::new);
+
+	// Get first slot saved.
+	let slot_header_start = SLOT_HEADER_START.to_vec();
+	let first_saved_slot = load_decode::<_, u64>(backend.clone(), &slot_header_start[..])?
+		.unwrap_or(slot_now);
 
 	for (prev_header, prev_signer) in headers_with_sig.iter() {
 		// A proof of equivocation consists of two headers:
@@ -114,13 +123,13 @@ pub fn check_equivocation<C, H, P>(
 	}
 
 	let mut keys_to_delete = vec![];
+	let mut new_first_saved_slot = first_saved_slot;
 
-	if slot_now % PRUNING_BOUND == 0 {
+	if slot_now - first_saved_slot > PRUNING_BOUND {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
 
-		let first_slot = slot_now.saturating_sub(PRUNING_BOUND);
-		let last_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
-		for s in first_slot..last_slot {
+		new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
+		for s in first_saved_slot..new_first_saved_slot {
 			let mut p = prefix.clone();
 			s.using_encoded(|s| p.extend(s));
 			keys_to_delete.push(p);
@@ -130,7 +139,10 @@ pub fn check_equivocation<C, H, P>(
 	headers_with_sig.push((header, signer));
 
 	backend.insert_aux(
-		&[(&curr_slot_key[..], headers_with_sig.encode().as_slice())],
+		&[
+			(&curr_slot_key[..], headers_with_sig.encode().as_slice()),
+			(&slot_header_start[..], new_first_saved_slot.encode().as_slice()),
+		],
 		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
 	)?;
 

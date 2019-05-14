@@ -1032,11 +1032,11 @@ mod tests {
 		let client = test_client::new();
 		let pair = sr25519::Pair::generate();
 		let public = pair.public();
-		let authorities = vec![public.clone()];
+		let authorities = vec![public.clone(), sr25519::Pair::generate().public()];
 
-		let (header1, header1_hash) = create_header(1, 1, &pair);
-		let (header2, header2_hash) = create_header(1, 2, &pair);
-		let (header3, header3_hash) = create_header(2, 2, &pair);
+		let (header1, header1_hash) = create_header(2, 1, &pair);
+		let (header2, header2_hash) = create_header(2, 2, &pair);
+		let (header3, header3_hash) = create_header(4, 2, &pair);
 		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 2, 3, &pair);
 		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 2, 4, &pair);
 
@@ -1046,14 +1046,14 @@ mod tests {
 		let c = Arc::new(client);
 
 		// It's ok to sign same headers.
-		assert!(check_header::<_, B, P>(&c, 1, header1.clone(), header1_hash, &authorities, false).is_ok());
-		assert!(check_header::<_, B, P>(&c, 1, header1, header1_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 2, header1.clone(), header1_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 3, header1, header1_hash, &authorities, false).is_ok());
 
 		// But not two different headers at the same slot.
-		assert!(check_header::<_, B, P>(&c, 1, header2, header2_hash, &authorities, false).is_err());
+		assert!(check_header::<_, B, P>(&c, 4, header2, header2_hash, &authorities, false).is_err());
 
 		// Different slot is ok.
-		assert!(check_header::<_, B, P>(&c, 2, header3.clone(), header3_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 5, header3.clone(), header3_hash, &authorities, false).is_ok());
 		
 		// Pruning works.
 		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND, header4, header4_hash, &authorities, false).is_ok());
