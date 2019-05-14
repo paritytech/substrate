@@ -901,7 +901,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		request: message::RemoteCallRequest<B::Hash>,
 	) {
 		trace!(target: "sync", "Remote call request {} from {} ({} at {})",
-			request.id, who, request.method, request.block);
+			request.id,
+			who,
+			request.method,
+			request.block
+		);
 		let proof = match self.context_data.chain.execution_proof(
 			&request.block,
 			&request.method,
