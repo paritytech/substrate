@@ -637,7 +637,7 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
-		let topics = match topics_len {
+		let mut topics = match topics_len {
 			0 => Vec::new(),
 			_ => {
 				let topics_buf = read_sandbox_memory(ctx, topics_ptr, topics_len)?;
@@ -652,7 +652,7 @@ define_env!(Env, <E: Ext>,
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
-		if (1..topics.len()).any(|i| topics[i..].contains(&topics[i - 1])) {
+		if has_duplicates(&mut topics) {
 			return Err(sandbox::HostError);
 		}
 
@@ -709,3 +709,21 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 );
+
+/// Finds duplicates in a given vector.
+///
+/// This function has complexity of O(n log n) and no additional memory is required, although
+/// the order of items is not preserved.
+fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
+	// Sort the vector
+	items.sort_unstable_by(|a, b| {
+		Ord::cmp(a.as_ref(), b.as_ref())
+	});
+	// And then find any two consecutive equal elements.
+	items.windows(2).any(|w| {
+		match w {
+			&[ref a, ref b] => a == b,
+			_ => false,
+		}
+	})
+}
