@@ -312,10 +312,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, 
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
-	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>) -> Option<message::BlockRequest<B>> {
+	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>)
+	-> Option<message::BlockRequest<B>> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			if let Some(_) = peer.obsolete_requests.remove(&response.id) {
-				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id,);
+				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id);
 				return None;
 			}
 			// Clear the request. If the response is invalid peer will be disconnected anyway.
@@ -577,7 +578,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 
 		} else {
-			let outcome = self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response);
+			let outcome = self.sync.on_block_data(
+				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+				peer,
+				request,
+				response
+			);
 			if let Some((origin, blocks)) = outcome {
 				CustomMessageOutcome::BlockImport(origin, blocks)
 			} else {
@@ -611,7 +617,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					aborting.push(who.clone());
 				}
 			}
-			for (who, _) in self.handshaking_peers.iter().filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC) {
+			for (who, _) in self.handshaking_peers.iter()
+				.filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC) {
 				trace!(target: "sync", "Handshake timeout {}", who);
 				aborting.push(who.clone());
 			}
@@ -663,7 +670,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.unwrap_or(0);
 				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-					self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE));
+					self.network_chan.send(
+						NetworkMsg::ReportPeer(who.clone(), PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE)
+					);
 					self.network_chan.send(NetworkMsg::DisconnectPeer(who));
 					return;
 				}
@@ -871,7 +880,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteCallRequest<B::Hash>,
 	) {
-		trace!(target: "sync", "Remote call request {} from {} ({} at {})", request.id, who, request.method, request.block);
+		trace!(target: "sync", "Remote call request {} from {} ({} at {})",
+			request.id, who, request.method, request.block);
 		let proof = match self.context_data.chain.execution_proof(
 			&request.block,
 			&request.method,
@@ -1038,7 +1048,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id, who, request.key.to_hex::<String>(), request.first, request.last);
 		let key = StorageKey(request.key);
-		let proof = match self.context_data.chain.key_changes_proof(request.first, request.last, request.min, request.max, &key) {
+		let proof = match self.context_data.chain.key_changes_proof(
+			request.first,
+			request.last,
+			request.min,
+			request.max,
+			&key
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
