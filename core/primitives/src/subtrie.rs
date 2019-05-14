@@ -61,16 +61,37 @@ pub struct SubTrieNode {
 	pub keyspace: KeySpace,
 	/// subtrie current root hash
 	#[cfg_attr(feature = "std", serde(with="bytes"))]
-	root: Vec<u8>,
+	pub root: Vec<u8>,
 }
-
+impl SubTrieNode {
+	/// node ref of subtrie
+	pub fn node_ref(&self) -> SubTrieNodeRef {
+		SubTrieNodeRef::new(&self.keyspace, &self.root[..])
+	}
+}
+impl<'a> From<SubTrieNodeRef<'a>> for SubTrieNode {
+	fn from(s: SubTrieNodeRef<'a>) -> Self {
+		SubTrieNode {
+			keyspace: s.keyspace.clone(),
+			root: s.root.to_vec(),
+		}
+	}
+}
 /// `SubTrieNode` using reference for encoding without copy
-#[derive(Encode)]
-struct SubTrieNodeRef<'a> {
+#[derive(Encode, Clone)]
+pub struct SubTrieNodeRef<'a> {
+	/// subtrie unique keyspace
 	pub keyspace: &'a KeySpace,
+	/// subtrie root hash
 	pub root: &'a [u8],
 }
 
+impl<'a> SubTrieNodeRef<'a> {
+	/// create a SubTrieNodeRef
+	pub fn new(keyspace: &'a KeySpace, root: &'a[u8]) -> Self {
+		SubTrieNodeRef {keyspace, root}
+	}
+}
 
 /// child trie infos
 #[derive(PartialEq, Eq, Clone)]
@@ -81,6 +102,8 @@ pub struct SubTrie {
 	/// subtrie path: at this point it is only address of subtrie in root
 	/// (only one level of subtrie)
 	parent: ParentTrie,
+	/// extension: for subtrie containing additional data
+	extension: Vec<u8>,
 }
 impl SubTrie {
 	/// map parent key to some isolated space
@@ -98,24 +121,26 @@ impl SubTrie {
 				root: Default::default(),
 			},
 			parent,
+			extension: Default::default(),
 		}
+	}
+	/// node ref of subtrie
+	pub fn node_ref(&self) -> SubTrieNodeRef {
+		self.node.node_ref()
 	}
 	/// instantiate subtrie from a read node value
 	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
-		parity_codec::Decode::decode(&mut &encoded_node[..]).map(|node| {
-			let parent = Self::prefix_parent_key(parent);
-			SubTrie {
-				node,
-				parent,
-			}
-		})
+		let parent = Self::prefix_parent_key(parent);
+		Self::decode_node_prefixed_parent(encoded_node, parent)
 	}
 	/// instantiate subtrie from a read node value, parent node is prefixed
 	pub fn decode_node_prefixed_parent(encoded_node: &[u8], parent: Vec<u8>) -> Option<Self> {
-		parity_codec::Decode::decode(&mut &encoded_node[..]).map(|node|
+		let input = &mut &encoded_node[..];
+		parity_codec::Decode::decode(input).map(|node|
 			SubTrie {
 				node,
 				parent,
+				extension: (*input).to_vec(),
 		})
 	}
 	/// encoded parent trie node content
@@ -140,9 +165,15 @@ impl SubTrie {
 	}
 	/// encdode with an updated root
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
-		parity_codec::Encode::encode(&SubTrieNodeRef{
-			keyspace: &self.node.keyspace,
-			root: new_root,
-		})
+		parity_codec::Encode::encode(&SubTrieNodeRef::new(
+			&self.node.keyspace,
+			new_root,
+		))
+	}
+}
+
+impl AsRef<SubTrie> for SubTrie {
+	fn as_ref(&self) -> &SubTrie {
+		self
 	}
 }

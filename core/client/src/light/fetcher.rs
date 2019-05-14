@@ -22,11 +22,12 @@ use std::marker::PhantomData;
 use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher};
-use heapsize::HeapSizeOf;
 use primitives::{ChangesTrieConfiguration, convert_hash};
+use primitives::subtrie::SubTrieNode;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
-	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
+	TrieBackend, read_proof_check, key_changes_proof_check,
+	create_proof_check_backend_storage, read_child_proof_check};
 
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -67,6 +68,21 @@ pub struct RemoteReadRequest<Header: HeaderT> {
 	/// Header of block at which read is performed.
 	pub header: Header,
 	/// Storage key to read.
+	pub key: Vec<u8>,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
+}
+
+/// Remote storage read child request.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteReadChildRequest<Header: HeaderT> {
+	/// Read at state of given block.
+	pub block: Header::Hash,
+	/// Header of block at which read is performed.
+	pub header: Header,
+	/// Child trie
+	pub child_trie: SubTrieNode,
+	/// Child storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
 	pub retry_count: Option<usize>,
@@ -124,7 +140,15 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
 	/// Fetch remote storage value.
-	fn remote_read(&self, request: RemoteReadRequest<Block::Header>) -> Self::RemoteReadResult;
+	fn remote_read(
+		&self,
+		request: RemoteReadRequest<Block::Header>
+	) -> Self::RemoteReadResult;
+	/// Fetch remote storage child value.
+	fn remote_read_child(
+		&self,
+		request: RemoteReadChildRequest<Block::Header>
+	) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
 	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
@@ -148,6 +172,12 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	fn check_read_proof(
 		&self,
 		request: &RemoteReadRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Option<Vec<u8>>>;
+	/// Check remote storage read proof.
+	fn check_read_child_proof(
+		&self,
+		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>>;
 	/// Check remote method execution proof.
@@ -188,7 +218,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
-			H::Out: Ord + HeapSizeOf,
+			H::Out: Ord,
 	{
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
@@ -259,7 +289,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	) -> ClientResult<()>
 		where
 			H: Hasher,
-			H::Out: Ord + HeapSizeOf,
+			H::Out: Ord,
 	{
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);
@@ -309,7 +339,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord + HeapSizeOf,
+		H::Out: Ord,
 		S: BlockchainStorage<Block>,
 		F: Send + Sync,
 {
@@ -337,6 +367,18 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 	) -> ClientResult<Option<Vec<u8>>> {
 		read_proof_check::<H>(convert_hash(request.header.state_root()), remote_proof, &request.key)
 			.map_err(Into::into)
+	}
+
+	fn check_read_child_proof(
+		&self,
+		request: &RemoteReadChildRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Option<Vec<u8>>> {
+		read_child_proof_check::<H>(
+			remote_proof,
+			request.child_trie.node_ref(),
+			&request.key[..]
+		).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -423,6 +465,10 @@ pub mod tests {
 		}
 
 		fn remote_read(&self, _request: RemoteReadRequest<Header>) -> Self::RemoteReadResult {
+			err("Not implemented on test node".into())
+		}
+
+		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
 			err("Not implemented on test node".into())
 		}
 

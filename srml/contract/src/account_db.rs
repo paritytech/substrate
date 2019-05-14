@@ -25,7 +25,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use runtime_primitives::traits::Zero;
+use runtime_primitives::traits::{Bounded, Zero};
 use substrate_primitives::subtrie::SubTrie;
 use srml_support::traits::{Currency, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
@@ -80,7 +80,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		// TODO pass optional SubTrie or change def to use subtrie (put the subtrie in cache (rc one of
 		// the overlays)) EMCH TODO create an issue for a following pr
 		trie_id.and_then(|id|child::get_child_trie(&id).and_then(|subtrie|
-			child::get_raw(&subtrie, &blake2_256(location))
+			child::get_raw(subtrie.node_ref(), &blake2_256(location))
 		))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
@@ -128,7 +128,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						storage_size: <Module<T>>::storage_size_offset(),
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 						deduct_block: <system::Module<T>>::block_number(),
-						rent_allowance: <BalanceOf<T>>::zero(),
+						rent_allowance: <BalanceOf<T>>::max_value(),
 					}
 				} else {
 					// No contract exist and no code_hash provided
@@ -152,7 +152,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				});
 
 				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get_raw(&subtrie, &blake2_256(&k)) {
+					if let Some(value) = child::get_raw(subtrie.node_ref(), &blake2_256(&k)) {
 						new_info.storage_size -= value.len() as u64;
 					}
 					if let Some(value) = v {
@@ -226,7 +226,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		let contract = local.entry(account.clone()).or_insert_with(|| Default::default());
 
 		contract.code_hash = Some(code_hash);
-		contract.rent_allowance = Some(<BalanceOf<T>>::zero());
+		contract.rent_allowance = Some(<BalanceOf<T>>::max_value());
 
 		Ok(())
 	}

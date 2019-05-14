@@ -325,7 +325,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
+		pub fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
 			}
@@ -338,7 +338,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
-		fn put_code(
+		pub fn put_code(
 			origin,
 			#[compact] gas_limit: T::Gas,
 			code: Vec<u8>
@@ -365,7 +365,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		fn call(
+		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
@@ -421,7 +421,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		fn create(
+		pub fn create(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: T::Gas,
@@ -476,7 +476,7 @@ decl_module! {
 				Some(system::RawOrigin::Signed(ref account)) if aux_sender.is_none() => {
 					(true, account)
 				},
-				Some(system::RawOrigin::Inherent) if aux_sender.is_some() => {
+				Some(system::RawOrigin::None) if aux_sender.is_some() => {
 					(false, aux_sender.as_ref().expect("checked above"))
 				},
 				_ => return Err("Invalid surcharge claim: origin must be signed or \
@@ -549,10 +549,10 @@ decl_storage! {
 		/// The amount of funds a contract should deposit in order to offset
 		/// the cost of one byte.
 		///
-		/// Let's suppose the deposit is 1,000 EDG/byte and the rent is 1 EDG/byte/day, then a contract
-		/// with 1,000,000 EDG that uses 1,000 bytes of storage would pay no rent.
-		/// But if the balance reduced to 500,000 EDG and the storage stayed the same at 1,000,
-		/// then it would pay 500 EDG/day.
+		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
+		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
+		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
+		/// then it would pay 500 BU/day.
 		RentDepositOffset get(rent_deposit_offset) config(): BalanceOf<T>;
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.

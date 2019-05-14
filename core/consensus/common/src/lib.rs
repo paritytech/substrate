@@ -40,6 +40,7 @@ pub use inherents::InherentData;
 pub mod offline_tracker;
 pub mod error;
 mod block_import;
+mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
 
@@ -48,8 +49,10 @@ const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::{Error, ErrorKind};
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult, JustificationImport,
+	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult,
+	JustificationImport, FinalityProofImport, FinalityProofRequestBuilder,
 };
+pub use select_chain::SelectChain;
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
@@ -116,6 +119,20 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 	fn is_offline(&self) -> bool {
 		T::is_offline(&*self)
 	}
+}
+
+/// Extra verification for blocks.
+pub trait ExtraVerification<B: Block>: Send + Sync {
+	/// Future that resolves when the block is verified, or fails with error if
+	/// not.
+	type Verified: IntoFuture<Item=(),Error=String>;
+
+	/// Do additional verification for this block.
+	fn verify(
+		&self,
+		header: &B::Header,
+		body: Option<&[B::Extrinsic]>,
+	) -> Self::Verified;
 }
 
 /// A list of all well known keys in the cache.

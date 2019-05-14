@@ -21,7 +21,7 @@
 
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
-	ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
+	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, TrieIdGenerator,
 };
 use assert_matches::assert_matches;
@@ -364,28 +364,34 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(BOB, 100)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4]))
+					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4])),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
 				}
 			]);
 
@@ -435,10 +441,12 @@ fn dispatch_call() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					topics: vec![],
 				},
 			]);
 
@@ -462,24 +470,29 @@ fn dispatch_call() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(BOB, 100)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
 				},
 
 				// Dispatching the call.
@@ -487,19 +500,22 @@ fn dispatch_call() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(CHARLIE, 50)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
-					)
+					),
+					topics: vec![],
 				},
 
 				// Event emited as a result of dispatch.
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
+					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true)),
+					topics: vec![],
 				}
 			]);
 		},
@@ -615,7 +631,6 @@ const CODE_SET_RENT: &str = r#"
 "#;
 const HASH_SET_RENT: [u8; 32] = hex!("a51c2a6f3f68936d4ae9abdb93b28eedcbd0f6f39770e168f9025f0c1e7094ef");
 
-
 /// Input data for each call in set_rent code
 mod call {
 	pub fn set_storage_4_byte() -> Vec<u8> { vec![] }
@@ -646,10 +661,12 @@ fn set_rent_hash_and_code() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+					topics: vec![],
 				},
 			]);
 		}
@@ -720,7 +737,31 @@ fn deduct_blocks() {
 				* 4; // blocks to rent
 			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent);
+			assert_eq!(bob_contract.deduct_block, 5);
 			assert_eq!(Balances::free_balance(BOB), 30_000 - rent);
+
+			// Advance 7 blocks more
+			System::initialize(&12, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Check result
+			let rent_2 = (8 + 4 - 2) // storage size = size_offset + deploy_set_storage - deposit_offset
+				* 4 // rent byte price
+				* 7; // blocks to rent
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
+			assert_eq!(bob_contract.deduct_block, 12);
+			assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
+
+			// Second call on same block should have no effect on rent
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
+			assert_eq!(bob_contract.deduct_block, 12);
+			assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
 		}
 	);
 }
@@ -732,7 +773,7 @@ fn call_contract_removals() {
 
 #[test]
 fn inherent_claim_surcharge_contract_removals() {
-	removals(|| Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok());
+	removals(|| Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok());
 }
 
 #[test]
@@ -743,10 +784,10 @@ fn signed_claim_surcharge_contract_removals() {
 #[test]
 fn claim_surcharge_malus() {
 	// Test surcharge malus for inherent
-	claim_surcharge(4, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(3, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(2, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(1, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), false);
+	claim_surcharge(4, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(3, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(2, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(1, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), false);
 
 	// Test surcharge malus for signed
 	claim_surcharge(4, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);
@@ -898,6 +939,92 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Trigger rent must have no effect
 			assert!(trigger_call());
 			assert!(super::ContractInfoOf::<Test>::get(BOB).is_none());
+		}
+	);
+}
+
+const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
+(module
+	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call"))
+
+	(func (export "deploy")
+		;; fill the scratch buffer with the rent allowance.
+		(call $ext_rent_allowance)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to <BalanceOf<T>>::max_value().
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 0xFFFFFFFFFFFFFFFF)
+			)
+		)
+	)
+)
+"#;
+const HASH_CHECK_DEFAULT_RENT_ALLOWANCE: [u8; 32] = hex!("4f9ec2b94eea522cfff10b77ef4056c631045c00978a457d283950521ecf07b6");
+
+#[test]
+fn default_rent_allowance_on_create() {
+	let wasm = wabt::wat2wasm(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				30_000,
+				100_000,
+				HASH_CHECK_DEFAULT_RENT_ALLOWANCE.into(),
+				vec![],
+			));
+
+			// Check creation
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+
+			// Advance blocks
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
+
+			// Trigger rent through call
+			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+
+			// Check contract is still alive
+			let bob_contract = super::ContractInfoOf::<Test>::get(BOB).unwrap().get_alive();
+			assert!(bob_contract.is_some())
 		}
 	);
 }

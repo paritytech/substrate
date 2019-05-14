@@ -24,17 +24,17 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root, KeySpacedDBMut};
-use heapsize::HeapSizeOf;
-use primitives::subtrie::{KeySpace, SubTrie};
+use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,
+	KeySpacedDBMut};
+use primitives::subtrie::{KeySpace, SubTrie, SubTrieNodeRef};
 
-// TODO EMCH would switch to BTreeMap make sense, also if keeping option<keyspace>, a top
-// field/childs would be more appropriate
+// TODO EMCH Option<KeySpace> is bad for ref : TODO keyspace size 0 for root
 /// type alias over a in memory transaction storring struct
 pub type MapTransaction = HashMap<Option<KeySpace>, (HashMap<Vec<u8>, Vec<u8>>, Option<SubTrie>)>;
-// TODO EMCH repeated Subtrie as field take to much memory : TODO switch to rc or cow
-/// type alias over a list of in memory changes
+
+/// type alias over a list of in memory changes TODO EMCH highly redundant SubTrie to remove
 pub type VecTransaction = Vec<(Option<SubTrie>, Vec<u8>, Option<Vec<u8>>)>;
+
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -66,7 +66,7 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
-	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -74,12 +74,12 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// true if a key exists in child storage.
-	fn exists_child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Result<bool, Self::Error> {
+	fn exists_child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.child_storage(subtrie, key)?.is_some())
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: &SubTrie, f: F);
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F);
 
 	/// Retrieve all entries keys of which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -92,15 +92,6 @@ pub trait Backend<H: Hasher> {
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
-
-	/// Calculate the storage root, with given delta over what is already stored in
-	/// the backend, and produce a "transaction" that can be used to commit.
-	/// Does include child storage updates.
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord;
-
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
@@ -118,6 +109,45 @@ pub trait Backend<H: Hasher> {
 
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
+
+	/// Calculate the storage root, with given delta over what is already stored
+	/// in the backend, and produce a "transaction" that can be used to commit.
+	/// Does include child storage updates.
+	fn full_storage_root<I1, I2i, I2, TR>(
+		&self,
+		delta: I1,
+		child_deltas: I2)
+	-> (H::Out, Self::Transaction)
+	where
+		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		TR: AsRef<SubTrie>,
+		I2: IntoIterator<Item=(TR, I2i)>,
+		<H as Hasher>::Out: Ord,
+	{
+		let mut txs: Self::Transaction = Default::default();
+		let mut child_roots: Vec<_> = Default::default();
+		// child first
+		for (subtrie, child_delta) in child_deltas {
+			let (child_root, empty, child_txs) =
+				self.child_storage_root(subtrie.as_ref(), child_delta);
+			txs.consolidate(child_txs);
+			if empty {
+				child_roots.push((subtrie.as_ref().parent_prefixed_key().to_vec(), None));
+			} else {
+				child_roots.push(
+					(subtrie.as_ref().parent_prefixed_key().to_vec(),
+					Some(subtrie.as_ref().encoded_with_root(&child_root[..])))
+				);
+			}
+		}
+		let (root, parent_txs) = self.storage_root(
+			delta.into_iter().chain(child_roots.into_iter())
+		);
+		txs.consolidate(parent_txs);
+		(root, txs)
+	}
+
 }
 
 /// Trait that allows consolidate two transactions together.
@@ -132,7 +162,7 @@ impl Consolidate for () {
 	}
 }
 
-impl Consolidate for Vec<(Option<SubTrie>, Vec<u8>, Option<Vec<u8>>)> {
+impl Consolidate for VecTransaction {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
 	}
@@ -191,7 +221,7 @@ impl<H> PartialEq for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		// costy clone
@@ -254,7 +284,15 @@ impl<H> From<VecTransaction> for InMemory<H> {
 
 impl super::Error for Void {}
 
-impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
+#[cfg(test)]
+impl<H: Hasher> InMemory<H> {
+	/// child subtrie iterator
+	pub fn child_storage_subtrie(&self) -> impl Iterator<Item=&SubTrie> {
+		self.inner.iter().filter_map(|item| (item.1).1.as_ref())
+	}
+}
+
+impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = VecTransaction;
 	type TrieBackendStorage = MemoryDB<H>;
@@ -263,8 +301,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		Ok(self.inner.get(&None).and_then(|map| map.0.get(key).map(Clone::clone)))
 	}
 
-	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.get(&Some(subtrie.keyspace().to_vec())).and_then(|map| map.0.get(key).map(Clone::clone)))
+	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		Ok(self.inner.get(&Some(subtrie.keyspace.to_vec())).and_then(|map| map.0.get(key).map(Clone::clone)))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -275,41 +313,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.get(&None).map(|map| map.0.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: &SubTrie, mut f: F) {
-		self.inner.get(&Some(subtrie.keyspace().clone())).map(|map| map.0.keys().for_each(|k| f(&k)));
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, mut f: F) {
+		self.inner.get(&Some(subtrie.keyspace.clone())).map(|map| map.0.keys().for_each(|k| f(&k)));
 	}
-
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		<H as Hasher>::Out: Ord,
-	{
-		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-		let transaction: Vec<_> = delta.into_iter().collect();
-		let mut map_input = existing_pairs.chain(transaction.iter().cloned())
-			.collect::<HashMap<_, _>>();
-
-		// first add child root to delta
-		for (keyspace, (_existing_pairs, subtrie)) in self.inner.iter() {
-			if keyspace != &None {
-				subtrie.as_ref().map(|s|{
-					let child_root = self.child_storage_root(s, ::std::iter::empty()).0;
-					map_input.insert(s.parent_prefixed_key().clone(), Some(s.encoded_with_root(child_root.as_ref())));
-				});
-			}
-		}
-
-
-		let root = trie_root::<H, _, _, _>(map_input
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
-		);
-
-		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
-
-		(root, full_transaction)
-	}
-
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
@@ -330,7 +336,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 
 		(root, full_transaction)
 	}
-
 
 	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
@@ -363,44 +368,55 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.get(&None).into_iter().flat_map(|map| map.0.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn try_into_trie_backend(
+		self
+	)-> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
-		for (keyspace, (map, subtrie)) in self.inner {
-			if keyspace != None {
-				let child_root = insert_into_memory_db::<H, _>(&mut mdb, map.into_iter(), &subtrie)?;
-				if let Some(subtrie) = subtrie {
-					new_child_roots.push((subtrie.parent_prefixed_key().clone(), subtrie.encoded_with_root(child_root.as_ref())));
-				} else { unreachable!("if some keyspace we have/need subtrie") };
+		for (_o_keyspace, (map, o_subtrie)) in self.inner {
+			if o_subtrie.is_some() {
+				let ch = insert_into_memory_db::<H, _>(
+					&mut mdb, map.into_iter(),
+					o_subtrie.as_ref().map(|s|s.node_ref())
+				)?;
+				new_child_roots.push(
+					o_subtrie.as_ref().map(|s|(
+						s.parent_prefixed_key().to_vec(),
+						s.encoded_with_root(ch.as_ref()))
+					).expect("is_some previously checked;qed"),
+				);
 			} else {
-				root_map = Some((map, subtrie));
+				root_map = Some(map);
 			}
 		}
 		// root handling
-		if let Some((map, subtrie)) = root_map.take() {
-			root = Some(insert_into_memory_db::<H, _>(&mut mdb, map.into_iter().chain(new_child_roots.into_iter()), &subtrie)?);
+		if let Some(map) = root_map.take() {
+			root = Some(insert_into_memory_db::<H, _>(
+				&mut mdb,
+				map.into_iter().chain(new_child_roots.into_iter()),
+				None
+			)?);
 		}
 		let root = match root {
 			Some(root) => root,
-			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty(), &None)?,
+			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty(), None)?,
 		};
 		Some(TrieBackend::new(mdb, root))
 	}
 }
 
 /// Insert input pairs into memory db.
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I, subtrie: &Option<SubTrie>) -> Option<H::Out>
+pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I, subtrie: Option<SubTrieNodeRef>) -> Option<H::Out>
 	where
 		H: Hasher,
-		H::Out: HeapSizeOf,
 		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
 {
 	let mut root = <H as Hasher>::Out::default();
 	{
 		if let Some(subtrie) = subtrie.as_ref() {
-			let mut mdb = KeySpacedDBMut::new(&mut *mdb, subtrie.keyspace());
+			let mut mdb = KeySpacedDBMut::new(&mut *mdb, subtrie.keyspace);
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input {
 				if let Err(e) = trie.insert(&key, &value) {

@@ -24,9 +24,10 @@ use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use primitives::subtrie::SubTrie;
+use primitives::subtrie::SubTrieNodeRef;
 use state_machine::{Backend as StateBackend, TrieBackend};
 use state_machine::backend::{InMemory as InMemoryState, MapTransaction};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -35,7 +36,6 @@ use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use heapsize::HeapSizeOf;
 use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
@@ -110,7 +110,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
@@ -224,7 +224,7 @@ where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.genesis_state.read().is_some()
@@ -240,7 +240,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
 
@@ -345,7 +345,7 @@ where
 			.into_future().wait()
 	}
 
-	fn child_storage(&self, _subtrie: &SubTrie, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(&self, _subtrie: SubTrieNodeRef, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
@@ -353,18 +353,11 @@ where
 		// whole state is not available on light node
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _subtrie: &SubTrie, _action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _subtrie: SubTrieNodeRef, _action: A) {
 		// whole state is not available on light node
 	}
 
 	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		(H::Out::default(), ())
-	}
-
-	fn full_storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -399,7 +392,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -414,7 +407,7 @@ where
 		}
 	}
 
-	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::child_storage(state, subtrie, key),
@@ -431,7 +424,7 @@ where
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, subtrie: &SubTrie, action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, action: A) {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::for_keys_in_child_storage(state, subtrie, action),
@@ -452,21 +445,6 @@ where
 			},
 		}
 	}
-
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::full_storage_root(state, delta),
-			OnDemandOrGenesisState::Genesis(ref state) => {
-				let (root, _) = state.full_storage_root(delta);
-				(root, ())
-			},
-		}
-	}
-
 
 	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where

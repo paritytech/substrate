@@ -267,8 +267,8 @@ impl ::rstd::ops::Deref for PerU128 {
 	type Target = u128;
 
 	fn deref(&self) -> &u128 {
-        &self.0
-    }
+		&self.0
+	}
 }
 
 impl codec::CompactAs for PerU128 {

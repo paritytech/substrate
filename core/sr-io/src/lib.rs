@@ -22,7 +22,6 @@
 #![cfg_attr(not(feature = "std"), feature(lang_items))]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #![cfg_attr(feature = "std", doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
@@ -34,7 +33,7 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
-pub use primitives::subtrie::SubTrie;
+pub use primitives::subtrie::{SubTrie, SubTrieNodeRef};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -95,7 +94,7 @@ export_api! {
 		fn storage(key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
-		fn child_storage(subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>>;
+		fn child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
@@ -113,7 +112,7 @@ export_api! {
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
 		/// number of bytes is not equal to the number of bytes written to the `value_out`.
-		fn read_child_storage(subtrie: &SubTrie, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
+		fn read_child_storage(subtrie: SubTrieNodeRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
 		/// Set the storage of some particular key to Some value.
 		fn set_storage(key: &[u8], value: &[u8]);
@@ -134,7 +133,7 @@ export_api! {
 		fn exists_storage(key: &[u8]) -> bool;
 
 		/// Check whether a given `key` exists in storage.
-		fn exists_child_storage(subtrie: &SubTrie, key: &[u8]) -> bool;
+		fn exists_child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> bool;
 
 		/// Clear the storage entries with a key that starts with the given prefix.
 		fn clear_prefix(prefix: &[u8]);

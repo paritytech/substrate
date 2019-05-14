@@ -24,10 +24,9 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate, VecTransaction};
+use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
@@ -446,7 +445,7 @@ where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
 
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type State = InMemory<H>;
 
@@ -483,22 +482,17 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
-		let mut transaction: VecTransaction = Default::default();
+		let child_delta = children.into_iter()
+			.map(|(_keyspace, (child_overlay, subtrie))|
+				(subtrie, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
-		for (keyspace, (child_map, subtrie)) in children {
-			let (root, is_default, update) = self.old_state.child_storage_root(&subtrie, child_map.into_iter().map(|(k, v)| (k, Some(v))));
-			transaction.consolidate(update);
-
-			if !is_default {
-				top.insert(keyspace, root);
-			}
-		}
-
-		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
-		transaction.consolidate(update);
+		let (root, transaction) = self.old_state.full_storage_root(
+			top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta
+		);
 
 		self.new_state = Some(InMemory::from(transaction));
 		Ok(root)
@@ -532,7 +526,7 @@ pub struct Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: ChangesTrieStorage<H>,
@@ -543,7 +537,7 @@ impl<Block, H> Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend<Block, H> {
@@ -559,7 +553,7 @@ impl<Block, H> backend::AuxStore for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn insert_aux<
 		'a,
@@ -580,7 +574,7 @@ impl<Block, H> backend::Backend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
@@ -682,14 +676,14 @@ impl<Block, H> backend::LocalBackend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {}
 
 impl<Block, H> backend::RemoteBackend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.blockchain.expect_block_number_from_id(block)
@@ -699,20 +693,20 @@ where
 }
 
 /// Prunable in-memory changes trie storage.
-pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>) where H::Out: HeapSizeOf;
-impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>);
+impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> {
 	fn oldest_changes_trie_block(&self, _config: &ChangesTrieConfiguration, _best_finalized: u64) -> u64 {
 		0
 	}
 }
 
-impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> {
 	fn root(&self, anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
 		self.0.root(anchor, block)
 	}
 }
 
-impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}

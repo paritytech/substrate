@@ -18,18 +18,17 @@
 
 use log::{warn, debug};
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
-use primitives::subtrie::SubTrie;
+use primitives::subtrie::{SubTrie, SubTrieNodeRef};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
@@ -61,7 +60,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSi
 impl super::Error for String {}
 
 impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
@@ -71,7 +70,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.storage(key)
 	}
 
-	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.essence.child_storage(subtrie, key)
 	}
 
@@ -79,7 +78,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: &SubTrie, f: F) {
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F) {
 		self.essence.for_keys_in_child_storage(subtrie, f)
 	}
 
@@ -148,12 +147,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn full_storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		self.storage_root(delta)
-	}
-
 	fn child_storage_root<I>(&self, subtrie: &SubTrie, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -170,7 +163,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<H, _, _, _, _>(subtrie, &mut eph, delta) {
+			match child_delta_trie_root::<H, _, _, _, _>(subtrie.node_ref(), &mut eph, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -199,15 +192,15 @@ pub mod tests {
 		let subtrie1 = SubTrie::new(b"sub1".to_vec(), &b"unique1"[..]);
 		let mut sub_root = H256::default();
 		{
-      let mut kmdb = KeySpacedDBMut::new(&mut mdb, subtrie1.keyspace());
+			let mut kmdb = KeySpacedDBMut::new(&mut mdb, subtrie1.keyspace());
 			let mut trie = TrieDBMut::new(&mut kmdb, &mut sub_root);
-      trie.insert(b"value3", &[142]).expect("insert failed");
-      trie.insert(b"value4", &[124]).expect("insert failed");
-    }
-    {
-      let enc_sub_root = subtrie1.encoded_with_root(&sub_root[..]);
-      let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-      trie.insert(&SubTrie::prefix_parent_key(b"sub1")[..], &enc_sub_root).expect("insert failed");
+			trie.insert(b"value3", &[142]).expect("insert failed");
+			trie.insert(b"value4", &[124]).expect("insert failed");
+		}
+		{
+			let enc_sub_root = subtrie1.encoded_with_root(&sub_root[..]);
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(&SubTrie::prefix_parent_key(b"sub1")[..], &enc_sub_root).expect("insert failed");
 
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");

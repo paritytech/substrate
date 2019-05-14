@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use primitives::subtrie::{KeySpace, SubTrie};
+use primitives::subtrie::{KeySpace, SubTrie, SubTrieNodeRef};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -116,14 +116,14 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(map) = self.prospective.children.get(subtrie.keyspace()) {
+	pub fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Option<&[u8]>> {
+		if let Some(map) = self.prospective.children.get(subtrie.keyspace) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));
 			}
 		}
 
-		if let Some(map) = self.committed.children.get(subtrie.keyspace()) {
+		if let Some(map) = self.committed.children.get(subtrie.keyspace) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));
 			}
@@ -158,25 +158,6 @@ impl OverlayedChanges {
 		if let Some(extrinsic) = extrinsic_index {
 			map_entry.0.get_or_insert_with(Default::default)
 				.insert(extrinsic);
-		}
-	}
-
-	/// Sync the child storage root.
-	pub(crate) fn sync_child_storage_root(&mut self, subtrie: &SubTrie, root: Option<Vec<u8>>) {
-		let entry = self.prospective.top.entry(subtrie.parent_prefixed_key().clone()).or_default();
-		if let Some(new_root) = root {
-			if &new_root != subtrie.root_initial_value() {
-				entry.value = Some(subtrie.encoded_with_root(&new_root));
-			}
-		} else {
-			entry.value = None;
-		}
-
-		if let Some((Some(extrinsics), _, _)) = self.prospective.children.get(subtrie.keyspace()) {
-			for extrinsic in extrinsics {
-				entry.extrinsics.get_or_insert_with(Default::default)
-					.insert(*extrinsic);
-			}
 		}
 	}
 

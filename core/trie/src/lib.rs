@@ -17,14 +17,13 @@
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 mod error;
 mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use substrate_primitives::subtrie::{SubTrie, KeySpace, keyspace_as_prefix_alloc};
+use substrate_primitives::subtrie::{SubTrieNodeRef, KeySpace, keyspace_as_prefix_alloc};
 use rstd::boxed::Box;
 use rstd::vec::Vec;
 use hash_db::Hasher;
@@ -173,7 +172,7 @@ pub fn child_trie_root<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
-	subtrie: &SubTrie,
+	subtrie: SubTrieNodeRef,
 	db: &mut DB,
 	delta: I
 ) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
@@ -182,10 +181,10 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let mut root = subtrie_root_as_hash::<H>(subtrie);
+	let mut root = subtrie_root_as_hash::<H,_>(subtrie.root);
 
 	{
-		let mut db = KeySpacedDBMut::new(&mut *db, subtrie.keyspace());
+		let mut db = KeySpacedDBMut::new(&mut *db, subtrie.keyspace);
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
@@ -201,14 +200,14 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
-	subtrie: &SubTrie,
+	subtrie: SubTrieNodeRef,
 	db: &DB,
 	mut f: F
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let root = subtrie_root_as_hash::<H>(subtrie);
-	let db = KeySpacedDB::new(&*db, subtrie.keyspace());
+	let root = subtrie_root_as_hash::<H,_>(subtrie.root);
+	let db = KeySpacedDB::new(&*db, subtrie.keyspace);
 
 	let trie = TrieDB::<H>::new(&db, &root)?;
 	let iter = trie.iter()?;
@@ -246,28 +245,28 @@ pub fn record_all_keys<H: Hasher, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<H: Hasher, DB>(
-	subtrie: &SubTrie,
+	subtrie: SubTrieNodeRef,
 	db: &DB,
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let root = subtrie_root_as_hash::<H>(subtrie);
-	let db = KeySpacedDB::new(&*db, subtrie.keyspace());
+	let root = subtrie_root_as_hash::<H,_>(subtrie.root);
+	let db = KeySpacedDB::new(&*db, subtrie.keyspace);
 	Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
-	subtrie: &SubTrie,
+	subtrie: SubTrieNodeRef,
 	db: &DB,
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let root = subtrie_root_as_hash::<H>(subtrie);
-	let db = KeySpacedDB::new(&*db, subtrie.keyspace());
+	let root = subtrie_root_as_hash::<H,_>(subtrie.root);
+	let db = KeySpacedDB::new(&*db, subtrie.keyspace);
 	Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
@@ -287,11 +286,11 @@ const EXTENSION_NODE_THRESHOLD: u8 = EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET;
 const LEAF_NODE_SMALL_MAX: u8 = LEAF_NODE_BIG - 1;
 const EXTENSION_NODE_SMALL_MAX: u8 = EXTENSION_NODE_BIG - 1;
 
-pub fn subtrie_root_as_hash<H: Hasher> (subtrie: &SubTrie) -> H::Out {
-	let mut root = H::Out::default();
-	let max = rstd::cmp::min(root.as_ref().len(), subtrie.root_initial_value().len());
-	root.as_mut()[..max].copy_from_slice(&subtrie.root_initial_value()[..max]);
-	root
+pub fn subtrie_root_as_hash<H: Hasher, R: AsRef<[u8]>> (root: R) -> H::Out {
+	let mut res = H::Out::default();
+	let max = rstd::cmp::min(res.as_ref().len(), root.as_ref().len());
+	res.as_mut()[..max].copy_from_slice(&root.as_ref()[..max]);
+	res
 }
 
 fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {

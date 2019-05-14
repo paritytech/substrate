@@ -25,13 +25,13 @@ use wasmi::{
 };
 use wasmi::RuntimeValue::{I32, I64, self};
 use wasmi::memory_units::{Pages};
-use state_machine::{Externalities, ChildStorageKey};
+use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher, subtrie::SubTrie};
+use primitives::{H256, Blake2Hasher, subtrie::{SubTrie, SubTrieNode}};
 use trie::ordered_trie_root;
 use crate::sandbox;
 use crate::allocator;
@@ -161,8 +161,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.set_storage(key, value);
 		Ok(())
 	},
-	ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+	ext_set_child_storage(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		value_data: *const u8,
+		value_len: u32) => {
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_child_storage"))?;
 		if let Some(_preimage) = this.hash_lookup.get(&key) {
@@ -221,16 +230,18 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
 		Ok(if this.ext.exists_storage(&key) { 1 } else { 0 })
 	},
-	ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32 => {
-		let storage_key = this.memory.get(
-			storage_key_data,
-			storage_key_len as usize
-		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
+	ext_exists_child_storage(
+		keyspace_data: *const u8,
+		keyspace_len: u32,
+		root_data: *const u8,
+		root_len: u32,
+		key_data: *const u8,
+		key_len: u32) -> u32 => {
+		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+		let root = this.memory.get(root_data, root_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
-		let exist = this.with_subtrie(&storage_key[..], |this, subtrie|
-			this.ext.exists_child_storage(&subtrie, &key)
-		).expect("Called from a valid SubTrie instance");
-		Ok(if exist { 1 } else { 0 })
+		let subtrie = SubTrieNode { keyspace, root };
+		Ok(if this.ext.exists_child_storage(subtrie.node_ref(), &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
@@ -282,18 +293,22 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
-	ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
-		let storage_key = this.memory.get(
-			storage_key_data,
-			storage_key_len as usize
-		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
+	ext_get_allocated_child_storage(
+		keyspace_data: *const u8,
+		keyspace_len: u32,
+		root_data: *const u8,
+		root_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		written_out: *mut u32) -> *mut u8 => {
+		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+		let root = this.memory.get(root_data, root_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
-		let maybe_value = this.with_subtrie(&storage_key[..], |this, subtrie|
-			this.ext.child_storage(&subtrie, &key)
-		).expect("Called from a valid SubTrie instance");
+		let subtrie = SubTrieNode { keyspace, root };
+		let maybe_value = this.ext.child_storage(subtrie.node_ref(), &key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
@@ -350,18 +365,25 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 	},
 	// return u32::max_value() if no value exists for the key.
-	ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
-		let storage_key = this.memory.get(
-			storage_key_data,
-			storage_key_len as usize
-		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_child_storage_into"))?;
+	ext_get_child_storage_into(
+		keyspace_data: *const u8,
+		keyspace_len: u32,
+		root_data: *const u8,
+		root_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		value_data: *mut u8,
+		value_len: u32,
+		value_offset: u32) -> u32 => {
+		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+		let root = this.memory.get(root_data, root_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(
 			key_data,
 			key_len as usize
-		).map_err(|_| UserError("Invalid attempt to get key in ext_get_child_storage_into"))?;
-		let maybe_value = this.with_subtrie(&storage_key[..], |this, subtrie|
-			this.ext.child_storage(&subtrie, &key)
-		).expect("Called from a valid SubTrie instance");
+		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
+		let subtrie = SubTrieNode { keyspace, root };
+
+		let maybe_value = this.ext.child_storage(subtrie.node_ref(), &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
 			if let Some(_preimage) = this.hash_lookup.get(&key) {

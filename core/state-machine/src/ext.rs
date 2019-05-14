@@ -18,14 +18,14 @@
 
 use std::{error, fmt, cmp::Ord};
 use log::warn;
-use crate::backend::{Backend, Consolidate};
+use crate::backend::Backend;
 use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
 use crate::{Externalities, OverlayedChanges, OffchainExt};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
 use primitives::subtrie::SubTrie;
+use primitives::subtrie::SubTrieNodeRef;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
-use heapsize::HeapSizeOf;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -93,7 +93,7 @@ where
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 	O: 'a + OffchainExt,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
@@ -136,30 +136,6 @@ where
 		self.storage_transaction = None;
 	}
 
-	/// Fetch child storage root together with its transaction.
-	fn child_storage_root_transaction(&mut self, subtrie: &SubTrie) -> (Vec<u8>, B::Transaction) {
-		self.mark_dirty();
-
-		let (root, is_default, transaction) = {
-			let delta = self.overlay.committed.children.get(subtrie.keyspace())
-				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(subtrie.keyspace())
-						.into_iter()
-						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
-
-			self.backend.child_storage_root(subtrie, delta)
-		};
-
-		let root_val = if is_default {
-			None
-		} else {
-			Some(root.clone())
-		};
-		self.overlay.sync_child_storage_root(subtrie, root_val);
-
-		(root, transaction)
-	}
 }
 
 #[cfg(test)]
@@ -191,7 +167,7 @@ where
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 	O: 'a + OffchainExt,
-	H::Out: Ord + HeapSizeOf,
+	H::Out: Ord,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
@@ -215,9 +191,9 @@ where
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.child_storage(subtrie, key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+		self.overlay.child_storage(subtrie.clone(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.child_storage(subtrie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
@@ -229,9 +205,9 @@ where
 		}
 	}
 
-	fn exists_child_storage(&self, subtrie: &SubTrie, key: &[u8]) -> bool {
+	fn exists_child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
-		match self.overlay.child_storage(subtrie, key) {
+		match self.overlay.child_storage(subtrie.clone(), key) {
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_child_storage(subtrie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		}
@@ -248,7 +224,7 @@ where
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		self.mark_dirty();
-		self.overlay.set_child_storage(&subtrie, key, value);
+		self.overlay.set_child_storage(subtrie, key, value);
 	}
 
 	fn kill_child_storage(&mut self, subtrie: &SubTrie) {
@@ -256,8 +232,7 @@ where
 
 		self.mark_dirty();
 		self.overlay.clear_child_storage(subtrie);
-		self.overlay.sync_child_storage_root(subtrie, None);
-		self.backend.for_keys_in_child_storage(subtrie, |key| {
+		self.backend.for_keys_in_child_storage(subtrie.node_ref(), |key| {
 			self.overlay.set_child_storage(subtrie, key.to_vec(), None);
 		});
 	}
@@ -286,22 +261,25 @@ where
 			return root.clone();
 		}
 
-		let mut transaction = B::Transaction::default();
+		let child_storage_tries =
+			self.overlay.prospective.children.values()
+				.chain(self.overlay.committed.children.values())
+				.map(|v|&v.2);
 
-		let child_storage_subtries: std::collections::BTreeSet<_> = self.overlay.prospective.children.values().map(|v|v.2.clone())
-			.chain(self.overlay.committed.children.values().map(|v|v.2.clone())).collect();
+		let child_delta_iter = child_storage_tries.map(|child_trie|
+			(child_trie, self.overlay.committed.children.get(child_trie.keyspace())
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(child_trie.keyspace())
+					.into_iter()
+					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
 
-		for subtrie in child_storage_subtries {
-			let (_, t) = self.child_storage_root_transaction(&subtrie);
-			transaction.consolidate(t);
-		}
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let (root, t) = self.backend.storage_root(delta);
-		transaction.consolidate(t);
+		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
 		self.storage_transaction = Some((transaction, root));
 		root
 	}
@@ -314,8 +292,21 @@ where
 				.map(|subtrie|subtrie.root_initial_value().to_vec())
 				.unwrap_or(default_child_trie_root::<H>())
 		} else {
-	  	self.child_storage_root_transaction(subtrie).0
-    }
+
+			let delta = self.overlay.committed.children.get(subtrie.keyspace())
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(subtrie.keyspace())
+						.into_iter()
+						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+
+			let root = self.backend.child_storage_root(subtrie, delta).0;
+
+			self.overlay.set_storage(subtrie.parent_prefixed_key().clone(), Some(subtrie.encoded_with_root(&root[..])));
+
+			root
+
+		}
 	}
 
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {

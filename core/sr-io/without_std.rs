@@ -20,8 +20,9 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
-use primitives::{Blake2Hasher, subtrie::SubTrie};
+use primitives::{Blake2Hasher, subtrie::{SubTrie, SubTrieNodeRef}};
 
+#[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &PanicInfo) -> ! {
@@ -43,6 +44,7 @@ pub fn panic(info: &PanicInfo) -> ! {
 	}
 }
 
+#[cfg(not(feature = "no_oom"))]
 #[alloc_error_handler]
 pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
@@ -88,7 +90,7 @@ pub mod ext {
 		/// # Returns
 		///
 		/// Returns the original implementation wrapped in [`RestoreImplementation`].
-		pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
+		pub fn replace_implementation(&'static self, new_impl: T) -> RestoreImplementation<T> {
 			if let ExchangeableFunctionState::Replaced = self.0.get().1 {
 				panic!("Trying to replace an already replaced implementation!")
 			}
@@ -259,7 +261,14 @@ pub mod ext {
 		/// See [`ext_exists_storage`] for details.
 		///
 		/// A child storage is used e.g. by a contract.
-		fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
+		fn ext_exists_child_storage(
+			keyspace_data: *const u8,
+			keyspace_len: u32,
+			root_data: *const u8,
+			root_len: u32,
+			key_data: *const u8,
+			key_len: u32
+		) -> u32;
 		/// A child storage function.
 		///
 		/// See [`ext_kill_storage`] for details.
@@ -272,8 +281,10 @@ pub mod ext {
 		///
 		/// A child storage is used e.g. by a contract.
 		fn ext_get_allocated_child_storage(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
+			keyspace_data: *const u8,
+			keyspace_len: u32,
+			root_data: *const u8,
+			root_len: u32,
 			key_data: *const u8,
 			key_len: u32,
 			written_out: *mut u32
@@ -284,8 +295,10 @@ pub mod ext {
 		///
 		/// A child storage is used e.g. by a contract.
 		fn ext_get_child_storage_into(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
+			keyspace_data: *const u8,
+			keyspace_len: u32,
+			root_data: *const u8,
+			root_len: u32,
 			key_data: *const u8,
 			key_len: u32,
 			value_data: *mut u8,
@@ -382,13 +395,14 @@ impl StorageApi for () {
 		set_storage(key, value);
 	}
 
-	fn child_storage(subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
-		let storage_key = subtrie.parent_key(); // no prefix
+	fn child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
 		unsafe {
 			let ptr = ext_get_allocated_child_storage.get()(
-				storage_key.as_ptr(),
-				storage_key.len() as u32,
+				subtrie.keyspace.as_ptr(),
+				subtrie.keyspace.len() as u32,
+				subtrie.root.as_ptr(),
+				subtrie.root.len() as u32,
 				key.as_ptr(),
 				key.len() as u32,
 				&mut length
@@ -404,11 +418,13 @@ impl StorageApi for () {
 		}
 	}
 
-	fn read_child_storage(subtrie: &SubTrie, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-		let storage_key = subtrie.parent_key(); // no prefix
+	fn read_child_storage(subtrie: SubTrieNodeRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 		unsafe {
 			match ext_get_child_storage_into.get()(
-				storage_key.as_ptr(), storage_key.len() as u32,
+				subtrie.keyspace.as_ptr(),
+				subtrie.keyspace.len() as u32,
+				subtrie.root.as_ptr(),
+				subtrie.root.len() as u32,
 				key.as_ptr(), key.len() as u32,
 				value_out.as_mut_ptr(), value_out.len() as u32,
 				value_offset as u32
@@ -465,11 +481,13 @@ impl StorageApi for () {
 		}
 	}
 
-	fn exists_child_storage(subtrie: &SubTrie, key: &[u8]) -> bool {
-		let storage_key = subtrie.parent_key(); // no prefix
+	fn exists_child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
 		unsafe {
 			ext_exists_child_storage.get()(
-				storage_key.as_ptr(), storage_key.len() as u32,
+				subtrie.keyspace.as_ptr(),
+				subtrie.keyspace.len() as u32,
+				subtrie.root.as_ptr(),
+				subtrie.root.len() as u32,
 				key.as_ptr(), key.len() as u32
 			) != 0
 		}

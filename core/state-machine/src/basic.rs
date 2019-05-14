@@ -19,10 +19,10 @@
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::trie_root;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use primitives::subtrie::SubTrie;
+use primitives::subtrie::SubTrieNodeRef;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 use log::warn;
@@ -104,7 +104,7 @@ impl From< HashMap<Vec<u8>, Vec<u8>> > for BasicExternalities {
 	}
 }
 
-impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
 			CODE => self.code.clone(),
@@ -116,7 +116,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage(&self, _subtrie: &SubTrie, _key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, _subtrie: SubTrieNodeRef, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!("basic not used for child trie");
 	}
 

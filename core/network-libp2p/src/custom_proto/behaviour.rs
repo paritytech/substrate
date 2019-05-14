@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::DiscoveryNetBehaviour;
 use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
@@ -22,7 +23,7 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::{Multiaddr, PeerId};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
-use std::{collections::hash_map::Entry, cmp, error, io, marker::PhantomData, mem, time::Duration, time::Instant};
+use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::clock::Clock;
 
@@ -182,8 +183,8 @@ pub enum CustomProtoOut<TMessage> {
 	CustomProtocolClosed {
 		/// Id of the peer we were connected to.
 		peer_id: PeerId,
-		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
-		result: io::Result<()>,
+		/// Reason why the substream closed, for debugging purposes.
+		reason: Cow<'static, str>,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -348,16 +349,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		});
 	}
 
-	/// Indicates to the peerset that we have discovered new addresses for a given node.
-	pub fn add_discovered_nodes<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
-			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
-		}));
-	}
-
 	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&self) -> serde_json::Value {
+	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.peerset.debug_info()
 	}
 
@@ -595,6 +588,15 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 }
 
+impl<TMessage, TSubstream> DiscoveryNetBehaviour for CustomProto<TMessage, TSubstream> {
+	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
+	}
+}
+
 impl<TMessage, TSubstream> NetworkBehaviour for CustomProto<TMessage, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
@@ -696,7 +698,7 @@ where
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
-						result: Ok(()),
+						reason: "Disconnected by libp2p".into(),
 					};
 
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
@@ -713,7 +715,7 @@ where
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
-						result: Ok(()),
+						reason: "Disconnected by libp2p".into(),
 					};
 
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
@@ -730,7 +732,7 @@ where
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
 					let event = CustomProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
-						result: Ok(()),
+						reason: "Disconnected by libp2p".into(),
 					};
 
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
@@ -802,8 +804,8 @@ where
 		event: CustomProtoHandlerOut<TMessage>,
 	) {
 		match event {
-			CustomProtoHandlerOut::CustomProtocolClosed { result } => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Closed({:?})", source, result);
+			CustomProtoHandlerOut::CustomProtocolClosed { reason } => {
+				debug!(target: "sub-libp2p", "Handler({:?}) => Closed: {}", source, reason);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
 					entry
@@ -814,7 +816,7 @@ where
 
 				debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
 				let event = CustomProtoOut::CustomProtocolClosed {
-					result,
+					reason,
 					peer_id: source.clone(),
 				};
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));

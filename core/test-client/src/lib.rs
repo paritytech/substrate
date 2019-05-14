@@ -29,7 +29,7 @@ pub use client::{ExecutionStrategies, blockchain, backend, self};
 pub use executor::{NativeExecutor, self};
 pub use runtime;
 pub use consensus;
-pub use keyring::{AuthorityKeyring, AccountKeyring};
+pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 
 use std::{sync::Arc, collections::HashMap};
 use futures::future::FutureResult;
@@ -299,6 +299,13 @@ impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {
 	fn remote_read(
 		&self,
 		_request: client::light::fetcher::RemoteReadRequest<Block::Header>,
+	) -> Self::RemoteReadResult {
+		unimplemented!("not (yet) used in tests")
+	}
+
+	fn remote_read_child(
+		&self,
+		_request: client::light::fetcher::RemoteReadChildRequest<Block::Header>,
 	) -> Self::RemoteReadResult {
 		unimplemented!("not (yet) used in tests")
 	}

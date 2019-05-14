@@ -1,7 +1,6 @@
 #![no_std]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
-#![feature(alloc)]
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::slice;

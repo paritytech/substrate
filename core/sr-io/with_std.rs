@@ -17,7 +17,7 @@
 // re-export hashing functions.
 pub use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher,
-	sr25519, Pair, subtrie::{SubTrie, KeySpace},
+	sr25519, Pair, subtrie::{SubTrie, SubTrieNodeRef, KeySpace},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -77,7 +77,7 @@ impl StorageApi for () {
 			.expect("storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn child_storage(subtrie: &SubTrie, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
 		ext::with(|ext| {
 			ext.child_storage(subtrie, key).map(|s| s.to_vec())
 		})
@@ -91,7 +91,7 @@ impl StorageApi for () {
 	}
 
 	fn read_child_storage(
-		subtrie: &SubTrie,
+		subtrie: SubTrieNodeRef,
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: usize,
@@ -138,7 +138,7 @@ impl StorageApi for () {
 		).unwrap_or(false)
 	}
 
-	fn exists_child_storage(subtrie: &SubTrie, key: &[u8]) -> bool {
+	fn exists_child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
 		ext::with(|ext| {
 			ext.exists_child_storage(subtrie, key)
 		}).unwrap_or(false)

@@ -1,6 +1,6 @@
 [package]
 name = "substrate-state-machine"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 edition = "2018"
@@ -8,7 +8,6 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 parking_lot = "0.7.1"
-heapsize = "0.4"
 hash-db = "0.12"
 trie-db = "0.12"
 trie-root = "0.12"
