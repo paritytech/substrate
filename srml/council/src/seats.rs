@@ -96,7 +96,8 @@ pub struct VoterActivity {
 	last_win: VoteIndex,
 }
 
-const COUNCIL_SEATS_ID: LockIdentifier = *b"councilc";
+const COUNCIL_SEATS_ID: LockIdentifier = *b"councils";
+
 const VOTER_SET_SIZE: usize = 64;
 const APPROVAL_SET_SIZE: usize = 8;
 
@@ -127,10 +128,10 @@ decl_module! {
 		/// are registered.
 		///
 		/// Locks the total balance of caller indefinitely.
-		/// [`retract_voter`] or [`reap_inactive_voter`] can unlock the balance.
+		/// Only [`retract_voter`] or [`reap_inactive_voter`] can unlock the balance.
 		///
 		/// `voter_index`argument is only used when the call is being used to re-set approvals. In this case,
-		/// the index must be valid. Otherwise, on the first call to this function, the argument will be ignored
+		/// the index must be valid, as explained in `voter_at`. Otherwise, on the first call to this function, the argument will be ignored
 		/// and can be filled with any arbitrary value.
 		///
 		/// Note that any trailing `false` votes in `votes` is ignored; In approval voting, not voting for a candidate
@@ -237,6 +238,8 @@ decl_module! {
 		///
 		/// NOTE: if `origin` has already assigned approvals via [`set_approvals`],
 		/// it will NOT have any usable funds to pass candidacy bond and must first retract.
+		/// Note that setting approvals will lock the entire balance of the voter until
+		/// retraction or being reported.
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -279,7 +282,6 @@ decl_module! {
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
-			let voters = Self::all_voters();
 			// TODO: Most likely we prefer this bond to be proportional to `|voters| * |candidates|`.
 			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(Self::voter_count() as u64);
 			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
@@ -291,6 +293,7 @@ decl_module! {
 				ensure!(p < expiring.len(), "candidate must not form a duplicated member if elected");
 			}
 
+			let voters = Self::all_voters();
 			let (registered_since, candidate_index): (VoteIndex, u32) =
 				Self::candidate_reg_info(&candidate).ok_or("presented candidate must be current")?;
 			let actual_total = voters.iter()
@@ -300,8 +303,9 @@ decl_module! {
 						let now = Self::vote_index();
 						let offset = Self::get_offset(*stake, now - last_win);
 						let weight = *stake + offset + Self::offset_pot(voter).unwrap_or_default();
-						Self::approvals_of_at(voter, candidate_index as usize)
-							.and_then(|approved| if approved { Some(weight) } else { None })
+						if Self::approvals_of_at(voter, candidate_index as usize) {
+							Some(weight)
+						} else { None }
 					},
 					_ => None,
 				})
@@ -401,7 +405,7 @@ decl_storage! {
 		pub VoteCount get(vote_index): VoteIndex;
 
 		// ---- persistent state (always relevant, changes constantly)
-		/// A list of votes for each voter. The votes are stored as numeric values and parsed in a bit-wise fashio.
+		/// A list of votes for each voter. The votes are stored as numeric values and parsed in a bit-wise manner.
 		/// Example:
 		///
 		/// ```nocomplile
@@ -423,7 +427,7 @@ decl_storage! {
 		/// Accumulated offset weight of a voter.
 		/// Has a value only when a voter is not winning and decides to change votes.
 		pub OffsetPotOf get(offset_pot): map T::AccountId => Option<BalanceOf<T>>;
-		/// The present voter list and their _locked_ balance.
+		/// The present voter list (chunked and capped at `VOTER_SET_SIZE`) and their _locked_ balance.
 		pub Voters get(voters): linked_map SetIndex => Vec<(T::AccountId, BalanceOf<T>)>;
 		/// the next free set to store a voter in.
 		pub NextVoterSet get(next_voter_set): SetIndex = 0;
@@ -559,19 +563,18 @@ impl<T: Trait> Module<T> {
 		let locked_balance = T::Currency::total_balance(&who);
 
 		if let Some(activity) = Self::voter_activity(&who) {
-			// TODO: use TryFrom for these. There are more in this module.
 			let voter_index = voter_index as usize;
 			let maybe_voter = Self::voter_at(voter_index);
 			ensure!(maybe_voter.is_some(), "invalid voter index.");
-			let (voter, stake) = maybe_voter.unwrap(); // safe unwrap() due to is_some() check.
+			let (voter, stake) = maybe_voter.expect("is_some() checked above; qed");
 			ensure!(voter == who, "wrong voter index.");
 
-			// already a voter - update pot. O(voters)
+			// already a voter and index is valid. update pot. O(1)
 			let (set_index, vec_index) = Self::split_index::<SetIndex>(voter_index, VOTER_SET_SIZE);
 			let mut set = Self::voters(set_index);
-			// update stake in local set
+			// update stake in local set.
 			set[vec_index] = (who.clone(), locked_balance);
-			// write new accumulated offset
+			// write new accumulated offset.
 			let last_win = activity.last_win;
 			let now = index;
 			let offset = Self::get_offset(stake, now - last_win);
@@ -582,7 +585,7 @@ impl<T: Trait> Module<T> {
 			// write updated set
 			<Voters<T>>::insert(set_index, set);
 		} else {
-			// not yet a voter - deduct bond. O(1).
+			// not yet a voter. deduct bond. O(1).
 			T::Currency::reserve(&who, Self::voting_bond())?;
 			let current_index = Self::next_voter_set();
 			let mut set = Self::voters(current_index);
@@ -591,8 +594,12 @@ impl<T: Trait> Module<T> {
 			if set.len() == VOTER_SET_SIZE {
 				// Unlike indices module, this loop might execute.
 				// This is most often +1, but can't be sure.
-				// Where the loop is needed if we are finding the next free set
+				// Where the loop is needed is if we are finding the next free set
 				// after a `remove_voter()`.
+				// NOTE: in case the number of voters grows extremely large, a
+				// retraction from one of the early set causes not the next set_approval,
+				// but the one after that slightly more expensive than usual as
+				// we need to find a next open set.
 				let mut idx = current_index + 1;
 				let next_index = loop {
 					let try_set = Self::voters(idx);
@@ -670,7 +677,7 @@ impl<T: Trait> Module<T> {
 			Self::all_voters()
 				.iter()
 				.map(|(a, _)| a)
-				.filter(|v| Self::approvals_of_at(*v, index).unwrap_or(false))
+				.filter(|v| Self::approvals_of_at(*v, index))
 				.for_each(|v| <ActivityInfoOf<T>>::mutate(v, |a| {
 					if let Some(activity) = a { activity.last_win = Self::vote_index() + 1; }
 				}));
@@ -745,7 +752,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Moreover, if a voter is stored in the last element of a set, any retraction or reap of a
 	/// voter in that set can lead to the last voter to be swapped over to that particular index.
-	// TODO: usage of `swap_remove` might be worth re-considering.
+	/// TODO: this behavior might not be desired.
 	fn voter_at(index: usize) -> Option<(T::AccountId, BalanceOf<T>)> {
 		let (set_index, vec_index) = Self::split_index::<SetIndex>(index, VOTER_SET_SIZE);
 		let set = Self::voters(set_index);
@@ -766,14 +773,19 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
-	fn approvals_of_at(who: &T::AccountId, index: usize) -> Option<bool> {
+	///
+	/// Using this function to read a vote is preferred as it reads `APPROVAL_SET_SIZE` items of type
+	/// `ApprovalFlag` from storage at most; not all of them.
+	///
+	/// Note that false is returned in case of no-vote or an explicit `false`.
+	fn approvals_of_at(who: &T::AccountId, index: usize) -> bool {
 		let (flag_index, bit) = Self::split_index(index, APPROVAL_FLAG_LEN);
 		let (set_index, vec_index) = Self::split_index::<SetIndex>(flag_index, APPROVAL_SET_SIZE);
 		let set = Self::approvals_of(who, set_index);
 		if vec_index < set.len() {
-			Some(Self::bit_at(set[vec_index], bit))
+			Self::bit_at(set[vec_index], bit)
 		} else {
-			None
+			false
 		}
 	}
 
@@ -813,7 +825,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Return a concatenated vector over all approvals of a voter as boolean.
-	/// TODO: new test for this in large nunbers.
+	/// The trailing zeros are removed.
 	fn all_approvals_of(who: &T::AccountId) -> Vec<bool> {
 		let mut all: Vec<bool> = vec![];
 		// NOTE: There is sadly no way in StorageDoubleMap to get all values associated
@@ -825,6 +837,7 @@ impl<T: Trait> Module<T> {
 			chunk.into_iter()
 				.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
 				.for_each(|c| {
+					// strip out trailing zeros.
 					let last_approve = match c.iter().rposition(|n| *n) {
 						Some(idx) => idx + 1,
 						None => 0
@@ -898,6 +911,14 @@ mod tests {
 				]),
 				vec![0x16_00_00_00_u32] // 32 bit.
 			);
+
+			let mut rhs = (0..100/APPROVAL_FLAG_LEN).map(|_| 0xFFFFFFFF_u32).collect::<Vec<u32>>();
+			// NOTE: this might be need change based on `APPROVAL_FLAG_LEN`.
+			rhs.extend(vec![0xF_0000000]);
+			assert_eq!(
+				Council::b2f((0..100).map(|_| true).collect()),
+				rhs
+			)
 		})
 	}
 
@@ -1229,6 +1250,36 @@ mod tests {
 			System::set_block_number(1);
 			assert_eq!(Council::candidates(), Vec::<u64>::new());
 			assert_noop!(Council::submit_candidacy(Origin::signed(7), 0), "candidate has not enough funds");
+		});
+	}
+
+	#[test]
+	fn balance_should_lock_to_the_maximum() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			System::set_block_number(1);
+			assert_eq!(Council::candidates(), Vec::<u64>::new());
+			assert_eq!(Balances::free_balance(&2), 20);
+
+			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0));
+			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
+
+			assert_eq!(Balances::free_balance(&2), 18); // 20 - 2 (bond)
+			assert_noop!(Balances::reserve(&2, 1), "account liquidity restrictions prevent withdrawal"); // locked.
+
+			// deposit a bit more.
+			let _ = Balances::deposit_creating(&2, 100);
+			assert_ok!(Balances::reserve(&2, 1)); // locked but now has enough.
+
+			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0, 0));
+			assert_noop!(Balances::reserve(&2, 1), "account liquidity restrictions prevent withdrawal"); // locked.
+			assert_eq!(Balances::locks(&2).len(), 1);
+			assert_eq!(Balances::locks(&2)[0].amount, 100 + 20);
+
+			assert_ok!(Council::retract_voter(Origin::signed(2), 0));
+
+			assert_eq!(Balances::locks(&2).len(), 0);
+			assert_eq!(Balances::free_balance(&2), 18 + 2 + 100 - 1); // 1 ok call to .reserve() happened.
+			assert_ok!(Balances::reserve(&2, 1)); // unlocked.
 		});
 	}
 
