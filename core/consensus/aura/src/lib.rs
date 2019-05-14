@@ -65,7 +65,6 @@ use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
 
-
 type AuthorityId<P> = <P as Pair>::Public;
 type Signature<P> = <P as Pair>::Signature;
 
@@ -468,7 +467,7 @@ fn check_header<C, B: Block, P: Pair>(
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
 		C: client::backend::AuxStore,
-		<P as Pair>::Public: AsRef<<P as Pair>::Public> + Encode + Decode + PartialEq,
+		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -506,12 +505,11 @@ fn check_header<C, B: Block, P: Pair>(
 				slot_now,
 				slot_num,
 				header.clone(),
-				public.clone()
+				public.clone(),
 			) {
 				Ok(Some(equivocation_proof)) => {
 					let log_str = format!(
-						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-						public,
+						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 						slot_num,
 						equivocation_proof.fst_header().hash(),
 						equivocation_proof.snd_header().hash(),

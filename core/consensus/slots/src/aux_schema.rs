@@ -43,6 +43,7 @@ fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
+/// Represents an equivocation proof.
 #[derive(Debug, Clone)]
 pub struct EquivocationProof<H> {
 	slot: u64,
@@ -51,14 +52,17 @@ pub struct EquivocationProof<H> {
 }
 
 impl<H> EquivocationProof<H> {
+	/// Get the slot number where the equivocation happened.
 	pub fn slot(&self) -> u64 {
 		self.slot
 	}
 
+	/// Get the first header involved in the equivocation.
 	pub fn fst_header(&self) -> &H {
 		&self.fst_header
 	}
 
+	/// Get the second header involved in the equivocation.
 	pub fn snd_header(&self) -> &H {
 		&self.snd_header
 	}
@@ -77,7 +81,7 @@ pub fn check_equivocation<C, H, P>(
 	where
 		H: Header,
 		C: AuxStore,
-		P: Encode + Decode + PartialEq + std::fmt::Debug,
+		P: Encode + Decode + PartialEq,
 {
 	if slot_now - slot > MAX_SLOT_CAPACITY {
 		return Ok(None)

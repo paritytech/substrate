@@ -897,7 +897,6 @@ mod tests {
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
 	use slots::{MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-
 	type Error = client::error::Error;
 
 	type TestClient = client::Client<
@@ -1163,7 +1162,6 @@ mod tests {
 			Keyring::Charlie.into()
 		]);
 	}
-
 
 	#[test]
 	fn check_header_works_with_equivocation() {
