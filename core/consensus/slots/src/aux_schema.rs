@@ -90,14 +90,20 @@ pub fn check_equivocation<C, H, P>(
 		.unwrap_or_else(Vec::new);
 
 	for (prev_header, prev_signer) in headers_with_sig.iter() {
+		// A proof of equivocation consists of two headers:
+		// 1) signed by the same voter,
 		if *prev_signer == signer {
+			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
-					slot,
+					slot, // 3) and mentioning the same slot.
 					fst_header: prev_header.clone(),
 					snd_header: header.clone(),
 				}));
 			} else {
+				//  We don't need to continue in case of duplicated header,
+				// since it's already saved and a possible equivocation
+				// would have been detected before.
 				return Ok(None)
 			}
 		}

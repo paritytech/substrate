@@ -525,13 +525,8 @@ fn check_header<C, B: Block, P: Pair>(
 						equivocation_proof.snd_header().hash(),
 					))
 				},
-				Ok(None) => {
-					Ok(CheckedHeader::Checked(header, digest_item))
-				},
-				Err(e) => {
-					println!("{}", e.to_string());
-					Err(e.to_string())
-				},
+				Ok(None) => Ok(CheckedHeader::Checked(header, digest_item)),
+				Err(e) => Err(e.to_string()),
 			}
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
