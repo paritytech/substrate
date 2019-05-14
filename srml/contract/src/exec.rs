@@ -195,8 +195,7 @@ impl VmExecResult {
 }
 
 /// Struct that records a request to deposit an event with a list of topics.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(PartialEq, Eq)]
+#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq))]
 pub struct IndexedEvent<T: Trait> {
 	/// A list of topics this event will be deposited with.
 	pub topics: Vec<T::Hash>,
