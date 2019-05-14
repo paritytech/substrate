@@ -304,8 +304,6 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 			return Ok(());
 		}
 
-		use std::collections::HashSet;
-
 		self.tree.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
 
 		let roots = self.tree.roots().collect::<HashSet<_>>();
