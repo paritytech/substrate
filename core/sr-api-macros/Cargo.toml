@@ -24,6 +24,7 @@ substrate-primitives = { path = "../primitives" }
 criterion = "0.2"
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 codec = { package = "parity-codec", version = "3.5.1" }
+trybuild = "1.0"
 
 [[bench]]
 name = "bench"
