@@ -83,6 +83,9 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 		peer: PeerId,
 		response: message::BlockResponse<Block>
 	);
+
+	/// Check whether a block response is an `on_demand` response
+	fn is_on_demand_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool;
 }
 
 /// Trait used by the `OnDemand` service to communicate messages back to the network.
@@ -438,6 +441,12 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 			other => Accept::Unexpected(other),
 		})
 	}
+
+	fn is_on_demand_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
+		// TODO(niklasad1): could make sense to use `RwLock` instead of `Mutex`
+		let core = self.core.lock();
+		core.is_pending_request(&peer, request_id)
+	}
 }
 
 impl<B> Fetcher<B> for OnDemand<B> where
@@ -500,6 +509,10 @@ impl<B> OnDemandCore<B> where
 	B: BlockT,
 	B::Header: HeaderT,
 {
+	fn is_pending_request(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
+		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
+	}
+
 	pub fn add_peer(&mut self, peer: PeerId, best_number: NumberFor<B>) {
 		self.idle_peers.push_back(peer.clone());
 		self.best_blocks.insert(peer, best_number);
@@ -666,7 +679,7 @@ impl<Block: BlockT> Request<Block> {
 					key: data.key.clone(),
 				}),
 			RequestData::RemoteBody(ref data, _) => {
-				message::generic::Message::RemoteBodyRequest(message::BlockRequest::<Block> {
+				message::generic::Message::BlockRequest(message::BlockRequest::<Block> {
 					id: self.id,
 					fields: message::BlockAttributes::BODY | message::BlockAttributes::HEADER,
 					from: message::FromBlock::Hash(data.header.hash()),
