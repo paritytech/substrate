@@ -44,7 +44,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolStatus, CustomMessageOutcome};
+use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -747,26 +747,41 @@ pub trait TestNetFactory: Sized {
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
+		network_sender: NetworkChan<Block>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
 		mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<Block, Self::Specialization>>,
 		peer: Arc<Peer<Self::PeerData, Self::Specialization>>,
 	) {
 		std::thread::spawn(move || {
+			// Implementation of `protocol::NetworkOut` using the available local variables.
+			struct Ctxt<'a, B: BlockT>(&'a NetworkChan<B>);
+			impl<'a, B: BlockT> NetworkOut<B> for Ctxt<'a, B> {
+				fn report_peer(&mut self, who: PeerId, reputation: i32) {
+					self.0.send(NetworkMsg::ReportPeer(who, reputation))
+				}
+				fn disconnect_peer(&mut self, who: PeerId) {
+					self.0.send(NetworkMsg::DisconnectPeer(who))
+				}
+				fn send_message(&mut self, who: PeerId, message: Message<B>) {
+					self.0.send(NetworkMsg::Outgoing(who, message))
+				}
+			}
+
 			tokio::runtime::current_thread::run(futures::future::poll_fn(move || {
 				while let Async::Ready(msg) = network_to_protocol_rx.poll().unwrap() {
 					let outcome = match msg {
 						Some(FromNetworkMsg::PeerConnected(peer_id, debug_msg)) => {
-							protocol.on_peer_connected(peer_id, debug_msg);
+							protocol.on_peer_connected(&mut Ctxt(&network_sender), peer_id, debug_msg);
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::PeerDisconnected(peer_id, debug_msg)) => {
-							protocol.on_peer_disconnected(peer_id, debug_msg);
+							protocol.on_peer_disconnected(&mut Ctxt(&network_sender), peer_id, debug_msg);
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
-							protocol.on_custom_message(peer_id, message),
+							protocol.on_custom_message(&mut Ctxt(&network_sender), peer_id, message),
 						Some(FromNetworkMsg::Synchronize) => {
-							protocol.synchronize();
+							let _ = network_sender.send(NetworkMsg::Synchronized);
 							CustomMessageOutcome::None
 						},
 						None => return Ok(Async::Ready(())),
@@ -792,51 +807,53 @@ pub trait TestNetFactory: Sized {
 
 					match msg {
 						ProtocolMsg::BlockImported(hash, header) =>
-							protocol.on_block_imported(hash, &header),
+							protocol.on_block_imported(&mut Ctxt(&network_sender), hash, &header),
 						ProtocolMsg::BlockFinalized(hash, header) =>
-							protocol.on_block_finalized(hash, &header),
+							protocol.on_block_finalized(&mut Ctxt(&network_sender), hash, &header),
 						ProtocolMsg::ExecuteWithSpec(task) => {
-							let (mut context, spec) = protocol.specialization_lock();
+							let mut ctxt = Ctxt(&network_sender);
+							let (mut context, spec) = protocol.specialization_lock(&mut ctxt);
 							task.call_box(spec, &mut context);
 						},
 						ProtocolMsg::ExecuteWithGossip(task) => {
-							let (mut context, gossip) = protocol.consensus_gossip_lock();
+							let mut ctxt = Ctxt(&network_sender);
+							let (mut context, gossip) = protocol.consensus_gossip_lock(&mut ctxt);
 							task.call_box(gossip, &mut context);
 						}
 						ProtocolMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
-							protocol.gossip_consensus_message(topic, engine_id, message, recipient),
+							protocol.gossip_consensus_message(&mut Ctxt(&network_sender), topic, engine_id, message, recipient),
 						ProtocolMsg::BlocksProcessed(hashes, has_error) =>
-							protocol.blocks_processed(hashes, has_error),
+							protocol.blocks_processed(&mut Ctxt(&network_sender), hashes, has_error),
 						ProtocolMsg::RestartSync => 
-							protocol.restart(),
+							protocol.restart(&mut Ctxt(&network_sender)),
 						ProtocolMsg::AnnounceBlock(hash) =>
-							protocol.announce_block(hash),
+							protocol.announce_block(&mut Ctxt(&network_sender), hash),
 						ProtocolMsg::BlockImportedSync(hash, number) =>
 							protocol.block_imported(&hash, number),
 						ProtocolMsg::ClearJustificationRequests =>
 							protocol.clear_justification_requests(),
 						ProtocolMsg::RequestJustification(hash, number) =>
-							protocol.request_justification(&hash, number),
+							protocol.request_justification(&mut Ctxt(&network_sender), &hash, number),
 						ProtocolMsg::JustificationImportResult(hash, number, success) =>
 							protocol.justification_import_result(hash, number, success),
 						ProtocolMsg::SetFinalityProofRequestBuilder(builder) =>
 							protocol.set_finality_proof_request_builder(builder),
 						ProtocolMsg::RequestFinalityProof(hash, number) =>
-							protocol.request_finality_proof(&hash, number),
+							protocol.request_finality_proof(&mut Ctxt(&network_sender), &hash, number),
 						ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
 							protocol.finality_proof_import_result(requested_block, finalziation_result),
-						ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(),
+						ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(&mut Ctxt(&network_sender)),
 						#[cfg(any(test, feature = "test-helpers"))]
-						ProtocolMsg::Tick => protocol.tick(),
+						ProtocolMsg::Tick => protocol.tick(&mut Ctxt(&network_sender)),
 						#[cfg(any(test, feature = "test-helpers"))]
 						ProtocolMsg::Synchronize => {
 							trace!(target: "sync", "handle_client_msg: received Synchronize msg");
-							protocol.synchronize();
+							let _ = network_sender.send(NetworkMsg::Synchronized);
 						}
 					}
 				}
 
-				if let Async::Ready(_) = protocol.poll().unwrap() {
+				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender)).unwrap() {
 					return Ok(Async::Ready(()))
 				}
 
@@ -882,7 +899,6 @@ pub trait TestNetFactory: Sized {
 
 		let protocol = Protocol::new(
 			peers.clone(),
-			network_sender.clone(),
 			config.clone(),
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
@@ -896,6 +912,7 @@ pub trait TestNetFactory: Sized {
 			protocol_status.clone(),
 			import_queue.clone(),
 			protocol,
+			network_sender.clone(),
 			network_to_protocol_rx,
 			protocol_rx,
 			Arc::new(Peer::new(
@@ -939,7 +956,6 @@ pub trait TestNetFactory: Sized {
 
 		let protocol = Protocol::new(
 			peers.clone(),
-			network_sender.clone(),
 			config,
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
@@ -953,6 +969,7 @@ pub trait TestNetFactory: Sized {
 			protocol_status.clone(),
 			import_queue.clone(),
 			protocol,
+			network_sender.clone(),
 			network_to_protocol_rx,
 			protocol_rx,
 			Arc::new(Peer::new(
