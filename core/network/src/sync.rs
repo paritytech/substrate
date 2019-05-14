@@ -39,12 +39,14 @@ use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
-use crate::extra_requests::ExtraRequestsAggregator;
+use crate::sync::extra_requests::ExtraRequestsAggregator;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, CheckedSub};
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
+
+mod extra_requests;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
