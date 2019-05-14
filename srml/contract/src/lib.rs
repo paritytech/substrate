@@ -393,7 +393,12 @@ decl_module! {
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
-				ctx.events.into_iter().for_each(Self::deposit_event);
+				ctx.events.into_iter().for_each(|indexed_event| {
+					<system::Module<T>>::deposit_event_indexed(
+						&*indexed_event.topics,
+						<T as Trait>::Event::from(indexed_event.event).into(),
+					);
+				});
 			}
 
 			// Refund cost of the unused gas.
@@ -447,7 +452,12 @@ decl_module! {
 				DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
-				ctx.events.into_iter().for_each(Self::deposit_event);
+				ctx.events.into_iter().for_each(|indexed_event| {
+					<system::Module<T>>::deposit_event_indexed(
+						&*indexed_event.topics,
+						<T as Trait>::Event::from(indexed_event.event).into(),
+					);
+				});
 			}
 
 			// Refund cost of the unused gas.
@@ -653,14 +663,20 @@ pub struct Schedule<Gas> {
 	/// Gas cost to deposit an event; the per-byte portion.
 	pub event_data_per_byte_cost: Gas,
 
+	/// Gas cost to deposit an event; the cost per topic.
+	pub event_per_topic_cost: Gas,
+
 	/// Gas cost to deposit an event; the base.
-	pub event_data_base_cost: Gas,
+	pub event_base_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
 
 	/// Gas cost per one byte written to the sandbox memory.
 	pub sandbox_data_write_cost: Gas,
+
+	/// The maximum number of topics supported by an event.
+	pub max_event_topics: u32,
 
 	/// Maximum allowed stack height.
 	///
@@ -685,9 +701,11 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),
 			event_data_per_byte_cost: Gas::sa(1),
-			event_data_base_cost: Gas::sa(1),
+			event_per_topic_cost: Gas::sa(1),
+			event_base_cost: Gas::sa(1),
 			sandbox_data_read_cost: Gas::sa(1),
 			sandbox_data_write_cost: Gas::sa(1),
+			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 			enable_println: false,
