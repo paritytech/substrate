@@ -161,7 +161,7 @@ impl<Components: components::Components> Service<Components> {
 		let chain_info = client.info()?.chain;
 
 		let version = config.full_version();
-		info!("Best block: #{}", chain_info.best_number);
+		info!("Highest known block at #{}", chain_info.best_number);
 		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => chain_info.best_number.as_(), "best" => ?chain_info.best_hash);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
