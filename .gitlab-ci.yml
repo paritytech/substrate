@@ -18,7 +18,6 @@ variables:
   GIT_STRATEGY:                    fetch
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
-  SCCACHE_CACHE_SIZE:              50G
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
@@ -53,6 +52,18 @@ check-runtime:
   script:
     - ./scripts/gitlab/check_runtime.sh
 
+
+check-line-width:
+  stage:                           test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./scripts/gitlab/check_line_width.sh
+  allow_failure:                   false
+
+
 test-linux-stable:                 &test
   stage:                           test
   variables:
@@ -82,7 +93,7 @@ test-linux-stable:                 &test
 check-web-wasm:
   stage:                           test
   image:                           tomaka/cargo-web:latest
-  allow_failure: true
+  allow_failure:                   true
   only:
     - master
     - /^[0-9]+$/
@@ -102,6 +113,8 @@ check-web-wasm:
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
     - time cargo web build -p substrate-trie
+  tags:
+    - linux-docker
 
 .build-only:                      &build-only
   only:

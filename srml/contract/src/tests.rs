@@ -363,28 +363,34 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(BOB, 100)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4]))
+					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4])),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
 				}
 			]);
 
@@ -434,10 +440,12 @@ fn dispatch_call() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					topics: vec![],
 				},
 			]);
 
@@ -461,24 +469,29 @@ fn dispatch_call() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(BOB, 100)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
 				},
 
 				// Dispatching the call.
@@ -486,19 +499,22 @@ fn dispatch_call() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(CHARLIE, 50)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
-					)
+					),
+					topics: vec![],
 				},
 
 				// Event emited as a result of dispatch.
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
+					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true)),
+					topics: vec![],
 				}
 			]);
 		},
@@ -644,10 +660,12 @@ fn set_rent_hash_and_code() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+					topics: vec![],
 				},
 			]);
 		}

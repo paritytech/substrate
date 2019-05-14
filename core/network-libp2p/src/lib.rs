@@ -57,9 +57,9 @@
 //!
 //! Please keep in mind that the state of the [`Service`] only updates itself in a way
 //! corresponding to the [`ServiceEvent`] that `poll` returns.
-//! 
+//!
 //! Illustration:
-//! 
+//!
 //! - You call [`Service::connected_peers`] to get the list of nodes we are connected to.
 //! - If you then call [`Service::connected_peers`] again, the returned list will always be the
 //!   same, no matter what happened on the wire.
@@ -118,6 +118,17 @@ use libp2p::core::nodes::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, error, fmt, time::Duration};
+
+/// Extension trait for `NetworkBehaviour` that also accepts discovering nodes.
+pub trait DiscoveryNetBehaviour {
+	/// Notify the protocol that we have learned about the existence of nodes.
+	///
+	/// Can (or most likely will) be called multiple times with the same `PeerId`s.
+	///
+	/// Also note that there is no notification for expired nodes. The implementer must add a TTL
+	/// system, or remove nodes that will fail to reach.
+	fn add_discovered_nodes(&mut self, nodes: impl Iterator<Item = PeerId>);
+}
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
