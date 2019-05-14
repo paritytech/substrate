@@ -1099,14 +1099,17 @@ fn restoration(failing_test: bool) {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RESTORATION.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+					topics: vec![],
 				},
 			]);
 
