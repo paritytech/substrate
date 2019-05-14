@@ -58,18 +58,12 @@ impl<H: Hasher> TestExternalities<H> {
 		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		inner.insert(CODE.to_vec(), code.to_vec());
 
-		let mut t = TestExternalities {
+		TestExternalities {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend: InMemory::default(),
+			backend: inner.into(),
 			_hasher: Default::default(),
-		};
-
-		for (key, value) in inner {
-			t.insert(key, value);
 		}
-
-		t
 	}
 
 	/// Insert key/value into backend
