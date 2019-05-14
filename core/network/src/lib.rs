@@ -30,7 +30,6 @@ mod protocol;
 mod chain;
 mod blocks;
 mod on_demand;
-mod extra_requests;
 mod util;
 pub mod config;
 pub mod consensus_gossip;
