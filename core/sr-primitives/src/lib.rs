@@ -911,13 +911,11 @@ mod tests {
 	fn saturating_mul() {
 		use primitive_types::U256;
 
-		assert_eq!(super::Perbill::one() * std::u128::MAX, std::u128::MAX);
 		assert_eq!(
 			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
 		);
 
-		assert_eq!(super::Permill::from_percent(100) * std::u128::MAX, std::u128::MAX);
 		assert_eq!(
 			super::Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
