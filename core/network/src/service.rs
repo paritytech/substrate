@@ -612,7 +612,17 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let peerset_clone = peerset.clone();
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(is_offline, is_major_syncing, protocol, service_clone, import_queue, network_port, protocol_rx, status_sinks, peerset_clone)
+		let fut = run_thread(
+			is_offline,
+			is_major_syncing,
+			protocol,
+			service_clone,
+			import_queue,
+			network_port,
+			protocol_rx,
+			status_sinks,
+			peerset_clone
+		)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);

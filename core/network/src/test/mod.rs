@@ -517,7 +517,9 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 
 		let header = self.client.header(&BlockId::Hash(info.chain.finalized_hash)).unwrap().unwrap();
-		self.net_proto_channel.send_from_client(ProtocolMsg::BlockFinalized(info.chain.finalized_hash, header.clone()));
+		self.net_proto_channel.send_from_client(
+			ProtocolMsg::BlockFinalized(info.chain.finalized_hash, header.clone())
+		);
 		*finalized_hash = Some(info.chain.finalized_hash);
 	}
 
