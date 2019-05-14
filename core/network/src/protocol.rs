@@ -186,13 +186,19 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 	}
 
 	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who,
+		send_message(
+			&mut self.context_data.peers,
+			&self.network_chan,
+			who,
 			GenericMessage::Consensus(consensus)
 		)
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who,
+		send_message(
+			&mut self.context_data.peers,
+			&self.network_chan,
+			who,
 			GenericMessage::ChainSpecific(message)
 		)
 	}
@@ -216,13 +222,19 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> SyncContext<B> for ProtocolContext<'a,
 	}
 
 	fn send_finality_proof_request(&mut self, who: PeerId, request: FinalityProofRequestMessage<B::Hash>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who,
+		send_message(
+			&mut self.context_data.peers,
+			&self.network_chan,
+			who,
 			GenericMessage::FinalityProofRequest(request)
 		)
 	}
 
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequestMessage<B>) {
-		send_message(&mut self.context_data.peers, &self.network_chan, who,
+		send_message(
+			&mut self.context_data.peers,
+			&self.network_chan,
+			who,
 			GenericMessage::BlockRequest(request)
 		)
 	}
@@ -312,8 +324,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Future for Protocol<B, 
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
-	fn handle_response(&mut self, who: PeerId, response: &message::BlockResponse<B>)
-	-> Option<message::BlockRequest<B>> {
+	fn handle_response(
+		&mut self,
+		who: PeerId,
+		response: &message::BlockResponse<B>
+	) -> Option<message::BlockRequest<B>> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			if let Some(_) = peer.obsolete_requests.remove(&response.id) {
 				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id);
@@ -551,15 +566,19 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::BlockResponse<B>,
 	) -> CustomMessageOutcome<B> {
 		let blocks_range = match (
-				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
-				response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
-			) {
-				(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
-				(Some(first), Some(_)) => format!(" ({})", first),
-				_ => Default::default(),
-			};
+			response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
+			response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
+		) {
+			(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
+			(Some(first), Some(_)) => format!(" ({})", first),
+			_ => Default::default(),
+		};
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks {}",
-			response.id, peer, response.blocks.len(), blocks_range);
+			response.id,
+			peer,
+			response.blocks.len(),
+			blocks_range
+		);
 
 		// TODO [andre]: move this logic to the import queue so that
 		// justifications are imported asynchronously (#1482)
@@ -618,7 +637,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 			for (who, _) in self.handshaking_peers.iter()
-				.filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC) {
+				.filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC)
+			{
 				trace!(target: "sync", "Handshake timeout {}", who);
 				aborting.push(who.clone());
 			}
@@ -890,7 +910,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Ok((_, proof)) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote call request {} from {} ({} at {}) failed with: {}",
-					request.id, who, request.method, request.block, error);
+					request.id,
+					who,
+					request.method,
+					request.block,
+					error
+				);
 				self.network_chan.send(NetworkMsg::ReportPeer(who.clone(), RPC_FAILED_REPUTATION_CHANGE));
 				Default::default()
 			}
@@ -985,7 +1010,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
-					request.id, who, request.key.to_hex::<String>(), request.block, error);
+					request.id,
+					who,
+					request.key.to_hex::<String>(),
+					request.block,
+					error
+				);
 				Default::default()
 			}
 		};
@@ -1015,7 +1045,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Ok((header, proof)) => (Some(header), proof),
 			Err(error) => {
 				trace!(target: "sync", "Remote header proof request {} from {} ({}) failed with: {}",
-					request.id, who, request.block, error);
+					request.id,
+					who,
+					request.block,
+					error
+				);
 				(Default::default(), Default::default())
 			}
 		};
@@ -1046,7 +1080,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		request: message::RemoteChangesRequest<B::Hash>,
 	) {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
-			request.id, who, request.key.to_hex::<String>(), request.first, request.last);
+			request.id,
+			who,
+			request.key.to_hex::<String>(),
+			request.first,
+			request.last
+		);
 		let key = StorageKey(request.key);
 		let proof = match self.context_data.chain.key_changes_proof(
 			request.first,
@@ -1058,7 +1097,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
-					request.id, who, key.0.to_hex::<String>(), request.first, request.last, error);
+					request.id,
+					who,
+					key.0.to_hex::<String>(),
+					request.first,
+					request.last,
+					error
+				);
 				ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
 					proof: vec![],
@@ -1085,7 +1130,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>,
 	) {
 		trace!(target: "sync", "Remote changes proof response {} from {} (max={})",
-			response.id, who, response.max);
+			response.id,
+			who,
+			response.max
+		);
 		self.on_demand
 			.as_ref()
 			.map(|s| s.on_remote_changes_response(who, response));
@@ -1099,13 +1147,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = self.context_data.finality_proof_provider.as_ref()
 			.ok_or_else(|| String::from("Finality provider is not configured"))
-			.and_then(|provider| provider.prove_finality(request.block, &request.request)
-				.map_err(|e| e.to_string()));
+			.and_then(|provider|
+				provider.prove_finality(request.block, &request.request).map_err(|e| e.to_string())
+			);
 		let finality_proof = match finality_proof {
 			Ok(finality_proof) => finality_proof,
 			Err(error) => {
 				trace!(target: "sync", "Finality proof request from {} for {} failed with: {}",
-					who, request.block, error);
+					who,
+					request.block,
+					error
+				);
 				None
 			},
 		};
