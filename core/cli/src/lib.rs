@@ -366,14 +366,8 @@ fn fill_network_configuration(
 }
 
 fn input_keystore_password() -> Result<String, String> {
-	let password =
-		rpassword::read_password_from_tty(Some("Password: ")).map_err(|e| format!("{:?}", e))?;
-	let confirmed_password = rpassword::read_password_from_tty(Some("Repeat again: "))
-		.map_err(|e| format!("{:?}", e))?;
-	if confirmed_password != password {
-		return Err("Password does not match".to_string());
-	}
-	Ok(password)
+	rpassword::read_password_from_tty(Some("Keystore password: "))
+		.map_err(|e| format!("{:?}", e))
 }
 
 fn create_run_node_config<F, S>(
