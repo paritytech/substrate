@@ -35,7 +35,7 @@ use cli::{AugmentClap, GetLogFilter};
 use crate::factory_impl::RuntimeAdapterImpl;
 
 /// The chain specification option.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ChainSpec {
 	/// Whatever the current runtime is, with just Alice as an auth.
 	Development,
@@ -51,7 +51,11 @@ pub enum ChainSpec {
 #[derive(Clone, Debug, StructOpt)]
 pub enum CustomSubcommands {
 	/// The custom factory subcommmand for manufacturing transactions.
-	#[structopt(name = "factory", about = "Manufactures num transactions from Alice to random accounts")]
+	#[structopt(
+		name = "factory",
+		about = "Manufactures num transactions from Alice to random accounts. \
+		Only supported for development or local testnet."
+	)]
 	Factory(FactoryCmd),
 }
 
@@ -173,6 +177,14 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				&cli_args.shared_params,
 				&version,
 			)?;
+
+			let supported = match ChainSpec::from(config.chain_spec.id()) {
+				Some(c) => c == ChainSpec::Development || c == ChainSpec::LocalTestnet,
+				_ => false,
+			};
+			if !supported {
+				panic!("Factory is only supported for development and local testnet.");
+			}
 
 			transaction_factory::factory::<service::Factory, RuntimeAdapterImpl>(
 				config,
