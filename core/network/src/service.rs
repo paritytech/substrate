@@ -36,8 +36,6 @@ use crate::config::Params;
 use crate::error::Error;
 use crate::specialization::NetworkSpecialization;
 
-use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
-use tokio::prelude::task::AtomicTask;
 use tokio::runtime::Builder as RuntimeBuilder;
 
 /// Interval at which we send status updates on the SyncProvider status stream.
@@ -86,7 +84,7 @@ pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
 	pub(crate) protocol_sender: mpsc::UnboundedSender<ProtocolMsg<B, S>>,
 	/// The network sender
-	pub(crate) network_sender: NetworkChan<B>,
+	pub(crate) network_sender: mpsc::UnboundedSender<NetworkMsg<B>>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
@@ -102,8 +100,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.unbounded_send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
 			info!("Invalid justification provided by {} for #{}", who, hash);
-			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
-			let _ = self.network_sender.send(NetworkMsg::DisconnectPeer(who.clone()));
+			let _ = self.network_sender.unbounded_send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+			let _ = self.network_sender.unbounded_send(NetworkMsg::DisconnectPeer(who.clone()));
 		}
 	}
 
@@ -135,13 +133,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		));
 		if !success {
 			info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
-			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
-			let _ = self.network_sender.send(NetworkMsg::DisconnectPeer(who.clone()));
+			let _ = self.network_sender.unbounded_send(NetworkMsg::ReportPeer(who.clone(), i32::min_value()));
+			let _ = self.network_sender.unbounded_send(NetworkMsg::DisconnectPeer(who.clone()));
 		}
 	}
 
 	fn report_peer(&self, who: PeerId, reputation_change: i32) {
-		self.network_sender.send(NetworkMsg::ReportPeer(who, reputation_change));
+		let _ = self.network_sender.unbounded_send(NetworkMsg::ReportPeer(who, reputation_change));
 	}
 
 	fn restart(&self) {
@@ -178,7 +176,7 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Peers whom we are connected with.
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	/// Channel for networking messages processed by the background thread.
-	network_chan: NetworkChan<B>,
+	network_chan: mpsc::UnboundedSender<NetworkMsg<B>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
@@ -199,7 +197,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		protocol_id: ProtocolId,
 		import_queue: Box<ImportQueue<B>>,
 	) -> Result<Arc<Service<B, S>>, Error> {
-		let (network_chan, network_port) = network_channel();
+		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		// Start in off-line mode, since we're not connected to any nodes yet.
@@ -321,14 +319,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	///
 	/// This method is extremely poor in terms of API and should be eventually removed.
 	pub fn disconnect_peer(&self, who: PeerId) {
-		let _ = self.network_chan.send(NetworkMsg::DisconnectPeer(who));
+		let _ = self.network_chan.unbounded_send(NetworkMsg::DisconnectPeer(who));
 	}
 
 	/// Send a message to the given peer. Has no effect if we're not connected to this peer.
 	///
 	/// This method is extremely poor in terms of API and should be eventually removed.
 	pub fn send_request(&self, who: PeerId, message: Message<B>) {
-		let _ = self.network_chan.send(NetworkMsg::Outgoing(who, message));
+		let _ = self.network_chan.unbounded_send(NetworkMsg::Outgoing(who, message));
 	}
 
 	/// Execute a closure with the chain-specific network specialization.
@@ -432,81 +430,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 	}
 }
 
-
-/// Create a NetworkPort/Chan pair.
-pub fn network_channel<B: BlockT + 'static>() -> (NetworkChan<B>, NetworkPort<B>) {
-	let (network_sender, network_receiver) = channel::unbounded();
-	let task_notify = Arc::new(AtomicTask::new());
-	let network_port = NetworkPort::new(network_receiver, task_notify.clone());
-	let network_chan = NetworkChan::new(network_sender, task_notify);
-	(network_chan, network_port)
-}
-
-
-/// A sender of NetworkMsg that notifies a task when a message has been sent.
-#[derive(Clone)]
-pub struct NetworkChan<B: BlockT + 'static> {
-	sender: Sender<NetworkMsg<B>>,
-	task_notify: Arc<AtomicTask>,
-}
-
-impl<B: BlockT + 'static> NetworkChan<B> {
-	/// Create a new network chan.
-	pub fn new(sender: Sender<NetworkMsg<B>>, task_notify: Arc<AtomicTask>) -> Self {
-		 NetworkChan {
-			sender,
-			task_notify,
-		}
-	}
-
-	/// Send a messaging, to be handled on a stream. Notify the task handling the stream.
-	pub fn send(&self, msg: NetworkMsg<B>) {
-		let _ = self.sender.send(msg);
-		self.task_notify.notify();
-	}
-}
-
-impl<B: BlockT + 'static> Drop for NetworkChan<B> {
-	/// Notifying the task when a sender is dropped(when all are dropped, the stream is finished).
-	fn drop(&mut self) {
-		self.task_notify.notify();
-	}
-}
-
-
-/// A receiver of NetworkMsg that makes the protocol-id available with each message.
-pub struct NetworkPort<B: BlockT + 'static> {
-	receiver: Receiver<NetworkMsg<B>>,
-	task_notify: Arc<AtomicTask>,
-}
-
-impl<B: BlockT + 'static> NetworkPort<B> {
-	/// Create a new network port for a given protocol-id.
-	pub fn new(receiver: Receiver<NetworkMsg<B>>, task_notify: Arc<AtomicTask>) -> Self {
-		Self {
-			receiver,
-			task_notify,
-		}
-	}
-
-	/// Receive a message, if any is currently-enqueued.
-	/// Register the current tokio task for notification when a new message is available.
-	pub fn take_one_message(&self) -> Result<Option<NetworkMsg<B>>, ()> {
-		self.task_notify.register();
-		match self.receiver.try_recv() {
-			Ok(msg) => Ok(Some(msg)),
-			Err(TryRecvError::Empty) => Ok(None),
-			Err(TryRecvError::Disconnected) => Err(()),
-		}
-	}
-
-	/// Get a reference to the underlying crossbeam receiver.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn receiver(&self) -> &Receiver<NetworkMsg<B>> {
-		&self.receiver
-	}
-}
-
 /// Messages to be handled by NetworkService.
 #[derive(Debug)]
 pub enum NetworkMsg<B: BlockT + 'static> {
@@ -591,7 +514,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
 	import_queue: Box<ImportQueue<B>>,
-	network_port: NetworkPort<B>,
+	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	config: NetworkConfiguration,
@@ -644,7 +567,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
-	network_port: NetworkPort<B>,
+	mut network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	peerset: PeersetHandle,
@@ -679,19 +602,19 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 		}
 
 		loop {
-			match network_port.take_one_message() {
-				Ok(None) => break,
-				Ok(Some(NetworkMsg::Outgoing(who, outgoing_message))) =>
+			match network_port.poll() {
+				Ok(Async::NotReady) => break,
+				Ok(Async::Ready(Some(NetworkMsg::Outgoing(who, outgoing_message)))) =>
 					network_service.lock().send_custom_message(&who, outgoing_message),
-				Ok(Some(NetworkMsg::ReportPeer(who, reputation))) =>
+				Ok(Async::Ready(Some(NetworkMsg::ReportPeer(who, reputation)))) =>
 					peerset.report_peer(who, reputation),
-				Ok(Some(NetworkMsg::DisconnectPeer(who))) =>
+				Ok(Async::Ready(Some(NetworkMsg::DisconnectPeer(who)))) =>
 					network_service.lock().drop_node(&who),
 
 				#[cfg(any(test, feature = "test-helpers"))]
-				Ok(Some(NetworkMsg::Synchronized)) => {}
+				Ok(Async::Ready(Some(NetworkMsg::Synchronized))) => {}
 
-				Err(_) => return Ok(Async::Ready(())),
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
 			}
 		}
 

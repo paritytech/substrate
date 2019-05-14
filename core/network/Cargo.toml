@@ -9,7 +9,6 @@ edition = "2018"
 [lib]
 
 [dependencies]
-crossbeam-channel = "0.3.6"
 log = "0.4"
 parking_lot = "0.7.1"
 error-chain = "0.12"
