@@ -118,7 +118,7 @@ pub fn check_equivocation<C, H, P>(
 	if slot_now % PRUNING_BOUND == 0 {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
 
-		let first_slot = slot_now - PRUNING_BOUND;
+		let first_slot = slot_now.saturating_sub(PRUNING_BOUND);
 		let last_slot = slot_now - MAX_SLOT_CAPACITY;
 		for s in first_slot..last_slot {
 			let mut p = prefix.clone();
