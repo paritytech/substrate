@@ -265,6 +265,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId, roles: Roles) {
+		// light nodes are not valid targets for consensus gossip messages
+		if !roles.is_full() {
+			return;
+		}
+
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
 		self.peers.insert(who.clone(), PeerConsensus {
 			known_messages: HashSet::new(),

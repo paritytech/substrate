@@ -25,20 +25,24 @@ use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::ed25519::{Keyring as AuthorityKeyring};
 use client::{
-	BlockchainEvents, error::Result,
-	blockchain::Backend as BlockchainBackend,
+	error::Result,
 	runtime_api::{Core, RuntimeVersion, ApiExt},
+	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
-use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
+use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+	SharedFinalityProofRequestBuilder,
+};
 use std::collections::{HashMap, HashSet};
 use std::result;
+use parity_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext, ed25519::Public as AuthorityId};
 
 use authorities::AuthoritySet;
+use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
 use communication::GRANDPA_ENGINE_ID;
 use consensus_changes::ConsensusChanges;
 
@@ -50,6 +54,7 @@ type PeerData =
 				test_client::Executor,
 				Block,
 				test_client::runtime::RuntimeApi,
+				LongestChain<test_client::Backend, Block>
 			>
 		>
 	>;
@@ -70,7 +75,7 @@ impl GrandpaTestNet {
 		};
 		let config = Self::default_config();
 		for _ in 0..n_peers {
-			net.add_peer(&config);
+			net.add_full_peer(&config);
 		}
 		net
 	}
@@ -97,21 +102,61 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
-	fn make_verifier(&self, _client: Arc<PeersClient>, _cfg: &ProtocolConfig)
+	fn make_verifier(&self, _client: PeersClient, _cfg: &ProtocolConfig)
 		-> Arc<Self::Verifier>
 	{
 		Arc::new(PassThroughVerifier(false)) // use non-instant finality.
 	}
 
-	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, PeerData)
+	fn make_block_import(&self, client: PeersClient)
+		-> (
+			SharedBlockImport<Block>,
+			Option<SharedJustificationImport<Block>>,
+			Option<SharedFinalityProofImport<Block>>,
+			Option<SharedFinalityProofRequestBuilder<Block>>,
+			PeerData,
+		)
 	{
-		let (import, link) = block_import(
-			client,
-			Arc::new(self.test_config.clone())
-		).expect("Could not create block import for fresh peer.");
-		let shared_import = Arc::new(import);
-		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
+		match client {
+			PeersClient::Full(ref client) => {
+				let select_chain = LongestChain::new(
+					client.backend().clone(),
+					client.import_lock().clone()
+				);
+				let (import, link) = block_import(
+					client.clone(),
+					Arc::new(self.test_config.clone()),
+					select_chain,
+				).expect("Could not create block import for fresh peer.");
+				let shared_import = Arc::new(import);
+				(shared_import.clone(), Some(shared_import), None, None, Mutex::new(Some(link)))
+			},
+			PeersClient::Light(ref client) => {
+				use crate::light_import::tests::light_block_import_without_justifications;
+
+				let authorities_provider = Arc::new(self.test_config.clone());
+				// forbid direct finalization using justification that cames with the block
+				// => light clients will try to fetch finality proofs
+				let import = light_block_import_without_justifications(
+					client.clone(),
+					authorities_provider,
+					Arc::new(self.test_config.clone())
+				).expect("Could not create block import for fresh peer.");
+				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
+				let shared_import = Arc::new(import);
+				(shared_import.clone(), None, Some(shared_import), Some(finality_proof_req_builder), Mutex::new(None))
+			},
+		}
+	}
+
+	fn make_finality_proof_provider(&self, client: PeersClient) -> Option<Arc<network::FinalityProofProvider<Block>>> {
+		match client {
+			PeersClient::Full(ref client) => {
+				let authorities_provider = Arc::new(self.test_config.clone());
+				Some(Arc::new(FinalityProofProvider::new(client.clone(), authorities_provider)))
+			},
+			PeersClient::Light(_) => None,
+		}
 	}
 
 	fn peer(&self, i: usize) -> &GrandpaPeer {
@@ -226,14 +271,14 @@ impl Future for Exit {
 }
 
 #[derive(Default, Clone)]
-struct TestApi {
+pub(crate) struct TestApi {
 	genesis_authorities: Vec<(AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 	forced_changes: Arc<Mutex<HashMap<Hash, (BlockNumber, ScheduledChange<BlockNumber>)>>>,
 }
 
 impl TestApi {
-	fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
+	pub fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
@@ -242,7 +287,7 @@ impl TestApi {
 	}
 }
 
-struct RuntimeApi {
+pub(crate) struct RuntimeApi {
 	inner: TestApi,
 }
 
@@ -319,16 +364,12 @@ impl ApiExt<Block> for RuntimeApi {
 impl GrandpaApi<Block> for RuntimeApi {
 	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
 		&self,
-		at: &BlockId<Block>,
+		_: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<(substrate_primitives::ed25519::Public, u64)>>> {
-		if at == &BlockId::Number(0) {
-			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
-		} else {
-			panic!("should generally only request genesis authorities")
-		}
+		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 
 	fn GrandpaApi_grandpa_pending_change_runtime_api_impl(
@@ -364,6 +405,33 @@ impl GrandpaApi<Block> for RuntimeApi {
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
 		Ok(self.inner.forced_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
+	}
+}
+
+impl AuthoritySetForFinalityProver<Block> for TestApi {
+	fn authorities(&self, block: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>> {
+		let runtime_api = RuntimeApi { inner: self.clone() };
+		runtime_api.GrandpaApi_grandpa_authorities_runtime_api_impl(block, ExecutionContext::Syncing, None, Vec::new())
+			.map(|v| match v {
+				NativeOrEncoded::Native(value) => value,
+				_ => unreachable!("only providing native values"),
+			})
+	}
+
+	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<Vec<Vec<u8>>> {
+		self.authorities(block).map(|auth| vec![auth.encode()])
+	}
+}
+
+impl AuthoritySetForFinalityChecker<Block> for TestApi {
+	fn check_authorities_proof(
+		&self,
+		_hash: <Block as BlockT>::Hash,
+		_header: <Block as BlockT>::Header,
+		proof: Vec<Vec<u8>>,
+	) -> Result<Vec<(AuthorityId, u64)>> {
+		Decode::decode(&mut &proof[0][..])
+			.ok_or_else(|| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
 	}
 }
 
@@ -491,7 +559,7 @@ fn finalize_3_voters_no_observers() {
 	run_to_completion(20, net.clone(), peers);
 
 	// normally there's no justification for finalized blocks
-	assert!(net.lock().peer(0).client().backend().blockchain().justification(BlockId::Number(20)).unwrap().is_none(),
+	assert!(net.lock().peer(0).client().justification(&BlockId::Number(20)).unwrap().is_none(),
 		"Extra justification for block#1");
 }
 
@@ -594,11 +662,12 @@ fn transition_3_voters_twice_1_full_observer() {
 	net.lock().sync();
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
-		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
+		let full_client = peer.client().as_full().expect("only full clients are used in test");
+		assert_eq!(full_client.info().unwrap().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			&**peer.client().backend()
+			&**full_client.backend()
 		).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
@@ -679,13 +748,15 @@ fn transition_3_voters_twice_1_full_observer() {
 				link,
 			)
 		};
+
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| Ok(n.header.number() < &30))
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
+					let full_client = client.as_full().expect("only full clients are used in test");
 					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-						&**client.backend()
+						&**full_client.backend()
 					).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
@@ -740,8 +811,8 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(1, net.clone(), peers);
 
-	// ... and check that there's no justification for block#1
-	assert!(net.lock().peer(0).client().backend().blockchain().justification(BlockId::Number(1)).unwrap().is_some(),
+	// ... and check that there's justification for block#1
+	assert!(net.lock().peer(0).client().justification(&BlockId::Number(1)).unwrap().is_some(),
 		"Missing justification for block#1");
 }
 
@@ -760,8 +831,7 @@ fn justification_is_generated_periodically() {
 	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().backend().blockchain()
-			.justification(BlockId::Number(32)).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justification(&BlockId::Number(32)).unwrap().is_some());
 	}
 }
 
@@ -954,8 +1024,9 @@ fn force_change_to_new_set() {
 			assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
 					"Peer #{} failed to sync", i);
 
+			let full_client = peer.client().as_full().expect("only full clients are used in test");
 			let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-				&**peer.client().backend()
+				&**full_client.backend()
 			).unwrap();
 
 			assert_eq!(set.current(), (1, voters.as_slice()));
@@ -982,7 +1053,8 @@ fn allows_reimporting_change_blocks() {
 	let client = net.peer(0).client().clone();
 	let (block_import, ..) = net.make_block_import(client.clone());
 
-	let builder = client.new_block_at(&BlockId::Number(0)).unwrap();
+	let full_client = client.as_full().unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1005,7 +1077,12 @@ fn allows_reimporting_change_blocks() {
 
 	assert_eq!(
 		block_import.import_block(block(), HashMap::new()).unwrap(),
-		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: false }),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: true,
+			clear_justification_requests: false,
+			bad_justification: false,
+			needs_finality_proof: false,
+		}),
 	);
 
 	assert_eq!(
@@ -1025,7 +1102,8 @@ fn test_bad_justification() {
 	let client = net.peer(0).client().clone();
 	let (block_import, ..) = net.make_block_import(client.clone());
 
-	let builder = client.new_block_at(&BlockId::Number(0)).unwrap();
+	let full_client = client.as_full().expect("only full clients are used in test");
+	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1048,7 +1126,12 @@ fn test_bad_justification() {
 
 	assert_eq!(
 		block_import.import_block(block(), HashMap::new()).unwrap(),
-		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: true }),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: true,
+			clear_justification_requests: false,
+			bad_justification: true,
+			..Default::default()
+		}),
 	);
 
 	assert_eq!(
@@ -1093,7 +1176,7 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
-			let (_block_import, _, link) = net.lock().make_block_import(client.clone());
+			let (_block_import, _, _, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
 			let grandpa_params = GrandpaParams {
@@ -1192,7 +1275,7 @@ fn voter_persists_its_votes() {
 						   "Peer #{} failed to sync", 0);
 
 				let block_30_hash =
-					net.lock().peer(0).client().backend().blockchain().hash(30).unwrap().unwrap();
+					net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
 
 				// we restart alice's voter
 				voter_tx.unbounded_send(()).unwrap();
@@ -1292,4 +1375,95 @@ fn finalize_3_voters_1_light_observer() {
 
 		Some(Box::new(finality_notifications.map(|_| ())))
 	});
+}
+
+#[test]
+fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
+	let _ = ::env_logger::try_init();
+
+	let peers = &[AuthorityKeyring::Alice];
+	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
+	net.add_light_peer(&GrandpaTestNet::default_config());
+
+	// import block#1 WITH consensus data change. Light client ignores justification
+	// && instead fetches finality proof for block #1
+	net.peer(0).push_authorities_change_block(vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]);
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(1, net.clone(), peers);
+	net.lock().sync_without_disconnects();
+
+	// check that the block#1 is finalized on light client
+	while net.lock().peer(1).client().info().unwrap().chain.finalized_number != 1 {
+		net.lock().tick_peer(1);
+		net.lock().sync_without_disconnects();
+	}
+}
+
+#[test]
+fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_different() {
+	// for debug: to ensure that without forced change light client will sync finality proof
+	const FORCE_CHANGE: bool = true;
+
+	let _ = ::env_logger::try_init();
+
+	// two of these guys are offline.
+	let genesis_authorities = if FORCE_CHANGE {
+		vec![
+			AuthorityKeyring::Alice,
+			AuthorityKeyring::Bob,
+			AuthorityKeyring::Charlie,
+			AuthorityKeyring::One,
+			AuthorityKeyring::Two,
+		]
+	} else {
+		vec![
+			AuthorityKeyring::Alice,
+			AuthorityKeyring::Bob,
+			AuthorityKeyring::Charlie,
+		]
+	};
+	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let api = TestApi::new(make_ids(&genesis_authorities));
+
+	let voters = make_ids(peers_a);
+	let forced_transitions = api.forced_changes.clone();
+	let net = GrandpaTestNet::new(api, 3);
+	let net = Arc::new(Mutex::new(net));
+
+	let runner_net = net.clone();
+	let add_blocks = move |_| {
+		net.lock().peer(0).push_blocks(1, false); // best is #1
+
+		// add a forced transition at block 5.
+		if FORCE_CHANGE {
+			let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
+			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
+				next_authorities: voters.clone(),
+				delay: 3,
+			}));
+		}
+
+		// ensure block#10 enacts authorities set change => justification is generated
+		// normally it will reach light client, but because of the forced change, it will not
+		net.lock().peer(0).push_blocks(8, false); // best is #9
+		net.lock().peer(0).push_authorities_change_block(
+			vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]
+		); // #10
+		net.lock().peer(0).push_blocks(1, false); // best is #11
+		net.lock().sync_without_disconnects();
+
+		None
+	};
+
+	// finalize block #11 on full clients
+	run_to_completion_with(11, runner_net.clone(), peers_a, add_blocks);
+	// request finalization by light client
+	runner_net.lock().add_light_peer(&GrandpaTestNet::default_config());
+	runner_net.lock().sync_without_disconnects();
+
+ 	// check block, finalized on light client
+	assert_eq!(
+		runner_net.lock().peer(3).client().info().unwrap().chain.finalized_number,
+		if FORCE_CHANGE { 0 } else { 10 },
+	);
 }

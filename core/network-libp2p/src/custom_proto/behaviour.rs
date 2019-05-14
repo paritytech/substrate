@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::DiscoveryNetBehaviour;
 use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
 use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
@@ -348,16 +349,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 		});
 	}
 
-	/// Indicates to the peerset that we have discovered new addresses for a given node.
-	pub fn add_discovered_nodes<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
-			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
-		}));
-	}
-
 	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&self) -> serde_json::Value {
+	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.peerset.debug_info()
 	}
 
@@ -592,6 +585,15 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 			event: CustomProtoHandlerIn::Disable,
 		});
 		*state = PeerState::Disabled { open: false, connected_point, banned_until: None };
+	}
+}
+
+impl<TMessage, TSubstream> DiscoveryNetBehaviour for CustomProto<TMessage, TSubstream> {
+	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
 	}
 }
 
