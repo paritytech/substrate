@@ -119,7 +119,7 @@ pub fn check_equivocation<C, H, P>(
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
 
 		let first_slot = slot_now.saturating_sub(PRUNING_BOUND);
-		let last_slot = slot_now - MAX_SLOT_CAPACITY;
+		let last_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
 		for s in first_slot..last_slot {
 			let mut p = prefix.clone();
 			s.using_encoded(|s| p.extend(s));
