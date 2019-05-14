@@ -589,21 +589,15 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			if check(&inout, threshold) {
 				match check_equivocation(&client, slot_now, slot_num, header.clone(), signer.clone()) {
 					Ok(Some(equivocation_proof)) => {
-						info!(
+						let log_str = format!(
 							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 							signer,
 							slot_num,
 							equivocation_proof.fst_header().hash(),
 							equivocation_proof.snd_header().hash(),
 						);
-
-						Err(format!(
-							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-							signer,
-							slot_num,
-							equivocation_proof.fst_header().hash(),
-							equivocation_proof.snd_header().hash(),
-						))
+						info!("{}", log_str);
+						Err(log_str)
 					},
 					Ok(None) => {
 						Ok(CheckedHeader::Checked(header, digest_item))

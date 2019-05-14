@@ -509,21 +509,15 @@ fn check_header<C, B: Block, P: Pair>(
 				public.clone()
 			) {
 				Ok(Some(equivocation_proof)) => {
-					info!(
+					let log_str = format!(
 						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 						public,
 						slot_num,
 						equivocation_proof.fst_header().hash(),
 						equivocation_proof.snd_header().hash(),
 					);
-
-					Err(format!(
-						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-						public,
-						slot_num,
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
-					))
+					info!("{}", log_str);
+					Err(log_str)
 				},
 				Ok(None) => Ok(CheckedHeader::Checked(header, digest_item)),
 				Err(e) => Err(e.to_string()),
