@@ -20,10 +20,10 @@
 #![warn(missing_docs)]
 
 mod components;
-mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
+pub mod error;
 
 use std::io;
 use std::net::SocketAddr;
@@ -42,7 +42,6 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use substrate_executor::NativeExecutor;
-use consensus_common::SelectChain;
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
@@ -74,7 +73,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: <Components as components::Components>::SelectChain,
+	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
@@ -159,11 +158,11 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-		let best_header = select_chain.best_chain()?;
+		let chain_info = client.info()?.chain;
 
 		let version = config.full_version();
-		info!("Best block: #{}", best_header.number());
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+		info!("Highest known block at #{}", chain_info.best_number);
+		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => chain_info.best_number.as_(), "best" => ?chain_info.best_hash);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
@@ -404,7 +403,7 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 
 	/// Get clone of select chain.
-	pub fn select_chain(&self) -> <Components as components::Components>::SelectChain {
+	pub fn select_chain(&self) -> Option<<Components as components::Components>::SelectChain> {
 		self.select_chain.clone()
 	}
 
