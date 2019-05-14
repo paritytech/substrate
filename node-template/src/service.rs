@@ -10,6 +10,7 @@ use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
 	TaskExecutor,
+	error::{Error as ServiceError, ErrorKind as ServiceErrorKind},
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
@@ -65,11 +66,13 @@ construct_service_factory! {
 						inherents_pool: service.inherents_pool(),
 					});
 					let client = service.client();
+					let select_chain = service.select_chain()
+						.ok_or_else(|| ServiceError::from(ServiceErrorKind::SelectChainRequired))?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client.clone(),
-						service.select_chain(),
+						select_chain,
 						client,
 						proposer,
 						service.network(),

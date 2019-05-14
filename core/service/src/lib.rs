@@ -20,10 +20,10 @@
 #![warn(missing_docs)]
 
 mod components;
-mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
+pub mod error;
 
 use std::io;
 use std::net::SocketAddr;
@@ -42,7 +42,6 @@ use primitives::Pair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use substrate_executor::NativeExecutor;
-use consensus_common::SelectChain;
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
@@ -74,7 +73,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: <Components as components::Components>::SelectChain,
+	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
@@ -159,18 +158,18 @@ impl<Components: components::Components> Service<Components> {
 			select_chain.clone(),
 		)?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-		let best_header = select_chain.best_chain()?;
+		let chain_info = client.info()?.chain;
 
 		let version = config.full_version();
-		info!("Best block: #{}", best_header.number());
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+		info!("Highest known block at #{}", chain_info.best_number);
+		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => chain_info.best_number.as_(), "best" => ?chain_info.best_hash);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !(config.roles == Roles::LIGHT),
+			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 });
@@ -199,12 +198,10 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let (network, network_chan) = network::Service::new(
-			network_params,
-			protocol_id,
-			import_queue
-		)?;
-		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
+		let network = network::Service::new(network_params, protocol_id, import_queue)?;
+		if let Some(on_demand) = on_demand.as_ref() {
+			on_demand.set_network_interface(Box::new(Arc::downgrade(&network)));
+		}
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
@@ -406,7 +403,7 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 
 	/// Get clone of select chain.
-	pub fn select_chain(&self) -> <Components as components::Components>::SelectChain {
+	pub fn select_chain(&self) -> Option<<Components as components::Components>::SelectChain> {
 		self.select_chain.clone()
 	}
 
@@ -543,33 +540,77 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 ///
 /// # Example
 ///
-/// ```nocompile
+/// ```
+/// # use substrate_service::{
+/// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
+/// # };
+/// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+/// # use network::construct_simple_protocol;
+/// # use client::{self, LongestChain};
+/// # use primitives::{Pair as PairT, ed25519};
+/// # use consensus_common::import_queue::{BasicQueue, Verifier};
+/// # use consensus_common::{BlockOrigin, ImportBlock};
+/// # use node_runtime::{GenesisConfig, RuntimeApi};
+/// # use std::sync::Arc;
+/// # use node_primitives::Block;
+/// # use runtime_primitives::Justification;
+/// # use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT};
+/// # use grandpa;
+/// # construct_simple_protocol! {
+/// # 	pub struct NodeProtocol where Block = Block { }
+/// # }
+/// # struct MyVerifier;
+/// # impl<B: BlockT> Verifier<B> for MyVerifier {
+/// # 	fn verify(
+/// # 		&self,
+/// # 		origin: BlockOrigin,
+/// # 		header: B::Header,
+/// # 		justification: Option<Justification>,
+/// # 		body: Option<Vec<B::Extrinsic>>,
+/// # 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+/// # 		unimplemented!();
+/// # 	}
+/// # }
+/// type FullChainApi<T> = transaction_pool::ChainApi<
+/// 	client::Client<FullBackend<T>, FullExecutor<T>, Block, RuntimeApi>, Block>;
+/// type LightChainApi<T> = transaction_pool::ChainApi<
+/// 	client::Client<LightBackend<T>, LightExecutor<T>, Block, RuntimeApi>, Block>;
+///
 /// construct_service_factory! {
 /// 	struct Factory {
-///         // Declare the block type
+/// 		// Declare the block type
 /// 		Block = Block,
-///         // Declare the network protocol and give an initializer.
+/// 		RuntimeApi = RuntimeApi,
+/// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 /// 		RuntimeDispatch = node_executor::Executor,
-/// 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
+/// 		FullTransactionPoolApi = FullChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-/// 		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
+/// 		LightTransactionPoolApi = LightChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 /// 		Genesis = GenesisConfig,
 /// 		Configuration = (),
-/// 		FullService = Service<FullComponents<Self>>
-/// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
-///         // Setup as Consensus Authority (if the role and key are given)
+/// 		FullService = FullComponents<Self>
+/// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
+/// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| { Ok(service) }},
-/// 		LightService = Service<LightComponents<Self>>
-/// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
-///         // Declare the import queue. The import queue is special as it takes two initializers.
-///         // The first one is for the initializing the full import queue and the second for the
-///         // light import queue.
-/// 		ImportQueue = BasicQueue<Block, NoneVerifier>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) }
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) },
+/// 			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<ed25519::Pair>>| {
+/// 				Ok(service)
+/// 			}},
+/// 		LightService = LightComponents<Self>
+/// 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+/// 		FullImportQueue = BasicQueue<Block>
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 		LightImportQueue = BasicQueue<Block>
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
+/// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 			}},
+/// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
+/// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
+/// 			}},
 /// 	}
 /// }
 /// ```

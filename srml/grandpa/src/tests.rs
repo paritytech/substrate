@@ -47,6 +47,7 @@ fn authorities_change_logged() {
 			EventRecord {
 				phase: Phase::Finalization,
 				event: RawEvent::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
+				topics: vec![],
 			},
 		]);
 	});
@@ -77,6 +78,7 @@ fn authorities_change_logged_after_delay() {
 			EventRecord {
 				phase: Phase::Finalization,
 				event: RawEvent::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
+				topics: vec![],
 			},
 		]);
 	});

@@ -33,18 +33,20 @@
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use log::{debug, trace, warn, info};
-use crate::protocol::Context;
+use crate::protocol::PeerInfo as ProtocolPeerInfo;
 use network_libp2p::PeerId;
 use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
-use crate::extra_requests::ExtraRequestsAggregator;
+use crate::sync::extra_requests::ExtraRequestsAggregator;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, CheckedSub};
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
+
+mod extra_requests;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -62,6 +64,28 @@ const BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE: i32 = -(1 << 16);
 const ANCESTRY_BLOCK_ERROR_REPUTATION_CHANGE: i32 = -(1 << 9);
 /// Reputation change when a peer sent us a status message with a different genesis than us.
 const GENESIS_MISMATCH_REPUTATION_CHANGE: i32 = i32::min_value() + 1;
+
+/// Context for a network-specific handler.
+pub trait Context<B: BlockT> {
+	/// Get a reference to the client.
+	fn client(&self) -> &crate::chain::Client<B>;
+
+	/// Adjusts the reputation of the peer. Use this to point out that a peer has been malign or
+	/// irresponsible or appeared lazy.
+	fn report_peer(&mut self, who: PeerId, reputation: i32);
+
+	/// Force disconnecting from a peer. Use this when a peer misbehaved.
+	fn disconnect_peer(&mut self, who: PeerId);
+
+	/// Get peer info.
+	fn peer_info(&self, peer: &PeerId) -> Option<ProtocolPeerInfo<B>>;
+
+	/// Request a finality proof from a peer.
+	fn send_finality_proof_request(&mut self, who: PeerId, request: message::FinalityProofRequest<B::Hash>);
+
+	/// Request a block from a peer.
+	fn send_block_request(&mut self, who: PeerId, request: message::BlockRequest<B>);
+}
 
 #[derive(Debug)]
 pub(crate) struct PeerSync<B: BlockT> {
@@ -157,7 +181,7 @@ impl<B: BlockT> ChainSync<B> {
 		info: &ClientInfo<B>,
 	) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
-		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
+		if role.is_full() {
 			required_block_attributes |= message::BlockAttributes::BODY;
 		}
 
@@ -209,6 +233,12 @@ impl<B: BlockT> ChainSync<B> {
 	/// Handle new connected peer. Call this method whenever we connect to a new peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId) {
 		if let Some(info) = protocol.peer_info(&who) {
+			// there's nothing sync can get from the node that has no blockchain data
+			// (the opposite is not true, but all requests are served at protocol level)
+			if !info.roles.is_full() {
+				return;
+			}
+
 			let status = block_status(&*protocol.client(), &self.queue_blocks, info.best_hash);
 			match (status, info.best_number) {
 				(Err(e), _) => {

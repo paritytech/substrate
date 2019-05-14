@@ -53,3 +53,18 @@ You can use the included vanity generator to find a seed that provides an addres
 ```bash
 subkey vanity 1337
 ```
+
+=== Signing a transaction
+
+Sign a transaction from an encoded `Call`.
+
+```bash
+subkey sign-transaction \
+	--call <call-as-hex> \
+	--nonce 0 \
+	--suri <secret-uri> \
+	--password <password> \
+	--prior-block-hash <prior-block-hash-as-hex>
+```
+
+Will output a signed and encoded `UncheckedMortalCompactExtrinsic` as hex.

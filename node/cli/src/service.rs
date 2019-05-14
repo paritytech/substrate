@@ -31,6 +31,7 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
+	error::{Error as ServiceError, ErrorKind as ServiceErrorKind},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -90,11 +91,13 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
+					let select_chain = service.select_chain()
+						.ok_or_else(|| ServiceError::from(ServiceErrorKind::SelectChainRequired))?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client,
-						service.select_chain(),
+						select_chain,
 						block_import.clone(),
 						proposer,
 						service.network(),
@@ -131,17 +134,17 @@ construct_service_factory! {
 					},
 					Some(_) => {
 						let telemetry_on_connect = TelemetryOnConnect {
-						  on_exit: Box::new(service.on_exit()),
-						  telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-						  executor: &executor,
+							on_exit: Box::new(service.on_exit()),
+							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
+							executor: &executor,
 						};
 						let grandpa_config = grandpa::GrandpaParams {
-						  config: config,
-						  link: link_half,
-						  network: service.network(),
-						  inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-						  on_exit: service.on_exit(),
-						  telemetry_on_connect: Some(telemetry_on_connect),
+							config: config,
+							link: link_half,
+							network: service.network(),
+							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+							on_exit: service.on_exit(),
+							telemetry_on_connect: Some(telemetry_on_connect),
 						};
 						executor.spawn(grandpa::run_grandpa_voter(grandpa_config)?);
 					},
