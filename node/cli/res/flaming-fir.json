@@ -7,9 +7,13 @@
 	},
 	"bootNodes": [
 		"/ip4/35.246.224.91/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+		"/ip4/35.246.224.91/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
 		"/ip4/35.246.210.11/tcp/30333/p2p/QmWv9Ww7znzgLFyCzf21SR6tUKXrmHCZH9KhebeH4gyE9f",
+		"/ip4/35.246.210.11/tcp/30334/ws/p2p/QmWv9Ww7znzgLFyCzf21SR6tUKXrmHCZH9KhebeH4gyE9f",
 		"/ip4/35.198.110.45/tcp/30333/p2p/QmTtcYKJho9vFmqtMA548QBSmLbmwAkBSiEKK3kWKfb6bJ",
-		"/ip4/35.198.114.154/tcp/30333/p2p/QmQJmDorK9c8KjMF5PdWiH2WGUXyzJtgTeJ55S5gggdju6"
+		"/ip4/35.198.110.45/tcp/30334/ws/p2p/QmTtcYKJho9vFmqtMA548QBSmLbmwAkBSiEKK3kWKfb6bJ",
+		"/ip4/35.198.114.154/tcp/30333/p2p/QmQJmDorK9c8KjMF5PdWiH2WGUXyzJtgTeJ55S5gggdju6",
+		"/ip4/35.198.114.154/tcp/30334/ws/p2p/QmQJmDorK9c8KjMF5PdWiH2WGUXyzJtgTeJ55S5gggdju6"
 	],
 	"telemetryEndpoints": [
 		["wss://telemetry.polkadot.io/submit/", 0]
