@@ -56,13 +56,11 @@ pub struct V2CompletedRound<Block: BlockT> {
 	pub votes: Vec<SignedMessage<Block>>,
 }
 
-// Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
-// contains data about at least one round (genesis).
+// Data about last completed rounds.
 #[derive(Debug, Clone, PartialEq)]
 pub struct V2CompletedRounds<Block: BlockT> {
 	pub inner: VecDeque<V2CompletedRound<Block>>,
 }
-
 
 impl<Block: BlockT> Encode for V2CompletedRounds<Block> {
 	fn encode(&self) -> Vec<u8> {
@@ -79,11 +77,7 @@ impl<Block: BlockT> Decode for V2CompletedRounds<Block> {
 	}
 }
 
-// The state of the current voter set, whether it is currently active or not
-/// and information related to the previously completed rounds. Current round
-/// voting status is used when restarting the voter, i.e. it will re-use the
-/// previous votes for a given round if appropriate (same round and same local
-/// key).
+// The state of the current voter set.
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub enum V2VoterSetState<Block: BlockT> {
 	/// The voter is live, i.e. participating in rounds.
@@ -182,6 +176,22 @@ pub(crate) struct PersistentData<Block: BlockT> {
 	pub(crate) set_state: SharedVoterSetState<Block>,
 }
 
+fn make_voter_set_state_live<Block: BlockT>(
+	number: u64,
+	state: RoundState<Block::Hash, NumberFor<Block>>,
+	base: (Block::Hash, NumberFor<Block>),
+) -> VoterSetState<Block> {
+	VoterSetState::Live {
+		completed_rounds: CompletedRounds::new(CompletedRound {
+			number,
+			state,
+			votes: HistoricalVotes::new(),
+			base,
+		}),
+		current_round: HasVoted::No,
+	}
+}
+
 fn migrate_from_version0<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
@@ -213,16 +223,7 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 		let base = last_round_state.prevote_ghost
 			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-		let set_state = VoterSetState::Live {
-			completed_rounds: CompletedRounds::new(CompletedRound {
-				number: last_round_number,
-				state: last_round_state,
-				votes: HistoricalVotes::new(),
-				base,
-			}),
-			current_round: HasVoted::No,
-		};
-
+		let set_state = make_voter_set_state_live(last_round_number, last_round_state, base);
 		backend.insert_aux(&[(SET_STATE_KEY, set_state.encode().as_slice())], &[])?;
 
 		return Ok(Some((new_set, set_state)));
@@ -268,31 +269,13 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 			Some(V1VoterSetState::Live(last_round_number, set_state)) => {
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
-
-				VoterSetState::Live {
-					completed_rounds: CompletedRounds::new(CompletedRound {
-						number: last_round_number,
-						state: set_state,
-						votes: HistoricalVotes::new(),
-						base,
-					}),
-					current_round: HasVoted::No,
-				}
+				make_voter_set_state_live(last_round_number, set_state, base)
 			},
 			None => {
 				let set_state = genesis_round();
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
-
-				VoterSetState::Live {
-					completed_rounds: CompletedRounds::new(CompletedRound {
-						number: 0,
-						state: set_state,
-						votes: HistoricalVotes::new(),
-						base,
-					}),
-					current_round: HasVoted::No,
-				}
+				make_voter_set_state_live(0, set_state, base)
 			},
 		};
 
@@ -304,6 +287,34 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 	Ok(None)
 }
 
+fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Block>) -> VoterSetState<Block> {
+	let transform = |completed_rounds: V2CompletedRounds<Block>| {
+		CompletedRounds::new_with_rounds(completed_rounds.inner.into_iter().map(
+				| V2CompletedRound { number, state, base, votes } | {
+					CompletedRound {
+						number,
+						state,
+						base,
+						votes: HistoricalVotes::new_with_votes(votes),
+					}
+				}
+			).collect::<VecDeque<CompletedRound<Block>>>()
+		)
+	};
+	match voter_set_state_v2 {
+		V2VoterSetState::Paused { completed_rounds } => {
+			VoterSetState::Paused {
+				completed_rounds: transform(completed_rounds)
+			}
+		},
+		V2VoterSetState::Live { completed_rounds, current_round } => {
+			VoterSetState::Live {
+				completed_rounds: transform(completed_rounds),
+				current_round,
+			}
+		},
+	}
+}
 
 fn migrate_from_version2<Block: BlockT, B, G>(
 	backend: &B,
@@ -326,23 +337,12 @@ fn migrate_from_version2<Block: BlockT, B, G>(
 			backend,
 			SET_STATE_KEY,
 		)? {
-			Some(v2_voter_set_state) => {
-				VoterSetState::from(v2_voter_set_state)
-			},
+			Some(voter_set_state_v2) => voter_set_state_from_v2(voter_set_state_v2),
 			None => {
 				let set_state = genesis_round();
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
-
-				VoterSetState::Live {
-					completed_rounds: CompletedRounds::new(CompletedRound {
-						number: 0,
-						state: set_state,
-						votes: HistoricalVotes::new(),
-						base,
-					}),
-					current_round: HasVoted::No,
-				}
+				make_voter_set_state_live(0, set_state, base)
 			},
 		};
 
@@ -353,7 +353,6 @@ fn migrate_from_version2<Block: BlockT, B, G>(
 
 	Ok(None)
 }
-
 
 /// Load or initialize persistent data from backend.
 pub(crate) fn load_persistent<Block: BlockT, B, G>(

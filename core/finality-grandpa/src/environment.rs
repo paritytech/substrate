@@ -42,8 +42,7 @@ use consensus_common::SelectChain;
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, NewAuthoritySet, VoterCommand,
-	aux_schema::{V2VoterSetState, V2CompletedRound}, HistoricalVotes,
+	PrimaryPropose, NewAuthoritySet, VoterCommand, HistoricalVotes,
 };
 
 use crate::authorities::SharedAuthoritySet;
@@ -96,10 +95,15 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 
 impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
-	pub fn new(genesis: CompletedRound<Block>) -> CompletedRounds<Block> {
+	pub fn new(genesis: CompletedRound<Block>) -> Self {
 		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		inner.push_back(genesis);
 		CompletedRounds { inner }
+	}
+
+	/// Create a new completed rounds tracker initialized with the rounds in `completed_rounds`.
+	pub fn new_with_rounds(completed_rounds: VecDeque<CompletedRound<Block>>) -> Self {
+		CompletedRounds { inner: completed_rounds }
 	}
 
 	/// Returns the last (latest) completed round.
@@ -154,46 +158,6 @@ impl<Block: BlockT> VoterSetState<Block> {
 				completed_rounds.clone(),
 			VoterSetState::Paused { completed_rounds } =>
 				completed_rounds.clone(),
-		}
-	}
-}
-
-impl<Block: BlockT> From<V2VoterSetState<Block>> for VoterSetState<Block> {
-	fn from(voter_set_state_v2: V2VoterSetState<Block>) -> Self {
-		match voter_set_state_v2 {
-			V2VoterSetState::Paused { completed_rounds } => {
-				VoterSetState::Paused {
-					completed_rounds: CompletedRounds { 
-						inner: completed_rounds.inner.into_iter().map(
-							| V2CompletedRound { number, state, base, votes } | {
-								CompletedRound {
-									number,
-									state,
-									base,
-									votes: HistoricalVotes::<Block>::new_with_votes(votes),
-								}
-							}
-						).collect::<VecDeque<CompletedRound<Block>>>()
-					}
-				}
-			},
-			V2VoterSetState::Live { completed_rounds, current_round } => {
-				VoterSetState::Live {
-					completed_rounds: CompletedRounds { 
-						inner: completed_rounds.inner.into_iter().map(
-							| V2CompletedRound { number, state, base, votes } | {
-								CompletedRound {
-									number,
-									state,
-									base,
-									votes: HistoricalVotes::<Block>::new_with_votes(votes),
-								}
-							}
-						).collect::<VecDeque<CompletedRound<Block>>>()
-					},
-					current_round,
-				}
-			},
 		}
 	}
 }
