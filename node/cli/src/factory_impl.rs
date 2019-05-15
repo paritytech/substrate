@@ -96,12 +96,12 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 	}
 
 	fn minimum_balance() -> Self::Balance {
-		// TODO get correct amount via api
+		// TODO get correct amount via api. See #2587.
 		1337
 	}
 
 	fn minimum_period() -> Self::Moment {
-		// TODO get minimum_period via api: <timestamp::Module<T>>::minimum_period()
+		// TODO get via api: <timestamp::Module<T>>::minimum_period(). See #2587.
 		99
 	}
 
@@ -126,19 +126,19 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 	}
 
 	fn extract_timestamp(_block_hash: Self::Hash) -> Self::Moment {
-		// TODO get correct timestamp from inherent
+		// TODO get correct timestamp from inherent. See #2587.
 		let now = SystemTime::now();
 		now.duration_since(UNIX_EPOCH)
 			.expect("now always later than unix epoch; qed").as_secs()
 	}
 
 	fn extract_index(_account_id: Self::AccountId, _block_hash: Self::Hash) -> Self::Index {
-		// TODO get correct index for account via api
+		// TODO get correct index for account via api. See #2587.
 		0.as_()
 	}
 
 	fn extract_phase(_block_hash: Self::Hash) -> Self::Phase {
-		// TODO get correct phase via api
+		// TODO get correct phase via api. See #2587.
 		0.as_()
 	}
 }
