@@ -28,11 +28,45 @@ fn should_return_storage() {
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
+	let key = StorageKey(b":code".to_vec());
+
+	assert!(
+		client.storage(key.clone(), Some(genesis_hash).into())
+			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap()
+		> 195_000
+	);
+	assert_matches!(
+		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert!(
+		client.storage_size(key.clone(), None).unwrap().unwrap()
+		> 195_000
+	);
+}
+
+#[test]
+fn should_return_child_storage() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let genesis_hash = client.genesis_hash();
+	let client = State::new(client, Subscriptions::new(core.executor()));
+	let child_key = StorageKey(b"1".to_vec());
+	let key = StorageKey(b"2".to_vec());
+
 
 	assert_matches!(
-		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
+		client.child_storage(child_key.clone(), key.clone(), Some(genesis_hash).into()),
 		Ok(None)
-	)
+	);
+	assert_matches!(
+		client.child_storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into()),
+		Ok(None)
+	);
+	assert_matches!(
+		client.child_storage_size(child_key.clone(), key.clone(), None),
+		Ok(None)
+	);
 }
 
 #[test]

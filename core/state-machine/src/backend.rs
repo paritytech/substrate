@@ -88,7 +88,22 @@ pub trait Backend<H: Hasher> {
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Get all keys with given prefix
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>>;
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		let mut all = Vec::new();
+		self.for_keys_with_prefix(prefix, |k| all.push(k.to_vec()));
+		all
+	}
+
+	/// Get all keys of child storage with given prefix
+	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+		let mut all = Vec::new();
+		self.for_keys_in_child_storage(child_storage_key, |k| {
+			if k.starts_with(prefix) {
+				all.push(k.to_vec());
+			}
+		});
+		all
+	}
 
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
@@ -329,8 +344,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone()))).collect()
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.inner.get(&None).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
+	}
+
+	fn child_keys(&self, storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.inner.get(&Some(storage_key.to_vec())).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
 	}
 
 	fn try_into_trie_backend(

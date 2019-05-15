@@ -373,7 +373,7 @@ where
 		Vec::new()
 	}
 
-	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, _prefix: &[u8]) -> Vec<Vec<u8>> {
 		// whole state is not available on light node
 		Vec::new()
 	}
@@ -465,7 +465,7 @@ where
 		}
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::keys(state, prefix),
