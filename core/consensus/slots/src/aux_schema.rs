@@ -126,7 +126,7 @@ pub fn check_equivocation<C, H, P>(
 	let mut keys_to_delete = vec![];
 	let mut new_first_saved_slot = first_saved_slot;
 
-	if slot_now - first_saved_slot > PRUNING_BOUND {
+	if slot_now - first_saved_slot >= PRUNING_BOUND {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
 		new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
 

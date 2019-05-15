@@ -1037,8 +1037,9 @@ mod tests {
 		let (header1, header1_hash) = create_header(2, 1, &pair);
 		let (header2, header2_hash) = create_header(2, 2, &pair);
 		let (header3, header3_hash) = create_header(4, 2, &pair);
-		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 2, 3, &pair);
-		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 2, 4, &pair);
+		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 4, 3, &pair);
+		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 4, 4, &pair);
+		let (header6, header6_hash) = create_header(4, 3, &pair);
 
 		type B = RawBlock<ExtrinsicWrapper<u64>>;
 		type P = sr25519::Pair;
@@ -1053,11 +1054,15 @@ mod tests {
 		assert!(check_header::<_, B, P>(&c, 4, header2, header2_hash, &authorities, false).is_err());
 
 		// Different slot is ok.
-		assert!(check_header::<_, B, P>(&c, 5, header3.clone(), header3_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities, false).is_ok());
 		
-		// Pruning works.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND, header4, header4_hash, &authorities, false).is_ok());
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 1, header5, header5_hash, &authorities, false).is_err());
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header3, header3_hash, &authorities, false).is_ok());
+		// Here we trigger pruning and save header 4.
+		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities, false).is_ok());
+
+		// This fails because header 5 is an equivocation of header 4.
+		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 3, header5, header5_hash, &authorities, false).is_err());
+
+		// This is ok because we pruned the corresponding header. Shows that we are pruning.
+		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 4, header6, header6_hash, &authorities, false).is_ok());
 	}
 }
