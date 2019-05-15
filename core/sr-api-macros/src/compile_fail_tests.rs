@@ -16,24 +16,6 @@
 
 //! Compile fail tests.
 
-mod adding_self_parameter {
-	/*!
-	```compile_fail
-		#[macro_use]
-		extern crate client;
-		extern crate sr_primitives as runtime_primitives;
-
-		decl_runtime_apis! {
-			pub trait Api {
-				fn test(&self);
-			}
-		}
-
-		fn main() {}
-	```
-	*/
-}
-
 mod adding_at_parameter {
 	/*!
 	```compile_fail
