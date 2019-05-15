@@ -241,9 +241,14 @@ fn decl_store_extra_genesis(
 
 			let value_type = &type_infos.value_type;
 			serde_complete_bound.push(quote!( #value_type ));
-			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
-				serde_complete_bound.push(quote!( #key_type ));
-
+			match type_infos.kind {
+				DeclStorageTypeInfosKind::Map { key_type, .. } =>
+					serde_complete_bound.push(quote!( #key_type )),
+				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+					serde_complete_bound.push(quote!( #key1_type ));
+					serde_complete_bound.push(quote!( #key2_type ));
+				},
+				_ => {},
 			}
 
 			if type_infos.is_option {
@@ -369,7 +374,7 @@ fn decl_store_extra_genesis(
 	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
 		let mut b_dser = String::new();
-		// panic!("{:#?}", serde_complete_bound);
+
 		serde_complete_bound.into_iter().for_each(|bound| {
 			let stype = quote!(#bound);
 			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", stype, scrate));
