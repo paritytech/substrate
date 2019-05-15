@@ -22,37 +22,36 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::swarm::toggle::Toggle;
-use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
-use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, info, trace, warn};
 use std::{cmp, iter, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, clock::Clock};
 use void;
 
+mod debug_info;
+
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourOut<TBehaviourEv>", poll_method = "poll")]
+#[behaviour(out_event = "TBehaviourEv", poll_method = "poll")]
 pub struct Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	/// Main protocol that handles everything except the discovery and the technicalities.
 	user_protocol: UserBehaviourWrap<TBehaviour>,
-	/// Periodically ping nodes, and close the connection if it's unresponsive.
-	ping: Ping<TSubstream>,
+	/// Periodically pings and identifies the nodes we are connected to, and store information in a
+	/// cache.
+	debug_info: debug_info::DebugInfoBehaviour<TSubstream>,
 	/// Discovers nodes of the network. Defined below.
 	discovery: DiscoveryBehaviour<TSubstream>,
-	/// Periodically identifies the remote and responds to incoming requests.
-	identify: Identify<TSubstream>,
 	/// Discovers nodes on the local network.
 	#[cfg(not(target_os = "unknown"))]
 	mdns: Toggle<Mdns<TSubstream>>,
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
-	events: Vec<BehaviourOut<TBehaviourEv>>,
+	events: Vec<TBehaviourEv>,
 }
 
 impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
@@ -64,10 +63,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
 	) -> Self {
-		let identify = {
-			let proto_version = "/substrate/1.0".to_string();
-			Identify::new(proto_version, user_agent, local_public_key.clone())
-		};
+		let debug_info = debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone());
 
 		let mut kademlia = Kademlia::new(local_public_key.clone().into_peer_id());
 		for (peer_id, addr) in &known_addresses {
@@ -82,7 +78,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 		let clock = Clock::new();
 		Behaviour {
 			user_protocol: UserBehaviourWrap(user_protocol),
-			ping: Ping::new(PingConfig::new()),
+			debug_info,
 			discovery: DiscoveryBehaviour {
 				user_defined: known_addresses,
 				kademlia,
@@ -91,7 +87,6 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 				clock,
 				local_peer_id: local_public_key.into_peer_id(),
 			},
-			identify,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
@@ -120,6 +115,15 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 		}
 	}
 
+	/// Borrows `self` and returns a struct giving access to the information about a node.
+	///
+	/// Returns `None` if we don't know anything about this node. Always returns `Some` for nodes
+	/// we're connected to, meaning that if `None` is returned then we're not connected to that
+	/// node.
+	pub fn node(&self, peer_id: &PeerId) -> Option<debug_info::Node> {
+		self.debug_info.node(peer_id)
+	}
+
 	/// Returns a shared reference to the user protocol.
 	pub fn user_protocol(&self) -> &TBehaviour {
 		&self.user_protocol.0
@@ -131,73 +135,39 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	}
 }
 
-/// Event that can be emitted by the behaviour.
-#[derive(Debug)]
-pub enum BehaviourOut<TBehaviourEv> {
-	/// Message from the user protocol.
-	UserProtocol(TBehaviourEv),
-
-	/// We have obtained debug information from a peer.
-	Identified {
-		/// Id of the peer that has been identified.
-		peer_id: PeerId,
-		/// Information about the peer.
-		info: IdentifyInfo,
-	},
-
-	/// We have successfully pinged a peer.
-	PingSuccess {
-		/// Id of the peer that has been pinged.
-		peer_id: PeerId,
-		/// Time it took for the ping to come back.
-		ping_time: Duration,
-	},
-}
-
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
+impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<UserEventWrap<TBehaviourEv>> for Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
+impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<UserEventWrap<TBehaviourEv>> for
+Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	fn inject_event(&mut self, event: UserEventWrap<TBehaviourEv>) {
-		self.events.push(BehaviourOut::UserProtocol(event.0));
+		self.events.push(event.0);
 	}
 }
 
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent>
+impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
 	for Behaviour<TBehaviour, TBehaviourEv, TSubstream>
 	where TBehaviour: DiscoveryNetBehaviour {
-	fn inject_event(&mut self, event: IdentifyEvent) {
-		match event {
-			IdentifyEvent::Identified { peer_id, mut info, .. } => {
-				trace!(target: "sub-libp2p", "Identified {:?} => {:?}", peer_id, info);
-				// TODO: ideally we would delay the first identification to when we open the custom
-				//	protocol, so that we only report id info to the service about the nodes we
-				//	care about (https://github.com/libp2p/rust-libp2p/issues/876)
-				if !info.protocol_version.contains("substrate") {
-					warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
-				}
-				if info.listen_addrs.len() > 30 {
-					warn!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
-						it is identified by {:?} and {:?}", peer_id, info.protocol_version,
-						info.agent_version
-					);
-					info.listen_addrs.truncate(30);
-				}
-				for addr in &info.listen_addrs {
-					self.discovery.kademlia.add_connected_address(&peer_id, addr.clone());
-				}
-				self.user_protocol.0.add_discovered_nodes(iter::once(peer_id.clone()));
-				self.events.push(BehaviourOut::Identified { peer_id, info });
-			}
-			IdentifyEvent::Error { .. } => {}
-			IdentifyEvent::SendBack { result: Err(ref err), ref peer_id } =>
-				debug!(target: "sub-libp2p", "Error when sending back identify info \
-					to {:?} => {}", peer_id, err),
-			IdentifyEvent::SendBack { .. } => {}
+	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
+		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
+		if !info.protocol_version.contains("substrate") {
+			warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
 		}
+		if info.listen_addrs.len() > 30 {
+			warn!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
+				it is identified by {:?} and {:?}", peer_id, info.protocol_version,
+				info.agent_version
+			);
+			info.listen_addrs.truncate(30);
+		}
+		for addr in &info.listen_addrs {
+			self.discovery.kademlia.add_connected_address(&peer_id, addr.clone());
+		}
+		self.user_protocol.0.add_discovered_nodes(iter::once(peer_id.clone()));
 	}
 }
 
@@ -224,18 +194,6 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<Kademlia
 	}
 }
 
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
-	fn inject_event(&mut self, event: PingEvent) {
-		match event {
-			PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } => {
-				trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer, rtt);
-				self.events.push(BehaviourOut::PingSuccess { peer_id: peer, ping_time: rtt });
-			}
-			_ => ()
-		}
-	}
-}
-
 #[cfg(not(target_os = "unknown"))]
 impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for
 	Behaviour<TBehaviour, TBehaviourEv, TSubstream>
@@ -251,7 +209,7 @@ impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<MdnsEven
 }
 
 impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
-	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, BehaviourOut<TBehaviourEv>>> {
+	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, TBehaviourEv>> {
 		if !self.events.is_empty() {
 			return Async::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}
@@ -279,16 +237,21 @@ impl<TInner: NetworkBehaviour> NetworkBehaviour for UserBehaviourWrap<TInner> {
 		self.0.inject_disconnected(peer_id, endpoint)
 	}
 	fn inject_node_event(
-				&mut self,
-				peer_id: PeerId,
-				event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
-		) {
+		&mut self,
+		peer_id: PeerId,
+		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
+	) {
 		self.0.inject_node_event(peer_id, event)
 	}
 	fn poll(
 		&mut self,
 		params: &mut PollParameters
-	) -> Async<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>> {
+	) -> Async<
+		NetworkBehaviourAction<
+			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
+			Self::OutEvent
+		>
+	> {
 		match self.0.poll(params) {
 			Async::NotReady => Async::NotReady,
 			Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) =>
