@@ -145,7 +145,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote changes result future.
 	type RemoteChangesResult: IntoFuture<Item=Vec<(NumberFor<Block>, u32)>, Error=ClientError>;
 	/// Remote block body result future.
-	type RemoteBodyResult: IntoFuture<Item = Option<Vec<Block::Extrinsic>>, Error = ClientError>;
+	type RemoteBodyResult: IntoFuture<Item = Vec<Block::Extrinsic>, Error = ClientError>;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
@@ -472,7 +472,7 @@ pub mod tests {
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
 		type RemoteCallResult = FutureResult<Vec<u8>, ClientError>;
 		type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, ClientError>;
-		type RemoteBodyResult = FutureResult<Option<Vec<Extrinsic>>, ClientError>;
+		type RemoteBodyResult = FutureResult<Vec<Extrinsic>, ClientError>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
 			err("Not implemented on test node".into())

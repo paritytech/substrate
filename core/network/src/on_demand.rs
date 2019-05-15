@@ -149,7 +149,7 @@ struct Request<Block: BlockT> {
 }
 
 enum RequestData<Block: BlockT> {
-	RemoteBody(RemoteBodyRequest<Block::Header>, OneShotSender<Result<Option<Vec<Block::Extrinsic>>, ClientError>>),
+	RemoteBody(RemoteBodyRequest<Block::Header>, OneShotSender<Result<Vec<Block::Extrinsic>, ClientError>>),
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, OneShotSender<Result<Block::Header, ClientError>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
 	RemoteReadChild(
@@ -428,7 +428,7 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 				let	extrinsics_root = HashFor::<B>::ordered_trie_root(bodies.iter().map(Encode::encode));
 				if *request.header.extrinsics_root() == extrinsics_root {
 					let body = std::mem::replace(&mut bodies[0], Vec::new());
-					let _ = sender.send(Ok(Some(body)));
+					let _ = sender.send(Ok(body));
 					Accept::Ok
 				} else {
 					Accept::CheckFailed(
@@ -459,7 +459,7 @@ impl<B> Fetcher<B> for OnDemand<B> where
 	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
 	type RemoteCallResult = RemoteResponse<Vec<u8>>;
 	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
-	type RemoteBodyResult = RemoteResponse<Option<Vec<B::Extrinsic>>>;
+	type RemoteBodyResult = RemoteResponse<Vec<B::Extrinsic>>;
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = channel();

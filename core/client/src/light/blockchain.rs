@@ -156,6 +156,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 				retry_count: None,
 			})
 			.into_future().wait()
+			.map(Some)
 	}
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {
