@@ -205,7 +205,11 @@ publish-docker-release:
     - test "$CI_COMMIT_REF_NAME" = "master" ||
         BRANCH="-$(echo "${CI_COMMIT_REF_NAME}" | sed -r 's/^(v[0-9]+\.[0-9]+)\.[0-9]+$/\1/')"
     - cd ./artifacts
-    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest$BRANCH .
+    - docker build
+      --build-arg VCS_REF="${CI_COMMIT_SHORT_SHA}"
+      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      --tag $CONTAINER_IMAGE:$VERSION 
+      --tag $CONTAINER_IMAGE:latest$BRANCH .
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest$BRANCH
   after_script:
