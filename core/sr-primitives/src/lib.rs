@@ -908,7 +908,7 @@ mod tests {
 	}
 
 	#[test]
-	fn saturating_mul() {
+	fn per_things_one_minus_one_part() {
 		use primitive_types::U256;
 
 		assert_eq!(
