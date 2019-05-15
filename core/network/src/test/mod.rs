@@ -274,12 +274,12 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 }
 
 pub struct Peer<D, S: NetworkSpecialization<Block>> {
-	pub peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
-	pub peer_id: PeerId,
+	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
+	peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
 	protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
-	pub import_queue: Box<BasicQueue<Block>>,
+	import_queue: Box<BasicQueue<Block>>,
 	pub data: D,
 	best_hash: Mutex<Option<H256>>,
 	finalized_hash: Mutex<Option<H256>>,
@@ -440,7 +440,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 	}
 	/// Called after blockchain has been populated to updated current state.
-	pub fn start(&self) {
+	fn start(&self) {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
 		let header = self
@@ -451,7 +451,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		self.net_proto_channel.send_from_client(ProtocolMsg::BlockImported(info.chain.best_hash, header));
 	}
 
-	pub fn on_block_imported(
+	fn on_block_imported(
 		&self,
 		hash: <Block as BlockT>::Hash,
 		header: &<Block as BlockT>::Header,
@@ -461,18 +461,18 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// SyncOracle: are we connected to any peer?
 	#[cfg(test)]
-	pub fn is_offline(&self) -> bool {
+	fn is_offline(&self) -> bool {
 		self.protocol_status.read().sync.is_offline()
 	}
 
 	/// SyncOracle: are we in the process of catching-up with the chain?
 	#[cfg(test)]
-	pub fn is_major_syncing(&self) -> bool {
+	fn is_major_syncing(&self) -> bool {
 		self.protocol_status.read().sync.is_major_syncing()
 	}
 
 	/// Get protocol status.
-	pub fn protocol_status(&self) -> ProtocolStatus<Block> {
+	fn protocol_status(&self) -> ProtocolStatus<Block> {
 		self.protocol_status.read().clone()
 	}
 
@@ -530,7 +530,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Send block finalization notifications.
-	pub fn send_finality_notifications(&self) {
+	fn send_finality_notifications(&self) {
 		let info = self.client.info().expect("In-mem client does not fail");
 
 		let mut finalized_hash = self.finalized_hash.lock();
@@ -566,10 +566,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		);
 	}
 
-	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
-		self.with_gossip(move |gossip, _| gossip.collect_garbage())
-	}
-
 	/// access the underlying consensus gossip handler
 	pub fn consensus_gossip_messages_for(
 		&self,
@@ -592,7 +588,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Announce a block to peers.
-	pub fn announce_block(&self, block: Hash) {
+	fn announce_block(&self, block: Hash) {
 		self.net_proto_channel.send_from_client(ProtocolMsg::AnnounceBlock(block));
 	}
 
@@ -612,7 +608,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Add blocks to the peer -- edit the block before adding. The chain will
 	/// start at the given block iD.
-	pub fn generate_blocks_at<F>(
+	fn generate_blocks_at<F>(
 		&self,
 		at: BlockId<Block>,
 		count: usize,
@@ -660,7 +656,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+	fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
