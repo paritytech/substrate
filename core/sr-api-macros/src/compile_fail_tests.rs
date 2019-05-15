@@ -16,26 +16,6 @@
 
 //! Compile fail tests.
 
-mod declaring_own_block_with_different_name {
-	/*!
-	```compile_fail
-		#[macro_use]
-		extern crate client;
-		extern crate sr_primitives as runtime_primitives;
-
-		use runtime_primitives::traits::Block as BlockT;
-
-		decl_runtime_apis! {
-			pub trait Api<B: BlockT> {
-				fn test();
-			}
-		}
-
-		fn main() {}
-	```
-	*/
-}
-
 mod adding_self_parameter {
 	/*!
 	```compile_fail

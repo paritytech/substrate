@@ -1,17 +1,11 @@
-error: `Block: BlockT` generic parameter will be added automatically by the `decl_runtime_apis!` macro!
- --> $DIR/declaring_old_block.rs:5:16
-  |
-5 |     pub trait Api<Block: BlockT> {
-  |                   ^^^^^
-
 error: `Block: BlockT` generic parameter will be added automatically by the `decl_runtime_apis!` macro! If you try to use a different trait than the substrate `Block` trait, please rename it locally.
- --> $DIR/declaring_old_block.rs:5:23
+ --> $DIR/declaring_own_block_with_different_name.rs:5:19
   |
-5 |     pub trait Api<Block: BlockT> {
-  |                          ^^^^^^
+5 |     pub trait Api<B: BlockT> {
+  |                      ^^^^^^
 
 warning: unused import: `runtime_primitives::traits::Block as BlockT`
- --> $DIR/declaring_old_block.rs:1:5
+ --> $DIR/declaring_own_block_with_different_name.rs:1:5
   |
 1 | use runtime_primitives::traits::Block as BlockT;
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
