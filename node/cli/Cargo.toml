@@ -33,6 +33,7 @@ substrate-telemetry = { package = "substrate-telemetry", path = "../../core/tele
 
 [dev-dependencies]
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
+substrate-keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }

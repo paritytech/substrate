@@ -263,4 +263,17 @@ mod tests {
 		service_test::sync::<Factory, _, _>(chain_spec::integration_test_config(), block_factory, extrinsic_factory);
 	}
 
+	#[test]
+	fn test_consensus() {
+		use substrate_keyring::ed25519::{self, Keyring};
+		use super::Factory;
+
+		service_test::consensus::<Factory>(
+			crate::chain_spec::tests::integration_test_config(),
+			vec![
+				"//Alice".into(),
+				"//Bob".into(),
+			],
+		)
+	}
 }
