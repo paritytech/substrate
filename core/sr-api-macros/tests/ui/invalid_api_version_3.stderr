@@ -27,9 +27,3 @@ error: Unexpected `api_version` attribute. The supported format is `api_version(
   |
 4 |     #[api_version()]
   |       ^^^^^^^^^^^
-
-error[E0601]: `main` function not found in crate `$CRATE`
-  |
-  = note: consider adding a `main` function to `$DIR/tests/ui/invalid_api_version_3.rs`
-
-For more information about this error, try `rustc --explain E0601`.

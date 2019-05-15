@@ -6,3 +6,6 @@ decl_runtime_apis! {
 		fn test(data: u64);
 	}
 }
+
+fn main() {}
+
