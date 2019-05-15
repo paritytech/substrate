@@ -11,6 +11,7 @@ stages:
   - build
   - publish
   - deploy
+  - flaming-fir
 
 image:                             parity/rust-builder:latest
 
@@ -328,7 +329,7 @@ deploy-ue1-tag:
     name: parity-prod-ue1
 
 .validator-deploy: &validator-deploy
-  stage: deploy
+  stage: flaming-fir
   dependencies:
     - build-linux-release
   image: parity/azure-ansible:v1
@@ -340,4 +341,16 @@ deploy-ue1-tag:
 validator1:
   <<: *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh
+    - ./scripts/flamingfir-deploy
+validator2:
+  <<: *validator-deploy
+  script:
+    - ./scripts/flamingfir-deploy
+validator3:
+  <<: *validator-deploy
+  script:
+    - ./scripts/flamingfir-deploy
+validator4
+  <<: *validator-deploy
+  script:
+    - ./scripts/flamingfir-deploy
