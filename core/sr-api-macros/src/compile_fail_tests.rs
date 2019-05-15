@@ -16,25 +16,6 @@
 
 //! Compile fail tests.
 
-mod invalid_api_version {
-	/*!
-	```compile_fail
-		#[macro_use]
-		extern crate client;
-		extern crate sr_primitives as runtime_primitives;
-
-		decl_runtime_apis! {
-			#[api_version]
-			pub trait Api {
-				fn test(data: u64);
-			}
-		}
-
-		fn main() {}
-	```
-	*/
-}
-
 mod invalid_api_version_2 {
 	/*!
 	```compile_fail
