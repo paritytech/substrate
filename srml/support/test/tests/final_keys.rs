@@ -43,7 +43,7 @@ srml_support::decl_storage!{
 		pub DoubleMap2: double_map hasher(twox_128) u32, blake2_128(u32) => u32;
 
 		pub Foo get(foo) config(): Option<T::BlockNumber>;
-		pub Foo2 get(foo2) config(): double_map u32, blake2_256(T::BlockNumber) => Option<T::BlockNumber>;
+		pub Foo2 get(foo2) config(): double_map u32, blake2_256(T::BlockNumber) => Option<u32>;
 	}
 }
 
