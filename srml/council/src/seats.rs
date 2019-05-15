@@ -164,20 +164,24 @@ decl_module! {
 			#[compact] assumed_vote_index: VoteIndex
 		) {
 			let reporter = ensure_signed(origin)?;
-
 			let who = T::Lookup::lookup(who)?;
+
 			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 			ensure!(Self::voter_activity(&reporter).is_some(), "reporter must be a voter");
+
 			let activity = Self::voter_activity(&who).ok_or("target for inactivity cleanup must be active")?;
 			let last_active = activity.last_active;
+
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
 			ensure!(assumed_vote_index > last_active + Self::inactivity_grace_period(), "cannot reap during grace period");
+
 			let reporter_index = reporter_index as usize;
 			let who_index = who_index as usize;
-			let maybe_voter = Self::voter_at(reporter_index);
-			let maybe_who = Self::voter_at(who_index);
-			ensure!(maybe_voter.is_some() && maybe_voter.unwrap_or_default().0 == reporter, "bad reporter index");
-			ensure!(maybe_who.is_some() && maybe_who.unwrap_or_default().0 == who, "bad target index");
+			let assumed_reporter = Self::voter_at(reporter_index).ok_or("invalid reporter index")?;
+			let assumed_who = Self::voter_at(who_index).ok_or("invalid target index")?;
+
+			ensure!(assumed_reporter.0 == reporter, "bad reporter index");
+			ensure!(assumed_who.0 == who, "bad target index");
 
 			// will definitely kill one of reporter or who now.
 
@@ -223,9 +227,8 @@ decl_module! {
 			ensure!(!Self::presentation_active(), "cannot retract when presenting");
 			ensure!(<ActivityInfoOf<T>>::exists(&who), "cannot retract non-voter");
 			let index = index as usize;
-			let maybe_who = Self::voter_at(index);
-			ensure!(maybe_who.is_some(), "retraction index invalid");
-			ensure!(maybe_who.unwrap_or_default().0 == who, "retraction index mismatch");
+			let voter = Self::voter_at(index).ok_or("retraction index invalid")?;
+			ensure!(voter.0 == who, "retraction index mismatch");
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, Self::voting_bond());
@@ -564,10 +567,9 @@ impl<T: Trait> Module<T> {
 
 		if let Some(activity) = Self::voter_activity(&who) {
 			let voter_index = voter_index as usize;
-			let maybe_voter = Self::voter_at(voter_index);
-			ensure!(maybe_voter.is_some(), "invalid voter index.");
-			let (voter, stake) = maybe_voter.expect("is_some() checked above; qed");
-			ensure!(voter == who, "wrong voter index.");
+			let voter_struct = Self::voter_at(voter_index).ok_or("invalid voter index")?;
+			let (voter, stake) = voter_struct;
+			ensure!(voter == who, "wrong voter index");
 
 			// already a voter and index is valid. update pot. O(1)
 			let (set_index, vec_index) = Self::split_index::<SetIndex>(voter_index, VOTER_SET_SIZE);
@@ -1083,9 +1085,9 @@ mod tests {
 			assert_ok!(Council::set_approvals(Origin::signed(5), vec![true], 0, 100));
 
 			// invalid index
-			assert_noop!(Council::set_approvals(Origin::signed(4), vec![true], 0, 5), "invalid voter index.");
+			assert_noop!(Council::set_approvals(Origin::signed(4), vec![true], 0, 5), "invalid voter index");
 			// wrong index
-			assert_noop!(Council::set_approvals(Origin::signed(4), vec![true], 0, 0), "wrong voter index.");
+			assert_noop!(Council::set_approvals(Origin::signed(4), vec![true], 0, 0), "wrong voter index");
 			// correct
 			assert_ok!(Council::set_approvals(Origin::signed(4), vec![true], 0, 1));
 		})
@@ -1109,7 +1111,7 @@ mod tests {
 			// still the same. These holes are in some other set.
 			assert_eq!(Council::voter_at(64).unwrap(), (65, 5));
 			// proof: can submit a new approval with the old index.
-			assert_noop!(Council::set_approvals(Origin::signed(65), vec![false, true], 0, 64 - 2), "invalid voter index.");
+			assert_noop!(Council::set_approvals(Origin::signed(65), vec![false, true], 0, 64 - 2), "invalid voter index");
 			assert_ok!(Council::set_approvals(Origin::signed(65), vec![false, true], 0, 64));
 		})
 	}
@@ -1130,7 +1132,7 @@ mod tests {
 
 			assert_eq!(Council::voter_at(0).unwrap(), (64, 5));
 			// Same, updated index must be used for set_approvals
-			assert_noop!(Council::set_approvals(Origin::signed(64), vec![false, true], 0, 64), "invalid voter index.");
+			assert_noop!(Council::set_approvals(Origin::signed(64), vec![false, true], 0, 64), "invalid voter index");
 			assert_ok!(Council::set_approvals(Origin::signed(64), vec![false, true], 0, 0));
 		})
 	}
@@ -1981,7 +1983,7 @@ mod tests {
 				42,
 				2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2
-			), "bad reporter index");
+			), "invalid reporter index");
 		});
 	}
 
@@ -2010,7 +2012,7 @@ mod tests {
 				(voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2, 42,
 				2
-			), "bad target index");
+			), "invalid target index");
 		});
 	}
 
