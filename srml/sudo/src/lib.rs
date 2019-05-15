@@ -90,7 +90,7 @@ use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
 use srml_support::{
 	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
-	decl_storage, ensure, dispatch::Result,
+	decl_storage, ensure
 };
 use system::ensure_signed;
 
@@ -110,14 +110,20 @@ decl_module! {
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		fn sudo(origin, proposal: Box<T::Proposal>) -> Result {
+		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let res = proposal.dispatch(system::RawOrigin::Root.into());
-			Self::deposit_event(RawEvent::Sudid(res.is_ok()));
-			res
+			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
+				Ok(_) => true,
+				Err(e) => {
+					sr_io::print(e);
+					false
+				}
+			};
+
+			Self::deposit_event(RawEvent::Sudid(res));
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
