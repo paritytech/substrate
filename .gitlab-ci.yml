@@ -328,7 +328,7 @@ deploy-ue1-tag:
     name: parity-prod-ue1
 
 .validator-deploy: &validator-deploy
-  stage: publish
+  stage: deploy
   dependencies:
     - build-linux-release
   image: parity/azure-ansible:v1
@@ -340,10 +340,4 @@ deploy-ue1-tag:
 validator1:
   <<: *validator-deploy
   script:
-    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator1
-
-validator2:
-  <<: *validator-deploy
-  script:
-    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator2
-
+    - ./scripts/flamingfir-deploy.sh
