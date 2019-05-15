@@ -180,7 +180,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 						let temp =
 							n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
 							* (*n.load / SCALE_FACTOR);
-						c.score = Fraction::from_max_value((*c.score).saturating_add(temp));
+						c.score = Fraction::from_parts((*c.score).saturating_add(temp));
 					}
 				}
 			}
@@ -196,7 +196,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for n in &mut nominators {
 					for e in &mut n.edges {
 						if e.who == winner.who {
-							e.load = Fraction::from_max_value(*winner.score - *n.load);
+							e.load = Fraction::from_parts(*winner.score - *n.load);
 							n.load = winner.score;
 						}
 					}
