@@ -20,7 +20,7 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![forbid(unsafe_code, missing_docs)]
+#![forbid(warnings, unsafe_code, missing_docs)]
 
 mod slots;
 mod aux_schema;
