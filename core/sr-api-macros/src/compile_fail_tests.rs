@@ -16,44 +16,6 @@
 
 //! Compile fail tests.
 
-mod type_reference_in_impl_runtime_apis_call {
-	/*!
-	```compile_fail
-		#[macro_use]
-		extern crate client;
-		extern crate substrate_test_client as test_client;
-		extern crate sr_primitives as runtime_primitives;
-		extern crate substrate_primitives as primitives;
-
-		use runtime_primitives::traits::GetNodeBlockType;
-		use test_client::runtime::Block;
-
-		/// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
-		/// trait are done by the `construct_runtime!` macro in a real runtime.
-		struct Runtime {}
-		impl GetNodeBlockType for Runtime {
-			type NodeBlock = Block;
-		}
-
-		decl_runtime_apis! {
-			pub trait Api {
-				fn test(data: u64);
-			}
-		}
-
-		impl_runtime_apis! {
-			impl self::Api<Block> for Runtime {
-				fn test(data: &u64) {
-					unimplemented!()
-				}
-			}
-		}
-
-		fn main() {}
-	```
-	*/
-}
-
 mod impl_incorrect_method_signature {
 	/*!
 	```compile_fail
