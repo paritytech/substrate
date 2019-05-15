@@ -85,6 +85,7 @@ pub fn check_equivocation<C, H, P>(
 		C: AuxStore,
 		P: Encode + Decode + PartialEq,
 {
+	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
 		return Ok(None)
 	}
@@ -100,7 +101,7 @@ pub fn check_equivocation<C, H, P>(
 	// Get first slot saved.
 	let slot_header_start = SLOT_HEADER_START.to_vec();
 	let first_saved_slot = load_decode::<_, u64>(backend.clone(), &slot_header_start[..])?
-		.unwrap_or(slot_now);
+		.unwrap_or(slot);
 
 	for (prev_header, prev_signer) in headers_with_sig.iter() {
 		// A proof of equivocation consists of two headers:
@@ -127,8 +128,8 @@ pub fn check_equivocation<C, H, P>(
 
 	if slot_now - first_saved_slot > PRUNING_BOUND {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
-
 		new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
+
 		for s in first_saved_slot..new_first_saved_slot {
 			let mut p = prefix.clone();
 			s.using_encoded(|s| p.extend(s));
