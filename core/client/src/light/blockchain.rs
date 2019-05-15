@@ -154,8 +154,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 		self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 			.remote_body(RemoteBodyRequest {
-				header: header.hash(),
-				number: *header.number(),
+				header,
 				retry_count: None,
 			})
 			.into_future().wait()

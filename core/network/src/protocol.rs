@@ -569,12 +569,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 		}
-
 		let response = message::generic::BlockResponse {
 			id: request.id,
 			blocks: blocks,
 		};
-
 		trace!(target: "sync", "Sending BlockResponse with {} blocks", response.blocks.len());
 		self.send_message(peer, GenericMessage::BlockResponse(response))
 	}

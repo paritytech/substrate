@@ -22,8 +22,8 @@ use std::time::{Instant, Duration};
 use log::{trace, info};
 use futures::{Async, Future, Poll};
 use futures::sync::oneshot::{channel, Receiver, Sender as OneShotSender};
-use linked_hash_map::LinkedHashMap;
-use linked_hash_map::Entry;
+use linked_hash_map::{Entry, LinkedHashMap};
+use parity_codec::Encode;
 use parking_lot::Mutex;
 use client::error::Error as ClientError;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
@@ -34,7 +34,7 @@ use network_libp2p::PeerId;
 use crate::config::Roles;
 use crate::service::Service as NetworkService;
 use crate::specialization::NetworkSpecialization;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Hash, Header as HeaderT, NumberFor, HashFor};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -406,41 +406,38 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 	fn on_remote_body_response(&self, peer: PeerId, response: message::BlockResponse<B>) {
 		self.accept_response("body", peer, response.id, |request| match request.data {
 			RequestData::RemoteBody(request, sender) => {
-				let num_bodies = response.blocks.iter().count();
-
-				// Number of bodies are hardcoded to 1 for valid `RemoteBodyResponses`
-				if num_bodies != 1 {
-					return Accept::CheckFailed("RemoteBodyResponse: invalid number of blocks".into(),
-												RequestData::RemoteBody(request, sender))
-				}
-
-				let response = response
+				let mut bodies: Vec<_> = response
 					.blocks
 					.into_iter()
-					.map(|b| match (b.body, b.header) {
-						(Some(b), Some(h)) => Some((b, h)),
-						_ => None
-					})
-					.nth(0);
+					.filter_map(|b| b.body)
+					.collect();
 
-				// Body and Header should included in valid `RemoteBodyResponses`
-				let (body, header) = match response {
-					Some(Some((b, h))) => (b, h),
-					_ => return Accept::CheckFailed("RemoteBodyResponse: is missing body or header".into(),
-													RequestData::RemoteBody(request, sender)),
-				};
+				// Number of bodies are hardcoded to 1 for valid `RemoteBodyResponses`
+				if bodies.len() != 1 {
+					return Accept::CheckFailed(
+						"RemoteBodyResponse: invalid number of blocks".into(),
+						RequestData::RemoteBody(request, sender),
+					)
+				}
 
-				// TODO(svyatonik/niklasad1): ideally we should fetch only:
-				// Body + HashFor::<Block>::ordered_trie_root(body) + checking it against local header.extrinsic_root()
+				// TODO(niklasad1/svyatonik): there is nothing in the runtime that ensures that
+				// `Header::extrinsics_root()` actually returns
+				// `<Block>::ordered_trie_root(body.iter().map(Encode::encode))`.
 				//
-				// However, because the `runtime` don't guarantee that `ordereed_trie_root(body)` ==
-				// `Header::extrinsic_root, just compare the hashes for now!
-				if request.header == header.hash() {
+				// Thus, this may fail
+				let	extrinsics_root = HashFor::<B>::ordered_trie_root(bodies.iter().map(Encode::encode));
+				if *request.header.extrinsics_root() == extrinsics_root {
+					let body = std::mem::replace(&mut bodies[0], Vec::new());
 					let _ = sender.send(Ok(Some(body)));
 					Accept::Ok
 				} else {
-					Accept::CheckFailed("RemoteBodyResponse: invalid extrinsic root".into(),
-										RequestData::RemoteBody(request, sender))
+					Accept::CheckFailed(
+						format!("RemoteBodyRequest: invalid extrinsics root expected: {} but got {}",
+								*request.header.extrinsics_root(),
+								extrinsics_root,
+						).into(),
+						RequestData::RemoteBody(request, sender)
+					)
 				}
 			}
 			other => Accept::Unexpected(other),
@@ -642,7 +639,7 @@ impl<Block: BlockT> Request<Block> {
 			RequestData::RemoteReadChild(ref data, _) => *data.header.number(),
 			RequestData::RemoteCall(ref data, _) => *data.header.number(),
 			RequestData::RemoteChanges(ref data, _) => data.max_block.0,
-			RequestData::RemoteBody(ref data, _) => data.number,
+			RequestData::RemoteBody(ref data, _) => *data.header.number(),
 		}
 	}
 
@@ -686,8 +683,8 @@ impl<Block: BlockT> Request<Block> {
 			RequestData::RemoteBody(ref data, _) => {
 				message::generic::Message::BlockRequest(message::BlockRequest::<Block> {
 					id: self.id,
-					fields: message::BlockAttributes::BODY | message::BlockAttributes::HEADER,
-					from: message::FromBlock::Hash(data.header),
+					fields: message::BlockAttributes::BODY,
+					from: message::FromBlock::Hash(data.header.hash()),
 					to: None,
 					direction: message::Direction::Ascending,
 					max: Some(1),
