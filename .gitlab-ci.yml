@@ -341,16 +341,16 @@ deploy-ue1-tag:
 validator1:
   <<: *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy
+    - ./scripts/flamingfir-deploy.sh
 validator2:
   <<: *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy
+    - ./scripts/flamingfir-deploy.sh
 validator3:
   <<: *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy
-validator4
+    - ./scripts/flamingfir-deploy.sh
+validator4:
   <<: *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy
+    - ./scripts/flamingfir-deploy.sh
