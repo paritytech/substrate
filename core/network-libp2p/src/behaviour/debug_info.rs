@@ -259,7 +259,12 @@ where TSubstream: AsyncRead + AsyncWrite {
 	fn poll(
 		&mut self,
 		params: &mut PollParameters
-	) -> Async<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>> {
+	) -> Async<
+		NetworkBehaviourAction<
+			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
+			Self::OutEvent
+		>
+	> {
 		loop {
 			match self.ping.poll(params) {
 				Async::NotReady => break,
@@ -273,7 +278,10 @@ where TSubstream: AsyncRead + AsyncWrite {
 				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
 					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
 				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event: EitherOutput::First(event) }),
+					return Async::Ready(NetworkBehaviourAction::SendEvent {
+						peer_id,
+						event: EitherOutput::First(event)
+					}),
 				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
 					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
@@ -286,7 +294,8 @@ where TSubstream: AsyncRead + AsyncWrite {
 					match event {
 						IdentifyEvent::Identified { peer_id, info, .. } => {
 							self.handle_identify_report(&peer_id, &info);
-							return Async::Ready(NetworkBehaviourAction::GenerateEvent(DebugInfoEvent::Identified { peer_id, info }));
+							let event = DebugInfoEvent::Identified { peer_id, info };
+							return Async::Ready(NetworkBehaviourAction::GenerateEvent(event));
 						}
 						IdentifyEvent::Error { .. } => {}
 						IdentifyEvent::SendBack { result: Err(ref err), ref peer_id } =>
@@ -300,7 +309,10 @@ where TSubstream: AsyncRead + AsyncWrite {
 				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
 					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
 				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-					return Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event: EitherOutput::Second(event) }),
+					return Async::Ready(NetworkBehaviourAction::SendEvent {
+						peer_id,
+						event: EitherOutput::Second(event)
+					}),
 				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
 					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}

@@ -155,7 +155,10 @@ pub enum ServiceEvent<TMessage> {
 /// Network service. Must be polled regularly in order for the networking to work.
 pub struct Service<TMessage> where TMessage: CustomMessage {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<CustomProto<TMessage, Substream<StreamMuxerBox>>, CustomProtoOut<TMessage>, Substream<StreamMuxerBox>>>,
+	swarm: Swarm<
+		Boxed<(PeerId, StreamMuxerBox), IoError>,
+		Behaviour<CustomProto<TMessage, Substream<StreamMuxerBox>>, CustomProtoOut<TMessage>, Substream<StreamMuxerBox>>
+	>,
 
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,

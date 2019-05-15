@@ -135,13 +135,15 @@ impl<TBehaviour, TBehaviourEv, TSubstream> Behaviour<TBehaviour, TBehaviourEv, T
 	}
 }
 
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
+impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<UserEventWrap<TBehaviourEv>> for Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
+impl<TBehaviour, TBehaviourEv, TSubstream> NetworkBehaviourEventProcess<UserEventWrap<TBehaviourEv>> for
+Behaviour<TBehaviour, TBehaviourEv, TSubstream> {
 	fn inject_event(&mut self, event: UserEventWrap<TBehaviourEv>) {
 		self.events.push(event.0);
 	}
@@ -235,16 +237,21 @@ impl<TInner: NetworkBehaviour> NetworkBehaviour for UserBehaviourWrap<TInner> {
 		self.0.inject_disconnected(peer_id, endpoint)
 	}
 	fn inject_node_event(
-				&mut self,
-				peer_id: PeerId,
-				event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
-		) {
+		&mut self,
+		peer_id: PeerId,
+		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
+	) {
 		self.0.inject_node_event(peer_id, event)
 	}
 	fn poll(
 		&mut self,
 		params: &mut PollParameters
-	) -> Async<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>> {
+	) -> Async<
+		NetworkBehaviourAction<
+			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
+			Self::OutEvent
+		>
+	> {
 		match self.0.poll(params) {
 			Async::NotReady => Async::NotReady,
 			Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) =>
