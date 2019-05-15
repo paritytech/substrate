@@ -365,7 +365,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	pub fn on_custom_message(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId, message: Message<B>) -> CustomMessageOutcome<B> {
+	pub fn on_custom_message(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		who: PeerId,
+		message: Message<B>
+	) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(network_out, who, r),
@@ -420,13 +425,19 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
-	pub fn consensus_gossip_lock<'a>(&'a mut self, network_out: &'a mut dyn NetworkOut<B>) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
+	pub fn consensus_gossip_lock<'a>(
+		&'a mut self,
+		network_out: &'a mut dyn NetworkOut<B>
+	) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
 		let context = ProtocolContext::new(&mut self.context_data, network_out);
 		(context, &mut self.consensus_gossip)
 	}
 
 	/// Locks `self` and returns a context plus the network specialization.
-	pub fn specialization_lock<'a>(&'a mut self, network_out: &'a mut dyn NetworkOut<B>) -> (impl Context<B> + 'a, &'a mut S) {
+	pub fn specialization_lock<'a>(
+		&'a mut self,
+		network_out: &'a mut dyn NetworkOut<B>
+	) -> (impl Context<B> + 'a, &'a mut S) {
 		let context = ProtocolContext::new(&mut self.context_data, network_out);
 		(context, &mut self.specialization)
 	}
@@ -753,7 +764,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called when peer sends us new extrinsics
-	fn on_extrinsics(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId, extrinsics: message::Transactions<B::Extrinsic>) {
+	fn on_extrinsics(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		who: PeerId,
+		extrinsics: message::Transactions<B::Extrinsic>
+	) {
 		// Accept extrinsics only when fully synced
 		if self.sync.status().state != SyncState::Idle {
 			trace!(target: "sync", "{} Ignoring extrinsics while syncing", who);
@@ -847,7 +863,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_block_announce(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId, announce: message::BlockAnnounce<B::Header>) {
+	fn on_block_announce(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		who: PeerId,
+		announce: message::BlockAnnounce<B::Header>
+	) {
 		let header = announce.header;
 		let hash = header.hash();
 		{
@@ -962,7 +983,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the import queue, with or without
 	/// errors.
-	pub fn blocks_processed(&mut self, network_out: &mut dyn NetworkOut<B>, processed_blocks: Vec<B::Hash>, has_error: bool) {
+	pub fn blocks_processed(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		processed_blocks: Vec<B::Hash>,
+		has_error: bool
+	) {
 		self.sync.blocks_processed(processed_blocks, has_error);
 		let mut context =
 			ProtocolContext::new(&mut self.context_data, network_out);
