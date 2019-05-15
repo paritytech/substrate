@@ -508,6 +508,35 @@ mod tests {
 	}
 
 	#[test]
+	// Note: This test demonstrates that `on_dilution` does not increase the pot with good resolution
+	// with large amounts of the network staked. https://github.com/paritytech/substrate/issues/2579
+	// A fix to 2579 should include a change of this test.
+	fn on_dilution_quantization_effects() {
+		with_externalities(&mut new_test_ext(), || {
+			// minted = 1% of total issuance for all cases
+			let _ = Treasury::set_pot(0);
+			assert_eq!(Balances::total_issuance(), 200);
+
+			Treasury::on_dilution(2, 66);   // portion = 33% of total issuance
+			assert_eq!(Treasury::pot(), 4); // should increase by 4 (200 - 66) / 66 * 2
+
+			Treasury::on_dilution(2, 67);   // portion = 33+eps% of total issuance
+			assert_eq!(Treasury::pot(), 6); // should increase by 2 (200 - 67) / 67 * 2
+
+			Treasury::on_dilution(2, 100);  // portion = 50% of total issuance
+			assert_eq!(Treasury::pot(), 8); // should increase by 2 (200 - 100) / 100 * 2
+
+			// If any more than 50% of the network is staked (i.e. (2 * portion) > total_issuance)
+			// then the pot will not increase.
+			Treasury::on_dilution(2, 101);  // portion = 50+eps% of total issuance
+			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 101) / 101 * 2
+
+			Treasury::on_dilution(2, 134);  // portion = 67% of total issuance
+			assert_eq!(Treasury::pot(), 8); // should increase by 0 (200 - 134) / 134 * 2
+		});
+	}
+
+	#[test]
 	fn pot_underflow_should_not_diminish() {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
