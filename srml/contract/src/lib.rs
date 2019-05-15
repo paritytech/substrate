@@ -595,7 +595,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
-			child::get_child_trie(&info.trie_id[..])
+			child::child_trie(&info.trie_id[..])
 				.map(|subtrie|child::kill_storage(&subtrie));
 		}
 		<ContractInfoOf<T>>::remove(who);

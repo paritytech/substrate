@@ -159,10 +159,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		if !is_below_subsistence {
 			// The contract has funds above subsistence deposit and that means it can afford to
 			// leave tombstone.
-			let subtrie = runtime_io::get_child_trie(&contract.trie_id[..]).unwrap_or_else(||{
-				let new_subtrie = SubTrie::new(contract.trie_id.clone(), &contract.trie_id[..]);
-				runtime_io::set_child_trie(&new_subtrie);
-				new_subtrie
+			let subtrie = runtime_io::child_trie(&contract.trie_id[..]).unwrap_or_else(||{
+				SubTrie::new(contract.trie_id.clone(), &contract.trie_id[..])
 			});
 
 

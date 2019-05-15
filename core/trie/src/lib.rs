@@ -156,6 +156,7 @@ pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
 }
 
 /// Determine the default child trie root.
+/// TODO EMCH constify that
 pub fn default_child_trie_root<H: Hasher>() -> Vec<u8> {
 	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
 }
@@ -174,6 +175,7 @@ pub fn child_trie_root<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	subtrie: SubTrieNodeRef,
 	db: &mut DB,
+	default_root: &Vec<u8>,
 	delta: I
 ) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
@@ -181,8 +183,12 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 	B: AsRef<[u8]>,
 	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
-	let mut root = subtrie_root_as_hash::<H,_>(subtrie.root);
-
+	let mut root = if let Some(root) = subtrie.root.as_ref() {
+		subtrie_root_as_hash::<H,_>(root)
+	} else {
+		// TODO EMCH the no content case could benefit from using a inline iter_build (need ordering).
+		subtrie_root_as_hash::<H,_>(default_root)
+	};
 	{
 		let mut db = KeySpacedDBMut::new(&mut *db, subtrie.keyspace);
 		let mut trie = TrieDBMut::<H>::from_existing(&mut db, &mut root)?;
@@ -206,15 +212,17 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 ) -> Result<(), Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let root = subtrie_root_as_hash::<H,_>(subtrie.root);
-	let db = KeySpacedDB::new(&*db, subtrie.keyspace);
+	if let Some(root) = subtrie.root {
+		let root = subtrie_root_as_hash::<H,_>(root);
+		let db = KeySpacedDB::new(&*db, subtrie.keyspace);
 
-	let trie = TrieDB::<H>::new(&db, &root)?;
-	let iter = trie.iter()?;
+		let trie = TrieDB::<H>::new(&db, &root)?;
+		let iter = trie.iter()?;
 
-	for x in iter {
-		let (key, _) = x?;
-		f(&key);
+		for x in iter {
+			let (key, _) = x?;
+			f(&key);
+		}
 	}
 
 	Ok(())
@@ -251,9 +259,13 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let root = subtrie_root_as_hash::<H,_>(subtrie.root);
-	let db = KeySpacedDB::new(&*db, subtrie.keyspace);
-	Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	if let Some(root) = subtrie.root {
+		let root = subtrie_root_as_hash::<H,_>(root);
+		let db = KeySpacedDB::new(&*db, subtrie.keyspace);
+		Ok(TrieDB::<H>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	} else {
+		Ok(None)
+	}
 }
 
 /// Read a value from the child trie with given query.
@@ -265,9 +277,13 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
 	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
-	let root = subtrie_root_as_hash::<H,_>(subtrie.root);
-	let db = KeySpacedDB::new(&*db, subtrie.keyspace);
-	Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	if let Some(root) = subtrie.root {
+		let root = subtrie_root_as_hash::<H,_>(root);
+		let db = KeySpacedDB::new(&*db, subtrie.keyspace);
+		Ok(TrieDB::<H>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	} else {
+		Ok(None)
+	}
 }
 
 

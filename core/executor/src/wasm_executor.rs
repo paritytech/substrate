@@ -31,7 +31,7 @@ use crate::wasm_utils::UserError;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher, subtrie::{SubTrie, SubTrieNode}};
+use primitives::{H256, Blake2Hasher, subtrie::{SubTrie, SubTrieNodeRef}};
 use trie::ordered_trie_root;
 use crate::sandbox;
 use crate::allocator;
@@ -72,7 +72,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	// its storage_key and native will fetch through this function: need either to ref native subtrie
 	// or pass by value the Subtrie.
 	fn with_subtrie<R>(&mut self, storage_key: &[u8], f: impl Fn(&mut Self, SubTrie) -> R) -> Option<R> {
-		self.ext.get_child_trie(storage_key).map(|s|f(self,s))
+		self.ext.child_trie(storage_key).map(|s|f(self,s))
 	}
 }
 
@@ -240,8 +240,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let root = this.memory.get(root_data, root_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
-		let subtrie = SubTrieNode { keyspace, root };
-		Ok(if this.ext.exists_child_storage(subtrie.node_ref(), &key) { 1 } else { 0 })
+		let root = if root.len() > 0 { Some(&root[..]) } else { None };
+		let subtrie = SubTrieNodeRef::new(&keyspace, root);
+		Ok(if this.ext.exists_child_storage(subtrie, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
@@ -307,8 +308,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
-		let subtrie = SubTrieNode { keyspace, root };
-		let maybe_value = this.ext.child_storage(subtrie.node_ref(), &key);
+		let root = if root.len() > 0 { Some(&root[..]) } else { None };
+		let subtrie = SubTrieNodeRef::new(&keyspace, root);
+		let maybe_value = this.ext.child_storage(subtrie, &key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
@@ -381,9 +383,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_data,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
-		let subtrie = SubTrieNode { keyspace, root };
+		let root = if root.len() > 0 { Some(&root[..]) } else { None };
+		let subtrie = SubTrieNodeRef::new(&keyspace, root);
 
-		let maybe_value = this.ext.child_storage(subtrie.node_ref(), &key);
+		let maybe_value = this.ext.child_storage(subtrie, &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
 			if let Some(_preimage) = this.hash_lookup.get(&key) {

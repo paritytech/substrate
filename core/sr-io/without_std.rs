@@ -381,28 +381,22 @@ impl StorageApi for () {
 	}
 
 	/// get child trie at storage key location
-	fn get_child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
 		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
 		storage(&prefixed_key)
 			.and_then(|enc_node|SubTrie::decode_node_prefixed_parent(&enc_node, prefixed_key))
 	}
 
-	fn set_child_trie(subtrie: &SubTrie) {
-		let prefixed_key = subtrie.parent_prefixed_key();
-		let key = &prefixed_key[..];
-		let encoded_node = subtrie.encoded_node();
-		let value = &encoded_node[..];
-		set_storage(key, value);
-	}
-
 	fn child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
+		let empty_byte: [u8;0] = [];
+		let root = subtrie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
 			let ptr = ext_get_allocated_child_storage.get()(
 				subtrie.keyspace.as_ptr(),
 				subtrie.keyspace.len() as u32,
-				subtrie.root.as_ptr(),
-				subtrie.root.len() as u32,
+				root.as_ptr(),
+				root.len() as u32,
 				key.as_ptr(),
 				key.len() as u32,
 				&mut length
@@ -419,12 +413,14 @@ impl StorageApi for () {
 	}
 
 	fn read_child_storage(subtrie: SubTrieNodeRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+		let empty_byte: [u8;0] = [];
+		let root = subtrie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
 			match ext_get_child_storage_into.get()(
 				subtrie.keyspace.as_ptr(),
 				subtrie.keyspace.len() as u32,
-				subtrie.root.as_ptr(),
-				subtrie.root.len() as u32,
+				root.as_ptr(),
+				root.len() as u32,
 				key.as_ptr(), key.len() as u32,
 				value_out.as_mut_ptr(), value_out.len() as u32,
 				value_offset as u32
@@ -482,12 +478,14 @@ impl StorageApi for () {
 	}
 
 	fn exists_child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
+		let empty_byte: [u8;0] = [];
+		let root = subtrie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
 			ext_exists_child_storage.get()(
 				subtrie.keyspace.as_ptr(),
 				subtrie.keyspace.len() as u32,
-				subtrie.root.as_ptr(),
-				subtrie.root.len() as u32,
+				root.as_ptr(),
+				root.len() as u32,
 				key.as_ptr(), key.len() as u32
 			) != 0
 		}

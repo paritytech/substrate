@@ -285,7 +285,10 @@ fn account_removal_removes_storage() {
 				overlay.set_storage(&2, key2.clone(), Some(b"4".to_vec()));
 				DirectAccountDb.commit(overlay.into_change_set());
 			}
-
+assert_eq!(
+					<AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
+					Some(b"3".to_vec())
+				);
 			// Transfer funds from account 1 of such amount that after this transfer
 			// the balance of account 1 will be below the existential threshold.
 			//

@@ -166,17 +166,7 @@ pub trait Externalities<H: Hasher> {
 	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// get child trie infos at storage_key
-	fn get_child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
-		self.storage(&SubTrie::prefix_parent_key(storage_key))
-			.and_then(|v|{
-				SubTrie::decode_node(&v, storage_key)
-			})
-	}
-
-	/// put or delete child trie in top trie at a location
-	fn set_child_trie(&mut self, subtrie: &SubTrie) {
-		self.place_storage(subtrie.parent_prefixed_key().clone(), Some(subtrie.encoded_node()))
-	}
+	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -769,9 +759,14 @@ where
 	H: Hasher,
 	H::Out: Ord
 {
-	let root = trie::subtrie_root_as_hash::<H,_>(subtrie.root);
-	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
-	read_child_proof_check_on_proving_backend(&proving_backend, subtrie, key)
+	// TODO EMCH the no root does not really make sense (we know already the result)
+	if let Some(root) = subtrie.root {
+		let root = trie::subtrie_root_as_hash::<H,_>(root);
+		let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
+		read_child_proof_check_on_proving_backend(&proving_backend, subtrie, key)
+	} else {
+		Ok(None)
+	}
 }
 
 /// Check storage read proof on pre-created proving backend.
@@ -1060,16 +1055,12 @@ mod tests {
 			NeverOffchainExt::new()
 		);
 
-		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
-		ext.set_child_trie(&SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild"));
-		let subtrie = ext.get_child_trie(&b"testchild"[..]);
-		assert!(subtrie.is_some());
-		let subtrie = subtrie.expect("checked above");
+		assert_eq!(ext.child_trie(&b"testchild"[..]), None);
+		let subtrie = SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild");
 		ext.set_child_storage(&subtrie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(subtrie.node_ref(), b"abc"), Some(b"def".to_vec()));
 		ext.kill_child_storage(&subtrie);
 		assert_eq!(ext.child_storage(subtrie.node_ref(), b"abc"), None);
-		assert_eq!(ext.get_child_trie(&b"testchild"[..]), None);
 	}
 
 	#[test]
@@ -1169,15 +1160,15 @@ mod tests {
 	#[test]
 	fn child_storage_keyspace() {
 		use crate::trie_backend::tests::test_trie;
+		use std::collections::HashSet;
 
-		let subtrie1 = SubTrie::new(b"atestchild".to_vec(), &b"unique1"[..]);
-		let subtrie2 = SubTrie::new(b"btestchild".to_vec(), &b"unique2"[..]);
+		let subtrie1 = SubTrie::new(b"unique1".to_vec(), &[0x01]);
+		let subtrie2 = SubTrie::new(b"unique2".to_vec(), &[0x23]);
 		let mut tr1 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
 			let changes_trie_storage = InMemoryChangesTrieStorage::new();
 			let mut overlay = OverlayedChanges::default();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
-			ext.set_child_trie(&subtrie1);
 			ext.set_child_storage(&subtrie1, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
 			ext.transaction().0
@@ -1187,20 +1178,43 @@ mod tests {
 			let changes_trie_storage = InMemoryChangesTrieStorage::new();
 			let mut overlay = OverlayedChanges::default();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
-			ext.set_child_trie(&subtrie2);
 			ext.set_child_storage(&subtrie2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
 			ext.transaction().0
 		};
-		// assert no duplicate new key (removal is fine)
-		assert!(tr1.drain().iter()
-			.zip(tr2.drain().iter())
-			.find(|((k1,(_,kind)),(k2,_))|k1 == k2 && *kind == 1).is_none());
+ 
+		let mut set1 = HashSet::new();
+		tr1.drain().into_iter().for_each(|(i, (_,rc))| if rc == -1i32 {
+			set1.remove(&i);
+		} else {
+			set1.insert(i);
+		});
+		let mut set2 = HashSet::new();
+		tr2.drain().into_iter().for_each(|(i, (_,rc))| if rc == -1i32 {
+			set2.remove(&i);
+		} else {
+			set2.insert(i);
+		});
+		assert!(set1.len() == set2.len());
+		assert!(set1.len() != 0);
+		let mut nb_id = 0;
+		for k in set1.iter() {
+			if set2.contains(k) {
+				nb_id += 1;
+			}
+		}
+		// this is the test_trie existing subtrie being switch
+		// from a leaf node to a shorter leaf node due to addition
+		// of a branch at child trie prefix. If a subtrie is added
+		// to the test this is likely to need to switch to 0 (can depend
+		// on child ix)
+		assert_eq!(nb_id, 1);
 	}
 
 	#[test]
 	fn storage_same_branch_keyspace() {
 		use crate::trie_backend::tests::test_trie;
+		use std::collections::HashSet;
 		let mut tr1 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
 			let changes_trie_storage = InMemoryChangesTrieStorage::new();
@@ -1221,11 +1235,25 @@ mod tests {
 			ext.storage_root();
 			ext.transaction().0
 		};
-
+		let mut set1 = HashSet::new();
+		tr1.drain().into_iter().for_each(|(i, (_,rc))| if rc == -1i32 {
+			set1.remove(&i);
+		} else {
+			set1.insert(i);
+		});
+		let mut set2 = HashSet::new();
+		tr2.drain().into_iter().for_each(|(i, (_,rc))| if rc == -1i32 {
+			set2.remove(&i);
+		} else {
+			set2.insert(i);
+		});
+		assert!(set1.len() != 0);
+		assert!(set2.len() != 0);
+ 
 		// assert no duplicate new key (removal is fine)
-		assert!( tr1.drain().iter()
-			.zip(tr2.drain().iter())
-			.find(|((k1,(_,kind)),(k2,_))|k1 == k2 && *kind == 1).is_none());
+		for k in set1.iter() {
+			assert!(!set2.contains(k));
+		}
 	}
 
 

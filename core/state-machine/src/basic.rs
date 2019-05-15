@@ -120,6 +120,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		unreachable!("basic not used for child trie");
 	}
 
+	fn child_trie(&self, _storage_key: &[u8]) -> Option<SubTrie> {
+		unreachable!("basic not used for child trie");
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		self.changes.set_storage(key.clone(), maybe_value.clone());
 		match key.as_ref() {

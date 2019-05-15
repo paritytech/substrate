@@ -79,9 +79,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
 		// TODO pass optional SubTrie or change def to use subtrie (put the subtrie in cache (rc one of
 		// the overlays)) EMCH TODO create an issue for a following pr
-		trie_id.and_then(|id|child::get_child_trie(&id).and_then(|subtrie|
+		trie_id.and_then(|id|{
+			child::child_trie(&id).and_then(|subtrie|
 			child::get_raw(subtrie.node_ref(), &blake2_256(location))
-		))
+		)})
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -145,10 +146,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// TODO put in cache (there is also a scheme change to do to avoid indirection)
 				// TODO also switch to using address instead of trie_id that way no need to store
 				// trie_id (subtrie field at address).
-				let subtrie = child::get_child_trie(&new_info.trie_id[..]).unwrap_or_else(||{
-					let new_subtrie = SubTrie::new(new_info.trie_id.clone(), &new_info.trie_id[..]);
-					child::set_child_trie(&new_subtrie);
-					new_subtrie
+				let subtrie = child::child_trie(&new_info.trie_id[..]).unwrap_or_else(||{
+					SubTrie::new(new_info.trie_id.clone(), &new_info.trie_id[..])
 				});
 
 				for (k, v) in changed.storage.into_iter() {

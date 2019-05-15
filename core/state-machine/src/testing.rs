@@ -127,6 +127,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 		self.changes.child_storage(subtrie, key)?.map(Vec::from)
 	}
 
+	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+		self.changes.child_trie(storage_key)
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		self.changes.set_storage(key.clone(), maybe_value.clone());
 		match key.as_ref() {

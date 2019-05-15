@@ -633,7 +633,7 @@ pub mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 	use futures::Future;
-	use primitives::subtrie::SubTrieNode;
+	use primitives::subtrie::SubTrieNodeCodec;
 	use runtime_primitives::traits::{Block as BlockT, NumberFor};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
@@ -977,7 +977,7 @@ pub mod tests {
 		let response = on_demand.remote_read_child(RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			child_trie: SubTrieNode {
+			child_trie: SubTrieNodeCodec {
 				keyspace: b"keyspace".to_vec(),
 				// dummy : this should be queried
 				root: b"root".to_vec(),

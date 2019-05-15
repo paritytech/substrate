@@ -191,6 +191,12 @@ where
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
+	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.overlay.child_trie(storage_key).or_else(||
+			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
 	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.child_storage(subtrie.clone(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
@@ -288,8 +294,8 @@ where
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		if self.storage_transaction.is_some() {
-			self.get_child_trie(subtrie.parent_prefixed_key())
-				.map(|subtrie|subtrie.root_initial_value().to_vec())
+			self.child_trie(subtrie.parent_prefixed_key())
+				.and_then(|subtrie|subtrie.root_initial_value().clone())
 				.unwrap_or(default_child_trie_root::<H>())
 		} else {
 

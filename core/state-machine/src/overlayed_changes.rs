@@ -56,7 +56,10 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<KeySpace, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, SubTrie)>,
+	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>, SubTrie)>,
+	/// association from parent storage location to keyspace,
+	/// for freshly added subtrie
+	pub pending_child: HashMap<Vec<u8>, KeySpace>,
 }
 
 #[cfg(test)]
@@ -65,6 +68,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		Self {
 			top: iter.into_iter().collect(),
 			children: Default::default(),
+			pending_child: Default::default(),
 		}
 	}
 }
@@ -79,6 +83,7 @@ impl OverlayedChangeSet {
 	pub fn clear(&mut self) {
 		self.top.clear();
 		self.children.clear();
+		self.pending_child.clear();
 	}
 }
 
@@ -132,6 +137,26 @@ impl OverlayedChanges {
 		None
 	}
 
+	/// returns a child trie if present
+	pub fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+		
+		if let Some(keyspace) = self.prospective.pending_child.get(storage_key) {
+			if let Some(map) = self.prospective.children.get(keyspace) {
+				 return Some(map.2.clone());
+			}
+		}
+
+		if let Some(keyspace) = self.committed.pending_child.get(storage_key) {
+			if let Some(map) = self.committed.children.get(keyspace) {
+				 return Some(map.2.clone());
+			}
+		}
+
+		None
+	}
+
+
+
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
@@ -151,8 +176,13 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(&mut self, subtrie: &SubTrie, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(subtrie.keyspace().clone())
-			.or_insert_with(||(Default::default(), Default::default(), subtrie.clone()));
+		let p = &mut self.prospective.children;
+		let pc = &mut self.prospective.pending_child;
+		let map_entry = p.entry(subtrie.keyspace().clone())
+			.or_insert_with(||{
+				pc.insert(subtrie.parent_key().to_vec(), subtrie.keyspace().clone());
+				(Default::default(), Default::default(), subtrie.clone())
+			});
 		map_entry.1.insert(key, val);
 
 		if let Some(extrinsic) = extrinsic_index {
@@ -252,6 +282,7 @@ impl OverlayedChanges {
 						.extend(prospective_extrinsics);
 				}
 			}
+			self.committed.pending_child.extend(self.prospective.pending_child.drain());
 		}
 	}
 
