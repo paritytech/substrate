@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COMMIT=$(echo `expr substr ${CI_COMMIT_SHORT_SHA} 0 8)
+COMMIT=$(echo `expr substr ${CI_COMMIT_SHORT_SHA} 0 9)
 DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/2.0.0-${COMMIT}/substrate"
 POST_DATA='{"extra_vars":{"artifact_path":"'${DOWNLOAD_URL}'"}}'
 
