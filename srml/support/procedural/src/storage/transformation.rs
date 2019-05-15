@@ -198,7 +198,7 @@ fn decl_store_extra_genesis(
 
 	let mut is_trait_needed = false;
 	let mut has_trait_field = false;
-	let mut serde_complete_bound = std::collections::HashSet::new();
+	let mut serde_complete_bound = Vec::new();
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
@@ -239,9 +239,15 @@ fn decl_store_extra_genesis(
 				has_trait_field = true;
 			}
 
-			serde_complete_bound.insert(type_infos.value_type);
+			let value_type = &type_infos.value_type;
+			serde_complete_bound.push(quote!( #value_type ));
 			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
-				serde_complete_bound.insert(key_type);
+				serde_complete_bound.push(quote!( #key_type ));
+
+			}
+
+			if type_infos.is_option {
+				serde_complete_bound.push(type_infos.typ.clone());
 			}
 
 			// Propagate doc attributes.
@@ -335,7 +341,7 @@ fn decl_store_extra_genesis(
 						has_trait_field = true;
 					}
 
-					serde_complete_bound.insert(extra_type);
+					serde_complete_bound.push(quote!( #extra_type ));
 
 					let extrafield = &extra_field.content;
 					genesis_extrafields.extend(quote!{
@@ -515,7 +521,7 @@ fn decl_storage_items(
 
 			impls.extend(quote! {
 				/// Tag a type as an instance of a module.
-				/// 
+				///
 				/// Defines storage prefixes, they must be unique.
 				pub trait #instantiable: 'static {
 					#const_impls
