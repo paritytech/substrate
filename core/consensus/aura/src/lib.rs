@@ -467,7 +467,7 @@ fn check_header<C, B: Block, P: Pair>(
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
 		C: client::backend::AuxStore,
-		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq,
+		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 {
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
