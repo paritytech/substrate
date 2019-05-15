@@ -31,7 +31,8 @@ use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId
 
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
-use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer, ProtocolStatus, PeerInfo, NetworkOut};
+use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
+use crate::protocol::{ProtocolStatus, PeerInfo, NetworkOut};
 use crate::config::Params;
 use crate::error::Error;
 use crate::specialization::NetworkSpecialization;

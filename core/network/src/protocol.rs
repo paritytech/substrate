@@ -395,7 +395,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(network_out, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
 			GenericMessage::FinalityProofRequest(request) => self.on_finality_proof_request(network_out, who, request),
-			GenericMessage::FinalityProofResponse(response) => return self.on_finality_proof_response(network_out, who, response),
+			GenericMessage::FinalityProofResponse(response) =>
+				return self.on_finality_proof_response(network_out, who, response),
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
