@@ -61,8 +61,6 @@ pub struct CompletedRound<Block: BlockT> {
 	pub state: RoundState<Block::Hash, NumberFor<Block>>,
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
-	/// All the votes observed in the round (sorted by order of reception).
-	pub votes: HistoricalVotes<Block>,
 }
 
 // Data about last completed rounds. Stores NUM_LAST_COMPLETED_ROUNDS and always
@@ -662,7 +660,6 @@ where
 				number: round,
 				state: state.clone(),
 				base,
-				votes: votes.clone(),
 			}) {
 				let msg = "Voter completed round that is older than the last completed round.";
 				return Err(Error::Safety(msg.to_string()));
@@ -674,6 +671,7 @@ where
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_historical_votes(&**self.inner.backend(), self.set_id, round, votes.clone())?;
 
 			Ok(Some(set_state))
 		})?;

@@ -40,6 +40,7 @@ const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
+const HISTORICAL_VOTES_PREFIX: &[u8] = b"grandpa_historical_votes_";
 
 const CURRENT_VERSION: u32 = 3;
 
@@ -185,7 +186,6 @@ fn make_voter_set_state_live<Block: BlockT>(
 		completed_rounds: CompletedRounds::new(CompletedRound {
 			number,
 			state,
-			votes: HistoricalVotes::new(),
 			base,
 		}),
 		current_round: HasVoted::No,
@@ -261,7 +261,6 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 					completed_rounds: CompletedRounds::new(CompletedRound {
 						number: last_round_number,
 						state: set_state,
-						votes: HistoricalVotes::new(),
 						base,
 					}),
 				}
@@ -290,12 +289,11 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Block>) -> VoterSetState<Block> {
 	let transform = |completed_rounds: V2CompletedRounds<Block>| {
 		CompletedRounds::new_with_rounds(completed_rounds.inner.into_iter().map(
-				| V2CompletedRound { number, state, base, votes } | {
+				| V2CompletedRound { number, state, base, votes: _ } | {
 					CompletedRound {
 						number,
 						state,
 						base,
-						votes: HistoricalVotes::new_with(votes, None, None),
 					}
 				}
 			).collect::<VecDeque<CompletedRound<Block>>>()
@@ -418,7 +416,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 						VoterSetState::Live {
 							completed_rounds: CompletedRounds::new(CompletedRound {
 								number: 0,
-								votes: HistoricalVotes::new(),
 								base,
 								state,
 							}),
@@ -451,7 +448,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	let genesis_state = VoterSetState::Live {
 		completed_rounds: CompletedRounds::new(CompletedRound {
 			number: 0,
-			votes: HistoricalVotes::new(),
 			state,
 			base,
 		}),
@@ -506,7 +502,6 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 			completed_rounds: CompletedRounds::new(CompletedRound {
 				number: 0,
 				state: round_state,
-				votes: HistoricalVotes::new(),
 				base: (new_set.canon_hash, new_set.canon_number),
 			}),
 			current_round: HasVoted::No,
@@ -532,6 +527,33 @@ pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 		&[]
 	)
 }
+
+/// Write historical votes for a completed round.
+pub(crate) fn write_historical_votes<B: AuxStore, H: Encode, N: Encode, S: Encode, Id: Encode>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+	historical_votes: HistoricalVotes<H, N, S, Id>,
+) -> ClientResult<()> {
+	let mut key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| key.extend(set_id));
+	round.using_encoded(|round| key.extend(round));
+	backend.insert_aux(
+		&[(&key[..], historical_votes.encode().as_slice())],
+		&[]
+	)
+}
+
+/// Read historical votes for a completed round.
+// pub(crate) fn read_historical_votes<B: AuxStore, H: Decode, N: Decode, S: Decode, Id: Decode>(
+// 	backend: &B,
+// 	round: u64,
+// ) -> Option<HistoricalVotes<H, N, S, Id>> {
+// 	let mut key = HISTORICAL_VOTES.to_vec();
+// 	round.using_encoded(|round| key.extend(round));
+// 	load_decode::<_, HistoricalVotes<H, N, S, Id>>(backend, &key[..])
+// 		.expect("backend error")
+// }
 
 /// Update the consensus changes.
 pub(crate) fn update_consensus_changes<H, N, F, R>(
@@ -634,7 +656,6 @@ mod test {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.unwrap(),
-					votes: HistoricalVotes::new(),
 				}),
 				current_round: HasVoted::No,
 			},
@@ -717,7 +738,6 @@ mod test {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.unwrap(),
-					votes: HistoricalVotes::new(),
 				}),
 				current_round: HasVoted::No,
 			},
@@ -835,7 +855,6 @@ mod test {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.expect("Because I added the ghost; qed"),
-					votes: HistoricalVotes::new_with(vec![sig_msg], None, None),
 				}),
 				current_round: HasVoted::Yes(AuthorityId::default(), vote),
 			},
