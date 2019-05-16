@@ -834,7 +834,7 @@ where
 mod tests {
 	use std::collections::HashMap;
 	use parity_codec::{Encode, Decode};
-	use primitives::subtrie::SubTrieNode;
+	use primitives::subtrie::SubTrieNodeCodec;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -1094,7 +1094,7 @@ mod tests {
 			&pr_sub1
 		).unwrap();
 	
-		let subtrie1: SubTrieNode = Decode::decode(&mut &local_result1.unwrap()[..]).unwrap();
+		let subtrie1: SubTrieNodeCodec = Decode::decode(&mut &local_result1.unwrap()[..]).unwrap();
 
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
