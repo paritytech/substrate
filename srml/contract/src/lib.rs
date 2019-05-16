@@ -198,8 +198,12 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub storage_size: u64,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
+	/// Pay rent at most up to this value.
 	pub rent_allowance: Balance,
+	/// Last block rent has been payed.
 	pub deduct_block: BlockNumber,
+	/// Last block child storage has been written.
+	pub last_write: Option<BlockNumber>,
 }
 
 pub type TombstoneContractInfo<T> =
@@ -527,7 +531,8 @@ decl_module! {
 			origin,
 			dest: T::AccountId,
 			code_hash: CodeHash<T>,
-			rent_allowance: BalanceOf<T>
+			rent_allowance: BalanceOf<T>,
+			delta: Vec<exec::StorageKey>
 		) {
 			let origin = ensure_signed(origin)?;
 
@@ -535,9 +540,30 @@ decl_module! {
 				.and_then(|c| c.get_alive())
 				.ok_or("Cannot restore from inexisting or tombstone contract")?;
 
+			let current_block = <system::Module<T>>::block_number();
+
+			if origin_contract.last_write == Some(current_block) {
+				return Err("Origin TrieId written in the current block");
+			}
+
 			let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 				.and_then(|c| c.get_tombstone())
 				.ok_or("Cannot restore to inexisting or alive contract")?;
+
+			let last_write = if !delta.is_empty() {
+				Some(current_block)
+			} else {
+				origin_contract.last_write
+			};
+
+			let key_values_taken = delta.iter()
+				.filter_map(|key| {
+					child::get_raw(&origin_contract.trie_id, key).map(|value| {
+						child::kill(&origin_contract.trie_id, key);
+						(key, value)
+					})
+				})
+				.collect::<Vec<_>>();
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				runtime_io::child_storage_root(&origin_contract.trie_id),
@@ -546,6 +572,10 @@ decl_module! {
 			);
 
 			if tombstone != dest_tombstone {
+				for (key, value) in key_values_taken {
+					child::put_raw(&origin_contract.trie_id, key, &value);
+				}
+
 				return Err("Tombstones don't match");
 			}
 
@@ -555,7 +585,8 @@ decl_module! {
 				storage_size: origin_contract.storage_size,
 				code_hash,
 				rent_allowance,
-				deduct_block: <system::Module<T>>::block_number(),
+				deduct_block: current_block,
+				last_write,
 			}));
 
 			let origin_free_balance = T::Currency::free_balance(&origin);
