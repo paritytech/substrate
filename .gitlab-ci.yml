@@ -10,7 +10,7 @@ stages:
   - test
   - build
   - publish
-  - deploy
+  - kubernetes
   - flaming-fir
 
 image:                             parity/rust-builder:latest
@@ -261,7 +261,7 @@ publish-s3-doc:
         --human-readable --summarize
 
 .deploy-template:                  &deploy
-  stage:                           deploy
+  stage:                           kubernetes 
   when:                            manual
   retry:                           1
   image:                           parity/kubetools:latest
