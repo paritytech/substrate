@@ -30,7 +30,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	voter, voter_set::VoterSet, AccountableSafety,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -423,6 +423,34 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	// and `tree_route` includes it.
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
+
+
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
+	AccountableSafety
+for Environment<B, E, Block, N, RA, SC>
+where
+	Block: 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	N: Network<Block> + 'static + Send,
+	N::In: 'static + Send,
+	RA: 'static + Send + Sync,
+	SC: SelectChain<Block> + 'static,
+	NumberFor<Block>: BlockNumberOps,
+{
+	type Message = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, ed25519::Signature, AuthorityId>;
+
+	fn prevotes_seen(&self, _round: u64) -> Vec<Self::Message> {
+		Vec::new()
+	}
+	fn votes_seen_when_prevoted(&self, _round: u64) -> Vec<Self::Message> {
+		Vec::new()
+	}
+	fn votes_seen_when_precommited(&self, _round: u64) -> Vec<Self::Message> {
+		Vec::new()
+	}
+}
+
 
 impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
 	voter::Environment<Block::Hash, NumberFor<Block>>
