@@ -309,7 +309,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		const MAX_TIMESTAMP_DRIFT: u64 = 60;
 
 		let t: u64 = match call {
-			Call::set(ref t) => t.clone().saturated_into::<u64>(),//<T::Moment as SaturatedInto<u64>>::saturated_into(t.clone()),
+			Call::set(ref t) => t.clone().saturated_into::<u64>(),
 			_ => return Ok(()),
 		};
 
