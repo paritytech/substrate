@@ -5008,19 +5008,12 @@ name = "transaction-factory"
 version = "0.0.1"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-primitives 2.0.0",
- "node-runtime 2.0.0",
  "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
  "sr-primitives 2.0.0",
- "srml-indices 2.0.0",
- "srml-support 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-serializer 2.0.0",
  "substrate-service 2.0.0",
 ]
 
