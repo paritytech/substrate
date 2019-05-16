@@ -835,7 +835,7 @@ mod test {
 					number: round_number,
 					state: round_state.clone(),
 					base: round_state.prevote_ghost.expect("Because I added the ghost; qed"),
-					votes: HistoricalVotes::new_with_votes(vec![sig_msg]),
+					votes: HistoricalVotes::new_with(vec![sig_msg], None, None),
 				}),
 				current_round: HasVoted::Yes(AuthorityId::default(), vote),
 			},
