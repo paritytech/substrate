@@ -20,6 +20,7 @@ use libp2p::identity::{Keypair, secp256k1, ed25519};
 use libp2p::{Multiaddr, multiaddr::Protocol};
 use std::error::Error;
 use std::{io::{self, Write}, iter, fs, net::Ipv4Addr, path::{Path, PathBuf}};
+use zeroize::Zeroize;
 
 /// Network service configuration.
 #[derive(Clone)]
@@ -210,7 +211,7 @@ where
 				let sk = generate();
 				let mut sk_vec = serialize(&sk);
 				write_secret_file(file, &sk_vec)?;
-				for b in sk_vec.iter_mut() { *b = 0; }  // Zero the private key
+				sk_vec.zeroize();
 				Ok(sk)
 			} else {
 				Err(e)

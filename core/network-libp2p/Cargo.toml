@@ -26,6 +26,7 @@ tokio-io = "0.1"
 tokio-timer = "0.2"
 unsigned-varint = { version = "0.2.1", features = ["codec"] }
 void = "1.0"
+zeroize = "0.6.0"
 
 slog = { version = "^2", features = ["nested-values"] }
 slog_derive = "0.1.1"
