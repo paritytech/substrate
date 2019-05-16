@@ -467,6 +467,13 @@ pub mod tests {
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
+	fn not_implemented_in_tests<T, E>() -> FutureResult<T, E>
+	where
+		E: std::convert::From<&'static str>,
+	{
+		err("Not implemented on test node".into())
+	}
+
 	impl Fetcher<Block> for OkCallFetcher {
 		type RemoteHeaderResult = FutureResult<Header, ClientError>;
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
@@ -475,15 +482,15 @@ pub mod tests {
 		type RemoteBodyResult = FutureResult<Vec<Extrinsic>, ClientError>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_read(&self, _request: RemoteReadRequest<Header>) -> Self::RemoteReadResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
@@ -491,11 +498,11 @@ pub mod tests {
 		}
 
 		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_body(&self, _request: RemoteBodyRequest<Header>) -> Self::RemoteBodyResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 	}
 
