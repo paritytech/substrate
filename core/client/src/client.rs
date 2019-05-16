@@ -351,13 +351,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
-	pub fn child_storage_keys(&self, id: &BlockId<Block>, child_storage_key: &StorageKey, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
-		let keys = self.state_at(id)?.child_keys(&child_storage_key.0, &key_prefix.0).into_iter().map(StorageKey).collect();
+	pub fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key_prefix: &StorageKey
+	) -> error::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?
+			.child_keys(&child_storage_key.0, &key_prefix.0)
+			.into_iter()
+			.map(StorageKey)
+			.collect();
 		Ok(keys)
 	}
 
 	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
-	pub fn child_storage(&self, id: &BlockId<Block>, child_storage_key: &StorageKey, key: &StorageKey) -> error::Result<Option<StorageData>> {
+	pub fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key: &StorageKey
+	) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.child_storage(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
