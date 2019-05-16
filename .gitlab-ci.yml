@@ -92,7 +92,6 @@ test-linux-stable:                 &test
 
 check-web-wasm:
   stage:                           test
-  image:                           tomaka/cargo-web:latest
   allow_failure:                   true
   only:
     - master
