@@ -193,7 +193,7 @@ where
 
 	fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.overlay.child_trie(storage_key).or_else(||
+		self.overlay.child_trie(prefix, storage_key).or_else(||
 			self.backend.child_trie(prefix, storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 

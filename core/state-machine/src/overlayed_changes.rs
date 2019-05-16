@@ -138,15 +138,20 @@ impl OverlayedChanges {
 	}
 
 	/// returns a child trie if present
-	pub fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+	pub fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
 		
-		if let Some(keyspace) = self.prospective.pending_child.get(storage_key) {
+		let prefixed_storage_key = SubTrie::prefix_parent_key(prefix, storage_key);
+		if let Some(keyspace) = self.prospective.pending_child.get(
+			SubTrie::prefix_parent_key_slice(&prefixed_storage_key)
+		) {
 			if let Some(map) = self.prospective.children.get(keyspace) {
 				 return Some(map.2.clone());
 			}
 		}
 
-		if let Some(keyspace) = self.committed.pending_child.get(storage_key) {
+		if let Some(keyspace) = self.committed.pending_child.get(
+			SubTrie::prefix_parent_key_slice(&prefixed_storage_key)
+		) {
 			if let Some(map) = self.committed.children.get(keyspace) {
 				 return Some(map.2.clone());
 			}

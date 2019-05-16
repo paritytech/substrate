@@ -759,7 +759,6 @@ where
 	H: Hasher,
 	H::Out: Ord
 {
-	// TODO EMCH the no root does not really make sense (we know already the result)
 	if let Some(root) = subtrie.root {
 		let root = trie::subtrie_root_as_hash::<H,_>(root);
 		let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
