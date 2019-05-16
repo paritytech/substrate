@@ -59,10 +59,10 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// get SubTrie information
-	fn child_trie(&self, storage_key: &[u8]) -> Result<Option<SubTrie>, Self::Error> {
-		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
-		Ok(self.storage(&prefixed_key)?
-			.and_then(|n|SubTrie::decode_node_prefixed_parent(&n[..], prefixed_key)))
+	fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Result<Option<SubTrie>, Self::Error> {
+		let prefixed_key = SubTrie::prefix_parent_key(prefix, storage_key);
+		Ok(self.storage(&prefixed_key.0)?
+			.and_then(|n|SubTrie::decode_node_with_parent(&n[..], prefixed_key)))
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
@@ -133,10 +133,10 @@ pub trait Backend<H: Hasher> {
 				self.child_storage_root(subtrie.as_ref(), child_delta);
 			txs.consolidate(child_txs);
 			if empty {
-				child_roots.push((subtrie.as_ref().parent_prefixed_key().to_vec(), None));
+				child_roots.push((subtrie.as_ref().raw_parent_key().to_vec(), None));
 			} else {
 				child_roots.push(
-					(subtrie.as_ref().parent_prefixed_key().to_vec(),
+					(subtrie.as_ref().raw_parent_key().to_vec(),
 					Some(subtrie.as_ref().encoded_with_root(&child_root[..])))
 				);
 			}
@@ -383,7 +383,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				)?;
 				new_child_roots.push(
 					o_subtrie.as_ref().map(|s|(
-						s.parent_prefixed_key().to_vec(),
+						s.raw_parent_key().to_vec(),
 						s.encoded_with_root(ch.as_ref()))
 					).expect("is_some previously checked;qed"),
 				);

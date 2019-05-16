@@ -98,15 +98,19 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero};
+use substrate_primitives::subtrie::{KeySpace, KeySpaceGenerator};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
-use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
+/// TODO EMCH consider removal
 pub type TrieId = Vec<u8>;
+
+/// contract uses this prefix
+pub const CHILD_CONTRACT_PREFIX: &'static [u8] = b"default:";
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
 pub trait ContractAddressFor<CodeHash, AccountId> {
@@ -208,6 +212,7 @@ impl<T: Trait> TombstoneContractInfo<T> {
 	}
 }
 
+/// TODO EMCH this trait got superseded by KeySpaceGenerator ???
 /// Get a trie id (trie id must be unique and collision resistant depending upon its context).
 /// Note that it is different than encode because trie id should be collision resistant
 /// (being a proper unique identifier).
@@ -225,7 +230,13 @@ pub trait TrieIdGenerator<AccountId> {
 }
 
 /// Get trie id from `account_id`.
+/// TODO EMCH when merging contract and trie, remove this
 pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
+
+/// Get trie id from `account_id`.
+/// TODO EMCH when merging contract and trie rename this 
+pub struct TrieIdFromParentCounterNew<'a, T: Trait>(pub &'a T::AccountId);
+
 
 /// This generator uses inner counter for account id and applies the hash over `AccountId +
 /// accountid_counter`.
@@ -234,22 +245,41 @@ where
 	T::AccountId: AsRef<[u8]>
 {
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
+		TrieIdFromParentCounterNew::<T>(account_id).generate_keyspace()
+	}
+}
+
+/// This generator uses inner counter for account id and applies the hash over `AccountId +
+/// accountid_counter`.
+impl<'a, T: Trait> KeySpaceGenerator for TrieIdFromParentCounterNew<'a, T>
+where
+	T::AccountId: AsRef<[u8]>
+{
+	fn generate_keyspace(&mut self) -> KeySpace {
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
 		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
 
 		let mut buf = Vec::new();
-		buf.extend_from_slice(account_id.as_ref());
+		buf.extend_from_slice(self.0.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
-		// TODO: see https://github.com/paritytech/substrate/issues/2325
-		CHILD_STORAGE_KEY_PREFIX.iter()
-			.chain(b"default:")
-			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
-			.cloned()
-			.collect()
+		T::Hashing::hash(&buf[..]).as_ref().into()
 	}
 }
+
+/// temporary implementation of keyspace gen, a hack until
+/// contract info and child trie info get stored in same node
+struct TempKeyspaceGen<'a>(&'a[u8]);
+
+impl<'a> KeySpaceGenerator for TempKeyspaceGen<'a>
+{
+	fn generate_keyspace(&mut self) -> KeySpace {
+		self.0.to_vec()
+	}
+}
+
+
 
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
@@ -595,7 +625,7 @@ decl_storage! {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
-			child::child_trie(&info.trie_id[..])
+			child::child_trie(&CHILD_CONTRACT_PREFIX, &info.trie_id[..])
 				.map(|subtrie|child::kill_storage(&subtrie));
 		}
 		<ContractInfoOf<T>>::remove(who);

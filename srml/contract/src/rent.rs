@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
+use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo,
+	Trait, CHILD_CONTRACT_PREFIX, TempKeyspaceGen};
 use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating, Zero};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
@@ -159,8 +160,13 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		if !is_below_subsistence {
 			// The contract has funds above subsistence deposit and that means it can afford to
 			// leave tombstone.
-			let subtrie = runtime_io::child_trie(&contract.trie_id[..]).unwrap_or_else(||{
-				SubTrie::new(contract.trie_id.clone(), &contract.trie_id[..])
+			let subtrie = runtime_io::child_trie(&CHILD_CONTRACT_PREFIX, &contract.trie_id[..]).unwrap_or_else(|| {
+				SubTrie::new(
+					&mut TempKeyspaceGen(&contract.trie_id[..]),
+					//TrieIdFromParentCounter(&address),
+					CHILD_CONTRACT_PREFIX,
+					&contract.trie_id[..]
+				)
 			});
 
 

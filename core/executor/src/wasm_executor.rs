@@ -71,8 +71,10 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	// (yet), so when wasm call a child function it got its runtime subtrie mem then call with
 	// its storage_key and native will fetch through this function: need either to ref native subtrie
 	// or pass by value the Subtrie.
-	fn with_subtrie<R>(&mut self, storage_key: &[u8], f: impl Fn(&mut Self, SubTrie) -> R) -> Option<R> {
-		self.ext.child_trie(storage_key).map(|s|f(self,s))
+	fn with_subtrie<R>(&mut self, prefixed_storage_key: &[u8], f: impl Fn(&mut Self, SubTrie) -> R) -> Option<R> {
+		// note that we use empty prefix which result in a subtrie that requires
+		// key + prefix but the subtrie is quickly drop so it is not an issue).
+		self.ext.child_trie(&[], prefixed_storage_key).map(|s|f(self,s))
 	}
 }
 
@@ -162,14 +164,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_set_child_storage(
-		storage_key_data: *const u8,
+		prefixed_storage_key_data: *const u8,
 		storage_key_len: u32,
 		key_data: *const u8,
 		key_len: u32,
 		value_data: *const u8,
 		value_len: u32) => {
 		let storage_key = this.memory.get(
-			storage_key_data,
+			prefixed_storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
@@ -196,9 +198,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		).expect("Called from a valid SubTrie instance");
 		Ok(())
 	},
-	ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
+	ext_clear_child_storage(prefixed_storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
 		let storage_key = this.memory.get(
-			storage_key_data,
+			prefixed_storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_clear_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_child_storage"))?;
@@ -249,9 +251,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
-	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
+	ext_kill_child_storage(prefixed_storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(
-			storage_key_data,
+			prefixed_storage_key_data,
 			storage_key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
 		this.with_subtrie(&storage_key[..], |this, subtrie|

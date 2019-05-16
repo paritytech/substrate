@@ -103,7 +103,7 @@ export_api! {
 		fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
 		/// get child trie at storage key location
-		fn child_trie(storage_key: &[u8]) -> Option<SubTrie>;
+		fn child_trie(prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie>;
 
 		/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry

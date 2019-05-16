@@ -383,7 +383,7 @@ impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H> where
 		if key == &self.2 {
 			return Some(NULL_NODE.into());
 		}
-		// TODO use interal buffer for derive key to avoid alloc?
+
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
@@ -407,8 +407,8 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 		if key == &self.2 {
 			return Some(NULL_NODE.into());
 		}
-		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 
+		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.get(key, &derived_prefix)
 	}
 
@@ -435,6 +435,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 		if key == self.2 {
 			return;
 		}
+
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.emplace(key, &derived_prefix, value)
 	}
@@ -443,6 +444,7 @@ impl<'a, DB, H, T> hash_db::HashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 		if key == &self.2 {
 			return;
 		}
+
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
 		self.0.remove(key, &derived_prefix)
 	}

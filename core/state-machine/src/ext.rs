@@ -191,10 +191,10 @@ where
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.child_trie(storage_key).or_else(||
-			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+			self.backend.child_trie(prefix, storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
@@ -294,7 +294,8 @@ where
 		let _guard = panic_handler::AbortGuard::new(true);
 
 		if self.storage_transaction.is_some() {
-			self.child_trie(subtrie.parent_prefixed_key())
+			let (pr, pa) = subtrie.parent_and_prefix();
+			self.child_trie(pr, pa)
 				.and_then(|subtrie|subtrie.root_initial_value().clone())
 				.unwrap_or(default_child_trie_root::<H>())
 		} else {
@@ -308,7 +309,7 @@ where
 
 			let root = self.backend.child_storage_root(subtrie, delta).0;
 
-			self.overlay.set_storage(subtrie.parent_prefixed_key().clone(), Some(subtrie.encoded_with_root(&root[..])));
+			self.overlay.set_storage(subtrie.raw_parent_key().clone(), Some(subtrie.encoded_with_root(&root[..])));
 
 			root
 

@@ -127,7 +127,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 		self.changes.child_storage(subtrie, key)?.map(Vec::from)
 	}
 
-	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(&self, _prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
 		self.changes.child_trie(storage_key)
 	}
 
@@ -149,7 +149,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 	}
 
 	fn kill_child_storage(&mut self, subtrie: &SubTrie) {
-		self.changes.set_storage(subtrie.parent_prefixed_key().clone(), None);
+		self.changes.set_storage(subtrie.raw_parent_key().clone(), None);
 		self.changes.clear_child_storage(subtrie);
 	}
 

@@ -63,7 +63,7 @@ pub use trie_backend::TrieBackend;
 
 /// A wrapper around a child storage key.
 ///
-/// This wrapper ensures that the child storage key is correct and properly used.  It is
+/// This wrapper ensures that the child storage key is correct and properly used. It is
 /// impossible to create an instance of this struct without providing a correct `storage_key`.
 pub struct ChildStorageKey<'a, H: Hasher> {
 	storage_key: Cow<'a, [u8]>,
@@ -166,7 +166,7 @@ pub trait Externalities<H: Hasher> {
 	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// get child trie infos at storage_key
-	fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie>;
+	fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -834,7 +834,7 @@ where
 mod tests {
 	use std::collections::HashMap;
 	use parity_codec::{Encode, Decode};
-	use primitives::subtrie::SubTrieRead;
+	use primitives::subtrie::{SubTrieRead, TestKeySpaceGenerator};
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -844,6 +844,9 @@ mod tests {
 		Configuration as ChangesTrieConfig,
 	};
 	use primitives::{Blake2Hasher, map};
+
+	/// TestChildtriePrefix
+	const TCP: &'static[u8] = &[];
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -992,7 +995,7 @@ mod tests {
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
 		// Note that proof of get_subtrie should use standard child proof
-		let subtrie1 = remote_backend.child_trie(b"sub1").unwrap().unwrap();
+		let subtrie1 = remote_backend.child_trie(TCP, b"sub1").unwrap().unwrap();
 		let _remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (_v, remote_proof) = prove_child_read(remote_backend, subtrie1.node_ref(), b"value3").unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), subtrie1.node_ref(), b"value3").unwrap();
@@ -1055,8 +1058,8 @@ mod tests {
 			NeverOffchainExt::new()
 		);
 
-		assert_eq!(ext.child_trie(&b"testchild"[..]), None);
-		let subtrie = SubTrie::new(b"testchild_keyspace".to_vec(), b"testchild");
+		assert_eq!(ext.child_trie(TCP, &b"testchild"[..]), None);
+		let subtrie = SubTrie::new(&mut TestKeySpaceGenerator::new(), TCP, b"testchild");
 		ext.set_child_storage(&subtrie, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(subtrie.node_ref(), b"abc"), Some(b"def".to_vec()));
 		ext.kill_child_storage(&subtrie);
@@ -1086,12 +1089,15 @@ mod tests {
 
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let pr_sub1 = SubTrie::prefix_parent_key(b"sub1");
-		let remote_proof = prove_read(remote_backend, &pr_sub1).unwrap().1;
+		let pr_sub1 = SubTrie::prefix_parent_key(TCP, b"sub1");
+		let remote_proof = prove_read(
+			remote_backend,
+			&SubTrie::raw_parent_key_vec(&pr_sub1)[..]
+		).unwrap().1;
 		let local_result1 = read_proof_check::<Blake2Hasher>(
 			remote_root,
 			remote_proof.clone(),
-			&pr_sub1
+			&SubTrie::raw_parent_key_vec(&pr_sub1)[..]
 		).unwrap();
 	
 		let subtrie1: SubTrieRead = Decode::decode(&mut &local_result1.unwrap()[..]).unwrap();
@@ -1162,8 +1168,9 @@ mod tests {
 		use crate::trie_backend::tests::test_trie;
 		use std::collections::HashSet;
 
-		let subtrie1 = SubTrie::new(b"unique1".to_vec(), &[0x01]);
-		let subtrie2 = SubTrie::new(b"unique2".to_vec(), &[0x23]);
+		let mut ks_gen = TestKeySpaceGenerator::new();
+		let subtrie1 = SubTrie::new(&mut ks_gen, TCP, &[0x01]);
+		let subtrie2 = SubTrie::new(&mut ks_gen, TCP, &[0x23]);
 		let mut tr1 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
 			let changes_trie_storage = InMemoryChangesTrieStorage::new();

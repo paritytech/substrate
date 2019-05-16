@@ -67,8 +67,8 @@ impl StorageApi for () {
 		})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
-		ext::with(|ext| ext.child_trie(storage_key))
+	fn child_trie(prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
+		ext::with(|ext| ext.child_trie(prefix, storage_key))
 			.expect("storage cannot be called outside of an Externalities-provided environment.")
 	}
 

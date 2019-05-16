@@ -18,7 +18,7 @@
 
 use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
-
+use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
@@ -26,11 +26,11 @@ pub use impl_serde::serialize as bytes;
 pub type KeySpace = Vec<u8>;
 
 
-/// key of subtrie in parent trie.
-pub type ParentTrie = Vec<u8>;
+/// info related to parent trie.
+/// Full key of child trie storage location
+/// and size of the prefix of this location.
+pub type ParentTrie = (Vec<u8>, usize);
 
-// TODO consider memorydb change trait to avoid those allocations eg : move prefix encoding to 
-// KeyFunction implementation (and put keyspace in key function instance).
 /// temp function to keyspace data above the db level
 pub fn keyspace_in_prefix(ks: &KeySpace, prefix: &[u8], dst: &mut[u8]) {
 	assert!(dst.len() == keyspace_prefixed_expected_len(ks, prefix));
@@ -123,17 +123,30 @@ pub struct SubTrie {
 }
 impl SubTrie {
 	/// map parent key to some isolated space
-	pub fn prefix_parent_key(parent: &[u8]) -> Vec<u8> {
-		let mut key_full = crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
-		key_full.extend(parent.iter());
-		key_full
+	pub fn prefix_parent_key(prefix: &[u8], parent: &[u8]) -> ParentTrie {
+		let mut key_full = CHILD_STORAGE_KEY_PREFIX.to_vec();
+		key_full.extend_from_slice(prefix);
+		key_full.extend_from_slice(parent);
+		(key_full, CHILD_STORAGE_KEY_PREFIX.len() + prefix.len())
 	}
+	/// get parent key with prefix
+	/// will move to `ParentTrie` if ParentTrie become its own struct
+	/// in the future.
+	pub fn prefix_parent_key_slice(p: &ParentTrie) -> &[u8] {
+		&p.0[CHILD_STORAGE_KEY_PREFIX.len()..]
+	}
+	/// get full parent key
+	/// will move to `ParentTrie` if ParentTrie become its own struct
+	/// in the future.
+	pub fn raw_parent_key_vec(p: &ParentTrie) -> &Vec<u8> {
+		&p.0
+	}
+
 	/// instantiate new subtrie without root value
-	/// TODO EMCH do not use keyspace as param but generate it
-	pub fn new(keyspace: KeySpace, parent: &[u8]) -> Self {
-		let parent = Self::prefix_parent_key(parent);
+	pub fn new(keyspace_builder: &mut impl KeySpaceGenerator, prefix: &[u8], parent: &[u8]) -> Self {
+		let parent = Self::prefix_parent_key(prefix, parent);
 		SubTrie {
-			keyspace,
+			keyspace: keyspace_builder.generate_keyspace(),
 			root: Default::default(),
 			parent,
 			extension: Default::default(),
@@ -144,12 +157,12 @@ impl SubTrie {
 		SubTrieReadRef::new(&self.keyspace, self.root.as_ref().map(|r|&r[..]))
 	}
 	/// instantiate subtrie from a read node value
-	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
-		let parent = Self::prefix_parent_key(parent);
-		Self::decode_node_prefixed_parent(encoded_node, parent)
+	pub fn decode_node(encoded_node: &[u8], prefix: &[u8], parent: &[u8]) -> Option<Self> {
+		let parent = Self::prefix_parent_key(prefix, parent);
+		Self::decode_node_with_parent(encoded_node, parent)
 	}
-	/// instantiate subtrie from a read node value, parent node is prefixed
-	pub fn decode_node_prefixed_parent(encoded_node: &[u8], parent: Vec<u8>) -> Option<Self> {
+	/// instantiate subtrie from a read node value
+	pub fn decode_node_with_parent(encoded_node: &[u8], parent: ParentTrie) -> Option<Self> {
 		let input = &mut &encoded_node[..];
 		SubTrieRead::decode(input).map(|SubTrieRead { keyspace, root }|
 			SubTrie {
@@ -171,13 +184,28 @@ impl SubTrie {
 			enc
 		})
 	}
-	/// parent trie key with prefix
-	pub fn parent_prefixed_key(&self) -> &Vec<u8> {
-		&self.parent
+
+	/// parent trie key with full prefix
+	pub fn raw_parent_key(&self) -> &Vec<u8> {
+		Self::raw_parent_key_vec(&self.parent)
 	}
+	/// parent trie key with prefix
+	pub fn parent_and_prefix_slice(&self) -> &[u8] {
+		Self::prefix_parent_key_slice(&self.parent)
+	}
+
+
+	/// parent trie key with prefix
+	pub fn parent_and_prefix(&self) -> (&[u8], &[u8]) {
+		(
+			&self.parent.0[CHILD_STORAGE_KEY_PREFIX.len()..self.parent.1],
+			&self.parent.0[self.parent.1..],
+		)
+	}
+
 	/// parent trie key
 	pub fn parent_key(&self) -> &[u8] {
-		&self.parent[crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX.len()..]
+		&self.parent.0[self.parent.1..]
 	}
 	/// access to root value (as it was on build)
 	pub fn root_initial_value(&self) -> &Option<Vec<u8>> {
@@ -203,23 +231,25 @@ impl AsRef<SubTrie> for SubTrie {
 		self
 	}
 }
-
-/// Builder for keyspace (keyspace shall either be created through builder and 
-/// be unique or accessed through deserializetion from state)
-pub trait KeySpaceBuilder {
+/// Builder for keyspace (keyspace must be unique and collision resistant depending upon
+/// its context). (keyspace shall either be created through builder and be unique or accessed
+/// through deserializetion from state)
+/// Keyspace should be unique, ideally a uuid that can be use unprefixed or unique for a given
+/// prefix (user shall ensure the prefix is used only with this builder instance).
+pub trait KeySpaceGenerator {
 	/// generate a new keyspace
 	fn generate_keyspace(&mut self) -> KeySpace;
 }
 
 /// test keyspace generator (simply use sequential values)
-pub struct TestKeySpaceBuilder(u32);
+pub struct TestKeySpaceGenerator(u32);
 
-impl TestKeySpaceBuilder {
+impl TestKeySpaceGenerator {
 	/// intitialize a new keyspace builder: only for testing
-	pub fn new() -> Self { TestKeySpaceBuilder(0) }
+	pub fn new() -> Self { TestKeySpaceGenerator(0) }
 }
 
-impl KeySpaceBuilder for TestKeySpaceBuilder {
+impl KeySpaceGenerator for TestKeySpaceGenerator {
 	fn generate_keyspace(&mut self) -> KeySpace {
 		self.0 += 1;
 		parity_codec::Encode::encode(&self.0)

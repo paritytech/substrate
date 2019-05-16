@@ -182,14 +182,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
+	use primitives::subtrie::{TestKeySpaceGenerator};
 	use trie::{TrieMut, TrieDBMut, PrefixedMemoryDB, KeySpacedDBMut};
 	use super::*;
+
+	/// TestChildPrefix
+	const TCP: &'static [u8] = &[];
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 
-		let subtrie1 = SubTrie::new(b"sub1".to_vec(), &b"unique1"[..]);
+		let mut ks_gen = TestKeySpaceGenerator::new();
+		let subtrie1 = SubTrie::new(&mut ks_gen, TCP, &b"sub1"[..]);
 		let mut sub_root = H256::default();
 		{
 			let mut kmdb = KeySpacedDBMut::new(&mut mdb, subtrie1.keyspace());
@@ -200,7 +205,7 @@ pub mod tests {
 		{
 			let enc_sub_root = subtrie1.encoded_with_root(&sub_root[..]);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(&SubTrie::prefix_parent_key(b"sub1")[..], &enc_sub_root).expect("insert failed");
+			trie.insert(&subtrie1.raw_parent_key()[..], &enc_sub_root).expect("insert failed");
 
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
