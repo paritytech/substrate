@@ -31,7 +31,7 @@ use crate::wasm_utils::UserError;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher, subtrie::{SubTrie, SubTrieNodeRef}};
+use primitives::{H256, Blake2Hasher, subtrie::{SubTrie, SubTrieReadRef}};
 use trie::ordered_trie_root;
 use crate::sandbox;
 use crate::allocator;
@@ -241,7 +241,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let root = this.memory.get(root_data, root_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
 		let root = if root.len() > 0 { Some(&root[..]) } else { None };
-		let subtrie = SubTrieNodeRef::new(&keyspace, root);
+		let subtrie = SubTrieReadRef::new(&keyspace, root);
 		Ok(if this.ext.exists_child_storage(subtrie, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
@@ -309,7 +309,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
 		let root = if root.len() > 0 { Some(&root[..]) } else { None };
-		let subtrie = SubTrieNodeRef::new(&keyspace, root);
+		let subtrie = SubTrieReadRef::new(&keyspace, root);
 		let maybe_value = this.ext.child_storage(subtrie, &key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
@@ -384,7 +384,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			key_len as usize
 		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
 		let root = if root.len() > 0 { Some(&root[..]) } else { None };
-		let subtrie = SubTrieNodeRef::new(&keyspace, root);
+		let subtrie = SubTrieReadRef::new(&keyspace, root);
 
 		let maybe_value = this.ext.child_storage(subtrie, &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",

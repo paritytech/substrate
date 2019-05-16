@@ -24,7 +24,7 @@ use crate::backend::InMemory;
 use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
@@ -123,7 +123,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 		self.storage(key)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		self.changes.child_storage(subtrie, key)?.map(Vec::from)
 	}
 

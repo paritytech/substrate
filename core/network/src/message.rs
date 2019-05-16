@@ -18,7 +18,7 @@
 
 use bitflags::bitflags;
 use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use primitives::subtrie::SubTrieNodeCodec;
+use primitives::subtrie::SubTrieRead;
 use parity_codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
@@ -131,7 +131,7 @@ pub mod generic {
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
-		RemoteReadResponse, Transactions, Direction, SubTrieNodeCodec,
+		RemoteReadResponse, Transactions, Direction, SubTrieRead,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 	};
 	/// Consensus is mostly opaque to us
@@ -307,7 +307,7 @@ pub mod generic {
 		/// Block at which to perform call.
 		pub block: H,
 		/// Child trie info.
-		pub child_trie: SubTrieNodeCodec,
+		pub child_trie: SubTrieRead,
 		/// Storage key.
 		pub key: Vec<u8>,
 	}

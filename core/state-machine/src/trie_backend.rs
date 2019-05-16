@@ -21,7 +21,7 @@ use hash_db::Hasher;
 use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
-use primitives::subtrie::{SubTrie, SubTrieNodeRef};
+use primitives::subtrie::{SubTrie, SubTrieReadRef};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -70,7 +70,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.storage(key)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.essence.child_storage(subtrie, key)
 	}
 
@@ -78,7 +78,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F) {
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
 		self.essence.for_keys_in_child_storage(subtrie, f)
 	}
 

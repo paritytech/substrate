@@ -24,7 +24,7 @@ use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 use state_machine::{Backend as StateBackend, TrieBackend};
 use state_machine::backend::{InMemory as InMemoryState, MapTransaction};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -345,7 +345,7 @@ where
 			.into_future().wait()
 	}
 
-	fn child_storage(&self, _subtrie: SubTrieNodeRef, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(&self, _subtrie: SubTrieReadRef, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient.into())
 	}
 
@@ -353,7 +353,7 @@ where
 		// whole state is not available on light node
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _subtrie: SubTrieNodeRef, _action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _subtrie: SubTrieReadRef, _action: A) {
 		// whole state is not available on light node
 	}
 
@@ -407,7 +407,7 @@ where
 		}
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::child_storage(state, subtrie, key),
@@ -424,7 +424,7 @@ where
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, action: A) {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::for_keys_in_child_storage(state, subtrie, action),

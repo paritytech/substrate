@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use primitives::subtrie::{KeySpace, SubTrie, SubTrieNodeRef};
+use primitives::subtrie::{KeySpace, SubTrie, SubTrieReadRef};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -121,7 +121,7 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Option<&[u8]>> {
+	pub fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(subtrie.keyspace) {
 			if let Some(val) = map.1.get(key) {
 				return Some(val.as_ref().map(AsRef::as_ref));

@@ -27,7 +27,7 @@ use trie::{
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use primitives::subtrie::{SubTrie, SubTrieNodeRef};
+use primitives::subtrie::{SubTrie, SubTrieReadRef};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -53,7 +53,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		read_trie_value_with::<H, _, Ephemeral<S, H>>(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
 	}
 
-	pub fn child_storage(&mut self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn child_storage(&mut self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
@@ -140,7 +140,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		}.storage(key)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
 			backend: self.backend.essence(),
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
@@ -148,7 +148,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		}.child_storage(subtrie, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F) {
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
 		self.backend.for_keys_in_child_storage(subtrie, f)
 	}
 

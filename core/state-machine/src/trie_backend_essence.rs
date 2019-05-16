@@ -23,7 +23,7 @@ use log::{debug, warn};
 use hash_db::{self, Hasher};
 use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
 use crate::changes_trie::Storage as ChangesTrieStorage;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 use crate::backend::Consolidate;
 
 /// Patricia trie-based storage trait.
@@ -76,7 +76,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Get the value of child storage at given key.
-	pub fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
@@ -89,7 +89,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F) {
+	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,

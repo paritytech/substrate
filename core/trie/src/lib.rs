@@ -23,7 +23,7 @@ mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use substrate_primitives::subtrie::{SubTrieNodeRef, KeySpace, keyspace_as_prefix_alloc};
+use substrate_primitives::subtrie::{SubTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
 use rstd::boxed::Box;
 use rstd::vec::Vec;
 use hash_db::Hasher;
@@ -173,7 +173,7 @@ pub fn child_trie_root<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
-	subtrie: SubTrieNodeRef,
+	subtrie: SubTrieReadRef,
 	db: &mut DB,
 	default_root: &Vec<u8>,
 	delta: I
@@ -206,7 +206,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
-	subtrie: SubTrieNodeRef,
+	subtrie: SubTrieReadRef,
 	db: &DB,
 	mut f: F
 ) -> Result<(), Box<TrieError<H::Out>>> where
@@ -253,7 +253,7 @@ pub fn record_all_keys<H: Hasher, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<H: Hasher, DB>(
-	subtrie: SubTrieNodeRef,
+	subtrie: SubTrieReadRef,
 	db: &DB,
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
@@ -270,7 +270,7 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
-	subtrie: SubTrieNodeRef,
+	subtrie: SubTrieReadRef,
 	db: &DB,
 	key: &[u8],
 	query: Q

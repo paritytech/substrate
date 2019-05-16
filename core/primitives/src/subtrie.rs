@@ -50,51 +50,60 @@ pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
 	res
 }
 
-/// `SubTrieNodeRef` used for non changing state query
+/// `SubTrieReadRef` used for non changing state query
 /// so it is safe to build
 #[derive(Clone)]
-pub struct SubTrieNodeRef<'a> {
+pub struct SubTrieReadRef<'a> {
 	/// subtrie unique keyspace
 	pub keyspace: &'a KeySpace,
 	/// subtrie root hash
 	pub root: Option<&'a [u8]>,
 }
 
-impl<'a> SubTrieNodeRef<'a> {
-	/// create a SubTrieNodeRef
+impl<'a> SubTrieReadRef<'a> {
+	/// create a SubTrieReadRef
 	pub fn new(keyspace: &'a KeySpace, root: Option<&'a[u8]>) -> Self {
-		SubTrieNodeRef {keyspace, root}
+		SubTrieReadRef {keyspace, root}
 	}
 	// should not be public as it produce incomplete content
-	fn enc(&self) -> Option<SubTrieNodeCodecRef> {
-		self.root.map(|r|SubTrieNodeCodecRef {keyspace: self.keyspace, root: r})
+	fn enc(&self) -> Option<SubTrieReadEncode> {
+		self.root.map(|r|SubTrieReadEncode {keyspace: self.keyspace, root: r})
 	}
 }
 
 /// `SubTrieNode` encoder internal implementation
 /// shall never be exposed
 #[derive(Encode, Clone)]
-struct SubTrieNodeCodecRef<'a> {
+struct SubTrieReadEncode<'a> {
 	/// subtrie unique keyspace
 	pub keyspace: &'a KeySpace,
 	/// subtrie root hash
 	pub root: &'a [u8],
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 /// Subtrie node info for query (with a valid root)
-pub struct SubTrieNodeCodec {
+pub struct SubTrieRead {
 	/// subtrie unique keyspace
 	pub keyspace: KeySpace,
 	/// subtrie root hash
 	pub root: Vec<u8>,
 }
-impl SubTrieNodeCodec {
+impl SubTrieRead {
 	/// get node ref for read only query
-	pub fn node_ref(&self) -> SubTrieNodeRef {
+	pub fn node_ref(&self) -> SubTrieReadRef {
 		debug_assert!(self.root.len() > 0);
-		SubTrieNodeRef::new(&self.keyspace, Some(&self.root[..]))
+		SubTrieReadRef::new(&self.keyspace, Some(&self.root[..]))
+	}
+}
+
+impl parity_codec::Encode for SubTrieRead {
+	fn encode(&self) -> Vec<u8> {
+		SubTrieReadEncode {
+			keyspace: &self.keyspace,
+			root: &self.root[..]
+		}.encode()
 	}
 }
 
@@ -131,8 +140,8 @@ impl SubTrie {
 		}
 	}
 	/// node ref of subtrie
-	pub fn node_ref(&self) -> SubTrieNodeRef {
-		SubTrieNodeRef::new(&self.keyspace, self.root.as_ref().map(|r|&r[..]))
+	pub fn node_ref(&self) -> SubTrieReadRef {
+		SubTrieReadRef::new(&self.keyspace, self.root.as_ref().map(|r|&r[..]))
 	}
 	/// instantiate subtrie from a read node value
 	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
@@ -142,7 +151,7 @@ impl SubTrie {
 	/// instantiate subtrie from a read node value, parent node is prefixed
 	pub fn decode_node_prefixed_parent(encoded_node: &[u8], parent: Vec<u8>) -> Option<Self> {
 		let input = &mut &encoded_node[..];
-		SubTrieNodeCodec::decode(input).map(|SubTrieNodeCodec { keyspace, root }|
+		SubTrieRead::decode(input).map(|SubTrieRead { keyspace, root }|
 			SubTrie {
 				keyspace,
 				root: Some(root),
@@ -180,7 +189,7 @@ impl SubTrie {
 	}
 	/// encdode with an updated root
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
-		let mut enc = parity_codec::Encode::encode(&SubTrieNodeCodecRef{
+		let mut enc = parity_codec::Encode::encode(&SubTrieReadEncode{
 			keyspace: &self.keyspace,
 			root: new_root,
 		});

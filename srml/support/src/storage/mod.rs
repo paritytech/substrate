@@ -19,7 +19,7 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use substrate_primitives::subtrie::SubTrie;
-use substrate_primitives::subtrie::SubTrieNodeRef;
+use substrate_primitives::subtrie::SubTrieReadRef;
 use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
@@ -45,7 +45,7 @@ impl<'a> Input for IncrementalInput<'a> {
 }
 
 struct IncrementalChildInput<'a> {
-	subtrie: SubTrieNodeRef<'a>,
+	subtrie: SubTrieReadRef<'a>,
 	key: &'a [u8],
 	pos: usize,
 }
@@ -493,14 +493,14 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, SubTrie, SubTrieNodeRef};
+	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, SubTrie, SubTrieReadRef};
 
 	pub fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
 		runtime_io::child_trie(storage_key)
 	}
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-	pub fn get<T: Codec + Sized>(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<T> {
+	pub fn get<T: Codec + Sized>(subtrie: SubTrieReadRef, key: &[u8]) -> Option<T> {
 		runtime_io::read_child_storage(subtrie.clone(), key, &mut [0; 0][..], 0).map(|_| {
 			let mut input = IncrementalChildInput {
 				subtrie,
@@ -513,19 +513,19 @@ pub mod child {
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
 	/// explicit entry.
-	pub fn get_or_default<T: Codec + Sized + Default>(subtrie: SubTrieNodeRef, key: &[u8]) -> T {
+	pub fn get_or_default<T: Codec + Sized + Default>(subtrie: SubTrieReadRef, key: &[u8]) -> T {
 		get(subtrie, key).unwrap_or_else(Default::default)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value` if there is no
 	/// explicit entry.
-	pub fn get_or<T: Codec + Sized>(subtrie: SubTrieNodeRef, key: &[u8], default_value: T) -> T {
+	pub fn get_or<T: Codec + Sized>(subtrie: SubTrieReadRef, key: &[u8], default_value: T) -> T {
 		get(subtrie, key).unwrap_or(default_value)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry.
-	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(subtrie: SubTrieNodeRef, key: &[u8], default_value: F) -> T {
+	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(subtrie: SubTrieReadRef, key: &[u8], default_value: F) -> T {
 		get(subtrie, key).unwrap_or_else(default_value)
 	}
 
@@ -562,7 +562,7 @@ pub mod child {
 	}
 
 	/// Check to see if `key` has an explicit entry in storage.
-	pub fn exists(subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
+	pub fn exists(subtrie: SubTrieReadRef, key: &[u8]) -> bool {
 		runtime_io::read_child_storage(subtrie, key, &mut [0;0][..], 0).is_some()
 	}
 
@@ -577,7 +577,7 @@ pub mod child {
 	}
 
 	/// Get a Vec of bytes from storage.
-	pub fn get_raw(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
+	pub fn get_raw(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		runtime_io::child_storage(subtrie, key)
 	}
 

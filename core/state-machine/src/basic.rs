@@ -22,7 +22,7 @@ use hash_db::Hasher;
 use trie::trie_root;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 use log::warn;
@@ -116,7 +116,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage(&self, _subtrie: SubTrieNodeRef, _key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, _subtrie: SubTrieReadRef, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!("basic not used for child trie");
 	}
 

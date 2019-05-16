@@ -24,7 +24,7 @@ use crate::{Externalities, OverlayedChanges, OffchainExt};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
 use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -197,7 +197,7 @@ where
 			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.child_storage(subtrie.clone(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.child_storage(subtrie, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
@@ -211,7 +211,7 @@ where
 		}
 	}
 
-	fn exists_child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
+	fn exists_child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::new(true);
 		match self.overlay.child_storage(subtrie.clone(), key) {
 			Some(x) => x.is_some(),

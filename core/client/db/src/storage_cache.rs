@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use primitives::subtrie::SubTrie;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -359,7 +359,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		Ok(hash)
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(subtrie, key)
 	}
 
@@ -367,7 +367,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		Ok(self.storage(key)?.is_some())
 	}
 
-	fn exists_child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<bool, Self::Error> {
+	fn exists_child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<bool, Self::Error> {
 		self.state.exists_child_storage(subtrie, key)
 	}
 
@@ -375,7 +375,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F) {
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F) {
 		self.state.for_keys_in_child_storage(subtrie, f)
 	}
 

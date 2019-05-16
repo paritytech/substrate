@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell};
-use primitives::{Blake2Hasher, subtrie::{SubTrie, SubTrieNodeRef}};
+use primitives::{Blake2Hasher, subtrie::{SubTrie, SubTrieReadRef}};
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -387,7 +387,7 @@ impl StorageApi for () {
 			.and_then(|enc_node|SubTrie::decode_node_prefixed_parent(&enc_node, prefixed_key))
 	}
 
-	fn child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
 		let empty_byte: [u8;0] = [];
 		let root = subtrie.root.unwrap_or(&empty_byte[..]);
@@ -412,7 +412,7 @@ impl StorageApi for () {
 		}
 	}
 
-	fn read_child_storage(subtrie: SubTrieNodeRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	fn read_child_storage(subtrie: SubTrieReadRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 		let empty_byte: [u8;0] = [];
 		let root = subtrie.root.unwrap_or(&empty_byte[..]);
 		unsafe {
@@ -477,7 +477,7 @@ impl StorageApi for () {
 		}
 	}
 
-	fn exists_child_storage(subtrie: SubTrieNodeRef, key: &[u8]) -> bool {
+	fn exists_child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> bool {
 		let empty_byte: [u8;0] = [];
 		let root = subtrie.root.unwrap_or(&empty_byte[..]);
 		unsafe {

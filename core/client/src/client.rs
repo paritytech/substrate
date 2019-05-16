@@ -24,7 +24,7 @@ use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
-use primitives::subtrie::SubTrieNodeRef;
+use primitives::subtrie::SubTrieReadRef;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
@@ -380,7 +380,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn read_child_proof(
 		&self,
 		id: &BlockId<Block>,
-		subtrie: SubTrieNodeRef,
+		subtrie: SubTrieReadRef,
 		key: &[u8]
 	) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)

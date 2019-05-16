@@ -26,7 +26,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,
 	KeySpacedDBMut};
-use primitives::subtrie::{KeySpace, SubTrie, SubTrieNodeRef};
+use primitives::subtrie::{KeySpace, SubTrie, SubTrieReadRef};
 
 // TODO EMCH Option<KeySpace> is bad for ref : TODO keyspace size 0 for root
 /// type alias over a in memory transaction storring struct
@@ -66,7 +66,7 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -74,12 +74,12 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// true if a key exists in child storage.
-	fn exists_child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<bool, Self::Error> {
+	fn exists_child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.child_storage(subtrie, key)?.is_some())
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, f: F);
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, f: F);
 
 	/// Retrieve all entries keys of which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -301,7 +301,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		Ok(self.inner.get(&None).and_then(|map| map.0.get(key).map(Clone::clone)))
 	}
 
-	fn child_storage(&self, subtrie: SubTrieNodeRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(&self, subtrie: SubTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&Some(subtrie.keyspace.to_vec())).and_then(|map| map.0.get(key).map(Clone::clone)))
 	}
 
@@ -313,7 +313,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		self.inner.get(&None).map(|map| map.0.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieNodeRef, mut f: F) {
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, subtrie: SubTrieReadRef, mut f: F) {
 		self.inner.get(&Some(subtrie.keyspace.clone())).map(|map| map.0.keys().for_each(|k| f(&k)));
 	}
 
@@ -408,7 +408,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 }
 
 /// Insert input pairs into memory db.
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I, subtrie: Option<SubTrieNodeRef>) -> Option<H::Out>
+pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I, subtrie: Option<SubTrieReadRef>) -> Option<H::Out>
 	where
 		H: Hasher,
 		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
