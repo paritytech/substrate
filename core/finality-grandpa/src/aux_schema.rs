@@ -528,7 +528,7 @@ pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	)
 }
 
-/// Write historical votes for a completed round.
+/// Write votes seen in a round.
 pub(crate) fn write_historical_votes<B: AuxStore, H: Encode, N: Encode, S: Encode, Id: Encode>(
 	backend: &B,
 	set_id: u64,
@@ -544,16 +544,19 @@ pub(crate) fn write_historical_votes<B: AuxStore, H: Encode, N: Encode, S: Encod
 	)
 }
 
-/// Read historical votes for a completed round.
-// pub(crate) fn read_historical_votes<B: AuxStore, H: Decode, N: Decode, S: Decode, Id: Decode>(
-// 	backend: &B,
-// 	round: u64,
-// ) -> Option<HistoricalVotes<H, N, S, Id>> {
-// 	let mut key = HISTORICAL_VOTES.to_vec();
-// 	round.using_encoded(|round| key.extend(round));
-// 	load_decode::<_, HistoricalVotes<H, N, S, Id>>(backend, &key[..])
-// 		.expect("backend error")
-// }
+/// Read votes seen in a round.
+#[cfg(test)]
+pub(crate) fn read_historical_votes<B: AuxStore, H: Decode, N: Decode, S: Decode, Id: Decode>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+) -> Option<HistoricalVotes<H, N, S, Id>> {
+	let mut key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| key.extend(set_id));
+	round.using_encoded(|round| key.extend(round));
+	load_decode::<_, HistoricalVotes<H, N, S, Id>>(backend, &key[..])
+		.expect("backend error")
+}
 
 /// Update the consensus changes.
 pub(crate) fn update_consensus_changes<H, N, F, R>(
@@ -859,5 +862,14 @@ mod test {
 				current_round: HasVoted::Yes(AuthorityId::default(), vote),
 			},
 		);
+	}
+
+	#[test]
+	fn write_read_historical_votes_works() {
+		let client = test_client::new();
+		let historical_votes = HistoricalVotes::<H256, u64, Signature, AuthorityId>::new();
+		let _ = write_historical_votes(&client, 123, 321, historical_votes.clone());
+		let historical_votes_cpy = read_historical_votes(&client, 123, 321);
+		assert_eq!(historical_votes, historical_votes_cpy.unwrap());
 	}
 }

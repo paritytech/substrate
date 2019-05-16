@@ -556,7 +556,12 @@ where
 		Ok(())
 	}
 
-	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
+	fn prevoted(
+		&self,
+		round: u64,
+		prevote: Prevote<Block>,
+		votes: &HistoricalVotes<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -590,6 +595,12 @@ where
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_historical_votes(
+				&**self.inner.backend(),
+				self.set_id,
+				round,
+				votes.clone(),
+			)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -597,7 +608,12 @@ where
 		Ok(())
 	}
 
-	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+	fn precommitted(
+		&self,
+		round: u64,
+		precommit: Precommit<Block>,
+		votes: &HistoricalVotes<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -629,6 +645,12 @@ where
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_historical_votes(
+				&**self.inner.backend(),
+				self.set_id,
+				round,
+				votes.clone(),
+			)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -671,7 +693,11 @@ where
 			};
 
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			crate::aux_schema::write_historical_votes(&**self.inner.backend(), self.set_id, round, votes.clone())?;
+			crate::aux_schema::write_historical_votes(
+				&**self.inner.backend(),
+				self.set_id,
+				round,
+			votes.clone())?;
 
 			Ok(Some(set_state))
 		})?;
