@@ -306,8 +306,8 @@ pub mod generic {
 		pub id: RequestId,
 		/// Block at which to perform call.
 		pub block: H,
-		/// Child Storage key with prefix.
-		pub prefixed_storage_key: Vec<u8>,
+		/// Child trie info.
+		pub child_trie: SubTrieRead,
 		/// Storage key.
 		pub key: Vec<u8>,
 	}
