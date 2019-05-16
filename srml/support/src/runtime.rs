@@ -17,13 +17,14 @@
 //! Macros to define a runtime. A runtime is basically all your logic running in Substrate,
 //! consisting of selected SRML modules and maybe some of your own modules.
 //! A lot of supporting logic is automatically generated for a runtime,
-//! mostly for to combine data types and metadata of the included modules.
+//! mostly to combine data types and metadata of the included modules.
 
 /// Construct a runtime, with the given name and the given modules.
 ///
-/// The parameters here are specific types for Block, NodeBlock and InherentData
-/// (TODO: describe the difference between Block and NodeBlock)
-///	and the modules that are used by the runtime.
+/// The parameters here are specific types for `Block`, `NodeBlock`, and `InherentData`
+/// and the modules that are used by the runtime.
+/// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
+/// that is used in the node. For instance they can differ in the extrinsics type.
 ///
 /// # Example:
 ///
@@ -56,6 +57,7 @@
 /// `Test2: test_with_long_module::{Module}`.
 ///
 /// We provide support for the following types in a module:
+///
 /// - `Module`
 /// - `Call`
 /// - `Storage`
@@ -66,11 +68,13 @@
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
 ///                             inherent.
+/// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
 ///
 /// # Note
 ///
 /// The population of the genesis storage depends on the order of modules. So, if one of your
-/// modules depends on another module. The dependent module need to come before the module depending on it.
+/// modules depends on another module, the module that is depended upon needs to come before
+/// the module depending on it.
 #[macro_export]
 macro_rules! construct_runtime {
 
@@ -285,6 +289,13 @@ macro_rules! construct_runtime {
 			$(
 				$name: $module::{ $( $modules $( ( $( $modules_args ),* ) )* ),* }
 			),*;
+		);
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{};
+			$(
+				$name: $module::{ $( $modules $( ( $( $modules_args )* ) )* )* }
+			)*
 		);
 	}
 }
@@ -945,5 +956,67 @@ macro_rules! __decl_instance_import {
 		$crate::paste::item! {
 			$(use $module as [< $module _ $instance >];)*
 		}
+	};
+}
+
+/// A private macro that calls impl_outer_validate_unsigned for Call.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_outer_validate_unsigned {
+	(
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
+			ValidateUnsigned $( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
+		}
+		$( $rest:tt )*
+	) => {
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{ $( $parsed )* $name };
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {
+			$ignore:ident $( ( $( $args_ignore:ident )* ) )*
+			$( $modules:ident $( ( $( $modules_args:ident )* ) )* )*
+		}
+		$( $rest:tt )*
+	) => {
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{ $( $parsed )* };
+			$name: $module:: $(<$module_instance>::)? {
+				$( $modules $( ( $( $modules_args )* ) )* )*
+			}
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $(<$module_instance:ident>::)? {}
+		$( $rest:tt )*
+	) => {
+		$crate::__impl_outer_validate_unsigned!(
+			$runtime;
+			{ $( $parsed )* };
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		{ $(
+			$parsed_modules:ident
+		)* };
+	) => {
+		$crate::impl_outer_validate_unsigned!(
+			impl ValidateUnsigned for $runtime {
+				$( $parsed_modules )*
+			}
+		);
 	};
 }

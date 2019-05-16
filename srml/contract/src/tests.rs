@@ -64,7 +64,7 @@ impl_outer_dispatch! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -313,14 +313,16 @@ fn account_removal_removes_storage() {
 const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
-	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32)))
+	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
 		(call $ext_deposit_event
-			(i32.const 8)
-			(i32.const 4)
+			(i32.const 0) ;; The topics buffer
+			(i32.const 0) ;; The topics buffer's length
+			(i32.const 8) ;; The data buffer
+			(i32.const 4) ;; The data buffer's length
 		)
 		(call $ext_return
 			(i32.const 8)
@@ -337,7 +339,7 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 	(data (i32.const 8) "\01\02\03\04")
 )
 "#;
-const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("abb4194bdea47b2904fe90b4fd674bd40d96f423956627df8c39d2b1a791ab9d");
+const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("66c45bd7c473a1746e1d241176166ef53b1f207f56c5e87d1b6650140704181b");
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {
@@ -363,28 +365,34 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(BOB, 100)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4]))
+					event: MetaEvent::contract(RawEvent::Contract(BOB, vec![1, 2, 3, 4])),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
 				}
 			]);
 
@@ -434,10 +442,12 @@ fn dispatch_call() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					topics: vec![],
 				},
 			]);
 
@@ -461,24 +471,29 @@ fn dispatch_call() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(BOB, 100)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB)),
+					topics: vec![],
 				},
 
 				// Dispatching the call.
@@ -486,19 +501,22 @@ fn dispatch_call() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::NewAccount(CHARLIE, 50)
-					)
+					),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(
 						balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
-					)
+					),
+					topics: vec![],
 				},
 
 				// Event emited as a result of dispatch.
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
+					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true)),
+					topics: vec![],
 				}
 			]);
 		},
@@ -644,10 +662,12 @@ fn set_rent_hash_and_code() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::balances(balances::RawEvent::NewAccount(1, 1_000_000)),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: MetaEvent::contract(RawEvent::CodeStored(HASH_SET_RENT.into())),
+					topics: vec![],
 				},
 			]);
 		}
@@ -754,7 +774,7 @@ fn call_contract_removals() {
 
 #[test]
 fn inherent_claim_surcharge_contract_removals() {
-	removals(|| Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok());
+	removals(|| Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok());
 }
 
 #[test]
@@ -765,10 +785,10 @@ fn signed_claim_surcharge_contract_removals() {
 #[test]
 fn claim_surcharge_malus() {
 	// Test surcharge malus for inherent
-	claim_surcharge(4, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(3, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(2, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(1, || Contract::claim_surcharge(Origin::INHERENT, BOB, Some(ALICE)).is_ok(), false);
+	claim_surcharge(4, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(3, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(2, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(1, || Contract::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), false);
 
 	// Test surcharge malus for signed
 	claim_surcharge(4, || Contract::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);
