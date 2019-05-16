@@ -27,7 +27,7 @@ use crate::transaction_validity::TransactionValidity;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, Saturating
+	CheckedShl, CheckedShr
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -193,7 +193,7 @@ pub trait SimpleArithmetic:
 	Zero + One + IntegerSquareRoot +
 	As<u64> +   // < TODO: REMOVE
 	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
 	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
 	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
 	Add<Self, Output = Self> + AddAssign<Self> +
@@ -210,9 +210,10 @@ impl<T:
 	Zero + One + IntegerSquareRoot +
 	As<u64> +   // < TODO: REMOVE
 	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
 	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
+	UniqueSaturatedInto<u128> + UniqueSaturatedFrom<usize> + UniqueSaturatedInto<usize> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -247,6 +248,31 @@ impl<T: Sized, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
 impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
 	fn unique_saturated_into(self) -> T {
 		self.try_into().unwrap_or_else(|_| Bounded::max_value())
+	}
+}
+
+/// Simple trait to use checked mul and max value to give a saturated mul operation over
+/// supported types.
+pub trait Saturating {
+	/// Saturated addition - if the product can't fit in the type then just use max-value.
+	fn saturating_add(self, o: Self) -> Self;
+
+	/// Saturated subtraction - if the product can't fit in the type then just use max-value.
+	fn saturating_sub(self, o: Self) -> Self;
+
+	/// Saturated multiply - if the product can't fit in the type then just use max-value.
+	fn saturating_mul(self, o: Self) -> Self;
+}
+
+impl<T: CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+	fn saturating_add(self, o: Self) -> Self {
+		<Self as num_traits::Saturating>::saturating_add(self, o)
+	}
+	fn saturating_sub(self, o: Self) -> Self {
+		<Self as num_traits::Saturating>::saturating_sub(self, o)
+	}
+	fn saturating_mul(self, o: Self) -> Self {
+		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
 	}
 }
 
