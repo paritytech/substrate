@@ -65,17 +65,10 @@ impl<'a> SubTrieNodeRef<'a> {
 	pub fn new(keyspace: &'a KeySpace, root: Option<&'a[u8]>) -> Self {
 		SubTrieNodeRef {keyspace, root}
 	}
+	// should not be public as it produce incomplete content
 	fn enc(&self) -> Option<SubTrieNodeCodecRef> {
 		self.root.map(|r|SubTrieNodeCodecRef {keyspace: self.keyspace, root: r})
 	}
-/*	/// root getter
-	pub fn root(&self) -> Option<&[u8]> {
-		self.root
-	}
-	/// keyspace getter
-	pub fn keyspace(&self) -> &KeySpace {
-		self.keyspace
-	}*/
 }
 
 /// `SubTrieNode` encoder internal implementation
@@ -163,7 +156,11 @@ impl SubTrie {
 	}
 	/// encoded parent trie node content
 	pub fn encoded_node(&self) -> Option<Vec<u8>> {
-		self.node_ref().enc().map(|n|parity_codec::Encode::encode(&n))
+		self.node_ref().enc().map(|n|{
+			let mut enc = parity_codec::Encode::encode(&n);
+			enc.extend_from_slice(&self.extension[..]);
+			enc
+		})
 	}
 	/// parent trie key with prefix
 	pub fn parent_prefixed_key(&self) -> &Vec<u8> {
@@ -183,10 +180,12 @@ impl SubTrie {
 	}
 	/// encdode with an updated root
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
-		parity_codec::Encode::encode(&SubTrieNodeCodecRef{
+		let mut enc = parity_codec::Encode::encode(&SubTrieNodeCodecRef{
 			keyspace: &self.keyspace,
 			root: new_root,
-		})
+		});
+		enc.extend_from_slice(&self.extension[..]);
+		enc
 	}
 }
 
