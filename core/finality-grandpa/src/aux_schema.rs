@@ -295,7 +295,7 @@ fn voter_set_state_from_v2<Block: BlockT>(voter_set_state_v2: V2VoterSetState<Bl
 						number,
 						state,
 						base,
-						votes: HistoricalVotes::new_with_votes(votes),
+						votes: HistoricalVotes::new_with(votes, None, None),
 					}
 				}
 			).collect::<VecDeque<CompletedRound<Block>>>()
