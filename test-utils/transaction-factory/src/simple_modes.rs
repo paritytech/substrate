@@ -33,16 +33,12 @@
 ///   A -> B
 ///   ... x `num`
 
-use std::ops::Mul;
 use std::sync::Arc;
-use std::fmt::Display;
 
 use log::info;
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
-use parity_codec::Encode;
-use serde::Serialize;
-use sr_primitives::traits::{As, ProvideRuntimeApi, SimpleArithmetic};
+use sr_primitives::traits::{As, Block as BlockT, ProvideRuntimeApi};
 use substrate_service::{FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents};
 
 use crate::{FactoryState, Mode, RuntimeAdapter, create_block};
@@ -50,26 +46,17 @@ use crate::{FactoryState, Mode, RuntimeAdapter, create_block};
 pub fn next<F, RA>(
 	curr: &mut FactoryState,
 	client: &Arc<ComponentClient<FullComponents<F>>>,
-	prior_block_hash: RA::Hash,
+	prior_block_hash: <RA::Block as BlockT>::Hash,
 	last_ts: RA::Moment,
-)
-	-> Option<(RA::Moment, <F as ServiceFactory>::Block)>
+) -> Option<(RA::Moment, <F as ServiceFactory>::Block)>
 where
 	F: ServiceFactory,
 	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
 	FullClient<F>: ProvideRuntimeApi,
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
-
 	RA: RuntimeAdapter,
-	<RA as RuntimeAdapter>::AccountId: Display,
-	<RA as RuntimeAdapter>::Balance: Display + Mul + As<u64>,
-	<RA as RuntimeAdapter>::Extrinsic: Encode + Serialize,
-	<RA as RuntimeAdapter>::Hash: From<primitives::H256> + Copy + Display,
-	<RA as RuntimeAdapter>::Index: Copy + As<u64>,
-	<RA as RuntimeAdapter>::Moment: SimpleArithmetic + Copy,
-	<RA as RuntimeAdapter>::Phase: Copy + As<u64>,
 {
-	if !(curr.block_no < curr.num) {
+	if curr.block_no >= curr.num {
 		return None;
 	}
 

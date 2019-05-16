@@ -32,8 +32,7 @@ use client::runtime_api::ConstructRuntimeApi;
 use consensus_common::{BlockOrigin, ImportBlock, ForkChoiceStrategy, SelectChain};
 use consensus_common::block_import::BlockImport;
 use parity_codec::{Decode, Encode};
-use serde::Serialize;
-use sr_primitives::traits::{As, Block, Header, ProvideRuntimeApi, SimpleArithmetic};
+use sr_primitives::traits::{As, Block as BlockT, Header, ProvideRuntimeApi, SimpleArithmetic};
 use substrate_service::{FactoryBlock, FactoryFullConfiguration, FullClient, new_client, ServiceFactory, ComponentClient, FullComponents};
 pub use crate::modes::Mode;
 
@@ -42,17 +41,13 @@ mod complex_mode;
 mod simple_modes;
 
 pub trait RuntimeAdapter {
-	type AccountId;
-	type Extrinsic;
-	type Balance;
-	type Moment;
-	type BlockNumber;
-	type BlockId;
-	type Hash;
+	type AccountId: Display;
+	type Balance: Display + Mul + As<u64>;
+	type Block: BlockT;
+	type Index: Copy + As<u64>;
+	type Moment: SimpleArithmetic + Copy;
+	type Phase: Copy + As<u64>;
 	type Secret;
-	type Index;
-	type Phase;
-	type Header;
 
 	fn transfer_extrinsic(
 		sender: &Self::AccountId,
@@ -61,23 +56,23 @@ pub trait RuntimeAdapter {
 		amount: Self::Balance,
 		index: Self::Index,
 		phase: Self::Phase,
-		prior_block_hash: &Self::Hash,
-	) -> Self::Extrinsic;
+		prior_block_hash: &<Self::Block as BlockT>::Hash,
+	) -> <Self::Block as BlockT>::Extrinsic;
 
 	fn timestamp_inherent(
 		ts: Self::Moment,
 		key: Self::Secret,
 		phase: Self::Phase,
-		prior_block_hash: &Self::Hash
-	) -> Self::Extrinsic;
+		prior_block_hash: &<Self::Block as BlockT>::Hash,
+	) -> <Self::Block as BlockT>::Extrinsic;
 
 	fn minimum_balance() -> Self::Balance;
 	fn minimum_period() -> Self::Moment;
 	fn master_account_id() -> Self::AccountId;
 	fn master_account_secret() -> Self::Secret;
-	fn extract_timestamp(block_hash: Self::Hash) -> Self::Moment;
-	fn extract_index(account_id: Self::AccountId, block_hash: Self::Hash) -> Self::Index;
-	fn extract_phase(block_hash: Self::Hash) -> Self::Phase;
+	fn extract_timestamp(block_hash: <Self::Block as BlockT>::Hash) -> Self::Moment;
+	fn extract_index(account_id: Self::AccountId, block_hash: <Self::Block as BlockT>::Hash) -> Self::Index;
+	fn extract_phase(block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase;
 	fn gen_random_account_id(seed: u64) -> Self::AccountId;
 	fn gen_random_account_secret(seed: u64) -> Self::Secret;
 }
@@ -107,21 +102,16 @@ where
 	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
 	FullClient<F>: ProvideRuntimeApi,
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
-
 	RA: RuntimeAdapter,
-	<RA as RuntimeAdapter>::AccountId: Display,
-	<RA as RuntimeAdapter>::Balance: Display + Mul + As<u64>,
-	<RA as RuntimeAdapter>::Extrinsic: Encode + Serialize,
-	<RA as RuntimeAdapter>::Hash: From<primitives::H256> + Copy + Display,
-	<RA as RuntimeAdapter>::Index: Copy + As<u64>,
-	<RA as RuntimeAdapter>::Moment: SimpleArithmetic + Copy,
-	<RA as RuntimeAdapter>::Phase: Copy + As<u64>,
+	<<RA as RuntimeAdapter>::Block as BlockT>::Hash: From<primitives::H256>,
 {
 	let client = new_client::<F>(&config)?;
 
 	let select_chain = F::build_select_chain(&mut config, client.clone())?;
-	let best_header = select_chain.best_chain().expect("Failed to fetch best header");
-	let mut prior_block_hash: RA::Hash = best_header.hash().into();
+
+	let best_header: Result<<F::Block as BlockT>::Header, cli::error::Error> =
+		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
+	let mut prior_block_hash = best_header?.hash().into();
 
 	let mut last_ts = RA::extract_timestamp(prior_block_hash);
 
@@ -158,17 +148,15 @@ where
 /// Create a baked block from a transfer extrinsic and timestamp inherent.
 pub fn create_block<F, RA>(
 	client: &Arc<ComponentClient<FullComponents<F>>>,
-	transfer: RA::Extrinsic,
-	timestamp: RA::Extrinsic
-)
--> <F as ServiceFactory>::Block where
+	transfer: <RA::Block as BlockT>::Extrinsic,
+	timestamp: <RA::Block as BlockT>::Extrinsic,
+) -> <F as ServiceFactory>::Block
+where
 	F: ServiceFactory,
-	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
 	FullClient<F>: ProvideRuntimeApi,
+	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
-
 	RA: RuntimeAdapter,
-	<RA as RuntimeAdapter>::Extrinsic: Encode + Serialize,
 {
 	let mut block = client.new_block().expect("Failed to create new block");
 	block.push(
@@ -187,8 +175,7 @@ pub fn create_block<F, RA>(
 fn import_block<F>(
 	client: &Arc<ComponentClient<FullComponents<F>>>,
 	block: <F as ServiceFactory>::Block
-) -> () where
-	F: ServiceFactory,
+) -> () where F: ServiceFactory
 {
 	let import = ImportBlock {
 		origin: BlockOrigin::File,

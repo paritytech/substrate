@@ -24,15 +24,15 @@ use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
 use balances::Call as BalancesCall;
+use parity_codec::{Decode};
 use keyring::sr25519::Keyring;
-use keyring::sr25519::sr25519::Public;
 use node_primitives::Hash;
 use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic};
 use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
-use sr_primitives::generic::{Era, UncheckedMortalCompactExtrinsic};
-use sr_primitives::traits::As;
+use sr_primitives::generic::Era;
+use sr_primitives::traits::{As, Block as BlockT};
 use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;
 use crate::service;
@@ -41,23 +41,12 @@ pub struct RuntimeAdapterImpl;
 
 impl RuntimeAdapter for RuntimeAdapterImpl {
 	type AccountId = node_primitives::AccountId;
-	type BlockNumber = node_primitives::BlockNumber;
-
-	type Extrinsic = UncheckedMortalCompactExtrinsic<
-		indices::address::Address<Public, u32>,
-		u64,
-		node_runtime::Call,
-		sr_primitives::AnySignature
-	>;
-
 	type Balance = node_primitives::Balance;
 	type Moment = node_primitives::Timestamp;
-	type Hash = node_primitives::Hash;
-	type BlockId = node_primitives::BlockId;
 	type Index = node_primitives::Index;
 	type Phase = sr_primitives::generic::Phase;
 	type Secret = sr25519::Pair;
-	type Header = node_primitives::Header;
+	type Block = node_primitives::Block;
 
 	fn transfer_extrinsic(
 		sender: &Self::AccountId,
@@ -66,9 +55,9 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 		amount: Self::Balance,
 		index: Self::Index,
 		phase: Self::Phase,
-		prior_block_hash: &Self::Hash,
-	) -> Self::Extrinsic {
-		sign::<service::Factory>(CheckedExtrinsic {
+		prior_block_hash: &<Self::Block as BlockT>::Hash,
+	) -> <Self::Block as BlockT>::Extrinsic {
+		sign::<service::Factory, Self>(CheckedExtrinsic {
 			signed: Some((sender.clone(), index)),
 			function: Call::Balances(
 				BalancesCall::transfer(
@@ -85,14 +74,13 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 		ts: Self::Moment,
 		key: Self::Secret,
 		phase: Self::Phase,
-		prior_block_hash: &Self::Hash,
-	) -> Self::Extrinsic {
+		prior_block_hash: &<Self::Block as BlockT>::Hash,
+	) -> <Self::Block as BlockT>::Extrinsic {
 		let cex = CheckedExtrinsic {
 			signed: None,
 			function: Call::Timestamp(timestamp::Call::set(ts)),
 		};
-		let timestamp = sign::<service::Factory>(cex, &key, &prior_block_hash, phase.as_());
-		timestamp
+		sign::<service::Factory, Self>(cex, &key, &prior_block_hash, phase.as_())
 	}
 
 	fn minimum_balance() -> Self::Balance {
@@ -125,19 +113,22 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 		pair
 	}
 
-	fn extract_timestamp(_block_hash: Self::Hash) -> Self::Moment {
+	fn extract_timestamp(_block_hash: <Self::Block as BlockT>::Hash) -> Self::Moment {
 		// TODO get correct timestamp from inherent. See #2587.
 		let now = SystemTime::now();
 		now.duration_since(UNIX_EPOCH)
 			.expect("now always later than unix epoch; qed").as_secs()
 	}
 
-	fn extract_index(_account_id: Self::AccountId, _block_hash: Self::Hash) -> Self::Index {
+	fn extract_index(
+		_account_id: Self::AccountId,
+		_block_hash: <Self::Block as BlockT>::Hash,
+	) -> Self::Index {
 		// TODO get correct index for account via api. See #2587.
 		0.as_()
 	}
 
-	fn extract_phase(_block_hash: Self::Hash) -> Self::Phase {
+	fn extract_phase(_block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase {
 		// TODO get correct phase via api. See #2587.
 		0.as_()
 	}
@@ -155,13 +146,13 @@ fn gen_seed_bytes(seed: u64) -> [u8; 32] {
 
 /// Creates an `UncheckedExtrinsic` containing the appropriate signature for
 /// a `CheckedExtrinsics`.
-fn sign<F: ServiceFactory>(
+fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
 	xt: CheckedExtrinsic,
 	key: &sr25519::Pair,
 	prior_block_hash: &Hash,
 	phase: u64,
-) -> UncheckedExtrinsic {
-	match xt.signed {
+) -> <RA::Block as BlockT>::Extrinsic {
+	let s = match xt.signed {
 		Some((signed, index)) => {
 			let era = Era::mortal(256, phase);
 			let payload = (index.into(), xt.function, era, prior_block_hash);
@@ -181,5 +172,8 @@ fn sign<F: ServiceFactory>(
 			signature: None,
 			function: xt.function,
 		},
-	}
+	};
+
+	let e = Encode::encode(&s);
+	Decode::decode(&mut &e[..]).expect("Failed to decode signed unchecked extrinsic")
 }
