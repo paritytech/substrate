@@ -284,7 +284,7 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 	B::Header: HeaderT,
 {
 	fn on_connect(&self, peer: PeerId, role: Roles, best_number: NumberFor<B>) {
-		if !role.intersects(Roles::FULL | Roles::AUTHORITY) {
+		if !role.is_full() {
 			return;
 		}
 

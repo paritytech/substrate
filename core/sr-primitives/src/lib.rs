@@ -30,6 +30,7 @@ pub use serde;
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
+use rstd::ops;
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -116,24 +117,52 @@ pub type ConsensusEngineId = [u8; 4];
 pub struct Permill(u32);
 
 impl Permill {
-	/// Wraps the argument into `Permill` type.
-	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
+	/// Nothing.
+	pub fn zero() -> Self { Self(0) }
 
-	/// Converts percents into `Permill`.
-	pub fn from_percent(x: u32) -> Permill { Permill(x * 10_000) }
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
+	/// Everything.
+	pub fn one() -> Self { Self(1_000_000) }
+
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
+
+	/// Converts from a percent. Equal to `x / 100`.
+	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000) }
 
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
-	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Permill
+impl<N> ops::Mul<N> for Permill
 where
-	N: traits::As<u64>
+	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
+		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000)
+		let million = <N as traits::As<u64>>::sa(1_000_000);
+		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(million.clone());
+
+			// `rem` is inferior to one million, thus it fits into u64
+			let rem_u64: u64 = rem.as_();
+
+			// `self` and `rem` are inferior to one million, thus the product fits into u64
+			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+
+			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000;
+
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			traits::As::sa(rem_multiplied_divided_u64)
+		};
+
+		(b / million) * part + rem_multiplied_divided
 	}
 }
 
@@ -175,39 +204,54 @@ pub struct Perbill(u32);
 
 impl Perbill {
 	/// Nothing.
-	pub fn zero() -> Perbill { Perbill(0) }
+	pub fn zero() -> Self { Self(0) }
 
 	/// `true` if this is nothing.
 	pub fn is_zero(&self) -> bool { self.0 == 0 }
 
 	/// Everything.
-	pub fn one() -> Perbill { Perbill(1_000_000_000) }
+	pub fn one() -> Self { Self(1_000_000_000) }
 
-	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
-	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(1_000_000_000)) }
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
+
+	/// Converts from a percent. Equal to `x / 100`.
+	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000_000) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
-	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(1_000_000) * 1000) }
-
-	/// Construct new instance where `x` is a percent. Value equivalent to `x%`.
-	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(100) * 10_000_000) }
+	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }
 
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
-	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
-
-	#[cfg(feature = "std")]
-	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
-	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Perbill
+impl<N> ops::Mul<N> for Perbill
 where
-	N: traits::As<u64>
+	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
+		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000_000)
+		let billion = <N as traits::As<u64>>::sa(1_000_000_000);
+		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(billion.clone());
+
+			// `rem` is inferior to one billion, thus it fits into u64
+			let rem_u64: u64 = rem.as_();
+
+			// `self` and `rem` are inferior to one billion, thus the product fits into u64
+			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+
+			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000_000;
+
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			traits::As::sa(rem_multiplied_divided_u64)
+		};
+
+		(b / billion) * part + rem_multiplied_divided
 	}
 }
 
@@ -253,11 +297,14 @@ impl PerU128 {
 	/// Nothing.
 	pub fn zero() -> Self { Self(0) }
 
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
 	/// Everything.
 	pub fn one() -> Self { Self(U128) }
 
-	/// Construct new instance where `x` is parts in u128::max_value. Equal to x/U128::max_value.
-	pub fn from_max_value(x: u128) -> Self { Self(x) }
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u128) -> Self { Self(x) }
 
 	/// Construct new instance where `x` is denominator and the nominator is 1.
 	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
@@ -738,6 +785,24 @@ mod tests {
 		}
 	}
 
+	macro_rules! per_thing_mul_upper_test {
+		($num_type:tt, $per:tt) => {
+			// all sort of from_percent
+			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
+			assert_eq!(
+				$per::from_percent(99) * $num_type::max_value(),
+				((Into::<U256>::into($num_type::max_value()) * 99u32) / 100u32).as_u128() as $num_type
+			);
+			assert_eq!($per::from_percent(50) * $num_type::max_value(), $num_type::max_value() / 2);
+			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
+			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
+
+			// bounds
+			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
+			assert_eq!($per::zero() * $num_type::max_value(), 0);
+		}
+	}
+
 	#[test]
 	fn impl_outer_log_works() {
 		// encode/decode regular item
@@ -819,8 +884,41 @@ mod tests {
 	}
 
 	#[test]
-	fn saturating_mul() {
-		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
-		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
+	fn per_things_should_work() {
+		use super::{Perbill, Permill};
+		use primitive_types::U256;
+
+		per_thing_mul_upper_test!(u32, Perbill);
+		per_thing_mul_upper_test!(u64, Perbill);
+		per_thing_mul_upper_test!(u128, Perbill);
+
+		per_thing_mul_upper_test!(u32, Permill);
+		per_thing_mul_upper_test!(u64, Permill);
+		per_thing_mul_upper_test!(u128, Permill);
+	}
+
+	#[test]
+	#[should_panic]
+	fn per_things_operate_in_output_type() {
+		use super::Perbill;
+
+		assert_eq!(Perbill::one() * 255_u64, 255);
+		// panics
+		assert_ne!(Perbill::one() * 255_u8, 255);
+	}
+
+	#[test]
+	fn per_things_one_minus_one_part() {
+		use primitive_types::U256;
+
+		assert_eq!(
+			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
+		);
+
+		assert_eq!(
+			super::Permill::from_parts(999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
+		);
 	}
 }

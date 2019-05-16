@@ -34,3 +34,7 @@ offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
+node-executor = { path = "../../node/executor" }
+node-primitives = { path = "../../node/primitives" }
+node-runtime = { path = "../../node/runtime" }
+grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }

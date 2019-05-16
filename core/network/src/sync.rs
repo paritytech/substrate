@@ -39,12 +39,14 @@ use client::{BlockStatus, ClientInfo};
 use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRequestBuilder}};
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
-use crate::extra_requests::ExtraRequestsAggregator;
+use crate::sync::extra_requests::ExtraRequestsAggregator;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, CheckedSub};
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
 use crate::config::Roles;
 use std::collections::HashSet;
+
+mod extra_requests;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -179,7 +181,7 @@ impl<B: BlockT> ChainSync<B> {
 		info: &ClientInfo<B>,
 	) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
-		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
+		if role.is_full() {
 			required_block_attributes |= message::BlockAttributes::BODY;
 		}
 
@@ -231,6 +233,12 @@ impl<B: BlockT> ChainSync<B> {
 	/// Handle new connected peer. Call this method whenever we connect to a new peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId) {
 		if let Some(info) = protocol.peer_info(&who) {
+			// there's nothing sync can get from the node that has no blockchain data
+			// (the opposite is not true, but all requests are served at protocol level)
+			if !info.roles.is_full() {
+				return;
+			}
+
 			let status = block_status(&*protocol.client(), &self.queue_blocks, info.best_hash);
 			match (status, info.best_number) {
 				(Err(e), _) => {
