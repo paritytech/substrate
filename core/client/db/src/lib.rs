@@ -327,13 +327,11 @@ where Block: BlockT<Hash=H256>,
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-			println!("A");
 			return Err(client::error::Error::GenesisInvalid.into());
 		}
 
 		for child_key in children.keys() {
 			if !well_known_keys::is_child_storage_key(&child_key) {
-				println!("B: {:?}", ::std::str::from_utf8(child_key).unwrap());
 				return Err(client::error::Error::GenesisInvalid.into());
 			}
 		}
