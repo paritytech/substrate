@@ -180,7 +180,7 @@ impl OverlayedChanges {
 		let pc = &mut self.prospective.pending_child;
 		let map_entry = p.entry(subtrie.keyspace().clone())
 			.or_insert_with(||{
-				pc.insert(subtrie.parent_key().to_vec(), subtrie.keyspace().clone());
+				pc.insert(subtrie.parent_and_prefix_slice().to_vec(), subtrie.keyspace().clone());
 				(Default::default(), Default::default(), subtrie.clone())
 			});
 		map_entry.1.insert(key, val);

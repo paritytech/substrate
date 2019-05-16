@@ -194,7 +194,6 @@ impl SubTrie {
 		Self::prefix_parent_key_slice(&self.parent)
 	}
 
-
 	/// parent trie key with prefix
 	pub fn parent_and_prefix(&self) -> (&[u8], &[u8]) {
 		(
