@@ -51,6 +51,18 @@ impl HttpRequestStatus {
 			_ => None,
 		}
 	}
+
+	/// Convert the status into `u32`.
+	///
+	/// This is an oposite conversion to `from_u32`
+	pub fn as_u32(&self) -> u32 {
+		match *self {
+			HttpRequestStatus::Unknown => 0,
+			HttpRequestStatus::DeadlineReached => 10,
+			HttpRequestStatus::Timeout => 20,
+			HttpRequestStatus::Finished(code) => code as u32,
+		}
+	}
 }
 
 /// Opaque timestamp type
@@ -186,7 +198,7 @@ pub trait Externalities {
 
 	/// Read all response headers.
 	///
-	/// Resturns a vector of pairs `(HeaderKey, HeaderValue)`.
+	/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
 	fn http_response_headers(
 		&mut self,
 		request_id: HttpRequestId
