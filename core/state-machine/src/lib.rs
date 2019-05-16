@@ -997,8 +997,16 @@ mod tests {
 		let subtrie1 = remote_backend.child_trie(TCP, b"sub1").unwrap().unwrap();
 		let _remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (_v, remote_proof) = prove_child_read(remote_backend, subtrie1.node_ref(), b"value3").unwrap();
-		let local_result1 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), subtrie1.node_ref(), b"value3").unwrap();
-		let local_result2 = read_child_proof_check::<Blake2Hasher>(remote_proof.clone(), subtrie1.node_ref(), b"value2").unwrap();
+		let local_result1 = read_child_proof_check::<Blake2Hasher>(
+			remote_proof.clone(),
+			subtrie1.node_ref(),
+			b"value3"
+		).unwrap();
+		let local_result2 = read_child_proof_check::<Blake2Hasher>(
+			remote_proof.clone(),
+			subtrie1.node_ref(),
+			b"value2"
+		).unwrap();
 		assert_eq!(local_result1, Some(vec![142]));
 		assert_eq!(local_result2, None);
 	}

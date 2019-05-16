@@ -21,7 +21,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher};
-use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError, read_trie_value, read_child_trie_value, for_keys_in_child_trie};
+use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError,
+	read_trie_value, read_child_trie_value, for_keys_in_child_trie};
 use crate::changes_trie::Storage as ChangesTrieStorage;
 use primitives::subtrie::SubTrieReadRef;
 use crate::backend::Consolidate;

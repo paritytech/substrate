@@ -249,13 +249,25 @@ pub mod ext {
 		/// See [`ext_set_storage`] for details.
 		///
 		/// A child storage is used e.g. by a contract.
-		fn ext_set_child_storage(prefix_storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+		fn ext_set_child_storage(
+			prefix_storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32,
+			value_data: *const u8,
+			value_len: u32
+		);
 		/// A child storage function.
 		///
 		/// See [`ext_clear_storage`] for details.
 		///
 		/// A child storage is used e.g. by a contract.
-		fn ext_clear_child_storage(prefix_storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
+		fn ext_clear_child_storage(
+			prefix_storage_key_data: *const u8,
+			storage_key_len: u32,
+			key_data: *const u8,
+			key_len: u32
+		);
 		/// A child storage function.
 		///
 		/// See [`ext_exists_storage`] for details.
@@ -413,7 +425,12 @@ impl StorageApi for () {
 		}
 	}
 
-	fn read_child_storage(subtrie: SubTrieReadRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	fn read_child_storage(
+		subtrie: SubTrieReadRef,
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: usize
+	) -> Option<usize> {
 		let empty_byte: [u8;0] = [];
 		let root = subtrie.root.unwrap_or(&empty_byte[..]);
 		unsafe {

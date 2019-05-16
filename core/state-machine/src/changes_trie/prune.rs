@@ -177,13 +177,29 @@ mod tests {
 	fn prune_works() {
 		fn prepare_storage() -> InMemoryStorage<Blake2Hasher> {
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
-			let root1 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb1, vec![(vec![10], vec![20])], None).unwrap();
+			let root1 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb1,
+				vec![(vec![10], vec![20])],
+				None
+			).unwrap();
 			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
-			let root2 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb2, vec![(vec![11], vec![21]), (vec![12], vec![22])], None).unwrap();
+			let root2 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb2,
+				vec![(vec![11], vec![21]), (vec![12], vec![22])],
+				None
+			).unwrap();
 			let mut mdb3 = MemoryDB::<Blake2Hasher>::default();
-			let root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![(vec![13], vec![23]), (vec![14], vec![24])], None).unwrap();
+			let root3 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb3,
+				vec![(vec![13], vec![23]), (vec![14], vec![24])],
+				None
+			).unwrap();
 			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
-			let root4 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb4, vec![(vec![15], vec![25])], None).unwrap();
+			let root4 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb4,
+				vec![(vec![15], vec![25])],
+				None
+			).unwrap();
 			let storage = InMemoryStorage::new();
 			storage.insert(65, root1, mdb1);
 			storage.insert(66, root2, mdb2);

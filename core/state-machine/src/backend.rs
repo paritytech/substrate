@@ -322,7 +322,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.get(&None).into_iter()
+			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let map_input = existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>();
@@ -343,7 +344,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		H::Out: Ord
 	{
 		// costy clone
-		let existing_pairs = self.inner.get(&Some(subtrie.keyspace().clone())).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.get(&Some(subtrie.keyspace().clone())).into_iter()
+			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = child_trie_root::<H, _, _, _>(
@@ -408,7 +410,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 }
 
 /// Insert input pairs into memory db.
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I, subtrie: Option<SubTrieReadRef>) -> Option<H::Out>
+pub(crate) fn insert_into_memory_db<H, I>(
+	mdb: &mut MemoryDB<H>,
+	input: I,
+	subtrie: Option<SubTrieReadRef>
+) -> Option<H::Out>
 	where
 		H: Hasher,
 		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,

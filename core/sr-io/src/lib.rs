@@ -109,7 +109,12 @@ export_api! {
 		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
 		/// number of bytes is not equal to the number of bytes written to the `value_out`.
-		fn read_child_storage(subtrie: SubTrieReadRef, key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
+		fn read_child_storage(
+			subtrie: SubTrieReadRef,
+			key: &[u8],
+			value_out: &mut [u8],
+			value_offset: usize
+		) -> Option<usize>;
 
 		/// Set the storage of some particular key to Some value.
 		fn set_storage(key: &[u8], value: &[u8]);
