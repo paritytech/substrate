@@ -261,6 +261,7 @@ where
 		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
 
 		let mut buf = Vec::new();
+		buf.extend_from_slice(b"contract_seed");
 		buf.extend_from_slice(self.0.as_ref());
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
