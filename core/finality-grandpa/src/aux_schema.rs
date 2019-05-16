@@ -607,7 +607,7 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
+			Some(3),
 		);
 
 		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
@@ -690,7 +690,7 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
+			Some(3),
 		);
 
 		let PersistentData { authority_set, set_state, .. } = load_persistent::<test_client::runtime::Block, _, _>(
