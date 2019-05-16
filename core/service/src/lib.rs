@@ -142,7 +142,7 @@ impl<Components: components::Components> Service<Components> {
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
 			None => {
-				let key = keystore.generate("")?;
+				let key = keystore.generate(&config.password)?;
 				let public_key = key.public();
 				info!("Generated a new keypair: {:?}", public_key);
 
@@ -382,7 +382,7 @@ impl<Components: components::Components> Service<Components> {
 		if self.config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, "")))
+				.map(|k| keystore.load(k, &self.config.password)))
 		{
 			Some(key)
 		} else {

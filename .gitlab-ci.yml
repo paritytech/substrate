@@ -207,7 +207,11 @@ publish-docker-release:
     - echo "Substrate version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
     - cd ./artifacts
-    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest .
+    - docker build
+      --build-arg VCS_REF="${CI_COMMIT_SHORT_SHA}"
+      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      --tag $CONTAINER_IMAGE:$VERSION 
+      --tag $CONTAINER_IMAGE:latest .
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
   after_script:

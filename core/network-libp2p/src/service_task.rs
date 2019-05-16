@@ -15,22 +15,20 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	behaviour::Behaviour, behaviour::BehaviourOut,
+	behaviour::Behaviour,
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomProto, CustomProtoOut, CustomMessage, RegisteredProtocol};
 use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr};
-use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
 use libp2p::{Multiaddr, core::swarm::NetworkBehaviour, PeerId};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
-use log::{debug, info, warn};
+use log::{info, error, warn};
 use std::fs;
 use std::io::Error as IoError;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 /// Starts the substrate libp2p service.
 ///
@@ -110,7 +108,6 @@ where TMessage: CustomMessage + Send + 'static {
 	let service = Service {
 		swarm,
 		bandwidth,
-		nodes_info: Default::default(),
 		injected_events: Vec::new(),
 	};
 
@@ -158,57 +155,57 @@ pub enum ServiceEvent<TMessage> {
 /// Network service. Must be polled regularly in order for the networking to work.
 pub struct Service<TMessage> where TMessage: CustomMessage {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<CustomProto<TMessage, Substream<StreamMuxerBox>>, CustomProtoOut<TMessage>, Substream<StreamMuxerBox>>>,
+	swarm: Swarm<
+		Boxed<(PeerId, StreamMuxerBox), IoError>,
+		Behaviour<CustomProto<TMessage, Substream<StreamMuxerBox>>, CustomProtoOut<TMessage>, Substream<StreamMuxerBox>>
+	>,
 
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
 
-	/// Information about all the nodes we're connected to.
-	nodes_info: FnvHashMap<PeerId, NodeInfo>,
-
 	/// Events to produce on the Stream.
 	injected_events: Vec<ServiceEvent<TMessage>>,
-}
-
-/// Information about a node we're connected to.
-#[derive(Debug)]
-struct NodeInfo {
-	/// How we're connected to the node.
-	endpoint: ConnectedPoint,
-	/// Version reported by the remote, or `None` if unknown.
-	client_version: Option<String>,
-	/// Latest ping time with this node.
-	latest_ping: Option<Duration>,
 }
 
 impl<TMessage> Service<TMessage>
 where TMessage: CustomMessage + Send + 'static {
 	/// Returns a struct containing tons of useful information about the network.
 	pub fn state(&mut self) -> NetworkState {
+		let open = self.swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
+
 		let connected_peers = {
 			let swarm = &mut self.swarm;
-			self.nodes_info.iter().map(move |(peer_id, info)| {
+			open.iter().filter_map(move |peer_id| {
 				let known_addresses = NetworkBehaviour::addresses_of_peer(&mut **swarm, peer_id)
 					.into_iter().collect();
 
-				(peer_id.to_base58(), NetworkStatePeer {
-					endpoint: info.endpoint.clone().into(),
-					version_string: info.client_version.clone(),
-					latest_ping_time: info.latest_ping,
+				let endpoint = if let Some(e) = swarm.node(peer_id).map(|i| i.endpoint()) {
+					e.clone().into()
+				} else {
+					error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
+						and debug information about {:?}", peer_id);
+					return None
+				};
+
+				Some((peer_id.to_base58(), NetworkStatePeer {
+					endpoint,
+					version_string: swarm.node(peer_id).and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
 					enabled: swarm.user_protocol().is_enabled(&peer_id),
 					open: swarm.user_protocol().is_open(&peer_id),
 					known_addresses,
-				})
+				}))
 			}).collect()
 		};
 
 		let not_connected_peers = {
 			let swarm = &mut self.swarm;
-			let nodes_info = &self.nodes_info;
-			let list = swarm.known_peers().filter(|p| !nodes_info.contains_key(p))
+			let list = swarm.known_peers().filter(|p| !open.iter().all(|n| n != *p))
 				.cloned().collect::<Vec<_>>();
 			list.into_iter().map(move |peer_id| {
 				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+					version_string: swarm.node(&peer_id).and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
 					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
 						.into_iter().collect(),
 				})
@@ -246,27 +243,28 @@ where TMessage: CustomMessage + Send + 'static {
 	}
 
 	/// Returns the peer id of the local node.
-	#[inline]
 	pub fn peer_id(&self) -> &PeerId {
 		Swarm::local_peer_id(&self.swarm)
 	}
 
 	/// Returns the list of all the peers we are connected to.
-	#[inline]
 	pub fn connected_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
-		self.nodes_info.keys()
+		self.swarm.user_protocol().open_peers()
 	}
 
-	/// Returns the way we are connected to a node.
-	#[inline]
+	/// Returns the way we are connected to a node. Returns `None` if we are not connected to it.
 	pub fn node_endpoint(&self, peer_id: &PeerId) -> Option<&ConnectedPoint> {
-		self.nodes_info.get(peer_id).map(|info| &info.endpoint)
+		if self.swarm.user_protocol().is_open(peer_id) {
+			self.swarm.node(peer_id).map(|n| n.endpoint())
+		} else {
+			None
+		}
 	}
 
-	/// Returns the client version reported by a node.
+	/// Returns the latest client version reported by a node. Can return `Some` even for nodes
+	/// we're not connected to.
 	pub fn node_client_version(&self, peer_id: &PeerId) -> Option<&str> {
-		self.nodes_info.get(peer_id)
-			.and_then(|info| info.client_version.as_ref().map(|s| &s[..]))
+		self.swarm.node(peer_id).and_then(|n| n.client_version())
 	}
 
 	/// Sends a message to a peer using the custom protocol.
@@ -286,11 +284,7 @@ where TMessage: CustomMessage + Send + 'static {
 	/// This is asynchronous and will not immediately close the peer.
 	/// Corresponding closing events will be generated once the closing actually happens.
 	pub fn drop_node(&mut self, peer_id: &PeerId) {
-		if let Some(info) = self.nodes_info.get(peer_id) {
-			debug!(target: "sub-libp2p", "Dropping {:?} on purpose ({:?}, {:?})",
-				peer_id, info.endpoint, info.client_version);
-			self.swarm.user_protocol_mut().disconnect_peer(peer_id);
-		}
+		self.swarm.user_protocol_mut().disconnect_peer(peer_id);
 	}
 
 	/// Adds a hard-coded address for the given peer, that never expires.
@@ -300,10 +294,10 @@ where TMessage: CustomMessage + Send + 'static {
 
 	/// Get debug info for a given peer.
 	pub fn peer_debug_info(&self, who: &PeerId) -> String {
-		if let Some(info) = self.nodes_info.get(who) {
-			format!("{:?} (version: {:?}) through {:?}", who, info.client_version, info.endpoint)
+		if let Some(node) = self.swarm.node(who) {
+			format!("{:?} {}", who, node.debug_info())
 		} else {
-			"unknown".to_string()
+			format!("{:?} (unknown)", who)
 		}
 	}
 
@@ -311,12 +305,7 @@ where TMessage: CustomMessage + Send + 'static {
 	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::CustomProtocolOpen { peer_id, version, endpoint })))) => {
-					self.nodes_info.insert(peer_id.clone(), NodeInfo {
-						endpoint,
-						client_version: None,
-						latest_ping: None,
-					});
+				Ok(Async::Ready(Some(CustomProtoOut::CustomProtocolOpen { peer_id, version, .. }))) => {
 					let debug_info = self.peer_debug_info(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::OpenedCustomProtocol {
 						peer_id,
@@ -324,41 +313,24 @@ where TMessage: CustomMessage + Send + 'static {
 						debug_info,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::CustomProtocolClosed { peer_id, .. })))) => {
+				Ok(Async::Ready(Some(CustomProtoOut::CustomProtocolClosed { peer_id, .. }))) => {
 					let debug_info = self.peer_debug_info(&peer_id);
-					self.nodes_info.remove(&peer_id);
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
 						peer_id,
 						debug_info,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::CustomMessage { peer_id, message })))) => {
+				Ok(Async::Ready(Some(CustomProtoOut::CustomMessage { peer_id, message }))) => {
 					break Ok(Async::Ready(Some(ServiceEvent::CustomMessage {
 						peer_id,
 						message,
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::UserProtocol(CustomProtoOut::Clogged { peer_id, messages })))) => {
+				Ok(Async::Ready(Some(CustomProtoOut::Clogged { peer_id, messages }))) => {
 					break Ok(Async::Ready(Some(ServiceEvent::Clogged {
 						peer_id,
 						messages,
 					})))
-				}
-				Ok(Async::Ready(Some(BehaviourOut::Identified { peer_id, info }))) => {
-					// Contrary to the other events, this one can happen even on nodes which don't
-					// have any open custom protocol slot. Therefore it is not necessarily in the
-					// list.
-					if let Some(n) = self.nodes_info.get_mut(&peer_id) {
-						n.client_version = Some(info.agent_version);
-					}
-				}
-				Ok(Async::Ready(Some(BehaviourOut::PingSuccess { peer_id, ping_time }))) => {
-					// Contrary to the other events, this one can happen even on nodes which don't
-					// have any open custom protocol slot. Therefore it is not necessarily in the
-					// list.
-					if let Some(n) = self.nodes_info.get_mut(&peer_id) {
-						n.latest_ping = Some(ping_time);
-					}
 				}
 				Ok(Async::NotReady) => break Ok(Async::NotReady),
 				Ok(Async::Ready(None)) => unreachable!("The Swarm stream never ends"),

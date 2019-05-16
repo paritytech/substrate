@@ -247,6 +247,10 @@ pub struct NetworkStatePeer {
 pub struct NetworkStateNotConnectedPeer {
 	/// List of addresses known for this node.
 	pub known_addresses: HashSet<Multiaddr>,
+	/// Node information, as provided by the node itself, if we were ever connected to this node.
+	pub version_string: Option<String>,
+	/// Latest ping duration with this node, if we were ever connected to this node.
+	pub latest_ping_time: Option<Duration>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -270,8 +274,8 @@ impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 				NetworkStatePeerEndpoint::Dialing(address),
 			ConnectedPoint::Listener { listen_addr, send_back_addr } =>
 				NetworkStatePeerEndpoint::Listening {
-					listen_addr: listen_addr,
-					send_back_addr: send_back_addr
+					listen_addr,
+					send_back_addr
 				}
 		}
 	}

@@ -586,7 +586,7 @@ decl_storage! {
 		/// The maximum nesting level of a call/create stack.
 		MaxDepth get(max_depth) config(): u32 = 100;
 		/// The maximum amount of gas that could be expended per block.
-		BlockGasLimit get(block_gas_limit) config(): T::Gas = T::Gas::sa(1_000_000);
+		BlockGasLimit get(block_gas_limit) config(): T::Gas = T::Gas::sa(10_000_000);
 		/// Gas spent so far in this block.
 		GasSpent get(gas_spent): T::Gas;
 		/// Current cost schedule for contracts.
