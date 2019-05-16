@@ -301,7 +301,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
@@ -322,7 +324,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	{
 		let storage_key = storage_key.to_vec();
 
-		let existing_pairs = self.inner.get(&Some(storage_key.clone())).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.get(&Some(storage_key.clone()))
+			.into_iter()
+			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = child_trie_root::<H, _, _, _>(
@@ -341,15 +345,24 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone()))).collect()
+		self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone())))
+			.collect()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.inner.get(&None).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
+		self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.collect()
 	}
 
 	fn child_keys(&self, storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.inner.get(&Some(storage_key.to_vec())).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
+		self.inner.get(&Some(storage_key.to_vec()))
+			.into_iter()
+			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.collect()
 	}
 
 	fn try_into_trie_backend(
