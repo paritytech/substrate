@@ -66,12 +66,12 @@ impl HttpRequestStatus {
 }
 
 /// Opaque timestamp type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Timestamp(u64);
 
 /// Duration type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Duration(u64);
 

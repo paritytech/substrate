@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use futures::{Stream, Future, sync::mpsc};
 use inherents::pool::InherentsPool;
-use log::{info, debug, warn};
+use log::{info, debug, warn, error};
 use parity_codec::Decode;
 use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, Externalities as OffchainExt};
 use runtime_primitives::{
@@ -36,7 +36,12 @@ enum ExtMessage {
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
 pub(crate) struct AsyncApi(mpsc::UnboundedSender<ExtMessage>);
 
-// TODO [ToDr] Implement me!
+fn unavailable_yet<R: Default>(name: &str) -> R {
+	error!("This {:?} API is not available for offchain workers yet. Follow
+		   https://github.com/paritytech/substrate/issues/1458 for details", name);
+	Default::default()
+}
+
 impl OffchainExt for AsyncApi {
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
 		self.0.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
@@ -44,56 +49,85 @@ impl OffchainExt for AsyncApi {
 			.map_err(|_| ())
 	}
 
-	fn sign(&mut self, data: &[u8]) -> Option<[u8; 64]> { unimplemented!() }
+	fn sign(&mut self, _data: &[u8]) -> Option<[u8; 64]> {
+		unavailable_yet("sign")
+	}
 
-	fn timestamp(&mut self) -> Timestamp { unimplemented!() }
+	fn timestamp(&mut self) -> Timestamp {
+		unavailable_yet("timestamp")
+	}
 
-	fn sleep_until(&mut self, deadline: Timestamp) { unimplemented!() }
+	fn sleep_until(&mut self, _deadline: Timestamp) {
+		unavailable_yet::<()>("sleep_until")
+	}
 
-	fn random_seed(&mut self) -> [u8; 32] { unimplemented!() }
+	fn random_seed(&mut self) -> [u8; 32] {
+		unavailable_yet("random_seed")
+	}
 
-	fn local_storage_set(&mut self, key: &[u8], value: &[u8]) { unimplemented!() }
+	fn local_storage_set(&mut self, _key: &[u8], _value: &[u8]) {
+		unavailable_yet("local_storage_set")
+	}
 
-	fn local_storage_read(&mut self, key: &[u8]) -> Option<Vec<u8>> { unimplemented!() }
+	fn local_storage_read(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+		unavailable_yet("local_storage_read")
+	}
 
 	fn http_request_start(
 		&mut self,
-		method: &str,
-		uri: &str,
-		meta: &[u8]
-	) -> Result<HttpRequestId, ()> { unimplemented!() }
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> Result<HttpRequestId, ()> {
+		unavailable_yet::<()>("http_request_start");
+		Err(())
+	}
 
 	fn http_request_add_header(
 		&mut self,
-		request_id: HttpRequestId,
-		name: &str,
-		value: &str
-	) -> Result<(), ()> { unimplemented!() }
+		_request_id: HttpRequestId,
+		_name: &str,
+		_value: &str
+	) -> Result<(), ()> {
+		unavailable_yet::<()>("http_request_add_header");
+		Err(())
+	}
 
 	fn http_request_write_body(
 		&mut self,
-		request_id: HttpRequestId,
-		chunk: &[u8],
-		deadline: Option<Timestamp>
-	) -> Result<(), ()> { unimplemented!() }
+		_request_id: HttpRequestId,
+		_chunk: &[u8],
+		_deadline: Option<Timestamp>
+	) -> Result<(), ()> {
+		unavailable_yet::<()>("http_request_write_body");
+		Err(())
+	}
 
 	fn http_response_wait(
 		&mut self,
 		ids: &[HttpRequestId],
-		deadline: Option<Timestamp>
-	) -> Vec<HttpRequestStatus> { unimplemented!() }
+		_deadline: Option<Timestamp>
+	) -> Vec<HttpRequestStatus> {
+		unavailable_yet::<()>("http_response_wait");
+		ids.iter().map(|_| HttpRequestStatus::Unknown).collect()
+	}
 
 	fn http_response_headers(
 		&mut self,
-		request_id: HttpRequestId
-	) -> Vec<(Vec<u8>, Vec<u8>)> { unimplemented!() }
+		_request_id: HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unavailable_yet("http_response_headers")
+	}
 
 	fn http_response_read_body(
 		&mut self,
-		request_id: HttpRequestId,
-		buffer: &mut [u8],
-		deadline: Option<Timestamp>
-	) -> Result<usize, ()> { unimplemented!() }
+		_request_id: HttpRequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<Timestamp>
+	) -> Result<usize, ()> {
+		unavailable_yet::<()>("http_response_read_body");
+		Err(())
+	}
 }
 
 /// Offchain extensions implementation API
