@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 pub use self::behaviour::{CustomProto, CustomProtoOut};
-pub use self::upgrade::{CustomMessage, CustomMessageId, RegisteredProtocol};
+pub use self::upgrade::{CustomMessage, RegisteredProtocol};
 
 mod behaviour;
 mod handler;

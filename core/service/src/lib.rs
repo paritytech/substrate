@@ -152,14 +152,16 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let protocol_id = {
-			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
-			let mut protocol_id = network::ProtocolId::default();
-			if protocol_id_full.len() > protocol_id.len() {
-				warn!("Protocol ID truncated to {} chars", protocol_id.len());
-			}
-			let id_len = protocol_id_full.len().min(protocol_id.len());
-			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
-			protocol_id
+			let protocol_id_full = match config.chain_spec.protocol_id() {
+				Some(pid) => pid,
+				None => {
+					warn!("Using default protocol ID {:?} because none is configured in the \
+						chain specs", DEFAULT_PROTOCOL_ID
+					);
+					DEFAULT_PROTOCOL_ID
+				}
+			}.as_bytes();
+			network::ProtocolId::from(protocol_id_full)
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

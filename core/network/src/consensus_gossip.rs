@@ -116,7 +116,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				if let Status::Future = entry.status { continue }
 
 				known_messages.insert(entry.message_hash);
-				protocol.send_message(who.clone(), Message::Consensus(entry.message.clone()));
+				protocol.send_consensus(who.clone(), entry.message.clone());
 			}
 			self.peers.insert(who, PeerConsensus {
 				known_messages,
@@ -162,12 +162,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 				if peer.known_messages.insert(message_hash.clone()) || force {
 					let message = get_message();
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					protocol.send_message(id.clone(), Message::Consensus(message));
+					protocol.send_consensus(id.clone(), message);
 				}
 			} else if non_authorities.contains(&id) {
 				let message = get_message();
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-				protocol.send_message(id.clone(), Message::Consensus(message));
+				protocol.send_consensus(id.clone(), message);
 			}
 		}
 	}

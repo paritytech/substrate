@@ -19,7 +19,7 @@ use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 use crate::{NetworkConfiguration, NonReservedPeerMode, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{multiaddr::Protocol, Multiaddr, core::swarm::NetworkBehaviour, PeerId};
+use libp2p::{Multiaddr, core::swarm::NetworkBehaviour, PeerId};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
 use log::{debug, info, warn};
@@ -81,6 +81,7 @@ where TMessage: CustomMessage + Send + 'static {
 	let local_identity = config.node_key.clone().into_keypair()?;
 	let local_public = local_identity.public();
 	let local_peer_id = local_public.clone().into_peer_id();
+	info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
 
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
@@ -92,12 +93,8 @@ where TMessage: CustomMessage + Send + 'static {
 
 	// Listen on multiaddresses.
 	for addr in &config.listen_addresses {
-		match Swarm::listen_on(&mut swarm, addr.clone()) {
-			Ok(mut new_addr) => {
-				new_addr.append(Protocol::P2p(local_peer_id.clone().into()));
-				info!(target: "sub-libp2p", "Local node address is: {}", new_addr);
-			},
-			Err(err) => warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
+		if let Err(err) = Swarm::listen_on(&mut swarm, addr.clone()) {
+			warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 		}
 	}
 

@@ -20,6 +20,7 @@ use crate::storage::hashed::generator::StorageHasher;
 use crate::Twox64Concat;
 use crate::rstd::prelude::Vec;
 
+/// Trait for available hash functions.
 // This trait must be kept coherent with srml-support-procedural HasherKind usage
 pub trait Hashable: Sized {
 	fn blake2_128(&self) -> [u8; 16];
