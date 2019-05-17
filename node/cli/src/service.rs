@@ -281,6 +281,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn test_sync() {
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
@@ -368,6 +369,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn test_consensus() {
 		use super::Factory;
 

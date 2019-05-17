@@ -425,6 +425,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn test_connectivity() {
 		service_test::connectivity::<Factory>(integration_test_config_with_two_authorities());
 	}
