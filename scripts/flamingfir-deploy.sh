@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 TIMEOUT=60
 TARGET_HOST="$1"
@@ -12,7 +13,7 @@ echo "Launched job: $JOB_ID"
 
 sleep $TIMEOUT
 
-AWX_OUTPUT=$(wget -O - --header 'Authorization: Bearer ${AWK_TOKEN}'  https://ansible-awx.parity.io/api/v1/jobs/1894/stdout?format=txt_download)
+AWX_OUTPUT=$(wget -O - --header 'Authorization: Bearer ${AWK_TOKEN}'  https://ansible-awx.parity.io/api/v1/jobs/${JOB_ID}/stdout?format=txt_download)
 
 echo "AWX job log:"
 echo $AWX_OUTPUT
