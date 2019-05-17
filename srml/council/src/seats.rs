@@ -20,15 +20,13 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup, Bounded, Saturating};
 use runtime_io::print;
 use srml_support::{
-	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap,
+	StorageValue, StorageMap, EnumerableStorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, LockIdentifier, LockableCurrency, WithdrawReasons}
 };
 use democracy;
 use parity_codec::{Encode, Decode};
 use system::{self, ensure_signed};
-
-// TODO: double check offset and pot
 
 // no polynomial attacks:
 //
@@ -420,7 +418,7 @@ decl_storage! {
 		///
 		/// Furthermore, each vector of scalars is chunked with the cap of `APPROVAL_SET_SIZE`.
 		/// The second key of the `double_map` represents which chunk to read from memory.
-		pub ApprovalsOf get(approvals_of): double_map T::AccountId, blake2_256(SetIndex) => Vec<ApprovalFlag>;
+		pub ApprovalsOf get(approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
 		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
@@ -543,7 +541,7 @@ impl<T: Trait> Module<T> {
 		}
 		<Voters<T>>::insert(set_index, set);
 		<VoterCount<T>>::mutate(|c| *c = *c - 1);
-		<ApprovalsOf<T>>::remove_prefix(voter);
+		Self::remove_all_approvals_of(voter);
 		<ActivityInfoOf<T>>::remove(voter);
 		<OffsetPotOf<T>>::remove(voter);
 	}
@@ -771,7 +769,7 @@ impl<T: Trait> Module<T> {
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert(who, SetIndex::sa(idx), slice.to_vec()));
+			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert((who.clone(), SetIndex::sa(idx)), slice.to_vec()));
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
@@ -783,7 +781,7 @@ impl<T: Trait> Module<T> {
 	fn approvals_of_at(who: &T::AccountId, index: usize) -> bool {
 		let (flag_index, bit) = Self::split_index(index, APPROVAL_FLAG_LEN);
 		let (set_index, vec_index) = Self::split_index::<SetIndex>(flag_index, APPROVAL_SET_SIZE);
-		let set = Self::approvals_of(who, set_index);
+		let set = Self::approvals_of((who.clone(), set_index));
 		if vec_index < set.len() {
 			Self::bit_at(set[vec_index], bit)
 		} else {
@@ -834,7 +832,7 @@ impl<T: Trait> Module<T> {
 		// with one of the keys. This is best that we can do so far.
 		let mut index = 0_u32;
 		loop {
-			let chunk = Self::approvals_of(who, index);
+			let chunk = Self::approvals_of((who.clone(), index));
 			if chunk.len() == 0 { break; }
 			chunk.into_iter()
 				.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
@@ -849,6 +847,20 @@ impl<T: Trait> Module<T> {
 			index += 1;
 		}
 		all
+	}
+
+	/// Remove all approvals associated with one account.
+	fn remove_all_approvals_of(who: &T::AccountId) {
+		let mut idx = 0;
+		loop {
+			let set = Self::approvals_of((who.clone(), idx));
+			if set.len() > 0 {
+				<ApprovalsOf<T>>::remove((who.clone(), idx));
+				idx += 1;
+			} else {
+				break
+			}
+		}
 	}
 
 	/// Calculates the offset value (stored pot) of a stake, based on the distance
@@ -1048,7 +1060,7 @@ mod tests {
 			// grab and check the last full set, if it exists.
 			if full_sets > 0 {
 				assert_eq!(
-					Council::approvals_of(180, SetIndex::sa(full_sets-1)),
+					Council::approvals_of((180, SetIndex::sa(full_sets-1))),
 					Council::b2f((0..APPROVAL_SET_SIZE * APPROVAL_FLAG_LEN).map(|_| true).collect::<Vec<bool>>())
 				);
 			}
@@ -1056,7 +1068,7 @@ mod tests {
 			// grab and check the last, half-empty, set.
 			if left_over > 0 {
 				assert_eq!(
-					Council::approvals_of(180, SetIndex::sa(full_sets)),
+					Council::approvals_of((180, SetIndex::sa(full_sets))),
 					Council::b2f((0..left_over * APPROVAL_FLAG_LEN + rem).map(|_| true).collect::<Vec<bool>>())
 				);
 			}
@@ -1753,8 +1765,8 @@ mod tests {
 			assert_eq!(Council::all_approvals_of(&3), vec![]);
 			assert_eq!(Council::all_approvals_of(&4), vec![]);
 
-			assert_eq!(Council::approvals_of(&3, 0), vec![0]);
-			assert_eq!(Council::approvals_of(&4, 0), vec![]);
+			assert_eq!(Council::approvals_of((3, 0)), vec![0]);
+			assert_eq!(Council::approvals_of((4, 0)), vec![]);
 		});
 	}
 
