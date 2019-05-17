@@ -113,7 +113,7 @@ test-linux-stable-int:             &test
     - sccache -s
     - ./scripts/build.sh
   script:
-    - time cargo test -p node-cli --release --verbose --locked -- --ignored
+    - time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
     - sccache -s
   allow_failure:                   true
 
