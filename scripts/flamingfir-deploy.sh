@@ -1,6 +1,8 @@
 #!/bin/bash
 
-TIMEOUT=60
+RETRY_COUNT=10
+RETRY_ATTEMPT=0
+SLEEP_TIME=15
 TARGET_HOST="$1"
 COMMIT=$(echo ${CI_BUILD_REF} | cut -c -9)
 DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/2.0.0-${COMMIT}/substrate"
@@ -10,7 +12,17 @@ JOB_ID=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}" --header "Conte
 
 echo "Launched job: $JOB_ID"
 
-sleep $TIMEOUT
+
+while [ ${RETRY_ATTEMPT} -le ${RETRY_COUNT} ] ; do 
+	export RETRY_RESULT=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://ansible-awx.parity.io/api/v2/jobs/${JOB_ID}/ | jq .status)
+	echo "retry result: $RETRY_RESULT"
+	RETRY_ATTEMPT=$(( $RETRY_ATTEMPT +1 ))
+	sleep $SLEEP_TIME 
+	if [ $(echo $RETRY_RESULT | egrep  -e successful -e failed) ] ; then
+            echo "breaking"
+            break 
+        fi
+done
 
 AWX_OUTPUT=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://ansible-awx.parity.io/api/v2/jobs/${JOB_ID}/stdout?format=txt_download)
 
