@@ -318,6 +318,11 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
+		/// Set max extrinsics limit for package transaction.
+ 		fn set_max_extrinsics_limit(max_extrinsics_limit: u32) {
+ 			storage::unhashed::put(well_known_keys::MAX_EXTRINSICS_LIMIT, &max_extrinsics_limit.encode())
+ 		}
+
 		/// Set some items of storage.
 		fn set_storage(items: Vec<KeyValue>) {
 			for i in &items {

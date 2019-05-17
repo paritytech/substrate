@@ -82,6 +82,11 @@ pub mod well_known_keys {
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
+	/// Max extrisics limit for package transaction.
+ 	///
+ 	/// The type of this value is encoded `u32`. 
+ 	pub const MAX_EXTRINSICS_LIMIT: &'static [u8] = b":max_extrinsics_limit";
+
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
