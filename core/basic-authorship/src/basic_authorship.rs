@@ -37,7 +37,6 @@ use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::{InherentData, pool::InherentsPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use primitives::storage::{StorageKey, well_known_keys};
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -55,7 +54,7 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 	type Error: std::error::Error;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>, u32) -> ()>(
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
@@ -89,7 +88,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	type Block = Block;
 	type Error = client::error::Error;
 
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>, u32) -> ()>(
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
@@ -103,11 +102,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
 			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
-		const MAX_EXTRINSICS_LIMIT: u32 = 1000; // default 1000 tx
- 		let max_extrinsics_limit = match self.storage(at, &StorageKey(well_known_keys::MAX_EXTRINSICS_LIMIT.to_vec())) {
- 			Ok(Some(limit)) => Decode::decode(&mut limit.0.as_slice()).unwrap_or(MAX_EXTRINSICS_LIMIT),
- 			_ => MAX_EXTRINSICS_LIMIT, };
- 		build_ctx(&mut block_builder, max_extrinsics_limit);
+ 		build_ctx(&mut block_builder);
 
 		block_builder.bake().map_err(Into::into)
 	}
@@ -208,7 +203,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		let block = self.client.build_block(
 			&self.parent_id,
 			inherent_data,
-			|block_builder, max_extrinsics_limit| {
+			|block_builder| {
 				// Add inherents from the internal pool
 
 				let inherents = self.inherents_pool.drain();
@@ -223,7 +218,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				let mut is_first = true;
 				let mut skipped = 0;
 				let mut unqueue_invalid = Vec::new();
-				let mut extrinsics_count = 0;
 				let pending_iterator = self.transaction_pool.ready();
 
 				debug!("Attempting to push transactions from the pool.");
@@ -237,12 +231,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
 							debug!("[{:?}] Pushed to the block.", pending.hash);
-							extrinsics_count = extrinsics_count + 1;
-							if extrinsics_count > max_extrinsics_limit {
- 								info!("Exceed max extrinsics limit: {:?}", max_extrinsics_limit);
- 								break;
- 							}
-							
 						}
 						Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
 							if is_first {
