@@ -23,7 +23,6 @@ use log::{trace, info};
 use futures::{Async, Future, Poll};
 use futures::sync::oneshot::{channel, Receiver, Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
-use parity_codec::Encode;
 use parking_lot::Mutex;
 use client::error::Error as ClientError;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
@@ -34,7 +33,7 @@ use network_libp2p::PeerId;
 use crate::config::Roles;
 use crate::service::Service as NetworkService;
 use crate::specialization::NetworkSpecialization;
-use runtime_primitives::traits::{Block as BlockT, Hash, Header as HeaderT, NumberFor, HashFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -419,25 +418,14 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 						RequestData::RemoteBody(request, sender),
 					)
 				}
+				let body = bodies.remove(0);
 
-				// TODO(niklasad1/svyatonik): there is nothing in the runtime that ensures that
-				// `Header::extrinsics_root()` actually returns
-				// `<Block>::ordered_trie_root(body.iter().map(Encode::encode))`.
-				//
-				// Thus, this may fail
-				let	extrinsics_root = HashFor::<B>::ordered_trie_root(bodies.iter().map(Encode::encode));
-				if *request.header.extrinsics_root() == extrinsics_root {
-					let body = std::mem::replace(&mut bodies[0], Vec::new());
-					let _ = sender.send(Ok(body));
-					Accept::Ok
-				} else {
-					Accept::CheckFailed(
-						format!("RemoteBodyRequest: invalid extrinsics root expected: {} but got {}",
-								*request.header.extrinsics_root(),
-								extrinsics_root,
-						).into(),
-						RequestData::RemoteBody(request, sender)
-					)
+				match self.checker.check_body_proof(&request, body) {
+					Ok(body) => {
+						let _ = sender.send(Ok(body));
+						Accept::Ok
+					}
+					Err(error) => Accept::CheckFailed(error, RequestData::RemoteBody(request, sender)),
 				}
 			}
 			other => Accept::Unexpected(other),
@@ -718,12 +706,12 @@ pub mod tests {
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		ChangesProof,	RemoteCallRequest, RemoteReadRequest,
-		RemoteReadChildRequest, RemoteChangesRequest};
+		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message;
 	use network_libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandNetwork, OnDemandService};
-	use test_client::runtime::{changes_trie_config, Block, Header};
+	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
 
 	pub struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
@@ -766,9 +754,24 @@ pub mod tests {
 			}
 		}
 
-		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: ChangesProof<Header>) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
+		fn check_changes_proof(
+			&self,
+			_: &RemoteChangesRequest<Header>,
+			_: ChangesProof<Header>
+		) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
 			match self.ok {
 				true => Ok(vec![(100, 2)]),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_body_proof(
+			&self,
+			_: &RemoteBodyRequest<Header>,
+			body: Vec<Extrinsic>
+		) -> ClientResult<Vec<Extrinsic>> {
+			match self.ok {
+				true => Ok(body),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
@@ -1246,5 +1249,82 @@ pub mod tests {
 
 		assert!(on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>().is_empty());
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+	}
+
+	#[test]
+	fn remote_body_with_one_block_body_should_succeed() {
+		let (_x, on_demand) = dummy(true);
+		let network_interface = Arc::new(DummyNetwork::default());
+		let peer1 = PeerId::random();
+		on_demand.set_network_interface(Box::new(network_interface.clone()));
+
+		let header = dummy_header();
+		on_demand.on_connect(peer1.clone(), Roles::FULL, 250);
+
+		on_demand.remote_body(RemoteBodyRequest {
+			header: header.clone(),
+			retry_count: None,
+		});
+
+		assert!(on_demand.core.lock().pending_requests.is_empty());
+		assert_eq!(on_demand.core.lock().active_peers.len(), 1);
+
+		let block = message::BlockData::<Block> {
+			hash: primitives::H256::random(),
+			header: None,
+			body: Some(Vec::new()),
+			message_queue: None,
+			receipt: None,
+			justification: None,
+		};
+
+		let response = message::generic::BlockResponse {
+			id: 0,
+			blocks: vec![block],
+		};
+
+		on_demand.on_remote_body_response(peer1.clone(), response);
+
+		assert!(on_demand.core.lock().active_peers.is_empty());
+		assert_eq!(on_demand.core.lock().idle_peers.len(), 1);
+	}
+
+	#[test]
+	fn remote_body_with_three_bodies_should_fail() {
+		let (_x, on_demand) = dummy(true);
+		let network_interface = Arc::new(DummyNetwork::default());
+		let peer1 = PeerId::random();
+		on_demand.set_network_interface(Box::new(network_interface.clone()));
+
+		let header = dummy_header();
+		on_demand.on_connect(peer1.clone(), Roles::FULL, 250);
+
+		on_demand.remote_body(RemoteBodyRequest {
+			header: header.clone(),
+			retry_count: None,
+		});
+
+		assert!(on_demand.core.lock().pending_requests.is_empty());
+		assert_eq!(on_demand.core.lock().active_peers.len(), 1);
+
+		let response = {
+			let blocks: Vec<_> = (0..3).map(|_| message::BlockData::<Block> {
+				hash: primitives::H256::random(),
+				header: None,
+				body: Some(Vec::new()),
+				message_queue: None,
+				receipt: None,
+				justification: None,
+			}).collect();
+
+			message::generic::BlockResponse {
+				id: 0,
+				blocks,
+			}
+		};
+
+		on_demand.on_remote_body_response(peer1.clone(), response);
+		assert!(on_demand.core.lock().active_peers.is_empty());
+		assert!(on_demand.core.lock().idle_peers.is_empty(), "peer should be disconnected after bad response");
 	}
 }
