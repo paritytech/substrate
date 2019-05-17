@@ -102,7 +102,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
 			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
- 		build_ctx(&mut block_builder);
+		build_ctx(&mut block_builder);
 
 		block_builder.bake().map_err(Into::into)
 	}
