@@ -395,6 +395,10 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
+
+	/// Interactive password for validator key.
+	#[structopt(short = "i")]
+	pub interactive_password: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.

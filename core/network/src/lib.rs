@@ -40,7 +40,7 @@ pub mod specialization;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test;
 
-pub use chain::Client as ClientHandle;
+pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
 	Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg,
 	SyncProvider, ExHashT, ReportHandle,
