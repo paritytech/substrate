@@ -284,7 +284,7 @@ Detailed logs may be shown by running the node with the following environment va
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on link:https://telemetry.polkadot.io/#/Local%20Testnet[Telemetry] . You'll need two terminals windows open.
 
-We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN`, which is generated from the `--node-key` value that we specify below:
+We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`, which is generated from the `--node-key` value that we specify below:
 
 [source, shell]
 cargo run --release \-- \
@@ -300,7 +300,7 @@ In the second terminal, we'll run the following to start Bob's substrate node on
 [source, shell]
 cargo run --release \-- \
   --base-path /tmp/bob \
-  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN \
+  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR \
   --chain=local \
   --bob \
   --port 30334 \
