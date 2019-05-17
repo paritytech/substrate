@@ -656,8 +656,13 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						current_round: HasVoted::No,
 					};
 
-					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
-					aux_schema::write_historical_votes(&**client.backend(), new.set_id, 0, HistoricalVotes::<Block>::new())?;
+					aux_schema::write_voter_state(
+						&**client.backend(),
+						new.set_id,
+						0,
+						&set_state,
+						&HistoricalVotes::<Block>::new(),
+					)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
 

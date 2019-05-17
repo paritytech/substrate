@@ -24,7 +24,7 @@ use parity_codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
-use grandpa::{round::State as RoundState, HistoricalVotes};
+use grandpa::{round::State as RoundState};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -32,7 +32,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::environment::{CompletedRound, CompletedRounds, HasVoted, SharedVoterSetState, VoterSetState};
-use crate::{NewAuthoritySet, SignedMessage};
+use crate::{NewAuthoritySet, SignedMessage, HistoricalVotes};
 
 use substrate_primitives::ed25519::Public as AuthorityId;
 
@@ -517,44 +517,64 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	}
 }
 
-/// Write voter set state.
+/// Write voter set state and historical votes to database.
+pub(crate) fn write_voter_state<Block: BlockT, B: AuxStore>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+	state: &VoterSetState<Block>,
+	historical_votes: &HistoricalVotes<Block>,
+) -> ClientResult<()> {
+	let mut votes_key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| votes_key.extend(set_id));
+	round.using_encoded(|round| votes_key.extend(round));
+	backend.insert_aux(
+		&[
+			(&votes_key[..], historical_votes.encode().as_slice()),
+			(SET_STATE_KEY, state.encode().as_slice()),
+		],
+		&[],
+	)
+}
+
+/// Write voter set state to database.
 pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	state: &VoterSetState<Block>,
 ) -> ClientResult<()> {
 	backend.insert_aux(
 		&[(SET_STATE_KEY, state.encode().as_slice())],
-		&[]
+		&[],
 	)
 }
 
-/// Write votes seen in a round.
-pub(crate) fn write_historical_votes<B: AuxStore, H: Encode, N: Encode, S: Encode, Id: Encode>(
-	backend: &B,
-	set_id: u64,
-	round: u64,
-	historical_votes: HistoricalVotes<H, N, S, Id>,
-) -> ClientResult<()> {
-	let mut key = HISTORICAL_VOTES_PREFIX.to_vec();
-	set_id.using_encoded(|set_id| key.extend(set_id));
-	round.using_encoded(|round| key.extend(round));
-	backend.insert_aux(
-		&[(&key[..], historical_votes.encode().as_slice())],
-		&[]
-	)
-}
-
-/// Read votes seen in a round.
+/// Write historical votes to database.
 #[cfg(test)]
-pub(crate) fn read_historical_votes<B: AuxStore, H: Decode, N: Decode, S: Decode, Id: Decode>(
+pub(crate) fn write_historical_votes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	set_id: u64,
 	round: u64,
-) -> Option<HistoricalVotes<H, N, S, Id>> {
+	historical_votes: &HistoricalVotes<Block>,
+) -> ClientResult<()> {
+	let mut votes_key = HISTORICAL_VOTES_PREFIX.to_vec();
+	set_id.using_encoded(|set_id| votes_key.extend(set_id));
+	round.using_encoded(|round| votes_key.extend(round));
+	backend.insert_aux(
+		&[(&votes_key[..], historical_votes.encode().as_slice())],
+		&[],
+	)
+}
+
+/// Read historical votes seen in a round.
+pub(crate) fn read_historical_votes<Block: BlockT, B: AuxStore>(
+	backend: &B,
+	set_id: u64,
+	round: u64,
+) -> Option<HistoricalVotes<Block>> {
 	let mut key = HISTORICAL_VOTES_PREFIX.to_vec();
 	set_id.using_encoded(|set_id| key.extend(set_id));
 	round.using_encoded(|round| key.extend(round));
-	load_decode::<_, HistoricalVotes<H, N, S, Id>>(backend, &key[..])
+	load_decode::<_, HistoricalVotes<Block>>(backend, &key[..])
 		.expect("backend error")
 }
 
@@ -867,9 +887,9 @@ mod test {
 	#[test]
 	fn write_read_historical_votes_works() {
 		let client = test_client::new();
-		let historical_votes = HistoricalVotes::<H256, u64, Signature, AuthorityId>::new();
-		let _ = write_historical_votes(&client, 123, 321, historical_votes.clone());
-		let historical_votes_cpy = read_historical_votes(&client, 123, 321);
+		let historical_votes = HistoricalVotes::<test_client::runtime::Block>::new();
+		let _ = write_historical_votes::<test_client::runtime::Block, _>(&client, 123, 321, &historical_votes);
+		let historical_votes_cpy = read_historical_votes::<test_client::runtime::Block, _>(&client, 123, 321);
 		assert_eq!(historical_votes, historical_votes_cpy.unwrap());
 	}
 }

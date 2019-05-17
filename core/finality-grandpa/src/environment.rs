@@ -438,14 +438,31 @@ where
 {
 	type Message = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, ed25519::Signature, AuthorityId>;
 
-	fn prevotes_seen(&self, _round: u64) -> Vec<Self::Message> {
-		Vec::new()
+	fn prevotes_seen(&self, round: u64) -> Vec<Self::Message> {
+		crate::aux_schema::read_historical_votes::<Block, _>(&**self.inner.backend(), self.set_id, round)
+			.map(|historical_votes| historical_votes.seen().clone())
+			.unwrap_or(Vec::new())
+			.into_iter()
+			.filter(|sig_msg| sig_msg.message.is_prevote())
+			.collect()
 	}
-	fn votes_seen_when_prevoted(&self, _round: u64) -> Vec<Self::Message> {
-		Vec::new()
+	fn votes_seen_when_prevoted(&self, round: u64) -> Vec<Self::Message> {
+		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.set_id,
+			round
+		).unwrap_or(HistoricalVotes::<Block>::new());
+		let len = historical_votes.prevote_idx().unwrap_or(0);
+		historical_votes.seen().split_at(len).0.to_vec()
 	}
-	fn votes_seen_when_precommited(&self, _round: u64) -> Vec<Self::Message> {
-		Vec::new()
+	fn votes_seen_when_precommited(&self, round: u64) -> Vec<Self::Message> {
+		let historical_votes = crate::aux_schema::read_historical_votes::<Block, _>(
+			&**self.inner.backend(),
+			self.set_id,
+			round
+		).unwrap_or(HistoricalVotes::<Block>::new());
+		let len = historical_votes.precommit_idx().unwrap_or(0);
+		historical_votes.seen().split_at(len).0.to_vec()
 	}
 }
 
@@ -594,12 +611,12 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
 			};
 
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			crate::aux_schema::write_historical_votes(
+			crate::aux_schema::write_voter_state(
 				&**self.inner.backend(),
 				self.set_id,
 				round,
-				votes.clone(),
+				&set_state,
+				votes,
 			)?;
 
 			Ok(Some(set_state))
@@ -644,12 +661,12 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
 			};
 
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			crate::aux_schema::write_historical_votes(
+			crate::aux_schema::write_voter_state(
 				&**self.inner.backend(),
 				self.set_id,
 				round,
-				votes.clone(),
+				&set_state,
+				votes,
 			)?;
 
 			Ok(Some(set_state))
@@ -692,12 +709,13 @@ where
 				current_round: HasVoted::No,
 			};
 
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
-			crate::aux_schema::write_historical_votes(
+			crate::aux_schema::write_voter_state(
 				&**self.inner.backend(),
 				self.set_id,
 				round,
-			votes.clone())?;
+				&set_state,
+				&votes,
+			)?;
 
 			Ok(Some(set_state))
 		})?;

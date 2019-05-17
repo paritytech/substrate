@@ -232,12 +232,12 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 						current_round: HasVoted::No,
 					};
 
-					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
-					crate::aux_schema::write_historical_votes(
+					crate::aux_schema::write_voter_state(
 						&**client.backend(),
 						set_id,
 						0,
-						HistoricalVotes::<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>::new()
+						&set_state,
+						&HistoricalVotes::<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>::new(),
 					)?;
 
 					set_state
