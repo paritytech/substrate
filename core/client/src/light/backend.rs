@@ -279,15 +279,16 @@ where
 		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
 
+		// create a list of children keys to re-compute roots for
+		let child_delta = children.keys()
+			.cloned()
+			.map(|storage_key| (storage_key, None))
+			.collect::<Vec<_>>();
+
 		// make sure to persist the child storage
-		for (child_key, child_storage) in children.clone() {
+		for (child_key, child_storage) in children {
 			storage.insert(Some(child_key), child_storage);
 		}
-
-		// but also compute delta to calculate storage root correctly.
-		let child_delta = children.into_iter()
-			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
 		let storage_update: InMemoryState<H> = storage.into();
 		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
