@@ -552,7 +552,7 @@ where
 		enacts_change: bool,
 	) -> Result<(), ConsensusError> {
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
-			justification,
+			&justification,
 			(hash, number),
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),

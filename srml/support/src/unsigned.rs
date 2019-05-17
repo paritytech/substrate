@@ -80,6 +80,7 @@ macro_rules! impl_outer_validate_unsigned {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod test_empty_call {
 	pub enum Call {
 	}

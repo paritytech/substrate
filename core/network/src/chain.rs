@@ -68,6 +68,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error>;
 }
 
+/// Finality proof provider.
+pub trait FinalityProofProvider<Block: BlockT>: Send + Sync {
+	/// Prove finality of the block.
+	fn prove_finality(&self, for_block: Block::Hash, request: &[u8]) -> Result<Option<Vec<u8>>, Error>;
+}
+
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,

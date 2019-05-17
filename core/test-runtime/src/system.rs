@@ -135,8 +135,6 @@ pub fn execute_block(mut block: Block) {
 
 	// check digest
 	let ref mut digest = header.digest;
-	let popped = digest.pop().expect("We are given a digest!");
-	digest.push(popped);
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}

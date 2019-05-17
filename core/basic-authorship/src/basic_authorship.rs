@@ -269,7 +269,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
 
-		debug_assert_eq!(block.header().digest(), &inherent_digests, "We just set the digests above; qed");
+		assert_eq!(block.header().digest(), &inherent_digests, "We just set the digests above; qed");
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),

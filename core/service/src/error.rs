@@ -39,5 +39,9 @@ error_chain! {
 	}
 
 	errors {
+		SelectChainRequired {
+			description("Best chain selection strategy (SelectChain) must be provided when starting full node or authority."),
+			display("Best chain selection strategy (SelectChain) is not provided."),
+		}
 	}
 }
