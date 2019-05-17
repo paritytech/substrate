@@ -164,7 +164,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				child_storage_root,
-				contract.storage_size,
 				contract.code_hash,
 			);
 			<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));

@@ -268,6 +268,7 @@ fn account_removal_removes_storage() {
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(1),
 					rent_allowance: 40,
+					last_write: None,
 				}));
 
 				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
@@ -282,6 +283,7 @@ fn account_removal_removes_storage() {
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(2),
 					rent_allowance: 40,
+					last_write: None,
 				}));
 
 				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
@@ -1042,51 +1044,89 @@ const CODE_RESTORATION: &str = r#"
 	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	(func (export "call"))
+	(func (export "call")
+		(call $ext_dispatch_call
+			(i32.const 200) ;; Pointer to the start of encoded call buffer
+			(i32.const 115) ;; Length of the buffer
+		)
+	)
 	(func (export "deploy")
+		;; Data to restore
 		(call $ext_set_storage
 			(i32.const 0)
 			(i32.const 1)
 			(i32.const 0)
 			(i32.const 4)
 		)
-		(call $ext_dispatch_call
-			(i32.const 68) ;; Pointer to the start of encoded call buffer
-			(i32.const 50) ;; Length of the buffer
+
+		;; ACL
+		(call $ext_set_storage
+			(i32.const 100)
+			(i32.const 1)
+			(i32.const 0)
+			(i32.const 4)
 		)
 	)
 
+	;; Data to restore
 	(data (i32.const 0) "\28")
-	(data (i32.const 68) "\01\05\02\00\00\00\00\00\00\00\21\d6\b1\d5\9a\a6\03\8f\ca\d6\32\48\8e\90"
-		"\26\89\3a\1b\bb\48\58\17\74\c7\71\b8\f2\43\20\69\7f\05\32\00\00\00\00\00\00\00")
+
+	;; ACL
+	(data (i32.const 100) "\01")
+
+	;; Call
+	(data (i32.const 200) "\01\05\02\00\00\00\00\00\00\00\21\d6\b1\d5\9a\a6\03\8f\ca\d6\32\48\8e\90"
+		"\26\89\3a\1b\bb\48\58\17\74\c7\71\b8\f2\43\20\69\7f\05\32\00\00\00\00\00\00\00\08\01\00\00"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\01"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00"
+	)
 )
 "#;
-const HASH_RESTORATION: [u8; 32] = hex!("47943ae9394cf62824b8567b49f33ec2fda638198fd6ba084de81ad8d01ce740");
+const HASH_RESTORATION: [u8; 32] = hex!("b393bfa8de97b02f08ba1580b46100a80c9489a97c8d870691c9ff7236b29bc7");
 
 #[test]
-fn failing_restoration() {
-	restoration(true);
+fn restorations_dirty_storage_and_different_storage() {
+	restoration(true, true);
 }
 
 #[test]
-fn successful_restoration() {
-	restoration(false);
+fn restorations_dirty_storage() {
+	restoration(false, true);
 }
 
-fn restoration(failing_test: bool) {
+#[test]
+fn restoration_different_storage() {
+	restoration(true, false);
+}
+
+#[test]
+fn restoration_success() {
+	restoration(false, false);
+}
+
+fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage: bool) {
+	let acl_key = {
+		let mut s = [0u8; 32];
+		s[0] = 1;
+		s
+	};
+
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = Encode::encode(&Call::Contract(super::Call::restore_to(
+	let encoded = hex::encode(Encode::encode(&Call::Contract(super::Call::restore_to(
 		BOB,
 		HASH_SET_RENT.into(),
 		<Test as balances::Trait>::Balance::sa(50u64),
-	)));
+		vec![acl_key, acl_key],
+	))));
 
-	let literal = hex!("0105020000000000000021d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f24
-		320697f053200000000000000");
+	let literal = "0105020000000000000021d6b1d59aa6038fcad632488e9026893a1bbb48581774c771b8f243206\
+		97f053200000000000000080100000000000000000000000000000000000000000000000000000000000000010\
+		0000000000000000000000000000000000000000000000000000000000000";
 
-	assert_eq!(&encoded[..], &literal[..]);
-	assert_eq!(50, literal.len());
+	assert_eq!(encoded, literal);
+	assert_eq!(115, hex::decode(literal).unwrap().len());
 
 	let restoration_wasm = wabt::wat2wasm(CODE_RESTORATION).unwrap();
 	let set_rent_wasm = wabt::wat2wasm(CODE_SET_RENT).unwrap();
@@ -1129,7 +1169,7 @@ fn restoration(failing_test: bool) {
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 0);
 
-			if failing_test {
+			if test_different_storage {
 				assert_ok!(Contract::call(
 					Origin::signed(ALICE),
 					BOB, 0, 100_000,
@@ -1152,18 +1192,25 @@ fn restoration(failing_test: bool) {
 				<Test as balances::Trait>::Balance::sa(0u64).encode()
 			));
 
+			let django_trie_id = ContractInfoOf::<Test>::get(DJANGO).unwrap()
+				.get_alive().unwrap().trie_id;
 
-			// One Id has been generated in `Contract::create` call,
-			// revert to previous state to retrieve the trie_id generated.
-			<super::AccountCounter<Test>>::mutate(|v| *v -= 1);
-			let mut django_trie_id = <Test as Trait>::TrieIdGenerator::trie_id(&DJANGO);
+			if !test_restore_to_with_dirty_storage {
+				// Advance 1 blocks
+				System::initialize(&6, &[0u8; 32].into(), &[0u8; 32].into());
+			}
 
-			if failing_test {
+			assert_ok!(Contract::call(
+				Origin::signed(ALICE),
+				DJANGO, 0, 100_000,
+				vec![],
+			));
+
+			if test_different_storage || test_restore_to_with_dirty_storage {
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 				let django_contract = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 					.get_alive().unwrap();
-				assert_eq!(django_contract.rent_allowance, 18446744073709551615);
-				assert_eq!(django_contract.storage_size, 12);
+				assert_eq!(django_contract.storage_size, 16);
 				assert_eq!(django_contract.trie_id, django_trie_id);
 				assert_eq!(django_contract.deduct_block, System::block_number());
 			} else {

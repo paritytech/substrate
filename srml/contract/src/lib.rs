@@ -97,6 +97,7 @@ use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
+use runtime_io::blake2_256;
 use runtime_primitives::traits::{
 	Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
@@ -219,10 +220,9 @@ where
 	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash,
 	Hasher: Hash<Output=H>,
 {
-	fn new(storage_root: Vec<u8>, storage_size: u64, code_hash: H) -> Self {
+	fn new(storage_root: Vec<u8>, code_hash: H) -> Self {
 		let mut buf = Vec::new();
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
-		storage_size.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
 		RawTombstoneContractInfo(Hasher::hash(&buf[..]), Default::default())
 	}
@@ -536,7 +536,7 @@ decl_module! {
 		) {
 			let origin = ensure_signed(origin)?;
 
-			let origin_contract = <ContractInfoOf<T>>::get(&origin)
+			let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 				.and_then(|c| c.get_alive())
 				.ok_or("Cannot restore from inexisting or tombstone contract")?;
 
@@ -558,8 +558,8 @@ decl_module! {
 
 			let key_values_taken = delta.iter()
 				.filter_map(|key| {
-					child::get_raw(&origin_contract.trie_id, key).map(|value| {
-						child::kill(&origin_contract.trie_id, key);
+					child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
+						child::kill(&origin_contract.trie_id, &blake2_256(key));
 						(key, value)
 					})
 				})
@@ -567,17 +567,20 @@ decl_module! {
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				runtime_io::child_storage_root(&origin_contract.trie_id),
-				origin_contract.storage_size,
 				code_hash,
 			);
 
 			if tombstone != dest_tombstone {
 				for (key, value) in key_values_taken {
-					child::put_raw(&origin_contract.trie_id, key, &value);
+					child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
 				}
 
 				return Err("Tombstones don't match");
 			}
+
+			origin_contract.storage_size -= key_values_taken.iter()
+				.map(|(_, value)| value.len() as u64)
+				.sum::<u64>();
 
 			<ContractInfoOf<T>>::remove(&origin);
 			<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
