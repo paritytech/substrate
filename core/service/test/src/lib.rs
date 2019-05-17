@@ -221,11 +221,15 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	}
 }
 
-pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, block_factory: B, extrinsic_factory: E)
+pub fn sync<F, B, E>(
+	spec: FactoryChainSpec<F>,
+	mut block_factory: B,
+	mut extrinsic_factory: E,
+)
 where
 	F: ServiceFactory,
-	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
-	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
+	B: FnMut(&F::FullService) -> ImportBlock<F::Block>,
+	E: FnMut(&F::FullService) -> FactoryExtrinsic<F>,
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;

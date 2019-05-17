@@ -32,8 +32,11 @@ substrate-keystore = { path = "../../core/keystore" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
 
 [dev-dependencies]
+consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
 substrate-keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+srml-finality-tracker = { path = "../../srml/finality-tracker" }
+srml-timestamp = { path = "../../srml/timestamp" }
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
