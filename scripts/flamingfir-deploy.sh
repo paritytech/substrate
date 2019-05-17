@@ -15,7 +15,7 @@ sleep $TIMEOUT
 AWX_OUTPUT=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://ansible-awx.parity.io/api/v2/jobs/${JOB_ID}/stdout?format=txt_download)
 
 echo "AWX job log:"
-echo "$AWX_OUTPUT"
+echo "${AWX_OUTPUT}"
 
 
 JOB_STATUS=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://ansible-awx.parity.io/api/v2/jobs/${JOB_ID}/ | jq .status )
