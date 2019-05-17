@@ -278,11 +278,19 @@ where
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
-		for (child_key, child_storage) in children {
+
+		// make sure to persist the child storage
+		for (child_key, child_storage) in children.clone() {
 			storage.insert(Some(child_key), child_storage);
 		}
+
+		// but also compute delta to calculate storage root correctly.
+		let child_delta = children.into_iter()
+			.map(|(storage_key, child_overlay)|
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
+
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.storage_root(::std::iter::empty());
+		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
