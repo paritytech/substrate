@@ -433,7 +433,6 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 	}
 
 	fn is_on_demand_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
-		// TODO(niklasad1): could make sense to use `RwLock` instead of `Mutex`
 		let core = self.core.lock();
 		core.is_pending_request(&peer, request_id)
 	}

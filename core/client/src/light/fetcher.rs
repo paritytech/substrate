@@ -423,11 +423,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		body: Vec<Block::Extrinsic>
 	) -> ClientResult<Vec<Block::Extrinsic>> {
 
-		// TODO(niklasad1/svyatonik): there is nothing in the runtime that ensures that
-		// `Header::extrinsics_root()` actually returns
-		// `<Block>::ordered_trie_root(body.iter().map(Encode::encode))`.
-		//
-		// Thus, this may fail
+		// TODO: #2621
 		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode));
 		if *request.header.extrinsics_root() == extrinsics_root {
 			Ok(body)
