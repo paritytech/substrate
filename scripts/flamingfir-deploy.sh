@@ -18,7 +18,7 @@ echo "AWX job log:"
 echo $AWX_OUTPUT
 
 
-if [ echo $AWK_OUTPUT | grep fail ] ; then
+if [ $(grep fail ${AWX_OUTPUT} | grep -v failed | wc -l ) -ne 0 ] ; then
 	echo "Job $JOB_ID failed"
 else
 	echo "Job $JOB_ID success"
