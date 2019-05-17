@@ -238,7 +238,7 @@ decl_module! {
 					}
 				}
 
-				if block_number == pending_change.scheduled_at + pending_change.delay {
+				if block_number >= pending_change.scheduled_at + pending_change.delay {
 					Self::deposit_event(
 						RawEvent::NewAuthorities(pending_change.next_authorities.clone())
 					);
