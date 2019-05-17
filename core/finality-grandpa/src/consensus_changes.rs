@@ -32,6 +32,11 @@ impl<H, N> ConsensusChanges<H, N> {
 
 impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 
+	/// Returns reference to all pending changes.
+	pub fn pending_changes(&self) -> &[(N, H)] {
+		&self.pending_changes
+	}
+
 	/// Note unfinalized change of consensus-related data.
 	pub(crate) fn note_change(&mut self, at: (N, H)) {
 		let idx = self.pending_changes

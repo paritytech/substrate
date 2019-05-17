@@ -150,4 +150,24 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 
 	/// Mutate the value under a key.
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &S) -> R;
+
+	/// Append the given items to the value under the key specified.
+	fn append<I, S: UnhashedStorage>(
+		k1: &K1,
+		k2: &K2,
+		items: &[I],
+		storage: &S,
+	) -> Result<(), &'static str>
+	where
+		I: codec::Encode,
+		V: codec::EncodeAppend<Item=I>,
+	{
+		let key = Self::key_for(k1, k2);
+		let new_val = <V as codec::EncodeAppend>::append(
+			storage.get_raw(&key).unwrap_or_default(),
+			items,
+		).ok_or_else(|| "Could not append given item")?;
+		storage.put_raw(&key, &new_val);
+		Ok(())
+	}
 }

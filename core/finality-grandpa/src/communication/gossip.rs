@@ -594,24 +594,30 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn note_round<F>(&self, round: Round, set_id: SetId, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_round(round, set_id)
-			.map(|(to, msg)| send_neighbor(to, msg));
+		let maybe_msg = self.inner.write().note_round(round, set_id);
+		if let Some((to, msg)) = maybe_msg {
+			send_neighbor(to, msg);
+		}
 	}
 
 	/// Note that a voter set with given ID has started.
 	pub(super) fn note_set<F>(&self, set_id: SetId, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_set(set_id)
-			.map(|(to, msg)| send_neighbor(to, msg));
+		let maybe_msg = self.inner.write().note_set(set_id);
+		if let Some((to, msg)) = maybe_msg {
+			send_neighbor(to, msg);
+		}
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
 	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_commit_finalized(finalized)
-			.map(|(to, msg)| send_neighbor(to, msg));
+		let maybe_msg = self.inner.write().note_commit_finalized(finalized);
+		if let Some((to, msg)) = maybe_msg {
+			send_neighbor(to, msg);
+		}
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: i32) {

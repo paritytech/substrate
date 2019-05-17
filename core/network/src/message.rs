@@ -23,6 +23,7 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
+	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest,
 };
 
@@ -200,6 +201,10 @@ pub mod generic {
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Remote child storage read request.
 		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
+		/// Finality proof request.
+		FinalityProofRequest(FinalityProofRequest<Hash>),
+		/// Finality proof reponse.
+		FinalityProofResponse(FinalityProofResponse<Hash>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -358,5 +363,27 @@ pub mod generic {
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
 		pub roots_proof: Vec<Vec<u8>>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Finality proof request.
+	pub struct FinalityProofRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Hash of the block to request proof for.
+		pub block: H,
+		/// Additional data blob (that both requester and provider understood) required for proving finality.
+		pub request: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Finality proof response.
+	pub struct FinalityProofResponse<H> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Hash of the block (the same as in the FinalityProofRequest).
+		pub block: H,
+		/// Finality proof (if available).
+		pub proof: Option<Vec<u8>>,
 	}
 }
