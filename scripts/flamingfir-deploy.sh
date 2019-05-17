@@ -17,7 +17,9 @@ AWX_OUTPUT=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://an
 echo "AWX job log:"
 echo "$AWX_OUTPUT"
 
-echo "==================================="
 
 JOB_STATUS=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}"  https://ansible-awx.parity.io/api/v2/jobs/${JOB_ID}/ | jq .status )
-echo "Job: ${JOB_ID} Status: ${JOB_STATUS}"
+
+echo "==================================="
+echo -e "Ansible AWX Remote Job: ${JOB_ID} \x1B[31mStatus: ${JOB_STATUS}\x1B[0m"
+echo "==================================="
