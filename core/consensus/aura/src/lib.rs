@@ -381,6 +381,34 @@ macro_rules! aura_err {
 	};
 }
 
+fn find_pre_digest<C, B: Block, P: Pair>(
+	client: &Arc<C>,
+	header: B::Header,
+	hash: B::Hash,
+) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String>
+	where DigestItemFor<B>: CompatibleDigestItem<P>,
+		P::Signature: Decode,
+		C: client::backend::AuxStore,
+		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
+{
+	let mut pre_digest: Option<u64> = None;
+	let mut num_logs = 0;
+	for i in header.digest().logs() {
+		num_logs += 1;
+		trace!(target: "aura", "Checking log {:?} in header {:?}", i, hash);
+		match i.as_aura_pre_digest() {
+			s @ Some(_) => if pre_digest.is_some() {
+				return Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting header {:?}", hash))
+			} else {
+				pre_digest = s
+			},
+			None => trace!(target: "aura", "Ignoring digest not meant for us"),
+		}
+	}
+	Ok(pre_digest)
+}
+
+
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
@@ -408,20 +436,7 @@ fn check_header<C, B: Block, P: Pair>(
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let mut pre_digest: Option<u64> = None;
-	let mut num_logs = 0;
-	for i in header.digest().logs() {
-		num_logs += 1;
-		trace!(target: "aura", "Checking log {:?} in header {:?}", i, hash);
-		match i.as_aura_pre_digest() {
-			s @ Some(_) => if pre_digest.is_some() {
-				return Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting header {:?}", hash))
-			} else {
-				pre_digest = s
-			},
-			None => trace!(target: "aura", "Ignoring digest not meant for us"),
-		}
-	}
+	let num_logs = find_pre_digest(client, header, hash)?;
 
 	trace!(target: "aura", "Header {:?} has {:?} pre-runtime digests", hash, num_logs);
 
