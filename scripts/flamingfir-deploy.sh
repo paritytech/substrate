@@ -4,8 +4,8 @@ RETRY_COUNT=10
 RETRY_ATTEMPT=0
 SLEEP_TIME=15
 TARGET_HOST="$1"
-COMMIT=$(echo ${CI_BUILD_REF} | cut -c -9)
-DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/2.0.0-${COMMIT}/substrate"
+COMMIT=$(cat artifacts/VERSION | cut -d- -f2)
+DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/${COMMIT}/substrate"
 POST_DATA='{"extra_vars":{"artifact_path":"'${DOWNLOAD_URL}'","target_host":"'${TARGET_HOST}'"}}'
 
 JOB_ID=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}" --header "Content-type: application/json" --post-data "${POST_DATA}" https://ansible-awx.parity.io/api/v2/job_templates/32/launch/ | jq .job)
@@ -18,7 +18,6 @@ while [ ${RETRY_ATTEMPT} -le ${RETRY_COUNT} ] ; do
 	RETRY_ATTEMPT=$(( $RETRY_ATTEMPT +1 ))
 	sleep $SLEEP_TIME 
 	if [ $(echo $RETRY_RESULT | egrep  -e successful -e failed) ] ; then
-            echo "breaking"
             break 
         fi
 done
