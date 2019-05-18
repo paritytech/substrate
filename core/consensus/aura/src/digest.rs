@@ -13,10 +13,10 @@ pub trait CompatibleDigestItem<T: Pair>: Sized {
 	fn as_aura_seal(&self) -> Option<&Signature<T>>;
 
 	/// Construct a digest item which contains the slot number
-    fn aura_pre_digest(slot_num: u64) -> Self;
+	fn aura_pre_digest(slot_num: u64) -> Self;
 
-    /// If this item is an AuRa pre-digest, return the slot number
-    fn as_aura_pre_digest(&self) -> Option<u64>;
+	/// If this item is an AuRa pre-digest, return the slot number
+	fn as_aura_pre_digest(&self) -> Option<u64>;
 }
 
 impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash, P::Public, P::Signature>
@@ -33,14 +33,14 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash, P::Public, P::Signatu
 		}
 	}
 
-    fn aura_pre_digest(slot_num: u64) -> Self {
-        DigestItem::PreRuntime(AURA_ENGINE_ID, slot_num.encode())
-    }
+	fn aura_pre_digest(slot_num: u64) -> Self {
+		DigestItem::PreRuntime(AURA_ENGINE_ID, slot_num.encode())
+	}
 
-    fn as_aura_pre_digest(&self) -> Option<u64> {
-        match self {
-            DigestItem::PreRuntime(AURA_ENGINE_ID, ref buffer) => Decode::decode(&mut &buffer[..]),
-            _ => None,
-        }
-    }
+	fn as_aura_pre_digest(&self) -> Option<u64> {
+		match self {
+			DigestItem::PreRuntime(AURA_ENGINE_ID, ref buffer) => Decode::decode(&mut &buffer[..]),
+			_ => None,
+		}
+	}
 }
