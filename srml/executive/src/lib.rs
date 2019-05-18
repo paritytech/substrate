@@ -253,7 +253,8 @@ where
 			return Err(internal::ApplyError::FullBlock);
 		}
 
-		let extrinsic_count = storage::unhashed::get(well_known_keys::MAX_EXTRINSICS_LIMIT).unwrap_or(internal::MAX_EXTRINSICS_LIMIT);
+		let extrinsic_count =
+			storage::unhashed::get(well_known_keys::MAX_EXTRINSICS_LIMIT).unwrap_or(internal::MAX_EXTRINSICS_LIMIT);
 		// Check the extrinsics count of the block if that extrinsic is applied.
 		if <system::Module<System>>::extrinsic_count()  > extrinsic_count {
 			return Err(internal::ApplyError::FullBlock);
