@@ -48,7 +48,7 @@ use client::{
 use runtime_primitives::{generic::{self, BlockId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
-	SimpleBitOps, Zero,
+	SimpleBitOps, Zero, Member,
 };
 use runtime_support::serde::{Serialize, Deserialize};
 
@@ -128,6 +128,14 @@ impl SlotCompatible for AuraSlotCompatible {
 	}
 }
 
+mod simple {
+	use super::{Member, Encode, Decode};
+	pub trait Simple: Member + Encode + Decode + std::hash::Hash {}
+	impl<T> Simple for T where T: Member + Encode + Decode + std::hash::Hash {}
+}
+
+use simple::Simple;
+
 /// Start the aura worker. The returned future should be run in a tokio runtime.
 pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, HashT, H>(
 	slot_duration: SlotDuration,
@@ -142,15 +150,15 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, HashT, H>(
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
 	B: Block<Header=H, Hash=HashT>,
-	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore,
+	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuthoritiesApi<B>,
 	SC: SelectChain<B>,
 	generic::DigestItem<HashT, P::Public, P::Signature>: DigestItem<Hash=HashT>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
-	P::Public: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
-	P::Signature: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
+	P::Public: Simple,
+	P::Signature: Simple,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
@@ -197,7 +205,7 @@ impl<
 		std::hash::Hash + Display + Send + Sync + 'static,
 	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=B::Hash>,
 	B: Block<Header=H, Hash=Hash>, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore,
+	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -316,19 +324,18 @@ impl<
 			}
 
 			let (mut header, body) = b.deconstruct();
-			match header.digest().logs().len() {
-				0 => {
-					warn!(target: "aura", "Runtime stripped our digest!  Re-adding it.");
-					header.set_digest(generic::Digest {
-						logs: vec![
-							generic::DigestItem::aura_pre_digest(slot_num)
-						],
-					})
-				}
-				1 => trace!(target: "aura", "Got correct number of seals.  Good!"),
-				_ => {
-					unimplemented!()
-				}
+			// TODO is better debug logging worth hashing the header again?
+			let header_hash = header.hash();
+			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header, header_hash);
+			if pre_digest.is_err() {
+				warn!(target: "aura", "Runtime stripped our digest!  Re-adding it.");
+				header.set_digest(generic::Digest {
+					logs: vec![
+						generic::DigestItem::aura_pre_digest(slot_num)
+					],
+				})
+			} else {
+				trace!(target: "aura", "Got correct number of seals.  Good!")
 			};
 			let header_num = header.number().clone();
 			let pre_hash = header.hash();
@@ -381,20 +388,16 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<C, B: Block, P: Pair>(
-	client: &Arc<C>,
-	header: B::Header,
+fn find_pre_digest<B: Block, P: Pair>(
+	header: &B::Header,
 	hash: B::Hash,
-) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String>
+) -> Result<u64, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
-		C: client::backend::AuxStore,
-		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
+		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	let mut pre_digest: Option<u64> = None;
-	let mut num_logs = 0;
 	for i in header.digest().logs() {
-		num_logs += 1;
 		trace!(target: "aura", "Checking log {:?} in header {:?}", i, hash);
 		match i.as_aura_pre_digest() {
 			s @ Some(_) => if pre_digest.is_some() {
@@ -405,7 +408,7 @@ fn find_pre_digest<C, B: Block, P: Pair>(
 			None => trace!(target: "aura", "Ignoring digest not meant for us"),
 		}
 	}
-	Ok(pre_digest)
+	pre_digest.ok_or_else(|| aura_err!("No AuRa pre-runtime digest found"))
 }
 
 
@@ -421,11 +424,11 @@ fn check_header<C, B: Block, P: Pair>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String>
-	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		C: client::backend::AuxStore,
-		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
+) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
+	DigestItemFor<B>: CompatibleDigestItem<P>,
+	P::Signature: Decode,
+	C: client::backend::AuxStore,
+	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -436,11 +439,7 @@ fn check_header<C, B: Block, P: Pair>(
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let num_logs = find_pre_digest(client, header, hash)?;
-
-	trace!(target: "aura", "Header {:?} has {:?} pre-runtime digests", hash, num_logs);
-
-	let slot_num = pre_digest.ok_or_else(|| aura_err!("Header {:?} has no AuRa pre-digest", hash))?;
+	let slot_num = find_pre_digest::<B, _>(&header, hash)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
