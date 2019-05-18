@@ -705,7 +705,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					protocol.gossip_consensus_message(topic, engine_id, message, recipient),
 				ProtocolMsg::BlocksProcessed(hashes, has_error) =>
 					protocol.blocks_processed(hashes, has_error),
-				ProtocolMsg::RestartSync =
+				ProtocolMsg::RestartSync =>
 					protocol.restart(),
 				ProtocolMsg::AnnounceBlock(hash) =>
 					protocol.announce_block(hash),
