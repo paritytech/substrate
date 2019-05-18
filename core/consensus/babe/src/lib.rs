@@ -80,7 +80,7 @@ use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::aura::Config` can be eliminated.
+// and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
 pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
@@ -299,7 +299,7 @@ impl<
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let (proposal_work, inherent_digest) = if let Some((inout, proof, _batchable_proof)) = claim_slot(
+		let (proposal_work, inherent_digest): (_, BabePreDigest) = if let Some((inout, proof, _batchable_proof)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -371,20 +371,19 @@ impl<
 			}
 
 			let (mut header, body) = b.deconstruct();
-			match header.digest().logs().len() {
-				0 => {
-					warn!(target: "babe", "Runtime stripped our digest!  Re-adding it.");
-					header.set_digest(generic::Digest {
-						logs: vec![
-							generic::DigestItem::babe_pre_digest(inherent_digest)
-						],
-					})
+			let header_hash = header.hash();
+			match find_pre_digest::<B>(&mut header, header_hash) {
+				Ok(_pre_digest) => (),
+				Err((true, e)) => {
+					warn!(target: "babe", "Bad header: {}: Multiple distinct BABE pre-runtime digests", e);
+					return
 				}
-				1 => trace!(target: "babe", "Got correct number of seals.  Good!"),
-				_ => {
-					unimplemented!()
+				Err((false, e)) => {
+					warn!(target: "babe", "Bad header: {}: No BABE pre-runtime digest", e);
+					header.digest_mut().push(CompatibleDigestItem::babe_pre_digest(inherent_digest))
 				}
 			};
+
 			let header_num = header.number().clone();
 			let pre_hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
@@ -431,6 +430,40 @@ impl<
 	}
 }
 
+macro_rules! babe_err {
+	($($i: expr),+) => {
+		{ debug!(target: "babe", $($i),+)
+		; format!($($i),+)
+		}
+	};
+}
+
+fn find_pre_digest<B: Block>(
+	header: &mut B::Header,
+	hash: B::Hash,
+) -> Result<BabePreDigest, (bool, String)>
+	where DigestItemFor<B>: CompatibleDigestItem,
+{
+	let mut pre_digest: Option<_> = None;
+	let digest = std::mem::replace(header.digest_mut(), Default::default());
+	for i in digest.logs() {
+		trace!(target: "babe", "Checking log {:?} in header {:?}", i, hash);
+		match i.as_babe_pre_digest() {
+			// For some reason that I have not figured out, we can get
+			// duplicate entries here.  Filter those out.
+			ref s @ Some(_) if s == &pre_digest => continue,
+			s @ Some(_) => if pre_digest.is_some() {
+				return Err((true, babe_err!("Multiple BABE pre-runtime headers, rejecting header {:?}", hash)))
+			} else {
+				pre_digest = s;
+			},
+			None => trace!(target: "babe", "Ignoring digest not meant for us"),
+		}
+		header.digest_mut().push(i.clone());
+	}
+	pre_digest.ok_or_else(|| (false, babe_err!("No BABE pre-runtime digest found")))
+}
+
 /// check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
@@ -455,50 +488,25 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	trace!(target: "babe", "Checking header");
 	let digest_item = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => {
-			debug!(target: "babe", "Header {:?} is unsealed", hash);
-			return Err(format!("Header {:?} is unsealed", hash))
-		}
+		None => return Err(babe_err!("Header {:?} is unsealed", hash)),
 	};
 
 	let signature = digest_item.as_babe_seal().ok_or_else(|| {
-		debug!(target: "babe", "Header {:?} has a bad seal", hash);
-		format!("Header {:?} has a bad seal", hash)
+		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
-
-	let mut pre_digest_seal: Option<BabePreDigest> = None;
-	let mut num_logs = 0;
-	for i in header.digest().logs() {
-		num_logs += 1;
-		trace!(target: "babe", "Checking log {:?} in header {:?}", i, hash);
-		match i.as_babe_pre_digest() {
-			s @ Some(_) => if pre_digest_seal.is_some() {
-				info!(target: "babe", "Multiple BABE pre-runtime headers, rejecting!");
-				return Err("Multiple BABE pre-runtime headers, rejecting!".to_string())
-			} else {
-				pre_digest_seal = s
-			},
-			None => trace!(target: "babe", "Ignoring digest not meant for us"),
-		}
-	}
-	trace!(target: "babe", "Header {:?} has {:?} pre-runtime digests", hash, num_logs);
 
 	let BabePreDigest {
 		slot_num,
 		author,
 		proof,
 		vrf_output,
-	} = pre_digest_seal.ok_or_else(|| {
-		debug!(target: "babe", "Header {:?} has no BABE pre-digest", hash);
-		format!("Header {:?} has no BABE pre-digest", hash)
-	})?;
+	} = find_pre_digest::<B>(&mut header, hash).map_err(|x|x.1)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
 		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else if !authorities.contains(&author) {
-		debug!(target: "babe", "Slot Author not found");
-		Err("Slot Author not found".to_string())
+		Err(babe_err!("Slot author not found"))
 	} else {
 		let pre_hash = header.hash();
 		let to_sign = pre_hash;
@@ -514,8 +522,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 					p.vrf_verify(transcript, &vrf_output, &proof)
 				}).map_err(|s| {
-					debug!(target: "babe", "VRF verification failed: {:?}", s);
-					format!("VRF verification failed")
+					babe_err!("VRF verification failed: {:?}", s)
 				})?
 			};
 
@@ -529,7 +536,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 							equivocation_proof.fst_header().hash(),
 							equivocation_proof.snd_header().hash(),
 						);
-						info!("{}", log_str);
+						info!(target: "babe", "{}", log_str);
 						Err(log_str)
 					},
 					Ok(None) => {
@@ -541,12 +548,10 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					},
 				}
 			} else {
-				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
-				Err(format!("Validator {:?} made seal when it wasn’t its turn", author))
+				Err(babe_err!("VRF verification of block by author {:?} failed: threshold {} exceeded", author, threshold))
 			}
 		} else {
-			debug!(target: "babe", "Bad signature on {:?}", hash);
-			Err(format!("Bad signature on {:?}", hash))
+			Err(babe_err!("Bad signature on {:?}", hash))
 		}
 	}
 }
@@ -958,16 +963,16 @@ mod tests {
 
 		let (inout, proof, _batchable_proof) = get_keypair(&pair).vrf_sign_n_check(transcript, |inout| check(inout, u64::MAX)).unwrap();
 		let pre_hash: H256 = header.hash();
-		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
-		let signature = pair.sign(&to_sign[..]);
 		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem>::babe_pre_digest(BabePreDigest {
 			proof,
 			author: pair.public(),
 			slot_num,
 			vrf_output: inout.to_output(),
 		});
-
 		header.digest_mut().push(item);
+
+		let to_sign = header.hash();
+		let signature = pair.sign(&to_sign[..]);
 		header.digest_mut().push(<generic::DigestItem<_, _, _> as CompatibleDigestItem>::babe_seal(signature));
 		(header, pre_hash)
 	}
@@ -1116,6 +1121,7 @@ mod tests {
 
 	#[test]
 	fn check_header_works_with_equivocation() {
+		drop(env_logger::try_init());
 		let client = test_client::new();
 		let pair = sr25519::Pair::generate();
 		let public = pair.public();

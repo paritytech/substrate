@@ -30,7 +30,6 @@ use parity_codec::Decode;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-// use system::PreDigest;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -112,12 +111,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_finalize(_n: T::BlockNumber) {
-			// use primitives::traits::Digest as _;
-			// assert!(<PreDigest<T>>::get().clone().pop().is_some())
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
 }
 
 impl<T: Trait> Module<T> {

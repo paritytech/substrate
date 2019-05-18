@@ -320,8 +320,6 @@ decl_storage! {
 		Digest get(digest): T::Digest;
 		/// Digest of the current block, also part of the block header.
 		pub PreDigest get(pre_digests): T::Digest;
-		/// The number of pre-digests
-		NumDigests get(num_digests): usize;
 		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
@@ -478,8 +476,7 @@ impl<T: Trait> Module<T> {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
-		<NumDigests<T>>::put(digest.logs().len());
-		<PreDigest<T>>::put(digest);
+		<Digest<T>>::put(<T::Digest as Default>::default());
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
@@ -501,14 +498,14 @@ impl<T: Trait> Module<T> {
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
-		let digest = <PreDigest<T>>::take();
-		assert_eq!(digest.logs().len(), <NumDigests<T>>::take(), "Pre-digests are not altered by the runtime");
-		let mut digest: T::Digest = Default::default();
+		let mut digest = <PreDigest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash, number.as_() - 1);
 		for item in <Digest<T>>::take().logs() {
-			digest.push(item.clone())
+			if !digest.logs().contains(item) {
+				digest.push(item.clone())
+			}
 		}
 
 		// we can't compute changes trie root earlier && put it to the Digest
