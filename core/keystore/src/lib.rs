@@ -25,8 +25,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use error_chain::{bail, error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
+use error_chain::{bail, error_chain};
 
 use substrate_primitives::{ed25519::{Pair, Public}, Pair as PairT};
 

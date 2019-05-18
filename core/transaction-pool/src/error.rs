@@ -18,13 +18,10 @@
 
 // Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
 // https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
 
 use client;
 use txpool;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed, impl_extract_backtrace, impl_error_chain_kind
-};
+use error_chain::error_chain;
 
 error_chain! {
 	foreign_links {

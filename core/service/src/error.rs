@@ -18,13 +18,12 @@
 
 // Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
 // https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
 
 use client;
 use network;
 use keystore;
 use consensus_common;
-use error_chain::*;
+use error_chain::error_chain;
 
 error_chain! {
 	foreign_links {

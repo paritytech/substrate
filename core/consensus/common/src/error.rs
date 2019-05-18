@@ -16,8 +16,7 @@
 
 //! Error types in Consensus
 use runtime_version::RuntimeVersion;
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
+use error_chain::error_chain;
 use primitives::ed25519::{Public, Signature};
 
 error_chain! {
