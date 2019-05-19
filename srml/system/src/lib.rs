@@ -318,8 +318,6 @@ decl_storage! {
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
 		Digest get(digest): T::Digest;
-		/// Pre-digest of the current block, also part of the block header.
-		pub PreDigest get(pre_digests): T::Digest;
 		/// Events deposited for the current block.
 		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
@@ -471,12 +469,12 @@ impl<T: Trait> Module<T> {
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
 		txs_root: &T::Hash,
-		digest: &T::Digest,
+		_digest: &T::Digest,
 	) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
-		<Digest<T>>::put(digest);
+		<Digest<T>>::put(Default::default());
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
@@ -498,8 +496,7 @@ impl<T: Trait> Module<T> {
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
-		let mut digest = <PreDigest<T>>::take();
-		while let Some(_) = digest.pop() {}
+		let mut digest = T::Digest::default();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash, number.as_() - 1);
