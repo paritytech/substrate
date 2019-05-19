@@ -337,16 +337,43 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.import_lock.clone()
 	}
 
-	/// Return storage entry keys in state in a block of given hash with given prefix.
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
-	/// Return single storage entry of contract under given address in state in a block of given hash.
+	/// Given a `BlockId` and a key, return the value under the key in that block.
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.map(StorageData))
+	}
+
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	pub fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key_prefix: &StorageKey
+	) -> error::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?
+			.child_keys(&child_storage_key.0, &key_prefix.0)
+			.into_iter()
+			.map(StorageKey)
+			.collect();
+		Ok(keys)
+	}
+
+	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
+	pub fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key: &StorageKey
+	) -> error::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
+			.child_storage(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
 
