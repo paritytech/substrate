@@ -474,7 +474,7 @@ impl<T: Trait> Module<T> {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
-		<Digest<T>>::put(Default::default());
+		<Digest<T>>::put(T::Digest::default());
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
