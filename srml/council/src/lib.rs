@@ -103,6 +103,7 @@ mod tests {
 	pub struct ExtBuilder {
 		balance_factor: u64,
 		decay_ratio: u32,
+		voting_fee: u64,
 		with_council: bool,
 	}
 
@@ -111,6 +112,7 @@ mod tests {
 			Self {
 				balance_factor: 1,
 				decay_ratio: 24,
+				voting_fee: 5,
 				with_council: false,
 			}
 		}
@@ -127,6 +129,10 @@ mod tests {
 		}
 		pub fn decay_ratio(mut self, ratio: u32) -> Self {
 			self.decay_ratio = ratio;
+			self
+		}
+		pub fn voting_fee(mut self, fee: u64) -> Self {
+			self.voting_fee = fee;
 			self
 		}
 
@@ -170,6 +176,7 @@ mod tests {
 				presentation_duration: 2,
 				desired_seats: 2,
 				decay_ratio: self.decay_ratio,
+				voting_fee: self.voting_fee,
 				term_duration: 5,
 			}.build_storage().unwrap().0);
 			t.extend(voting::GenesisConfig::<Test> {
