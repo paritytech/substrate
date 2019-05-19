@@ -162,8 +162,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.pairs()
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.backend.keys(prefix)
+	}
+
+	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.backend.child_keys(child_storage_key, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
