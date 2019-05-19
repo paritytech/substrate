@@ -126,8 +126,8 @@ type SetIndex = u32;
 
 // all three must be in sync.
 type ApprovalFlag = u32;
-pub const APPROVAL_FLAG_LEN: usize = 32;
 pub const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
+pub const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -197,7 +197,10 @@ decl_module! {
 			let last_active = info.last_active;
 
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
-			ensure!(assumed_vote_index > last_active + Self::inactivity_grace_period(), "cannot reap during grace period");
+			ensure!(
+				assumed_vote_index > last_active+ Self::inactivity_grace_period(),
+				"cannot reap during grace period"
+			);
 
 			let reporter_index = reporter_index as usize;
 			let who_index = who_index as usize;
@@ -304,14 +307,22 @@ decl_module! {
 			#[compact] index: VoteIndex
 		) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(!total.is_zero(), "stake deposited to present winner and be added to leaderboard should be non-zero");
+			ensure!(
+				!total.is_zero(),
+				"stake deposited to present winner and be added to leaderboard should be non-zero"
+			);
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			// TODO: Most likely we prefer this bond to be proportional to `|voters| * |candidates|`.
-			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(Self::voter_count() as u64);
-			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
+			let bad_presentation_punishment =
+				Self::present_slash_per_voter()
+				* BalanceOf::<T>::sa(Self::voter_count() as u64);
+			ensure!(
+				T::Currency::can_slash(&who, bad_presentation_punishment),
+				"presenter must have sufficient slashable funds"
+			);
 
 			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
 			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
@@ -570,7 +581,7 @@ impl<T: Trait> Module<T> {
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
 		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
 		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
-		ensure!(candidates.len() >= votes.len(), "amount of candidate approval votes cannot exceed amount of candidates");
+		ensure!(candidates.len() >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
 
 		// Amount to be locked up.
 		// TODO: maybe this should be total - fee?
@@ -1431,7 +1442,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 19), (5, 19)]);
-			assert_eq!(Council::voter_info(6).unwrap(), VoterInfo { last_win: 2, last_active: 1, stake: 600 - fee(), pot:0 });
+			assert_eq!(
+				Council::voter_info(6).unwrap(),
+				VoterInfo { last_win: 2, last_active: 1, stake: 600 - fee(), pot:0 }
+			);
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 2, last_active: 1, stake: 500, pot:0 });
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot:0 });
 
@@ -1453,7 +1467,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 27), (5, 27)]);
-			assert_eq!(Council::voter_info(6).unwrap(), VoterInfo { last_win: 3, last_active: 2, stake: 600 - fee(), pot: 0});
+			assert_eq!(
+				Council::voter_info(6).unwrap(),
+				VoterInfo { last_win: 3, last_active: 2, stake: 600 - fee(), pot: 0}
+			);
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 3, last_active: 2, stake: 500, pot: 0});
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
 
@@ -1476,7 +1493,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(6, 35), (5, 35)]);
-			assert_eq!(Council::voter_info(6).unwrap(), VoterInfo { last_win: 4, last_active: 3, stake: 600 - fee(), pot: 0});
+			assert_eq!(
+				Council::voter_info(6).unwrap(),
+				VoterInfo { last_win: 4, last_active: 3, stake: 600 - fee(), pot: 0}
+			);
 			assert_eq!(Council::voter_info(5).unwrap(), VoterInfo { last_win: 4, last_active: 3, stake: 500, pot: 0});
 			assert_eq!(Council::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
 		})
@@ -1614,7 +1634,10 @@ mod tests {
 			assert_eq!(Council::get_offset(50_000_000_000, 1), 48_000_000_000);
 			assert_eq!(Council::get_offset(50_000_000_000, 2), 48_000_000_000 + 46_080_000_000);
 			assert_eq!(Council::get_offset(50_000_000_000, 3), 48_000_000_000 + 46_080_000_000 + 44_236_800_000);
-			assert_eq!(Council::get_offset(50_000_000_000, 4), 48_000_000_000 + 46_080_000_000 + 44_236_800_000 + 42_467_328_000);
+			assert_eq!(
+				Council::get_offset(50_000_000_000, 4),
+				48_000_000_000 + 46_080_000_000 + 44_236_800_000 + 42_467_328_000
+			);
 			// limit
 			assert_eq!(Council::get_offset(50_000_000_000, 1000), 50_000_000_000 * 24);
 		})
@@ -1701,7 +1724,10 @@ mod tests {
 
 			assert_eq!(Council::candidates().len(), 0);
 
-			assert_noop!(Council::set_approvals(Origin::signed(4), vec![], 0, 0), "amount of candidates to receive approval votes should be non-zero");
+			assert_noop!(
+				Council::set_approvals(Origin::signed(4), vec![], 0, 0),
+				"amount of candidates to receive approval votes should be non-zero"
+			);
 		});
 	}
 
@@ -1713,7 +1739,10 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0));
 			assert_eq!(Council::candidates().len(), 1);
 
-			assert_noop!(Council::set_approvals(Origin::signed(4), vec![true, true], 0, 0), "amount of candidate approval votes cannot exceed amount of candidates");
+			assert_noop!(
+				Council::set_approvals(Origin::signed(4),vec![true, true], 0, 0),
+				"amount of candidate approval votes cannot exceed amount of candidates"
+			);
 		});
 	}
 
@@ -1913,7 +1942,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_noop!(Council::present_winner(Origin::signed(4), 2, 0, 0), "stake deposited to present winner and be added to leaderboard should be non-zero");
+			assert_noop!(
+				Council::present_winner(Origin::signed(4), 2, 0, 0),
+				"stake deposited to present winner and be added to leaderboard should be non-zero"
+			);
 		});
 	}
 
@@ -1994,7 +2026,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_noop!(Council::present_winner(Origin::signed(4), 2, 20, 1), "candidate must not form a duplicated member if elected");
+			assert_noop!(
+				Council::present_winner(Origin::signed(4), 2, 20, 1),
+				"candidate must not form a duplicated member if elected"
+			);
 		});
 	}
 
@@ -2240,7 +2275,10 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			assert_noop!(Council::present_winner(Origin::signed(5), 5, 1, 0), "cannot present outside of presentation period");
+			assert_noop!(
+				Council::present_winner(Origin::signed(5), 5, 1, 0),
+				"cannot present outside of presentation period"
+			);
 		});
 	}
 
@@ -2272,7 +2310,10 @@ mod tests {
 			System::set_block_number(6);
 			assert_eq!(Balances::free_balance(&1), 5 - fee());
 			assert_eq!(Balances::reserved_balance(&1), 5);
-			assert_noop!(Council::present_winner(Origin::signed(1), 1, 10, 0), "presenter must have sufficient slashable funds");
+			assert_noop!(Council::present_winner(
+				Origin::signed(1), 1, 10, 0),
+				"presenter must have sufficient slashable funds"
+			);
 		});
 	}
 
@@ -2403,7 +2444,10 @@ mod tests {
 			assert_eq!(Council::voter_info(3), Some( VoterInfo { last_win: 2, last_active: 0, stake: 30, pot: 0}));
 			assert_eq!(Council::voter_info(4), Some( VoterInfo { last_win: 0, last_active: 0, stake: 40, pot: 0}));
 			assert_eq!(Council::voter_info(5), Some( VoterInfo { last_win: 1, last_active: 0, stake: 50, pot: 0}));
-			assert_eq!(Council::voter_info(6), Some( VoterInfo { last_win: 2, last_active: 1, stake: 60 - fee(), pot: 0}));
+			assert_eq!(
+				Council::voter_info(6),
+				Some(VoterInfo { last_win: 2, last_active: 1, stake: 60 - fee(), pot: 0})
+			);
 
 			assert_eq!(Council::candidate_reg_info(4), Some((0, 3)));
 		});
