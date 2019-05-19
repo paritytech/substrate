@@ -329,7 +329,7 @@ impl<
 			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header, header_hash);
 			if pre_digest.is_err() {
 				warn!(target: "aura", "Runtime stripped our digest!  Re-adding it.");
-				header.set_digest(generic::Digest {
+				header.append_digest(generic::Digest {
 					logs: vec![
 						generic::DigestItem::aura_pre_digest(slot_num)
 					],

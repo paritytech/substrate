@@ -229,18 +229,12 @@ struct BabeWorker<C, E, I, SO> {
 	threshold: u64,
 }
 
-impl<
+impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
 	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
 	B: Block<Header=H, Hash=Hash>,
-	C,
-	E,
-	I,
-	Error,
-	SO,
-> SlotWorker<B> for BabeWorker<C, E, I, SO> where
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
@@ -1055,20 +1049,10 @@ mod tests {
 	}
 
 	#[test]
-	#[allow(deprecated)]
-	fn old_seals_rejected() {
-		drop(env_logger::try_init());
-		let sig = sr25519::Pair::generate().sign(b"");
-		let bad_seal: Item = DigestItem::Seal(0, sig);
-		assert!(bad_seal.as_babe_pre_digest().is_none());
-		assert!(bad_seal.as_babe_seal().is_none())
-	}
-
-	#[test]
 	fn wrong_consensus_engine_id_rejected() {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().sign(b"");
-		let bad_seal: Item = DigestItem::Seal2([0; 4], sig);
+		let bad_seal: Item = DigestItem::Seal([0; 4], sig);
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_none())
 	}
@@ -1076,7 +1060,7 @@ mod tests {
 	#[test]
 	fn malformed_pre_digest_rejected() {
 		drop(env_logger::try_init());
-		let bad_seal: Item = DigestItem::Seal2(BABE_ENGINE_ID, Signature([0; 64]));
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, Signature([0; 64]));
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 	}
 
@@ -1084,7 +1068,7 @@ mod tests {
 	fn sig_is_not_pre_digest() {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().sign(b"");
-		let bad_seal: Item = DigestItem::Seal2(BABE_ENGINE_ID, sig);
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig);
 		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_some())
 	}

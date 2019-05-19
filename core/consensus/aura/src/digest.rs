@@ -39,12 +39,12 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash, P::Public, P::Signatu
 	where P: Pair, P::Signature: Clone + Encode + Decode,
 {
 	fn aura_seal(signature: Signature<P>) -> Self {
-		DigestItem::Seal2(AURA_ENGINE_ID, signature)
+		DigestItem::Seal(AURA_ENGINE_ID, signature)
 	}
 
 	fn as_aura_seal(&self) -> Option<&Signature<P>> {
 		match self {
-			DigestItem::Seal2(AURA_ENGINE_ID, ref sig) => Some(sig),
+			DigestItem::Seal(AURA_ENGINE_ID, ref sig) => Some(sig),
 			_ => None,
 		}
 	}

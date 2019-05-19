@@ -108,7 +108,7 @@ impl traits::Header for Header {
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
 	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
-	fn set_digest(&mut self, digest: Self::Digest) {
+	fn append_digest(&mut self, digest: Self::Digest) {
 		for i in digest.logs {
 			debug!(target: "import", "Importing log");
 			self.digest.push(i)

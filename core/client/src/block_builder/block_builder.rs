@@ -81,7 +81,7 @@ where
 			api.record_proof();
 		}
 
-		header.set_digest(inherent_digests);
+		header.append_digest(inherent_digests);
 
 		api.initialize_block_with_context(
 			block_id, ExecutionContext::BlockConstruction, &header,

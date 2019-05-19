@@ -126,12 +126,12 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
 	}
 
 	fn babe_seal(signature: Signature) -> Self {
-		DigestItem::Seal2(BABE_ENGINE_ID, signature)
+		DigestItem::Seal(BABE_ENGINE_ID, signature)
 	}
 
 	fn as_babe_seal(&self) -> Option<&Signature> {
 		match self {
-			DigestItem::Seal2(BABE_ENGINE_ID, signature) => Some(signature),
+			DigestItem::Seal(BABE_ENGINE_ID, signature) => Some(signature),
 			_ => None,
 		}
 	}
