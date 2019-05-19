@@ -27,7 +27,7 @@ use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_vali
 use parity_codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
 use primitives::{Blake2Hasher, storage::well_known_keys};
-use primitives::ed25519::Public as AuthorityId;
+use primitives::sr25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -35,7 +35,7 @@ const BALANCE_OF: &[u8] = b"balance:";
 storage_items! {
 	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
 	// The current block number being processed. Set by `execute_block`.
-	Number: b"sys:num" => required BlockNumber;
+	Number: b"sys:num" => BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 }
@@ -68,6 +68,14 @@ pub fn initialize_block(header: &Header) {
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+}
+
+pub fn get_block_number() -> Option<BlockNumber> {
+	Number::get()
+}
+
+pub fn take_block_number() -> Option<BlockNumber> {
+	Number::take()
 }
 
 /// Actually execute all transitioning for `block`.
@@ -167,7 +175,9 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		let mut deps = Vec::new();
 		deps.push(hash(&tx.from, tx.nonce - 1));
 		deps
-	} else { Vec::new() };
+	} else {
+		Vec::new()
+	};
 
 	let provides = {
 		let mut p = Vec::new();
@@ -200,7 +210,7 @@ pub fn finalize_block() -> Header {
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
 
-	let number = <Number>::take();
+	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash, number - 1);

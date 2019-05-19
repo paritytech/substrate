@@ -43,7 +43,7 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{ed25519, sr25519, OpaqueMetadata};
+use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -102,8 +102,7 @@ pub enum Extrinsic {
 }
 
 #[cfg(feature = "std")]
-impl serde::Serialize for Extrinsic
-{
+impl serde::Serialize for Extrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
@@ -143,7 +142,7 @@ impl Extrinsic {
 }
 
 /// The signature type used by authorities.
-pub type AuthoritySignature = ed25519::Signature;
+pub type AuthoritySignature = sr25519::Signature;
 /// The identity type used by authorities.
 pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
 /// The signature type used by accounts/transactions.
@@ -240,6 +239,13 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
+				/// Returns the initialized block number.
+				fn get_block_number() -> u64;
+				/// Takes and returns the initialized block number.
+				fn take_block_number() -> Option<u64>;
+				/// Returns if no block was initialized.
+				#[skip_initialize_block]
+				fn without_initialize_block() -> bool;
 			}
 		}
 	} else {
@@ -264,6 +270,13 @@ cfg_if! {
 				fn use_trie() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
+				/// Returns the initialized block number.
+				fn get_block_number() -> u64;
+				/// Takes and returns the initialized block number.
+				fn take_block_number() -> Option<u64>;
+				/// Returns if no block was initialized.
+				#[skip_initialize_block]
+				fn without_initialize_block() -> bool;
 			}
 		}
 	}
@@ -417,10 +430,32 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64 {
 					(0..1000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
+
+				fn get_block_number() -> u64 {
+					system::get_block_number().expect("Block number is initialized")
+				}
+
+				fn without_initialize_block() -> bool {
+					system::get_block_number().is_none()
+				}
+
+				fn take_block_number() -> Option<u64> {
+					system::take_block_number()
+				}
 			}
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+			}
+
+			impl consensus_babe::BabeApi<Block> for Runtime {
+				fn startup_data() -> consensus_babe::BabeConfiguration {
+					consensus_babe::BabeConfiguration {
+						slot_duration: 1,
+						expected_block_time: 1,
+						threshold: std::u64::MAX,
+					}
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
@@ -432,7 +467,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}
@@ -537,12 +572,32 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64 {
 					(0..10000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
+
+				fn get_block_number() -> u64 {
+					system::get_block_number().expect("Block number is initialized")
+				}
+
+				fn without_initialize_block() -> bool {
+					system::get_block_number().is_none()
+				}
+
+				fn take_block_number() -> Option<u64> {
+					system::take_block_number()
+				}
 			}
-
-
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+			}
+
+			impl consensus_babe::BabeApi<Block> for Runtime {
+				fn startup_data() -> consensus_babe::BabeConfiguration {
+					consensus_babe::BabeConfiguration {
+						slot_duration: 1,
+						expected_block_time: 1,
+						threshold: core::u64::MAX,
+					}
+				}
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
@@ -554,7 +609,7 @@ cfg_if! {
 
 			impl consensus_authorities::AuthoritiesApi<Block> for Runtime {
 				fn authorities() -> Vec<AuthorityIdFor<Block>> {
-					crate::system::authorities()
+					system::authorities()
 				}
 			}
 		}

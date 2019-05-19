@@ -17,7 +17,6 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[macro_use]
 extern crate bitmask;
@@ -53,6 +52,8 @@ pub mod metadata;
 mod runtime;
 #[macro_use]
 pub mod inherent;
+#[macro_use]
+pub mod unsigned;
 mod double_map;
 pub mod traits;
 
@@ -60,11 +61,14 @@ pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorage
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::print;
+pub use runtime_io::{print, storage_root};
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
 
+/// Return Err of the expression: `return Err($expression);`.
+///
+/// Used as `fail!(expression)`.
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
@@ -72,6 +76,9 @@ macro_rules! fail {
 	}}
 }
 
+/// Evaluate `$x:expr` and if not true return `Err($y:expr)`.
+///
+/// Used as `ensure!(expression_to_ensure, expression_to_return_on_false)`.
 #[macro_export]
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
@@ -81,16 +88,27 @@ macro_rules! ensure {
 	}}
 }
 
+/// Evaluate an expression, assert it returns an expected `Err` value and that
+/// runtime storage has not been mutated (i.e. expression is a no-operation).
+///
+/// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
-		let h = runtime_io::storage_root();
+		let h = $crate::storage_root();
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, runtime_io::storage_root());
+		assert_eq!(h, $crate::storage_root());
 	}
 }
 
+/// Panic if an expression doesn't evaluate to an `Err`.
+///
+/// Used as `assert_err!(expression_to_assert, expected_err_expression)`.
+
+/// Assert an expression returns an error specified.
+///
+/// Used as `assert_err!(expression_to_assert, expected_error_expression)`
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err {
@@ -99,6 +117,10 @@ macro_rules! assert_err {
 	}
 }
 
+/// Panic if an expression doesn't evaluate to `Ok`.
+///
+/// Used as `assert_ok!(expression_to_assert, expected_ok_expression)`,
+/// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`.
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
@@ -216,6 +238,7 @@ mod tests {
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]): double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
 			pub GenericDataDM: double_map T::BlockNumber, twox_128(T::BlockNumber) => T::BlockNumber;
 			pub GenericData2DM: double_map T::BlockNumber, twox_256(T::BlockNumber) => Option<T::BlockNumber>;
+			pub AppendableDM: double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
 		}
 	}
 
@@ -345,6 +368,21 @@ mod tests {
 			assert_eq!(DoubleMap::get(key1, key2+1), 0u64);
 			assert_eq!(DoubleMap::get(key1+1, key2), 4u64);
 			assert_eq!(DoubleMap::get(key1+1, key2+1), 4u64);
+
+		});
+	}
+
+	#[test]
+	fn double_map_append_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			type DoubleMap = AppendableDM<Test>;
+
+			let key1 = 17u32;
+			let key2 = 18u32;
+
+			DoubleMap::insert(key1, key2, vec![1]);
+			DoubleMap::append(key1, key2, &[2, 3]);
+			assert_eq!(DoubleMap::get(key1, key2), vec![1, 2, 3]);
 		});
 	}
 
@@ -425,6 +463,21 @@ mod tests {
 					key2: DecodeDifferent::Encode("T::BlockNumber"),
 					value: DecodeDifferent::Encode("T::BlockNumber"),
 					key2_hasher: DecodeDifferent::Encode("twox_256"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("AppendableDM"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::DoubleMap{
+					hasher: StorageHasher::Blake2_256,
+					key1: DecodeDifferent::Encode("u32"),
+					key2: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("Vec<u32>"),
+					key2_hasher: DecodeDifferent::Encode("blake2_256"),
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))

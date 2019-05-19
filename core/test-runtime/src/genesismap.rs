@@ -22,7 +22,7 @@ use super::AccountId;
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use runtime_primitives::traits::Block;
-use primitives::ed25519::Public as AuthorityId;
+use primitives::sr25519::Public as AuthorityId;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -32,7 +32,12 @@ pub struct GenesisConfig {
 }
 
 impl GenesisConfig {
-	pub fn new(support_changes_trie: bool, authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, balance: u64) -> Self {
+	pub fn new(
+		support_changes_trie: bool,
+		authorities: Vec<AuthorityId>,
+		endowed_accounts: Vec<AccountId>,
+		balance: u64
+	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
 				true => Some(super::changes_trie_config()),
@@ -44,11 +49,13 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
+		#[cfg(feature = "include-wasm-blob")]
 		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm").to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
+				#[cfg(feature = "include-wasm-blob")]
 				(well_known_keys::CODE.into(), wasm_runtime),
 				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
 				(well_known_keys::AUTHORITY_COUNT.into(), vec![].and(&(self.authorities.len() as u32))),

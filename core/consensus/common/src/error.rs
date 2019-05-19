@@ -35,7 +35,7 @@ error_chain! {
 		}
 
 		/// Unable to schedule wakeup.
-		FaultyTimer(e: ::tokio::timer::Error) {
+		FaultyTimer(e: ::tokio_timer::Error) {
 			description("Timer error"),
 			display("Timer error: {}", e),
 		}
@@ -104,6 +104,12 @@ error_chain! {
 		ClientImport(reason: String) {
 			description("Import failed"),
 			display("Import failed: {}", reason),
+		}
+
+		/// Error from the client while importing
+		ChainLookup(reason: String) {
+			description("Looking up chain failed"),
+			display("Chain lookup failed: {}", reason),
 		}
 	}
 }

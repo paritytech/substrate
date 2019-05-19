@@ -105,7 +105,7 @@ where H: Clone + Debug + PartialEq,
 	}
 }
 
-fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
