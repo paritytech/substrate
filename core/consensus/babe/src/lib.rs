@@ -433,27 +433,22 @@ macro_rules! babe_err {
 }
 
 fn find_pre_digest<B: Block>(
-	header: &mut B::Header,
+	header: &B::Header,
 	hash: B::Hash,
 ) -> Result<BabePreDigest, (bool, String)>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	let mut pre_digest: Option<_> = None;
-	let digest = std::mem::replace(header.digest_mut(), Default::default());
-	for i in digest.logs() {
+	for i in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?} in header {:?}", i, hash);
 		match i.as_babe_pre_digest() {
-			// For some reason that I have not figured out, we can get
-			// duplicate entries here.  Filter those out.
-			ref s @ Some(_) if s == &pre_digest => continue,
 			s @ Some(_) => if pre_digest.is_some() {
 				return Err((true, babe_err!("Multiple BABE pre-runtime headers, rejecting header {:?}", hash)))
 			} else {
-				pre_digest = s;
+				pre_digest = s
 			},
 			None => trace!(target: "babe", "Ignoring digest not meant for us"),
 		}
-		header.digest_mut().push(i.clone());
 	}
 	pre_digest.ok_or_else(|| (false, babe_err!("No BABE pre-runtime digest found")))
 }
@@ -494,7 +489,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		author,
 		proof,
 		vrf_output,
-	} = find_pre_digest::<B>(&mut header, hash).map_err(|x|x.1)?;
+	} = find_pre_digest::<B>(&header, hash).map_err(|x|x.1)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(digest_item);
