@@ -59,10 +59,10 @@ pub const CONSENSUS_INFO: &str = "0";
 /// Multiply logging to all drains. This is similar to `slog::Duplicate`, which is
 /// limited to two drains though and doesn't support dynamic nesting at runtime.
 #[derive(Debug, Clone)]
-pub struct Multiply<D: Drain> (pub Vec<Box<D>>);
+pub struct Multiply<D: Drain> (pub Vec<D>);
 
 impl<D: Drain> Multiply<D> {
-	pub fn new(v: Vec<Box<D>>) -> Self {
+	pub fn new(v: Vec<D>) -> Self {
 		Multiply(v)
 	}
 }

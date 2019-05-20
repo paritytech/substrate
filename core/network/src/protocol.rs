@@ -328,6 +328,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		Ok(Async::NotReady)
 	}
 
+	fn is_on_demand_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
+		self.on_demand.as_ref().map_or(false, |od| od.is_on_demand_response(&who, response_id))
+	}
+
 	fn handle_response(
 		&mut self,
 		network_out: &mut dyn NetworkOut<B>,
@@ -375,10 +379,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(network_out, who, r),
 			GenericMessage::BlockResponse(r) => {
-				if let Some(request) = self.handle_response(network_out, who.clone(), &r) {
-					let outcome = self.on_block_response(network_out, who.clone(), request, r);
-					self.update_peer_info(&who);
-					return outcome
+				// Note, this is safe because only `ordinary bodies` and `remote bodies` are received in this matter.
+				if self.is_on_demand_response(&who, r.id) {
+					self.on_remote_body_response(who, r);
+				} else {
+					if let Some(request) = self.handle_response(network_out, who.clone(), &r) {
+						let outcome = self.on_block_response(network_out, who.clone(), request, r);
+						self.update_peer_info(&who);
+						return outcome
+					}
 				}
 			},
 			GenericMessage::BlockAnnounce(announce) => {
@@ -1238,6 +1247,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		} else {
 			CustomMessageOutcome::None
 		}
+	}
+
+	fn on_remote_body_response(&self, peer: PeerId, response: message::BlockResponse<B>) {
+		self.on_demand
+			.as_ref()
+			.map(|od| od.on_remote_body_response(peer, response));
 	}
 }
 
