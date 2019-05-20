@@ -90,7 +90,7 @@ pub enum Message {
 }
 
 /// Opaque identifier for an incoming connection. Allocated by the network.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct IncomingIndex(pub u64);
 
 impl From<u64> for IncomingIndex {
@@ -316,8 +316,9 @@ impl Peerset {
 	/// connection implicitely means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
 	///
-	/// Because of concurrency issues, it is acceptable to call `incoming` with a `PeerId` the
-	/// peerset is already connected to, in which case it must not answer.
+	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
+	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
+	// `PeerId` before that message has been read by the user. In this situation we must not answer.
 	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
 		trace!(target: "peerset", "Incoming {:?}", peer_id);
 

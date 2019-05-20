@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 crossbeam-channel = "0.3.4"
-libp2p = { version = "0.7.0", default-features = false }
+libp2p = { version = "0.8.1", default-features = false }
 log = "0.4"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }

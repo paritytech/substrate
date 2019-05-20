@@ -365,6 +365,11 @@ fn fill_network_configuration(
 	Ok(())
 }
 
+fn input_keystore_password() -> Result<String, String> {
+	rpassword::read_password_from_tty(Some("Keystore password: "))
+		.map_err(|e| format!("{:?}", e))
+}
+
 fn create_run_node_config<F, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
 ) -> error::Result<FactoryFullConfiguration<F>>
@@ -374,6 +379,9 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
+	if cli.interactive_password {
+		config.password = input_keystore_password()?
+	}
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -828,7 +836,7 @@ mod tests {
 			NodeKeyType::variants().into_iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
-					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().as_ref().to_vec(),
+					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().to_bytes().to_vec(),
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
 				};
 				let params = NodeKeyParams {
@@ -839,7 +847,7 @@ mod tests {
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Secp256k1(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Secp256k1 &&
-							&sk[..] == ski.as_ref() => Ok(()),
+							&sk[..] == ski.to_bytes() => Ok(()),
 					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),

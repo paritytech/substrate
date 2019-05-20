@@ -205,7 +205,7 @@ pub mod generic {
 		FinalityProofRequest(FinalityProofRequest<Hash>),
 		/// Finality proof reponse.
 		FinalityProofResponse(FinalityProofResponse<Hash>),
-		/// Chain-specific message
+		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
 	}
