@@ -42,7 +42,7 @@ use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as Heade
 use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
 
-use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
+use crate::{Error, Message, SignedMessage, CatchUp, Commit, CompactCommit};
 use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
@@ -343,6 +343,34 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let incoming = incoming.select(out_rx);
 
 		(incoming, outgoing)
+	}
+
+	pub(crate) fn catch_up_stream(
+		&self,
+		set_id: SetId,
+	) -> impl Stream<Item = CatchUp<B>, Error = Error> {
+		let topic = crate::communication::global_topic::<B>(set_id.0);
+		self.service.messages_for(topic)
+			.filter_map(|notification| {
+				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
+				if decoded.is_none() {
+					debug!(target: "afg", "Skipping malformed message {:?}", notification);
+				}
+				decoded
+			})
+			.and_then(move |msg| {
+				match msg {
+					GossipMessage::CatchUp(msg) => {
+						Ok(Some(msg.message))
+					}
+					_ => {
+						debug!(target: "afg", "Skipping unknown message type");
+						return Ok(None);
+					}
+				}
+			})
+			.filter_map(|x| x)
+			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 	}
 
 	/// Set up the global communication streams.

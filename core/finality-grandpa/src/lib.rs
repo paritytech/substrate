@@ -403,7 +403,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	let commits_in = commit_in.map_err(CommandOrError::from);
 	let commits_out = commit_out.sink_map_err(CommandOrError::from);
 
-	let global_in = commits_in.map(|(round, commit, mut callback)| {
+	let commits_in = commits_in.map(|(round, commit, mut callback)| {
 		let callback = voter::Callback::Work(Box::new(move |outcome| match outcome {
 			voter::CommitProcessingOutcome::Good(_) =>
 				callback(communication::CommitProcessingOutcome::Good),
@@ -413,7 +413,17 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		voter::CommunicationIn::Commit(round, commit, callback)
 	});
 
+	// FIXME: read from same gossip topic stream. block until ref'd blocks imported like for commits.
+	let catch_ups_in = network.catch_up_stream(communication::SetId(set_id))
+		.map(|catch_up| {
+			voter::CommunicationIn::Auxiliary(voter::AuxiliaryCommunication::CatchUp(catch_up))
+		})
+		.map_err(CommandOrError::from);
+
+	let global_in = commits_in.select(catch_ups_in);
+
 	// NOTE: eventually this will also handle catch-up requests
+	// FIXME: CommunicationOut doesn't need auxiliary communication
 	let global_out = commits_out.with(|global| match global {
 		voter::CommunicationOut::Commit(round, commit) => Ok((round, commit)),
 		_ => unimplemented!(),
