@@ -411,7 +411,7 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 				Ok(Async::Ready(None)) => None,
 			}))
 		});
-	
+
 		if self.use_tokio {
 			fut.wait()
 		} else {
@@ -792,6 +792,7 @@ pub trait TestNetFactory: Sized {
 		&mut self,
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
+		tx_pool: EmptyTransactionPool,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
@@ -825,7 +826,7 @@ pub trait TestNetFactory: Sized {
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
-							protocol.on_custom_message(&mut Ctxt(&network_sender), peer_id, message),
+							protocol.on_custom_message(&mut Ctxt(&network_sender), &tx_pool, peer_id, message),
 						Some(FromNetworkMsg::Synchronize) => {
 							let _ = network_sender.unbounded_send(NetworkMsg::Synchronized);
 							CustomMessageOutcome::None
@@ -876,7 +877,7 @@ pub trait TestNetFactory: Sized {
 							),
 						ProtocolMsg::BlocksProcessed(hashes, has_error) =>
 							protocol.blocks_processed(&mut Ctxt(&network_sender), hashes, has_error),
-						ProtocolMsg::RestartSync => 
+						ProtocolMsg::RestartSync =>
 							protocol.restart(&mut Ctxt(&network_sender)),
 						ProtocolMsg::AnnounceBlock(hash) =>
 							protocol.announce_block(&mut Ctxt(&network_sender), hash),
@@ -894,7 +895,8 @@ pub trait TestNetFactory: Sized {
 							protocol.request_finality_proof(&mut Ctxt(&network_sender), &hash, number),
 						ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
 							protocol.finality_proof_import_result(requested_block, finalziation_result),
-						ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(&mut Ctxt(&network_sender)),
+						ProtocolMsg::PropagateExtrinsics =>
+							protocol.propagate_extrinsics(&mut Ctxt(&network_sender), &tx_pool),
 						#[cfg(any(test, feature = "test-helpers"))]
 						ProtocolMsg::Tick => protocol.tick(&mut Ctxt(&network_sender)),
 						#[cfg(any(test, feature = "test-helpers"))]
@@ -905,7 +907,7 @@ pub trait TestNetFactory: Sized {
 					}
 				}
 
-				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender)).unwrap() {
+				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender), &tx_pool).unwrap() {
 					return Ok(Async::Ready(()))
 				}
 
@@ -930,7 +932,6 @@ pub trait TestNetFactory: Sized {
 	/// Add a full peer.
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
-		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Full(client.clone()));
@@ -955,7 +956,6 @@ pub trait TestNetFactory: Sized {
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
 			None,
-			tx_pool,
 			specialization,
 		).unwrap();
 
@@ -963,6 +963,7 @@ pub trait TestNetFactory: Sized {
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
+			EmptyTransactionPool,
 			protocol,
 			network_sender.clone(),
 			network_to_protocol_rx,
@@ -988,7 +989,6 @@ pub trait TestNetFactory: Sized {
 		config.roles = Roles::LIGHT;
 
 		let client = Arc::new(test_client::new_light());
-		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Light(client.clone()));
@@ -1013,7 +1013,6 @@ pub trait TestNetFactory: Sized {
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
 			None,
-			tx_pool,
 			specialization,
 		).unwrap();
 
@@ -1021,6 +1020,7 @@ pub trait TestNetFactory: Sized {
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
+			EmptyTransactionPool,
 			protocol,
 			network_sender.clone(),
 			network_to_protocol_rx,

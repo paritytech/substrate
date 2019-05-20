@@ -211,7 +211,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			params.chain,
 			params.finality_proof_provider,
 			params.on_demand,
-			params.transaction_pool,
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
@@ -221,6 +220,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_major_syncing.clone(),
 			protocol,
 			import_queue.clone(),
+			params.transaction_pool,
 			network_port,
 			protocol_rx,
 			status_sinks.clone(),
@@ -515,6 +515,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
 	import_queue: Box<ImportQueue<B>>,
+	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -541,6 +542,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			protocol,
 			service_clone,
 			import_queue,
+			transaction_pool,
 			network_port,
 			protocol_rx,
 			status_sinks,
@@ -568,6 +570,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
+	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	mut network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -596,7 +599,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 		}
 
-		match protocol.poll(&mut Ctxt(&mut network_service.lock(), &peerset)) {
+		match protocol.poll(&mut Ctxt(&mut network_service.lock(), &peerset), &*transaction_pool) {
 			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
@@ -646,7 +649,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					protocol.gossip_consensus_message(&mut network_out, topic, engine_id, message, recipient),
 				ProtocolMsg::BlocksProcessed(hashes, has_error) =>
 					protocol.blocks_processed(&mut network_out, hashes, has_error),
-				ProtocolMsg::RestartSync => 
+				ProtocolMsg::RestartSync =>
 					protocol.restart(&mut network_out),
 				ProtocolMsg::AnnounceBlock(hash) =>
 					protocol.announce_block(&mut network_out, hash),
@@ -664,7 +667,8 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					protocol.request_finality_proof(&mut network_out, &hash, number),
 				ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
 					protocol.finality_proof_import_result(requested_block, finalziation_result),
-				ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(&mut network_out),
+				ProtocolMsg::PropagateExtrinsics =>
+					protocol.propagate_extrinsics(&mut network_out, &*transaction_pool),
 				#[cfg(any(test, feature = "test-helpers"))]
 				ProtocolMsg::Tick => protocol.tick(&mut network_out),
 				#[cfg(any(test, feature = "test-helpers"))]
@@ -692,7 +696,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					CustomMessageOutcome::None
 				},
 				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) =>
-					protocol.on_custom_message(&mut network_out, peer_id, message),
+					protocol.on_custom_message(&mut network_out, &*transaction_pool, peer_id, message),
 				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
 					debug!(target: "sync", "{} clogging messages:", messages.len());
 					for msg in messages.into_iter().take(5) {
