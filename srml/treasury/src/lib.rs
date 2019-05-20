@@ -102,6 +102,12 @@ decl_module! {
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
+		///
+		/// # <weight>
+		/// - Input value may have bearing on complexity.
+		/// - Complexity in `calculate_bond`
+		/// - Otherwise bounded complexity.
+		/// # </weight>
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -122,12 +128,24 @@ decl_module! {
 		}
 
 		/// Set the balance of funds available to spend.
+		///
+		/// # <weight>
+		/// - Input is an integer.
+		/// - Only makes a storage call.
+		/// - High likelihood of safe.
+		/// # </weight>
 		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
 			// Put the new value into storage.
 			<Pot<T>>::put(new_pot);
 		}
 
 		/// (Re-)configure this module.
+		///
+		/// # <weight>
+		/// - Constant storage writes.
+		/// - Not exploitable to user input.
+		/// - Very likely it is safe.
+		/// # </weight>
 		fn configure(
 			#[compact] proposal_bond: Permill,
 			#[compact] proposal_bond_minimum: BalanceOf<T>,
@@ -141,6 +159,12 @@ decl_module! {
 		}
 
 		/// Reject a proposed spend. The original deposit will be slashed.
+		///
+		/// # <weight>
+		/// - proposal_id is a u32
+		/// - possible complexity in `on_unbalanced`
+		/// - Otherwise low complexity.
+		/// # </weight>
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
@@ -152,6 +176,11 @@ decl_module! {
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		/// and the original deposit will be returned.
+		///
+		/// # <weight>
+		/// - Simply mutates storage by appending to a vector
+		/// - low complexity
+		/// # </weight>
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
