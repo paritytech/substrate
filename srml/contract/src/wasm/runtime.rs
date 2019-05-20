@@ -528,8 +528,10 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Load the latest block RNG seed into the scratch buffer
-	ext_random_seed(ctx) => {
-		ctx.scratch_buf = ctx.ext.random_seed().encode();
+	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
+		// TODO: limit `subject_len`.
+		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
+		ctx.scratch_buf = ctx.ext.random_seed(&subject_buf).encode();
 		Ok(())
 	},
 
