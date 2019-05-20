@@ -17,9 +17,10 @@
 use super::*;
 use self::error::{Error, ErrorKind};
 
-use sr_io::blake2_256;
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
+use primitives::storage::well_known_keys;
+use sr_io::blake2_256;
 use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt};
 
 #[test]
@@ -28,11 +29,46 @@ fn should_return_storage() {
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
+	let key = StorageKey(b":code".to_vec());
+
+	assert!(
+		client.storage(key.clone(), Some(genesis_hash).into())
+			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap()
+		> 195_000
+	);
+	assert_matches!(
+		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert!(
+		client.storage_size(key.clone(), None).unwrap().unwrap()
+		> 195_000
+	);
+}
+
+#[test]
+fn should_return_child_storage() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let genesis_hash = client.genesis_hash();
+	let client = State::new(client, Subscriptions::new(core.executor()));
+	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
+	let key = StorageKey(b"key".to_vec());
+
 
 	assert_matches!(
-		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
-		Ok(None)
-	)
+		client.child_storage(child_key.clone(), key.clone(), Some(genesis_hash).into()),
+		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
+	);
+	assert_matches!(
+		client.child_storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into())
+			.map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_matches!(
+		client.child_storage_size(child_key.clone(), key.clone(), None),
+		Ok(Some(1))
+	);
 }
 
 #[test]

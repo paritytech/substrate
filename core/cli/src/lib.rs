@@ -836,7 +836,7 @@ mod tests {
 			NodeKeyType::variants().into_iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
-					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().as_ref().to_vec(),
+					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().to_bytes().to_vec(),
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
 				};
 				let params = NodeKeyParams {
@@ -847,7 +847,7 @@ mod tests {
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Secp256k1(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Secp256k1 &&
-							&sk[..] == ski.as_ref() => Ok(()),
+							&sk[..] == ski.to_bytes() => Ok(()),
 					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
