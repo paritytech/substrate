@@ -121,6 +121,7 @@ fn node_config<F: ServiceFactory> (
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
+		rpc_ws_max_connections: None,
 		rpc_cors: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
