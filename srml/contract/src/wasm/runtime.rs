@@ -527,13 +527,17 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	/// Stores the random number for the current block for the given subject into the scratch
-	/// buffer.
-	///
-	/// The data is encoded as T::Balance. The current contents of the scratch buffer are
-	/// overwritten.
+	// Stores the random number for the current block for the given subject into the scratch
+	// buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are
+	// overwritten.
 	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
-		// TODO: limit `subject_len`.
+		// The length of a subject can't exceed `max_subject_len`.
+		if subject_len > ctx.schedule.max_subject_len {
+			return Err(sandbox::HostError);
+		}
+
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
 		ctx.scratch_buf = ctx.ext.random(&subject_buf).encode();
 		Ok(())
