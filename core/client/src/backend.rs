@@ -83,6 +83,11 @@ pub trait BlockImportOperation<Block, H> where
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out>;
 	/// Set top level storage changes.
 	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
+	/// Set children level storage changes.
+	fn update_child_storage(
+		&mut self,
+		update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+	) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 	/// Insert auxiliary keys. Values are `None` if should be deleted.

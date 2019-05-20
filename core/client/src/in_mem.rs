@@ -509,6 +509,13 @@ where
 		Ok(())
 	}
 
+	fn update_child_storage(
+		&mut self,
+		_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+	) -> error::Result<()> {
+		Ok(())
+	}
+
 	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())

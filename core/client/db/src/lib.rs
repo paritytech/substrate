@@ -270,6 +270,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, DbState, Block>,
 	db_updates: PrefixedMemoryDB<H>,
 	storage_updates: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	child_storage_updates: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
 	changes_trie_updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -365,7 +366,14 @@ where Block: BlockT<Hash=H256>,
 		self.storage_updates = update;
 		Ok(())
 	}
-
+	fn update_child_storage(
+		&mut self,
+		update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+	) -> Result<(), client::error::Error> {
+		self.child_storage_updates = update;
+		Ok(())
+  }
+	
 	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> Result<(), client::error::Error> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())
@@ -950,6 +958,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				&enacted,
 				&retracted,
 				operation.storage_updates,
+				operation.child_storage_updates,
 				Some(hash),
 				Some(number),
 				|| is_best,
@@ -1056,6 +1065,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			old_state,
 			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
+			child_storage_updates: Default::default(),
 			changes_trie_updates: MemoryDB::default(),
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
@@ -1202,7 +1212,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	fn destroy_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
 		if let Some(hash) = state.parent_hash.clone() {
 			let is_best = || self.blockchain.meta.read().best_hash == hash;
-			state.sync_cache(&[], &[], vec![], None, None, is_best);
+			state.sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 		}
 		Ok(())
 	}

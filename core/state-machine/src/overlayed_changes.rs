@@ -255,9 +255,13 @@ impl OverlayedChanges {
 	///
 	/// Panics:
 	/// Will panic if there are any uncommitted prospective changes.
-	pub fn into_committed(self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+	pub fn into_committed(self) -> (
+		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
+	){
 		assert!(self.prospective.is_empty());
-		self.committed.top.into_iter().map(|(k, v)| (k, v.value))
+		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
+			self.committed.children.into_iter().map(|(sk, v)| (sk, v.1.into_iter())))
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.
