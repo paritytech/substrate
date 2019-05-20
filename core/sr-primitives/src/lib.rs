@@ -655,7 +655,7 @@ macro_rules! impl_outer_log {
 				self.dref().and_then(|dref| dref.as_changes_trie_root())
 			}
 
-			fn as_pre_runtime(&self) -> Option<(runtime_primitives::ConsensusEngineId, &[u8])> {
+			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
 				self.dref().and_then(|dref| dref.as_pre_runtime())
 			}
 		}
