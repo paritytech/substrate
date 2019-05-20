@@ -155,6 +155,15 @@ impl<Block: BlockT> VoterSetState<Block> {
 				completed_rounds.clone(),
 		}
 	}
+
+	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
+		match self {
+			VoterSetState::Live { completed_rounds, .. } =>
+				completed_rounds.last().clone(),
+			VoterSetState::Paused { completed_rounds } =>
+				completed_rounds.last().clone(),
+		}
+	}
 }
 
 /// Whether we've voted already during a prior run of the program.

@@ -215,13 +215,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
+		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
-		let (validator, report_stream) = GossipValidator::new(config);
+		let (validator, report_stream) = GossipValidator::new(config, set_state);
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 

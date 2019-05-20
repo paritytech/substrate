@@ -77,7 +77,7 @@ use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
 
-use crate::{CatchUp, CompactCommit, SignedMessage};
+use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
@@ -575,11 +575,60 @@ impl<Block: BlockT> Inner<Block> {
 		Action::ProcessAndDiscard(topic, 0)
 	}
 
-	fn handle_catch_up_request(&mut self, _who: &PeerId, _request: CatchUpRequestMessage)
-		-> Action<Block::Hash>
-	{
-		// let catch_up = GossipMessage::CatchUp(());
-		Action::Discard(0)
+	fn handle_catch_up_request(
+		&mut self,
+		_who: &PeerId,
+		request: CatchUpRequestMessage,
+		set_state: &environment::SharedVoterSetState<Block>,
+	) -> (Option<GossipMessage<Block>>, Action<Block::Hash>) {
+		if request.set_id != self.local_view.set_id {
+			return (None, Action::Discard(-1));
+		}
+
+		let last_completed_round = set_state.read().last_completed_round();
+		if last_completed_round.number < request.round.0 {
+			return (None, Action::Discard(-1));
+		}
+
+		let mut prevotes = Vec::new();
+		let mut precommits = Vec::new();
+
+		for vote in last_completed_round.votes {
+			match vote.message {
+				grandpa::Message::Prevote(prevote) => {
+					prevotes.push(grandpa::SignedPrevote {
+						prevote,
+						signature: vote.signature,
+						id: vote.id,
+					});
+				},
+				grandpa::Message::Precommit(precommit) => {
+					precommits.push(grandpa::SignedPrecommit {
+						precommit,
+						signature: vote.signature,
+						id: vote.id,
+					});
+				},
+				_ => {},
+			}
+		}
+
+		let (base_hash, base_number) = last_completed_round.base;
+
+		let catch_up = CatchUp::<Block> {
+			round_number: last_completed_round.number,
+			prevotes,
+			precommits,
+			base_hash,
+			base_number,
+		};
+
+		let full_catch_up = GossipMessage::CatchUp::<Block>(FullCatchUpMessage {
+			set_id: request.set_id,
+			message: catch_up,
+		});
+
+		(Some(full_catch_up), Action::Discard(0))
 	}
 
 	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
@@ -611,15 +660,19 @@ impl<Block: BlockT> Inner<Block> {
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
+	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
-	pub(super) fn new(config: crate::Config) -> (GossipValidator<Block>, ReportStream) {
+	pub(super) fn new(config: crate::Config, set_state: environment::SharedVoterSetState<Block>)
+		-> (GossipValidator<Block>, ReportStream)
+	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
+			set_state,
 			report_sender: tx,
 		};
 
@@ -661,9 +714,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	pub(super) fn do_validate(&self, who: &PeerId, mut data: &[u8])
-		-> (Action<Block::Hash>, Vec<Block::Hash>)
+		-> (Action<Block::Hash>, Vec<Block::Hash>, Option<GossipMessage<Block>>)
 	{
 		let mut broadcast_topics = Vec::new();
+		let mut peer_reply = None;
+
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
 				Some(GossipMessage::VoteOrPrecommit(ref message))
@@ -680,8 +735,16 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 				Some(GossipMessage::CatchUp(ref message))
 					=> self.inner.write().validate_catch_up_message(who, message),
-				Some(GossipMessage::CatchUpRequest(request))
-					=> self.inner.write().handle_catch_up_request(who, request),
+				Some(GossipMessage::CatchUpRequest(request)) => {
+					let (reply, action) = self.inner.write().handle_catch_up_request(
+						who,
+						request,
+						&self.set_state,
+					);
+
+					peer_reply = reply;
+					action
+				}
 				None => {
 					debug!(target: "afg", "Error decoding message");
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
@@ -692,7 +755,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			}
 		};
 
-		(action, broadcast_topics)
+		(action, broadcast_topics, peer_reply)
 	}
 }
 
@@ -720,11 +783,15 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn validate(&self, context: &mut ValidatorContext<Block>, who: &PeerId, data: &[u8])
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
-		let (action, broadcast_topics) = self.do_validate(who, data);
+		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
 		// not with lock held!
 		for topic in broadcast_topics {
 			context.send_topic(who, topic, false);
+		}
+
+		if let Some(reply) = peer_reply {
+			context.send_message(who, reply.encode());
 		}
 
 		if let Some(peer) = self.inner.read().peers.peer(who) {
@@ -736,8 +803,9 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				let request = GossipMessage::<Block>::CatchUpRequest(CatchUpRequestMessage {
 					set_id: peer.view.set_id,
 					round: Round(peer.view.round.0 - 1), // peer.view.round is > 0
-				}).encode();
-				context.send_message(who, request);
+				});
+
+				context.send_message(who, request.encode());
 			}
 		}
 
