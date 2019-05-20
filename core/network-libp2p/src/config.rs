@@ -20,6 +20,7 @@ use libp2p::identity::{Keypair, secp256k1, ed25519};
 use libp2p::{Multiaddr, multiaddr::Protocol};
 use std::error::Error;
 use std::{io::{self, Write}, iter, fs, net::Ipv4Addr, path::{Path, PathBuf}};
+use zeroize::Zeroize;
 
 /// Network service configuration.
 #[derive(Clone)]
@@ -167,7 +168,8 @@ impl NodeKeyConfig {
 			Secp256k1(Secret::File(f)) =>
 				get_secret(f,
 					|mut b| secp256k1::SecretKey::from_bytes(&mut b),
-					secp256k1::SecretKey::generate)
+					secp256k1::SecretKey::generate,
+					|b| b.to_bytes().to_vec())
 				.map(secp256k1::Keypair::from)
 				.map(Keypair::Secp256k1),
 
@@ -180,7 +182,8 @@ impl NodeKeyConfig {
 			Ed25519(Secret::File(f)) =>
 				get_secret(f,
 					|mut b| ed25519::SecretKey::from_bytes(&mut b),
-					ed25519::SecretKey::generate)
+					ed25519::SecretKey::generate,
+					|b| b.as_ref().to_vec())
 				.map(ed25519::Keypair::from)
 				.map(Keypair::Ed25519),
 		}
@@ -190,13 +193,13 @@ impl NodeKeyConfig {
 /// Load a secret key from a file, if it exists, or generate a
 /// new secret key and write it to that file. In either case,
 /// the secret key is returned.
-fn get_secret<P, F, G, E, K>(file: P, parse: F, generate: G) -> io::Result<K>
+fn get_secret<P, F, G, E, W, K>(file: P, parse: F, generate: G, serialize: W) -> io::Result<K>
 where
 	P: AsRef<Path>,
 	F: for<'r> FnOnce(&'r mut [u8]) -> Result<K, E>,
 	G: FnOnce() -> K,
 	E: Error + Send + Sync + 'static,
-	K: AsRef<[u8]>
+	W: Fn(&K) -> Vec<u8>,
 {
 	std::fs::read(&file)
 		.and_then(|mut sk_bytes|
@@ -206,7 +209,9 @@ where
 			if e.kind() == io::ErrorKind::NotFound {
 				file.as_ref().parent().map_or(Ok(()), fs::create_dir_all)?;
 				let sk = generate();
-				write_secret_file(file, sk.as_ref())?;
+				let mut sk_vec = serialize(&sk);
+				write_secret_file(file, &sk_vec)?;
+				sk_vec.zeroize();
 				Ok(sk)
 			} else {
 				Err(e)
@@ -257,7 +262,7 @@ mod tests {
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
 		match kp {
 			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
-			Keypair::Secp256k1(p) => p.secret().as_ref().iter().cloned().collect(),
+			Keypair::Secp256k1(p) => p.secret().to_bytes().to_vec(),
 			_ => panic!("Unexpected keypair.")
 		}
 	}
