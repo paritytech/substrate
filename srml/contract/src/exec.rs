@@ -107,8 +107,7 @@ pub trait Ext {
 	fn now(&self) -> &MomentOf<Self::T>;
 
 	/// Returns a reference to the random seed for the current block.
-	/// TODO: Rename to `random`
-	fn random_seed(&self, subject: &[u8]) -> SeedOf<Self::T>;
+	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
 	/// Deposit an event with the given topics.
 	///
@@ -640,7 +639,7 @@ where
 		self.value_transferred
 	}
 
-	fn random_seed(&self, subject: &[u8]) -> SeedOf<T> {
+	fn random(&self, subject: &[u8]) -> SeedOf<T> {
 		system::Module::<T>::random(subject)
 	}
 

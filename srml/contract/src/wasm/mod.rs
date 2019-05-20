@@ -276,7 +276,7 @@ mod tests {
 			&1111
 		}
 
-		fn random_seed(&self, subject: &[u8]) -> H256 {
+		fn random(&self, subject: &[u8]) -> H256 {
 			H256::from_slice(subject)
 		}
 
@@ -1115,7 +1115,7 @@ mod tests {
 		.unwrap();
 	}
 
-	const CODE_RANDOM_SEED: &str = r#"
+	const CODE_RANDOM: &str = r#"
 (module
 	(import "env" "ext_random" (func $ext_random (param i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
@@ -1136,7 +1136,7 @@ mod tests {
 		;; This stores the block random seed in the scratch buffer
 		(call $ext_random
 			(i32.const 40) ;; Pointer in memory to the start of the subject buffer
-			(i32.const 32) ;; The subject buffer
+			(i32.const 32) ;; The subject buffer's length
 		)
 
 		;; assert $ext_scratch_size == 32
@@ -1154,7 +1154,7 @@ mod tests {
 			(i32.const 32)		;; Count of bytes to copy.
 		)
 
-		;; return it from the contract
+		;; return the data from the contract
 		(call $ext_return
 			(i32.const 8)
 			(i32.const 32)
@@ -1179,7 +1179,7 @@ mod tests {
 
 		let mut return_buf = Vec::new();
 		execute(
-			CODE_RANDOM_SEED,
+			CODE_RANDOM,
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
@@ -1187,6 +1187,7 @@ mod tests {
 		)
 		.unwrap();
 
+		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
 			&return_buf,
 			&hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")

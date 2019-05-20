@@ -531,7 +531,7 @@ define_env!(Env, <E: Ext>,
 	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
 		// TODO: limit `subject_len`.
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
-		ctx.scratch_buf = ctx.ext.random_seed(&subject_buf).encode();
+		ctx.scratch_buf = ctx.ext.random(&subject_buf).encode();
 		Ok(())
 	},
 
