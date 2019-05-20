@@ -177,6 +177,10 @@ impl<
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		self.dref().as_changes_trie_root()
 	}
+
+	fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &[u8])> {
+		self.dref().as_pre_runtime()
+	}
 }
 
 impl<Hash: Encode, AuthorityId: Encode, SealSignature: Encode> Encode for DigestItem<Hash, AuthorityId, SealSignature> {
@@ -228,6 +232,14 @@ impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member, SealSignature: Codec
 	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
 		match *self {
 			DigestItemRef::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
+			_ => None,
+		}
+	}
+
+	/// Cast this digest item into `PreRuntime`
+	pub fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
+		match *self {
+			DigestItemRef::PreRuntime(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}

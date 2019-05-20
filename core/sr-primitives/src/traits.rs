@@ -708,11 +708,14 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// `AuthorityChange` payload.
 	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
-	/// Returns Some if the entry is the `AuthoritiesChange` entry.
+	/// Returns `Some` if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
 
-	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
+	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
+
+	/// Returns `Some` if this entry is the `PreRuntime` entry.
+	fn as_pre_runtime(&self) -> Option<(super::ConsensusEngineId, &[u8])>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
