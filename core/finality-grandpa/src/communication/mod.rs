@@ -416,6 +416,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 					}
 				},
 				_ => {
+					// FIXME: handle catch up replies and requests?
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;
 				}

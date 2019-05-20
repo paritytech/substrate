@@ -77,7 +77,7 @@ use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
 
-use crate::{CompactCommit, SignedMessage};
+use crate::{CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
@@ -227,6 +227,10 @@ pub(super) enum GossipMessage<Block: BlockT> {
 	Commit(FullCommitMessage<Block>),
 	/// A neighbor packet. Not repropagated.
 	Neighbor(VersionedNeighborPacket<NumberFor<Block>>),
+	/// Grandpa catch up request message with round and set info. Not repropagated.
+	CatchUpRequest(CatchUpRequestMessage),
+	/// Grandpa catch up message with round and set info. Not repropagated.
+	CatchUp(FullCatchUpMessage<Block>),
 }
 
 impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Block> {
@@ -279,6 +283,24 @@ impl<N> VersionedNeighborPacket<N> {
 			VersionedNeighborPacket::V1(p) => p,
 		}
 	}
+}
+
+/// A catch up request for a given round (or any further round) localized by set id.
+#[derive(Debug, Encode, Decode)]
+pub(super) struct CatchUpRequestMessage {
+	/// The round that we want to catch up to.
+	pub(super) round: Round,
+	/// The voter set ID this message is from.
+	pub(super) set_id: SetId,
+}
+
+/// Network level catch up message with topic information.
+#[derive(Debug, Encode, Decode)]
+pub(super) struct FullCatchUpMessage<Block: BlockT> {
+	/// The voter set ID this message is from.
+	pub(super) set_id: SetId,
+	/// The compact commit message.
+	pub(super) message: CatchUp<Block>,
 }
 
 /// Misbehavior that peers can perform.
@@ -546,6 +568,20 @@ impl<Block: BlockT> Inner<Block> {
 		Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_COMMIT)
 	}
 
+	fn validate_catch_up_message(&mut self, _who: &PeerId, full: &FullCatchUpMessage<Block>)
+		-> Action<Block::Hash>
+	{
+		let topic = super::global_topic::<Block>(full.set_id.0);
+		Action::ProcessAndDiscard(topic, 0)
+	}
+
+	fn handle_catch_up_request(&mut self, _who: &PeerId, _request: CatchUpRequestMessage)
+		-> Action<Block::Hash>
+	{
+		// let catch_up = GossipMessage::CatchUp(());
+		Action::Discard(0)
+	}
+
 	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
 		-> (Vec<Block::Hash>, Action<Block::Hash>)
 	{
@@ -642,6 +678,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 					broadcast_topics = topics;
 					action
 				}
+				Some(GossipMessage::CatchUp(ref message))
+					=> self.inner.write().validate_catch_up_message(who, message),
+				Some(GossipMessage::CatchUpRequest(request))
+					=> self.inner.write().handle_catch_up_request(who, request),
 				None => {
 					debug!(target: "afg", "Error decoding message");
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
@@ -685,6 +725,20 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		// not with lock held!
 		for topic in broadcast_topics {
 			context.send_topic(who, topic, false);
+		}
+
+		if let Some(peer) = self.inner.read().peers.peer(who) {
+			if peer.view.set_id == self.inner.read().local_view.set_id &&
+				peer.view.round.0.saturating_sub(2) > self.inner.read().local_view.round.0
+			{
+				// send catch up request
+				// FIXME: track pending requests
+				let request = GossipMessage::<Block>::CatchUpRequest(CatchUpRequestMessage {
+					set_id: peer.view.set_id,
+					round: Round(peer.view.round.0 - 1), // peer.view.round is > 0
+				}).encode();
+				context.send_message(who, request);
+			}
 		}
 
 		match action {
@@ -757,6 +811,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					&& Some(full.message.target_number) > peer_best_commit
 				}
 				Some(GossipMessage::Neighbor(_)) => false,
+				Some(GossipMessage::CatchUpRequest(_)) => false,
+				Some(GossipMessage::CatchUp(_)) => false,
 				Some(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
 			}
 		})

@@ -132,6 +132,13 @@ pub type PrimaryPropose<Block> = grandpa::PrimaryPropose<<Block as BlockT>::Hash
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
 pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+/// A catch up message for this chain's block type.
+pub type CatchUp<Block> = grandpa::CatchUp<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId
+>;
 /// A commit message for this chain's block type.
 pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
