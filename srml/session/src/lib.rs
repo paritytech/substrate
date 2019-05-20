@@ -165,8 +165,11 @@ decl_module! {
 		/// This doesn't take effect until the next session.
 		fn set_key(origin, key: T::SessionKey) {
 			let who = ensure_signed(origin)?;
-			// set new value for next session
-			<NextKeyFor<T>>::insert(who, key);
+			if <KeyFilterMap<T>>::get(&key) == None {
+				// set new value for next session
+				<NextKeyFor<T>>::insert(who.clone(), key.clone());
+				<KeyFilterMap<T>>::insert(key, who);
+			}
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
@@ -216,6 +219,7 @@ decl_storage! {
 		NextKeyFor build(|config: &GenesisConfig<T>| {
 			config.keys.clone()
 		}): map T::AccountId => Option<T::SessionKey>;
+		KeyFilterMap: map T::SessionKey => Option<T::AccountId>;
 		/// The next session length.
 		NextSessionLength: Option<T::BlockNumber>;
 	}
@@ -322,6 +326,10 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
+		let key = <NextKeyFor<T>>::get(who);
+		if key.is_some() {
+			<KeyFilterMap<T>>::remove(&key.unwrap());
+		}
 		<NextKeyFor<T>>::remove(who);
 	}
 }
