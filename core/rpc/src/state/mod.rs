@@ -57,7 +57,7 @@ pub trait StateApi<Hash> {
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
@@ -70,6 +70,40 @@ pub trait StateApi<Hash> {
 	/// Returns the size of a storage entry at a block's state.
 	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
 	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<u64>>;
+
+	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
+	#[rpc(name = "state_getChildKeys")]
+	fn child_storage_keys(
+		&self,
+		child_storage_key: StorageKey,
+		prefix: StorageKey,
+		hash: Option<Hash>
+	) -> Result<Vec<StorageKey>>;
+
+	/// Returns a child storage entry at a specific block's state.
+	#[rpc(name = "state_getChildStorage")]
+	fn child_storage(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey, hash: Option<Hash>
+	) -> Result<Option<StorageData>>;
+
+	/// Returns the hash of a child storage entry at a block's state.
+	#[rpc(name = "state_getChildStorageHash")]
+	fn child_storage_hash(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey, hash: Option<Hash>
+	) -> Result<Option<Hash>>;
+
+	/// Returns the size of a child storage entry at a block's state.
+	#[rpc(name = "state_getChildStorageSize")]
+	fn child_storage_size(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		hash: Option<Hash>
+	) -> Result<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[rpc(name = "state_getMetadata")]
@@ -84,7 +118,12 @@ pub trait StateApi<Hash> {
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
 	#[rpc(name = "state_queryStorage")]
-	fn query_storage(&self, keys: Vec<StorageKey>, block: Hash, hash: Option<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
+	fn query_storage(
+		&self,
+		keys: Vec<StorageKey>,
+		block: Hash,
+		hash: Option<Hash>
+	) -> Result<Vec<StorageChangeSet<Hash>>>;
 
 	/// New runtime version subscription
 	#[pubsub(
@@ -322,6 +361,50 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 
 	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<u64>> {
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
+	}
+
+	fn child_storage(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Option<StorageData>> {
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying child storage at {:?} for key {}", block, HexDisplay::from(&key.0));
+		Ok(self.client.child_storage(&BlockId::Hash(block), &child_storage_key, &key)?)
+	}
+
+	fn child_storage_keys(
+		&self,
+		child_storage_key: StorageKey,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Vec<StorageKey>> {
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying child storage keys at {:?}", block);
+		Ok(self.client.child_storage_keys(&BlockId::Hash(block), &child_storage_key, &key_prefix)?)
+	}
+
+	fn child_storage_hash(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Option<Block::Hash>> {
+		use runtime_primitives::traits::{Hash, Header as HeaderT};
+		Ok(
+			self.child_storage(child_storage_key, key, block)?
+				.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
+		)
+	}
+
+	fn child_storage_size(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Option<u64>> {
+		Ok(self.child_storage(child_storage_key, key, block)?.map(|x| x.0.len() as u64))
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes> {
