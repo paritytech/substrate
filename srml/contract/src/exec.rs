@@ -106,7 +106,7 @@ pub trait Ext {
 	/// Returns a reference to the timestamp of the current block
 	fn now(&self) -> &MomentOf<Self::T>;
 
-	/// Returns a reference to the random seed for the current block.
+	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
 	/// Deposit an event with the given topics.

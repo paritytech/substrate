@@ -527,7 +527,11 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Load the latest block RNG seed into the scratch buffer
+	/// Stores  therandom number for the current block with the given subject into the scratch
+	/// buffer.
+	///
+	/// The data is encoded as T::Balance. The current contents of the scratch buffer are
+	/// overwritten.
 	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
 		// TODO: limit `subject_len`.
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
