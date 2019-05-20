@@ -530,7 +530,7 @@ define_env!(Env, <E: Ext>,
 	// Stores the random number for the current block for the given subject into the scratch
 	// buffer.
 	//
-	// The data is encoded as T::Balance. The current contents of the scratch buffer are
+	// The data is encoded as T::Hash. The current contents of the scratch buffer are
 	// overwritten.
 	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
 		// The length of a subject can't exceed `max_subject_len`.
