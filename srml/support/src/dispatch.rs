@@ -1234,8 +1234,9 @@ macro_rules! __check_reserved_fn_name {
 	};
 	() => {};
 	(@compile_error $ident:ident) => {
-		compile_error!(concat!("Invalid call: `", stringify!($ident),
-		"`, name is reserved and doesn't match expected signature"));
+		compile_error!(concat!("Invalid call fn name: `", stringify!($ident),
+		"`, name is reserved and doesn't match expected signature, please refer to `decl_module!`",
+		" documentation to see the appropriate usage, or rename it to an unreserved keyword."));
 	};
 }
 
@@ -1392,31 +1393,8 @@ mod tests {
 	}
 }
 
-#[cfg(test)]
-mod reserved_keyword {
-	/// ```compile_fail
-	/// pub use srml_support::dispatch::Result;
-	///
-	/// pub trait Trait {
-	/// 	type Origin;
-	/// 	type BlockNumber: Into<u32>;
-	/// }
-	///
-	/// pub mod system {
-	/// 	use srml_support::dispatch::Result;
-	///
-	/// 	pub fn ensure_root<R>(_: R) -> Result {
-	/// 		Ok(())
-	/// 	}
-	/// }
-	///
-	/// srml_support::decl_module! {
-	/// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-	/// 		/// Hi, this is a comment.
-	/// 		fn on_initialize() -> Result { unreachable!() }
-	/// 	}
-	/// }
-	/// ```
-	#[allow(unused)]
-	struct TestDeclModule;
+#[test]
+fn reserved_keyword() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/reserved_keyword/*.rs");
 }

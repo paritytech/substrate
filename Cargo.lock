@@ -3650,6 +3650,7 @@ dependencies = [
  "srml-support-procedural 2.0.0",
  "srml-system 2.0.0",
  "substrate-inherents 2.0.0",
+ "trybuild 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
