@@ -527,7 +527,7 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	/// Stores  therandom number for the current block with the given subject into the scratch
+	/// Stores the random number for the current block for the given subject into the scratch
 	/// buffer.
 	///
 	/// The data is encoded as T::Balance. The current contents of the scratch buffer are
