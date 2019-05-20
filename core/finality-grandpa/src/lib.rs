@@ -51,8 +51,6 @@
 //! number (this is num(signal) + N). When finalizing a block, we either apply
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
-#![forbid(warnings)]
-#![allow(deprecated)] // FIXME #2532: remove once the refactor is done https://github.com/paritytech/substrate/issues/2532
 
 use futures::prelude::*;
 use log::{debug, info, warn};
