@@ -188,8 +188,19 @@ impl<C: Components> StartRPC<Self> for C where
 		};
 
 		Ok((
-			maybe_start_server(rpc_http, |address| rpc::start_http(address, rpc_cors.as_ref(), handler()))?,
-			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, rpc_ws_max_connections, rpc_cors.as_ref(), handler()))?.map(Mutex::new),
+			maybe_start_server(
+				rpc_http,
+				|address| rpc::start_http(address, rpc_cors.as_ref(), handler()),
+			)?,
+			maybe_start_server(
+				rpc_ws,
+				|address| rpc::start_ws(
+					address,
+					rpc_ws_max_connections,
+					rpc_cors.as_ref(),
+					handler(),
+				),
+			)?.map(Mutex::new),
 		))
 	}
 }
