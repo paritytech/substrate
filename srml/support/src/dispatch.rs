@@ -1392,9 +1392,3 @@ mod tests {
 		<Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
 	}
 }
-
-#[test]
-fn reserved_keyword() {
-    let t = trybuild::TestCases::new();
-    t.compile_fail("tests/reserved_keyword/*.rs");
-}
