@@ -151,7 +151,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					let has_child_wc = !cw.is_empty();
 					subscribers.extend(cw.iter());
 
-					if has_wildcard || has_child_wc || listeners.is_some() {
+					if has_child_wc || listeners.is_some() {
 						changes.push((k, v.map(StorageData)));
 					}
 				}
@@ -297,16 +297,21 @@ mod tests {
 	use futures::Stream;
 	use ::std::iter::{empty, Empty};
 
-  type TestChangeSet = (Vec<(StorageKey, Option<StorageData>)>,
-    Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>);
+	type TestChangeSet = (Vec<(StorageKey, Option<StorageData>)>,
+		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>);
 	#[cfg(test)]
 	impl From<TestChangeSet> for StorageChangeSet {
 		fn from(changes: TestChangeSet) -> Self {
+			// warning hardcoded child trie wildcard to test upon
+			let child_filters = Some([
+				(StorageKey(vec![4]), None),
+				(StorageKey(vec![5]), None),
+			].into_iter().cloned().collect());
 			StorageChangeSet {
 				changes: Arc::new(changes.0),
 				child_changes: Arc::new(changes.1),
 				filter: None,
-				child_filters: None,
+				child_filters,
 			}
 		}
 	}
@@ -324,7 +329,7 @@ mod tests {
 	fn triggering_change_should_notify_wildcard_listeners() {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
-    let child_filter = [(StorageKey(vec![4]), None)];
+		let child_filter = [(StorageKey(vec![4]), None)];
 		let mut recv = notifications.listen(None, Some(&child_filter[..])).wait();
 
 		// when
@@ -350,17 +355,17 @@ mod tests {
 		], vec![(StorageKey(vec![4]), vec![
 			(StorageKey(vec![5]), Some(StorageData(vec![4]))),
 			(StorageKey(vec![6]), None),
-    ])]).into())));
+		])]).into())));
 	}
 
 	#[test]
 	fn should_only_notify_interested_listeners() {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
-    let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
+		let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
 		let mut recv1 = notifications.listen(Some(&[StorageKey(vec![1])]), None).wait();
 		let mut recv2 = notifications.listen(Some(&[StorageKey(vec![2])]), None).wait();
-		let mut recv3 = notifications.listen(None, Some(&child_filter)).wait();
+		let mut recv3 = notifications.listen(Some(&[]), Some(&child_filter)).wait();
 
 		// when
 		let changeset = vec![
@@ -387,7 +392,9 @@ mod tests {
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 		], vec![]).into())));
 		assert_eq!(recv3.next().unwrap(), Ok((Hash::from_low_u64_be(1), (vec![],
-		vec![]).into())));
+		vec![
+			(StorageKey(vec![4]), vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))]),
+		]).into())));
 
 	}
 
