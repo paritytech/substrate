@@ -285,7 +285,7 @@ fn genesis_storage(
 
 	let mut child_storage = ChildrenStorageOverlay::default();
 	// warning no prefix probably next subtrie creation will go in same keyspace
-	let subtrie = SubTrie::new(&mut TestKeySpaceGenerator::new(), &[], &b"test"[..]);
+	let subtrie = SubTrie::new(&mut TestKeySpaceGenerator::new(), &b"test"[..]);
 	child_storage.insert(
 		subtrie.keyspace().clone(),
 		(vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect(), subtrie)

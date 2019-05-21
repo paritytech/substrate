@@ -120,7 +120,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		unreachable!("basic not used for child trie");
 	}
 
-	fn child_trie(&self, _prefix: &[u8], _storage_key: &[u8]) -> Option<SubTrie> {
+	fn child_trie(&self, _storage_key: &[u8]) -> Option<SubTrie> {
 		unreachable!("basic not used for child trie");
 	}
 

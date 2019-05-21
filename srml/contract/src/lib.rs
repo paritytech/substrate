@@ -633,10 +633,16 @@ decl_storage! {
 	}
 }
 
+fn prefixed_child_trie(trie_id: &[u8]) -> Vec<u8> {
+	let mut res = CHILD_CONTRACT_PREFIX.to_vec();
+	res.extend_from_slice(trie_id);
+	res
+}
+
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
-			child::child_trie(&CHILD_CONTRACT_PREFIX, &info.trie_id[..])
+			child::child_trie(&prefixed_child_trie(&info.trie_id[..])[..])
 				.map(|subtrie|child::kill_storage(&subtrie));
 		}
 		<ContractInfoOf<T>>::remove(who);

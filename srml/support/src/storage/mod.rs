@@ -495,8 +495,8 @@ where
 pub mod child {
 	use super::{runtime_io, Codec, Decode, Vec, IncrementalChildInput, SubTrie, SubTrieReadRef};
 
-	pub fn child_trie(prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
-		runtime_io::child_trie(prefix, storage_key)
+	pub fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+		runtime_io::child_trie(storage_key)
 	}
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.

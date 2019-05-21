@@ -186,15 +186,13 @@ pub mod tests {
 	use trie::{TrieMut, TrieDBMut, PrefixedMemoryDB, KeySpacedDBMut};
 	use super::*;
 
-	/// TestChildPrefix
-	const TCP: &'static [u8] = &[];
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 
 		let mut ks_gen = TestKeySpaceGenerator::new();
-		let subtrie1 = SubTrie::new(&mut ks_gen, TCP, &b"sub1"[..]);
+		let subtrie1 = SubTrie::new(&mut ks_gen, &b"sub1"[..]);
 		let mut sub_root = H256::default();
 		{
 			let mut kmdb = KeySpacedDBMut::new(&mut mdb, subtrie1.keyspace());

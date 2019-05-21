@@ -78,7 +78,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	) -> Option<R> {
 		// note that we use empty prefix which result in a subtrie that requires
 		// key + prefix but the subtrie is quickly drop so it is not an issue).
-		self.ext.child_trie(&[], prefixed_storage_key).map(|s|f(self,s))
+		self.ext.child_trie(prefixed_storage_key).map(|s|f(self,s))
 	}
 }
 

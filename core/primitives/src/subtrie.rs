@@ -29,7 +29,7 @@ pub type KeySpace = Vec<u8>;
 /// info related to parent trie.
 /// Full key of child trie storage location
 /// and size of the prefix of this location.
-pub type ParentTrie = (Vec<u8>, usize);
+pub type ParentTrie = Vec<u8>;
 
 /// temp function to keyspace data above the db level
 pub fn keyspace_in_prefix(ks: &KeySpace, prefix: &[u8], dst: &mut[u8]) {
@@ -123,28 +123,27 @@ pub struct SubTrie {
 }
 impl SubTrie {
 	/// map parent key to some isolated space
-	pub fn prefix_parent_key(prefix: &[u8], parent: &[u8]) -> ParentTrie {
+	pub fn prefix_parent_key(parent: &[u8]) -> ParentTrie {
 		let mut key_full = CHILD_STORAGE_KEY_PREFIX.to_vec();
-		key_full.extend_from_slice(prefix);
 		key_full.extend_from_slice(parent);
-		(key_full, CHILD_STORAGE_KEY_PREFIX.len() + prefix.len())
+		key_full
 	}
-	/// get parent key with prefix
+	/// get parent key without prefix
 	/// will move to `ParentTrie` if ParentTrie become its own struct
 	/// in the future.
-	pub fn prefix_parent_key_slice(p: &ParentTrie) -> &[u8] {
-		&p.0[CHILD_STORAGE_KEY_PREFIX.len()..]
+	pub fn parent_key_slice(p: &ParentTrie) -> &[u8] {
+		&p[CHILD_STORAGE_KEY_PREFIX.len()..]
 	}
 	/// get full parent key
 	/// will move to `ParentTrie` if ParentTrie become its own struct
 	/// in the future.
 	pub fn raw_parent_key_vec(p: &ParentTrie) -> &Vec<u8> {
-		&p.0
+		&p
 	}
 
 	/// instantiate new subtrie without root value
-	pub fn new(keyspace_builder: &mut impl KeySpaceGenerator, prefix: &[u8], parent: &[u8]) -> Self {
-		let parent = Self::prefix_parent_key(prefix, parent);
+	pub fn new(keyspace_builder: &mut impl KeySpaceGenerator, parent: &[u8]) -> Self {
+		let parent = Self::prefix_parent_key(parent);
 		SubTrie {
 			keyspace: keyspace_builder.generate_keyspace(),
 			root: Default::default(),
@@ -157,8 +156,8 @@ impl SubTrie {
 		SubTrieReadRef::new(&self.keyspace, self.root.as_ref().map(|r|&r[..]))
 	}
 	/// instantiate subtrie from a read node value
-	pub fn decode_node(encoded_node: &[u8], prefix: &[u8], parent: &[u8]) -> Option<Self> {
-		let parent = Self::prefix_parent_key(prefix, parent);
+	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
+		let parent = Self::prefix_parent_key(parent);
 		Self::decode_node_with_parent(encoded_node, parent)
 	}
 	/// instantiate subtrie from a read node value
@@ -190,21 +189,13 @@ impl SubTrie {
 		Self::raw_parent_key_vec(&self.parent)
 	}
 	/// parent trie key with prefix
-	pub fn parent_and_prefix_slice(&self) -> &[u8] {
-		Self::prefix_parent_key_slice(&self.parent)
-	}
-
-	/// parent trie key with prefix
-	pub fn parent_and_prefix(&self) -> (&[u8], &[u8]) {
-		(
-			&self.parent.0[CHILD_STORAGE_KEY_PREFIX.len()..self.parent.1],
-			&self.parent.0[self.parent.1..],
-		)
+	pub fn parent_slice(&self) -> &[u8] {
+		Self::parent_key_slice(&self.parent)
 	}
 
 	/// parent trie key
 	pub fn parent_key(&self) -> &[u8] {
-		&self.parent.0[self.parent.1..]
+		&self.parent[CHILD_STORAGE_KEY_PREFIX.len()..]
 	}
 	/// access to root value (as it was on build)
 	pub fn root_initial_value(&self) -> &Option<Vec<u8>> {

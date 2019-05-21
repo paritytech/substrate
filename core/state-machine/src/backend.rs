@@ -59,9 +59,9 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// get SubTrie information
-	fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Result<Option<SubTrie>, Self::Error> {
-		let prefixed_key = SubTrie::prefix_parent_key(prefix, storage_key);
-		Ok(self.storage(&prefixed_key.0)?
+	fn child_trie(&self, storage_key: &[u8]) -> Result<Option<SubTrie>, Self::Error> {
+		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
+		Ok(self.storage(&prefixed_key[..])?
 			.and_then(|n|SubTrie::decode_node_with_parent(&n[..], prefixed_key)))
 	}
 

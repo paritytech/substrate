@@ -138,11 +138,11 @@ impl OverlayedChanges {
 	}
 
 	/// returns a child trie if present
-	pub fn child_trie(&self, prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
+	pub fn child_trie(&self, storage_key: &[u8]) -> Option<SubTrie> {
 		
-		let prefixed_storage_key = SubTrie::prefix_parent_key(prefix, storage_key);
+		let prefixed_storage_key = SubTrie::prefix_parent_key(storage_key);
 		if let Some(keyspace) = self.prospective.pending_child.get(
-			SubTrie::prefix_parent_key_slice(&prefixed_storage_key)
+			SubTrie::parent_key_slice(&prefixed_storage_key)
 		) {
 			if let Some(map) = self.prospective.children.get(keyspace) {
 				 return Some(map.2.clone());
@@ -150,7 +150,7 @@ impl OverlayedChanges {
 		}
 
 		if let Some(keyspace) = self.committed.pending_child.get(
-			SubTrie::prefix_parent_key_slice(&prefixed_storage_key)
+			SubTrie::parent_key_slice(&prefixed_storage_key)
 		) {
 			if let Some(map) = self.committed.children.get(keyspace) {
 				 return Some(map.2.clone());
@@ -185,7 +185,7 @@ impl OverlayedChanges {
 		let pc = &mut self.prospective.pending_child;
 		let map_entry = p.entry(subtrie.keyspace().clone())
 			.or_insert_with(||{
-				pc.insert(subtrie.parent_and_prefix_slice().to_vec(), subtrie.keyspace().clone());
+				pc.insert(subtrie.parent_slice().to_vec(), subtrie.keyspace().clone());
 				(Default::default(), Default::default(), subtrie.clone())
 			});
 		map_entry.1.insert(key, val);

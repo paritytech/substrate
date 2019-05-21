@@ -18,7 +18,7 @@
 
 use super::{
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Module, Trait, TrieId,
-	TrieIdGenerator, CHILD_CONTRACT_PREFIX, TempKeyspaceGen,
+	TrieIdGenerator, TempKeyspaceGen, prefixed_child_trie,
 };
 use crate::exec::StorageKey;
 use rstd::cell::RefCell;
@@ -80,7 +80,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		// TODO pass optional SubTrie or change def to use subtrie (put the subtrie in cache (rc one of
 		// the overlays)) EMCH TODO create an issue for a following pr
 		trie_id.and_then(|id|{
-			child::child_trie(&CHILD_CONTRACT_PREFIX, &id).and_then(|subtrie|
+			child::child_trie(&prefixed_child_trie(&id)[..]).and_then(|subtrie|
 			child::get_raw(subtrie.node_ref(), &blake2_256(location))
 		)})
 	}
@@ -146,14 +146,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				// TODO put in cache (there is also a scheme change to do to avoid indirection)
 				// TODO also switch to using address instead of trie_id that way no need to store
 				// trie_id (subtrie field at address).
-				let subtrie = child::child_trie(&CHILD_CONTRACT_PREFIX, &new_info.trie_id[..]).unwrap_or_else(||{
+				let p_key = prefixed_child_trie(&new_info.trie_id);
+				let subtrie = child::child_trie(&p_key).unwrap_or_else(|| {
 					// TODO EMCH this is utterly wrong, we got to merge child and contract info to use
 					// directly KeySpaceGenerator
 					SubTrie::new(
 						&mut TempKeyspaceGen(&new_info.trie_id[..]),
 						//TrieIdFromParentCounter(&address),
-						CHILD_CONTRACT_PREFIX,
-						&new_info.trie_id[..]
+						&p_key[..]
 					)
 				});
 

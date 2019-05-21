@@ -226,9 +226,6 @@ mod tests {
 	use primitives::subtrie::{TestKeySpaceGenerator};
 	use primitives::{Blake2Hasher};
 
-	/// TestChildPrefix
-	const TCP: &'static [u8] = &[];
-
 	fn test_proving<'a>(trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
 		ProvingBackend::new(trie_backend)
 	}
@@ -291,8 +288,8 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
 		let mut ks_gen = TestKeySpaceGenerator::new();
-		let subtrie1 = SubTrie::new(&mut ks_gen, TCP, b"sub1");
-		let subtrie2 = SubTrie::new(&mut ks_gen, TCP, b"sub2");
+		let subtrie1 = SubTrie::new(&mut ks_gen, b"sub1");
+		let subtrie2 = SubTrie::new(&mut ks_gen, b"sub2");
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
 			.chain((28..65).map(|i| (Some(subtrie1.clone()), vec![i], Some(vec![i]))))
 			.chain((10..15).map(|i| (Some(subtrie2.clone()), vec![i], Some(vec![i]))))
@@ -340,7 +337,7 @@ mod tests {
 		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
 		let proving = ProvingBackend::new(&trie);
-		let subtrie1 = proving.child_trie(TCP, b"sub1").unwrap().unwrap();
+		let subtrie1 = proving.child_trie(b"sub1").unwrap().unwrap();
 		assert_eq!(proving.child_storage(subtrie1.node_ref(), &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
@@ -348,7 +345,7 @@ mod tests {
 			in_memory_root.into(),
 			proof
 		).unwrap();
-		let subtrie1 = proof_check.child_trie(TCP, b"sub1").unwrap().unwrap();
+		let subtrie1 = proof_check.child_trie(b"sub1").unwrap().unwrap();
 		assert_eq!(
 			proof_check.child_storage(subtrie1.node_ref(), &[64]).unwrap().unwrap(),
 			vec![64]

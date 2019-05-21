@@ -393,9 +393,9 @@ impl StorageApi for () {
 	}
 
 	/// get child trie at storage key location
-	fn child_trie(prefix: &[u8], storage_key: &[u8]) -> Option<SubTrie> {
-		let prefixed_key = SubTrie::prefix_parent_key(prefix, storage_key);
-		let prefixed_key_cat = SubTrie::prefix_parent_key_slice(&prefixed_key);
+	fn child_trie(storage_key: &[u8]) -> Option<SubTrie> {
+		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
+		let prefixed_key_cat = SubTrie::parent_key_slice(&prefixed_key);
 		storage(prefixed_key_cat)
 			.and_then(|enc_node|SubTrie::decode_node_with_parent(&enc_node, prefixed_key))
 	}
@@ -459,7 +459,7 @@ impl StorageApi for () {
 	}
 
 	fn set_child_storage(subtrie: &SubTrie, key: &[u8], value: &[u8]) {
-		let storage_key = subtrie.parent_and_prefix_slice();
+		let storage_key = subtrie.parent_slice();
 		unsafe {
 			ext_set_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
@@ -478,7 +478,7 @@ impl StorageApi for () {
 	}
 
 	fn clear_child_storage(subtrie: &SubTrie, key: &[u8]) {
-		let storage_key = subtrie.parent_and_prefix_slice();
+		let storage_key = subtrie.parent_slice();
 		unsafe {
 			ext_clear_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
@@ -519,7 +519,7 @@ impl StorageApi for () {
 	}
 
 	fn kill_child_storage(subtrie: &SubTrie) {
-		let storage_key = subtrie.parent_and_prefix_slice();
+		let storage_key = subtrie.parent_slice();
 		unsafe {
 			ext_kill_child_storage.get()(
 				storage_key.as_ptr(),
@@ -537,7 +537,7 @@ impl StorageApi for () {
 	}
 
 	fn child_storage_root(subtrie: &SubTrie) -> Vec<u8> {
-		let storage_key = subtrie.parent_and_prefix_slice();
+		let storage_key = subtrie.parent_slice();
 		let mut length: u32 = 0;
 		unsafe {
 			let ptr = ext_child_storage_root.get()(

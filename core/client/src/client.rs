@@ -355,11 +355,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_trie(
 		&self,
 		id: &BlockId<Block>,
-		prefix: &[u8],
 		child_key: &StorageKey
 	) -> error::Result<Option<SubTrie>> {
 		self.state_at(id)?
-			.child_trie(prefix, &child_key.0[..])
+			.child_trie(&child_key.0[..])
 			.map_err(|e| error::Error::from_state(Box::new(e)))
 	}
 
