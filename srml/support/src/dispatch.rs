@@ -22,10 +22,7 @@ pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
 pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use srml_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
-	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
-};
+pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
 
 /// A type that cannot be instantiated.
 pub enum Never {}

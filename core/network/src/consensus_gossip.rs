@@ -266,7 +266,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId, roles: Roles) {
 		// light nodes are not valid targets for consensus gossip messages
-		if !roles.intersects(Roles::FULL | Roles::AUTHORITY) {
+		if !roles.is_full() {
 			return;
 		}
 

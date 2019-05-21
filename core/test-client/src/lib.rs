@@ -34,7 +34,8 @@ pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
 use std::{sync::Arc, collections::HashMap};
 use futures::future::FutureResult;
 use primitives::Blake2Hasher;
-use runtime_primitives::StorageOverlay;
+use primitives::storage::well_known_keys;
+use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor
 };
@@ -271,7 +272,7 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 fn genesis_storage(
 	support_changes_trie: bool,
 	extension: HashMap<Vec<u8>, Vec<u8>>
-) -> StorageOverlay {
+) -> (StorageOverlay, ChildrenStorageOverlay) {
 	let mut storage = genesis_config(support_changes_trie).genesis_map();
 	storage.extend(extension.into_iter());
 
@@ -280,7 +281,14 @@ fn genesis_storage(
 	);
 	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 	storage.extend(additional_storage_with_genesis(&block));
-	storage
+
+	let mut child_storage = ChildrenStorageOverlay::default();
+	child_storage.insert(
+		well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect(),
+		vec![(b"key".to_vec(), vec![42_u8])].into_iter().collect()
+	);
+
+	(storage, child_storage)
 }
 
 impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {
@@ -288,6 +296,7 @@ impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {
 	type RemoteReadResult = FutureResult<Option<Vec<u8>>, client::error::Error>;
 	type RemoteCallResult = FutureResult<Vec<u8>, client::error::Error>;
 	type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, client::error::Error>;
+	type RemoteBodyResult = FutureResult<Vec<Block::Extrinsic>, client::error::Error>;
 
 	fn remote_header(
 		&self,
@@ -321,6 +330,13 @@ impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {
 		&self,
 		_request: client::light::fetcher::RemoteChangesRequest<Block::Header>,
 	) -> Self::RemoteChangesResult {
+		unimplemented!("not (yet) used in tests")
+	}
+
+	fn remote_body(
+		&self,
+		_request: client::light::fetcher::RemoteBodyRequest<Block::Header>,
+	) -> Self::RemoteBodyResult {
 		unimplemented!("not (yet) used in tests")
 	}
 }
