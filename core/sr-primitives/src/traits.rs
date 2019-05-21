@@ -157,33 +157,6 @@ impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
-/// Simple trait similar to `Into`, except that it can be used to convert numerics between each
-/// other.
-pub trait As<T> {
-	/// Convert forward (ala `Into::into`).
-	fn as_(self) -> T;
-	/// Convert backward (ala `From::from`).
-	fn sa(_: T) -> Self;
-}
-
-macro_rules! impl_numerics {
-	( $( $t:ty ),* ) => {
-		$(
-			impl_numerics!($t: u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize,);
-		)*
-	};
-	( $f:ty : $t:ty, $( $rest:ty, )* ) => {
-		impl As<$t> for $f {
-			fn as_(self) -> $t { self as $t }
-			fn sa(t: $t) -> Self { t as Self }
-		}
-		impl_numerics!($f: $( $rest, )*);
-	};
-	( $f:ty : ) => {}
-}
-
-impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
-
 /// A meta trait for arithmetic.
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
