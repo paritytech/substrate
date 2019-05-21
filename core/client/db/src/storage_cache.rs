@@ -331,7 +331,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 }
 
 impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H, S, B> {
-	type Error =	S::Error;
+	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
 
