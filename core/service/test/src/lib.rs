@@ -46,7 +46,7 @@ struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,
 	authority_nodes: Vec<(u32, Arc<F::FullService>, Multiaddr)>,
 	full_nodes: Vec<(u32, Arc<F::FullService>, Multiaddr)>,
-	light_nodes: Vec<(u32, Arc<F::LightService>)>,
+	light_nodes: Vec<(u32, Arc<F::LightService>, Multiaddr)>,
 	chain_spec: FactoryChainSpec<F>,
 	base_port: u16,
 	nodes: usize,
@@ -72,7 +72,7 @@ impl<F: ServiceFactory> TestNet<F> {
 					return Ok(());
 				}
 
-				let light_ready = light_nodes.iter().all(|&(ref id, ref service)| light_predicate(*id, service));
+				let light_ready = light_nodes.iter().all(|&(ref id, ref service, _)| light_predicate(*id, service));
 				if !light_ready {
 					return Ok(());
 				}
@@ -201,29 +201,46 @@ impl<F: ServiceFactory> TestNet<F> {
 		}));
 		nodes += full as usize;
 
-		self.light_nodes.extend((nodes..nodes + light as usize).map(|index| (index as u32,
-			Arc::new(F::new_light(node_config::<F>(index as u32, &spec, Roles::LIGHT, None, base_port, &temp), executor.clone())
-					 .expect("Error creating test node service")))
-		));
+		self.light_nodes.extend((nodes..nodes + light as usize).map(|index| {
+			let node_config = node_config::<F>(index as u32, &spec, Roles::LIGHT, None, base_port, &temp);
+			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
+			let service = Arc::new(F::new_light(node_config, executor.clone())
+				.expect("Error creating test node service"));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.network().local_peer_id().into()));
+			(index as u32, service, addr)
+		}));
 		nodes += light as usize;
+
 		self.nodes = nodes;
 	}
 }
 
 pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
-	const NUM_NODES: u32 = 10;
+	const NUM_FULL_NODES: u32 = 5;
+	const NUM_LIGHT_NODES: u32 = 5;
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		let runtime = {
-			let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30400);
+			let mut network = TestNet::<F>::new(
+				&temp,
+				spec.clone(),
+				NUM_FULL_NODES,
+				NUM_LIGHT_NODES,
+				vec![],
+				30400,
+			);
 			info!("Checking star topology");
 			let first_address = network.full_nodes[0].2.clone();
 			for (_, service, _) in network.full_nodes.iter().skip(1) {
 				service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 			}
+			for (_, service, _) in network.light_nodes.iter() {
+				service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+			}
 			network.run_until_all_full(
-				|_index, service| service.network().peers().len() == NUM_NODES as usize - 1,
-				|_index, _service| unreachable!("light nodes are not created in this test; qed"),
+				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize - 1
+					+ NUM_LIGHT_NODES as usize,
+				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize,
 			);
 			network.runtime
 		};
@@ -235,16 +252,34 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
-			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES, 0, vec![], 30400);
+			let mut network = TestNet::<F>::new(
+				&temp,
+				spec,
+				NUM_FULL_NODES,
+				NUM_LIGHT_NODES,
+				vec![],
+				30400,
+			);
 			info!("Checking linked topology");
 			let mut address = network.full_nodes[0].2.clone();
-			for (_, service, node_id) in network.full_nodes.iter().skip(1) {
-				service.network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
-				address = node_id.clone();
+			let max_nodes = ::std::cmp::max(NUM_FULL_NODES, NUM_LIGHT_NODES);
+			for i in 0..max_nodes {
+				if i != 0 {
+					if let Some((_, service, node_id)) = network.full_nodes.get(i as usize) {
+						service.network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
+						address = node_id.clone();
+					}
+				}
+
+				if let Some((_, service, node_id)) = network.light_nodes.get(i as usize) {
+					service.network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
+					address = node_id.clone();
+				}
 			}
 			network.run_until_all_full(
-				|_index, service| service.network().peers().len() == NUM_NODES as usize - 1,
-				|_index, _service| unreachable!("light nodes are not created in this test; qed"),
+				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize - 1
+					+ NUM_LIGHT_NODES as usize,
+				|_index, service| service.network().peers().len() == NUM_FULL_NODES as usize,
 			);
 		}
 		temp.close().expect("Error removing temp dir");
@@ -289,7 +324,7 @@ where
 	for (_, service, _) in network.full_nodes.iter().skip(1) {
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
-	for (_, service) in network.light_nodes.iter() {
+	for (_, service, _) in network.light_nodes.iter() {
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
@@ -329,7 +364,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 	for (_, service, _) in network.full_nodes.iter() {
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
-	for (_, service) in network.light_nodes.iter() {
+	for (_, service, _) in network.light_nodes.iter() {
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.authority_nodes.iter().skip(1) {
@@ -346,7 +381,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 	for (_, service, _) in network.full_nodes.iter() {
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
-	for (_, service) in network.light_nodes.iter() {
+	for (_, service, _) in network.light_nodes.iter() {
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
