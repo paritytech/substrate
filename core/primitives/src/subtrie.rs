@@ -67,7 +67,7 @@ impl<'a> SubTrieReadRef<'a> {
 	}
 	// should not be public as it produce incomplete content
 	fn enc(&self) -> Option<SubTrieReadEncode> {
-		self.root.map(|r|SubTrieReadEncode {keyspace: self.keyspace, root: r})
+		self.root.map(|r| SubTrieReadEncode {keyspace: self.keyspace, root: r})
 	}
 }
 
