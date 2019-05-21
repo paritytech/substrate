@@ -925,7 +925,6 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn per_things_operate_in_output_type() {
 		use super::Perbill;
 
