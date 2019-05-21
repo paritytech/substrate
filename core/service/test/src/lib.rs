@@ -36,7 +36,6 @@ use service::{
 };
 use network::{multiaddr, Multiaddr, SyncProvider, ManageNetwork};
 use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
-use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
 
