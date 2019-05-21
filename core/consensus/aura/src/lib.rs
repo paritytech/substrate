@@ -28,7 +28,7 @@
 #![forbid(missing_docs, unsafe_code)]
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Compact};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 	SelectChain, well_known_cache_keys
@@ -45,26 +45,30 @@ use client::{
 	backend::AuxStore,
 };
 use aura_primitives::AURA_ENGINE_ID;
-use runtime_primitives::{generic, generic::BlockId, Justification};
+use runtime_primitives::{generic, generic::BlockId, Justification, generic::Era, AnySignature};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
 };
-use primitives::Pair;
+use primitives::{Pair, sr25519, H256};
+use keyring::AccountKeyring;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future, stream::Stream};
 use tokio::timer::Timeout;
 use log::{warn, debug, info, trace};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
-use transaction_pool::txpool::{self, Pool as TransactionPool};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
+use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation, EquivocationProof};
+
+use node_runtime::{UncheckedExtrinsic, Call, ConsensusCall};
+use srml_indices::address::Address;
 
 pub use aura_primitives::*;
 pub use consensus_common::{SyncOracle, ExtraVerification};
@@ -460,8 +464,9 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<C, B: Block, P: Pair>(
+fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 	client: &Arc<C>,
+	transaction_pool: &Arc<TransactionPool<A>>,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -470,7 +475,7 @@ fn check_header<C, B: Block, P: Pair>(
 ) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
-		C: client::backend::AuxStore,
+		C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 		P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
 {
 	let digest_item = match header.digest_mut().pop() {
@@ -519,6 +524,7 @@ fn check_header<C, B: Block, P: Pair>(
 						equivocation_proof.snd_header().hash(),
 					);
 					info!("{}", log_str);
+					submit_report_call(client, transaction_pool, equivocation_proof);
 					Err(log_str)
 				},
 				Ok(None) => Ok(CheckedHeader::Checked(header, digest_item)),
@@ -530,10 +536,42 @@ fn check_header<C, B: Block, P: Pair>(
 	}
 }
 
+/// Submit report call.
+pub fn submit_report_call<H, A, B: Block, C>(
+	client: &Arc<C>,
+	transaction_pool: &Arc<TransactionPool<A>>,
+	proof: EquivocationProof<H>,
+) where
+	A: txpool::ChainApi<Block=B>,
+	C: client::blockchain::HeaderBackend<B>,
+{
+		// let next_index = 10000u64;
+		// let signed: sr25519::Public = AccountKeyring::Alice.into();
+		// let payload = (
+		// 	Compact::from(next_index),
+		// 	Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
+		// 	Era::immortal(),
+		// 	genesis_hash,
+		// );
+		// let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
+		// println!("payload = {:?}", payload);
+		// let local_id: sr25519::Public = signed.public();
+		// let any_signature = AnySignature::from(signature);
+		// println!("any signature = {:?}", any_signature);
+		// let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
+		// let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Consensus(ConsensusCall::report_misbehavior(report)));
+		// let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+		// // assert_eq!(extrinsic, uxt);
+		let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
+		// if let Err(e) = transaction_pool.unwrap().submit_one(&block_id, uxt) {
+		// 	warn!("Error importing misbehavior report: {:?}", e);
+		// }
+}
+
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E, P, A> {
+pub struct AuraVerifier<C, E, P, A: txpool::ChainApi> {
 	client: Arc<C>,
-	transaction_queue: Option<Arc<A>>,
+	transaction_queue: Arc<TransactionPool<A>>,
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
@@ -541,7 +579,9 @@ pub struct AuraVerifier<C, E, P, A> {
 }
 
 impl<C, E, P, A> AuraVerifier<C, E, P, A>
-	where P: Send + Sync + 'static
+where
+	P: Send + Sync + 'static,
+	A: txpool::ChainApi,
 {
 	fn check_inherents<B: Block>(
 		&self,
@@ -606,8 +646,8 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 
 #[forbid(deprecated)]
 impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
-	A: Send + Sync,
-	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore,
+	A: txpool::ChainApi<Block=B>,
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: ExtraVerification<B>,
@@ -638,8 +678,9 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<C, B, P>(
+		let checked_header = check_header::<C, B, P, A>(
 			&self.client,
+			&self.transaction_queue,
 			slot_now + 1,
 			header,
 			hash,
@@ -711,6 +752,7 @@ impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
 
 impl<B, C, E, P, A> Authorities<B> for AuraVerifier<C, E, P, A> where
 	B: Block,
+	A: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 {
@@ -801,9 +843,9 @@ pub fn import_queue<A, B, C, E, P>(
 	inherent_data_providers: InherentDataProviders,
 	transaction_queue: Option<Arc<TransactionPool<A>>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
-	A: txpool::ChainApi + 'static,
 	B: Block,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
+	A: txpool::ChainApi<Block=B> + 'static,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
@@ -817,7 +859,7 @@ pub fn import_queue<A, B, C, E, P>(
 	let verifier = Arc::new(
 		AuraVerifier {
 			client: client.clone(),
-			transaction_queue,
+			transaction_queue: transaction_queue.unwrap().clone(),
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
@@ -849,9 +891,9 @@ pub fn import_queue_accept_old_seals<B, C, E, P, A>(
 	inherent_data_providers: InherentDataProviders,
 	transaction_queue: Option<Arc<TransactionPool<A>>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
-	A: txpool::ChainApi + 'static,
 	B: Block,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
+	A: txpool::ChainApi<Block=B> + 'static,
+	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	E: 'static + ExtraVerification<B>,
@@ -865,7 +907,7 @@ pub fn import_queue_accept_old_seals<B, C, E, P, A>(
 	let verifier = Arc::new(
 		AuraVerifier {
 			client: client.clone(),
-			transaction_queue,
+			transaction_queue: transaction_queue.unwrap().clone(),
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
