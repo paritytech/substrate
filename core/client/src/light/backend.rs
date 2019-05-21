@@ -281,11 +281,18 @@ where
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: MapTransaction = HashMap::new();
 		storage.insert(None, (top, None));
+		// create a list of children keys to re-compute roots for
+		let child_delta : Vec<(SubTrie, _)> = children.iter()
+			.map(|(_, (_, subtrie))| (subtrie.clone(), None))
+			.collect::<Vec<_>>();
+
+		// make sure to persist the child storage
 		for (child_key, (child_storage, subtrie)) in children {
 			storage.insert(Some(child_key), (child_storage, Some(subtrie)));
 		}
+
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.storage_root(::std::iter::empty());
+		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -376,7 +383,7 @@ where
 		Vec::new()
 	}
 
-	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, _prefix: &[u8]) -> Vec<Vec<u8>> {
 		// whole state is not available on light node
 		Vec::new()
 	}
@@ -468,7 +475,7 @@ where
 		}
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::keys(state, prefix),

@@ -105,7 +105,22 @@ pub trait Backend<H: Hasher> {
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Get all keys with given prefix
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>>;
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		let mut all = Vec::new();
+		self.for_keys_with_prefix(prefix, |k| all.push(k.to_vec()));
+		all
+	}
+
+	/// Get all keys of child storage with given prefix
+	fn child_keys(&self, subtrie: SubTrieReadRef, prefix: &[u8]) -> Vec<Vec<u8>> {
+		let mut all = Vec::new();
+		self.for_keys_in_child_storage(subtrie, |k| {
+			if k.starts_with(prefix) {
+				all.push(k.to_vec());
+			}
+		});
+		all
+	}
 
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
@@ -322,8 +337,10 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let existing_pairs = self.inner.get(&None).into_iter()
+		let existing_pairs = self.inner.get(&None)
+			.into_iter()
 			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let map_input = existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>();
@@ -344,7 +361,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		H::Out: Ord
 	{
 		// costy clone
-		let existing_pairs = self.inner.get(&Some(subtrie.keyspace().clone())).into_iter()
+		let existing_pairs = self.inner.get(&Some(subtrie.keyspace().clone()))
+			.into_iter()
 			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
@@ -363,11 +381,17 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.inner.get(&None).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), v.clone()))).collect()
+		self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), v.clone())))
+			.collect()
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
-		self.inner.get(&None).into_iter().flat_map(|map| map.0.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.0.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.collect()
 	}
 
 	fn try_into_trie_backend(

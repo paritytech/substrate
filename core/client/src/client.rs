@@ -24,7 +24,7 @@ use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
-use primitives::subtrie::SubTrieReadRef;
+use primitives::subtrie::{SubTrie, SubTrieReadRef};
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
@@ -338,16 +338,55 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.import_lock.clone()
 	}
 
-	/// Return storage entry keys in state in a block of given hash with given prefix.
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
-	/// Return single storage entry of contract under given address in state in a block of given hash.
+	/// Given a `BlockId` and a key, return the value under the key in that block.
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.map(StorageData))
+	}
+
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	pub fn child_trie(
+		&self,
+		id: &BlockId<Block>,
+		prefix: &[u8],
+		child_key: &StorageKey
+	) -> error::Result<Option<SubTrie>> {
+		self.state_at(id)?
+			.child_trie(prefix, &child_key.0[..])
+			.map_err(|e| error::Error::from_state(Box::new(e)))
+	}
+
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
+	pub fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		subtrie: SubTrieReadRef,
+		key_prefix: &StorageKey
+	) -> error::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?
+			.child_keys(subtrie, &key_prefix.0)
+			.into_iter()
+			.map(StorageKey)
+			.collect();
+		Ok(keys)
+	}
+
+	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
+	pub fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		subtrie: SubTrieReadRef,
+		key: &StorageKey
+	) -> error::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
+			.child_storage(subtrie, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
 

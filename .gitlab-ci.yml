@@ -10,7 +10,8 @@ stages:
   - test
   - build
   - publish
-  - deploy
+  - kubernetes
+  - flaming-fir
 
 image:                             parity/rust-builder:latest
 
@@ -264,7 +265,7 @@ publish-s3-doc:
         --human-readable --summarize
 
 .deploy-template:                  &deploy
-  stage:                           deploy
+  stage:                           kubernetes 
   when:                            manual
   retry:                           1
   image:                           parity/kubetools:latest
@@ -332,7 +333,7 @@ deploy-ue1-tag:
     name: parity-prod-ue1
 
 .validator-deploy: &validator-deploy
-  stage: publish
+  stage: flaming-fir
   dependencies:
     - build-linux-release
   image: parity/azure-ansible:v1
@@ -344,10 +345,16 @@ deploy-ue1-tag:
 validator1:
   <<: *validator-deploy
   script:
-    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator1
-
+    - ./scripts/flamingfir-deploy.sh flamingfir-validator1
 validator2:
   <<: *validator-deploy
   script:
-    - ansible-playbook -i scripts/ansible/inventory.ini -u gitlab scripts/ansible/alexander.yml -l validator2
-
+    - ./scripts/flamingfir-deploy.sh flamingfir-validator2
+validator3:
+  <<: *validator-deploy
+  script:
+    - ./scripts/flamingfir-deploy.sh flamingfir-validator3
+validator4:
+  <<: *validator-deploy
+  script:
+    - ./scripts/flamingfir-deploy.sh flamingfir-validator4

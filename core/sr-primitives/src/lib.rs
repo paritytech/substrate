@@ -102,8 +102,28 @@ impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
 	}
-	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		_child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String> {
 		storage.extend(self);
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		Ok(self)
+	}
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	)-> Result<(), String> {
+		storage.extend(self.0);
+		child_storage.extend(self.1);
 		Ok(())
 	}
 }

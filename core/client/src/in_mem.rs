@@ -718,9 +718,8 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 		return Err(error::Error::GenesisInvalid.into());
 	}
 
-	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-		return Err(error::Error::GenesisInvalid.into());
-	}
+	debug_assert!(!children.iter()
+		.any(|(_, (_, subtrie))| !well_known_keys::is_child_storage_key(&subtrie.raw_parent_key()[..])));
 
 	Ok(())
 }
