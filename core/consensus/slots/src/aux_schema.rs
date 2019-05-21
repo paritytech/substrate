@@ -46,14 +46,17 @@ fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 }
 
 /// Represents an equivocation proof.
-#[derive(Debug, Clone)]
-pub struct EquivocationProof<H> {
+#[derive(Debug, Clone, Encode, Decode, Default)]
+pub struct EquivocationProof<H: Encode + Decode> {
 	slot: u64,
 	fst_header: H,
 	snd_header: H,
 }
 
-impl<H> EquivocationProof<H> {
+impl<H> EquivocationProof<H>
+where
+	H: Encode + Decode,
+{
 	/// Get the slot number where the equivocation happened.
 	pub fn slot(&self) -> u64 {
 		self.slot

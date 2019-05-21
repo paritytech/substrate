@@ -527,7 +527,10 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 					submit_report_call(client, transaction_pool, equivocation_proof);
 					Err(log_str)
 				},
-				Ok(None) => Ok(CheckedHeader::Checked(header, digest_item)),
+				Ok(None) => {
+					submit_report_call(client, transaction_pool, EquivocationProof::<B::Hash>::default());
+					Ok(CheckedHeader::Checked(header, digest_item))
+				},
 				Err(e) => Err(e.to_string()),
 			}
 		} else {
@@ -544,28 +547,30 @@ pub fn submit_report_call<H, A, B: Block, C>(
 ) where
 	A: txpool::ChainApi<Block=B>,
 	C: client::blockchain::HeaderBackend<B>,
+	H: Encode + Decode,
 {
-		// let next_index = 10000u64;
-		// let signed: sr25519::Public = AccountKeyring::Alice.into();
-		// let payload = (
-		// 	Compact::from(next_index),
-		// 	Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
-		// 	Era::immortal(),
-		// 	genesis_hash,
-		// );
-		// let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
-		// println!("payload = {:?}", payload);
-		// let local_id: sr25519::Public = signed.public();
-		// let any_signature = AnySignature::from(signature);
-		// println!("any signature = {:?}", any_signature);
-		// let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
-		// let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Consensus(ConsensusCall::report_misbehavior(report)));
-		// let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-		// // assert_eq!(extrinsic, uxt);
-		let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
-		// if let Err(e) = transaction_pool.unwrap().submit_one(&block_id, uxt) {
-		// 	warn!("Error importing misbehavior report: {:?}", e);
-		// }
+	println!("SUBMIT_REPORT_CALL");
+	// let next_index = 10000u64;
+	// let signed: sr25519::Public = AccountKeyring::Alice.into();
+	// let payload = (
+	// 	Compact::from(next_index),
+	// 	Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
+	// 	Era::immortal(),
+	// 	genesis_hash,
+	// );
+	// let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
+	// println!("payload = {:?}", payload);
+	// let local_id: sr25519::Public = signed.public();
+	// let any_signature = AnySignature::from(signature);
+	// println!("any signature = {:?}", any_signature);
+	// let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
+	let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Consensus(ConsensusCall::report_misbehavior(proof.encode())));
+	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+	// // assert_eq!(extrinsic, uxt);
+	let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
+	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
+		println!("Error importing misbehavior report: {:?}", e);
+	}
 }
 
 /// A verifier for Aura blocks.

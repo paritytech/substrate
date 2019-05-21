@@ -118,6 +118,7 @@ impl<B: ChainApi> Pool<B> {
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
+		println!("SUBMIT_AT");
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 

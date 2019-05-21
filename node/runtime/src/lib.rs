@@ -34,7 +34,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert, ValidateUnsigned
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -216,7 +216,7 @@ construct_runtime!(
 		System: system::{default, Log(ChangesTrieRoot)},
 		Aura: aura::{Module, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
+		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent, ValidateUnsigned},
 		Indices: indices,
 		Balances: balances,
 		Session: session,
