@@ -47,7 +47,9 @@ pub trait ResolveHint<AccountId, AccountIndex> {
 
 /// Simple encode-based resolve hint implemenntation.
 pub struct SimpleResolveHint<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
-impl<AccountId: Encode, AccountIndex: From<u32>> ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex> {
+impl<AccountId: Encode, AccountIndex: From<u32>>
+	ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex>
+{
 	fn resolve_hint(who: &AccountId) -> Option<AccountIndex> {
 		Some(AccountIndex::from(who.using_encoded(|e| e[0] as u32 + e[1] as u32 * 256)))
 	}
@@ -137,7 +139,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Lookup an address to get an Id, if there's one there.
-	pub fn lookup_address(a: address::Address<T::AccountId, T::AccountIndex>) -> Option<T::AccountId> {
+	pub fn lookup_address(
+		a: address::Address<T::AccountId, T::AccountIndex>
+	) -> Option<T::AccountId> {
 		match a {
 			address::Address::Id(i) => Some(i),
 			address::Address::Index(i) => Self::lookup_index(i),
@@ -175,7 +179,8 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 
 		// insert normally as a back up
 		let mut set_index = next_set_index;
-		// defensive only: this loop should never iterate since we keep NextEnumSet up to date later.
+		// defensive only: this loop should never iterate since we keep NextEnumSet up to date
+		// later.
 		let mut set = loop {
 			let set = Self::enum_set(set_index);
 			if (set.len() as u32) < ENUM_SET_SIZE {
