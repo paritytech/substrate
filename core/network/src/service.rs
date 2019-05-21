@@ -29,6 +29,7 @@ use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
+use crate::chain::FinalityProofProvider;
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
@@ -209,7 +210,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			peers.clone(),
 			params.config,
 			params.chain,
-			params.finality_proof_provider,
 			params.on_demand,
 			params.specialization,
 		)?;
@@ -221,6 +221,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			protocol,
 			import_queue.clone(),
 			params.transaction_pool,
+			params.finality_proof_provider,
 			network_port,
 			protocol_rx,
 			status_sinks.clone(),
@@ -516,6 +517,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	protocol: Protocol<B, S, H>,
 	import_queue: Box<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
+	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -543,6 +545,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			service_clone,
 			import_queue,
 			transaction_pool,
+			finality_proof_provider,
 			network_port,
 			protocol_rx,
 			status_sinks,
@@ -571,6 +574,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
+	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	mut network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -696,7 +700,13 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					CustomMessageOutcome::None
 				},
 				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) =>
-					protocol.on_custom_message(&mut network_out, &*transaction_pool, peer_id, message),
+					protocol.on_custom_message(
+						&mut network_out,
+						&*transaction_pool,
+						peer_id,
+						message,
+						finality_proof_provider.as_ref().map(|p| &**p)
+					),
 				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
 					debug!(target: "sync", "{} clogging messages:", messages.len());
 					for msg in messages.into_iter().take(5) {

@@ -257,7 +257,6 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
 	pub chain: Arc<Client<B>>,
-	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
@@ -266,7 +265,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
@@ -279,7 +277,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			context_data: ContextData {
 				peers: HashMap::new(),
 				chain,
-				finality_proof_provider,
 			},
 			on_demand,
 			genesis_hash: info.chain.genesis_hash,
@@ -375,7 +372,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_out: &mut dyn NetworkOut<B>,
 		transaction_pool: &(impl TransactionPool<H, B> + ?Sized),
 		who: PeerId,
-		message: Message<B>
+		message: Message<B>,
+		finality_proof_provider: Option<&FinalityProofProvider<B>>
 	) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
@@ -406,7 +404,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(network_out, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
-			GenericMessage::FinalityProofRequest(request) => self.on_finality_proof_request(network_out, who, request),
+			GenericMessage::FinalityProofRequest(request) =>
+				self.on_finality_proof_request(network_out, who, request, finality_proof_provider),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(network_out, who, response),
 			GenericMessage::Consensus(msg) => {
@@ -1209,9 +1208,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
+		finality_proof_provider: Option<&FinalityProofProvider<B>>
 	) {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
-		let finality_proof = self.context_data.finality_proof_provider.as_ref()
+		let finality_proof = finality_proof_provider.as_ref()
 			.ok_or_else(|| String::from("Finality provider is not configured"))
 			.and_then(|provider|
 				provider.prove_finality(request.block, &request.request).map_err(|e| e.to_string())

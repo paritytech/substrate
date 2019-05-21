@@ -793,6 +793,7 @@ pub trait TestNetFactory: Sized {
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
 		tx_pool: EmptyTransactionPool,
+		finality_proof_provider: Option<Arc<FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
@@ -826,7 +827,13 @@ pub trait TestNetFactory: Sized {
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
-							protocol.on_custom_message(&mut Ctxt(&network_sender), &tx_pool, peer_id, message),
+							protocol.on_custom_message(
+								&mut Ctxt(&network_sender),
+								&tx_pool,
+								peer_id,
+								message,
+								finality_proof_provider.as_ref().map(|p| &**p)
+							),
 						Some(FromNetworkMsg::Synchronize) => {
 							let _ = network_sender.unbounded_send(NetworkMsg::Synchronized);
 							CustomMessageOutcome::None
@@ -954,7 +961,6 @@ pub trait TestNetFactory: Sized {
 			peers.clone(),
 			config.clone(),
 			client.clone(),
-			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
 			None,
 			specialization,
 		).unwrap();
@@ -964,6 +970,7 @@ pub trait TestNetFactory: Sized {
 			protocol_status.clone(),
 			import_queue.clone(),
 			EmptyTransactionPool,
+			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
 			protocol,
 			network_sender.clone(),
 			network_to_protocol_rx,
@@ -1011,7 +1018,6 @@ pub trait TestNetFactory: Sized {
 			peers.clone(),
 			config,
 			client.clone(),
-			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
 			None,
 			specialization,
 		).unwrap();
@@ -1021,6 +1027,7 @@ pub trait TestNetFactory: Sized {
 			protocol_status.clone(),
 			import_queue.clone(),
 			EmptyTransactionPool,
+			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
 			protocol,
 			network_sender.clone(),
 			network_to_protocol_rx,
