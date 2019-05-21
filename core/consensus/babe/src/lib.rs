@@ -463,7 +463,6 @@ fn find_pre_digest<B: Block>(
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
 //
 // FIXME #1018 needs misbehavior types
-#[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
 	client: &Arc<C>,
 	slot_now: u64,
@@ -906,6 +905,10 @@ mod tests {
 				inherent_data_providers,
 				threshold: config.threshold(),
 			})
+		}
+
+		fn uses_tokio(&self) -> bool {
+			true
 		}
 
 		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {

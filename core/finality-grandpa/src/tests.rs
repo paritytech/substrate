@@ -159,6 +159,10 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
+	fn uses_tokio(&self) -> bool {
+		true
+	}
+
 	fn peer(&self, i: usize) -> &GrandpaPeer {
 		&self.peers[i]
 	}
