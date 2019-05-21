@@ -4030,6 +4030,7 @@ dependencies = [
  "substrate-service 2.0.0",
  "substrate-telemetry 2.0.0",
  "substrate-test-client 2.0.0",
+ "substrate-transaction-pool 2.0.0",
  "tokio 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

@@ -152,11 +152,8 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
-		let import_queue = Box::new(Components::build_import_queue(
-			&mut config,
-			client.clone(),
-			select_chain.clone(),
-		)?);
+		println!("BUILDING IMPORT QUEUE in /core/service/lib");
+		
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info()?.chain;
 
@@ -168,6 +165,14 @@ impl<Components: components::Components> Service<Components> {
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
+		
+		let import_queue = Box::new(Components::build_import_queue(
+			&mut config,
+			client.clone(),
+			select_chain.clone(),
+			Some(transaction_pool.clone()),
+		)?);
+
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
@@ -690,9 +695,10 @@ macro_rules! construct_service_factory {
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
-				select_chain: Self::SelectChain
+				select_chain: Self::SelectChain,
+				transaction_pool: Option<Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain)
+				( $( $full_import_queue_init )* ) (config, client, transaction_pool, select_chain)
 			}
 
 			fn build_light_import_queue(

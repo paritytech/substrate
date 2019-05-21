@@ -156,7 +156,13 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+			{ 
+			|
+				config: &mut FactoryFullConfiguration<Self>,
+				client: Arc<FullClient<Self>>,
+				transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+				select_chain: Self::SelectChain,
+			| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
@@ -167,7 +173,7 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, _, ed25519::Pair>(
+				import_queue::<_, _, _, _, ed25519::Pair>(
 					slot_duration,
 					block_import,
 					Some(justification_import),
@@ -176,6 +182,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					transaction_pool,
 				).map_err(Into::into)
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
@@ -191,7 +198,7 @@ construct_service_factory! {
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<_, _, _, ed25519::Pair>(
+				import_queue::<Self::FullTransactionPoolApi, _, _, _, ed25519::Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					block_import,
 					None,
@@ -200,6 +207,7 @@ construct_service_factory! {
 					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
+					None,
 				).map_err(Into::into)
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>

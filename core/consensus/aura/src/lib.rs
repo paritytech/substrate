@@ -62,6 +62,7 @@ use srml_aura::{
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation};
 
@@ -530,15 +531,16 @@ fn check_header<C, B: Block, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E, P> {
+pub struct AuraVerifier<C, E, P, A> {
 	client: Arc<C>,
+	transaction_queue: Option<Arc<A>>,
 	extra: E,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	allow_old_seals: bool,
 }
 
-impl<C, E, P> AuraVerifier<C, E, P>
+impl<C, E, P, A> AuraVerifier<C, E, P, A>
 	where P: Send + Sync + 'static
 {
 	fn check_inherents<B: Block>(
@@ -603,7 +605,8 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 #[forbid(deprecated)]
-impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
+impl<B: Block, C, E, P, A> Verifier<B> for AuraVerifier<C, E, P, A> where
+	A: Send + Sync,
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
@@ -706,7 +709,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 	}
 }
 
-impl<B, C, E, P> Authorities<B> for AuraVerifier<C, E, P> where
+impl<B, C, E, P, A> Authorities<B> for AuraVerifier<C, E, P, A> where
 	B: Block,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
@@ -787,7 +790,7 @@ fn register_aura_inherent_data_provider(
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C, E, P>(
+pub fn import_queue<A, B, C, E, P>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
@@ -796,7 +799,9 @@ pub fn import_queue<B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
+	transaction_queue: Option<Arc<TransactionPool<A>>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
+	A: txpool::ChainApi + 'static,
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
@@ -812,6 +817,7 @@ pub fn import_queue<B, C, E, P>(
 	let verifier = Arc::new(
 		AuraVerifier {
 			client: client.clone(),
+			transaction_queue,
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
@@ -832,7 +838,7 @@ pub fn import_queue<B, C, E, P>(
 	since = "1.0.1",
 	note = "should not be used unless backwards compatibility with an older chain is needed.",
 )]
-pub fn import_queue_accept_old_seals<B, C, E, P>(
+pub fn import_queue_accept_old_seals<B, C, E, P, A>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
@@ -841,7 +847,9 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
+	transaction_queue: Option<Arc<TransactionPool<A>>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
+	A: txpool::ChainApi + 'static,
 	B: Block,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
@@ -857,6 +865,7 @@ pub fn import_queue_accept_old_seals<B, C, E, P>(
 	let verifier = Arc::new(
 		AuraVerifier {
 			client: client.clone(),
+			transaction_queue,
 			extra,
 			inherent_data_providers,
 			phantom: PhantomData,
