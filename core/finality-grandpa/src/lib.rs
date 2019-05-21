@@ -70,7 +70,6 @@ use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
-use parking_lot::RwLock;
 
 use srml_finality_tracker;
 
@@ -515,7 +514,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
 		inner: client.clone(),
 		config: config.clone(),
 		voters: Arc::new(voters),
-		equivocators: Arc::new(RwLock::new(Default::default())),
 		network: network.clone(),
 		set_id: authority_set.set_id(),
 		authority_set: authority_set.clone(),
@@ -640,7 +638,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, X>(
 						inner: client,
 						config,
 						voters: Arc::new(new.authorities.into_iter().collect()),
-						equivocators: Arc::new(RwLock::new(Default::default())),
 						set_id: new.set_id,
 						network,
 						authority_set,

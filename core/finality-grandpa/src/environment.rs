@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -265,7 +265,6 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
-    pub(crate) equivocators: Arc<RwLock<HashSet<AuthorityId>>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -448,14 +447,10 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let local_key = self.config.local_key.as_ref()
 			.filter(|pair| self.voters.contains_key(&pair.public().into()));
 
-        // Reset equivocators for this round.
-        let _ = self.equivocators.write().drain();
-
 		let (incoming, outgoing) = self.network.round_communication(
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-            self.equivocators.clone(),
 			local_key.cloned(),
 			self.voter_set_state.has_voted(),
 		);
@@ -685,8 +680,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// this could further craft misbehavior reports of some kind.
-        self.equivocators.write().insert(equivocation.identity);
+		// this could craft misbehavior reports of some kind.
 	}
 
 	fn precommit_equivocation(
@@ -695,8 +689,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// this could further craft misbehavior reports of some kind.
-        self.equivocators.write().insert(equivocation.identity);
+		// this could  craft misbehavior reports of some kind.
 	}
 }
 

@@ -67,6 +67,7 @@
 //!
 //! We only send polite messages to peers,
 
+use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
@@ -94,6 +95,25 @@ enum Consider {
 	RejectPast,
 	/// Message is from the future. Reject.
 	RejectFuture,
+    /// Message is an equivocation. Reject.
+    RejectEquivocation,
+}
+
+#[derive(Debug)]
+pub(crate) struct VoteTally {
+    handled_pre_commits: usize,
+    handled_pre_votes: usize,
+    handled_primary_proposals: usize,
+}
+
+impl Default for VoteTally {
+    fn default() -> VoteTally {
+        VoteTally {
+            handled_pre_commits: 0,
+            handled_pre_votes: 0,
+            handled_primary_proposals: 0,
+        }
+    }
 }
 
 /// A view of protocol state.
@@ -300,6 +320,8 @@ pub(super) enum Misbehavior {
 	// A message received that's from the future relative to our view.
 	// always misbehavior.
 	FutureMessage,
+    // Equivocation received
+    Equivocation,
 }
 
 impl Misbehavior {
@@ -319,6 +341,7 @@ impl Misbehavior {
 				(benefit as i32).saturating_add(cost as i32)
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
+            Equivocation => cost::EQUIVOCATION,
 		}
 	}
 }
@@ -423,6 +446,7 @@ struct Inner<Block: BlockT> {
 	live_topics: KeepTopics<Block>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
+	votes_tally: HashMap<PeerId, VoteTally>,
 }
 
 impl<Block: BlockT> Inner<Block> {
@@ -433,6 +457,7 @@ impl<Block: BlockT> Inner<Block> {
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			config,
+			votes_tally: Default::default(),
 		}
 	}
 
@@ -449,6 +474,8 @@ impl<Block: BlockT> Inner<Block> {
 
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
+		// Reset the votes-tally for a new round.
+        self.votes_tally = Default::default();
 
 		self.live_topics.push(round, set_id);
 		self.multicast_neighbor_packet(send_neighbor);
@@ -476,7 +503,29 @@ impl<Block: BlockT> Inner<Block> {
 		}
 	}
 
-	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
+	fn consider_vote(&mut self, round: Round, set_id: SetId, msg: &SignedMessage<Block>, id: &PeerId) -> Consider {
+		let mut tally = self.votes_tally.entry(id.clone()).or_insert(Default::default());
+
+		match &msg.message {
+			PrimaryPropose(_propose) => {
+				tally.handled_primary_proposals += 1;
+			},
+			Prevote(_prevote) => {
+				tally.handled_pre_votes += 1;
+			},
+			Precommit(_precommit) => {
+				tally.handled_pre_commits += 1;
+			},
+		}
+
+		// When we're processed 2 votes of each type,
+		// or if it is an equivocator, reject the message.
+		if tally.handled_primary_proposals > 2
+			|| tally.handled_pre_votes > 2
+			|| tally.handled_pre_commits > 2 {
+			return Consider::RejectEquivocation
+		}
+
 		self.local_view.consider_vote(round, set_id)
 	}
 
@@ -489,11 +538,12 @@ impl<Block: BlockT> Inner<Block> {
 		cost::PAST_REJECTION
 	}
 
-	fn validate_round_message(&self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
+	fn validate_round_message(&mut self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		match self.consider_vote(full.round, full.set_id) {
+		match self.consider_vote(full.round, full.set_id, &full.message, who) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
+            Consider::RejectEquivocation => return Action::Discard(Misbehavior::Equivocation.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
@@ -528,6 +578,7 @@ impl<Block: BlockT> Inner<Block> {
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
+			Consider::RejectEquivocation => {},
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {

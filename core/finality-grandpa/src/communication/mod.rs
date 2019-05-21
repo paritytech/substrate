@@ -27,9 +27,7 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Instant;
 
 use grandpa::voter_set::VoterSet;
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
@@ -43,7 +41,6 @@ use runtime_primitives::ConsensusEngineId;
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
-use parking_lot::RwLock;
 
 use crate::{Error, Message, SignedMessage, Commit, CompactCommit};
 use crate::environment::HasVoted;
@@ -67,6 +64,7 @@ mod cost {
 	pub(super) const BAD_SIGNATURE: i32 = -100;
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
+    pub(super) const EQUIVOCATION: i32 = -500;
 
 	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
@@ -205,25 +203,6 @@ pub(crate) enum CommitProcessingOutcome {
 	Bad,
 }
 
-#[derive(Debug)]
-pub(crate) struct VoteTally {
-    handled_pre_commits: usize,
-    handled_pre_votes: usize,
-    handled_primary_proposals: usize,
-    timed_out: Option<Instant>,
-}
-
-impl Default for VoteTally {
-    fn default() -> VoteTally {
-        VoteTally {
-            handled_pre_commits: 0,
-            handled_pre_votes: 0,
-            handled_primary_proposals: 0,
-            timed_out: None,
-        }
-    }
-}
-
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
@@ -269,7 +248,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		equivocators: Arc<RwLock<HashSet<AuthorityId>>>,
 		local_key: Option<Arc<ed25519::Pair>>,
 		has_voted: HasVoted<B>,
 	) -> (
@@ -297,10 +275,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let topic = round_topic::<B>(round.0, set_id.0);
 
-        let mut votes_tally: HashMap<AuthorityId, VoteTally> = HashMap::new();
-		let num_signers = voters.voters().iter().count();
-		let max_timed_out = num_signers.checked_div(3).unwrap_or(1);
-
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -318,8 +292,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							return Ok(None);
 						}
 
-                        let mut tally = votes_tally.entry(msg.message.id.clone()).or_insert(Default::default());
-
 						match &msg.message.message {
 							PrimaryPropose(propose) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_propose";
@@ -327,7 +299,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?propose.target_number,
 									"target_hash" => ?propose.target_hash,
 								);
-                                tally.handled_primary_proposals += 1;
 							},
 							Prevote(prevote) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
@@ -335,7 +306,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?prevote.target_number,
 									"target_hash" => ?prevote.target_hash,
 								);
-                                tally.handled_pre_votes += 1;
 							},
 							Precommit(precommit) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
@@ -343,36 +313,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_number" => ?precommit.target_number,
 									"target_hash" => ?precommit.target_hash,
 								);
-                                tally.handled_pre_commits += 1;
 							},
 						}
 
-						let is_equivocator = equivocators.read().contains(&msg.message.id);
-
-						if ((tally.handled_primary_proposals > 2
-							|| tally.handled_pre_votes > 2
-							|| tally.handled_pre_commits > 2)
-							|| is_equivocator)
-							&& !tally.timed_out.is_some() {
-							// When we're processed 2 votes of each type,
-							// or if it is an equivocator, time-out the voter.
-							tally.timed_out = Some(Instant::now());
-						}
-
-						if let Some(instant) = tally.timed_out {
-							if instant.elapsed().as_secs() > 600 {
-								tally.timed_out = None;
-								return Ok(Some(msg.message));
-							}
-							let timed_out = votes_tally.values().filter(|tally| tally.timed_out.is_some()).count();
-							if timed_out == max_timed_out {
-								// We've timed-out too many voters,
-								// consider this one not timed out.
-								return Ok(Some(msg.message));
-							}
-							// Drop the message for timed-out voter.
-							return Ok(None);
-						}
 						Ok(Some(msg.message))
 					}
 					_ => {
