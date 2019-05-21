@@ -4,13 +4,14 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
-[dev-dependencies]
+[dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
 runtime_io = { package = "sr-io", path = "../../../core/sr-io", default-features = false }
-srml-support = { path = "../", default-features = false }
+srml-support = { version = "2", path = "../", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../core/inherents", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../core/primitives", default-features = false }
+trybuild = "1"
 
 [features]
 default = ["std"]
