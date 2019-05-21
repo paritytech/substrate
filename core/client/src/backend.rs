@@ -81,12 +81,11 @@ pub trait BlockImportOperation<Block, H> where
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out>;
-	/// Set top level storage changes.
-	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
-	/// Set children level storage changes.
-	fn update_child_storage(
+	/// Set storage changes.
+	fn update_storage(
 		&mut self,
-		update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+		update: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		child_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
 	) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;

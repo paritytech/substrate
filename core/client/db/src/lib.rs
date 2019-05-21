@@ -362,18 +362,16 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> Result<(), client::error::Error> {
+	fn update_storage(
+		&mut self,
+		update: Vec<(Vec<u8>,Option<Vec<u8>>)>,
+		child_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+	) -> Result<(), client::error::Error> {
 		self.storage_updates = update;
+		self.child_storage_updates = child_update;
 		Ok(())
 	}
-	fn update_child_storage(
-		&mut self,
-		update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
-	) -> Result<(), client::error::Error> {
-		self.child_storage_updates = update;
-		Ok(())
-  }
-	
+
 	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> Result<(), client::error::Error> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())

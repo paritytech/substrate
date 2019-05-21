@@ -886,8 +886,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.op.update_db_storage(storage_update)?;
 		}
 		if let Some(storage_changes) = storage_changes.clone() {
-			operation.op.update_storage(storage_changes.0)?;
-			operation.op.update_child_storage(storage_changes.1)?;
+			operation.op.update_storage(storage_changes.0, storage_changes.1)?;
 		}
 		if let Some(Some(changes_update)) = changes_update {
 			operation.op.update_changes_trie(changes_update)?;

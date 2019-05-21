@@ -457,7 +457,6 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 				vec![Ok(Ok(StorageChangeSet { block, changes }))]
 			}).unwrap_or_default());
 
-		// TODO change rpc to add children too
 		self.subscriptions.add(subscriber, |sink| {
 			let stream = stream
 				.map_err(|e| warn!("Error creating storage notification stream: {:?}", e))

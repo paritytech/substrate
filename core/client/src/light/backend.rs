@@ -304,14 +304,10 @@ where
 		Ok(())
 	}
 
-	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
-		// we're not storing anything locally => ignore changes
-		Ok(())
-	}
-
-	fn update_child_storage(
+	fn update_storage(
 		&mut self,
-		_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
+		_update: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		_child_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
