@@ -291,6 +291,10 @@ impl<'a> ConnectedPeer<'a> {
 
 	/// Sets whether or not the node is reserved.
 	pub fn set_reserved(&mut self, reserved: bool) {
+		if reserved == self.state.reserved {
+			return;
+		}
+
 		if reserved {
 			self.state.reserved = true;
 			match self.state.connection_state {
@@ -592,6 +596,18 @@ mod tests {
 		let id = PeerId::random();
 		let mut peer = peers_state.peer(&id).into_unknown().unwrap().discover()
 			.force_outgoing();
+		peer.set_reserved(true);
+		peer.disconnect();
+	}
+
+	#[test]
+	fn multiple_set_reserved_calls_doesnt_panic() {
+		let mut peers_state = PeersState::new(1, 1);
+		let id = PeerId::random();
+		let mut peer = peers_state.peer(&id)
+			.into_unknown().unwrap().discover()
+			.force_outgoing();
+		peer.set_reserved(true);
 		peer.set_reserved(true);
 		peer.disconnect();
 	}
