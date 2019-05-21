@@ -84,6 +84,8 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
+const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const CATCH_UP_IMPORT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// An outcome of examining a message.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -286,7 +288,7 @@ impl<N> VersionedNeighborPacket<N> {
 }
 
 /// A catch up request for a given round (or any further round) localized by set id.
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub(super) struct CatchUpRequestMessage {
 	/// The round that we want to catch up to.
 	pub(super) round: Round,
@@ -445,6 +447,8 @@ struct Inner<Block: BlockT> {
 	live_topics: KeepTopics<Block>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
+	pending_catch_up_request: Option<(PeerId, CatchUpRequestMessage, Instant)>,
+	last_catch_up_import: Option<Instant>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -456,6 +460,8 @@ impl<Block: BlockT> Inner<Block> {
 			peers: Peers::default(),
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
+			pending_catch_up_request: None,
+			last_catch_up_import: None,
 			config,
 		}
 	}
@@ -568,16 +574,37 @@ impl<Block: BlockT> Inner<Block> {
 		Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_COMMIT)
 	}
 
-	fn validate_catch_up_message(&mut self, _who: &PeerId, full: &FullCatchUpMessage<Block>)
+	fn validate_catch_up_message(&mut self, who: &PeerId, full: &FullCatchUpMessage<Block>)
 		-> Action<Block::Hash>
 	{
+		match self.pending_catch_up_request.take() {
+			Some((peer, request, instant)) => {
+				// FIXME: adjust costs
+				if peer != *who {
+					self.pending_catch_up_request = Some((peer, request, instant));
+					return Action::Discard(-1);
+				}
+
+				if request.set_id != full.set_id {
+					return Action::Discard(-1);
+				}
+
+				if request.round.0 > full.message.round_number {
+					return Action::Discard(-1);
+				}
+			},
+			None => return Action::Discard(-1),
+		}
+
+		self.last_catch_up_import = Some(Instant::now());
+
 		let topic = super::global_topic::<Block>(full.set_id.0);
 		Action::ProcessAndDiscard(topic, 0)
 	}
 
 	fn handle_catch_up_request(
 		&mut self,
-		_who: &PeerId,
+		who: &PeerId,
 		request: CatchUpRequestMessage,
 		set_state: &environment::SharedVoterSetState<Block>,
 	) -> (Option<GossipMessage<Block>>, Action<Block::Hash>) {
@@ -589,6 +616,12 @@ impl<Block: BlockT> Inner<Block> {
 		if last_completed_round.number < request.round.0 {
 			return (None, Action::Discard(-1));
 		}
+
+		trace!(target: "afg", "Replying to catch-up request for round {} from {} with round {}",
+			request.round.0,
+			who,
+			last_completed_round.number,
+		);
 
 		let mut prevotes = Vec::new();
 		let mut precommits = Vec::new();
@@ -654,6 +687,41 @@ impl<Block: BlockT> Inner<Block> {
 
 		let peers = self.peers.inner.keys().cloned().collect();
 		Some((peers, packet))
+	}
+
+	fn note_catch_up_request(
+		&mut self,
+		who: &PeerId,
+		catch_up_request: &CatchUpRequestMessage,
+	) -> bool {
+		match self.pending_catch_up_request.take() {
+			Some((peer, request, instant)) => {
+				if instant.elapsed() > CATCH_UP_REQUEST_TIMEOUT {
+					// FIXME: timeout cost
+					// self.report(peer, -1);
+				} else {
+					self.pending_catch_up_request = Some((peer, request, instant));
+					return false;
+				}
+			},
+			None => {},
+		}
+
+		match self.last_catch_up_import.take() {
+			Some(instant) if instant.elapsed() < CATCH_UP_IMPORT_TIMEOUT => {
+				self.last_catch_up_import = Some(instant);
+				return false;
+			},
+			_ => {},
+		}
+
+		self.pending_catch_up_request = Some((
+			who.clone(),
+			catch_up_request.clone(),
+			Instant::now(),
+		));
+
+		true
 	}
 }
 
@@ -785,6 +853,33 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	{
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
+		{
+			let mut inner = self.inner.write();
+			if let Some(peer) = inner.peers.peer(who) {
+				if peer.view.set_id == inner.local_view.set_id &&
+					peer.view.round.0.saturating_sub(2) > inner.local_view.round.0
+				{
+					// send catch up request if none pending
+					let round = peer.view.round.0 - 1; // peer.view.round is > 0
+					let request = CatchUpRequestMessage {
+						set_id: peer.view.set_id,
+						round: Round(round),
+					};
+
+					// TODO: track catch up message import outcome similar to what's done for commits
+					if inner.note_catch_up_request(who, &request) {
+						trace!(target: "afg", "Sending catch-up request for round {} to {}",
+							round,
+							who,
+						);
+
+						let message = GossipMessage::<Block>::CatchUpRequest(request);
+						context.send_message(who, message.encode());
+					}
+				}
+			}
+		}
+
 		// not with lock held!
 		for topic in broadcast_topics {
 			context.send_topic(who, topic, false);
@@ -792,21 +887,6 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 		if let Some(reply) = peer_reply {
 			context.send_message(who, reply.encode());
-		}
-
-		if let Some(peer) = self.inner.read().peers.peer(who) {
-			if peer.view.set_id == self.inner.read().local_view.set_id &&
-				peer.view.round.0.saturating_sub(2) > self.inner.read().local_view.round.0
-			{
-				// send catch up request
-				// FIXME: track pending requests
-				let request = GossipMessage::<Block>::CatchUpRequest(CatchUpRequestMessage {
-					set_id: peer.view.set_id,
-					round: Round(peer.view.round.0 - 1), // peer.view.round is > 0
-				});
-
-				context.send_message(who, request.encode());
-			}
 		}
 
 		match action {
