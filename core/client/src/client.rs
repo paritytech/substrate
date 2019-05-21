@@ -83,7 +83,11 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
-type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
+type StorageUpdate<B, Block> = <
+	<
+		<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation
+			as BlockImportOperation<Block, Blake2Hasher>
+	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
 /// Execution strategies settings.
@@ -147,13 +151,17 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// Get storage changes event stream.
 	///
 	/// Passing `None` as `filter_keys` subscribes to all storage changes.
-	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
+	fn storage_changes_notification_stream(&self,
+		filter_keys: Option<&[StorageKey]>
+	) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
 /// Fetch block body by ID.
 pub trait BlockBody<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
-	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	fn block_body(&self,
+		id: &BlockId<Block>
+	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
 /// Client info
@@ -243,11 +251,15 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block, RA>>
-	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT<Hash=H256>,
+) -> error::Result<Client<
+	in_mem::Backend<Block, Blake2Hasher>,
+	LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>,
+	Block,
+	RA
+>> where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT<Hash=H256>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
@@ -287,7 +299,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
-			info!("Initializing Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
+			info!("Initializing Genesis block/state (state: {}, header-hash: {})",
+				genesis_block.header().state_root(),
+				genesis_block.header().hash()
+			);
 			op.set_block_data(
 				genesis_block.deconstruct().0,
 				Some(vec![]),
@@ -381,7 +396,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
 		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
-			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
+			.expect("None is returned if there's no value stored for the given key;\
+				':code' key is always defined; qed").0)
 	}
 
 	/// Get the RuntimeVersion at a given block.
@@ -420,7 +436,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// AND returning execution proof.
 	///
 	/// No changes are made.
-	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
+	pub fn execution_proof(&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8]
+	) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
@@ -432,12 +452,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Get block hash by number.
-	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
+	pub fn block_hash(&self,
+		block_number: <<Block as BlockT>::Header as HeaderT>::Number
+	) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
-	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+	pub fn header_proof_with_cht_size(&self,
+		id: &BlockId<Block>,
+		cht_size: u64
+	) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
 		let proof_error = || error::Error::Backend(format!("Failed to generate header proof for {:?}", id));
 		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
@@ -574,8 +599,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		);
 
 		// fetch key changes proof
-		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.saturated_into::<u64>();
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.saturated_into::<u64>();
+		let first_number = self.backend.blockchain()
+			.expect_block_number_from_id(&BlockId::Hash(first))?
+			.saturated_into::<u64>();
+		let last_number = self.backend.blockchain()
+			.expect_block_number_from_id(&BlockId::Hash(last))?
+			.saturated_into::<u64>();
 		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
 			&config,
 			&recording_storage,

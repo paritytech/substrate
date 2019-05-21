@@ -283,7 +283,11 @@ impl<B: BlockT> ChainSync<B> {
 						self.download_new(protocol, who)
 					} else {
 						let common_best = ::std::cmp::min(our_best, info.best_number);
-						debug!(target:"sync", "New peer with unknown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
+						debug!(target:"sync",
+							"New peer with unknown best hash {} ({}), searching for common ancestor.",
+							info.best_hash,
+							info.best_number
+						);
 						self.peers.insert(who.clone(), PeerSync {
 							common_number: Zero::zero(),
 							best_hash: info.best_hash,
