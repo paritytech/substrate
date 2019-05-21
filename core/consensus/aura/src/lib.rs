@@ -26,7 +26,8 @@
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
 #![forbid(missing_docs, unsafe_code)]
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::{Debug, Display}};
+use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash};
+use std::fmt::{Debug, Display};
 
 use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
@@ -163,7 +164,10 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, HashT, H>(
 	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=HashT>,
+	H: Header<
+		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
+		Hash=HashT,
+	>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -199,21 +203,23 @@ struct AuraWorker<C, E, I, P, SO> {
 	force_authoring: bool,
 }
 
-impl<
-	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
-		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
-		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>, Hash=B::Hash>,
-	B: Block<Header=H, Hash=Hash>, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
+impl<H,	Hash, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+	B: Block<Header=H, Hash=Hash>,
+	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	H: Header<
+		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
+		Hash=B::Hash,
+	>,
+	Hash: Simple + Serialize + for<'de> Deserialize<'de> + Default + AsRef<[u8]> + AsMut<[u8]> +
+		Copy + SimpleBitOps + Display,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
-	P::Public: std::hash::Hash + Eq + Send + Sync + Clone + Debug + Encode + Decode + 'static,
-	P::Signature: Encode + Decode + Eq + Send + Sync + Debug + Clone,
+	P::Public: Simple,
+	P::Signature: Simple,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -779,7 +785,6 @@ pub fn import_queue<B, C, E, P>(
 mod tests {
 	use super::*;
 	use futures::stream::Stream as _;
-	use generic::DigestItem;
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
@@ -817,7 +822,12 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData, _: Duration, digests: DigestFor<TestBlock>) -> Result<TestBlock, Error> {
+		fn propose(
+			&self,
+			_: InherentData,
+			_: Duration,
+			digests: DigestFor<TestBlock>,
+		) -> Result<TestBlock, Error> {
 			self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 		}
 	}
@@ -901,7 +911,7 @@ mod tests {
 			extrinsics_root: Default::default(),
 			digest: DigestTest { logs: vec![], },
 		};
-		let mut item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_pre_digest(slot_num);
+		let mut item = <DigestItemFor<TestBlock> as CompatibleDigestItem<sr25519::Pair>>::aura_pre_digest(slot_num);
 		header.digest_mut().push(item);
 		let header_hash: H256 = header.hash();
 		let to_sign = (slot_num, header_hash).encode();

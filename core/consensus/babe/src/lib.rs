@@ -230,16 +230,16 @@ struct BabeWorker<C, E, I, SO> {
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
-	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
-		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
-		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
 	B: Block<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
+		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
+		std::hash::Hash + Display + Send + Sync + 'static,
+	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
