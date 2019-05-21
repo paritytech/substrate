@@ -61,7 +61,7 @@ fn run_until_exit<T, C, E>(
 {
 	let (exit_send, exit) = exit_future::signal();
 
-	let informant = cli::informant::build(&service);
+	let informant = informant::build(&service);
 	runtime.executor().spawn(exit.until(informant).map(|_| ()));
 
 	let _ = runtime.block_on(e.into_exit());
