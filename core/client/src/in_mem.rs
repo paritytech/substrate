@@ -415,12 +415,20 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 		Blockchain::finalize_header(self, id, None)
 	}
 
-	fn header_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+	fn header_cht_root(
+		&self,
+		_cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> error::Result<Block::Hash> {
 		self.storage.read().header_cht_roots.get(&block).cloned()
 			.ok_or_else(|| error::Error::Backend(format!("Header CHT for block {} not exists", block)))
 	}
 
-	fn changes_trie_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+	fn changes_trie_cht_root(
+		&self,
+		_cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> error::Result<Block::Hash> {
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
 			.ok_or_else(|| error::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 	}

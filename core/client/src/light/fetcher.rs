@@ -236,7 +236,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		&self,
 		request: &RemoteChangesRequest<B::Header>,
 		remote_proof: ChangesProof<B::Header>,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
@@ -307,7 +307,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	/// Check CHT-based proof for changes tries roots.
 	fn check_changes_tries_proof(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 		remote_roots: &BTreeMap<NumberFor<B>, B::Hash>,
 		remote_roots_proof: Vec<Vec<u8>>,
 	) -> ClientResult<()>
@@ -419,7 +419,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteChangesRequest<Block::Header>,
 		remote_proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
-		self.check_changes_proof_with_cht_size(request, remote_proof, cht::SIZE)
+		self.check_changes_proof_with_cht_size(request, remote_proof, cht::size())
 	}
 
 	fn check_body_proof(
