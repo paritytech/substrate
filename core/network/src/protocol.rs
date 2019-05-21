@@ -32,7 +32,6 @@ use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{ProtocolConfig, Roles};
-use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -89,9 +88,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
-	// Connected peers from whom we received a Status message,
-	// similar to context_data.peers but shared with the SyncProvider.
-	connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 }
 
 /// A peer from whom we have received a Status message.
@@ -262,7 +258,6 @@ struct ContextData<B: BlockT, H: ExHashT> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
-		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
@@ -284,7 +279,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			specialization: specialization,
 			consensus_gossip: ConsensusGossip::new(),
 			handshaking_peers: HashMap::new(),
-			connected_peers,
 		})
 	}
 
@@ -359,12 +353,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.info.best_hash = info.best_hash;
 				peer.info.best_number = info.best_number;
 			}
-			let mut peers = self.connected_peers.write();
-			if let Some(ref mut peer) = peers.get_mut(who) {
-				peer.peer_info.best_hash = info.best_hash;
-				peer.peer_info.best_number = info.best_number;
-			}
 		}
+	}
+
+	/// Returns information about all the peers we are connected to after the handshake message.
+	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
+		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
 	pub fn on_custom_message(
@@ -488,7 +482,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
 			self.handshaking_peers.remove(&peer);
-			self.connected_peers.write().remove(&peer);
 			self.context_data.peers.remove(&peer)
 		};
 		if let Some(peer_data) = removed {
@@ -733,16 +726,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 			let info = match self.handshaking_peers.remove(&who) {
 				Some(_handshaking) => {
-					let peer_info = PeerInfo {
+					PeerInfo {
 						protocol_version: status.version,
 						roles: status.roles,
 						best_hash: status.best_hash,
 						best_number: status.best_number
-					};
-					self.connected_peers
-						.write()
-						.insert(who.clone(), ConnectedPeer { peer_info: peer_info.clone() });
-					peer_info
+					}
 				},
 				None => {
 					error!(target: "sync", "Received status from previously unconnected node {}", who);

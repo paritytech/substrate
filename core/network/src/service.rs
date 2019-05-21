@@ -42,6 +42,8 @@ use tokio::runtime::Builder as RuntimeBuilder;
 
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
+/// Interval at which we update the `peers` field on the main thread.
+const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
 pub use network_libp2p::PeerId;
 
@@ -207,7 +209,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let protocol = Protocol::new(
-			peers.clone(),
 			params.config,
 			params.chain,
 			params.on_demand,
@@ -219,6 +220,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			protocol,
+			peers.clone(),
 			import_queue.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider,
@@ -515,6 +517,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
+	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
@@ -543,6 +546,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			is_major_syncing,
 			protocol,
 			service_clone,
+			peers,
 			import_queue,
 			transaction_pool,
 			finality_proof_provider,
@@ -572,6 +576,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_major_syncing: Arc<AtomicBool>,
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
+	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
@@ -596,11 +601,20 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 
 	// Interval at which we send status updates on the `status_sinks`.
 	let mut status_interval = tokio::timer::Interval::new_interval(STATUS_INTERVAL);
+	// Interval at which we update the `connected_peers` Arc.
+	let mut connected_peers_interval = tokio::timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL);
 
 	futures::future::poll_fn(move || {
 		while let Ok(Async::Ready(_)) = status_interval.poll() {
 			let status = protocol.status();
 			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
+		}
+
+		while let Ok(Async::Ready(_)) = connected_peers_interval.poll() {
+			let infos = protocol.peers_info().map(|(id, info)| {
+				(id.clone(), ConnectedPeer { peer_info: info.clone() })
+			}).collect();
+			*peers.write() = infos;
 		}
 
 		match protocol.poll(&mut Ctxt(&mut network_service.lock(), &peerset), &*transaction_pool) {

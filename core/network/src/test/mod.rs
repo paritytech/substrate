@@ -44,7 +44,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolStatus, CustomMessageOutcome, NetworkOut};
+use crate::protocol::{Context, Protocol, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -274,7 +274,6 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 }
 
 pub struct Peer<D, S: NetworkSpecialization<Block>> {
-	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 	peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
@@ -423,7 +422,6 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	fn new(
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
-		peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 		client: PeersClient,
 		import_queue: Box<BasicQueue<Block>>,
 		use_tokio: bool,
@@ -447,7 +445,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		import_queue.start(Box::new(network_link)).expect("Test ImportQueue always starts");
 		Peer {
 			protocol_status,
-			peers,
 			peer_id: PeerId::random(),
 			client,
 			import_queue,
@@ -952,13 +949,11 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 		));
 		let specialization = self::SpecializationFactory::create();
-		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
 		let (network_to_protocol_sender, network_to_protocol_rx) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 
 		let protocol = Protocol::new(
-			peers.clone(),
 			config.clone(),
 			client.clone(),
 			None,
@@ -977,7 +972,6 @@ pub trait TestNetFactory: Sized {
 			protocol_rx,
 			Arc::new(Peer::new(
 				protocol_status,
-				peers,
 				PeersClient::Full(client),
 				import_queue,
 				self.uses_tokio(),
@@ -1009,13 +1003,11 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 		));
 		let specialization = self::SpecializationFactory::create();
-		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
 		let (network_to_protocol_sender, network_to_protocol_rx) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 
 		let protocol = Protocol::new(
-			peers.clone(),
 			config,
 			client.clone(),
 			None,
@@ -1034,7 +1026,6 @@ pub trait TestNetFactory: Sized {
 			protocol_rx,
 			Arc::new(Peer::new(
 				protocol_status,
-				peers,
 				PeersClient::Light(client),
 				import_queue,
 				self.uses_tokio(),
