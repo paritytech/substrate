@@ -191,7 +191,6 @@ impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 /// and smaller ints. All other conversions are fallible.
 pub trait SimpleArithmetic:
 	Zero + One + IntegerSquareRoot +
-	As<u64> +   // < TODO: REMOVE
 	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
 	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
 	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
@@ -208,7 +207,6 @@ pub trait SimpleArithmetic:
 {}
 impl<T:
 	Zero + One + IntegerSquareRoot +
-	As<u64> +   // < TODO: REMOVE
 	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
 	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
 	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
@@ -288,6 +286,7 @@ pub trait SaturatedConversion {
 	fn saturated_from<T>(t: T) -> Self where Self: UniqueSaturatedFrom<T> {
 		<Self as UniqueSaturatedFrom<T>>::unique_saturated_from(t)
 	}
+
 	/// Consume self to return an equivalent value of `T`.
 	///
 	/// This just uses `UniqueSaturatedInto` internally but with this
@@ -298,6 +297,29 @@ pub trait SaturatedConversion {
 	}
 }
 impl<T: Sized> SaturatedConversion for T {}
+
+/// Convenience type to work around the highly unergonomic syntax needed
+/// to invoke the functions of overloaded generic traits, in this case
+/// `TryFrom` and `TryInto`.
+pub trait CheckedConversion {
+	/// Convert from a value of `T` into an equivalent instance of `Option<Self>`.
+	///
+	/// This just uses `TryFrom` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_from<T>(t: T) -> Option<Self> where Self: TryFrom<T> {
+		<Self as TryFrom<T>>::try_from(t).ok()
+	}
+	/// Consume self to return `Some` equivalent value of `Option<T>`.
+	///
+	/// This just uses `TryInto` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_into<T>(self) -> Option<T> where Self: TryInto<T> {
+		<Self as TryInto<T>>::try_into(self).ok()
+	}
+}
+impl<T: Sized> CheckedConversion for T {}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.

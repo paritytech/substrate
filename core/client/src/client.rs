@@ -35,8 +35,9 @@ use consensus::{
 	SelectChain, self,
 };
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight,
-	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem
+	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
+	BlockNumberToHash, ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+	SaturatedConversion, One
 };
 use runtime_primitives::BuildStorage;
 use crate::runtime_api::{
@@ -442,7 +443,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)));
+		let headers = (cht_start.saturated_into()..).map(|num| self.block_hash(num.saturated_into()));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, ::std::iter::once(block_num), headers)?;
 		Ok((header, proof))
 	}
@@ -460,14 +461,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some((config, storage)) => (config, storage),
 			None => return Ok(None),
 		};
- 		let first = first.as_();
-		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
+ 		let first = first.saturated_into::<u64>();
+		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.saturated_into::<u64>();
 		if first > last_num {
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
  		let finalized_number = self.backend.blockchain().info()?.finalized_number;
-		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.as_());
-		let first = As::sa(::std::cmp::max(first, oldest));
+		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.saturated_into::<u64>());
+		let first = ::std::cmp::max(first, oldest).saturated_into::<NumberFor<Block>>();
 		Ok(Some((first, last)))
 	}
 
@@ -480,20 +481,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let (config, storage) = self.require_changes_trie()?;
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?.saturated_into::<u64>();
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
 		key_changes::<_, Blake2Hasher>(
 			&config,
 			&*storage,
-			first.as_(),
+			first.saturated_into::<u64>(),
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last_hash),
 				number: last_number,
 			},
-			self.backend.blockchain().info()?.best_number.as_(),
+			self.backend.blockchain().info()?.best_number.saturated_into::<u64>(),
 			&key.0)
-		.and_then(|r| r.map(|r| r.map(|(block, tx)| (As::sa(block), tx))).collect::<Result<_, _>>())
+		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block.saturated_into(), tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
 	}
 
@@ -543,7 +544,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				if block < self.min {
 					if let Some(ref root) = root {
 						self.required_roots_proofs.lock().insert(
-							As::sa(block),
+							block.saturated_into(),
 							root.clone()
 						);
 					}
@@ -563,7 +564,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
 			storage,
-			min: min_number.as_(),
+			min: min_number.saturated_into::<u64>(),
 			required_roots_proofs: Mutex::new(BTreeMap::new()),
 		};
 
@@ -573,8 +574,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		);
 
 		// fetch key changes proof
-		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.as_();
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.as_();
+		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.saturated_into::<u64>();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.saturated_into::<u64>();
 		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
 			&config,
 			&recording_storage,
@@ -583,7 +584,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				hash: convert_hash(&last),
 				number: last_number,
 			},
-			max_number.as_(),
+			max_number.saturated_into::<u64>(),
 			&key.0
 		)
 		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
@@ -628,7 +629,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		blocks: Vec<NumberFor<Block>>
 	) -> error::Result<Vec<Vec<u8>>> {
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
+		let roots = (cht_start.saturated_into()..).map(|num| self.header(&BlockId::Number(num.saturated_into()))
 			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
 		Ok(proof)
@@ -777,7 +778,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let hash = import_headers.post().hash();
-		let height: u64 = import_headers.post().number().as_();
+		let height = (*import_headers.post().number()).saturated_into::<u64>();
 
 		*self.importing_block.write() = Some(hash);
 
@@ -1201,7 +1202,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _generation in 0..max_generation.as_() {
+		for _generation in 0..max_generation.saturated_into() {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
@@ -1224,7 +1225,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Prepare in-memory header that is used in execution environment.
 	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> error::Result<Block::Header> {
 		Ok(<<Block as BlockT>::Header as HeaderT>::new(
-			self.backend.blockchain().expect_block_number_from_id(parent)? + As::sa(1),
+			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
 			Default::default(),
 			Default::default(),
 			self.backend.blockchain().expect_block_hash_from_id(&parent)?,

@@ -19,7 +19,8 @@ use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	CheckedSub, SaturatedConversion};
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
 use crate::message::{
 	self, BlockRequest as BlockRequestMessage,
@@ -560,9 +561,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			};
 			blocks.push(block_data);
 			match request.direction {
-				message::Direction::Ascending => id = BlockId::Number(number + As::sa(1)),
+				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
 				message::Direction::Descending => {
-					if number == As::sa(0) {
+					if number.is_zero() {
 						break;
 					}
 					id = BlockId::Hash(parent_hash)
@@ -703,9 +704,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.and_then(|info| info.best_queued_number)
 					.unwrap_or_else(|| Zero::zero());
 				let blocks_difference = self_best_block
-					.as_()
-					.checked_sub(status.best_number.as_())
-					.unwrap_or(0);
+					.checked_sub(&status.best_number)
+					.unwrap_or_else(Zero::zero)
+					.saturated_into::<u64>();
 				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
 					self.network_chan.send(

@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem};
+	NumberFor, SaturatedConversion, Digest, DigestItem};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
@@ -619,7 +619,11 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(
+						(*header.number()).saturated_into::<u64>(),
+						changes_trie_root,
+						changes_trie_update
+					);
 				}
 			}
 
@@ -668,7 +672,7 @@ where
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
-		Ok(As::sa(0))
+		Ok(Zero::zero())
 	}
 }
 
