@@ -274,7 +274,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -314,7 +313,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 									"target_hash" => ?precommit.target_hash,
 								);
 							},
-						}
+						};
 
 						Ok(Some(msg.message))
 					}
