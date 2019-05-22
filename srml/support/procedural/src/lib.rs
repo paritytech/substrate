@@ -61,7 +61,8 @@ use proc_macro::TokenStream;
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
 ///   [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
 ///
-/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements `StorageDoubleMap` with
+/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements
+///   [StorageDoubleMap](../srml_support/storage/trait.StorageDoubleMap.html) with
 ///   `$hash` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable` trait](../srml_support/trait.Hashable.html).
 ///
