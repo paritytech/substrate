@@ -23,6 +23,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp" }
 balances = { package = "srml-balances", path = "../balances" }
 
 [features]
+bench = []
 default = ["std"]
 std = [
 	"serde",
