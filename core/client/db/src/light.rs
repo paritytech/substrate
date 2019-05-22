@@ -32,8 +32,9 @@ use client::light::blockchain::Storage as LightBlockchainStorage;
 use parity_codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, SaturatedConversion, NumberFor, Digest, DigestItem
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT,
+	Zero, One, NumberFor, Digest, DigestItem,
 };
 use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
@@ -272,7 +273,13 @@ impl<Block: BlockT> LightStorage<Block> {
 		if let Some(new_cht_number) = cht::is_build_required(cht::size(), *header.number()) {
 			let new_cht_start: NumberFor<Block> = cht::start_number(cht::size(), new_cht_number);
 
-			let cht_range = num_iter::range_inclusive(new_cht_start, Bounded::max_value());
+			let mut current_num = new_cht_start;
+			let cht_range = ::std::iter::from_fn(|| {
+				let old_current_num = current_num;
+				current_num = current_num + One::one();
+				Some(old_current_num)
+			});
+
 			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
@@ -284,7 +291,12 @@ impl<Block: BlockT> LightStorage<Block> {
 
 			// if the header includes changes trie root, let's build a changes tries roots CHT
 			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
-				let cht_range = num_iter::range_inclusive(new_cht_start, Bounded::max_value());
+				let mut current_num = new_cht_start;
+				let cht_range = ::std::iter::from_fn(|| {
+					let old_current_num = current_num;
+					current_num = current_num + One::one();
+					Some(old_current_num)
+				});
 				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))

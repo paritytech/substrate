@@ -21,20 +21,23 @@ use std::iter::FromIterator;
 use hash_db::Hasher;
 use trie::trie_root;
 use crate::backend::InMemory;
-use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
+use crate::changes_trie::{
+	compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage,
+	BlockNumber as ChangesTrieBlockNumber,
+};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher> {
+pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
-	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
+	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	changes: OverlayedChanges,
 	code: Option<Vec<u8>>,
 }
 
-impl<H: Hasher> TestExternalities<H> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		Self::new_with_code(&[], inner)
@@ -63,21 +66,26 @@ impl<H: Hasher> TestExternalities<H> {
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) -> Option<Vec<u8>> {
 		self.inner.insert(k, v)
 	}
+
+	/// Get mutable reference to changes trie storage.
+	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
+		&mut self.changes_trie_storage
+	}
 }
 
-impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> ::std::fmt::Debug for TestExternalities<H, N> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{:?}", self.inner)
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H> {
-	fn eq(&self, other: &TestExternalities<H>) -> bool {
+impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N> {
+	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
 		self.inner.eq(&other.inner)
 	}
 }
 
-impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H, N> {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
 		t.inner.extend(iter);
@@ -85,17 +93,17 @@ impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
 	}
 }
 
-impl<H: Hasher> Default for TestExternalities<H> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> {
-	fn from(tex: TestExternalities<H>) -> Self {
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<TestExternalities<H, N>> for HashMap<Vec<u8>, Vec<u8>> {
+	fn from(tex: TestExternalities<H, N>) -> Self {
 		tex.inner.into()
 	}
 }
 
-impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H, N> {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		TestExternalities {
 			inner: hashmap,
@@ -109,7 +117,7 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> {
 // TODO child test primitives are currently limited to `changes` (for non child the way
 // things are defined seems utterly odd to (put changes in changes but never make them
 // available for read through inner)
-impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
+impl<H: Hasher, N: ChangesTrieBlockNumber> Externalities<H> for TestExternalities<H, N> where H::Out: Ord + 'static {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
 			CODE => self.code.clone(),
@@ -161,13 +169,13 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 		vec![]
 	}
 
-	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {
-		compute_changes_trie_root::<_, _, H>(
+	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> {
+		Ok(compute_changes_trie_root::<_, _, H, N>(
 			&InMemory::default(),
 			Some(&self.changes_trie_storage),
 			&self.changes,
-			&AnchorBlockId { hash: parent, number: parent_num },
-		).map(|(root, _)| root.clone())
+			parent,
+		)?.map(|(root, _)| root.clone()))
 	}
 
 	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
@@ -183,7 +191,7 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -193,7 +201,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());

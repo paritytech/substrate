@@ -487,14 +487,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some((config, storage)) => (config, storage),
 			None => return Ok(None),
 		};
- 		let first = first.saturated_into::<u64>();
-		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.saturated_into::<u64>();
+		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		if first > last_num {
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
  		let finalized_number = self.backend.blockchain().info()?.finalized_number;
-		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.saturated_into::<u64>());
-		let first = ::std::cmp::max(first, oldest).saturated_into::<NumberFor<Block>>();
+		let oldest = storage.oldest_changes_trie_block(&config, finalized_number);
+		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
 	}
 
@@ -507,20 +506,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let (config, storage) = self.require_changes_trie()?;
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?.saturated_into::<u64>();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		key_changes::<_, Blake2Hasher>(
+		key_changes::<_, Blake2Hasher, _>(
 			&config,
 			&*storage,
-			first.saturated_into::<u64>(),
+			first,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last_hash),
 				number: last_number,
 			},
-			self.backend.blockchain().info()?.best_number.saturated_into::<u64>(),
+			self.backend.blockchain().info()?.best_number,
 			&key.0)
-		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block.saturated_into(), tx))).collect::<Result<_, _>>())
+		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
 	}
 
@@ -559,18 +558,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		cht_size: NumberFor<Block>,
 	) -> error::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a ChangesTrieStorage<Blake2Hasher>,
-			min: u64,
+			storage: &'a ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>,
+			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, H256>>,
 		};
 
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
-			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
+			fn build_anchor(&self, hash: H256) -> Result<ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+				self.storage.build_anchor(hash)
+			}
+
+			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, block: NumberFor<Block>) -> Result<Option<H256>, String> {
 				let root = self.storage.root(anchor, block)?;
 				if block < self.min {
 					if let Some(ref root) = root {
 						self.required_roots_proofs.lock().insert(
-							block.saturated_into(),
+							block,
 							root.clone()
 						);
 					}
@@ -579,7 +582,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
 			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -590,7 +593,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
 			storage,
-			min: min_number.saturated_into::<u64>(),
+			min: min_number,
 			required_roots_proofs: Mutex::new(BTreeMap::new()),
 		};
 
@@ -601,12 +604,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// fetch key changes proof
 		let first_number = self.backend.blockchain()
-			.expect_block_number_from_id(&BlockId::Hash(first))?
-			.saturated_into::<u64>();
+			.expect_block_number_from_id(&BlockId::Hash(first))?;
 		let last_number = self.backend.blockchain()
-			.expect_block_number_from_id(&BlockId::Hash(last))?
-			.saturated_into::<u64>();
-		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
+			.expect_block_number_from_id(&BlockId::Hash(last))?;
+		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
 			&config,
 			&recording_storage,
 			first_number,
@@ -614,7 +615,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				hash: convert_hash(&last),
 				number: last_number,
 			},
-			max_number.saturated_into::<u64>(),
+			max_number,
 			&key.0
 		)
 		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
