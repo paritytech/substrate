@@ -21,6 +21,7 @@ use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::Header;
+use consensus_common::EquivocationProof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -45,48 +46,21 @@ fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Represents an equivocation proof.
-#[derive(Debug, Clone, Encode, Decode, Default)]
-pub struct EquivocationProof<H: Encode + Decode> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
-}
-
-impl<H> EquivocationProof<H>
-where
-	H: Encode + Decode,
-{
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
-
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
-	}
-}
-
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, P>(
+pub fn check_equivocation<C, H, P, E>(
 	backend: &Arc<C>,
 	slot_now: u64,
 	slot: u64,
 	header: H,
 	signer: P,
-) -> ClientResult<Option<EquivocationProof<H>>>
+) -> ClientResult<Option<E>>
 	where
 		H: Header,
 		C: AuxStore,
 		P: Encode + Decode + PartialEq,
+		E: EquivocationProof<H>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -112,11 +86,11 @@ pub fn check_equivocation<C, H, P>(
 		if *prev_signer == signer {
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof {
-					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
-				}));
+				return Ok(Some(EquivocationProof::new(
+					slot,
+					prev_header.clone(),
+					header.clone(),
+				)));
 			} else {
 				//  We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation

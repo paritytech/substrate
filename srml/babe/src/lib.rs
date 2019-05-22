@@ -111,7 +111,36 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Report equivocation in block production.
+		fn report_equivocation(origin, _equivocation_proof: Vec<u8>) {
+			ensure_signed(origin)?;
+		}
+	}
+}
+
+impl<T: Trait> ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_equivocation(proof) => {
+				let maybe_equivocation_proof = EquivocationProof::decode(proof);
+				if let Some(equivocation_proof) = maybe_equivocation_proof {
+					if equivocation_proof.is_valid() {
+						return TransactionValidity::Valid {
+							priority: 0,
+							requires: vec![],
+							provides: vec![],
+							longevity: std::u64::MAX,
+						}
+					}
+				}
+				TransactionValidity::Invalid(0)
+			},
+			_ => TransactionValidity::Invalid(0),
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {

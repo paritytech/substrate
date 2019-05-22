@@ -58,7 +58,7 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
-use consensus_common::{SelectChain, well_known_cache_keys};
+use consensus_common::{SelectChain, well_known_cache_keys, EquivocationProof};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -523,6 +523,31 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 					consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()
 				})
 		)
+	}
+}
+
+impl<H> EquivocationProof for BabeEquivocationProof<H>
+where
+	H: Encode + Decode,
+{
+	/// Get the slot number where the equivocation happened.
+	fn slot(&self) -> u64 {
+		self.slot
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		self.second_header
+	}
+
+	/// Check if the proof is valid.
+	fn is_valid(&self) -> bool {
+		true
 	}
 }
 

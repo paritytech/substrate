@@ -53,14 +53,19 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{As, Zero};
+use substrate_primitives::Pair;
+use primitives::traits::{self, As, Zero, ValidateUnsigned};
+use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Input, Output};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+use aura_primitives::{AuraEquivocationProof, CompatibleDigestItem};
+use common::EquivocationProof;
+use system::ensure_signed;
 
 mod mock;
 mod tests;
@@ -149,6 +154,10 @@ impl HandleReport for () {
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
+	type Pair:  Pair;
+	type CompatibleDigestItem: CompatibleDigestItem<Self::Pair> + traits::DigestItem<Hash = Self::Hash>;
+	type D: traits::Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Encode + Decode;
+	type H: traits::Header<Digest = Self::D, Hash = Self::Hash>;
 }
 
 decl_storage! {
@@ -159,7 +168,36 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Report equivocation in block production.
+		fn report_equivocation(origin, _equivocation_proof: Vec<u8>) {
+			ensure_signed(origin)?;
+		}
+	}
+}
+
+impl<T: Trait> ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_equivocation(proof) => {
+				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H, T::Pair>> = Decode::decode(&mut proof.as_slice());
+				if let Some(equivocation_proof) = maybe_equivocation_proof {
+					if equivocation_proof.is_valid() {
+						return TransactionValidity::Valid {
+							priority: 0,
+							requires: vec![],
+							provides: vec![],
+							longevity: std::u64::MAX,
+						}
+					}
+				}
+				TransactionValidity::Invalid(0)
+			},
+			_ => TransactionValidity::Invalid(0),
+		}
+	}
 }
 
 /// A report of skipped authorities in Aura.

@@ -343,22 +343,6 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
-	type Call = Call<T>;
-
-	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
-		match call {
-			Call::report_misbehavior(_encoded_report) => srml_support::unsigned::TransactionValidity::Valid {
-				priority: 0,
-				requires: vec![],
-				provides: vec![],
-				longevity: std::u64::MAX,
-			},
-			_ => srml_support::unsigned::TransactionValidity::Invalid(0),
-		}
-	}
-}
-
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities. These are the session keys.
 	pub fn authorities() -> Vec<T::SessionKey> {

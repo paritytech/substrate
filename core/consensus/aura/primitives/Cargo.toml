@@ -6,8 +6,11 @@ description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
+parity-codec = "3.4"
 substrate-client = { path = "../../../client", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
+consensus_common = { package = "substrate-consensus-common", path = "../../common" }
+primitives = { package = "substrate-primitives", path = "../../../primitives" }
 
 [features]
 default = ["std"]

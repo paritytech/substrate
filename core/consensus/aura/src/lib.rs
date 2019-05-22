@@ -31,11 +31,11 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 use parity_codec::{Encode, Decode, Compact};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
-	SelectChain, well_known_cache_keys
+	SelectChain, well_known_cache_keys, EquivocationProof,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	SharedFinalityProofRequestBuilder
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -65,9 +65,12 @@ use srml_aura::{
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-use slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now, check_equivocation, EquivocationProof};
+use slots::{
+	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, slot_now,
+	check_equivocation,
+};
 
-use node_runtime::{UncheckedExtrinsic, Call, ConsensusCall};
+use node_runtime::{UncheckedExtrinsic, Call, AuraCall};
 use srml_indices::address::Address;
 
 pub use aura_primitives::*;
@@ -129,48 +132,6 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 	consensus_common::ErrorKind::InherentData(err.into()).into()
-}
-
-/// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<T: Pair>: Sized {
-	/// Construct a digest item which contains a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_num: u64, signature: Signature<T>) -> Self;
-
-	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, Signature<T>)>;
-
-	/// Return `true` if this seal type is deprecated.  Otherwise, return
-	/// `false`.
-	fn is_deprecated(&self) -> bool;
-}
-
-impl<P, Hash> CompatibleDigestItem<P> for generic::DigestItem<Hash, P::Public, P::Signature>
-	where P: Pair, P::Signature: Clone + Encode + Decode,
-{
-	/// Construct a digest item which is a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_number: u64, signature: Signature<P>) -> Self {
-		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
-	}
-
-	/// If this item is an Aura seal, return the slot number and signature.
-	#[allow(deprecated)]
-	fn as_aura_seal(&self) -> Option<(u64, Signature<P>)> {
-		match self {
-			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-			_ => None,
-		}
-	}
-
-	#[allow(deprecated)]
-	fn is_deprecated(&self) -> bool {
-		match self {
-			generic::DigestItem::Seal(_, _) => true,
-			_ => false,
-		}
-	}
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -509,7 +470,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			match check_equivocation::<_, _, <P as Pair>::Public>(
+			match check_equivocation::<_, _, <P as Pair>::Public, AuraEquivocationProof<_, _>>(
 				client,
 				slot_now,
 				slot_num,
@@ -520,15 +481,23 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 					let log_str = format!(
 						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 						slot_num,
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
+						equivocation_proof.first_header().hash(),
+						equivocation_proof.second_header().hash(),
 					);
 					info!("{}", log_str);
 					submit_report_call(client, transaction_pool, equivocation_proof);
 					Err(log_str)
 				},
 				Ok(None) => {
-					submit_report_call(client, transaction_pool, EquivocationProof::<B::Hash>::default());
+					submit_report_call(
+						client,
+						transaction_pool,
+						AuraEquivocationProof::new(
+							slot_now,
+							header.clone(),
+							header.clone(),
+						),
+					);
 					Ok(CheckedHeader::Checked(header, digest_item))
 				},
 				Err(e) => Err(e.to_string()),
@@ -540,14 +509,15 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 }
 
 /// Submit report call.
-pub fn submit_report_call<H, A, B: Block, C>(
+pub fn submit_report_call<H, A, B: Block, C, P>(
 	client: &Arc<C>,
 	transaction_pool: &Arc<TransactionPool<A>>,
-	proof: EquivocationProof<H>,
+	aura_proof: AuraEquivocationProof<H, P>,
 ) where
 	A: txpool::ChainApi<Block=B>,
 	C: client::blockchain::HeaderBackend<B>,
-	H: Encode + Decode,
+	H: Header + Encode + Decode,
+	P: Pair,
 {
 	println!("SUBMIT_REPORT_CALL");
 	// let next_index = 10000u64;
@@ -564,7 +534,7 @@ pub fn submit_report_call<H, A, B: Block, C>(
 	// let any_signature = AnySignature::from(signature);
 	// println!("any signature = {:?}", any_signature);
 	// let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
-	let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Consensus(ConsensusCall::report_misbehavior(proof.encode())));
+	let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Aura(AuraCall::report_equivocation(aura_proof.encode())));
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
 	// // assert_eq!(extrinsic, uxt);
 	let block_id = BlockId::<B>::number(client.info().unwrap().best_number);

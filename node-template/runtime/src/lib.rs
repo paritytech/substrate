@@ -27,6 +27,7 @@ use version::NativeVersion;
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
+pub use aura::Call as AuraCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};

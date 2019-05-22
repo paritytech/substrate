@@ -71,3 +71,12 @@ decl_runtime_apis! {
 		fn startup_data() -> BabeConfiguration;
 	}
 }
+
+
+/// Represents an equivocation proof.
+#[derive(Debug, Clone, Encode, Decode, Default)]
+pub struct BabeEquivocationProof<H: Encode + Decode> {
+	slot: u64,
+	first_header: H,
+	second_header: H,
+}

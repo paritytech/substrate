@@ -2294,6 +2294,8 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "substrate-consensus-aura-primitives 2.0.0",
+ "substrate-consensus-common 2.0.0",
  "substrate-inherents 2.0.0",
 ]
 
@@ -2702,8 +2704,10 @@ dependencies = [
 name = "substrate-consensus-aura-primitives"
 version = "2.0.0"
 dependencies = [
+ "parity-codec 3.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-common 2.0.0",
 ]
 
 [[package]]

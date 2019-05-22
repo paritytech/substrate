@@ -42,11 +42,13 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::OpaqueMetadata;
+use substrate_primitives::{OpaqueMetadata, ed25519::Pair};
+use support::inherent::Extrinsic;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
+pub use aura::Call as AuraCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
@@ -102,6 +104,10 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
+	type Pair = Pair;
+	type CompatibleDigestItem = generic::DigestItem<Self::Hash, AuthorityId, AuthoritySignature>;
+	type D = generic::Digest<Self::CompatibleDigestItem>;
+	type H = generic::Header<BlockNumber, BlakeTwo256, Self::CompatibleDigestItem>;
 }
 
 impl indices::Trait for Runtime {
@@ -214,9 +220,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module, Inherent(Timestamp)},
+		Aura: aura::{Module, Call, Inherent(Timestamp), ValidateUnsigned},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
-		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent, ValidateUnsigned},
+		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
 		Balances: balances,
 		Session: session,
