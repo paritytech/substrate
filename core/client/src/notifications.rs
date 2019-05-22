@@ -297,7 +297,10 @@ mod tests {
 	use futures::Stream;
 	use std::iter::{empty, Empty};
 
-	type TestChangeSet = (Vec<(StorageKey, Option<StorageData>)>,
+	type TestChangeSet = (
+	  Vec<(StorageKey, Option<StorageData>)>,
+	  Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
+	);
 		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>);
 	#[cfg(test)]
 	impl From<TestChangeSet> for StorageChangeSet {
