@@ -1741,7 +1741,7 @@ mod tests {
 
 			assert_noop!(
 				Council::set_approvals(Origin::signed(4),vec![true, true], 0, 0),
-				"amount of candidate approval votes cannot exceed amount of candidates"
+				"amount of candidate votes cannot exceed amount of candidates"
 			);
 		});
 	}
