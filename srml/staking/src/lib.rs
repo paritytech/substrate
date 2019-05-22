@@ -261,12 +261,12 @@ use srml_support::{ StorageValue, StorageMap, EnumerableStorageMap, dispatch::Re
 		WithdrawReasons, OnUnbalanced, Imbalance
 	}
 };
-use primitives::{
-	Perbill, Serialize, Deserialize,
+use primitives::{Perbill,
 	traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded},
 };
 
 #[cfg(feature = "std")]
+use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
 
 use phragmen::{elect, ACCURACY, ExtendedBalance};
