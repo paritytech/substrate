@@ -29,7 +29,7 @@ use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use log::{info, warn};
 
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, SaturatedConversion};
 
 /// Spawn informant on the event loop
 pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
@@ -47,7 +47,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let display_notifications = network.status().for_each(move |sync_status| {
 
 		if let Ok(info) = client.info() {
-			let best_number: u64 = info.chain.best_number.as_();
+			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
 			let num_peers = sync_status.num_peers;
 			let speed = move || speed(best_number, last_number, last_update);
@@ -59,7 +59,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			};
 			last_number = Some(best_number);
 			let txpool_status = txpool.status();
-			let finalized_number: u64 = info.chain.finalized_number.as_();
+			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
 			let bandwidth_download = network.average_download_per_sec();
 			let bandwidth_upload = network.average_upload_per_sec();
 			info!(

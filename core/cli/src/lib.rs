@@ -26,7 +26,6 @@ pub mod error;
 pub mod informant;
 
 use client::ExecutionStrategies;
-use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
@@ -627,7 +626,7 @@ where
 	};
 
 	service::chain_ops::export_blocks::<F, _, _>(
-		config, exit.into_exit(), file, As::sa(from), to.map(As::sa), json
+		config, exit.into_exit(), file, from.into(), to.map(Into::into), json
 	).map_err(Into::into)
 }
 
@@ -663,7 +662,7 @@ where
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 	let blocks = cli.num;
-	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
+	Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
 }
 
 fn purge_chain<F, S>(

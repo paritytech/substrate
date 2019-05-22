@@ -26,7 +26,7 @@ use parity_wasm::elements::{self, Internal, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
-use runtime_primitives::traits::As;
+use runtime_primitives::traits::{UniqueSaturatedInto, SaturatedConversion};
 
 struct ContractModule<'a, Gas: 'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
@@ -38,7 +38,7 @@ struct ContractModule<'a, Gas: 'a> {
 	schedule: &'a Schedule<Gas>,
 }
 
-impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
+impl<'a, Gas: 'a + From<u32> + UniqueSaturatedInto<u32> + Clone> ContractModule<'a, Gas> {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `original_code` couldn't be decoded or
@@ -85,10 +85,10 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 	fn inject_gas_metering(&mut self) -> Result<(), &'static str> {
 		let gas_rules =
 			rules::Set::new(
-				self.schedule.regular_op_cost.clone().as_(),
+				self.schedule.regular_op_cost.clone().saturated_into(),
 				Default::default(),
 			)
-			.with_grow_cost(self.schedule.grow_mem_cost.clone().as_())
+			.with_grow_cost(self.schedule.grow_mem_cost.clone().saturated_into())
 			.with_forbidden_floats();
 
 		let module = self
