@@ -21,6 +21,7 @@ session = { package = "srml-session", path = "../session", default-features = fa
 substrate-primitives = { path = "../../core/primitives" }
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
 balances = { package = "srml-balances", path = "../balances" }
+rand = "0.6.5"
 
 [features]
 bench = []
