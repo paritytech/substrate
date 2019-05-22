@@ -421,11 +421,14 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		{
+			let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
 			let _recv1 = notifications.listen(Some(&[StorageKey(vec![1])]), None).wait();
 			let _recv2 = notifications.listen(Some(&[StorageKey(vec![2])]), None).wait();
 			let _recv3 = notifications.listen(None, None).wait();
+			let _recv4 = notifications.listen(None, Some(&child_filter)).wait();
 			assert_eq!(notifications.listeners.len(), 2);
-			assert_eq!(notifications.wildcard_listeners.len(), 1);
+			assert_eq!(notifications.wildcard_listeners.len(), 2);
+			assert_eq!(notifications.child_listeners.len(), 1);
 		}
 
 		// when
@@ -439,6 +442,7 @@ mod tests {
 		// then
 		assert_eq!(notifications.listeners.len(), 0);
 		assert_eq!(notifications.wildcard_listeners.len(), 0);
+		assert_eq!(notifications.child_listeners.len(), 0);
 	}
 
 	#[test]
