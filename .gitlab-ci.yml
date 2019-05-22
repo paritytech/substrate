@@ -208,7 +208,7 @@ publish-docker-release:
     - test -z "${VERSION}" && exit 1
     - cd ./artifacts
     - docker build
-      --build-arg VCS_REF="${CI_COMMIT_SHORT_SHA}"
+      --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       --tag $CONTAINER_IMAGE:$VERSION 
       --tag $CONTAINER_IMAGE:latest .
