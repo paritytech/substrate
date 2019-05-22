@@ -247,7 +247,8 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
+use primitives::traits::{
+	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
 	Bounded, SaturatedConversion};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
