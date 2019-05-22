@@ -295,7 +295,7 @@ mod tests {
 	use runtime_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 	use futures::Stream;
-	use ::std::iter::{empty, Empty};
+	use std::iter::{empty, Empty};
 
 	type TestChangeSet = (Vec<(StorageKey, Option<StorageData>)>,
 		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>);
