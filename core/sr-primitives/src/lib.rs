@@ -926,11 +926,7 @@ mod tests {
 
 	#[test]
 	fn per_things_operate_in_output_type() {
-		use super::Perbill;
-
-		assert_eq!(Perbill::one() * 255_u64, 255);
-		// doesn't compile
-//		assert_ne!(Perbill::one() * 255_u8, 255);
+		assert_eq!(super::Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]

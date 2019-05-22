@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use serde::Deserialize;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Debug};
 use primitives::U256;
 use runtime_primitives::traits;
 
@@ -35,23 +35,28 @@ pub enum NumberOrHex<Number> {
 	Hex(U256),
 }
 
-impl<Number: TryFrom<u64>> NumberOrHex<Number> {
+impl<Number: TryFrom<u64> + From<u32> + Debug + PartialOrd> NumberOrHex<Number> {
 	/// Attempts to convert into concrete block number.
 	///
 	/// Fails in case hex number is too big.
 	pub fn to_number(self) -> Result<Number, String> {
-		match self {
-			NumberOrHex::Number(n) => Ok(n),
+		let num = match self {
+			NumberOrHex::Number(n) => n,
 			NumberOrHex::Hex(h) => {
 				let l = h.low_u64();
 				if U256::from(l) != h {
-					Err(format!("`{}` does not fit into u64 type; unsupported for now.", h))
+					return Err(format!("`{}` does not fit into u64 type; unsupported for now.", h))
 				} else {
 					Number::try_from(l)
-						.map_err(|_| format!("`{}` does not fit into block number type.", h))
+						.map_err(|_| format!("`{}` does not fit into block number type.", h))?
 				}
 			},
+		};
+		// FIXME <2329>: Database seems to limit the block number to u32 for no reason
+		if num > Number::from(u32::max_value()) {
+			return Err(format!("`{:?}` > u32::max_value(), the max block number is u32.", num))
 		}
+		Ok(num)
 	}
 }
 
