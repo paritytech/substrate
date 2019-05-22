@@ -272,9 +272,9 @@ impl<Block: BlockT> LightStorage<Block> {
 		if let Some(new_cht_number) = cht::is_build_required(cht::size(), *header.number()) {
 			let new_cht_start: NumberFor<Block> = cht::start_number(cht::size(), new_cht_number);
 
+			let cht_range = num_iter::range_inclusive(new_cht_start, Bounded::max_value());
 			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
-				cht::size(), new_cht_number, (new_cht_start.saturated_into::<u64>()..)
-					.map(|num| self.hash(num.saturated_into()))
+				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
 				columns::CHT,
@@ -284,9 +284,10 @@ impl<Block: BlockT> LightStorage<Block> {
 
 			// if the header includes changes trie root, let's build a changes tries roots CHT
 			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
+				let cht_range = num_iter::range_inclusive(new_cht_start, Bounded::max_value());
 				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
-					cht::size(), new_cht_number, (new_cht_start.saturated_into::<u64>()..)
-					.map(|num| self.changes_trie_root(BlockId::Number(num.saturated_into())))
+					cht::size(), new_cht_number, cht_range
+						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;
 				transaction.put(
 					columns::CHT,
