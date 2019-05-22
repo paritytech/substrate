@@ -56,8 +56,13 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
 	/// Get network state.
 	fn network_state(&self) -> NetworkState;
-	/// Get currently connected peers
-	fn peers(&self) -> Vec<(PeerId, PeerInfo<B>)>;
+
+	/// Get currently connected peers.
+	///
+	/// > **Warning**: This method can return outdated information and should only ever be used
+	/// > when obtaining outdated information is acceptable.
+	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)>;
+
 	/// Are we in the process of downloading the chain?
 	fn is_major_syncing(&self) -> bool;
 }
@@ -395,7 +400,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 		self.network.lock().state()
 	}
 
-	fn peers(&self) -> Vec<(PeerId, PeerInfo<B>)> {
+	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
 		let peers = (*self.peers.read()).clone();
 		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
 	}
