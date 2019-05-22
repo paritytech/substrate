@@ -2186,7 +2186,7 @@ name = "node-template"
 version = "2.0.0"
 dependencies = [
  "ctrlc 3.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "derive_more 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3885,7 +3885,6 @@ name = "substrate"
 version = "2.0.0"
 dependencies = [
  "ctrlc 3.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-cli 2.0.0",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3927,8 +3926,8 @@ dependencies = [
  "app_dirs 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "atty 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "derive_more 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "fdlimit 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",

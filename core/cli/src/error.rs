@@ -16,26 +16,27 @@
 
 //! Initialization errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
 use client;
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
 
-error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
-		Service(::service::Error) #[doc="Substrate service error"];
-		Client(client::error::Error) #[doc="Client error"];
-	}
-	errors {
-		/// Input error.
-		Input(m: String) {
-			description("Invalid input"),
-			display("{}", m),
-		}
-	}
+/// Initialization result.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Initialization errors.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// IO error.
+	Io(::std::io::Error),
+	/// CLI error.
+	Cli(::clap::Error),
+	/// Service error.
+	Service(::service::Error),
+	/// Client error.
+	Client(client::error::Error),
+	/// Input error.
+	Input(String),
+	/// Invalid listen multiaddress
+	#[display(fmt="Invalid listen multiaddress")]
+	InvalidListenMultiaddress,
 }
+
+impl std::error::Error for Error {}

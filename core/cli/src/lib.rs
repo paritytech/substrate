@@ -56,7 +56,6 @@ use params::{
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
-use error_chain::bail;
 use log::info;
 use lazy_static::lazy_static;
 
@@ -147,7 +146,7 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 }
 
 fn input_err<T: Into<String>>(msg: T) -> error::Error {
-	error::ErrorKind::Input(msg.into()).into()
+	error::Error::Input(msg.into())
 }
 
 /// Check whether a node name is considered as valid
@@ -335,7 +334,7 @@ fn fill_network_configuration(
 	}
 
 	for addr in cli.listen_addr.iter() {
-		let addr = addr.parse().map_err(|_| "Invalid listen multiaddress")?;
+		let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
 		config.listen_addresses.push(addr);
 	}
 
@@ -393,14 +392,14 @@ where
 	};
 	match is_node_name_valid(&config.name) {
 		Ok(_) => (),
-		Err(msg) => bail!(
+		Err(msg) => Err(
 			input_err(
 				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
 					config.name,
 					msg
 				)
 			)
-		)
+		)?
 	}
 
 	let base_path = base_path(&cli.shared_params, version);
