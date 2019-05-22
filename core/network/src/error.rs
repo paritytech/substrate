@@ -23,23 +23,12 @@ use client;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the network.
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Io error
-	Io(::std::io::Error),
+	Io(std::io::Error),
 	/// Client error
 	Client(client::error::Error),
-}
-
-impl From<::std::io::Error> for Error {
-	fn from(err: ::std::io::Error) -> Self {
-		Error::Io(err)
-	}
-}
-
-impl From<client::error::Error> for Error {
-	fn from(err: client::error::Error) -> Self {
-		Error::Client(err)
-	}
 }
 
 impl error::Error for Error {
@@ -47,21 +36,6 @@ impl error::Error for Error {
 		match self {
 			Error::Io(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),
-		}
-	}
-}
-
-impl fmt::Debug for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Display::fmt(self, f)
-	}
-}
-
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Error::Io(t) => write!(f, "{}", t),
-			Error::Client(t) => write!(f, "{}", t),
 		}
 	}
 }

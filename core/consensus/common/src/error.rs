@@ -25,51 +25,51 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Error type.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	#[display(fmt="State unavailable at block {}", _0)]
 	/// Missing state at block with given descriptor.
+	#[display(fmt="State unavailable at block {}", _0)]
 	StateUnavailable(String),
-	#[display(fmt="I/O terminated unexpectedly.")]
 	/// I/O terminated unexpectedly
+	#[display(fmt="I/O terminated unexpectedly.")]
 	IoTerminated,
-	#[display(fmt="Timer error: {}", _0)]
 	/// Unable to schedule wakeup.
+	#[display(fmt="Timer error: {}", _0)]
 	FaultyTimer(tokio_timer::Error),
-	#[display(fmt="InherentData error: {}", _0)]
 	/// Error while working with inherent data.
+	#[display(fmt="InherentData error: {}", _0)]
 	InherentData(String),
-	#[display(fmt="Unable to create block proposal.")]
 	/// Unable to propose a block.
+	#[display(fmt="Unable to create block proposal.")]
 	CannotPropose,
-	#[display(fmt="Message signature {:?} by {:?} is invalid.", _0, _1)]
 	/// Error checking signature
+	#[display(fmt="Message signature {:?} by {:?} is invalid.", _0, _1)]
 	InvalidSignature(Signature, Public),
-	#[display(fmt="Current state of blockchain has invalid authorities set")]
 	/// Invalid authorities set received from the runtime.
+	#[display(fmt="Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,
-	#[display(fmt="Message sender {:?} is not a valid authority.", _0)]
 	/// Account is not an authority.
+	#[display(fmt="Message sender {:?} is not a valid authority.", _0)]
 	InvalidAuthority(Public),
+	/// Authoring interface does not match the runtime.
 	#[display(fmt="Authoring for current \
 				runtime is not supported. Native ({}) cannot author for on-chain ({}).", native, on_chain)]
-	/// Authoring interface does not match the runtime.
 	IncompatibleAuthoringRuntime { native: RuntimeVersion, on_chain: RuntimeVersion },
+	/// Authoring interface does not match the runtime.
 	#[display(fmt="Authoring for current runtime is not supported since it has no version.")]
-	/// Authoring interface does not match the runtime.
 	RuntimeVersionMissing,
-	#[display(fmt="Authoring in current build is not supported since it has no runtime.")]
 	/// Authoring interface does not match the runtime.
+	#[display(fmt="Authoring in current build is not supported since it has no runtime.")]
 	NativeRuntimeMissing,
-	#[display(fmt="Invalid justification.")]
 	/// Justification requirements not met.
+	#[display(fmt="Invalid justification.")]
 	InvalidJustification,
-	#[display(fmt="Other error: {}", _0)]
 	/// Some other error.
+	#[display(fmt="Other error: {}", _0)]
 	Other(Box<error::Error + Send>),
+	/// Error from the client while importing
 	#[display(fmt="Import failed: {}", _0)]
-	/// Error from the client while importing
 	ClientImport(String),
-	#[display(fmt="Chain lookup failed: {}", _0)]
 	/// Error from the client while importing
+	#[display(fmt="Chain lookup failed: {}", _0)]
 	ChainLookup(String),
 }
 

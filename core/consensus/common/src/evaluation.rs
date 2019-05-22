@@ -20,7 +20,6 @@ use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
-use std::{error, fmt};
 
 type BlockNumber = u64;
 
@@ -28,39 +27,26 @@ type BlockNumber = u64;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
+#[derive(Debug, derive_more::Display)]
 pub enum Error {
 	/// Proposal provided not a block.
+	#[display(fmt="Proposal provided not a block.")]
 	BadProposalFormat,
 	/// Proposal had wrong parent hash.
+	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
 	WrongParentHash { expected: String, got: String },
 	/// Proposal had wrong number.
+	#[display(fmt="Proposal had wrong number. Expected {}, got {}", expected, got)]
 	WrongNumber { expected: BlockNumber, got: BlockNumber },
 	/// Proposal exceeded the maximum size.
+	#[display(
+		fmt="Proposal exceeded the maximum size of {} by {} bytes.",
+		"MAX_BLOCK_SIZE", "_0.saturating_sub(MAX_BLOCK_SIZE"
+	)]
 	ProposalTooLarge(usize),
 }
 
-impl error::Error for Error {
-}
-
-impl fmt::Debug for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Display::fmt(self, f)
-	}
-}
-
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Error::BadProposalFormat => write!(f, "Proposal provided not a block."),
-			Error::WrongParentHash { expected, got } =>
-				write!(f, "Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
-			Error::WrongNumber { expected, got } =>
-				write!(f, "Proposal had wrong number. Expected {}, got {}", expected, got),
-			Error::ProposalTooLarge(size) => write!(f, "Proposal exceeded the maximum size of {} by {} bytes.",
-				MAX_BLOCK_SIZE, size.saturating_sub(MAX_BLOCK_SIZE)),
-		}
-	}
-}
+impl std::error::Error for Error {}
 
 /// Attempt to evaluate a substrate block as a node block, returning error
 /// upon any initial validity checks failing.
