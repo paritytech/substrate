@@ -332,8 +332,8 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 
 /// A storage map that can be enumerated.
 ///
-/// Note that type is primarily useful for off-chain computations.
-/// Runtime implementors should avoid enumerating storage entries.
+/// Primarily useful for off-chain computations.
+/// Runtime implementors should avoid enumerating storage entries on-chain.
 pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Return current head element.
 	fn head() -> Option<K>;
