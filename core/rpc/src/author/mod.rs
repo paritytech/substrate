@@ -26,7 +26,6 @@ use transaction_pool::{
 		ChainApi as PoolChainApi,
 		BlockHash,
 		ExHash,
-		IntoPoolError,
 		Pool,
 		watcher::Status,
 	},
@@ -36,6 +35,7 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{Bytes, Blake2Hasher, H256};
 use crate::rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
+use std::convert::TryInto;
 use crate::subscriptions::Subscriptions;
 
 pub mod error;
@@ -108,7 +108,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		let best_block_hash = self.client.info()?.chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
-			.map_err(|e| e.into_pool_error()
+			.map_err(|e| e.try_into()
 				.map(Into::into)
 				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
 			)
@@ -124,7 +124,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
 			self.pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
-				.map_err(|e| e.into_pool_error()
+				.map_err(|e| e.try_into()
 					.map(Into::into)
 					.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
 				)

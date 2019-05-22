@@ -25,6 +25,7 @@ use txpool;
 use error_chain::{
 	error_chain, error_chain_processing, impl_error_chain_processed, impl_extract_backtrace, impl_error_chain_kind
 };
+use std::convert::TryFrom;
 
 error_chain! {
 	foreign_links {
@@ -35,9 +36,21 @@ error_chain! {
 	}
 }
 
+#[allow(deprecated)]
 impl txpool::IntoPoolError for Error {
 	fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
 		match self {
+			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
+			e => Err(e),
+		}
+	}
+}
+
+impl TryFrom<Error> for txpool::error::Error {
+	type Error = Error;
+
+	fn try_from(err: Error) -> ::std::result::Result<txpool::error::Error, Error> {
+		match err {
 			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
 			e => Err(e),
 		}

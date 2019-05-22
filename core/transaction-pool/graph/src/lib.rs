@@ -34,6 +34,7 @@ pub mod base_pool;
 pub mod error;
 pub mod watcher;
 
+#[allow(deprecated)]
 pub use self::error::IntoPoolError;
 pub use self::base_pool::{Transaction, Status};
 pub use self::pool::{Pool, Options, ChainApi, EventStream, ExtrinsicFor, BlockHash, ExHash, NumberFor, TransactionFor};

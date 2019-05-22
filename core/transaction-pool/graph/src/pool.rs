@@ -16,6 +16,7 @@
 
 use std::{
 	collections::{HashSet, HashMap},
+	convert::TryInto,
 	hash,
 	sync::Arc,
 	time,
@@ -61,7 +62,7 @@ pub trait ChainApi: Send + Sync {
 	/// Transaction Hash type
 	type Hash: hash::Hash + Eq + traits::Member + Serialize;
 	/// Error type.
-	type Error: From<error::Error> + error::IntoPoolError;
+	type Error: From<error::Error> + TryInto<error::Error, Error = Self::Error> + std::error::Error + Send;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
@@ -305,7 +306,7 @@ impl<B: ChainApi> Pool<B> {
 		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()))?;
 
 		// Collect the hashes of transactions that now became invalid (meaning that they are succesfully pruned).
-		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
+		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(TryInto::try_into) {
 			Err(Ok(err)) => match err.kind() {
 				error::ErrorKind::InvalidTransaction(_) => Some(hashes[idx].clone()),
 				_ => None,

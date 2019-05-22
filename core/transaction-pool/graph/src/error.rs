@@ -62,6 +62,7 @@ error_chain! {
 }
 
 /// Transaction pool error conversion.
+#[deprecated(note = "Use the TryFrom or TryInto traits instead")]
 pub trait IntoPoolError: ::std::error::Error + Send + Sized {
 	/// Try to extract original `Error`
 	///
@@ -71,6 +72,7 @@ pub trait IntoPoolError: ::std::error::Error + Send + Sized {
 	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Err(self) }
 }
 
+#[allow(deprecated)]
 impl IntoPoolError for Error {
 	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Ok(self) }
 }

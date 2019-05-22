@@ -25,6 +25,7 @@ pub mod config;
 pub mod chain_ops;
 pub mod error;
 
+use std::convert::TryInto;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -48,7 +49,7 @@ pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
-	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
+	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi
 };
 use client::runtime_api::BlockT;
 pub use client::FinalityNotifications;
@@ -506,7 +507,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			let best_block_id = self.best_block_id()?;
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
-				Err(e) => match e.into_pool_error() {
+				Err(e) => match e.try_into() {
 					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
 						hash.downcast::<ComponentExHash<C>>().ok()
 							.map(|x| x.as_ref().clone())
