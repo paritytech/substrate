@@ -14,25 +14,48 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use error_chain::*;
 use client;
 use crate::rpc;
 use crate::errors;
-pub use internal_errors::*;
+use std::{error, fmt};
 
-#[allow(deprecated)]
-mod internal_errors {
-	use super::*;
-	error_chain! {
-		foreign_links {
-			Client(client::error::Error) #[doc = "Client error"];
+/// Result type alias for the RPC.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type for the RPC.
+pub enum Error {
+	/// Client error
+	Client(client::error::Error),
+	/// Not implemented yet
+	Unimplemented,
+}
+
+impl From<client::error::Error> for Error {
+	fn from(err: client::error::Error) -> Self {
+		Error::Client(err)
+	}
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Unimplemented => None,
 		}
-		errors {
-			/// Not implemented yet
-			Unimplemented {
-				description("not yet implemented"),
-				display("Method Not Implemented"),
-			}
+	}
+}
+
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::Client(t) => write!(f, "{}", t),
+			Error::Unimplemented => write!(f, "Not implemented yet"),
 		}
 	}
 }
@@ -40,7 +63,7 @@ mod internal_errors {
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+			Error::Unimplemented => errors::unimplemented(),
 			e => errors::internal(e),
 		}
 	}

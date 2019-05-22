@@ -20,31 +20,44 @@ use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind, bail};
+use std::{error, fmt};
 
 type BlockNumber = u64;
 
-error_chain! {
-	errors {
-		BadProposalFormat {
-			description("Proposal provided not a block."),
-			display("Proposal provided not a block."),
-		}
-		WrongParentHash(expected: String, got: String) {
-			description("Proposal had wrong parent hash."),
-			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
-		}
-		WrongNumber(expected: BlockNumber, got: BlockNumber) {
-			description("Proposal had wrong number."),
-			display("Proposal had wrong number. Expected {}, got {}", expected, got),
-		}
-		ProposalTooLarge(size: usize) {
-			description("Proposal exceeded the maximum size."),
-			display(
-				"Proposal exceeded the maximum size of {} by {} bytes.",
-				MAX_BLOCK_SIZE, size.saturating_sub(MAX_BLOCK_SIZE)
-			),
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type.
+pub enum Error {
+	/// Proposal provided not a block.
+	BadProposalFormat,
+	/// Proposal had wrong parent hash.
+	WrongParentHash { expected: String, got: String },
+	/// Proposal had wrong number.
+	WrongNumber { expected: BlockNumber, got: BlockNumber },
+	/// Proposal exceeded the maximum size.
+	ProposalTooLarge(usize),
+}
+
+impl error::Error for Error {
+}
+
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::BadProposalFormat => write!(f, "Proposal provided not a block."),
+			Error::WrongParentHash { expected, got } =>
+				write!(f, "Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
+			Error::WrongNumber { expected, got } =>
+				write!(f, "Proposal had wrong number. Expected {}, got {}", expected, got),
+			Error::ProposalTooLarge(size) => write!(f, "Proposal exceeded the maximum size of {} by {} bytes.",
+				MAX_BLOCK_SIZE, size.saturating_sub(MAX_BLOCK_SIZE)),
 		}
 	}
 }
@@ -59,21 +72,24 @@ pub fn evaluate_initial<Block: BlockT>(
 
 	let encoded = Encode::encode(proposal);
 	let proposal = Block::decode(&mut &encoded[..])
-		.ok_or_else(|| ErrorKind::BadProposalFormat)?;
+		.ok_or_else(|| Error::BadProposalFormat)?;
 
 	if encoded.len() > MAX_BLOCK_SIZE {
-		bail!(ErrorKind::ProposalTooLarge(encoded.len()))
+		return Err(Error::ProposalTooLarge(encoded.len()))
 	}
 
 	if *parent_hash != *proposal.header().parent_hash() {
-		bail!(ErrorKind::WrongParentHash(
-			format!("{:?}", *parent_hash),
-			format!("{:?}", proposal.header().parent_hash())
-		));
+		return Err(Error::WrongParentHash {
+			expected: format!("{:?}", *parent_hash),
+			got: format!("{:?}", proposal.header().parent_hash())
+		});
 	}
 
 	if parent_number.as_() + 1 != proposal.header().number().as_() {
-		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header().number().as_()));
+		return Err(Error::WrongNumber {
+			expected: parent_number.as_() + 1,
+			got: proposal.header().number().as_()
+		});
 	}
 
 	Ok(())

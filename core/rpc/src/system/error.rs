@@ -16,38 +16,56 @@
 
 //! System RPC module errors.
 
-use error_chain::*;
-
 use crate::rpc;
 use crate::errors;
 use crate::system::helpers::Health;
+use std::{error, fmt};
 
-error_chain! {
-	errors {
-		/// Node is not fully functional
-		NotHealthy(h: Health) {
-			description("node is not healthy"),
-			display("Node is not fully functional: {}", h)
-		}
+const ERROR: i64 = 2000;
 
-		/// Not implemented yet
-		Unimplemented {
-			description("not yet implemented"),
-			display("Method Not Implemented"),
+/// Result type alias for the RPC.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type for the RPC.
+pub enum Error {
+	/// Not healthy
+	NotHealthy(Health),
+	/// Not implemented yet
+	Unimplemented,
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::NotHealthy(_) => None,
+			Error::Unimplemented => None,
 		}
 	}
 }
 
-const ERROR: i64 = 2000;
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::NotHealthy(h) => write!(f, "Node is not fully functional: {}", h),
+			Error::Unimplemented => write!(f, "Not implemented yet"),
+		}
+	}
+}
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
-			Error(ErrorKind::NotHealthy(h), _) => rpc::Error {
+			Error::Unimplemented => errors::unimplemented(),
+			Error::NotHealthy(h) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(ERROR + 1),
 				message: "node is not healthy".into(),
-				data:serde_json::to_value(h).ok(),
+				data: serde_json::to_value(h).ok(),
 			},
 			e => errors::internal(e),
 		}

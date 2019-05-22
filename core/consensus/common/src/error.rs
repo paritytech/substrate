@@ -16,100 +16,84 @@
 
 //! Error types in Consensus
 use runtime_version::RuntimeVersion;
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
 use primitives::ed25519::{Public, Signature};
+use std::{error, fmt};
 
-error_chain! {
-	errors {
-		/// Missing state at block with given descriptor.
-		StateUnavailable(b: String) {
-			description("State missing at given block."),
-			display("State unavailable at block {}", b),
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type.
+pub enum Error {
+	/// Missing state at block with given descriptor.
+	StateUnavailable(String),
+	/// I/O terminated unexpectedly
+	IoTerminated,
+	/// Unable to schedule wakeup.
+	FaultyTimer(::tokio_timer::Error),
+	/// Error while working with inherent data.
+	InherentData(String),
+	/// Unable to propose a block.
+	CannotPropose,
+	/// Error checking signature
+	InvalidSignature(Signature, Public),
+	/// Invalid authorities set received from the runtime.
+	InvalidAuthoritiesSet,
+	/// Account is not an authority.
+	InvalidAuthority(Public),
+	/// Authoring interface does not match the runtime.
+	IncompatibleAuthoringRuntime { native: RuntimeVersion, on_chain: RuntimeVersion },
+	/// Authoring interface does not match the runtime.
+	RuntimeVersionMissing,
+	/// Authoring interface does not match the runtime.
+	NativeRuntimeMissing,
+	/// Justification requirements not met.
+	InvalidJustification,
+	/// Some other error.
+	Other(Box<error::Error + Send>),
+	/// Error from the client while importing
+	ClientImport(String),
+	/// Error from the client while importing
+	ChainLookup(String),
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::FaultyTimer(ref err) => Some(err),
+			// Note: we really would like to return `Some(err)` here, but for some reason we can't
+			// convert a `&dyn Error + Send + 'static` into a `&dyn Error + 'static`.
+			Error::Other(ref _err) => None,
+			_ => None,
 		}
+	}
+}
 
-		/// I/O terminated unexpectedly
-		IoTerminated {
-			description("I/O terminated unexpectedly."),
-			display("I/O terminated unexpectedly."),
-		}
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
 
-		/// Unable to schedule wakeup.
-		FaultyTimer(e: ::tokio_timer::Error) {
-			description("Timer error"),
-			display("Timer error: {}", e),
-		}
-
-		/// Error while working with inherent data.
-		InherentData(e: String) {
-			description("InherentData error"),
-			display("InherentData error: {}", e),
-		}
-
-		/// Unable to propose a block.
-		CannotPropose {
-			description("Unable to create block proposal."),
-			display("Unable to create block proposal."),
-		}
-
-		/// Error checking signature
-		InvalidSignature(s: Signature, a: Public) {
-			description("Message signature is invalid"),
-			display("Message signature {:?} by {:?} is invalid.", s, a),
-		}
-
-		/// Invalid authorities set received from the runtime.
-		InvalidAuthoritiesSet {
-			description("authorities set is invalid"),
-			display("Current state of blockchain has invalid authorities set"),
-		}
-
-		/// Account is not an authority.
-		InvalidAuthority(a: Public) {
-			description("Message sender is not a valid authority"),
-			display("Message sender {:?} is not a valid authority.", a),
-		}
-
-		/// Authoring interface does not match the runtime.
-		IncompatibleAuthoringRuntime(native: RuntimeVersion, on_chain: RuntimeVersion) {
-			description("Authoring for current runtime is not supported"),
-			display("Authoring for current runtime is not supported. Native ({}) cannot author for on-chain ({}).", native, on_chain),
-		}
-
-		/// Authoring interface does not match the runtime.
-		RuntimeVersionMissing {
-			description("Current runtime has no version"),
-			display("Authoring for current runtime is not supported since it has no version."),
-		}
-
-		/// Authoring interface does not match the runtime.
-		NativeRuntimeMissing {
-			description("This build has no native runtime"),
-			display("Authoring in current build is not supported since it has no runtime."),
-		}
-
-		/// Justification requirements not met.
-		InvalidJustification {
-			description("Invalid justification"),
-			display("Invalid justification."),
-		}
-
-		/// Some other error.
-		Other(e: Box<::std::error::Error + Send>) {
-			description("Other error")
-			display("Other error: {}", e.description())
-		}
-
-		/// Error from the client while importing
-		ClientImport(reason: String) {
-			description("Import failed"),
-			display("Import failed: {}", reason),
-		}
-
-		/// Error from the client while importing
-		ChainLookup(reason: String) {
-			description("Looking up chain failed"),
-			display("Chain lookup failed: {}", reason),
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::StateUnavailable(ref b) => write!(f, "State unavailable at block {}", b),
+			Error::IoTerminated => write!(f, "I/O terminated unexpectedly."),
+			Error::FaultyTimer(ref e) => write!(f, "Timer error: {}", e),
+			Error::InherentData(ref e) => write!(f, "InherentData error: {}", e),
+			Error::CannotPropose => write!(f, "Unable to create block proposal."),
+			Error::InvalidSignature(ref s, ref a) => write!(f, "Message signature {:?} by {:?} is invalid.", s, a),
+			Error::InvalidAuthoritiesSet => write!(f, "Current state of blockchain has invalid authorities set"),
+			Error::InvalidAuthority(ref a) => write!(f, "Message sender {:?} is not a valid authority.", a),
+			Error::IncompatibleAuthoringRuntime { ref native, ref on_chain } => write!(f, "Authoring for current \
+				runtime is not supported. Native ({}) cannot author for on-chain ({}).", native, on_chain),
+			Error::RuntimeVersionMissing => write!(f, "Authoring for current runtime is not supported since \
+				it has no version."),
+			Error::NativeRuntimeMissing => write!(f, "Authoring in current build is not supported since it has no runtime."),
+			Error::InvalidJustification => write!(f, "Invalid justification."),
+			Error::Other(ref e) => write!(f, "Other error: {}", e),
+			Error::ClientImport(ref reason) => write!(f, "Import failed: {}", reason),
+			Error::ChainLookup(ref reason) => write!(f, "Chain lookup failed: {}", reason),
 		}
 	}
 }

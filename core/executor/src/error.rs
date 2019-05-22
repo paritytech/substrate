@@ -16,73 +16,93 @@
 
 //! Rust executor possible errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
 use state_machine;
+use std::{error, fmt};
 use serializer;
 use wasmi;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind
-};
 
-error_chain! {
-	foreign_links {
-		InvalidData(serializer::Error) #[doc = "Unserializable Data"];
-		Trap(wasmi::Trap) #[doc = "Trap occured during execution"];
-		Wasmi(wasmi::Error) #[doc = "Wasmi loading/instantiating error"];
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type.
+pub enum Error {
+	/// Unserializable Data
+	InvalidData(serializer::Error),
+	/// Trap occured during execution
+	Trap(wasmi::Trap),
+	/// Wasmi loading/instantiating error
+	Wasmi(wasmi::Error),
+	/// Error in the API. Parameter is an error message.
+	ApiError(String),
+	/// Method is not found
+	MethodNotFound(String),
+	/// Code is invalid (expected single byte)
+	InvalidCode(Vec<u8>),
+	/// Could not get runtime version.
+	VersionInvalid,
+	/// Externalities have failed.
+	Externalities,
+	/// Invalid index.
+	InvalidIndex,
+	/// Invalid return type.
+	InvalidReturn,
+	/// Runtime failed.
+	Runtime,
+	/// Runtime failed.
+	InvalidMemoryReference,
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::InvalidData(ref err) => Some(err),
+			Error::Trap(ref err) => Some(err),
+			Error::Wasmi(ref err) => Some(err),
+			_ => None,
+		}
 	}
+}
 
-	errors {
-		/// Method is not found
-		MethodNotFound(t: String) {
-			description("method not found"),
-			display("Method not found: '{}'", t),
-		}
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
 
-		/// Code is invalid (expected single byte)
-		InvalidCode(c: Vec<u8>) {
-			description("invalid code"),
-			display("Invalid Code: {:?}", c),
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::InvalidData(ref err) => write!(f, "{}", err),
+			Error::Trap(ref err) => write!(f, "{}", err),
+			Error::Wasmi(ref err) => write!(f, "{}", err),
+			Error::ApiError(ref err) => write!(f, "{}", err),
+			Error::MethodNotFound(ref t) => write!(f, "Method not found: '{}'", t),
+			Error::InvalidCode(ref c) => write!(f, "Invalid Code: {:?}", c),
+			Error::VersionInvalid => write!(f, "On-chain runtime does not specify version"),
+			Error::Externalities => write!(f, "Externalities error"),
+			Error::InvalidIndex => write!(f, "Invalid index provided"),
+			Error::InvalidReturn => write!(f, "Invalid type returned (should be u64)"),
+			Error::Runtime => write!(f, "Runtime error"),
+			Error::InvalidMemoryReference => write!(f, "Invalid memory reference"),
 		}
+	}
+}
 
-		/// Could not get runtime version.
-		VersionInvalid {
-			description("Runtime version error"),
-			display("On-chain runtime does not specify version"),
-		}
+impl From<serializer::Error> for Error {
+	fn from(err: serializer::Error) -> Error {
+		Error::InvalidData(err)
+	}
+}
 
-		/// Externalities have failed.
-		Externalities {
-			description("externalities failure"),
-			display("Externalities error"),
-		}
+impl From<wasmi::Trap> for Error {
+	fn from(err: wasmi::Trap) -> Error {
+		Error::Trap(err)
+	}
+}
 
-		/// Invalid index.
-		InvalidIndex {
-			description("index given was not in range"),
-			display("Invalid index provided"),
-		}
-
-		/// Invalid return type.
-		InvalidReturn {
-			description("u64 was not returned"),
-			display("Invalid type returned (should be u64)"),
-		}
-
-		/// Runtime failed.
-		Runtime {
-			description("runtime failure"),
-			display("Runtime error"),
-		}
-
-		/// Runtime failed.
-		InvalidMemoryReference {
-			description("invalid memory reference"),
-			display("Invalid memory reference"),
-		}
+impl From<wasmi::Error> for Error {
+	fn from(err: wasmi::Error) -> Error {
+		Error::Wasmi(err)
 	}
 }
 

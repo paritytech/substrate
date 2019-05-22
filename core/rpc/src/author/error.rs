@@ -23,6 +23,58 @@ use crate::rpc;
 
 use crate::errors;
 
+/// Result type alias for the RPC.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type for the RPC.
+pub enum Error {
+	/// Client error
+	Client(client::error::Error),
+	/// Transaction pool error
+	Pool(txpool::error::Error),
+	/// Not implemented yet
+	Unimplemented,
+}
+
+impl From<client::error::Error> for Error {
+	fn from(err: client::error::Error) -> Self {
+		Error::Client(err)
+	}
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Unimplemented => None,
+		}
+	}
+}
+
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::Client(t) => write!(f, "{}", t),
+			Error::Unimplemented => write!(f, "Not implemented yet"),
+		}
+	}
+}
+
+impl From<Error> for rpc::Error {
+	fn from(e: Error) -> Self {
+		match e {
+			Error::Unimplemented => errors::unimplemented(),
+			e => errors::internal(e),
+		}
+	}
+}
+
 error_chain! {
 	foreign_links {
 		Client(client::error::Error) #[doc = "Client error"];
@@ -74,48 +126,48 @@ const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
-			Error(ErrorKind::BadFormat, _) => rpc::Error {
+			Error::Unimplemented => errors::unimplemented(),
+			Error::BadFormat => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BAD_FORMAT),
 				message: "Extrinsic has invalid format.".into(),
 				data: None,
 			},
-			Error(ErrorKind::Verification(e), _) => rpc::Error {
+			Error::Verification(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(VERIFICATION_ERROR),
 				message: e.description().into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::InvalidTransaction(code)), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::InvalidTransaction(code)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
 				data: Some(code.into()),
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::UnknownTransactionValidity(code)), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::UnknownTransactionValidity(code)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
 				message: "Unknown Transaction Validity".into(),
 				data: Some(code.into()),
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::TemporarilyBanned), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::TemporarilyBanned) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TEMPORARILY_BANNED),
 				message: "Transaction is temporarily banned".into(),
 				data: None,
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::AlreadyImported(hash)), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::AlreadyImported(hash)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_ALREADY_IMPORTED),
 				message: "Transaction Already Imported".into(),
 				data: Some(format!("{:?}", hash).into()),
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::TooLowPriority(old, new)), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::TooLowPriority(old, new)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TOO_LOW_PRIORITY),
 				message: format!("Priority is too low: ({} vs {})", old, new),
 				data: Some("The transaction has too low priority to replace another transaction already in the pool.".into()),
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::CycleDetected), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::CycleDetected) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_CYCLE_DETECTED),
 				message: "Cycle Detected".into(),
 				data: None,
 			},
-			Error(ErrorKind::Pool(txpool::error::ErrorKind::ImmediatelyDropped), _) => rpc::Error {
+			Error::Pool(txpool::error::ErrorKind::ImmediatelyDropped) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped" .into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),

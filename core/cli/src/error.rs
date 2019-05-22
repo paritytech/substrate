@@ -16,26 +16,88 @@
 
 //! Initialization errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
 use client;
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
+use std::{error, fmt};
 
-error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
-		Service(::service::Error) #[doc="Substrate service error"];
-		Client(client::error::Error) #[doc="Client error"];
+/// Result type alias for the CLI.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type for the CLI.
+pub enum Error {
+	/// Io error
+	Io(::std::io::Error),
+	/// Cli error
+	Cli(::clap::Error),
+	/// Service error
+	Service(::service::Error),
+	/// Client error
+	Client(client::error::Error),
+	/// Input error
+	Input(String),
+}
+
+impl From<::std::io::Error> for Error {
+	fn from(err: ::std::io::Error) -> Self {
+		Error::Io(err)
 	}
-	errors {
-		/// Input error.
-		Input(m: String) {
-			description("Invalid input"),
-			display("{}", m),
+}
+
+impl From<::clap::Error> for Error {
+	fn from(err: ::clap::Error) -> Self {
+		Error::Cli(err)
+	}
+}
+
+impl From<::service::Error> for Error {
+	fn from(err: ::service::Error) -> Self {
+		Error::Service(err)
+	}
+}
+
+impl From<client::error::Error> for Error {
+	fn from(err: client::error::Error) -> Self {
+		Error::Client(err)
+	}
+}
+
+impl From<String> for Error {
+	fn from(err: String) -> Self {
+		Error::Input(err)
+	}
+}
+
+impl<'a> From<&'a str> for Error {
+	fn from(err: &'a str) -> Self {
+		Error::Input(err.to_string())
+	}
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::Io(ref err) => Some(err),
+			Error::Cli(ref err) => Some(err),
+			Error::Service(ref err) => Some(err),
+			Error::Client(ref err) => Some(err),
+			Error::Input(_) => None,
+		}
+	}
+}
+
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::Io(t) => write!(f, "{}", t),
+			Error::Cli(t) => write!(f, "{}", t),
+			Error::Service(t) => write!(f, "{}", t),
+			Error::Client(t) => write!(f, "{}", t),
+			Error::Input(t) => write!(f, "{}", t),
 		}
 	}
 }

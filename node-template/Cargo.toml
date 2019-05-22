@@ -10,7 +10,6 @@ name = "node-template"
 path = "src/main.rs"
 
 [dependencies]
-error-chain = "0.12"
 futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 log = "0.4"

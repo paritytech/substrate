@@ -16,29 +16,61 @@
 
 //! Transaction pool error.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
 use client;
 use txpool;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed, impl_extract_backtrace, impl_error_chain_kind
-};
+use std::{error, fmt};
 
-error_chain! {
-	foreign_links {
-		Client(client::error::Error) #[doc = "Client error"];
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Error type.
+pub enum Error {
+	/// Client error
+	Client(client::error::Error),
+	/// Pool error
+	Pool(txpool::error::Error),
+}
+
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Pool(ref err) => Some(err),
+		}
 	}
-	links {
-		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+}
+
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::Client(ref err) => write!(f, "{}", err),
+			Error::Pool(ref err) => write!(f, "{}", err),
+		}
+	}
+}
+
+impl From<client::error::Error> for Error {
+	fn from(err: client::error::Error) -> Error {
+		Error::Client(err)
+	}
+}
+
+impl From<txpool::error::Error> for Error {
+	fn from(err: txpool::error::Error) -> Error {
+		Error::Pool(err)
 	}
 }
 
 impl txpool::IntoPoolError for Error {
 	fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
 		match self {
-			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
+			Error::Pool(e) => Ok(txpool::error::Error(e, c)),
 			e => Err(e),
 		}
 	}
