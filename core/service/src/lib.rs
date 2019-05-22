@@ -44,7 +44,7 @@ use runtime_primitives::traits::{Header, As};
 use substrate_executor::NativeExecutor;
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
+pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{

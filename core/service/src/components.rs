@@ -330,7 +330,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self>,
-		client: Arc<FullClient<Self>>, 
+		client: Arc<FullClient<Self>>,
 	) -> Result<Self::SelectChain, error::Error>;
 
 	/// Build full service.
@@ -497,7 +497,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_transaction_pool(
-		config: TransactionPoolOptions, 
+		config: TransactionPoolOptions,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<TransactionPool<Self::TransactionPoolApi>, error::Error> {
 		Factory::build_full_transaction_pool(config, client)
@@ -509,7 +509,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
 		let select_chain = select_chain
-			.ok_or_else(|| error::Error::from(error::ErrorKind::SelectChainRequired))?;
+			.ok_or(error::Error::SelectChainRequired)?;
 		Factory::build_full_import_queue(config, client, select_chain)
 	}
 
