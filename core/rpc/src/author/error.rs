@@ -66,7 +66,7 @@ const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
-		use txpool::error::{Error as PoolError, ErrorKind};
+		use txpool::error::{Error as PoolError};
 
 		match e {
 			Error::BadFormat => rpc::Error {
@@ -79,37 +79,37 @@ impl From<Error> for rpc::Error {
 				message: e.description().into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError(ErrorKind::InvalidTransaction(code), _)) => rpc::Error {
+			Error::Pool(PoolError::InvalidTransaction(code)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
 				data: Some(code.into()),
 			},
-			Error::Pool(PoolError(ErrorKind::UnknownTransactionValidity(code), _)) => rpc::Error {
+			Error::Pool(PoolError::UnknownTransactionValidity(code)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
 				message: "Unknown Transaction Validity".into(),
 				data: Some(code.into()),
 			},
-			Error::Pool(PoolError(ErrorKind::TemporarilyBanned, _)) => rpc::Error {
+			Error::Pool(PoolError::TemporarilyBanned) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TEMPORARILY_BANNED),
 				message: "Transaction is temporarily banned".into(),
 				data: None,
 			},
-			Error::Pool(PoolError(ErrorKind::AlreadyImported(hash), _)) => rpc::Error {
+			Error::Pool(PoolError::AlreadyImported(hash)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_ALREADY_IMPORTED),
 				message: "Transaction Already Imported".into(),
 				data: Some(format!("{:?}", hash).into()),
 			},
-			Error::Pool(PoolError(ErrorKind::TooLowPriority(old, new), _)) => rpc::Error {
+			Error::Pool(PoolError::TooLowPriority { old, new }) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TOO_LOW_PRIORITY),
 				message: format!("Priority is too low: ({} vs {})", old, new),
 				data: Some("The transaction has too low priority to replace another transaction already in the pool.".into()),
 			},
-			Error::Pool(PoolError(ErrorKind::CycleDetected, _)) => rpc::Error {
+			Error::Pool(PoolError::CycleDetected) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_CYCLE_DETECTED),
 				message: "Cycle Detected".into(),
 				data: None,
 			},
-			Error::Pool(PoolError(ErrorKind::ImmediatelyDropped, _)) => rpc::Error {
+			Error::Pool(PoolError::ImmediatelyDropped) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped" .into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
