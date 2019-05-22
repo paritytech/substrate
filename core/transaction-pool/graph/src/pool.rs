@@ -34,7 +34,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
-	traits::{self, As},
+	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
@@ -138,7 +138,9 @@ impl<B: ChainApi> Pool<B> {
 							priority,
 							requires,
 							provides,
-							valid_till: block_number.as_().saturating_add(longevity),
+							valid_till: block_number
+								.saturated_into::<u64>()
+								.saturating_add(longevity),
 						})
 					},
 					TransactionValidity::Invalid(e) => {
@@ -337,7 +339,7 @@ impl<B: ChainApi> Pool<B> {
 	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
 		let block_number = self.api.block_id_to_number(at)?
 				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?
-				.as_();
+				.saturated_into::<u64>();
 		let now = time::Instant::now();
 		let to_remove = {
 			self.ready()

@@ -33,7 +33,10 @@ use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use crate::rpc::Result as RpcResult;
 use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Header, ProvideRuntimeApi, NumberFor,
+	SaturatedConversion
+};
 use runtime_version::RuntimeVersion;
 use state_machine::{self, ExecutionStrategy};
 
@@ -229,7 +232,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 				};
 				// check if we can filter blocks-with-changes from some (sub)range using changes tries
 				let changes_trie_range = self.client.max_key_changes_range(from_number, BlockId::Hash(to.hash()))?;
-				let filtered_range_begin = changes_trie_range.map(|(begin, _)| (begin - from_number).as_() as usize);
+				let filtered_range_begin = changes_trie_range.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
 				let (unfiltered_range, filtered_range) = split_range(blocks.len(), filtered_range_begin);
 				Ok(QueryStorageRange {
 					hashes: blocks,
@@ -281,7 +284,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 	) -> Result<()> {
 		let (begin, end) = match range.filtered_range {
 			Some(ref filtered_range) => (
-				range.first_number + As::sa(filtered_range.start as u64),
+				range.first_number + filtered_range.start.saturated_into(),
 				BlockId::Hash(range.hashes[filtered_range.end - 1].clone())
 			),
 			None => return Ok(()),
@@ -293,7 +296,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 				if last_block == Some(block) {
 					continue;
 				}
-				let block_hash = range.hashes[(block - range.first_number).as_() as usize].clone();
+				let block_hash = range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
 				let id = BlockId::Hash(block_hash);
 				let value_at_block = self.client.storage(&id, key)?;
 				changes_map.entry(block)

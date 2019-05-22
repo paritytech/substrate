@@ -29,8 +29,7 @@ pub use serde;
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
-use rstd::ops;
+use rstd::{prelude::*, ops};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -38,6 +37,8 @@ use codec::{Encode, Decode};
 pub mod testing;
 
 pub mod traits;
+use traits::{SaturatedConversion, UniqueSaturatedInto};
+
 pub mod generic;
 pub mod transaction_validity;
 
@@ -159,27 +160,30 @@ impl Permill {
 
 impl<N> ops::Mul<N> for Permill
 where
-	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
-		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+		+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		let million = <N as traits::As<u64>>::sa(1_000_000);
-		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+		let million: N = 1_000_000.into();
+		let part: N = self.0.into();
 
 		let rem_multiplied_divided = {
 			let rem = b.clone().rem(million.clone());
 
-			// `rem` is inferior to one million, thus it fits into u64
-			let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one million, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
 
-			// `self` and `rem` are inferior to one million, thus the product fits into u64
-			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one million, thus the product is less than 10^12
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
 
-			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000;
+			// `rem_multiplied_u64` is less than 10^12 therefore divided by a million it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			traits::As::sa(rem_multiplied_divided_u64)
+			rem_multiplied_divided_u32.into()
 		};
 
 		(b / million) * part + rem_multiplied_divided
@@ -248,27 +252,30 @@ impl Perbill {
 
 impl<N> ops::Mul<N> for Perbill
 where
-	N: Clone + traits::As<u64> + ops::Rem<N, Output=N> + ops::Div<N, Output=N>
-		+ ops::Mul<N, Output=N> + ops::Add<N, Output=N>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		let billion = <N as traits::As<u64>>::sa(1_000_000_000);
-		let part = <N as traits::As<u64>>::sa(self.0 as u64);
+		let billion: N = 1_000_000_000.into();
+		let part: N = self.0.into();
 
 		let rem_multiplied_divided = {
 			let rem = b.clone().rem(billion.clone());
 
-			// `rem` is inferior to one billion, thus it fits into u64
-			let rem_u64: u64 = rem.as_();
+			// `rem` is inferior to one billion, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
 
-			// `self` and `rem` are inferior to one billion, thus the product fits into u64
-			let rem_multiplied_u64 = rem_u64 * self.0 as u64;
+			// `self` and `rem` are inferior to one billion, thus the product is less than 10^18
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
 
-			let rem_multiplied_divided_u64 = rem_multiplied_u64 / 1_000_000_000;
+			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			traits::As::sa(rem_multiplied_divided_u64)
+			rem_multiplied_divided_u32.into()
 		};
 
 		(b / billion) * part + rem_multiplied_divided
@@ -918,13 +925,8 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn per_things_operate_in_output_type() {
-		use super::Perbill;
-
-		assert_eq!(Perbill::one() * 255_u64, 255);
-		// panics
-		assert_ne!(Perbill::one() * 255_u8, 255);
+		assert_eq!(super::Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]
