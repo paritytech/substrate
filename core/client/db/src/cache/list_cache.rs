@@ -44,8 +44,9 @@ use std::collections::BTreeSet;
 use log::warn;
 
 use client::error::{Error as ClientError, Result as ClientResult};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Bounded, SaturatedConversion,
-	CheckedSub};
+use runtime_primitives::traits::{
+	Block as BlockT, NumberFor, Zero, Bounded, SaturatedConversion, CheckedSub
+};
 
 use crate::cache::{CacheItemT, ComplexBlockId, EntryType};
 use crate::cache::list_entry::{Entry, StorageEntry};
