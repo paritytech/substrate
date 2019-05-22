@@ -85,11 +85,14 @@ impl<T> MakePayment<T> for () {
 /// - Someone got slashed.
 /// - Someone paid for a transaction to be included.
 pub trait OnUnbalanced<Imbalance> {
+	/// Create a new imbalance.
+	fn creating(amount: Balance) -> Imbalance;
 	/// Handler for some imbalance. Infallible.
 	fn on_unbalanced(amount: Imbalance);
 }
 
 impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
+	fn creating(amount: Balance) -> Imbalance { Imbalance::new(amount);	}
 	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }
 

@@ -22,15 +22,15 @@
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
-use rstd::{prelude::*, result, mem};
-use parity_codec::{HasCompact, Encode, Decode};
+// use rstd::{prelude::*, result, mem};
+// use parity_codec::{HasCompact, Encode, Decode};
 //use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
-use srml_support::{decl_module, decl_event, decl_storage, ensure};
+use srml_support::{decl_module, decl_event, decl_storage};
 use srml_support::traits::{
 	Currency, OnFreeBalanceZero, OnUnbalanced, Imbalance
 };
 use system;
-use primitives::{Permill, traits::Zero};
+use primitives::{Permill, traits::{Zero, CheckedMul, Saturating}};
 // use substrate_primitives::sr25519; // hack to get an account id, remove when we have working get_block_author
 
 // we will need the `BalanceOf` type for account balances
@@ -44,6 +44,12 @@ enum BurnOrMint {
 	Mint,
 	Null,
 }
+
+// impl Clone for BurnOrMint {
+// 	fn clone(&self) -> Self {
+// 		*self
+// 	}
+// }
 
 pub trait Trait: system::Trait {
 	/// Currency
@@ -74,7 +80,7 @@ decl_event!(
 
 		/// The block has been finalized and fees distributed. `BalanceOf` to `AccountId` (block author),
 		/// `BalanceOf` burned or minted.
-		Distribution(AccountId, Balance, Balance, BurnOrMint),
+		Distribution(AccountId, Balance, Balance),// BurnOrMint),
 	}
 );
 
@@ -125,12 +131,12 @@ decl_module! {
 		/// TODO: Send some funds to the Treasury.
 		fn on_finalize(n: T::BlockNumber) {
 
-			let total_fees = Self::total_block_fees();
-			let fees_to_author = Self::fees_to_block_author().mul(total_fees);
+			let total_fees = Self::total_block_fees(n);
+			let fees_to_author = Self::fees_to_block_author() * total_fees;
 
 			// Author
 			let author = Self::get_block_author(n);
-			let author_balance = Self::free_balance(author);
+			let author_balance = T::Currency::free_balance(&author);
 			let would_create = author_balance.is_zero(); // Impossible, but safe
 			let new_author_balance = author_balance.saturating_add(fees_to_author);
 
@@ -146,34 +152,41 @@ decl_module! {
 			// Burn or mint tokens
 			let units2mint = Self::block_new_issuance(n);
 
+			// Storage mutations, must be infallible from here.
+
 			let mut imbalance_mag = Zero::zero();
-			let mut imbalance = T::Mint::new(imbalance_mag);
+			//let mut imbalance = T::Mint::new(imbalance_mag);
 			let mut bm = BurnOrMint::Null;
 
 			if units2burn > units2mint {
 				imbalance_mag = units2burn.saturating_sub(units2mint);
-				imbalance = T::Burn::new(imbalance_mag);
+				//imbalance = T::Burn::new(imbalance_mag);
 				bm = BurnOrMint::Burn;
 			} else if units2mint > units2burn {
 				imbalance_mag = units2mint.saturating_sub(units2burn);
-				imbalance = T::Mint::new(imbalance_mag);
+				//imbalance = T::Mint::new(imbalance_mag);
 				bm = BurnOrMint::Mint;
 			}
 
-			// Storage mutations, must be infallible from here.
-
 			// Send fees to author
-			T::BlockPayout::pay_block_author(author, new_author_balance);
+			let pos_imbalance = T::Currency::deposit_creating(&author, fees_to_author);
+			let pos_imbalance = pos_imbalance.zero(); // we've already accounted for this
+			T::Mint::on_unbalanced(pos_imbalance);
 
 			// Update total issuance
-			T::OnUnbalanced::on_imbalanced(imbalance);
+			match bm {
+				BurnOrMint::Burn => T::Burn::on_unbalanced(imbalance_mag),
+				BurnOrMint::Mint => T::Mint::on_unbalanced(imbalance_mag),
+				BurnOrMint::Null => (),
+			}
 
 			// Emit an event
 			Self::deposit_event(RawEvent::Distribution(
-				&author, // `AccountId` of block author
+				author, // `AccountId` of block author
 				fees_to_author,
 				imbalance_mag,
-				bm));
+				//bm
+			));
 		}
 
 	}
@@ -199,9 +212,6 @@ impl<T: Trait> Module<T> {
 	// Will need to write a real function here.
 	fn get_block_author(n: T::BlockNumber) -> T::AccountId {
 		T::AccountId::default()
-		// sr25519::Pair::from_string("//Alice", None)
-		// 	.expect("static values are valid; qed")
-		// 	.public()
 	}
 }
 
