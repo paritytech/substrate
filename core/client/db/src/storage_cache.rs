@@ -34,7 +34,7 @@ type StorageValue = Vec<u8>;
 /// Shared canonical state cache.
 pub struct Cache<B: Block, H: Hasher> {
 	/// Storage cache. `None` indicates that key is known to be missing.
-	storage: LruCache<HStorageKey, Option<StorageValue>>,
+	storage: LruCache<StorageKey, Option<StorageValue>>,
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
 	hashes: LruCache<StorageKey, Option<H::Out>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
