@@ -48,6 +48,7 @@ use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
+	SaturatedConversion,
 };
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
@@ -435,7 +436,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 						  pre_hash
 					);
 					telemetry!(CONSENSUS_INFO; "aura.pre_sealed_block";
-						"header_num" => ?header_num,
+						"header_num" => header_num.saturated_into::<u64>(),
 						"hash_now" => ?import_block.post_header().hash(),
 						"hash_previously" => ?pre_hash
 					);

@@ -30,7 +30,8 @@ use codec::Decode;
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
-	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
+	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor,
+	SaturatedConversion,
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
@@ -270,7 +271,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				.join(", ")
 		);
 		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
-			"number" => ?block.header().number(),
+			"number" => (*block.header().number()).saturated_into::<u64>(),
 			"hash" => ?<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
 		);
 

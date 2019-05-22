@@ -35,6 +35,7 @@ use grandpa::{
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	SaturatedConversion,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -831,7 +832,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			e
 		})?;
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
-			"number" => ?number, "hash" => ?hash,
+			"number" => number.saturated_into::<u64>(),
+			"hash" => ?hash,
 		);
 
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
@@ -845,7 +847,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			}
 
 			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";
-				"number" => ?canon_number, "hash" => ?canon_hash,
+				"number" => canon_number.saturated_into::<u64>(),
+				"hash" => ?canon_hash,
 				"authorities" => ?set_ref.to_vec(),
 				"set_id" => ?new_id,
 			);

@@ -23,6 +23,7 @@ use grandpa::voter_set::VoterSet;
 use parity_codec::{Encode, Decode};
 use log::{debug, info};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use runtime_primitives::traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
@@ -249,7 +250,9 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 	) -> Result<Option<(N, Self)>, E>
-		where F: Fn(&H, &H) -> Result<bool, E>,
+	where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		N: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 	{
 		let mut new_set = None;
 
@@ -263,7 +266,7 @@ where
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
 				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
-					"block" => ?change.canon_height
+					"block" => change.canon_height.clone().saturated_into::<u64>(),
 				);
 
 				let median_last_finalized = match change.delay_kind {
@@ -306,6 +309,7 @@ where
 	) -> Result<Status<H, N>, fork_tree::Error<E>>
 		where F: Fn(&H, &H) -> Result<bool, E>,
 			  E: std::error::Error,
+			  N: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 	{
 		let mut status = Status {
 			changed: false,
@@ -329,7 +333,7 @@ where
 					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
 						  change.canon_height);
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
-						"block" => ?change.canon_height
+						"block" => change.canon_height.clone().saturated_into::<u64>(),
 					);
 
 					self.current_authorities = change.next_authorities;

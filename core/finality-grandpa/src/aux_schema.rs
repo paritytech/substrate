@@ -23,7 +23,7 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, SaturatedConversion};
 use log::{info, warn};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
@@ -368,7 +368,7 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	if let Some(new_set) = new_set {
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"hash" => ?new_set.canon_hash,
-			"number" => ?new_set.canon_number,
+			"number" => new_set.canon_number.saturated_into::<u64>(),
 			"authority_set_id" => ?new_set.set_id,
 			"authorities" => {
 				let authorities: Vec<String> =

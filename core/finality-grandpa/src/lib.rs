@@ -64,7 +64,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, SaturatedConversion,
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
@@ -434,7 +434,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
 					Ok(info) => {
 						telemetry!(CONSENSUS_INFO; "afg.finalized";
-							"finalized_number" => ?info.finalized_number,
+							"finalized_number" => info.finalized_number.saturated_into::<u64>(),
 							"finalized_hash" => ?info.finalized_hash,
 						);
 						Ok(info.finalized_number)
@@ -619,14 +619,14 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		let authority_set = authority_set.clone();
 		let consensus_changes = consensus_changes.clone();
 
-		let handle_voter_command = move |command: VoterCommand<_, _>, voter_commands_rx| {
+		let handle_voter_command = move |command: VoterCommand<_, NumberFor<Block>>, voter_commands_rx| {
 			match command {
 				VoterCommand::ChangeAuthorities(new) => {
 					let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
 						format!("{}", a)
 					}).collect();
 					telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
-						"number" => ?new.canon_number,
+						"number" => new.canon_number.saturated_into::<u64>(),
 						"hash" => ?new.canon_hash,
 						"voters" => ?voters,
 						"set_id" => ?new.set_id,

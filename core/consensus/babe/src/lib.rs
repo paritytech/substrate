@@ -505,7 +505,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 						  pre_hash
 					);
 					telemetry!(CONSENSUS_INFO; "babe.pre_sealed_block";
-						"header_num" => ?header_num,
+						"header_num" => header_num.saturated_into::<u64>(),
 						"hash_now" => ?import_block.post_header().hash(),
 						"hash_previously" => ?pre_hash
 					);

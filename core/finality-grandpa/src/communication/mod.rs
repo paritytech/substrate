@@ -38,7 +38,9 @@ use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::ConsensusEngineId;
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use runtime_primitives::traits::{
+	Block as BlockT, Hash as HashT, Header as HeaderT, SaturatedConversion,
+};
 use network::{consensus_gossip as network_gossip, Service as NetworkService};
 use network_gossip::ConsensusMessage;
 
@@ -294,21 +296,21 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							PrimaryPropose(propose) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_propose";
 									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?propose.target_number,
+									"target_number" => propose.target_number.saturated_into::<u64>(),
 									"target_hash" => ?propose.target_hash,
 								);
 							},
 							Prevote(prevote) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_prevote";
 									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?prevote.target_number,
+									"target_number" => prevote.target_number.saturated_into::<u64>(),
 									"target_hash" => ?prevote.target_hash,
 								);
 							},
 							Precommit(precommit) => {
 								telemetry!(CONSENSUS_INFO; "afg.received_precommit";
 									"voter" => ?format!("{}", msg.message.id),
-									"target_number" => ?precommit.target_number,
+									"target_number" => precommit.target_number.saturated_into::<u64>(),
 									"target_hash" => ?precommit.target_hash,
 								);
 							},
@@ -398,7 +400,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 						}).collect();
 					telemetry!(CONSENSUS_INFO; "afg.received_commit";
 						"contains_precommits_signed_by" => ?precommits_signed_by,
-						"target_number" => ?msg.message.target_number.clone(),
+						"target_number" => msg.message.target_number.saturated_into::<u64>(),
 						"target_hash" => ?msg.message.target_hash.clone(),
 					);
 					if let Err(cost) = check_compact_commit::<B>(
@@ -682,7 +684,8 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		let round = Round(round);
 
 		telemetry!(CONSENSUS_DEBUG; "afg.commit_issued";
-			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
+			"target_number" => commit.target_number.saturated_into::<u64>(),
+			"target_hash" => ?commit.target_hash,
 		);
 		let (precommits, auth_data) = commit.precommits.into_iter()
 			.map(|signed| (signed.precommit, (signed.signature, signed.id)))

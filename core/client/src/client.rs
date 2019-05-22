@@ -1058,7 +1058,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
 
 			telemetry!(SUBSTRATE_INFO; "notify.finalized";
-				"height" => format!("{}", header.number()),
+				"height" => (*header.number()).saturated_into::<u64>(),
 				"best" => ?finalized_hash,
 			);
 
