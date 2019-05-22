@@ -533,6 +533,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 /// This digest item will always return `Some` when used with `as_babe_seal`.
 //
 // FIXME #1018 needs misbehavior types
+#[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
 	client: &Arc<C>,
 	slot_now: u64,
@@ -584,7 +585,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					format!("VRF verification failed")
 				})?
 			};
-
+				
 			if check(&inout, threshold) {
 				match check_equivocation(&client, slot_now, slot_num, header.clone(), signer.clone()) {
 					Ok(Some(equivocation_proof)) => {
@@ -1018,7 +1019,7 @@ mod tests {
 			Default::default(),
 			0,
 		);
-
+		
 		let (inout, proof, _batchable_proof) = get_keypair(&pair).vrf_sign_n_check(transcript, |inout| check(inout, u64::MAX)).unwrap();
 		let pre_hash: H256 = header.hash();
 		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
