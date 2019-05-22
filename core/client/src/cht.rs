@@ -31,7 +31,8 @@ use trie;
 use primitives::{H256, convert_hash};
 // We're using saturatedconversion in order to go back and forth to `u64`. this is stupid.
 // instead we should just make the CHT generic over the block number.
-use runtime_primitives::traits::{Header as HeaderT, SimpleArithmetic, One, SaturatedConversion,
+use runtime_primitives::traits::{
+	Header as HeaderT, SimpleArithmetic, One, SaturatedConversion,
 	UniqueSaturatedInto
 };
 use state_machine::backend::InMemory as InMemoryState;

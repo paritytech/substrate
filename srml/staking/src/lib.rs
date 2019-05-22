@@ -249,7 +249,8 @@ use session::OnSessionChange;
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
-	Bounded, SaturatedConversion};
+	Bounded, SaturatedConversion
+};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;

@@ -183,7 +183,7 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 		// later.
 		let mut set = loop {
 			let set = Self::enum_set(set_index);
-			if (set.len() as u32) < ENUM_SET_SIZE {
+			if set.len() < ENUM_SET_SIZE as usize {
 				break set;
 			}
 			set_index += One::one();
