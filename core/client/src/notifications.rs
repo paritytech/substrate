@@ -155,7 +155,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 						changes.push((k, v.map(StorageData)));
 					}
 				}
-				if changes.len() > 0 {
+				if !changes.is_empty() {
 					child_changes.push((sk, changes));
 				}
 			}
