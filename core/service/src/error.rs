@@ -50,4 +50,15 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Io(ref err) => Some(err),
+			Error::Consensus(ref err) => Some(err),
+			Error::Network(ref err) => Some(err),
+			Error::Keystore(ref err) => Some(err),
+			_ => None,
+		}
+	}
+}

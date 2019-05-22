@@ -24,7 +24,7 @@ use wasmi;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Unserializable Data
 	InvalidData(serializer::Error),
@@ -35,17 +35,17 @@ pub enum Error {
 	/// Error in the API. Parameter is an error message.
 	ApiError(String),
 	/// Method is not found
-	#[display(fmt="Method not found: '{}'", t)]
+	#[display(fmt="Method not found: '{}'", _0)]
 	MethodNotFound(String),
 	/// Code is invalid (expected single byte)
-	#[display(fmt="Invalid Code: {:?}", c)]
+	#[display(fmt="Invalid Code: {:?}", _0)]
 	InvalidCode(Vec<u8>),
 	/// Could not get runtime version.
-	VersionInvalid,
 	#[display(fmt="On-chain runtime does not specify version")]
+	VersionInvalid,
 	/// Externalities have failed.
-	Externalities,
 	#[display(fmt="Externalities error")]
+	Externalities,
 	/// Invalid index.
 	#[display(fmt="Invalid index provided")]
 	InvalidIndex,

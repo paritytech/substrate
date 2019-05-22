@@ -16,7 +16,6 @@
 
 //! Substrate network possible errors.
 
-use std::{error, fmt};
 use client;
 
 /// Result type alias for the network.
@@ -31,8 +30,8 @@ pub enum Error {
 	Client(client::error::Error),
 }
 
-impl error::Error for Error {
-	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
 			Error::Io(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),

@@ -41,7 +41,7 @@ pub enum Error {
 	/// Proposal exceeded the maximum size.
 	#[display(
 		fmt="Proposal exceeded the maximum size of {} by {} bytes.",
-		"MAX_BLOCK_SIZE", "_0.saturating_sub(MAX_BLOCK_SIZE"
+		"MAX_BLOCK_SIZE", "_0.saturating_sub(MAX_BLOCK_SIZE)"
 	)]
 	ProposalTooLarge(usize),
 }
