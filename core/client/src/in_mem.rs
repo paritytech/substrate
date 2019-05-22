@@ -21,8 +21,10 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, SaturatedConversion, Digest, DigestItem};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Zero,
+	NumberFor, SaturatedConversion, Digest, DigestItem
+};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};

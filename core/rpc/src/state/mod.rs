@@ -33,8 +33,10 @@ use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use crate::rpc::Result as RpcResult;
 use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, NumberFor,
-	SaturatedConversion};
+use runtime_primitives::traits::{
+	Block as BlockT, Header, ProvideRuntimeApi, NumberFor,
+	SaturatedConversion
+};
 use runtime_version::RuntimeVersion;
 use state_machine::{self, ExecutionStrategy};
 

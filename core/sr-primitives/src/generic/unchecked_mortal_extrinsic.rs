@@ -22,8 +22,10 @@ use std::fmt;
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use crate::codec::{Decode, Encode, Input};
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
-	Lookup, Checkable, Extrinsic, SaturatedConversion};
+use crate::traits::{
+	self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
+	Lookup, Checkable, Extrinsic, SaturatedConversion
+};
 use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: u8 = 1;

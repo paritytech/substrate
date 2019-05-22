@@ -40,8 +40,10 @@ use consensus::{BlockOrigin, import_queue::{IncomingBlock, SharedFinalityProofRe
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
 use crate::sync::extra_requests::ExtraRequestsAggregator;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, One,
-	CheckedSub, SaturatedConversion};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, Zero, One,
+	CheckedSub, SaturatedConversion
+};
 use runtime_primitives::{Justification, generic::BlockId};
 use crate::message;
 use crate::config::Roles;

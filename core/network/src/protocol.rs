@@ -19,8 +19,10 @@ use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
-	CheckedSub, SaturatedConversion};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	CheckedSub, SaturatedConversion
+};
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
 use crate::message::{
 	self, BlockRequest as BlockRequestMessage,

@@ -45,8 +45,10 @@ use client::{Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
 use runtime_primitives::generic::{BlockId, Era, ImportResult, ImportBlock, BlockOrigin};
 use runtime_primitives::traits::{Block, Header};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT,
-	BlockNumberToHash, SaturatedConversion};
+use runtime_primitives::traits::{
+	Block as BlockT, Hash as HashT, Header as HeaderT,
+	BlockNumberToHash, SaturatedConversion
+};
 use runtime_primitives::Justification;
 use primitives::{AuthorityId, ed25519, Blake2Hasher, ed25519::LocalizedSignature};
 use srml_system::Trait as SystemT;

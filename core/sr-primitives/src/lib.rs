@@ -180,7 +180,7 @@ where
 
 			// `rem_multiplied_u64` is less than 10^12 therefore divided by a million it fits into
 			// u32
-			let rem_multiplied_divided_u32= (rem_multiplied_u64 / 1_000_000) as u32;
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
 			rem_multiplied_divided_u32.into()
@@ -272,7 +272,7 @@ where
 
 			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
 			// u32
-			let rem_multiplied_divided_u32= (rem_multiplied_u64 / 1_000_000_000) as u32;
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
 
 			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
 			rem_multiplied_divided_u32.into()
