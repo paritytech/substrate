@@ -25,7 +25,6 @@ use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
-use primitives::storage::HStorageKey;
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -34,9 +33,8 @@ type StorageValue = Vec<u8>;
 
 /// Shared canonical state cache.
 pub struct Cache<B: Block, H: Hasher> {
-  // TODO EMCH switch to HStorageKey
 	/// Storage cache. `None` indicates that key is known to be missing.
-	storage: LruCache<StorageKey, Option<StorageValue>>,
+	storage: LruCache<HStorageKey, Option<StorageValue>>,
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
 	hashes: LruCache<StorageKey, Option<H::Out>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
