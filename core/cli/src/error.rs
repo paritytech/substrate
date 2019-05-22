@@ -18,25 +18,36 @@
 
 use client;
 
-/// Initialization result.
+/// Result type alias for the CLI.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Initialization errors.
+/// Error type for the CLI.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// IO error.
-	Io(::std::io::Error),
-	/// CLI error.
-	Cli(::clap::Error),
-	/// Service error.
-	Service(::service::Error),
-	/// Client error.
+	/// Io error
+	Io(std::io::Error),
+	/// Cli error
+	Cli(clap::Error),
+	/// Service error
+	Service(service::Error),
+	/// Client error
 	Client(client::error::Error),
-	/// Input error.
+	/// Input error
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
-	InvalidListenMultiaddress,
+	InvalidListenMultiaddress
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Io(ref err) => Some(err),
+			Error::Cli(ref err) => Some(err),
+			Error::Service(ref err) => Some(err),
+			Error::Client(ref err) => Some(err),
+			Error::Input(_) => None,
+			Error::InvalidListenMultiaddress => None,
+		}
+	}
+}

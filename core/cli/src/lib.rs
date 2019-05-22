@@ -145,10 +145,6 @@ fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 		)
 }
 
-fn input_err<T: Into<String>>(msg: T) -> error::Error {
-	error::Error::Input(msg.into())
-}
-
 /// Check whether a node name is considered as valid
 fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
@@ -278,7 +274,7 @@ where
 
 /// Create an error caused by an invalid node key argument.
 fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
-	input_err(format!("Invalid node key: {}", e))
+	error::Error::Input(format!("Invalid node key: {}", e))
 }
 
 /// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
@@ -393,7 +389,7 @@ where
 	match is_node_name_valid(&config.name) {
 		Ok(_) => (),
 		Err(msg) => Err(
-			input_err(
+			error::Error::Input(
 				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
 					config.name,
 					msg
@@ -417,7 +413,7 @@ where
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
 		Some(s) => PruningMode::keep_blocks(
-			s.parse().map_err(|_| input_err("Invalid pruning mode specified"))?
+			s.parse().map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
 		),
 	};
 
@@ -850,7 +846,7 @@ mod tests {
 					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
-					_ => Err(input_err("Unexpected node key config"))
+					_ => Err(error::Error::Input("Unexpected node key config"))
 				})
 			})
 		}
@@ -876,7 +872,7 @@ mod tests {
 						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
 					NodeKeyConfig::Ed25519(network::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
-					_ => Err(input_err("Unexpected node key config"))
+					_ => Err(error::Error::Input("Unexpected node key config"))
 				})
 			})
 		}
@@ -910,7 +906,7 @@ mod tests {
 							if typ == NodeKeyType::Secp256k1 => Ok(()),
 						NodeKeyConfig::Ed25519(network::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
-						_ => Err(input_err("Unexpected node key config"))
+						_ => Err(error::Error::Input("Unexpected node key config"))
 					})
 			})
 		}
@@ -927,7 +923,7 @@ mod tests {
 						NodeKeyConfig::Ed25519(network::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
-						_ => Err(input_err("Unexpected node key config"))
+						_ => Err(error::Error::Input("Unexpected node key config"))
 				})
 			})
 		}

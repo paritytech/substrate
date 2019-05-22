@@ -45,10 +45,18 @@ pub enum Error {
 	InvalidSeed,
 }
 
-impl std::error::Error for Error {}
-
 /// Keystore Result
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Io(ref err) => Some(err),
+			Error::Json(ref err) => Some(err),
+			_ => None,
+		}
+	}
+}
 
 /// Key store.
 pub struct Store {

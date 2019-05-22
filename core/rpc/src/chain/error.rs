@@ -30,7 +30,14 @@ pub enum Error {
 	Other(String),
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			_ => None,
+		}
+	}
+}
 
 /// Base error code for all chain errors.
 const BASE_ERROR: i64 = 3000;

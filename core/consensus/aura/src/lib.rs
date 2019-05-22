@@ -123,7 +123,7 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 }
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
-	consensus_common::ErrorKind::InherentData(err.into()).into()
+	consensus_common::Error::InherentData(err.into()).into()
 }
 
 /// A digest item which is usable with aura consensus.
@@ -448,7 +448,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 						);
 					}
 				})
-				.map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into())
+				.map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into())
 		)
 	}
 }
@@ -738,7 +738,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		return Ok(());
 	}
 
-	let map_err = |error| consensus_common::Error::from(consensus_common::ErrorKind::ClientImport(
+	let map_err = |error| consensus_common::Error::from(consensus_common::Error::ClientImport(
 		format!(
 			"Error initializing authorities cache: {}",
 			error,
@@ -766,7 +766,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 			} else {
 				CoreApi::authorities(&*client.runtime_api(), at).ok()
 			}
-		}).ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
+		}).ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.
@@ -1000,7 +1000,7 @@ mod tests {
 		let header_hash: H256 = header.hash();
 		let to_sign = (slot_num, header_hash).encode();
 		let signature = pair.sign(&to_sign[..]);
-		
+
 		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(
 			slot_num,
 			signature,
@@ -1120,7 +1120,7 @@ mod tests {
 
 		// Different slot is ok.
 		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities, false).is_ok());
-		
+
 		// Here we trigger pruning and save header 4.
 		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities, false).is_ok());
 

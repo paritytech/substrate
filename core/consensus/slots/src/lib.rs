@@ -66,8 +66,9 @@ pub trait SlotCompatible {
 }
 
 /// Convert an inherent error to common error.
+#[deprecated(note = "This method doesn't make sense")]
 pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_common::Error {
-	consensus_common::ErrorKind::InherentData(err.into()).into()
+	consensus_common::Error::InherentData(err.into())
 }
 
 /// Start a new slot worker in a separate thread.

@@ -32,15 +32,24 @@ pub enum Error {
 	Client(client::error::Error),
 	/// Transaction pool error,
 	Pool(txpool::error::Error),
-	/// Incorrect extrinsic format.
-	#[display(fmt="Invalid extrinsic format")]
-	BadFormat,
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", "_0.description()")]
 	Verification(Box<::std::error::Error + Send>),
+	/// Incorrect extrinsic format.
+	#[display(fmt="Invalid extrinsic format")]
+	BadFormat,
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Pool(ref err) => Some(err),
+			Error::Verification(ref err) => Some(&**err),
+			_ => None,
+		}
+	}
+}
 
 /// Base code for all authorship errors.
 const BASE_ERROR: i64 = 1000;

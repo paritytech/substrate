@@ -16,100 +16,69 @@
 
 //! Error types in Consensus
 use runtime_version::RuntimeVersion;
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
-	impl_extract_backtrace, impl_error_chain_kind};
 use primitives::ed25519::{Public, Signature};
+use std::error;
 
-error_chain! {
-	errors {
-		/// Missing state at block with given descriptor.
-		StateUnavailable(b: String) {
-			description("State missing at given block."),
-			display("State unavailable at block {}", b),
-		}
+/// Result type alias.
+pub type Result<T> = std::result::Result<T, Error>;
 
-		/// I/O terminated unexpectedly
-		IoTerminated {
-			description("I/O terminated unexpectedly."),
-			display("I/O terminated unexpectedly."),
-		}
+/// Error type.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	#[display(fmt="State unavailable at block {}", _0)]
+	/// Missing state at block with given descriptor.
+	StateUnavailable(String),
+	#[display(fmt="I/O terminated unexpectedly.")]
+	/// I/O terminated unexpectedly
+	IoTerminated,
+	#[display(fmt="Timer error: {}", _0)]
+	/// Unable to schedule wakeup.
+	FaultyTimer(tokio_timer::Error),
+	#[display(fmt="InherentData error: {}", _0)]
+	/// Error while working with inherent data.
+	InherentData(String),
+	#[display(fmt="Unable to create block proposal.")]
+	/// Unable to propose a block.
+	CannotPropose,
+	#[display(fmt="Message signature {:?} by {:?} is invalid.", _0, _1)]
+	/// Error checking signature
+	InvalidSignature(Signature, Public),
+	#[display(fmt="Current state of blockchain has invalid authorities set")]
+	/// Invalid authorities set received from the runtime.
+	InvalidAuthoritiesSet,
+	#[display(fmt="Message sender {:?} is not a valid authority.", _0)]
+	/// Account is not an authority.
+	InvalidAuthority(Public),
+	#[display(fmt="Authoring for current \
+				runtime is not supported. Native ({}) cannot author for on-chain ({}).", native, on_chain)]
+	/// Authoring interface does not match the runtime.
+	IncompatibleAuthoringRuntime { native: RuntimeVersion, on_chain: RuntimeVersion },
+	#[display(fmt="Authoring for current runtime is not supported since it has no version.")]
+	/// Authoring interface does not match the runtime.
+	RuntimeVersionMissing,
+	#[display(fmt="Authoring in current build is not supported since it has no runtime.")]
+	/// Authoring interface does not match the runtime.
+	NativeRuntimeMissing,
+	#[display(fmt="Invalid justification.")]
+	/// Justification requirements not met.
+	InvalidJustification,
+	#[display(fmt="Other error: {}", _0)]
+	/// Some other error.
+	Other(Box<error::Error + Send>),
+	#[display(fmt="Import failed: {}", _0)]
+	/// Error from the client while importing
+	ClientImport(String),
+	#[display(fmt="Chain lookup failed: {}", _0)]
+	/// Error from the client while importing
+	ChainLookup(String),
+}
 
-		/// Unable to schedule wakeup.
-		FaultyTimer(e: ::tokio_timer::Error) {
-			description("Timer error"),
-			display("Timer error: {}", e),
-		}
-
-		/// Error while working with inherent data.
-		InherentData(e: String) {
-			description("InherentData error"),
-			display("InherentData error: {}", e),
-		}
-
-		/// Unable to propose a block.
-		CannotPropose {
-			description("Unable to create block proposal."),
-			display("Unable to create block proposal."),
-		}
-
-		/// Error checking signature
-		InvalidSignature(s: Signature, a: Public) {
-			description("Message signature is invalid"),
-			display("Message signature {:?} by {:?} is invalid.", s, a),
-		}
-
-		/// Invalid authorities set received from the runtime.
-		InvalidAuthoritiesSet {
-			description("authorities set is invalid"),
-			display("Current state of blockchain has invalid authorities set"),
-		}
-
-		/// Account is not an authority.
-		InvalidAuthority(a: Public) {
-			description("Message sender is not a valid authority"),
-			display("Message sender {:?} is not a valid authority.", a),
-		}
-
-		/// Authoring interface does not match the runtime.
-		IncompatibleAuthoringRuntime(native: RuntimeVersion, on_chain: RuntimeVersion) {
-			description("Authoring for current runtime is not supported"),
-			display("Authoring for current runtime is not supported. Native ({}) cannot author for on-chain ({}).", native, on_chain),
-		}
-
-		/// Authoring interface does not match the runtime.
-		RuntimeVersionMissing {
-			description("Current runtime has no version"),
-			display("Authoring for current runtime is not supported since it has no version."),
-		}
-
-		/// Authoring interface does not match the runtime.
-		NativeRuntimeMissing {
-			description("This build has no native runtime"),
-			display("Authoring in current build is not supported since it has no runtime."),
-		}
-
-		/// Justification requirements not met.
-		InvalidJustification {
-			description("Invalid justification"),
-			display("Invalid justification."),
-		}
-
-		/// Some other error.
-		Other(e: Box<::std::error::Error + Send>) {
-			description("Other error")
-			display("Other error: {}", e.description())
-		}
-
-		/// Error from the client while importing
-		ClientImport(reason: String) {
-			description("Import failed"),
-			display("Import failed: {}", reason),
-		}
-
-		/// Error from the client while importing
-		ChainLookup(reason: String) {
-			description("Looking up chain failed"),
-			display("Chain lookup failed: {}", reason),
+impl error::Error for Error {
+	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		match self {
+			Error::FaultyTimer(ref err) => Some(err),
+			Error::Other(ref err) => Some(&**err),
+			_ => None,
 		}
 	}
 }

@@ -31,7 +31,14 @@ pub enum Error {
 	Pool(txpool::error::Error),
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Pool(ref err) => Some(err),
+		}
+	}
+}
 
 impl txpool::IntoPoolError for Error {
 	fn into_pool_error(self) -> std::result::Result<txpool::error::Error, Self> {
