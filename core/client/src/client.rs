@@ -76,6 +76,13 @@ use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
 
+
+/// in memory storage values
+pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+/// in memory multiple children storage values
+pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
+
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
@@ -135,8 +142,8 @@ pub struct ClientImportOperation<Block: BlockT, H: Hasher<Out=Block::Hash>, B: b
 		Block::Header,
 		bool,
 		Option<(
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-			Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+			StorageCollection,
+			ChildStorageCollection,
 		)>)>,
 	notify_finalized: Vec<Block::Hash>,
 }

@@ -38,6 +38,7 @@ use std::collections::HashMap;
 use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
+use client::{StorageCollection, ChildStorageCollection};
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
@@ -269,8 +270,8 @@ impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Blo
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, DbState, Block>,
 	db_updates: PrefixedMemoryDB<H>,
-	storage_updates: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	child_storage_updates: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+	storage_updates: StorageCollection,
+	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -364,8 +365,8 @@ where Block: BlockT<Hash=H256>,
 
 	fn update_storage(
 		&mut self,
-		update: Vec<(Vec<u8>,Option<Vec<u8>>)>,
-		child_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+		update: StorageCollection,
+		child_update: ChildStorageCollection,
 	) -> Result<(), client::error::Error> {
 		self.storage_updates = update;
 		self.child_storage_updates = child_update;

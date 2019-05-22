@@ -24,6 +24,7 @@ use hash_db::Hasher;
 use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
+use super::{StorageCollection, ChildStorageCollection};
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -169,8 +170,8 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		&mut self,
 		enacted: &[B::Hash],
 		retracted: &[B::Hash],
-		changes: Vec<(Vec<u8>, Option<StorageValue>)>,
-		child_changes: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<StorageValue>)>)>,
+		changes: StorageCollection,
+		child_changes: ChildStorageCollection,
 		commit_hash: Option<B::Hash>,
 		commit_number: Option<<B::Header as Header>::Number>,
 		is_best: F,
@@ -254,17 +255,15 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			let childs = child_changes
 				.into_iter()
 				.map(|(k,i)|(Some(k),i))
-				.chain(::std::iter::once((None, changes)));
+				.chain(std::iter::once((None, changes)));
 			childs.for_each(|(sk, changes)|
 				for (k, v) in changes.into_iter() {
 					let k = (sk.clone(), k);
 					if is_best {
-						modifications.insert(k.clone());
 						cache.hashes.remove(&k);
-						CachingState::<H, S, B>::storage_insert(cache, k, v);
-					} else {
-						modifications.insert(k);
+						CachingState::<H, S, B>::storage_insert(cache, k.clone(), v);
 					}
+					modifications.insert(k);
 				}
 			);
 			// Save modified storage. These are ordered by the block number.

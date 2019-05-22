@@ -148,10 +148,10 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					if let Some(ref listeners) = listeners {
 						subscribers.extend(listeners.iter());
 					}
-					let has_child_wc = !cw.is_empty();
+
 					subscribers.extend(cw.iter());
 
-					if has_child_wc || listeners.is_some() {
+					if !cw.is_empty() || listeners.is_some() {
 						changes.push((k, v.map(StorageData)));
 					}
 				}
@@ -187,54 +187,82 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		}
 	}
 
+	fn remove_subscriber_from(
+		subscriber: &SubscriberId,
+		filters: &Option<HashSet<StorageKey>>,
+		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
+		wildcards: &mut FnvHashSet<SubscriberId>,
+	){
+		match filters {
+			None => {
+				wildcards.remove(subscriber);
+			},
+			Some(filters) => {
+
+				for key in filters.iter() {
+					let remove_key = match listeners.get_mut(key) {
+						Some(ref mut set) => {
+							set.remove(subscriber);
+							set.is_empty()
+						},
+						None => false,
+					};
+
+					if remove_key {
+						listeners.remove(key);
+					}
+				}
+			}
+		}
+	}
+
 	fn remove_subscriber(&mut self, subscriber: SubscriberId) {
 		if let Some((_, filters, child_filters)) = self.sinks.remove(&subscriber) {
-			match filters {
-				None => {
-					self.wildcard_listeners.remove(&subscriber);
-				},
-				Some(filters) => {
-					for key in filters {
-						let remove_key = match self.listeners.get_mut(&key) {
-							Some(ref mut set) => {
-								set.remove(&subscriber);
-								set.is_empty()
-							},
-							None => false,
-						};
+			Self::remove_subscriber_from(
+				&subscriber,
+				&filters,
+				&mut self.listeners,
+				&mut self.wildcard_listeners,
+			);
+			if let Some(child_filters) = child_filters.as_ref() {
+				for (c_key, filters) in child_filters {
 
-						if remove_key {
-							self.listeners.remove(&key);
-						}
-					}
-				},
-			};
-			if let Some(child_filters) = child_filters {
-				for (c_key, filters) in child_filters.into_iter() {
 					if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
-						if let Some(filters) = filters {
-							for key in filters.into_iter() {
-								let remove_key = match listeners.get_mut(&key) {
-									Some(ref mut set) => {
-										set.remove(&subscriber);
-										set.is_empty()
-									},
-									None => false,
-								};
+						Self::remove_subscriber_from(
+							&subscriber,
+							&filters,
+							&mut *listeners,
+							&mut *wildcards,
+						);
 
-								if remove_key {
-									listeners.remove(&key);
-								}
-							}
-						} else {
-							wildcards.remove(&subscriber);
-						}
 						if listeners.is_empty() && wildcards.is_empty() {
 							self.child_listeners.remove(&c_key);
 						}
 					}
 				}
 			}
+		}
+	}
+
+	fn listen_from(
+		current_id: SubscriberId,
+		filter_keys: &Option<impl AsRef<[StorageKey]>>,
+		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
+		wildcards: &mut FnvHashSet<SubscriberId>,
+	) -> Option<HashSet<StorageKey>>
+	{
+		match filter_keys {
+			None => {
+				wildcards.insert(current_id);
+				None
+			},
+			Some(keys) => Some(keys.as_ref().iter().map(|key| {
+				listeners
+					.entry(key.clone())
+					.or_insert_with(Default::default)
+					.insert(current_id);
+				key.clone()
+			}).collect())
 		}
 	}
 
@@ -245,47 +273,34 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> StorageEventStream<Block::Hash> {
 		self.next_id += 1;
-		let next_id = self.next_id;
+		let current_id = self.next_id;
 
 		// add subscriber for every key
-		let keys = match filter_keys {
-			None => {
-				self.wildcard_listeners.insert(next_id);
-				None
-			},
-			Some(keys) => Some(keys.iter().map(|key| {
-				self.listeners
-					.entry(key.clone())
-					.or_insert_with(Default::default)
-					.insert(next_id);
-				key.clone()
-			}).collect())
-		};
+		let keys = Self::listen_from(
+			current_id,
+			&filter_keys,
+			&mut self.listeners,
+			&mut self.wildcard_listeners,
+		);
 		let child_keys = filter_child_keys.map(|filter_child_keys| {
 			filter_child_keys.iter().map(|(c_key, o_keys)| {
 				let (c_listeners, c_wildcards) = self.child_listeners
 					.entry(c_key.clone())
 					.or_insert_with(Default::default);
 
-				(c_key.clone(), if let Some(keys) = o_keys {
-					Some(keys.iter().map(|key| {
-						c_listeners
-							.entry(key.clone())
-							.or_insert_with(Default::default)
-							.insert(next_id);
-						key.clone()
-					}).collect())
-				} else {
-					c_wildcards.insert(next_id);
-					None
-				})
+				(c_key.clone(), Self::listen_from(
+					current_id,
+					o_keys,
+					&mut *c_listeners,
+					&mut *c_wildcards,
+				))
 			}).collect()
 		});
 
 
 		// insert sink
 		let (tx, rx) = mpsc::unbounded();
-		self.sinks.insert(self.next_id, (tx, keys, child_keys));
+		self.sinks.insert(current_id, (tx, keys, child_keys));
 		rx
 	}
 }
@@ -298,10 +313,10 @@ mod tests {
 	use std::iter::{empty, Empty};
 
 	type TestChangeSet = (
-	  Vec<(StorageKey, Option<StorageData>)>,
-	  Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
+		Vec<(StorageKey, Option<StorageData>)>,
+		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
 	);
-		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>);
+
 	#[cfg(test)]
 	impl From<TestChangeSet> for StorageChangeSet {
 		fn from(changes: TestChangeSet) -> Self {
