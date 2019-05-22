@@ -24,7 +24,7 @@ use std::time;
 use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
-use network_libp2p::{Severity, PeerId};
+use network_libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 use runtime_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
@@ -35,6 +35,15 @@ use crate::config::Roles;
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+/// Reputation change when a peer sends us a gossip message that we didn't know about.
+const GOSSIP_SUCCESS_REPUTATION_CHANGE: i32 = 1 << 4;
+/// Reputation change when a peer sends us a gossip message that we already knew about.
+const DUPLICATE_GOSSIP_REPUTATION_CHANGE: i32 = -(1 << 2);
+/// Reputation change when a peer sends us a gossip message for an unknown engine, whatever that
+/// means.
+const UNKNOWN_GOSSIP_REPUTATION_CHANGE: i32 = -(1 << 6);
+/// Reputation change when a peer sends a message from a topic it isn't registered on.
+const UNREGISTERED_TOPIC_REPUTATION_CHANGE: i32 = -(1 << 10);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
@@ -256,6 +265,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId, roles: Roles) {
+		// light nodes are not valid targets for consensus gossip messages
+		if !roles.is_full() {
+			return;
+		}
+
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
 		self.peers.insert(who.clone(), PeerConsensus {
 			known_messages: HashSet::new(),
@@ -389,6 +403,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		if self.known_messages.contains_key(&message_hash) {
 			trace!(target:"gossip", "Ignored already known message from {}", who);
+			protocol.report_peer(who.clone(), DUPLICATE_GOSSIP_REPUTATION_CHANGE);
 			return;
 		}
 
@@ -406,15 +421,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(ValidationResult::Discard) => None,
 			None => {
 				trace!(target:"gossip", "Unknown message engine id {:?} from {}", engine_id, who);
-				protocol.report_peer(
-					who,
-					Severity::Useless(format!("Sent unknown consensus engine id")),
-				);
+				protocol.report_peer(who.clone(), UNKNOWN_GOSSIP_REPUTATION_CHANGE);
+				protocol.disconnect_peer(who);
 				return;
 			}
 		};
 
 		if let Some((topic, keep)) = validation_result {
+			protocol.report_peer(who.clone(), GOSSIP_SUCCESS_REPUTATION_CHANGE);
 			if let Some(ref mut peer) = self.peers.get_mut(&who) {
 				peer.known_messages.insert(message_hash);
 				if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
@@ -437,6 +451,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				}
 			} else {
 				trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
+				protocol.report_peer(who.clone(), UNREGISTERED_TOPIC_REPUTATION_CHANGE);
 			}
 		} else {
 			trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
@@ -445,9 +460,20 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(&mut self, protocol: &mut Context<B>, who: &PeerId, topic: B::Hash, engine_id: ConsensusEngineId, force: bool) {
+		let validator = self.validators.get(&engine_id);
+		let mut message_allowed = match validator {
+			None => return, // treat all messages with no validator as not allowed
+			Some(validator) => validator.message_allowed(),
+		};
+
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+
 		if let Some(ref mut peer) = self.peers.get_mut(who) {
 			for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
 				if !force && peer.known_messages.contains(&entry.message_hash) {
+					continue
+				}
+				if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
 					continue
 				}
 				peer.known_messages.insert(entry.message_hash.clone());

@@ -324,29 +324,26 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> Result<H256, client::error::Error> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
 		}
 
-		let mut transaction: PrefixedMemoryDB<Blake2Hasher> = Default::default();
-
-		for (child_key, child_map) in children {
+		for child_key in children.keys() {
 			if !well_known_keys::is_child_storage_key(&child_key) {
 				return Err(client::error::Error::GenesisInvalid.into());
 			}
-
-			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
-			transaction.consolidate(update);
-
-			if !is_default {
-				top.insert(child_key, root);
-			}
 		}
 
-		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
-		transaction.consolidate(update);
+		let child_delta = children.into_iter()
+			.map(|(storage_key, child_overlay)|
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
+
+		let (root, transaction) = self.old_state.full_storage_root(
+			top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta
+		);
 
 		self.db_updates = transaction;
 		Ok(root)

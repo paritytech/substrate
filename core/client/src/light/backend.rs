@@ -33,7 +33,6 @@ use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use heapsize::HeapSizeOf;
 use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
@@ -108,7 +107,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
@@ -222,7 +221,7 @@ where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.genesis_state.read().is_some()
@@ -238,7 +237,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
 
@@ -279,11 +278,20 @@ where
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
+
+		// create a list of children keys to re-compute roots for
+		let child_delta = children.keys()
+			.cloned()
+			.map(|storage_key| (storage_key, None))
+			.collect::<Vec<_>>();
+
+		// make sure to persist the child storage
 		for (child_key, child_storage) in children {
 			storage.insert(Some(child_key), child_storage);
 		}
+
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.storage_root(::std::iter::empty());
+		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -374,7 +382,7 @@ where
 		Vec::new()
 	}
 
-	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, _prefix: &[u8]) -> Vec<Vec<u8>> {
 		// whole state is not available on light node
 		Vec::new()
 	}
@@ -390,7 +398,7 @@ where
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -466,7 +474,7 @@ where
 		}
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::keys(state, prefix),

@@ -22,10 +22,7 @@ pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
 pub use std::fmt;
 pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use srml_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
-	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
-};
+pub use srml_metadata::{FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -877,6 +874,10 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 	) => {
+		$crate::__check_reserved_fn_name! {
+			$($fn_name)*
+		}
+
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
@@ -1202,6 +1203,38 @@ macro_rules! __function_to_metadata {
 			"`, the following attributes are supported: `#[compact]`"
 		))
 	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __check_reserved_fn_name {
+	(deposit_event $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error deposit_event);
+	};
+	(on_initialize $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_initialize);
+	};
+	(on_initialise $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_initialise);
+	};
+	(on_finalize $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_finalize);
+	};
+	(on_finalise $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_finalise);
+	};
+	(offchain_worker $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error offchain_worker);
+	};
+	($t:ident $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!($( $rest )*);
+	};
+	() => {};
+	(@compile_error $ident:ident) => {
+		compile_error!(concat!("Invalid call fn name: `", stringify!($ident),
+		"`, name is reserved and doesn't match expected signature, please refer to `decl_module!`",
+		" documentation to see the appropriate usage, or rename it to an unreserved keyword."));
+	};
 }
 
 #[cfg(test)]

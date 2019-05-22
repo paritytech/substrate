@@ -449,6 +449,8 @@ struct Inner<Block: BlockT> {
 	votes_tally: HashMap<PeerId, VoteTally>,
 }
 
+type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
+
 impl<Block: BlockT> Inner<Block> {
 	fn new(config: crate::Config) -> Self {
 		Inner {
@@ -462,11 +464,9 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	/// Note a round in a set has started.
-	fn note_round<F>(&mut self, round: Round, set_id: SetId, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
-	{
+	fn note_round(&mut self, round: Round, set_id: SetId) -> MaybeMessage<Block> {
 		if self.local_view.round == round && self.local_view.set_id == set_id {
-			return
+			return None;
 		}
 
 		debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
@@ -478,28 +478,28 @@ impl<Block: BlockT> Inner<Block> {
         self.votes_tally = Default::default();
 
 		self.live_topics.push(round, set_id);
-		self.multicast_neighbor_packet(send_neighbor);
+		self.multicast_neighbor_packet()
 	}
 
 	/// Note that a voter set with given ID has started. Does nothing if the last
 	/// call to the function was with the same `set_id`.
-	fn note_set<F>(&mut self, set_id: SetId, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
-	{
-		if self.local_view.set_id == set_id { return }
+	fn note_set(&mut self, set_id: SetId) -> MaybeMessage<Block> {
+		if self.local_view.set_id == set_id {
+			return None;
+		}
 
 		self.local_view.update_set(set_id);
 		self.live_topics.push(Round(0), set_id);
-		self.multicast_neighbor_packet(send_neighbor);
+		self.multicast_neighbor_packet()
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
-	fn note_commit_finalized<F>(&mut self, finalized: NumberFor<Block>, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
-	{
+	fn note_commit_finalized(&mut self, finalized: NumberFor<Block>) -> MaybeMessage<Block> {
 		if self.local_view.last_commit.as_ref() < Some(&finalized) {
 			self.local_view.last_commit = Some(finalized);
-			self.multicast_neighbor_packet(send_neighbor)
+			self.multicast_neighbor_packet()
+		} else {
+			None
 		}
 	}
 
@@ -611,9 +611,7 @@ impl<Block: BlockT> Inner<Block> {
 		(neighbor_topics, Action::Discard(cb))
 	}
 
-	fn multicast_neighbor_packet<F>(&self, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
-	{
+	fn multicast_neighbor_packet(&self) -> MaybeMessage<Block> {
 		let packet = NeighborPacket {
 			round: self.local_view.round,
 			set_id: self.local_view.set_id,
@@ -621,7 +619,7 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		let peers = self.peers.inner.keys().cloned().collect();
-		send_neighbor(peers, packet);
+		Some((peers, packet))
 	}
 }
 
@@ -647,21 +645,30 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn note_round<F>(&self, round: Round, set_id: SetId, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_round(round, set_id, send_neighbor);
+		let maybe_msg = self.inner.write().note_round(round, set_id);
+		if let Some((to, msg)) = maybe_msg {
+			send_neighbor(to, msg);
+		}
 	}
 
 	/// Note that a voter set with given ID has started.
 	pub(super) fn note_set<F>(&self, set_id: SetId, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_set(set_id, send_neighbor);
+		let maybe_msg = self.inner.write().note_set(set_id);
+		if let Some((to, msg)) = maybe_msg {
+			send_neighbor(to, msg);
+		}
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
 	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		self.inner.write().note_commit_finalized(finalized, send_neighbor);
+		let maybe_msg = self.inner.write().note_commit_finalized(finalized);
+		if let Some((to, msg)) = maybe_msg {
+			send_neighbor(to, msg);
+		}
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: i32) {
@@ -673,13 +680,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 	{
 		let mut broadcast_topics = Vec::new();
 		let action = {
-			let mut inner = self.inner.write();
 			match GossipMessage::<Block>::decode(&mut data) {
 				Some(GossipMessage::VoteOrPrecommit(ref message))
-					=> inner.validate_round_message(who, message),
-				Some(GossipMessage::Commit(ref message)) => inner.validate_commit_message(who, message),
+					=> self.inner.write().validate_round_message(who, message),
+				Some(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
 				Some(GossipMessage::Neighbor(update)) => {
-					let (topics, action) = inner.import_neighbor_message(
+					let (topics, action) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
 					);

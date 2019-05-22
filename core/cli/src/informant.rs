@@ -163,10 +163,10 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 fn speed(best_number: u64, last_number: Option<u64>, last_update: time::Instant) -> String {
 	let since_last_millis = last_update.elapsed().as_secs() * 1000;
 	let since_last_subsec_millis = last_update.elapsed().subsec_millis() as u64;
-	let speed = match last_number {
-		Some(num) => (best_number.saturating_sub(num) * 10_000 / (since_last_millis + since_last_subsec_millis)) as f64,
-		None => 0.0
-	};
+	let speed = last_number
+		.and_then(|num|
+			(best_number.saturating_sub(num) * 10_000).checked_div(since_last_millis + since_last_subsec_millis))
+		.map_or(0.0, |s| s as f64);
 
 	if speed < 1.0 {
 		"".into()

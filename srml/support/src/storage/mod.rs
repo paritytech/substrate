@@ -332,8 +332,8 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 
 /// A storage map that can be enumerated.
 ///
-/// Note that type is primarily useful for off-chain computations.
-/// Runtime implementors should avoid enumerating storage entries.
+/// Primarily useful for off-chain computations.
+/// Runtime implementors should avoid enumerating storage entries on-chain.
 pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Return current head element.
 	fn head() -> Option<K>;
@@ -401,6 +401,20 @@ pub trait StorageDoubleMap<K1: Codec, K2: Codec, V: Codec> {
 		KArg1: Borrow<K1>,
 		KArg2: Borrow<K2>,
 		F: FnOnce(&mut Self::Query) -> R;
+
+	/// Append the given items to the value under the key specified.
+	///
+	/// `V` is required to implement `codec::EncodeAppend<Item=I>`.
+	fn append<KArg1, KArg2, I>(
+		k1: KArg1,
+		k2: KArg2,
+		items: &[I],
+	) -> Result<(), &'static str>
+	where
+		KArg1: Borrow<K1>,
+		KArg2: Borrow<K2>,
+		I: codec::Encode,
+		V: EncodeAppend<Item=I>;
 }
 
 impl<K1: Codec, K2: Codec, V: Codec, U> StorageDoubleMap<K1, K2, V> for U
@@ -452,6 +466,20 @@ where
 		F: FnOnce(&mut Self::Query) -> R
 	{
 		U::mutate(k1.borrow(), k2.borrow(), f, &RuntimeStorage)
+	}
+
+	fn append<KArg1, KArg2, I>(
+		k1: KArg1,
+		k2: KArg2,
+		items: &[I],
+	) -> Result<(), &'static str>
+	where
+		KArg1: Borrow<K1>,
+		KArg2: Borrow<K2>,
+		I: codec::Encode,
+		V: EncodeAppend<Item=I>,
+	{
+		U::append(k1.borrow(), k2.borrow(), items, &RuntimeStorage)
 	}
 }
 

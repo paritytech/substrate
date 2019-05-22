@@ -322,6 +322,7 @@ fn fill_network_configuration(
 	chain_spec_id: &str,
 	config: &mut NetworkConfiguration,
 	client_id: String,
+	is_dev: bool,
 ) -> error::Result<()> {
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
 	config.config_path = Some(
@@ -359,9 +360,14 @@ fn fill_network_configuration(
 	config.in_peers = cli.in_peers;
 	config.out_peers = cli.out_peers;
 
-	config.enable_mdns = !cli.no_mdns;
+	config.enable_mdns = !is_dev && !cli.no_mdns;
 
 	Ok(())
+}
+
+fn input_keystore_password() -> Result<String, String> {
+	rpassword::read_password_from_tty(Some("Keystore password: "))
+		.map_err(|e| format!("{:?}", e))
 }
 
 fn create_run_node_config<F, S>(
@@ -373,6 +379,9 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
+	if cli.interactive_password {
+		config.password = input_keystore_password()?
+	}
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -441,6 +450,8 @@ where
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
 
+	let is_dev = cli.shared_params.dev;
+
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
@@ -448,6 +459,7 @@ where
 		spec.id(),
 		&mut config.network,
 		client_id,
+		is_dev,
 	)?;
 
 	fill_transaction_pool_configuration::<F>(
@@ -476,7 +488,6 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
-	let is_dev = cli.shared_params.dev;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
 		None
@@ -498,7 +509,8 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
-	config.force_authoring = cli.force_authoring;
+	// Imply forced authoring on --dev
+	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
 	Ok(config)
 }
@@ -824,7 +836,7 @@ mod tests {
 			NodeKeyType::variants().into_iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
-					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().as_ref().to_vec(),
+					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().to_bytes().to_vec(),
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
 				};
 				let params = NodeKeyParams {
@@ -835,7 +847,7 @@ mod tests {
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Secp256k1(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Secp256k1 &&
-							&sk[..] == ski.as_ref() => Ok(()),
+							&sk[..] == ski.to_bytes() => Ok(()),
 					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),

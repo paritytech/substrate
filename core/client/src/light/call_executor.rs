@@ -41,7 +41,6 @@ use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::{RuntimeVersion, NativeVersion};
-use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
@@ -149,7 +148,7 @@ where
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(id, "version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
+		let call_result = self.call(id, "Core_version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
 			.ok_or_else(|| ClientError::VersionInvalid.into())
 	}
@@ -436,7 +435,7 @@ pub fn check_execution_proof<Header, E, H>(
 		Header: HeaderT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord + HeapSizeOf,
+		H::Out: Ord,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
