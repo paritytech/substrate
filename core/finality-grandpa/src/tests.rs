@@ -36,6 +36,8 @@ use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImpor
 };
 use std::collections::{HashMap, HashSet};
 use std::result;
+use std::sync::Arc;
+use parking_lot::RwLock;
 use parity_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
@@ -1247,7 +1249,6 @@ fn voter_persists_its_votes() {
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::from_iter(voters)),
-			Arc::new(RwLock::new(Default::default())),
 			Some(config.local_key.unwrap()),
 			HasVoted::No,
 		);
