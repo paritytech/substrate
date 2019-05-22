@@ -33,7 +33,8 @@ use parity_codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, SaturatedConversion, NumberFor, Digest, DigestItem};
+	Zero, One, SaturatedConversion, NumberFor, Digest, DigestItem
+};
 use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, open_database,
