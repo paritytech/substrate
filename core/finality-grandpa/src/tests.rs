@@ -671,6 +671,7 @@ fn transition_3_voters_twice_1_full_observer() {
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+			#[allow(deprecated)]
 			&**full_client.backend()
 		).unwrap();
 
@@ -760,6 +761,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.map(move |()| {
 					let full_client = client.as_full().expect("only full clients are used in test");
 					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+						#[allow(deprecated)]
 						&**full_client.backend()
 					).unwrap();
 
@@ -1030,6 +1032,7 @@ fn force_change_to_new_set() {
 
 			let full_client = peer.client().as_full().expect("only full clients are used in test");
 			let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+				#[allow(deprecated)]
 				&**full_client.backend()
 			).unwrap();
 

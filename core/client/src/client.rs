@@ -1855,6 +1855,7 @@ pub(crate) mod tests {
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 		let longest_chain_select = test_client::client::LongestChain::new(
+			#[allow(deprecated)]
 			client.backend().clone(),
 			client.import_lock()
 		);
@@ -1872,6 +1873,7 @@ pub(crate) mod tests {
 		let client = test_client::new();
 
 		let uninserted_block = client.new_block().unwrap().bake().unwrap();
+		#[allow(deprecated)]
 		let backend = client.backend().as_in_memory();
 		let longest_chain_select = test_client::client::LongestChain::new(
 				Arc::new(backend),
@@ -2010,6 +2012,7 @@ pub(crate) mod tests {
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
 		let longest_chain_select = test_client::client::LongestChain::new(
+				#[allow(deprecated)]
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
@@ -2098,6 +2101,7 @@ pub(crate) mod tests {
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 		let longest_chain_select = test_client::client::LongestChain::new(
+				#[allow(deprecated)]
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
@@ -2328,6 +2332,7 @@ pub(crate) mod tests {
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 		let longest_chain_select = test_client::client::LongestChain::new(
+			#[allow(deprecated)]
 			Arc::new(client.backend().as_in_memory()),
 			client.import_lock()
 		);
@@ -2371,21 +2376,25 @@ pub(crate) mod tests {
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
 		assert_eq!(
+			#[allow(deprecated)]
 			client.backend().blockchain().last_finalized().unwrap(),
 			a3.hash(),
 		);
 
 		assert_eq!(
+			#[allow(deprecated)]
 			client.backend().blockchain().justification(BlockId::Hash(a3.hash())).unwrap(),
 			Some(justification),
 		);
 
 		assert_eq!(
+			#[allow(deprecated)]
 			client.backend().blockchain().justification(BlockId::Hash(a1.hash())).unwrap(),
 			None,
 		);
 
 		assert_eq!(
+			#[allow(deprecated)]
 			client.backend().blockchain().justification(BlockId::Hash(a2.hash())).unwrap(),
 			None,
 		);
