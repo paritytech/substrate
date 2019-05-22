@@ -214,7 +214,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
 						if let Some(filters) = filters {
 							for key in filters.into_iter() {
-								let remove_key = match self.listeners.get_mut(&key) {
+								let remove_key = match listeners.get_mut(&key) {
 									Some(ref mut set) => {
 										set.remove(&subscriber);
 										set.is_empty()
