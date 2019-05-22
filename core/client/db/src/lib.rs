@@ -38,7 +38,7 @@ use std::collections::HashMap;
 use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
-use client::{StorageCollection, ChildStorageCollection};
+use client::backend::{StorageCollection, ChildStorageCollection};
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};

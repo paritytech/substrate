@@ -27,6 +27,12 @@ use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
 
+/// in memory storage values
+pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+/// in memory multiple children storage values
+pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
+
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewBlockState {
@@ -84,8 +90,8 @@ pub trait BlockImportOperation<Block, H> where
 	/// Set storage changes.
 	fn update_storage(
 		&mut self,
-		update: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		child_update: Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+		update: StorageCollection,
+		child_update: ChildStorageCollection,
 	) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
