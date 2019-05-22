@@ -1083,7 +1083,7 @@ mod tests {
 
 
 			#[allow(deprecated)]
-			let select_chain = LongestChain::new(client.backend().clone(), client.import_lock().clone()),
+			let select_chain = LongestChain::new(client.backend().clone(), client.import_lock().clone());
 
 			let babe = start_babe(BabeParams {
 				config,
