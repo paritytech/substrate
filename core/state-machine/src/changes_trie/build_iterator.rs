@@ -160,7 +160,11 @@ mod tests {
 		assert_eq!(digest_build_iterator_basic(4, 16, 2), empty, "digest is not required for this block");
 		assert_eq!(digest_build_iterator_basic(4, 16, 15), empty, "digest is not required for this block");
 		assert_eq!(digest_build_iterator_basic(4, 16, 17), empty, "digest is not required for this block");
-		assert_eq!(digest_build_iterator_basic(::std::u32::MAX / 2 + 1, 16, ::std::u64::MAX), empty, "digest_interval * 2 is greater than u64::MAX");
+		assert_eq!(digest_build_iterator_basic(
+			::std::u32::MAX / 2 + 1,
+			16,
+			::std::u64::MAX,
+		), empty, "digest_interval * 2 is greater than u64::MAX");
 	}
 
 	#[test]

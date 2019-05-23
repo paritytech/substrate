@@ -143,7 +143,12 @@ impl<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> TrieBackend
 	}
 }
 
-impl<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number, S> {
+impl<'a, H, Number, S> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number, S>
+	where
+		S: 'a + Storage<H, Number>,
+		Number: BlockNumber,
+		H: Hasher,
+{
 	type Overlay = MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
