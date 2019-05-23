@@ -15,10 +15,12 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo, Trait};
-use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
-	SaturatedConversion};
+use runtime_primitives::traits::{
+	Bounded, CheckedDiv, CheckedMul, Saturating, Zero, SaturatedConversion,
+};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
+use core::convert::TryInto;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -78,10 +80,15 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			.checked_div(&<Module<T>>::rent_deposit_offset())
 			.unwrap_or_else(Zero::zero);
 
-		let effective_storage_size =
-			<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
+		// Free storage is saturated if exceeding storage_size capacity.
+		let free_storage_u64 = TryInto::<u64>::try_into(free_storage)
+			.unwrap_or_else(|_| u64::max_value());
 
-		effective_storage_size
+		let effective_storage_size = contract.storage_size.saturating_sub(free_storage_u64);
+
+		effective_storage_size.try_into()
+			// If effective_storage_size exceed balance capacity then we use max balance
+			.unwrap_or_else(|_| <BalanceOf<T>>::max_value())
 			.checked_mul(&<Module<T>>::rent_byte_price())
 			.unwrap_or(<BalanceOf<T>>::max_value())
 	};

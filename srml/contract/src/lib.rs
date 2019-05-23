@@ -195,7 +195,7 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The size of stored value in octet.
-	pub storage_size: u32,
+	pub storage_size: u64,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
@@ -591,8 +591,8 @@ decl_module! {
 			}
 
 			origin_contract.storage_size -= key_values_taken.iter()
-				.map(|(_, value)| value.len() as u32)
-				.sum::<u32>();
+				.map(|(_, value)| value.len() as u64)
+				.sum::<u64>();
 
 			<ContractInfoOf<T>>::remove(&origin);
 			<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
