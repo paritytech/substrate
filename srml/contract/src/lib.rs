@@ -690,6 +690,9 @@ pub struct Schedule<Gas> {
 	/// Whether the `ext_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
+
+	/// The maximum length of a subject used for PRNG generation.
+	pub max_subject_len: u32,
 }
 
 impl<Gas: From<u32>> Default for Schedule<Gas> {
@@ -709,6 +712,7 @@ impl<Gas: From<u32>> Default for Schedule<Gas> {
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 			enable_println: false,
+			max_subject_len: 32,
 		}
 	}
 }

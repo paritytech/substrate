@@ -106,8 +106,8 @@ pub trait Ext {
 	/// Returns a reference to the timestamp of the current block
 	fn now(&self) -> &MomentOf<Self::T>;
 
-	/// Returns a reference to the random seed for the current block
-	fn random_seed(&self) -> &SeedOf<Self::T>;
+	/// Returns a random number for the current block with the given subject.
+	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
 	/// Deposit an event with the given topics.
 	///
@@ -353,7 +353,6 @@ where
 							caller: self.self_account.clone(),
 							value_transferred: value,
 							timestamp: timestamp::Module::<T>::now(),
-							random_seed: system::Module::<T>::random_seed(),
 						},
 						input_data,
 						empty_output_buf,
@@ -423,7 +422,6 @@ where
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
 						timestamp: timestamp::Module::<T>::now(),
-						random_seed: system::Module::<T>::random_seed(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -576,7 +574,6 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
 	timestamp: T::Moment,
-	random_seed: T::Hash,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -642,8 +639,8 @@ where
 		self.value_transferred
 	}
 
-	fn random_seed(&self) -> &T::Hash {
-		&self.random_seed
+	fn random(&self, subject: &[u8]) -> SeedOf<T> {
+		system::Module::<T>::random(subject)
 	}
 
 	fn now(&self) -> &T::Moment {
