@@ -182,7 +182,7 @@ impl<Components: components::Components> Service<Components> {
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
 		};
@@ -202,9 +202,6 @@ impl<Components: components::Components> Service<Components> {
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network = network::Service::new(network_params, protocol_id, import_queue)?;
-		if let Some(on_demand) = on_demand.as_ref() {
-			on_demand.set_network_interface(Box::new(Arc::downgrade(&network)));
-		}
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {

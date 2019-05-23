@@ -29,9 +29,11 @@ use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
+use crate::AlwaysBadChecker;
 use crate::chain::FinalityProofProvider;
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
+use crate::on_demand::RequestData;
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
 use crate::protocol::{ProtocolStatus, PeerInfo, NetworkOut};
 use crate::config::Params;
@@ -216,7 +218,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let protocol = Protocol::new(
 			params.config,
 			params.chain,
-			params.on_demand,
+			params.on_demand.as_ref().map(|od| od.checker().clone())
+				.unwrap_or(Arc::new(AlwaysBadChecker)),
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
@@ -234,6 +237,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			status_sinks.clone(),
 			params.network_config,
 			registered,
+			params.on_demand.and_then(|od| od.extract_receiver()),
 		)?;
 
 		let service = Arc::new(Service {
@@ -531,6 +535,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
+	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 ) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>, PeersetHandle), Error> {
 	// Start the main service.
 	let (service, peerset) = match start_service(config, registered) {
@@ -558,7 +563,8 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			network_port,
 			protocol_rx,
 			status_sinks,
-			peerset_clone
+			peerset_clone,
+			on_demand_in
 		)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
@@ -589,6 +595,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	peerset: PeersetHandle,
+	mut on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 ) -> impl Future<Item = (), Error = io::Error> {
 	// Implementation of `protocol::NetworkOut` using the available local variables.
 	struct Ctxt<'a, B: BlockT>(&'a mut NetworkService<Message<B>>, &'a PeersetHandle);
@@ -626,6 +633,13 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
+		}
+
+		// Check for new incoming on-demand requests.
+		if let Some(on_demand_in) = on_demand_in.as_mut() {
+			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
+				protocol.add_on_demand_request(&mut Ctxt(&mut network_service.lock(), &peerset), rq);
+			}
 		}
 
 		loop {
