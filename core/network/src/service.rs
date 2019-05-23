@@ -29,6 +29,7 @@ use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
+use crate::chain::FinalityProofProvider;
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::message::Message;
 use crate::protocol::{self, Context, CustomMessageOutcome, Protocol, ConnectedPeer};
@@ -41,6 +42,8 @@ use tokio::runtime::Builder as RuntimeBuilder;
 
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
+/// Interval at which we update the `peers` field on the main thread.
+const CONNECTED_PEERS_INTERVAL: Duration = Duration::from_millis(500);
 
 pub use network_libp2p::PeerId;
 
@@ -53,8 +56,13 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
 	/// Get network state.
 	fn network_state(&self) -> NetworkState;
-	/// Get currently connected peers
-	fn peers(&self) -> Vec<(PeerId, PeerInfo<B>)>;
+
+	/// Get currently connected peers.
+	///
+	/// > **Warning**: This method can return outdated information and should only ever be used
+	/// > when obtaining outdated information is acceptable.
+	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)>;
+
 	/// Are we in the process of downloading the chain?
 	fn is_major_syncing(&self) -> bool;
 }
@@ -206,12 +214,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let protocol = Protocol::new(
-			peers.clone(),
 			params.config,
 			params.chain,
-			params.finality_proof_provider,
 			params.on_demand,
-			params.transaction_pool,
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
@@ -220,7 +225,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			protocol,
+			peers.clone(),
 			import_queue.clone(),
+			params.transaction_pool,
+			params.finality_proof_provider,
 			network_port,
 			protocol_rx,
 			status_sinks.clone(),
@@ -392,7 +400,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 		self.network.lock().state()
 	}
 
-	fn peers(&self) -> Vec<(PeerId, PeerInfo<B>)> {
+	fn peers_debug_info(&self) -> Vec<(PeerId, PeerInfo<B>)> {
 		let peers = (*self.peers.read()).clone();
 		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
 	}
@@ -514,7 +522,10 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
+	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
+	transaction_pool: Arc<dyn TransactionPool<H, B>>,
+	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -540,7 +551,10 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			is_major_syncing,
 			protocol,
 			service_clone,
+			peers,
 			import_queue,
+			transaction_pool,
+			finality_proof_provider,
 			network_port,
 			protocol_rx,
 			status_sinks,
@@ -567,7 +581,10 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_major_syncing: Arc<AtomicBool>,
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
+	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
+	transaction_pool: Arc<dyn TransactionPool<H, B>>,
+	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	mut network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
 	mut protocol_rx: mpsc::UnboundedReceiver<ProtocolMsg<B, S>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
@@ -589,6 +606,8 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 
 	// Interval at which we send status updates on the `status_sinks`.
 	let mut status_interval = tokio::timer::Interval::new_interval(STATUS_INTERVAL);
+	// Interval at which we update the `connected_peers` Arc.
+	let mut connected_peers_interval = tokio::timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL);
 
 	futures::future::poll_fn(move || {
 		while let Ok(Async::Ready(_)) = status_interval.poll() {
@@ -596,7 +615,14 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 		}
 
-		match protocol.poll(&mut Ctxt(&mut network_service.lock(), &peerset)) {
+		while let Ok(Async::Ready(_)) = connected_peers_interval.poll() {
+			let infos = protocol.peers_info().map(|(id, info)| {
+				(id.clone(), ConnectedPeer { peer_info: info.clone() })
+			}).collect();
+			*peers.write() = infos;
+		}
+
+		match protocol.poll(&mut Ctxt(&mut network_service.lock(), &peerset), &*transaction_pool) {
 			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
@@ -646,7 +672,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					protocol.gossip_consensus_message(&mut network_out, topic, engine_id, message, recipient),
 				ProtocolMsg::BlocksProcessed(hashes, has_error) =>
 					protocol.blocks_processed(&mut network_out, hashes, has_error),
-				ProtocolMsg::RestartSync => 
+				ProtocolMsg::RestartSync =>
 					protocol.restart(&mut network_out),
 				ProtocolMsg::AnnounceBlock(hash) =>
 					protocol.announce_block(&mut network_out, hash),
@@ -664,7 +690,8 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					protocol.request_finality_proof(&mut network_out, &hash, number),
 				ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
 					protocol.finality_proof_import_result(requested_block, finalziation_result),
-				ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(&mut network_out),
+				ProtocolMsg::PropagateExtrinsics =>
+					protocol.propagate_extrinsics(&mut network_out, &*transaction_pool),
 				#[cfg(any(test, feature = "test-helpers"))]
 				ProtocolMsg::Tick => protocol.tick(&mut network_out),
 				#[cfg(any(test, feature = "test-helpers"))]
@@ -692,7 +719,13 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 					CustomMessageOutcome::None
 				},
 				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) =>
-					protocol.on_custom_message(&mut network_out, peer_id, message),
+					protocol.on_custom_message(
+						&mut network_out,
+						&*transaction_pool,
+						peer_id,
+						message,
+						finality_proof_provider.as_ref().map(|p| &**p)
+					),
 				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
 					debug!(target: "sync", "{} clogging messages:", messages.len());
 					for msg in messages.into_iter().take(5) {
