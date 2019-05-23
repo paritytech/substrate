@@ -221,11 +221,6 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				// Add inherents from the internal pool
 				let inherents = self.inherents_pool.drain();
 				debug!("Pushing {} queued inherent extrinsics.", inherents.len());
-				for i in inherent_digests.logs().clone() {
-					if let Err(e) = block_builder.push_extrinsic(i) {
-						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
-					}
-				}
 				for i in inherents {
 					if let Err(e) = block_builder.push_extrinsic(i) {
 						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);

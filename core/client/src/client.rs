@@ -1259,7 +1259,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Default::default(),
 			Default::default(),
 			parent_header.hash(),
-			parent_header.digest().clone(),
+			Default::default(),
 		))
 	}
 }
