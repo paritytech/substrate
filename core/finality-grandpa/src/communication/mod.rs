@@ -228,11 +228,12 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
+	/// If a voter set state is given it registers previous round votes with the
+	/// gossip service.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
-		set_id: u64,
-		set_state: &crate::environment::VoterSetState<B>,
+		set_state: Option<(u64, &crate::environment::VoterSetState<B>)>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 	) -> (
 		Self,
@@ -243,36 +244,39 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
-		// register all previous votes with the gossip service so that they're
-		// available to peers potentially stuck on a previous round.
-		for round in set_state.completed_rounds().iter() {
-			let topic = round_topic::<B>(round.number, set_id);
+		if let Some((set_id, set_state)) = set_state {
+			// register all previous votes with the gossip service so that they're
+			// available to peers potentially stuck on a previous round.
+			for round in set_state.completed_rounds().iter() {
+				let topic = round_topic::<B>(round.number, set_id);
 
-			// we need to note the round with the gossip validator otherwise
-			// messages will be ignored.
-			validator.note_round(Round(round.number), SetId(set_id), |_, _| {});
+				// we need to note the round with the gossip validator otherwise
+				// messages will be ignored.
+				validator.note_round(Round(round.number), SetId(set_id), |_, _| {});
 
-			for signed in round.votes.iter() {
-				let message = gossip::GossipMessage::VoteOrPrecommit(
-					gossip::VoteOrPrecommitMessage::<B> {
-						message: signed.clone(),
-						round: Round(round.number),
-						set_id: SetId(set_id),
-					}
-				);
+				for signed in round.votes.iter() {
+					let message = gossip::GossipMessage::VoteOrPrecommit(
+						gossip::VoteOrPrecommitMessage::<B> {
+							message: signed.clone(),
+							round: Round(round.number),
+							set_id: SetId(set_id),
+						}
+					);
 
-				service.register_gossip_message(
+					service.register_gossip_message(
+						topic,
+						message.encode(),
+					);
+				}
+
+				trace!(target: "afg",
+					"Registered {} messages for topic {:?} (round: {}, set_id: {})",
+					round.votes.len(),
 					topic,
-					message.encode(),
+					round.number,
+					set_id,
 				);
 			}
-
-			trace!(target: "afg", "Registered {} messages for topic {:?} (round: {}, set_id: {})",
-				   round.votes.len(),
-				   topic,
-				   round.number,
-				   set_id,
-			);
 		}
 
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());

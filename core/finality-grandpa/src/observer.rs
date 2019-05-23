@@ -170,8 +170,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	let (network, network_startup) = NetworkBridge::new(
 		network,
 		config.clone(),
-		authority_set.set_id(),
-		&set_state.read(),
+		None,
 		on_exit.clone(),
 	);
 

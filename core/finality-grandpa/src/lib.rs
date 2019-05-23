@@ -502,8 +502,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	let (network, network_startup) = NetworkBridge::new(
 		network,
 		config.clone(),
-		authority_set.set_id(),
-		&set_state.read(),
+		Some((authority_set.set_id(), &set_state.read())),
 		on_exit.clone(),
 	);
 
