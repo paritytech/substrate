@@ -18,27 +18,22 @@ use error_chain::*;
 use client;
 use crate::rpc;
 use crate::errors;
-pub use internal::*;
 
-mod internal {
-	#![allow(deprecated)]
-	use super::*;
-	error_chain! {
-		foreign_links {
-			Client(client::error::Error) #[doc = "Client error"];
+error_chain! {
+	foreign_links {
+		Client(client::error::Error) #[doc = "Client error"];
+	}
+
+	errors {
+		/// Provided block range couldn't be resolved to a list of blocks.
+		InvalidBlockRange(from: String, to: String, details: String) {
+			description("Invalid block range"),
+			display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
 		}
-
-		errors {
-			/// Provided block range couldn't be resolved to a list of blocks.
-			InvalidBlockRange(from: String, to: String, details: String) {
-				description("Invalid block range"),
-				display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
-			}
-			/// Not implemented yet
-			Unimplemented {
-				description("not implemented yet"),
-				display("Method Not Implemented"),
-			}
+		/// Not implemented yet
+		Unimplemented {
+			description("not implemented yet"),
+			display("Method Not Implemented"),
 		}
 	}
 }

@@ -20,36 +20,31 @@ use error_chain::*;
 use client;
 use transaction_pool::txpool;
 use crate::rpc;
+
 use crate::errors;
 
-pub use internal::*;
-
-mod internal {
-	#![allow(deprecated)]
-	use super::*;
-	error_chain! {
-		foreign_links {
-			Client(client::error::Error) #[doc = "Client error"];
+error_chain! {
+	foreign_links {
+		Client(client::error::Error) #[doc = "Client error"];
+	}
+	links {
+		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+	}
+	errors {
+		/// Not implemented yet
+		Unimplemented {
+			description("not yet implemented"),
+			display("Method Not Implemented"),
 		}
-		links {
-			Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+		/// Incorrect extrinsic format.
+		BadFormat {
+			description("bad format"),
+			display("Invalid extrinsic format"),
 		}
-		errors {
-			/// Not implemented yet
-			Unimplemented {
-				description("not yet implemented"),
-				display("Method Not Implemented"),
-			}
-			/// Incorrect extrinsic format.
-			BadFormat {
-				description("bad format"),
-				display("Invalid extrinsic format"),
-			}
-			/// Verification error
-			Verification(e: Box<::std::error::Error + Send>) {
-				description("extrinsic verification error"),
-				display("Extrinsic verification error: {}", e.description()),
-			}
+		/// Verification error
+		Verification(e: Box<::std::error::Error + Send>) {
+			description("extrinsic verification error"),
+			display("Extrinsic verification error: {}", e.description()),
 		}
 	}
 }

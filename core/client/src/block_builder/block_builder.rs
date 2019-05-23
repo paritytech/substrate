@@ -72,7 +72,7 @@ where
 			Default::default(),
 			Default::default(),
 			parent_hash,
-			inherent_digests.clone(),
+			inherent_digests,
 		);
 
 		let mut api = api.runtime_api();
@@ -80,8 +80,6 @@ where
 		if proof_recording {
 			api.record_proof();
 		}
-
-		header.append_digest(inherent_digests);
 
 		api.initialize_block_with_context(
 			block_id, ExecutionContext::BlockConstruction, &header,
