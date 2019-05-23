@@ -10,9 +10,15 @@ Subkey is a commandline utility included with Substrate that generates or restor
 
 ```bash
 subkey generate
+
+EXAMPLE OUTPUT:
+Secret (Mnemonic) Phrase `this list of words in an exampe of a secret mnemonic phrase` is account:
+  Private Key (Seed): 0x03aedcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd4417
+  Public Key (hex): 0x123edcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd424c
+  Public Address (SS58): 5DeeNqcAcaHDSed2HYnqMDK7JHcvxZ5QUE9EKmjc5snvU6wF
 ```
 
-Will output a mnemonic phrase and give you the seed, public key, and address of a new account. DO NOT SHARE your mnemonic or seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Address**.
+Will output a secret mnemonic phrase and give you the seed, public key, and public address of a new account. DO NOT SHARE your mnemonic or seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Public Address**.
 
 === Inspecting a key
 
@@ -21,9 +27,9 @@ You can inspect a given URI (mnemonic, seed, public key, or address) and recover
 ```bash
 subkey inspect <mnemonic,seed,pubkey,address>
 
-OUTPUT:
-  Public key (hex): 0x461edcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd424c
-  Address (SS58): 5DeeNqcAcaHDSed2HYnqMDK7JHcvxZ5QUE9EKmjc5snvU6wF
+EXAMPLE OUTPUT:
+  Public Key (hex): 0x461edcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd424c
+  Public Address (SS58): 5DeeNqcAcaHDSed2HYnqMDK7JHcvxZ5QUE9EKmjc5snvU6wF
 ```
 
 === Signing
@@ -33,7 +39,7 @@ OUTPUT:
 ```bash
 echo <msg> | subkey sign <seed,mnemonic>
 
-OUTPUT:
+EXAMPLE OUTPUT:
 a69da4a6ccbf81dbbbfad235fa12cf8528c18012b991ae89214de8d20d29c1280576ced6eb38b7406d1b7e03231df6dd4a5257546ddad13259356e1c3adfb509
 ```
 
@@ -42,7 +48,7 @@ a69da4a6ccbf81dbbbfad235fa12cf8528c18012b991ae89214de8d20d29c1280576ced6eb38b740
 ```bash
 echo <msg> | subkey verify <sig> <address>
 
-OUTPUT:
+EXAMPLE OUTPUT:
 Signature verifies correctly.
 ```
 

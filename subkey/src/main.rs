@@ -54,7 +54,7 @@ trait Crypto {
 	fn seed_from_pair(_pair: &Self::Pair) -> Option<&Self::Seed> { None }
 	fn print_from_seed(seed: &Self::Seed) {
 		let pair = Self::pair_from_seed(seed);
-		println!("Seed 0x{} is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+		println!("Seed 0x{} is account:\n  Public Key (hex): 0x{}\n  Public Address (SS58): {}",
 			HexDisplay::from(&seed.as_ref()),
 			HexDisplay::from(&Self::public_from_pair(&pair)),
 			Self::ss58_from_pair(&pair)
@@ -63,7 +63,7 @@ trait Crypto {
 	fn print_from_phrase(phrase: &str, password: Option<&str>) {
 		let seed = Self::seed_from_phrase(phrase, password);
 		let pair = Self::pair_from_seed(&seed);
-		println!("Phrase `{}` is account:\n  Seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+		println!("Secret (Mnemonic) Phrase `{}` is account:\n  Private Key (Seed): 0x{}\n  Public Key (hex): 0x{}\n  Public Address (SS58): {}",
 			phrase,
 			HexDisplay::from(&seed.as_ref()),
 			HexDisplay::from(&Self::public_from_pair(&pair)),
@@ -73,8 +73,8 @@ trait Crypto {
 	fn print_from_uri(uri: &str, password: Option<&str>) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
 		if let Ok(pair) = Self::Pair::from_string(uri, password) {
 			let seed_text = Self::seed_from_pair(&pair)
-				.map_or_else(Default::default, |s| format!("\n  Seed: 0x{}", HexDisplay::from(&s.as_ref())));
-			println!("Secret Key URI `{}` is account:{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+				.map_or_else(Default::default, |s| format!("\n  Private Key (Seed): 0x{}", HexDisplay::from(&s.as_ref())));
+			println!("Secret Key URI `{}` is account:{}\n  Public Key (hex): 0x{}\n  Public Address (SS58): {}",
 				uri,
 				seed_text,
 				HexDisplay::from(&Self::public_from_pair(&pair)),
@@ -82,7 +82,7 @@ trait Crypto {
 			);
 		}
 		if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
-			println!("Public Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+			println!("Public Key URI `{}` is account:\n  Public Key (hex): 0x{}\n  Public Address (SS58): {}",
 				uri,
 				HexDisplay::from(&public.as_ref()),
 				public.to_ss58check()
@@ -119,7 +119,7 @@ impl Crypto for Sr25519 {
 		mini_secret_from_entropy(
 			Mnemonic::from_phrase(phrase, Language::English)
 				.unwrap_or_else(|_|
-					panic!("Phrase is not a valid BIP-39 phrase: \n    {}", phrase)
+					panic!("Secret (Mnemonic) Phrase is not a valid BIP-39 phrase: \n    {}", phrase)
 				)
 				.entropy(),
 			password.unwrap_or("")
