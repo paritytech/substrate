@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, DigestItem,
 };
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;
@@ -500,7 +500,7 @@ impl<T: Trait> Module<T> {
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash, number.as_() - 1);
-
+		assert!(digest.logs().iter().any(|s| s.as_pre_runtime().is_some()));
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {

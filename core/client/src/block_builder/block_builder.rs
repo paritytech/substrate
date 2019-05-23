@@ -67,7 +67,7 @@ where
 
 		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::Error::UnknownBlock(format!("{}", block_id)))?;
-		let mut header = <<Block as BlockT>::Header as HeaderT>::new(
+		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
 			Default::default(),

@@ -30,7 +30,7 @@ error_chain! {
 		BadProposalFormat {
 			description("Proposal provided not a block."),
 			display("Proposal provided not a block."),
-		}
+		}substrate
 		WrongParentHash(expected: String, got: String) {
 			description("Proposal had wrong parent hash."),
 			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),

@@ -59,7 +59,7 @@ use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future};
 use tokio::timer::Timeout;
-use log::{warn, debug, info, trace};
+use log::{error, warn, debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -138,7 +138,7 @@ mod simple {
 use simple::Simple;
 
 /// Start the aura worker. The returned future should be run in a tokio runtime.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, HashT, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	slot_duration: SlotDuration,
 	local_key: Arc<P>,
 	client: Arc<C>,
@@ -150,23 +150,20 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, HashT, H>(
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
-	B: Block<Header=H, Hash=HashT>,
+	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuthoritiesApi<B>,
 	SC: SelectChain<B>,
-	generic::DigestItem<HashT, P::Public, P::Signature>: DigestItem<Hash=HashT>,
+	generic::DigestItem<B::Hash, P::Public, P::Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Simple,
 	P::Signature: Simple,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
-	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
-		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
-		std::hash::Hash + Display + Send + Sync + 'static,
 	H: Header<
 		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
-		Hash=HashT,
+		Hash=B::Hash,
 	>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -329,17 +326,13 @@ impl<H,	Hash, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P,
 				return
 			}
 
-			let (mut header, body) = b.deconstruct();
+			let (header, body) = b.deconstruct();
 			// TODO is better debug logging worth hashing the header again?
 			let header_hash = header.hash();
 			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header, header_hash);
-			if pre_digest.is_err() {
-				warn!(target: "aura", "Runtime stripped our digest!  Re-adding it.");
-				header.append_digest(generic::Digest {
-					logs: vec![
-						generic::DigestItem::aura_pre_digest(slot_num)
-					],
-				})
+			if let Err(e) = pre_digest {
+				error!(target: "aura", "FATAL ERROR: Invalid pre-digest: {}!", e);
+				return
 			} else {
 				trace!(target: "aura", "Got correct number of seals.  Good!")
 			};
@@ -959,7 +952,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _, _>(
 				slot_duration,
 				Arc::new(key.clone().into()),
 				client.clone(),

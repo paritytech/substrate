@@ -68,6 +68,7 @@ pub fn initialize_block(header: &Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
+	<StorageDigest>::put(&header.digest);
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 }
 
@@ -214,7 +215,7 @@ pub fn finalize_block() -> Header {
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash, number - 1);
 
-	let mut digest = Digest::default();
+	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}

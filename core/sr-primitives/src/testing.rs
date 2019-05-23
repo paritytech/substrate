@@ -120,14 +120,14 @@ impl traits::Header for Header {
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Self::Digest,
 	) -> Self {
 		Header {
 			number,
-			extrinsics_root: extrinsics_root,
+			extrinsics_root,
 			state_root,
 			parent_hash,
-			digest
+			digest,
 		}
 	}
 }

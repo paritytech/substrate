@@ -448,7 +448,7 @@ pub fn check_execution_proof<Header, E, H>(
 		Default::default(),
 		Default::default(),
 		request.header.hash(),
-		Default::default(),
+		request.header.digest().clone(),
 	);
 	execution_proof_check_on_trie_backend::<H, _>(
 		&trie_backend,

@@ -97,6 +97,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		inherent_digests: DigestFor<Self::Block>,
 		mut build_ctx: F,
 	) -> Result<Self::Block, error::Error> {
+
 		let mut block_builder = self.new_block_at(at, inherent_digests)?;
 
 		let runtime_api = self.runtime_api();
@@ -204,7 +205,8 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		inherent_digests: DigestFor<Block>,
 	) -> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		use runtime_primitives::traits::BlakeTwo256;
+		warn!(target: "aura", "Found {:?} inherent digests", inherent_digests.logs().len());
+		use runtime_primitives::traits::{BlakeTwo256, Digest};
 
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -219,6 +221,11 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				// Add inherents from the internal pool
 				let inherents = self.inherents_pool.drain();
 				debug!("Pushing {} queued inherent extrinsics.", inherents.len());
+				for i in inherent_digests.logs().clone() {
+					if let Err(e) = block_builder.push_extrinsic(i) {
+						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
+					}
+				}
 				for i in inherents {
 					if let Err(e) = block_builder.push_extrinsic(i) {
 						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);

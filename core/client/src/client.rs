@@ -1223,12 +1223,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Prepare in-memory header that is used in execution environment.
 	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> error::Result<Block::Header> {
+		let parent_header = self.backend().blockchain().expect_header(*parent)?;
 		Ok(<<Block as BlockT>::Header as HeaderT>::new(
-			self.backend.blockchain().expect_block_number_from_id(parent)? + As::sa(1),
+			*parent_header.number() + As::sa(1),
 			Default::default(),
 			Default::default(),
-			self.backend.blockchain().expect_block_hash_from_id(&parent)?,
-			Default::default(),
+			parent_header.hash(),
+			parent_header.digest().clone(),
 		))
 	}
 }
