@@ -46,11 +46,11 @@ impl ChangesTrieConfiguration {
 	/// Do we need to build digest at given block?
 	pub fn is_digest_build_required_at_block<Number>(&self, block: Number) -> bool
 		where
-			Number: From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number>,
+			Number: From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + Zero,
 	{
 		block != 0.into()
 			&& self.is_digest_build_enabled()
-			&& block % self.digest_interval.into() == 0.into()
+			&& (block % self.digest_interval.into()).is_zero()
 	}
 
 	/// Returns max digest interval. One if digests are not created at all.
@@ -79,7 +79,7 @@ impl ChangesTrieConfiguration {
 	/// )
 	pub fn digest_level_at_block<Number>(&self, block: Number) -> Option<(u32, u32, u32)>
 		where
-			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number>,
+			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + Zero,
 	{
 		if !self.is_digest_build_required_at_block(block.clone()) {
 			return None;
@@ -90,7 +90,7 @@ impl ChangesTrieConfiguration {
 		let mut digest_step = 1u32;
 		while current_level < self.digest_levels {
 			let new_digest_interval = match digest_interval.checked_mul(self.digest_interval) {
-				Some(new_digest_interval) if block.clone() % new_digest_interval.into() == 0.into()
+				Some(new_digest_interval) if (block.clone() % new_digest_interval.into()).is_zero()
 					=> new_digest_interval,
 				_ => break,
 			};

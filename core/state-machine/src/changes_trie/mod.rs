@@ -76,7 +76,7 @@ impl<T> BlockNumber for T where T:
 	Send + Sync + 'static +
 	::std::fmt::Display +
 	Clone +
-	From<u32> +
+	From<u32> + One + Zero +
 	PartialEq + Ord +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +

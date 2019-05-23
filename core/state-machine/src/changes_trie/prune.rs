@@ -36,8 +36,8 @@ pub fn oldest_non_pruned_trie<Number: BlockNumber>(
 	let best_finalized_block_rem = best_finalized_block.clone() % max_digest_interval.into();
 	let max_digest_block = best_finalized_block - best_finalized_block_rem;
 	match pruning_range(config, min_blocks_to_keep, max_digest_block) {
-		Some((_, last_pruned_block)) => last_pruned_block + 1.into(),
-		None => 1.into(),
+		Some((_, last_pruned_block)) => last_pruned_block + One::one(),
+		None => One::one(),
 	}
 }
 

@@ -159,7 +159,7 @@ impl<'a, Number: BlockNumber> Iterator for SurfaceIterator<'a, Number> {
 		}
 		else {
 			let next = current.clone() - self.digest_step.into();
-			if next == 0.into() || next < self.begin {
+			if next.is_zero() || next < self.begin {
 				self.current = None;
 			}
 			else if next > self.current_begin {
@@ -355,7 +355,7 @@ fn lower_bound_max_digest<Number: BlockNumber>(
 			let new_digest_interval = config.digest_interval * {
 				if digest_interval == 0 { 1 } else { digest_interval }
 			};
-			let new_digest_begin = ((current.clone() - 1.into()) / new_digest_interval.into()) * new_digest_interval.into();
+			let new_digest_begin = ((current.clone() - One::one()) / new_digest_interval.into()) * new_digest_interval.into();
 			let new_digest_end = new_digest_begin.clone() + new_digest_interval.into();
 			let new_current = new_digest_begin.clone() + new_digest_interval.into();
 

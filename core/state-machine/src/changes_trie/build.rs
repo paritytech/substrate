@@ -108,7 +108,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 		Number: BlockNumber,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<Number>>::new();
-	for digest_build_block in digest_build_iterator(config, parent.number.clone() + 1.into()) {
+	for digest_build_block in digest_build_iterator(config, parent.number.clone() + One::one()) {
 		let trie_root = storage.root(parent, digest_build_block.clone())?;
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
 		let trie_storage = TrieBackendEssence::<_, H>::new(crate::changes_trie::TrieBackendStorageAdapter(storage), trie_root);
@@ -130,7 +130,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 	Ok(digest_map.into_iter()
 		.map(move |(key, set)| InputPair::DigestIndex(DigestIndex {
-			block: parent.number.clone() + 1.into(),
+			block: parent.number.clone() + One::one(),
 			key
 		}, set.into_iter().collect())))
 }
