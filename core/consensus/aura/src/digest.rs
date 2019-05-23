@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Aura (Authority-Round) digests
+//!
+//! This implements the digests for AuRa, to allow the private
+//! `CompatibleDigestItem` trait to appear in public interfaces.
 use primitives::Pair;
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::generic::DigestItem;

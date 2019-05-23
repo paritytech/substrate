@@ -200,8 +200,8 @@ struct AuraWorker<C, E, I, P, SO> {
 	force_authoring: bool,
 }
 
-impl<H,	Hash, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	B: Block<Header=H, Hash=Hash>,
+impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
@@ -211,14 +211,12 @@ impl<H,	Hash, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P,
 		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
 		Hash=B::Hash,
 	>,
-	Hash: Simple + Serialize + for<'de> Deserialize<'de> + Default + AsRef<[u8]> + AsMut<[u8]> +
-		Copy + SimpleBitOps + Display,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Simple,
 	P::Signature: Simple,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=Hash>,
+	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -337,12 +335,11 @@ impl<H,	Hash, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P,
 				trace!(target: "aura", "Got correct number of seals.  Good!")
 			};
 			let header_num = header.number().clone();
-			let pre_hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
 
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let to_sign = (slot_num, pre_hash).encode();
+			let to_sign = (slot_num, header_hash).encode();
 			let signature = pair.sign(&to_sign[..]);
 			let item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
@@ -360,12 +357,12 @@ impl<H,	Hash, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P,
 			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 					header_num,
 					import_block.post_header().hash(),
-					pre_hash
+					header_hash
 			);
 			telemetry!(CONSENSUS_INFO; "aura.pre_sealed_block";
 				"header_num" => ?header_num,
 				"hash_now" => ?import_block.post_header().hash(),
-				"hash_previously" => ?pre_hash
+				"hash_previously" => ?header_hash
 			);
 
 			if let Err(e) = block_import.import_block(import_block, Default::default()) {
