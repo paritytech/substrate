@@ -79,7 +79,10 @@ pub(crate) enum RequestData<Block: BlockT> {
 		OneShotSender<Result<Option<Vec<u8>>, ClientError>>
 	),
 	RemoteCall(RemoteCallRequest<Block::Header>, OneShotSender<Result<Vec<u8>, ClientError>>),
-	RemoteChanges(RemoteChangesRequest<Block::Header>, OneShotSender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
+	RemoteChanges(
+		RemoteChangesRequest<Block::Header>,
+		OneShotSender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>
+	),
 }
 
 enum Accept<Block: BlockT> {
@@ -234,7 +237,13 @@ impl<B: BlockT> OnDemandCore<B> where
 		self.dispatch(network);
 	}
 
-	pub fn on_connect(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, role: Roles, best_number: NumberFor<B>) {
+	pub fn on_connect(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		role: Roles,
+		best_number: NumberFor<B>
+	) {
 		if !role.is_full() {
 			return;
 		}
@@ -273,9 +282,18 @@ impl<B: BlockT> OnDemandCore<B> where
 		self.dispatch(network);
 	}
 
-	pub fn on_remote_header_response(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, response: message::RemoteHeaderResponse<B::Header>) {
+	pub fn on_remote_header_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteHeaderResponse<B::Header>
+	) {
 		self.accept_response("header", network, peer, response.id, |request, checker| match request.data {
-			RequestData::RemoteHeader(request, sender) => match checker.check_header_proof(&request, response.header, response.proof) {
+			RequestData::RemoteHeader(request, sender) => match checker.check_header_proof(
+				&request,
+				response.header,
+				response.proof
+			) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
@@ -287,7 +305,12 @@ impl<B: BlockT> OnDemandCore<B> where
 		})
 	}
 
-	pub fn on_remote_read_response(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, response: message::RemoteReadResponse) {
+	pub fn on_remote_read_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteReadResponse
+	) {
 		self.accept_response("read", network, peer, response.id, |request, checker| match request.data {
 			RequestData::RemoteRead(request, sender) => {
 				match checker.check_read_proof(&request, response.proof) {
@@ -317,7 +340,12 @@ impl<B: BlockT> OnDemandCore<B> where
 		})
 	}
 
-	pub fn on_remote_call_response(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, response: message::RemoteCallResponse) {
+	pub fn on_remote_call_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteCallResponse
+	) {
 		self.accept_response("call", network, peer, response.id, |request, checker| match request.data {
 			RequestData::RemoteCall(request, sender) => match checker.check_execution_proof(&request, response.proof) {
 				Ok(response) => {
@@ -331,7 +359,12 @@ impl<B: BlockT> OnDemandCore<B> where
 		})
 	}
 
-	pub fn on_remote_changes_response(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
+	pub fn on_remote_changes_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>
+	) {
 		self.accept_response("changes", network, peer, response.id, |request, checker| match request.data {
 			RequestData::RemoteChanges(request, sender) => match checker.check_changes_proof(
 				&request, ChangesProof {
@@ -351,7 +384,12 @@ impl<B: BlockT> OnDemandCore<B> where
 		})
 	}
 
-	pub fn on_remote_body_response(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, response: message::BlockResponse<B>) {
+	pub fn on_remote_body_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::BlockResponse<B>
+	) {
 		self.accept_response("body", network, peer, response.id, |request, checker| match request.data {
 			RequestData::RemoteBody(request, sender) => {
 				let mut bodies: Vec<_> = response

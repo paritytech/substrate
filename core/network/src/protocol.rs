@@ -543,7 +543,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_block_request(&mut self, network_out: &mut dyn NetworkOut<B>, peer: PeerId, request: message::BlockRequest<B>) {
+	fn on_block_request(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		peer: PeerId,
+		request: message::BlockRequest<B>
+	) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
 			request.id,
 			peer,
@@ -1052,7 +1057,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Request a finality proof for the given block.
 	///
 	/// Queues a new finality proof request and tries to dispatch all pending requests.
-	pub fn request_finality_proof(&mut self, network_out: &mut dyn NetworkOut<B>, hash: &B::Hash, number: NumberFor<B>) {
+	pub fn request_finality_proof(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		hash: &B::Hash,
+		number: NumberFor<B>
+	) {
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
 		self.sync.request_finality_proof(&hash, number, &mut context);
 	}
