@@ -754,6 +754,7 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 	q.as_ref()
 }
 
+#[allow(deprecated)]
 fn make_transcript(
 	randomness: &[u8],
 	slot_number: u64,
