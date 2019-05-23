@@ -155,7 +155,7 @@ use srml_support::traits::{
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
-	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub,
+	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub,
 	MaybeSerializeDebug, Saturating
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
@@ -167,7 +167,8 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + MaybeSerializeDebug;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+		MaybeSerializeDebug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -181,7 +182,8 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + MaybeSerializeDebug;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
+		MaybeSerializeDebug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -236,10 +238,12 @@ pub struct VestingSchedule<Balance> {
 	pub per_block: Balance,
 }
 
-impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
+impl<Balance: SimpleArithmetic + Copy> VestingSchedule<Balance> {
 	/// Amount locked at block `n`.
-	pub fn locked_at<BlockNumber: As<u64>>(&self, n: BlockNumber) -> Balance {
-		if let Some(x) = Balance::sa(n.as_()).checked_mul(&self.per_block) {
+	pub fn locked_at<BlockNumber>(&self, n: BlockNumber) -> Balance
+		where Balance: From<BlockNumber>
+	{
+		if let Some(x) = Balance::from(n).checked_mul(&self.per_block) {
 			self.offset.max(x) - x
 		} else {
 			Zero::zero()
@@ -276,10 +280,8 @@ decl_storage! {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
 			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
-				let begin: u64 = begin.as_();
-				let length: u64 = length.as_();
-				let begin: T::Balance = As::sa(begin);
-				let length: T::Balance = As::sa(length);
+				let begin = <T::Balance as From<T::BlockNumber>>::from(begin);
+				let length = <T::Balance as From<T::BlockNumber>>::from(length);
 
 				config.balances.iter()
 					.find(|&&(ref w, _)| w == who)
@@ -380,7 +382,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
 		if let Some(v) = Self::vesting(who) {
-			Self::free_balance(who).min(v.locked_at(<system::Module<T>>::block_number()))
+			Self::free_balance(who)
+				.min(v.locked_at::<T::BlockNumber>(<system::Module<T>>::block_number()))
 		} else {
 			Zero::zero()
 		}
@@ -1013,7 +1016,7 @@ where
 
 impl<T: Trait<I>, I: Instance> MakePayment<T::AccountId> for Module<T, I> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let encoded_len = <T::Balance as As<u64>>::sa(encoded_len as u64);
+		let encoded_len = T::Balance::from(encoded_len as u32);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len;
 		let imbalance = Self::withdraw(
 			transactor,
