@@ -316,7 +316,6 @@ decl_module! {
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
-			// TODO: Most likely we prefer this bond to be proportional to `|voters| * |candidates|`.
 			let bad_presentation_punishment =
 				Self::present_slash_per_voter()
 				* BalanceOf::<T>::sa(Self::voter_count() as u64);
@@ -585,7 +584,7 @@ impl<T: Trait> Module<T> {
 		ensure!(candidates.len() >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
 
 		// Amount to be locked up.
-		// TODO: maybe this should be total - fee?
+		// NOTE: maybe this should be total - fee?
 		let locked_balance = T::Currency::total_balance(&who);
 		let mut pot_to_set = BalanceOf::<T>::zero();
 		let hint = hint as usize;
@@ -605,13 +604,14 @@ impl<T: Trait> Module<T> {
 			let (set_idx, vec_idx) = Self::split_index(hint, VOTER_SET_SIZE);
 			match Self::cell_status(set_idx, vec_idx) {
 				CellStatus::Hole => {
-					// requested cell was free.
+					// requested cell was a valid hole.
 					<Voters<T>>::mutate(set_idx, |set| set[vec_idx] = Some(who.clone()));
 				},
 				_ => {
-					// Either occupied or hole.
+					// Either occupied or out-of-range.
 					let next = Self::next_voter_set();
 					let mut set = Self::voters(next);
+					// Caused a new set to be created. Pay for it.
 					// This is the last potential error. Writes will begin afterwards.
 					if set.len() == 0 {
 						let _ = T::Currency::withdraw(
