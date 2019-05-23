@@ -565,7 +565,7 @@ mod tests {
 		assert_eq!(pool.status().future, 0);
 
 		// then
-		assert_matches!(res.unwrap_err().kind(), error::ErrorKind::TemporarilyBanned);
+		assert_matches!(res.unwrap_err(), error::Error::TemporarilyBanned);
 	}
 
 	#[test]

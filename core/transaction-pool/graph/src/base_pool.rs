@@ -741,9 +741,9 @@ mod tests {
 		assert_eq!(it.next(), None);
 		assert_eq!(pool.ready.len(), 0);
 		assert_eq!(pool.future.len(), 0);
-		if let error::ErrorKind::CycleDetected = *err.kind() {
+		if let error::Error::CycleDetected = err {
 		} else {
-			assert!(false, "Invalid error kind: {:?}", err.kind());
+			assert!(false, "Invalid error kind: {:?}", err);
 		}
 	}
 
