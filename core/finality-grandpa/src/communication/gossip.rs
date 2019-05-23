@@ -99,21 +99,11 @@ enum Consider {
     RejectEquivocation,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct VoteTally {
     handled_pre_commits: usize,
     handled_pre_votes: usize,
     handled_primary_proposals: usize,
-}
-
-impl Default for VoteTally {
-    fn default() -> VoteTally {
-        VoteTally {
-            handled_pre_commits: 0,
-            handled_pre_votes: 0,
-            handled_primary_proposals: 0,
-        }
-    }
 }
 
 /// A view of protocol state.
