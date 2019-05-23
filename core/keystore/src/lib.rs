@@ -25,8 +25,6 @@ use std::io::{self, Write};
 
 use substrate_primitives::{ed25519::{Pair, Public}, Pair as PairT};
 
-pub use crypto::KEY_ITERATIONS;
-
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
