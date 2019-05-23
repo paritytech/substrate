@@ -576,6 +576,8 @@ decl_module! {
 				.collect::<Vec<_>>();
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
+				// This operation is cheap enough because last_write (delta not included)
+				// is not this block as it has been checked earlier.
 				runtime_io::child_storage_root(&origin_contract.trie_id),
 				code_hash,
 			);
