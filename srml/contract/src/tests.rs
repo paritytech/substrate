@@ -1179,7 +1179,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			}
 
 			// Advance 4 blocks
-			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into());
+			System::initialize(&5, &[0u8; 32].into(), &[0u8; 32].into(), Default::default());
 
 			// Trigger rent through call
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
@@ -1198,7 +1198,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			if !test_restore_to_with_dirty_storage {
 				// Advance 1 blocks
-				System::initialize(&6, &[0u8; 32].into(), &[0u8; 32].into());
+				System::initialize(&6, &[0u8; 32].into(), &[0u8; 32].into(), Default::default());
 			}
 
 			assert_ok!(Contract::call(
