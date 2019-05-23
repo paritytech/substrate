@@ -12,6 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Benchmarks of the phragmen election algorithm.
+//! Note that execution times will not be accurate in an absolute scale, since
+//! - Everything is executed in the context of `TestExternalities`
+//! - Everything is executed in native environment.
+//!
+//! Run using:
+//!
+//! ```zsh
+//!  cargo bench --features bench --color always
+//! ```
+
 use test::Bencher;
 use runtime_io::with_externalities;
 use mock::*;
@@ -19,20 +30,22 @@ use super::*;
 use rand::{self, Rng};
 
 const VALIDATORS: u64 = 1000;
-const NOMINATORS: u64 = 100;
+const NOMINATORS: u64 = 10_000;
 const EDGES: u64 = 2;
 const TO_ELECT: usize = 100;
-const STAKE: u64 = 100;
+const STAKE: u64 = 1000;
 
 fn do_phragmen(b: &mut Bencher, num_vals: u64, num_noms: u64, count: usize, votes_per: u64) {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert!(num_vals > votes_per);
+		let rr = |a, b| rand::thread_rng().gen_range(a as usize, b as usize) as u64;
 
 		// prefix to distinguish the validator and nominator account ranges.
 		let np = 10_000;
+
 		(1 ..= 2*num_vals)
 			.step_by(2)
-			.for_each(|acc| bond_validator(acc, 100));
+			.for_each(|acc| bond_validator(acc, STAKE + rr(10, 50)));
 
 		(np ..= (np + 2*num_noms))
 			.step_by(2)
@@ -43,21 +56,24 @@ fn do_phragmen(b: &mut Bencher, num_vals: u64, num_noms: u64, count: usize, vote
 					.collect::<Vec<AccountIdType>>();
 				let votes = (0 .. votes_per)
 					.map(|_| {
-						let idx = rand::thread_rng().gen_range(0, stashes_to_vote.len()) as usize;
-						stashes_to_vote.remove(idx)
+						stashes_to_vote.remove(rr(0, stashes_to_vote.len()) as usize)
 					})
 					.collect::<Vec<AccountIdType>>();
-				bond_nominator(acc, STAKE, votes);
+				bond_nominator(acc, STAKE + rr(10, 50), votes);
 			});
 
 		b.iter(|| {
-			let _ = phragmen::elect::<Test, _, _, _>(
+			let maybe_res = phragmen::elect::<Test, _, _, _>(
 				count,
-				Staking::minimum_validator_count() as usize,
+				1_usize,
 				<Validators<Test>>::enumerate(),
 				<Nominators<Test>>::enumerate(),
-				Staking::slashable_balance_of,
+				Staking::slashable_balance_of
 			);
+			assert!(maybe_res.is_some());
+			let res = maybe_res.unwrap();
+			assert_eq!(res.0.len(), TO_ELECT);
+			assert_eq!(res.1.len(), NOMINATORS as usize);
 		})
 	})
 }
