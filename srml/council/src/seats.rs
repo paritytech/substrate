@@ -815,7 +815,7 @@ impl<T: Trait> Module<T> {
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert((who.clone(), SetIndex::sa(idx)), slice.to_vec()));
+			.for_each(|(idx, slice)| <ApprovalsOf<T>>::insert((who.clone(), idx as SetIndex), slice.to_vec()));
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
@@ -874,8 +874,6 @@ impl<T: Trait> Module<T> {
 	/// The trailing zeros are removed.
 	fn all_approvals_of(who: &T::AccountId) -> Vec<bool> {
 		let mut all: Vec<bool> = vec![];
-		// NOTE: There is sadly no way in StorageDoubleMap to get all values associated
-		// with one of the keys. This is best that we can do so far.
 		let mut index = 0_u32;
 		loop {
 			let chunk = Self::approvals_of((who.clone(), index));
@@ -920,11 +918,11 @@ impl<T: Trait> Module<T> {
 	/// to a voter's stake value to get the correct weight. Indeed, zero is
 	/// returned if `t` is zero.
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
-		let decay_ratio = BalanceOf::<T>::sa(Self::decay_ratio() as u64);
+		let decay_ratio: BalanceOf<T> = Self::decay_ratio().into();
 		if t > 150 { return stake * decay_ratio }
 		let mut offset = stake;
 		let mut r = BalanceOf::<T>::zero();
-		let decay = decay_ratio + BalanceOf::<T>::sa(1);
+		let decay = decay_ratio + One::one();
 		for _ in 0..t {
 			offset = offset.saturating_sub(offset / decay);
 			r += offset
@@ -1115,7 +1113,7 @@ mod tests {
 			// grab and check the last full set, if it exists.
 			if full_sets > 0 {
 				assert_eq!(
-					Council::approvals_of((180, SetIndex::sa(full_sets-1))),
+					Council::approvals_of((180, (full_sets-1) as SetIndex )),
 					Council::b2f((0..APPROVAL_SET_SIZE * APPROVAL_FLAG_LEN).map(|_| true).collect::<Vec<bool>>())
 				);
 			}
@@ -1123,7 +1121,7 @@ mod tests {
 			// grab and check the last, half-empty, set.
 			if left_over > 0 {
 				assert_eq!(
-					Council::approvals_of((180, SetIndex::sa(full_sets))),
+					Council::approvals_of((180, full_sets as SetIndex)),
 					Council::b2f((0..left_over * APPROVAL_FLAG_LEN + rem).map(|_| true).collect::<Vec<bool>>())
 				);
 			}
