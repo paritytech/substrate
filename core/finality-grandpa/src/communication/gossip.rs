@@ -690,6 +690,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		match action {
 			Action::Keep(topic, cb) => {
 				self.report(who.clone(), cb);
+				context.broadcast_message(topic, data.to_vec(), false);
 				network_gossip::ValidationResult::ProcessAndKeep(topic)
 			}
 			Action::ProcessAndDiscard(topic, cb) => {

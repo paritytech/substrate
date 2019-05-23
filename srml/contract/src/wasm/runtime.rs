@@ -27,7 +27,7 @@ use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, CheckedAdd, Bounded};
+use runtime_primitives::traits::{CheckedMul, CheckedAdd, Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -122,24 +122,24 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
 		use self::RuntimeToken::*;
 		let value = match *self {
-			Explicit(amount) => Some(<T::Gas as As<u32>>::sa(amount)),
+			Explicit(amount) => Some(amount.into()),
 			ReadMemory(byte_count) => metadata
 				.sandbox_data_read_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+				.checked_mul(&byte_count.into()),
 			WriteMemory(byte_count) => metadata
 				.sandbox_data_write_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+				.checked_mul(&byte_count.into()),
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+				.checked_mul(&byte_count.into()),
 			DepositEvent(topic_count, data_byte_count) => {
 				let data_cost = metadata
 					.event_data_per_byte_cost
-					.checked_mul(&<T::Gas as As<u32>>::sa(data_byte_count));
+					.checked_mul(&data_byte_count.into());
 
 				let topics_cost = metadata
 					.event_per_topic_cost
-					.checked_mul(&<T::Gas as As<u32>>::sa(topic_count));
+					.checked_mul(&topic_count.into());
 
 				data_cost
 					.and_then(|data_cost| {
@@ -340,7 +340,7 @@ define_env!(Env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
+			gas.saturated_into()
 		};
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -413,7 +413,7 @@ define_env!(Env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
+			gas.saturated_into()
 		};
 		let ext = &mut ctx.ext;
 		let instantiate_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -527,16 +527,25 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Load the latest block RNG seed into the scratch buffer
-	ext_random_seed(ctx) => {
-		ctx.scratch_buf = ctx.ext.random_seed().encode();
+	// Stores the random number for the current block for the given subject into the scratch
+	// buffer.
+	//
+	// The data is encoded as T::Hash. The current contents of the scratch buffer are
+	// overwritten.
+	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
+		// The length of a subject can't exceed `max_subject_len`.
+		if subject_len > ctx.schedule.max_subject_len {
+			return Err(sandbox::HostError);
+		}
+
+		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
+		ctx.scratch_buf = ctx.ext.random(&subject_buf).encode();
 		Ok(())
 	},
 
 	// Load the latest block timestamp into the scratch buffer
 	ext_now(ctx) => {
-		let now: u64 = As::as_(ctx.ext.now().clone());
-		ctx.scratch_buf = now.encode();
+		ctx.scratch_buf = ctx.ext.now().encode();
 		Ok(())
 	},
 

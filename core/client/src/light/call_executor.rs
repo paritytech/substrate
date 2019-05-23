@@ -26,7 +26,7 @@ use futures::{IntoFuture, Future};
 use parity_codec::{Encode, Decode};
 use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded, OffchainExt};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{One, Block as BlockT, Header as HeaderT};
 use state_machine::{
 	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	ExecutionStrategy, create_proof_check_backend,
@@ -444,7 +444,7 @@ pub fn check_execution_proof<Header, E, H>(
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_block = <Header as HeaderT>::new(
-		*request.header.number() + As::sa(1),
+		*request.header.number() + One::one(),
 		Default::default(),
 		Default::default(),
 		request.header.hash(),

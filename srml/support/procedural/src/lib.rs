@@ -47,10 +47,11 @@ use proc_macro::TokenStream;
 ///
 /// Basic storage consists of a name and a type; supported types are:
 ///
-/// * Value: `Foo: type`: Implements [StorageValue](../srml_support/storage/trait.StorageValue.html).
-/// * Map: `Foo: map hasher($hash) type => type`: Implements [StorageMap](../srml_support/storage/trait.StorageMap.html)
+/// * Value: `Foo: type`: Implements the [`StorageValue`](../srml_support/storage/trait.StorageValue.html) trait.
+/// * Map: `Foo: map hasher($hash) type => type`: Implements the
+///   [`StorageMap`](../srml_support/storage/trait.StorageMap.html) trait
 ///   with `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable` trait](../srml_support/trait.Hashable.html).
+///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
@@ -59,11 +60,12 @@ use proc_macro::TokenStream;
 ///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
-///   [EnumarableStorageMap](../srml_support/storage/trait.EnumerableStorageMap.html).
+///   the [`EnumerableStorageMap`](../srml_support/storage/trait.EnumerableStorageMap.html) trait.
 ///
-/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements `StorageDoubleMap` with
+/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements the
+///   [`StorageDoubleMap`](../srml_support/storage/trait.StorageDoubleMap.html) trait with
 ///   `$hash` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable` trait](../srml_support/trait.Hashable.html).
+///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
