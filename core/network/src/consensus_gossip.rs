@@ -618,11 +618,9 @@ mod tests {
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-
-		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, message.clone());
+		consensus.register_message(topic, message.clone());
 		let stream = consensus.messages_for([0, 0, 0, 0], topic);
 
 		assert_eq!(stream.wait().next(), Some(Ok(TopicNotification { message: message.data, sender: None })));
@@ -636,8 +634,8 @@ mod tests {
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
 		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic,msg_a);
-		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic,msg_b);
+		consensus.register_message(topic, msg_a);
+		consensus.register_message(topic, msg_b);
 
 		assert_eq!(consensus.messages.len(), 2);
 	}
@@ -648,11 +646,9 @@ mod tests {
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-
-		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, message.clone());
+		consensus.register_message(topic, message.clone());
 
 		let stream1 = consensus.messages_for([0, 0, 0, 0], topic);
 		let stream2 = consensus.messages_for([0, 0, 0, 0], topic);
@@ -670,8 +666,8 @@ mod tests {
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
 		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 1] };
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, msg_a);
-		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, msg_b);
+		consensus.register_message(topic, msg_a);
+		consensus.register_message(topic, msg_b);
 
 		let mut stream = consensus.messages_for([0, 0, 0, 0], topic).wait();
 
