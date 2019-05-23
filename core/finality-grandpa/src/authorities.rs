@@ -266,7 +266,7 @@ where
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
 				telemetry!(CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
-					"block" => change.canon_height.clone().saturated_into::<u64>(),
+					"height" => change.canon_height.clone().saturated_into::<u64>(),
 				);
 
 				let median_last_finalized = match change.delay_kind {
@@ -333,7 +333,7 @@ where
 					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
 						  change.canon_height);
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
-						"block" => change.canon_height.clone().saturated_into::<u64>(),
+						"height" => change.canon_height.clone().saturated_into::<u64>(),
 					);
 
 					self.current_authorities = change.next_authorities;
