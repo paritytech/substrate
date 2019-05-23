@@ -17,7 +17,7 @@
 //! Council system: Handles the voting in and maintenance of council members.
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, As, StaticLookup, Bounded, Saturating};
+use primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
 use runtime_io::print;
 use srml_support::{
 	StorageValue, StorageMap,
@@ -317,8 +317,8 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let bad_presentation_punishment =
-				Self::present_slash_per_voter()
-				* BalanceOf::<T>::sa(Self::voter_count() as u64);
+      	Self::present_slash_per_voter()
+      	* BalanceOf::<T>::from(Self::voter_count() as u32);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
 				"presenter must have sufficient slashable funds"
@@ -411,24 +411,24 @@ decl_storage! {
 
 		// ---- parameters
 		/// How much should be locked up in order to submit one's candidacy.
-		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = BalanceOf::<T>::sa(9);
+		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = 9.into();
 		/// How much should be locked up in order to be able to submit votes.
 		pub VotingBond get(voting_bond) config(voter_bond): BalanceOf<T>;
 		/// The amount of fee paid upon each vote submission, unless if they submit a _hole_ index and replace it.
 		pub VotingFee get(voting_fee) config(voting_fee): BalanceOf<T>;
 		/// The punishment, per voter, if you provide an invalid presentation.
-		pub PresentSlashPerVoter get(present_slash_per_voter) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
+		pub PresentSlashPerVoter get(present_slash_per_voter) config(): BalanceOf<T> = 1.into();
 		/// How many runners-up should have their approvals persist until the next vote.
 		pub CarryCount get(carry_count) config(): u32 = 2;
 		/// How long to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = 1000.into();
 		/// How many vote indexes need to go by after a target voter's last vote before they can be reaped if their
 		/// approvals are moot.
 		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
 		/// How often (in blocks) to check for new votes.
-		pub VotingPeriod get(voting_period) config(approval_voting_period): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub VotingPeriod get(voting_period) config(approval_voting_period): T::BlockNumber = 1000.into();
 		/// How long each position is active for.
-		pub TermDuration get(term_duration) config(): T::BlockNumber = T::BlockNumber::sa(5);
+		pub TermDuration get(term_duration) config(): T::BlockNumber = 5.into();
 		/// Number of accounts that should be sitting on the council.
 		pub DesiredSeats get(desired_seats) config(): u32;
 		/// Decay factor of weight when being accumulated. It should typically be set the council size

@@ -22,8 +22,8 @@ use std::fmt;
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use crate::codec::{Decode, Encode, Input, Compact};
-use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
-	Checkable, Extrinsic};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash,
+	Lookup, Checkable, Extrinsic, SaturatedConversion};
 use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: u8 = 1;
@@ -84,7 +84,8 @@ where
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
-				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.current_height().as_())))
+				let current_u64 = context.current_height().saturated_into::<u64>();
+				let h = context.block_number_to_hash(era.birth(current_u64).saturated_into())
 					.ok_or("transaction birth block ancient")?;
 				let signed = context.lookup(signed)?;
 				let raw_payload = (index, self.function, era, h);

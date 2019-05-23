@@ -25,7 +25,7 @@ use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use crate::utils::{self, COLUMN_META, db_err};
 
@@ -36,7 +36,7 @@ mod list_entry;
 mod list_storage;
 
 /// Minimal post-finalization age age of finalized blocks before they'll pruned.
-const PRUNE_DEPTH: u64 = 1024;
+const PRUNE_DEPTH: u32 = 1024;
 
 /// The type of entry that is inserted to the cache.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -166,7 +166,7 @@ fn get_cache_helper<'a, Block: BlockT>(
 					cache,
 				},
 			),
-			As::sa(PRUNE_DEPTH),
+			PRUNE_DEPTH.into(),
 			best_finalized_block.clone(),
 		)
 	})

@@ -18,7 +18,7 @@ use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use crate::custom_proto::upgrade::{RegisteredProtocolEvent, RegisteredProtocolSubstream};
 use futures::prelude::*;
 use libp2p::core::{
-	PeerId, Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
+	ConnectedPoint, PeerId, Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
 	protocols_handler::IntoProtocolsHandler,
 	protocols_handler::KeepAlive,
 	protocols_handler::ProtocolsHandlerUpgrErr,
@@ -114,7 +114,11 @@ where
 {
 	type Handler = CustomProtoHandler<TMessage, TSubstream>;
 
-	fn into_handler(self, remote_peer_id: &PeerId) -> Self::Handler {
+	fn inbound_protocol(&self) -> RegisteredProtocol<TMessage> {
+		self.protocol.clone()
+	}
+
+	fn into_handler(self, remote_peer_id: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		let clock = Clock::new();
 		CustomProtoHandler {
 			protocol: self.protocol,
