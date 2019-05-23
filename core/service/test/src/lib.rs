@@ -36,7 +36,6 @@ use service::{
 };
 use network::{multiaddr, Multiaddr, SyncProvider, ManageNetwork};
 use network::config::{NetworkConfiguration, NodeKeyConfig, Secret, NonReservedPeerMode};
-use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
 
@@ -229,7 +228,7 @@ where
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
 {
 	const NUM_NODES: u32 = 10;
-	const NUM_BLOCKS: usize = 512;
+	const NUM_BLOCKS: u32 = 512;
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30500);
 	info!("Checking block sync");
@@ -249,7 +248,7 @@ where
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service|
-		service.client().info().unwrap().chain.best_number == As::sa(NUM_BLOCKS as u64)
+		service.client().info().unwrap().chain.best_number == NUM_BLOCKS.into()
 	);
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
@@ -265,7 +264,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		F: ServiceFactory,
 {
 	const NUM_NODES: u32 = 20;
-	const NUM_BLOCKS: u64 = 200;
+	const NUM_BLOCKS: u32 = 200;
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES / 2, 0, authorities, 30600);
 	info!("Checking consensus");
@@ -277,7 +276,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.client().info().unwrap().chain.finalized_number >= As::sa(NUM_BLOCKS / 2)
+		service.client().info().unwrap().chain.finalized_number >= (NUM_BLOCKS / 2).into()
 	});
 	info!("Adding more peers");
 	network.insert_nodes(&temp, NUM_NODES / 2, 0, vec![]);
@@ -285,6 +284,6 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service|
-		service.client().info().unwrap().chain.finalized_number >= As::sa(NUM_BLOCKS)
+		service.client().info().unwrap().chain.finalized_number >= NUM_BLOCKS.into()
 	);
 }

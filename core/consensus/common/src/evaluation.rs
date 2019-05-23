@@ -19,11 +19,13 @@
 use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
 	impl_extract_backtrace, impl_error_chain_kind, bail};
 
-type BlockNumber = u64;
+// This is just a best effort to encode the number. None indicated that it's too big to encode
+// in a u128.
+type BlockNumber = Option<u128>;
 
 error_chain! {
 	errors {
@@ -37,7 +39,7 @@ error_chain! {
 		}
 		WrongNumber(expected: BlockNumber, got: BlockNumber) {
 			description("Proposal had wrong number."),
-			display("Proposal had wrong number. Expected {}, got {}", expected, got),
+			display("Proposal had wrong number. Expected {:?}, got {:?}", expected, got),
 		}
 		ProposalTooLarge(size: usize) {
 			description("Proposal exceeded the maximum size."),
@@ -72,8 +74,11 @@ pub fn evaluate_initial<Block: BlockT>(
 		));
 	}
 
-	if parent_number.as_() + 1 != proposal.header().number().as_() {
-		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header().number().as_()));
+	if parent_number + One::one() != *proposal.header().number() {
+		bail!(ErrorKind::WrongNumber(
+			parent_number.checked_into::<u128>().map(|x| x + 1),
+			(*proposal.header().number()).checked_into::<u128>()
+		));
 	}
 
 	Ok(())

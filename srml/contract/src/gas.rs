@@ -16,7 +16,7 @@
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use runtime_primitives::BLOCK_FULL;
-use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
+use runtime_primitives::traits::{CheckedMul, CheckedSub, Zero, SaturatedConversion};
 use srml_support::{StorageValue, traits::{OnUnbalanced, ExistenceRequirement, WithdrawReason, Currency, Imbalance}};
 
 #[cfg(test)]
@@ -212,7 +212,7 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let cost = <T::Gas as As<BalanceOf<T>>>::as_(gas_limit.clone())
+	let cost = gas_limit.clone().into()
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;
 
@@ -248,7 +248,7 @@ pub fn refund_unused_gas<T: Trait>(
 	<GasSpent<T>>::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
 
 	// Refund gas left by the price it was bought at.
-	let refund = <T::Gas as As<BalanceOf<T>>>::as_(gas_left) * gas_meter.gas_price;
+	let refund = gas_left.into() * gas_meter.gas_price;
 	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
 	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
 		T::GasPayment::on_unbalanced(imbalance);
@@ -258,8 +258,7 @@ pub fn refund_unused_gas<T: Trait>(
 /// A little handy utility for converting a value in balance units into approximate value in gas units
 /// at the given gas price.
 pub fn approx_gas_for_balance<T: Trait>(gas_price: BalanceOf<T>, balance: BalanceOf<T>) -> T::Gas {
-	let amount_in_gas: BalanceOf<T> = balance / gas_price;
-	<T::Gas as As<BalanceOf<T>>>::sa(amount_in_gas)
+	(balance / gas_price).saturated_into::<T::Gas>()
 }
 
 /// A simple utility macro that helps to match against a

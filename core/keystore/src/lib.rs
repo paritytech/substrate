@@ -30,8 +30,6 @@ use error_chain::{bail, error_chain, error_chain_processing, impl_error_chain_pr
 
 use substrate_primitives::{ed25519::{Pair, Public}, Pair as PairT};
 
-pub use crypto::KEY_ITERATIONS;
-
 error_chain! {
 	foreign_links {
 		Io(io::Error);
