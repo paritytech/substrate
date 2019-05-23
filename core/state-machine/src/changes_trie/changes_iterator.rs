@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use parity_codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
+use num_traits::One;
 use trie::{Recorder, MemoryDB};
 use crate::changes_trie::{AnchorBlockId, Configuration, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};

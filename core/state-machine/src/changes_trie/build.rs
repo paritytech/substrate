@@ -19,6 +19,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use parity_codec::Decode;
 use hash_db::Hasher;
+use num_traits::One;
 use crate::backend::Backend;
 use crate::overlayed_changes::OverlayedChanges;
 use crate::trie_backend_essence::TrieBackendEssence;

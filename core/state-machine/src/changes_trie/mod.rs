@@ -48,6 +48,7 @@ pub use self::prune::{prune, oldest_non_pruned_trie};
 
 use hash_db::Hasher;
 use crate::backend::Backend;
+use num_traits::{One, Zero};
 use parity_codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
@@ -62,7 +63,7 @@ pub trait BlockNumber:
 	Send + Sync + 'static +
 	::std::fmt::Display +
 	Clone +
-	From<u32> +
+	From<u32> + One + Zero +
 	PartialEq + Ord +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +

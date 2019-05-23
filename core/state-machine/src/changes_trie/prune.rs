@@ -19,6 +19,7 @@
 use hash_db::Hasher;
 use trie::Recorder;
 use log::warn;
+use num_traits::One;
 use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
