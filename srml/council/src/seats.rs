@@ -85,7 +85,6 @@ use system::{self, ensure_signed};
 // after each vote as all but K entries are cleared. newly registering candidates must use cleared
 // entries before they increase the capacity.
 
-pub type VoteIndex = u32;
 
 /// The activity status of a voter.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default)]
@@ -122,7 +121,9 @@ pub const APPROVAL_SET_SIZE: usize = 8;
 
 type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+
 type SetIndex = u32;
+pub type VoteIndex = u32;
 
 // all three must be in sync.
 type ApprovalFlag = u32;
@@ -560,7 +561,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a voter at a specified index from the system.
 	fn remove_voter(voter: &T::AccountId, index: usize) {
-		let (set_index, vec_index) = Self::split_index::<SetIndex>(index, VOTER_SET_SIZE);
+		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let mut set = Self::voters(set_index);
 		set[vec_index] = None;
 		<Voters<T>>::insert(set_index, set);
@@ -601,7 +602,7 @@ impl<T: Trait> Module<T> {
 			pot_to_set = info.pot + offset;
 		} else {
 			// not yet a voter. Index _could be valid_. Fee might apply. O(1).
-			let (set_idx, vec_idx) = Self::split_index::<SetIndex>(hint, VOTER_SET_SIZE);
+			let (set_idx, vec_idx) = Self::split_index(hint, VOTER_SET_SIZE);
 			match Self::cell_status(set_idx, vec_idx) {
 				CellStatus::Hole => {
 					// requested cell was free.
@@ -753,8 +754,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// Note that this function does not take holes into account.
 	/// See [`voter_at`].
-	fn split_index<R: As<usize>>(index: usize, scale: usize) -> (R, usize) {
-		let set_index = R::sa(index / scale);
+	fn split_index(index: usize, scale: usize) -> (SetIndex, usize) {
+		let set_index = (index / scale) as u32;
 		let vec_index = index % scale;
 		(set_index, vec_index)
 	}
@@ -784,7 +785,7 @@ impl<T: Trait> Module<T> {
 	/// `VOTER_SET_SIZE * set_index + local_index`, meaning that you are ignoring all holes in the
 	/// first `set_index` sets.
 	fn voter_at(index: usize) -> Option<T::AccountId> {
-		let (set_index, vec_index) = Self::split_index::<SetIndex>(index, VOTER_SET_SIZE);
+		let (set_index, vec_index) = Self::split_index(index, VOTER_SET_SIZE);
 		let set = Self::voters(set_index);
 		if vec_index < set.len() {
 			set[vec_index].clone()
@@ -825,7 +826,7 @@ impl<T: Trait> Module<T> {
 	/// Note that false is returned in case of no-vote or an explicit `false`.
 	fn approvals_of_at(who: &T::AccountId, index: usize) -> bool {
 		let (flag_index, bit) = Self::split_index(index, APPROVAL_FLAG_LEN);
-		let (set_index, vec_index) = Self::split_index::<SetIndex>(flag_index, APPROVAL_SET_SIZE);
+		let (set_index, vec_index) = Self::split_index(flag_index as usize, APPROVAL_SET_SIZE);
 		let set = Self::approvals_of((who.clone(), set_index));
 		if vec_index < set.len() {
 			Self::bit_at(set[vec_index], bit)
