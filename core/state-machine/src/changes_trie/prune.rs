@@ -63,12 +63,14 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 	// FIXME: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	let mut block = first;
 	loop {
-		if block >= last.clone() + 1.into() {
+		if block >= last.clone() + One::one() {
 			break;
 		}
-		block += 1.into();
 
-		let block = block.clone() - 1.into();
+		let prev_block = block.clone();
+		block += One::one();
+
+		let block = prev_block;
 		let root = match storage.root(current_block, block.clone()) {
 			Ok(Some(root)) => root,
 			Ok(None) => continue,
