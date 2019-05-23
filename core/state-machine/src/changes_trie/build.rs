@@ -112,7 +112,10 @@ fn prepare_digest_input<'a, S, H, Number>(
 	for digest_build_block in digest_build_iterator(config, parent.number.clone() + One::one()) {
 		let trie_root = storage.root(parent, digest_build_block.clone())?;
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
-		let trie_storage = TrieBackendEssence::<_, H>::new(crate::changes_trie::TrieBackendStorageAdapter(storage), trie_root);
+		let trie_storage = TrieBackendEssence::<_, H>::new(
+			crate::changes_trie::TrieBackendStorageAdapter(storage),
+			trie_root,
+		);
 
 		let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block.clone());
 		trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
@@ -224,7 +227,13 @@ mod test {
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		let (backend, storage, changes) = prepare_for_build();
 		let config = changes.changes_trie_config.as_ref().unwrap();
-		let changes_trie_nodes = prepare_input(&backend, &storage, config, &changes, &AnchorBlockId { hash: Default::default(), number: 4 }).unwrap();
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			config,
+			&changes,
+			&AnchorBlockId { hash: Default::default(), number: 4 },
+		).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
@@ -236,7 +245,13 @@ mod test {
 	fn build_changes_trie_nodes_on_digest_block_l1() {
 		let (backend, storage, changes) = prepare_for_build();
 		let config = changes.changes_trie_config.as_ref().unwrap();
-		let changes_trie_nodes = prepare_input(&backend, &storage, config, &changes, &AnchorBlockId { hash: Default::default(), number: 3 }).unwrap();
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			config,
+			&changes,
+			&AnchorBlockId { hash: Default::default(), number: 3 },
+		).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
@@ -253,7 +268,13 @@ mod test {
 	fn build_changes_trie_nodes_on_digest_block_l2() {
 		let (backend, storage, changes) = prepare_for_build();
 		let config = changes.changes_trie_config.as_ref().unwrap();
-		let changes_trie_nodes = prepare_input(&backend, &storage, config, &changes, &AnchorBlockId { hash: Default::default(), number: 15 }).unwrap();
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			config,
+			&changes,
+			&AnchorBlockId { hash: Default::default(), number: 15 },
+		).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
@@ -278,7 +299,13 @@ mod test {
 		});
 
 		let config = changes.changes_trie_config.as_ref().unwrap();
-		let changes_trie_nodes = prepare_input(&backend, &storage, config, &changes, &AnchorBlockId { hash: Default::default(), number: 3 }).unwrap();
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			config,
+			&changes,
+			&AnchorBlockId { hash: Default::default(), number: 3 },
+		).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),

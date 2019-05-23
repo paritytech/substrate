@@ -574,7 +574,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				self.storage.build_anchor(hash)
 			}
 
-			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, block: NumberFor<Block>) -> Result<Option<H256>, String> {
+			fn root(
+				&self,
+				anchor: &ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+				block: NumberFor<Block>,
+			) -> Result<Option<H256>, String> {
 				let root = self.storage.root(anchor, block)?;
 				if block < self.min {
 					if let Some(ref root) = root {

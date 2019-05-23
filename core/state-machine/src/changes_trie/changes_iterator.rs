@@ -185,7 +185,14 @@ impl<'a, Number: BlockNumber> Iterator for SurfaceIterator<'a, Number> {
 
 /// Drilldown iterator - receives 'digest points' from surface iterator and explores
 /// every point until extrinsic is found.
-pub struct DrilldownIteratorEssence<'a, RS: 'a + RootsStorage<H, Number>, S: 'a + Storage<H, Number>, H: Hasher, Number: BlockNumber> where H::Out: 'a {
+pub struct DrilldownIteratorEssence<'a, RS, S, H, Number>
+	where
+		RS: 'a + RootsStorage<H, Number>,
+		S: 'a + Storage<H, Number>,
+		H: Hasher,
+		Number: BlockNumber,
+		H::Out: 'a,
+{
 	key: &'a [u8],
 	roots_storage: &'a RS,
 	storage: &'a S,
@@ -199,7 +206,14 @@ pub struct DrilldownIteratorEssence<'a, RS: 'a + RootsStorage<H, Number>, S: 'a 
 	_hasher: ::std::marker::PhantomData<H>,
 }
 
-impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Number: BlockNumber> DrilldownIteratorEssence<'a, RS, S, H, Number> {
+impl<'a, RS, S, H, Number> DrilldownIteratorEssence<'a, RS, S, H, Number>
+	where
+		RS: 'a + RootsStorage<H, Number>,
+		S: 'a + Storage<H, Number>,
+		H: Hasher,
+		Number: BlockNumber,
+		H::Out: 'a,
+{
 	pub fn next<F>(&mut self, trie_reader: F) -> Option<Result<(Number, u32), String>>
 		where
 			F: FnMut(&S, H::Out, &[u8]) -> Result<Option<Vec<u8>>, String>,
@@ -272,7 +286,14 @@ impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Num
 }
 
 /// Exploring drilldown operator.
-pub struct DrilldownIterator<'a, RS: 'a + RootsStorage<H, Number>, S: 'a + Storage<H, Number>, H: Hasher, Number: BlockNumber> where H::Out: 'a {
+pub struct DrilldownIterator<'a, RS, S, H, Number>
+	where
+		Number: BlockNumber,
+		H: Hasher,
+		S: 'a + Storage<H, Number>,
+		RS: 'a + RootsStorage<H, Number>,
+		H::Out: 'a,
+{
 	essence: DrilldownIteratorEssence<'a, RS, S, H, Number>,
 }
 
@@ -288,12 +309,26 @@ impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Num
 }
 
 /// Proving drilldown iterator.
-struct ProvingDrilldownIterator<'a, RS: 'a + RootsStorage<H, Number>, S: 'a + Storage<H, Number>, H: Hasher, Number: BlockNumber> where H::Out: 'a {
+struct ProvingDrilldownIterator<'a, RS, S, H, Number>
+	where
+		Number: BlockNumber,
+		H: Hasher,
+		S: 'a + Storage<H, Number>,
+		RS: 'a + RootsStorage<H, Number>,
+		H::Out: 'a,
+{
 	essence: DrilldownIteratorEssence<'a, RS, S, H, Number>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Number: BlockNumber> ProvingDrilldownIterator<'a, RS, S, H, Number> {
+impl<'a, RS, S, H, Number> ProvingDrilldownIterator<'a, RS, S, H, Number>
+	where
+		Number: BlockNumber,
+		H: Hasher,
+		S: 'a + Storage<H, Number>,
+		RS: 'a + RootsStorage<H, Number>,
+		H::Out: 'a,
+{
 	/// Consume the iterator, extracting the gathered proof in lexicographical order
 	/// by value.
 	pub fn extract_proof(self) -> Vec<Vec<u8>> {
@@ -304,7 +339,14 @@ impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Num
 	}
 }
 
-impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Number: BlockNumber> Iterator for ProvingDrilldownIterator<'a, RS, S, H, Number> {
+impl<'a, RS, S, H, Number> Iterator for ProvingDrilldownIterator<'a, RS, S, H, Number>
+	where
+		Number: BlockNumber,
+		H: Hasher,
+		S: 'a + Storage<H, Number>,
+		RS: 'a + RootsStorage<H, Number>,
+		H::Out: 'a,
+{
 	type Item = Result<(Number, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -319,8 +361,18 @@ impl<'a, RS: 'a + RootsStorage<H, Number>, S: Storage<H, Number>, H: Hasher, Num
 }
 
 /// Returns surface iterator for given range of blocks.
-fn surface_iterator<'a, Number: BlockNumber>(config: &'a Configuration, max: Number, begin: Number, end: Number) -> Result<SurfaceIterator<'a, Number>, String> {
-	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(config, max.clone(), begin.clone(), end)?;
+fn surface_iterator<'a, Number: BlockNumber>(
+	config: &'a Configuration,
+	max: Number,
+	begin: Number,
+	end: Number,
+) -> Result<SurfaceIterator<'a, Number>, String> {
+	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(
+		config,
+		max.clone(),
+		begin.clone(),
+		end,
+	)?;
 	Ok(SurfaceIterator {
 		config,
 		begin,
@@ -356,7 +408,8 @@ fn lower_bound_max_digest<Number: BlockNumber>(
 			let new_digest_interval = config.digest_interval * {
 				if digest_interval == 0 { 1 } else { digest_interval }
 			};
-			let new_digest_begin = ((current.clone() - One::one()) / new_digest_interval.into()) * new_digest_interval.into();
+			let new_digest_begin = ((current.clone() - One::one())
+				/ new_digest_interval.into()) * new_digest_interval.into();
 			let new_digest_end = new_digest_begin.clone() + new_digest_interval.into();
 			let new_current = new_digest_begin.clone() + new_digest_interval.into();
 
