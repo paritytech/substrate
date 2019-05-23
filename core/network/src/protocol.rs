@@ -55,7 +55,6 @@ pub(crate) const CURRENT_VERSION: u32 = 3;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 2;
 
-
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 /// When light node connects to the full node and the full node is behind light node
