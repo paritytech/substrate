@@ -34,7 +34,7 @@ use grandpa::{
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -669,7 +669,7 @@ where
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
-			Some(As::sa(self.config.justification_period)),
+			Some(self.config.justification_period.into()),
 			hash,
 			number,
 			(round, commit).into(),

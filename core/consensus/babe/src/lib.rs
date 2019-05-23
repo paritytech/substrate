@@ -463,6 +463,7 @@ fn find_pre_digest<B: Block>(
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
 //
 // FIXME #1018 needs misbehavior types
+#[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
 	client: &Arc<C>,
 	slot_now: u64,

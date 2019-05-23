@@ -19,7 +19,10 @@ use network_libp2p::PeerId;
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
 use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	CheckedSub, SaturatedConversion
+};
 use consensus::import_queue::SharedFinalityProofRequestBuilder;
 use crate::message::{
 	self, BlockRequest as BlockRequestMessage,
@@ -32,7 +35,6 @@ use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{ProtocolConfig, Roles};
-use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -89,10 +91,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
-	// Connected peers from whom we received a Status message,
-	// similar to context_data.peers but shared with the SyncProvider.
-	connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
-	transaction_pool: Arc<TransactionPool<H, B>>,
 }
 
 /// A peer from whom we have received a Status message.
@@ -258,18 +256,14 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
 	pub chain: Arc<Client<B>>,
-	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
-		connected_peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
-		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
 		let info = chain.info()?;
@@ -281,7 +275,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			context_data: ContextData {
 				peers: HashMap::new(),
 				chain,
-				finality_proof_provider,
 			},
 			on_demand,
 			genesis_hash: info.chain.genesis_hash,
@@ -289,8 +282,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			specialization: specialization,
 			consensus_gossip: ConsensusGossip::new(),
 			handshaking_peers: HashMap::new(),
-			connected_peers,
-			transaction_pool: transaction_pool,
 		})
 	}
 
@@ -316,13 +307,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.status().is_offline()
 	}
 
-	pub fn poll(&mut self, network_out: &mut dyn NetworkOut<B>) -> Poll<void::Void, void::Void> {
+	pub fn poll(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		transaction_pool: &(impl TransactionPool<H, B> + ?Sized)
+	) -> Poll<void::Void, void::Void> {
 		while let Ok(Async::Ready(_)) = self.tick_timeout.poll() {
 			self.tick(network_out);
 		}
 
 		while let Ok(Async::Ready(_)) = self.propagate_timeout.poll() {
-			self.propagate_extrinsics(network_out);
+			self.propagate_extrinsics(network_out, transaction_pool);
 		}
 
 		Ok(Async::NotReady)
@@ -361,19 +356,21 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.info.best_hash = info.best_hash;
 				peer.info.best_number = info.best_number;
 			}
-			let mut peers = self.connected_peers.write();
-			if let Some(ref mut peer) = peers.get_mut(who) {
-				peer.peer_info.best_hash = info.best_hash;
-				peer.peer_info.best_number = info.best_number;
-			}
 		}
+	}
+
+	/// Returns information about all the peers we are connected to after the handshake message.
+	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
+		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
 	pub fn on_custom_message(
 		&mut self,
 		network_out: &mut dyn NetworkOut<B>,
+		transaction_pool: &(impl TransactionPool<H, B> + ?Sized),
 		who: PeerId,
-		message: Message<B>
+		message: Message<B>,
+		finality_proof_provider: Option<&FinalityProofProvider<B>>
 	) -> CustomMessageOutcome<B> {
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(network_out, who, s),
@@ -394,7 +391,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_block_announce(network_out, who.clone(), announce);
 				self.update_peer_info(&who);
 			},
-			GenericMessage::Transactions(m) => self.on_extrinsics(network_out, who, m),
+			GenericMessage::Transactions(m) =>
+				self.on_extrinsics(network_out, transaction_pool, who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(network_out, who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(who, response),
 			GenericMessage::RemoteReadRequest(request) => self.on_remote_read_request(network_out, who, request),
@@ -403,7 +401,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(network_out, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
-			GenericMessage::FinalityProofRequest(request) => self.on_finality_proof_request(network_out, who, request),
+			GenericMessage::FinalityProofRequest(request) =>
+				self.on_finality_proof_request(network_out, who, request, finality_proof_provider),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(network_out, who, response),
 			GenericMessage::Consensus(msg) => {
@@ -486,7 +485,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
 			self.handshaking_peers.remove(&peer);
-			self.connected_peers.write().remove(&peer);
 			self.context_data.peers.remove(&peer)
 		};
 		if let Some(peer_data) = removed {
@@ -572,9 +570,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			};
 			blocks.push(block_data);
 			match request.direction {
-				message::Direction::Ascending => id = BlockId::Number(number + As::sa(1)),
+				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
 				message::Direction::Descending => {
-					if number == As::sa(0) {
+					if number.is_zero() {
 						break;
 					}
 					id = BlockId::Hash(parent_hash)
@@ -716,9 +714,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.and_then(|info| info.best_queued_number)
 					.unwrap_or_else(|| Zero::zero());
 				let blocks_difference = self_best_block
-					.as_()
-					.checked_sub(status.best_number.as_())
-					.unwrap_or(0);
+					.checked_sub(&status.best_number)
+					.unwrap_or_else(Zero::zero)
+					.saturated_into::<u64>();
 				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 					debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
 					network_out.report_peer(who.clone(), PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE);
@@ -731,16 +729,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 			let info = match self.handshaking_peers.remove(&who) {
 				Some(_handshaking) => {
-					let peer_info = PeerInfo {
+					PeerInfo {
 						protocol_version: status.version,
 						roles: status.roles,
 						best_hash: status.best_hash,
 						best_number: status.best_number
-					};
-					self.connected_peers
-						.write()
-						.insert(who.clone(), ConnectedPeer { peer_info: peer_info.clone() });
-					peer_info
+					}
 				},
 				None => {
 					error!(target: "sync", "Received status from previously unconnected node {}", who);
@@ -777,6 +771,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn on_extrinsics(
 		&mut self,
 		network_out: &mut dyn NetworkOut<B>,
+		transaction_pool: &(impl TransactionPool<H, B> + ?Sized),
 		who: PeerId,
 		extrinsics: message::Transactions<B::Extrinsic>
 	) {
@@ -788,7 +783,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Received {} extrinsics from {}", extrinsics.len(), who);
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			for t in extrinsics {
-				if let Some(hash) = self.transaction_pool.import(&t) {
+				if let Some(hash) = transaction_pool.import(&t) {
 					network_out.report_peer(who.clone(), NEW_EXTRINSIC_REPUTATION_CHANGE);
 					peer.known_extrinsics.insert(hash);
 				} else {
@@ -799,7 +794,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Call when we must propagate ready extrinsics to peers.
-	pub fn propagate_extrinsics(&mut self, network_out: &mut dyn NetworkOut<B>) {
+	pub fn propagate_extrinsics(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		transaction_pool: &(impl TransactionPool<H, B> + ?Sized)
+	) {
 		debug!(target: "sync", "Propagating extrinsics");
 
 		// Accept transactions only when fully synced
@@ -807,7 +806,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			return;
 		}
 
-		let extrinsics = self.transaction_pool.transactions();
+		let extrinsics = transaction_pool.transactions();
 		let mut propagated_to = HashMap::new();
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
@@ -827,7 +826,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				network_out.send_message(who.clone(), GenericMessage::Transactions(to_send))
 			}
 		}
-		self.transaction_pool.on_broadcasted(propagated_to);
+
+		transaction_pool.on_broadcasted(propagated_to);
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -1200,9 +1200,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
+		finality_proof_provider: Option<&FinalityProofProvider<B>>
 	) {
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
-		let finality_proof = self.context_data.finality_proof_provider.as_ref()
+		let finality_proof = finality_proof_provider.as_ref()
 			.ok_or_else(|| String::from("Finality provider is not configured"))
 			.and_then(|provider|
 				provider.prove_finality(request.block, &request.request).map_err(|e| e.to_string())

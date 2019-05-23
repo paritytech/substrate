@@ -116,13 +116,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Take a value from storage, removing it afterwards.
-				fn take<S: #scrate::HashedStorage<#scrate::Twox128>>(storage: &S) -> Self::Query {
+				fn take<S: #scrate::HashedStorage<#scrate::Twox128>>(storage: &mut S) -> Self::Query {
 					storage.take(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key.
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::Twox128>>(f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::Twox128>>(f: F, storage: &mut S) -> R {
 					let mut val = <Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::get(storage);
 
 					let ret = f(&mut val);
@@ -212,13 +212,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Take the value, reading and removing it.
-				fn take<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &mut S) -> Self::Query {
 					let key = #as_map::key_for(key);
 					storage.take(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, f: F, storage: &mut S) -> R {
 					let mut val = #as_map::get(key, storage);
 
 					let ret = f(&mut val);
@@ -349,7 +349,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					///
 					/// Takes care of updating previous and next elements points
 					/// as well as updates head if the element is first or last.
-					fn remove_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(linkage: Linkage<#kty>, storage: &S);
+					fn remove_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(linkage: Linkage<#kty>, storage: &mut S);
 
 					/// Read the contained data and it's linkage.
 					fn read_with_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>;
@@ -358,7 +358,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					///
 					/// Takes care of updating head and previous head's pointer.
 					fn new_head_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(
-						storage: &S,
+						storage: &mut S,
 						key: &#kty,
 					) -> Linkage<#kty>;
 
@@ -368,7 +368,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					/// Overwrite current head pointer.
 					///
 					/// If `None` is given head is removed from storage.
-					fn write_head<S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &S, head: Option<&#kty>);
+					fn write_head<S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &mut S, head: Option<&#kty>);
 				}
 			}
 		};
@@ -380,7 +380,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> self::#inner_module::Utils<#traitinstance, #instance> for #name<#traitinstance, #instance> {
 				fn remove_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(
 					linkage: self::#inner_module::Linkage<#kty>,
-					storage: &S,
+					storage: &mut S,
 				) {
 					use self::#inner_module::Utils;
 
@@ -415,7 +415,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				fn new_head_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(
-					storage: &S,
+					storage: &mut S,
 					key: &#kty,
 				) -> self::#inner_module::Linkage<#kty> {
 					use self::#inner_module::Utils;
@@ -450,7 +450,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					storage.get(#final_head_key)
 				}
 
-				fn write_head<S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &S, head: Option<&#kty>) {
+				fn write_head<S: #scrate::HashedStorage<#scrate::#hasher>>(storage: &mut S, head: Option<&#kty>) {
 					match head {
 						Some(head) => storage.put(#final_head_key, head),
 						None => storage.kill(#final_head_key),
@@ -489,7 +489,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Take the value, reading and removing it.
-				fn take<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &mut S) -> Self::Query {
 					use self::#inner_module::Utils;
 
 					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
@@ -503,12 +503,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Remove the value under a key.
-				fn remove<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &S) {
+				fn remove<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &mut S) {
 					#as_map::take(key, storage);
 				}
 
 				/// Store a value to be associated with the given key from the map.
-				fn insert<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, val: &#typ, storage: &S) {
+				fn insert<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, val: &#typ, storage: &mut S) {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -522,7 +522,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Mutate the value under a key
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, f: F, storage: &mut S) -> R {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -643,12 +643,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					storage.get(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn take<S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+				fn take<S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &mut S) -> Self::Query {
 					let key = #as_double_map::key_for(key1, key2);
 					storage.take(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &S) -> R {
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &mut S) -> R {
 					let mut val = #as_double_map::get(key1, key2, storage);
 
 					let ret = f(&mut val);

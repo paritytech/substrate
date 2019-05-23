@@ -46,7 +46,10 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, Digest, DigestItem,
+	SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto
+};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -446,7 +449,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			min_blocks_to_keep,
 			&state_machine::ChangesTrieAnchorBlockId {
 				hash: convert_hash(&block_hash),
-				number: block_num.as_(),
+				number: block_num.saturated_into::<u64>(),
 			},
 			|node| tx.delete(columns::CHANGES_TRIE, node.as_ref()));
 	}
@@ -477,19 +480,19 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 		}
 
 		// we need to get hash of the block to resolve changes trie root
-		let block_id = if block <= self.meta.read().finalized_number.as_() {
+		let block_id = if block <= self.meta.read().finalized_number.saturated_into::<u64>() {
 			// if block is finalized, we could just read canonical hash
-			BlockId::Number(As::sa(block))
+			BlockId::Number(block.saturated_into())
 		} else {
 			// the block is not finalized
 			let mut current_num = anchor.number;
 			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
 			let maybe_anchor_header: Block::Header = utils::require_header::<Block>(
-				&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(As::sa(current_num))
+				&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(current_num.saturated_into())
 			).map_err(|e| e.to_string())?;
 			if maybe_anchor_header.hash() == current_hash {
 				// if anchor is canonicalized, then the block is also canonicalized
-				BlockId::Number(As::sa(block))
+				BlockId::Number(block.saturated_into())
 			} else {
 				// else (block is not finalized + anchor is not canonicalized):
 				// => we should find the required block hash by traversing
@@ -770,7 +773,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	)
 		-> Result<(), client::error::Error>
 	{
-		let number_u64 = number.as_();
+		let number_u64 = number.saturated_into::<u64>();
 		if number_u64 > self.canonicalization_delay {
 			let new_canonical = number_u64 - self.canonicalization_delay;
 
@@ -781,7 +784,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let hash = if new_canonical == number_u64 {
 				hash
 			} else {
-				::client::blockchain::HeaderBackend::hash(&self.blockchain, As::sa(new_canonical))?
+				::client::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
 					.expect("existence of block with number `new_canonical` \
 						implies existence of blocks with all numbers before it; qed")
 			};
@@ -865,7 +868,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					changeset.deleted.push(key);
 				}
 			}
-			let number_u64 = number.as_();
+			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(&mut transaction, commit);
@@ -978,7 +981,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	{
 		let f_num = f_header.number().clone();
 
-		if self.storage.state_db.best_canonical().map(|c| f_num.as_() > c).unwrap_or(true) {
+		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
 			let parent_hash = f_header.parent_hash().clone();
 
 			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
@@ -1126,9 +1129,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let revertible = best - finalized;
 		let n = if revertible < n { revertible } else { n };
 
-		for c in 0 .. n.as_() {
-			if best == As::sa(0) {
-				return Ok(As::sa(c))
+		for c in 0 .. n.saturated_into::<u64>() {
+			if best.is_zero() {
+				return Ok(c.saturated_into::<NumberFor<Block>>())
 			}
 			let mut transaction = DBTransaction::new();
 			match self.storage.state_db.revert_one() {
@@ -1138,7 +1141,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 
-					best -= As::sa(1);  // prev block
+					best -= One::one();  // prev block
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
@@ -1150,7 +1153,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					self.blockchain.update_meta(hash, best, true, false);
 					self.blockchain.leaves.write().revert(removed.hash().clone(), removed.number().clone(), removed.parent_hash().clone());
 				}
-				None => return Ok(As::sa(c))
+				None => return Ok(c.saturated_into::<NumberFor<Block>>())
 			}
 		}
 		Ok(n)
@@ -1182,7 +1185,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
-				if !self.storage.state_db.is_pruned(&hash, hdr.number().as_()) {
+				if !self.storage.state_db.is_pruned(&hash, (*hdr.number()).saturated_into::<u64>()) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					let state = DbState::new(self.storage.clone(), root);
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
@@ -1196,7 +1199,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 
 	fn have_state_at(&self, hash: &Block::Hash, number: NumberFor<Block>) -> bool {
-		!self.storage.state_db.is_pruned(hash, number.as_())
+		!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
 	}
 
 	fn destroy_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
