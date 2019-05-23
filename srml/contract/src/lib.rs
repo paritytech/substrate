@@ -219,7 +219,7 @@ where
 	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash,
 	Hasher: Hash<Output=H>,
 {
-	fn new(storage_root: Vec<u8>, code_hash: H) -> Self {
+	fn new(storage_root: &[u8], code_hash: H) -> Self {
 		let mut buf = Vec::new();
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
@@ -578,7 +578,7 @@ decl_module! {
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				// This operation is cheap enough because last_write (delta not included)
 				// is not this block as it has been checked earlier.
-				runtime_io::child_storage_root(&origin_contract.trie_id),
+				&runtime_io::child_storage_root(&origin_contract.trie_id)[..],
 				code_hash,
 			);
 
