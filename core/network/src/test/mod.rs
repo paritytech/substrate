@@ -24,6 +24,7 @@ mod sync;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
+use crate::AlwaysBadChecker;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
@@ -956,7 +957,7 @@ pub trait TestNetFactory: Sized {
 		let protocol = Protocol::new(
 			config.clone(),
 			client.clone(),
-			None,
+			Arc::new(AlwaysBadChecker),
 			specialization,
 		).unwrap();
 
@@ -1010,7 +1011,7 @@ pub trait TestNetFactory: Sized {
 		let protocol = Protocol::new(
 			config,
 			client.clone(),
-			None,
+			Arc::new(AlwaysBadChecker),
 			specialization,
 		).unwrap();
 
