@@ -12,13 +12,13 @@ Subkey is a commandline utility included with Substrate that generates or restor
 subkey generate
 
 EXAMPLE OUTPUT:
-Secret (Mnemonic) Phrase `this list of words in an exampe of a secret mnemonic phrase` is account:
-  Private Key (Seed): 0x03aedcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd4417
+Mnemonic Phrase: `this list of words in an exampe of a secret mnemonic phrase` is account:
+  Private Key (Raw Seed): 0x03aedcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd4417
   Public Key (hex): 0x123edcf1ba99e43f50dec4bdeb3d1a2cf521ad7c3cd0eeee5cd3314e50fd424c
   Public Address (SS58): 5DeeNqcAcaHDSed2HYnqMDK7JHcvxZ5QUE9EKmjc5snvU6wF
 ```
 
-Will output a secret mnemonic phrase and give you the seed, public key, and public address of a new account. DO NOT SHARE your mnemonic or seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Public Address**.
+Will output a mnemonic phrase and give you the private key (raw seed), public key, and public address of a new account. **DO NOT SHARE** your mnemonic phrase or raw seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Public Address**.
 
 === Inspecting a key
 
