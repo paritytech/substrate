@@ -133,7 +133,7 @@ fn pruning_range<Number: BlockNumber>(
 	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(&prune_interval.into()));
 
 	last_block_to_prune
-		.and_then(|last| first_block_to_prune.map(|first| (first + 1.into(), last)))
+		.and_then(|last| first_block_to_prune.map(|first| (first + One::one(), last)))
 }
 
 /// Select pruning delay for the changes tries. To make sure we could build a changes
@@ -152,8 +152,8 @@ fn max_digest_intervals_to_keep<Number: BlockNumber>(
 	debug_assert!(max_digest_interval != 0);
 
 	let max_digest_intervals_to_keep = min_blocks_to_keep / max_digest_interval.into();
-	if max_digest_intervals_to_keep == 0.into() {
-		1.into()
+	if max_digest_intervals_to_keep.is_zero() {
+		One::one()
 	} else {
 		max_digest_intervals_to_keep
 	}
