@@ -24,7 +24,10 @@ use futures::IntoFuture;
 use hash_db::{HashDB, Hasher};
 use parity_codec::Encode;
 use primitives::{ChangesTrieConfiguration, convert_hash};
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
+	UniqueSaturatedInto, UniqueSaturatedFrom, SaturatedConversion
+};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check,
 	create_proof_check_backend_storage, read_child_proof_check};
@@ -288,14 +291,16 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				prev_roots: remote_roots,
 			},
 			remote_proof,
-			request.first_block.0.as_(),
+			request.first_block.0.saturated_into::<u64>(),
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0.as_(),
+				number: request.last_block.0.saturated_into::<u64>(),
 			},
-			remote_max_block.as_(),
+			remote_max_block.saturated_into::<u64>(),
 			&request.key)
-		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
+		.map(|pairs| pairs.into_iter().map(|(b, x)|
+			(b.saturated_into::<NumberFor<B>>(), x)
+		).collect())
 		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
@@ -438,7 +443,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 }
 
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
+struct RootsStorage<'a, Number: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u64>, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
 	prev_roots: BTreeMap<Number, Hash>,
 }
@@ -446,15 +451,16 @@ struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + As<u64>,
+		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + UniqueSaturatedInto<u64>
+			+ UniqueSaturatedFrom<u64>,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn root(&self, _anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
 		// we can't ask for roots from parallel forks here => ignore anchor
-		let root = if block < self.roots.0.as_() {
-			self.prev_roots.get(&As::sa(block)).cloned()
+		let root = if block < self.roots.0.saturated_into::<u64>() {
+			self.prev_roots.get(&Number::unique_saturated_from(block)).cloned()
 		} else {
-			block.checked_sub(self.roots.0.as_())
+			block.checked_sub(self.roots.0.saturated_into::<u64>())
 				.and_then(|index| self.roots.1.get(index as usize))
 				.cloned()
 		};

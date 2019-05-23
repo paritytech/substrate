@@ -50,7 +50,7 @@ use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
 };
 use primitives::Pair;
-use inherents::{InherentDataProviders, InherentData, RuntimeString};
+use inherents::{InherentDataProviders, InherentData};
 use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future, stream::Stream};

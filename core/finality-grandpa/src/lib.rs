@@ -157,7 +157,7 @@ pub struct Config {
 	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
-	pub justification_period: u64,
+	pub justification_period: u32,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.

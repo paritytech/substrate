@@ -247,7 +247,10 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded};
+use primitives::traits::{
+	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
+	Bounded, SaturatedConversion
+};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -396,7 +399,7 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
 type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
-type ExpoMap<T> = BTreeMap::<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
+type ExpoMap<T> = BTreeMap<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
@@ -432,7 +435,7 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(minimum_validator_count) config(): u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
 		/// The length of a staking era in sessions.
-		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = 1000.into();
 		/// Maximum reward, per validator, that is provided per acceptable session.
 		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_parts(60);
 		/// Slash, per validator that is taken for the first time they are found to be offline.
@@ -440,7 +443,7 @@ decl_storage! {
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 		/// The length of the bonding duration in eras.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(12);
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = 12.into();
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialize
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
@@ -867,8 +870,12 @@ impl<T: Trait> Module<T> {
 		if ideal_elapsed.is_zero() {
 			return Self::current_session_reward();
 		}
-		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-		Self::current_session_reward() * <BalanceOf<T>>::sa(per65536) / <BalanceOf<T>>::sa(65536u64)
+		// Assumes we have 16-bits free at the top of T::Moment. Holds true for moment as seconds
+		// in a u64 for the forseeable future, but more correct would be to handle overflows
+		// explicitly.
+		let per65536 = T::Moment::from(65536) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed);
+		let per65536: BalanceOf<T> = per65536.saturated_into::<u32>().into();
+		Self::current_session_reward() * per65536 / 65536.into()
 	}
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
@@ -901,8 +908,8 @@ impl<T: Trait> Module<T> {
 				Self::reward_validator(v, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
-			let len = validators.len() as u64; // validators length can never overflow u64
-			let len = BalanceOf::<T>::sa(len);
+			let len = validators.len() as u32; // validators length can never overflow u64
+			let len: BalanceOf<T> = len.into();
 			let total_minted = reward * len;
 			let total_rewarded_stake = Self::slot_stake() * len;
 			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);

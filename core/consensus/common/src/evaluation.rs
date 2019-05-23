@@ -19,9 +19,11 @@
 use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
-type BlockNumber = u64;
+// This is just a best effort to encode the number. None indicated that it's too big to encode
+// in a u128.
+type BlockNumber = Option<u128>;
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -36,7 +38,7 @@ pub enum Error {
 	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
 	WrongParentHash { expected: String, got: String },
 	/// Proposal had wrong number.
-	#[display(fmt="Proposal had wrong number. Expected {}, got {}", expected, got)]
+	#[display(fmt="Proposal had wrong number. Expected {:?}, got {:?}", expected, got)]
 	WrongNumber { expected: BlockNumber, got: BlockNumber },
 	/// Proposal exceeded the maximum size.
 	#[display(
@@ -71,10 +73,10 @@ pub fn evaluate_initial<Block: BlockT>(
 		});
 	}
 
-	if parent_number.as_() + 1 != proposal.header().number().as_() {
+	if parent_number + One::one() != *proposal.header().number() {
 		return Err(Error::WrongNumber {
-			expected: parent_number.as_() + 1,
-			got: proposal.header().number().as_()
+			expected: parent_number.checked_into::<u128>().map(|x| x + 1),
+			got: (*proposal.header().number()).checked_into::<u128>(),
 		});
 	}
 
