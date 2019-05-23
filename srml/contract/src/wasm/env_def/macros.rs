@@ -195,7 +195,7 @@ macro_rules! define_env {
 mod tests {
 	use parity_wasm::elements::FunctionType;
 	use parity_wasm::elements::ValueType;
-	use runtime_primitives::traits::{As, Zero};
+	use runtime_primitives::traits::Zero;
 	use sandbox::{self, ReturnValue, TypedValue};
 	use crate::wasm::tests::MockExt;
 	use crate::wasm::Runtime;
@@ -256,7 +256,7 @@ mod tests {
 	#[test]
 	fn macro_define_func() {
 		define_func!( <E: Ext> ext_gas (_ctx, amount: u32) => {
-			let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
+			let amount = <E::T as Trait>::Gas::from(amount);
 			if !amount.is_zero() {
 				Ok(())
 			} else {
@@ -308,7 +308,7 @@ mod tests {
 
 		define_env!(Env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {
-				let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
+				let amount = <E::T as Trait>::Gas::from(amount);
 				if !amount.is_zero() {
 					Ok(())
 				} else {

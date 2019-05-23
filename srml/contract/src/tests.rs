@@ -21,9 +21,8 @@
 
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
-	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf,
-	GenesisConfig, Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter,
-	TrieIdGenerator,
+	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
+	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, TrieIdGenerator,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -31,7 +30,7 @@ use parity_codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
-use runtime_primitives::traits::{As, BlakeTwo256, IdentityLookup};
+use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
 	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, storage::child,
@@ -699,7 +698,7 @@ fn storage_size() {
 				Origin::signed(ALICE),
 				30_000,
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
@@ -729,7 +728,7 @@ fn deduct_blocks() {
 				Origin::signed(ALICE),
 				30_000,
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
 			// Check creation
@@ -822,7 +821,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 				Origin::signed(ALICE),
 				100,
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
 			// Advance blocks
@@ -858,7 +857,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 				Origin::signed(ALICE),
 				100,
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
 			// Trigger rent must have no effect
@@ -892,7 +891,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 				Origin::signed(ALICE),
 				1_000,
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(100u64).encode() // rent allowance
+				<Test as balances::Trait>::Balance::from(100u32).encode() // rent allowance
 			));
 
 			// Trigger rent must have no effect
@@ -926,7 +925,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 				Origin::signed(ALICE),
 				50+Balances::minimum_balance(),
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(1_000u64).encode() // rent allowance
+				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 
 			// Trigger rent must have no effect
@@ -1119,7 +1118,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	let encoded = hex::encode(Encode::encode(&Call::Contract(super::Call::restore_to(
 		BOB,
 		HASH_SET_RENT.into(),
-		<Test as balances::Trait>::Balance::sa(50u64),
+		<Test as balances::Trait>::Balance::from(50u32),
 		vec![acl_key, acl_key],
 	))));
 
@@ -1164,7 +1163,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				Origin::signed(ALICE),
 				30_000,
 				100_000, HASH_SET_RENT.into(),
-				<Test as balances::Trait>::Balance::sa(0u64).encode()
+				<Test as balances::Trait>::Balance::from(0u32).encode()
 			));
 
 			// Check creation
@@ -1191,7 +1190,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				Origin::signed(CHARLIE),
 				30_000,
 				100_000, HASH_RESTORATION.into(),
-				<Test as balances::Trait>::Balance::sa(0u64).encode()
+				<Test as balances::Trait>::Balance::from(0u32).encode()
 			));
 
 			let django_trie_id = ContractInfoOf::<Test>::get(DJANGO).unwrap()

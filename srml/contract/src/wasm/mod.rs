@@ -177,9 +177,10 @@ mod tests {
 	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf, StorageKey};
 	use crate::gas::GasMeter;
 	use crate::tests::{Test, Call};
-	use wabt;
 	use crate::wasm::prepare::prepare_contract;
 	use crate::CodeHash;
+	use wabt;
+	use hex_literal::hex;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -207,7 +208,6 @@ mod tests {
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
-		random_seed: H256,
 	}
 	impl Ext for MockExt {
 		type T = Test;
@@ -276,8 +276,8 @@ mod tests {
 			&1111
 		}
 
-		fn random_seed(&self) -> &H256{
-			&self.random_seed
+		fn random(&self, subject: &[u8]) -> H256 {
+			H256::from_slice(subject)
 		}
 
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
@@ -1115,11 +1115,12 @@ mod tests {
 		.unwrap();
 	}
 
-	const CODE_RANDOM_SEED: &str = r#"
+	const CODE_RANDOM: &str = r#"
 (module
-	(import "env" "ext_random_seed" (func $ext_random_seed))
+	(import "env" "ext_random" (func $ext_random (param i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -1133,7 +1134,10 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the block random seed in the scratch buffer
-		(call $ext_random_seed)
+		(call $ext_random
+			(i32.const 40) ;; Pointer in memory to the start of the subject buffer
+			(i32.const 32) ;; The subject buffer's length
+		)
 
 		;; assert $ext_scratch_size == 32
 		(call $assert
@@ -1150,35 +1154,44 @@ mod tests {
 			(i32.const 32)		;; Count of bytes to copy.
 		)
 
-		;; assert the contents of the buffer in 4 x i64 parts matches 1,2,3,4.
-		(call $assert (i64.eq (i64.load (i32.const 8))  (i64.const 1)))
-		(call $assert (i64.eq (i64.load (i32.const 16)) (i64.const 2)))
-		(call $assert (i64.eq (i64.load (i32.const 24)) (i64.const 3)))
-		(call $assert (i64.eq (i64.load (i32.const 32)) (i64.const 4)))
+		;; return the data from the contract
+		(call $ext_return
+			(i32.const 8)
+			(i32.const 32)
+		)
 	)
 	(func (export "deploy"))
+
+	;; [8,40) is reserved for the result of PRNG.
+
+	;; the subject used for the PRNG. [40,72)
+	(data (i32.const 40)
+		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
+		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
+	)
 )
 "#;
 
 	#[test]
-	fn random_seed() {
+	fn random() {
 		let mut mock_ext = MockExt::default();
-		let seed: [u8; 32] = [
-			1,0,0,0,0,0,0,0,
-			2,0,0,0,0,0,0,0,
-			3,0,0,0,0,0,0,0,
-			4,0,0,0,0,0,0,0,
-		];
-		mock_ext.random_seed = H256::from_slice(&seed);
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+
+		let mut return_buf = Vec::new();
 		execute(
-			CODE_RANDOM_SEED,
+			CODE_RANDOM,
 			&[],
-			&mut Vec::new(),
+			&mut return_buf,
 			&mut mock_ext,
 			&mut gas_meter,
 		)
 		.unwrap();
+
+		// The mock ext just returns the same data that was passed as the subject.
+		assert_eq!(
+			&return_buf,
+			&hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")
+		);
 	}
 
 	const CODE_DEPOSIT_EVENT: &str = r#"

@@ -94,12 +94,11 @@ use crate::account_db::{AccountDb, DirectAccountDb};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
-use rstd::prelude::*;
-use rstd::marker::PhantomData;
+use rstd::{prelude::*, marker::PhantomData, convert::TryFrom};
 use parity_codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
 use runtime_primitives::traits::{
-	Hash, As, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
+	Hash, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{
@@ -196,7 +195,7 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The size of stored value in octet.
-	pub storage_size: u64,
+	pub storage_size: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
@@ -275,7 +274,8 @@ where
 }
 
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+pub type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
@@ -286,8 +286,8 @@ pub trait Trait: timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	// `As<u32>` is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<BalanceOf<Self>> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy +
+		Into<BalanceOf<Self>> + TryFrom<BalanceOf<Self>>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -333,10 +333,10 @@ where
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
-		let encoded_len = call.using_encoded(|encoded| encoded.len());
+		let encoded_len = call.using_encoded(|encoded| encoded.len() as u32);
 		let base_fee = <Module<T>>::transaction_base_fee();
 		let byte_fee = <Module<T>>::transaction_byte_fee();
-		base_fee + byte_fee * <BalanceOf<T> as As<u64>>::sa(encoded_len as u64)
+		base_fee + byte_fee * encoded_len.into()
 	}
 }
 
@@ -589,8 +589,8 @@ decl_module! {
 			}
 
 			origin_contract.storage_size -= key_values_taken.iter()
-				.map(|(_, value)| value.len() as u64)
-				.sum::<u64>();
+				.map(|(_, value)| value.len() as u32)
+				.sum::<u32>();
 
 			<ContractInfoOf<T>>::remove(&origin);
 			<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
@@ -652,7 +652,7 @@ decl_storage! {
 		TombstoneDeposit get(tombstone_deposit) config(): BalanceOf<T>;
 		/// Size of a contract at the time of creation. This is a simple way to ensure
 		/// that empty contracts eventually gets deleted.
-		StorageSizeOffset get(storage_size_offset) config(): u64;
+		StorageSizeOffset get(storage_size_offset) config(): u32;
 		/// Price of a byte of storage per one block interval. Should be greater than 0.
 		RentByteFee get(rent_byte_price) config(): BalanceOf<T>;
 		/// The amount of funds a contract should deposit in order to offset
@@ -675,17 +675,17 @@ decl_storage! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
 		/// The fee required to create a contract instance.
-		ContractFee get(contract_fee) config(): BalanceOf<T> = BalanceOf::<T>::sa(21);
+		ContractFee get(contract_fee) config(): BalanceOf<T> = 21.into();
 		/// The base fee charged for calling into a contract.
-		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
+		CallBaseFee get(call_base_fee) config(): T::Gas = 135.into();
 		/// The base fee charged for creating a contract.
-		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
+		CreateBaseFee get(create_base_fee) config(): T::Gas = 175.into();
 		/// The price of one unit of gas.
-		GasPrice get(gas_price) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
+		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
 		/// The maximum nesting level of a call/create stack.
 		MaxDepth get(max_depth) config(): u32 = 100;
 		/// The maximum amount of gas that could be expended per block.
-		BlockGasLimit get(block_gas_limit) config(): T::Gas = T::Gas::sa(10_000_000);
+		BlockGasLimit get(block_gas_limit) config(): T::Gas = 10_000_000.into();
 		/// Gas spent so far in this block.
 		GasSpent get(gas_spent): T::Gas;
 		/// Current cost schedule for contracts.
@@ -789,25 +789,29 @@ pub struct Schedule<Gas> {
 	/// Whether the `ext_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
+
+	/// The maximum length of a subject used for PRNG generation.
+	pub max_subject_len: u32,
 }
 
-impl<Gas: As<u64>> Default for Schedule<Gas> {
+impl<Gas: From<u32>> Default for Schedule<Gas> {
 	fn default() -> Schedule<Gas> {
 		Schedule {
 			version: 0,
-			put_code_per_byte_cost: Gas::sa(1),
-			grow_mem_cost: Gas::sa(1),
-			regular_op_cost: Gas::sa(1),
-			return_data_per_byte_cost: Gas::sa(1),
-			event_data_per_byte_cost: Gas::sa(1),
-			event_per_topic_cost: Gas::sa(1),
-			event_base_cost: Gas::sa(1),
-			sandbox_data_read_cost: Gas::sa(1),
-			sandbox_data_write_cost: Gas::sa(1),
+			put_code_per_byte_cost: 1.into(),
+			grow_mem_cost: 1.into(),
+			regular_op_cost: 1.into(),
+			return_data_per_byte_cost: 1.into(),
+			event_data_per_byte_cost: 1.into(),
+			event_per_topic_cost: 1.into(),
+			event_base_cost: 1.into(),
+			sandbox_data_read_cost: 1.into(),
+			sandbox_data_write_cost: 1.into(),
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 			enable_println: false,
+			max_subject_len: 32,
 		}
 	}
 }

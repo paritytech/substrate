@@ -24,8 +24,11 @@ use std::io;
 use log::error;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
-/// Maximal payload accepted by RPC servers
+/// Maximal payload accepted by RPC servers.
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+
+/// Default maximum number of connections for WS RPC servers.
+const WS_MAX_CONNECTIONS: usize = 100;
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -76,11 +79,13 @@ pub fn start_http(
 /// Start WS server listening on given address.
 pub fn start_ws(
 	addr: &std::net::SocketAddr,
+	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
 	io: RpcHandler,
 ) -> io::Result<ws::Server> {
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
 		.max_payload(MAX_PAYLOAD)
+		.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 		.allowed_origins(map_cors(cors))
 		.start(addr)
 		.map_err(|err| match err {

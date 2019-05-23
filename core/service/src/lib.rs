@@ -40,7 +40,7 @@ use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use tel::{telemetry, SUBSTRATE_INFO};
 
@@ -162,7 +162,10 @@ impl<Components: components::Components> Service<Components> {
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => chain_info.best_number.as_(), "best" => ?chain_info.best_hash);
+		telemetry!(SUBSTRATE_INFO; "node.start";
+			"height" => chain_info.best_number.saturated_into::<u64>(),
+			"best" => ?chain_info.best_hash
+		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
@@ -323,8 +326,16 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			client.clone(),
+			network.clone(),
+			has_bootnodes,
+			system_info,
+			config.rpc_http,
+			config.rpc_ws,
+			config.rpc_ws_max_connections,
+			config.rpc_cors.clone(),
+			task_executor.clone(),
+			transaction_pool.clone(),
 		)?;
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();

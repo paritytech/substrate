@@ -34,66 +34,66 @@ pub trait UnhashedStorage {
 	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
 
 	/// Put a value in under a key.
-	fn put<T: codec::Encode>(&self, key: &[u8], val: &T);
+	fn put<T: codec::Encode>(&mut self, key: &[u8], val: &T);
 
 	/// Remove the bytes of a key from storage.
-	fn kill(&self, key: &[u8]);
+	fn kill(&mut self, key: &[u8]);
 
 	/// Remove the bytes of a key from storage.
-	fn kill_prefix(&self, prefix: &[u8]);
+	fn kill_prefix(&mut self, prefix: &[u8]);
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: codec::Decode>(&mut self, key: &[u8]) -> Option<T> {
 		let value = self.get(key);
 		self.kill(key);
 		value
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Decode>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+	fn take_or_panic<T: codec::Decode>(&mut self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+	fn take_or_default<T: codec::Decode + Default>(&mut self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
 
 	/// Get a Vec of bytes from storage.
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Put a raw byte slice into storage.
-	fn put_raw(&self, key: &[u8], value: &[u8]);
+	fn put_raw(&mut self, key: &[u8], value: &[u8]);
 }
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl UnhashedStorage for std::cell::RefCell<&mut sr_primitives::StorageOverlay> {
+impl UnhashedStorage for sr_primitives::StorageOverlay {
 	fn exists(&self, key: &[u8]) -> bool {
-		self.borrow().contains_key(key)
+		self.contains_key(key)
 	}
 
 	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
-		self.borrow().get(key)
+		self.get(key)
 			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
 	}
 
-	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
-		self.borrow_mut().insert(key.to_vec(), codec::Encode::encode(val));
+	fn put<T: codec::Encode>(&mut self, key: &[u8], val: &T) {
+		self.insert(key.to_vec(), codec::Encode::encode(val));
 	}
 
-	fn kill(&self, key: &[u8]) {
-		self.borrow_mut().remove(key);
+	fn kill(&mut self, key: &[u8]) {
+		self.remove(key);
 	}
 
-	fn kill_prefix(&self, prefix: &[u8]) {
-		self.borrow_mut().retain(|key, _| {
+	fn kill_prefix(&mut self, prefix: &[u8]) {
+		self.retain(|key, _| {
 			!key.starts_with(prefix)
 		})
 	}
 
 	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.borrow().get(key).cloned()
+		self.get(key).cloned()
 	}
 
-	fn put_raw(&self, key: &[u8], value: &[u8]) {
-		self.borrow_mut().insert(key.to_vec(), value.to_vec());
+	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
+		self.insert(key.to_vec(), value.to_vec());
 	}
 }
 
@@ -131,32 +131,32 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	fn get<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
 
 	/// Take the value under a key.
-	fn take<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+	fn take<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &mut S) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<S: UnhashedStorage>(k1: &K1, k2: &K2, val: &V, storage: &S) {
+	fn insert<S: UnhashedStorage>(k1: &K1, k2: &K2, val: &V, storage: &mut S) {
 		storage.put(&Self::key_for(k1, k2), val);
 	}
 
 	/// Remove the value under a key.
-	fn remove<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) {
+	fn remove<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &mut S) {
 		storage.kill(&Self::key_for(k1, k2));
 	}
 
 	/// Removes all entries that shares the `k1` as the first key.
-	fn remove_prefix<S: UnhashedStorage>(k1: &K1, storage: &S) {
+	fn remove_prefix<S: UnhashedStorage>(k1: &K1, storage: &mut S) {
 		storage.kill_prefix(&Self::prefix_for(k1));
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &S) -> R;
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &mut S) -> R;
 
 	/// Append the given items to the value under the key specified.
 	fn append<I, S: UnhashedStorage>(
 		k1: &K1,
 		k2: &K2,
 		items: &[I],
-		storage: &S,
+		storage: &mut S,
 	) -> Result<(), &'static str>
 	where
 		I: codec::Encode,

@@ -26,7 +26,6 @@ pub mod error;
 pub mod informant;
 
 use client::ExecutionStrategies;
-use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
@@ -488,6 +487,7 @@ where
 	config.rpc_ws = Some(
 		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
 	);
+	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
 		None
@@ -627,7 +627,7 @@ where
 	};
 
 	service::chain_ops::export_blocks::<F, _, _>(
-		config, exit.into_exit(), file, As::sa(from), to.map(As::sa), json
+		config, exit.into_exit(), file, from.into(), to.map(Into::into), json
 	).map_err(Into::into)
 }
 
@@ -663,7 +663,7 @@ where
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 	let blocks = cli.num;
-	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
+	Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
 }
 
 fn purge_chain<F, S>(

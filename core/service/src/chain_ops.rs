@@ -21,7 +21,7 @@ use futures::Future;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{As, Block, Header, NumberFor};
+use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
 use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
 use network::message;
 
@@ -50,7 +50,7 @@ pub fn export_blocks<F, E, W>(
 	let mut block = from;
 
 	let last = match to {
-		Some(v) if v == As::sa(0) => As::sa(1),
+		Some(v) if v.is_zero() => One::one(),
 		Some(v) => v,
 		None => client.info()?.chain.best_number,
 	};
@@ -66,8 +66,8 @@ pub fn export_blocks<F, E, W>(
 	});
 	info!("Exporting blocks from #{} to #{}", block, last);
 	if !json {
-		let last_: u64 = last.as_();
-		let block_: u64 = block.as_();
+		let last_: u64 = last.saturated_into::<u64>();
+		let block_: u64 = block.saturated_into::<u64>();
 		let len: u64 = last_ - block_ + 1;
 		output.write(&len.encode())?;
 	}
@@ -87,13 +87,13 @@ pub fn export_blocks<F, E, W>(
 			},
 			None => break,
 		}
-		if block.as_() % 10000 == 0 {
+		if (block % 10000.into()).is_zero() {
 			info!("#{}", block);
 		}
 		if block == last {
 			break;
 		}
-		block += As::sa(1);
+		block += One::one();
 	}
 	Ok(())
 }
@@ -202,7 +202,7 @@ pub fn revert_chain<F>(
 	let reverted = client.revert(blocks)?;
 	let info = client.info()?.chain;
 
-	if reverted.as_() == 0 {
+	if reverted.is_zero() {
 		info!("There aren't any non-finalized blocks to revert.");
 	} else {
 		info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
