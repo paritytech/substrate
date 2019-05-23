@@ -110,14 +110,14 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 
 	fn system_health(&self) -> Result<Health> {
 		Ok(Health {
-			peers: self.sync.peers().len(),
+			peers: self.sync.peers_debug_info().len(),
 			is_syncing: self.sync.is_major_syncing(),
 			should_have_peers: self.should_have_peers,
 		})
 	}
 
 	fn system_peers(&self) -> Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
-		Ok(self.sync.peers().into_iter().map(|(peer_id, p)| PeerInfo {
+		Ok(self.sync.peers_debug_info().into_iter().map(|(peer_id, p)| PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: format!("{:?}", p.roles),
 			protocol_version: p.protocol_version,

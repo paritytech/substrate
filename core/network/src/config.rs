@@ -39,7 +39,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemandService<B>>>,
 	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool<H, B>>,
+	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// Protocol specialization.
 	pub specialization: S,
 }
