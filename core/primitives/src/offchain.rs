@@ -27,18 +27,25 @@ pub struct HttpRequestId(pub u16);
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum HttpRequestStatus {
-	/// Deadline was reached why we waited for this request to finish.
+	/// Deadline was reached while we waited for this request to finish.
+	///
+	/// Note the deadline is controlled by the calling part, it not necessarily means
+	/// that the request has timed out.
 	DeadlineReached,
 	/// Request timed out.
+	///
+	/// This means that the request couldn't be completed within a resonable time
+	/// by the host environment, has now been terminated and is considered finished.
+	/// To re-try the request you need to construct it again.
 	Timeout,
 	/// Request status of this ID is not known.
 	Unknown,
-	/// The request is finished with given status code.
+	/// The request has finished with given status code.
 	Finished(u16),
 }
 
 impl HttpRequestStatus {
-	/// Parse u32 as `RequestStatus`.
+	/// Parse u32 as `HttpRequestStatus`.
 	///
 	/// The first hundred of codes indicate internal states.
 	/// The rest are http response status codes.
@@ -144,12 +151,12 @@ pub trait Externalities {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&mut self, key: &[u8], value: &[u8]);
 
-	/// Reads a value from the local storage.
+	/// Gets a value from the local storage.
 	///
 	/// If the value does not exist in the storage `None` will be returned.
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
-	fn local_storage_read(&mut self, key: &[u8]) -> Option<Vec<u8>>;
+	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Initiaties a http request given HTTP verb and the URL.
 	///
@@ -187,7 +194,7 @@ pub trait Externalities {
 	///
 	/// Returns a vector of request statuses (the len is the same as ids).
 	/// Note that if deadline is not provided the method will block indefinitely,
-	/// otherwise unready responses will produce `WaitTimeout` status.
+	/// otherwise unready responses will produce `DeadlineReached` status.
 	///
 	/// Passing `None` as deadline blocks forever.
 	fn http_response_wait(
@@ -243,8 +250,8 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	}
 
 
-	fn local_storage_read(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		(&mut **self).local_storage_read(key)
+	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+		(&mut **self).local_storage_get(key)
 	}
 
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {

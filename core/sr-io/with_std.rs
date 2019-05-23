@@ -259,7 +259,6 @@ fn with_offchain<R>(f: impl FnOnce(&mut offchain::Externalities) -> R, msg: &'st
 	).expect("offchain-worker functions cannot be called outside of an Externalities-provided environment.")
 }
 
-// TODO [ToDr] Implement me
 impl OffchainApi for () {
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		with_offchain(|ext| {
@@ -297,10 +296,10 @@ impl OffchainApi for () {
 		}, "local_storage_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_read(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
 		with_offchain(|ext| {
-			ext.local_storage_read(key)
-		}, "local_storage_read can be called only in the offchain worker context")
+			ext.local_storage_get(key)
+		}, "local_storage_get can be called only in the offchain worker context")
 	}
 
 	fn http_request_start(

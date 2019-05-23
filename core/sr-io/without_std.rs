@@ -338,16 +338,22 @@ pub mod ext {
 
 		/// Sign a piece of data with authority key.
 		///
+		/// `sig_data` has to be a pointer to a slice of 64 bytes.
 		/// Returns `0` if successful, nonzero otherwise.
 		fn ext_sign(data: *const u8, len: u32, sig_data: *mut u8) -> u32;
 
 		/// Returns current UNIX timestamp (milliseconds)
 		fn ext_timestamp() -> u64;
 
-		/// Pause execution until `deadline` is reached.
+		/// Pause execution until given timestamp (milliseconds; `deadline`) is reached.
+		///
+		/// The deadline is obtained by querying the current timestamp via `ext_timestamp`
+		/// and then adding some time to it.
 		fn ext_sleep_until(deadline: u64);
 
 		/// Generate a random seed
+		///
+		/// `data` has to be a pointer to a slice of 32 bytes.
 		fn ext_random_seed(data: *mut u8);
 
 		/// Write a value to local storage.
@@ -355,12 +361,17 @@ pub mod ext {
 
 		/// Read a value from local storage.
 		///
-		/// if len is u32::max_value the value has not been found.
-		fn ext_local_storage_read(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
+		/// if `value_len` is u32::max_value the value has not been found.
+		fn ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
 
 		/// Initiaties a http request.
 		///
-		/// If returned value is `u32::max_value` the request couldn't have started.
+		/// Returns a `RequestId(u16)` of initiated request, any value beyond `u16::max_value`
+		/// signifies an error.
+		///
+		/// `meta` is parity-codec encoded additional parameters to the request (like redirection policy,
+		/// timeouts, certificates policy, etc). The format is not yet specified and the field is currently
+		/// only reserved for future use.
 		fn ext_http_request_start(
 			method: *const u8,
 			method_len: u8,
@@ -396,7 +407,8 @@ pub mod ext {
 		/// Block and wait for the responses for given requests.
 		///
 		/// Note that if deadline is not provided the method will block indefinitely,
-		/// otherwise unready responses will produce `WaitTimeout` status.
+		/// otherwise unready responses will produce `DeadlineReached` status.
+		/// (see #primitives::offchain::HttpRequestStatus)
 		///
 		/// Make sure that `statuses` have the same length as ids.
 		/// Passing `0` as deadline blocks forever.
@@ -409,7 +421,8 @@ pub mod ext {
 
 		/// Read all response headers.
 		///
-		/// Resturns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		/// Note the headers are only available before response body is fully consumed.
+		/// Returns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
 		fn ext_http_response_headers(
 			id: u32,
 			written_out: *mut u32
@@ -417,10 +430,10 @@ pub mod ext {
 
 		/// Read a chunk of body response to given buffer.
 		///
-		/// Returns the number of bytes written.
 		/// Passing `0` as deadline blocks forever.
-		///
-		/// If the returned value is `u32::max_value()` reading body failed.
+		/// Returns the number of bytes written if successful,
+		/// if it's `0` it means response has been fully consumed,
+		/// if it's `u32::max_value()` it means reading body failed.
 		fn ext_http_response_read_body(
 			id: u32,
 			buffer: *mut u8,
@@ -773,10 +786,10 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn local_storage_read(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
 		let mut len = 0u32;
 		unsafe {
-			let ptr = ext_local_storage_read.get()(
+			let ptr = ext_local_storage_get.get()(
 				key.as_ptr(),
 				key.len() as u32,
 				&mut len,

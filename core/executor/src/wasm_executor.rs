@@ -601,19 +601,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 => {
 		let extrinsic = this.memory.get(msg_data, len as usize)
-			.map_err(|_| UserError("OOB while ext_submit_extrinsic: wasm"))?;
+			.map_err(|_| UserError("OOB while ext_submit_transaction: wasm"))?;
 
 		let res = this.ext.offchain()
 			.map(|api| api.submit_transaction(extrinsic))
-			.ok_or_else(|| UserError("Calling unavailable API ext_submit_extrinsic: wasm"))?;
+			.ok_or_else(|| UserError("Calling unavailable API ext_submit_transaction: wasm"))?;
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
 	ext_sign(msg_data: *const u8, len: u32, sig_data: *mut u8) -> u32 => {
 		let message = this.memory.get(msg_data, len as usize)
-			.map_err(|_| UserError("OOB while ext_submit_extrinsic: wasm"))?;
+			.map_err(|_| UserError("OOB while ext_sign: wasm"))?;
 
-		let res = this.ext.offchain()
+		// NOTE the runtime as assumptions about signature size.
+		let res: Option<[u8; 64]> = this.ext.offchain()
 			.map(|api| api.sign(&*message))
 			.ok_or_else(|| UserError("Calling unavailable API ext_sign: wasm"))?;
 
@@ -637,7 +638,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_random_seed(seed_data: *mut u8) => {
-		let seed = this.ext.offchain()
+		// NOTE the runtime as assumptions about seed size.
+		let seed: [u8; 32] = this.ext.offchain()
 			.map(|api| api.random_seed())
 			.ok_or_else(|| UserError("Calling unavailable API ext_random_seed: wasm"))?;
 
@@ -657,25 +659,25 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(())
 	},
-	ext_local_storage_read(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8 => {
+	ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key, key_len as usize)
-			.map_err(|_| UserError("OOB while ext_local_storage_read: wasm"))?;
+			.map_err(|_| UserError("OOB while ext_local_storage_get: wasm"))?;
 
 		let maybe_value = this.ext.offchain()
-			.map(|api| api.local_storage_read(&key))
-			.ok_or_else(|| UserError("Calling unavailable API ext_local_storage_read: wasm"))?;
+			.map(|api| api.local_storage_get(&key))
+			.ok_or_else(|| UserError("Calling unavailable API ext_local_storage_get: wasm"))?;
 
 		let (offset, len) = if let Some(value) = maybe_value {
 			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value)
-				.map_err(|_| UserError("Invalid attempt to set memory in ext_local_storage_read"))?;
+				.map_err(|_| UserError("Invalid attempt to set memory in ext_local_storage_get"))?;
 			(offset, value.len() as u32)
 		} else {
 			(0, u32::max_value())
 		};
 
 		this.memory.write_primitive(value_len, len)
-			.map_err(|_| UserError("Invalid attempt to write value_len in ext_local_storage_read"))?;
+			.map_err(|_| UserError("Invalid attempt to write value_len in ext_local_storage_get"))?;
 
 		Ok(offset)
 	},
@@ -771,7 +773,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		let res = this.ext.offchain()
 			.map(|api| api.http_response_wait(&ids, deadline_to_timestamp(deadline)))
-			.ok_or_else(|| UserError("Calling unavailable API ext_http_request_write_body: wasm"))?
+			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_wait: wasm"))?
 			.into_iter()
 			.map(|status| status.as_u32())
 			.zip(0..ids_len);

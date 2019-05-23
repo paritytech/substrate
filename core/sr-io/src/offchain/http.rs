@@ -17,6 +17,7 @@
 //! A non-std set of HTTP types.
 
 use rstd::prelude::Vec;
+use rstd::str;
 #[cfg(not(feature = "std"))]
 use rstd::prelude::vec;
 use primitives::offchain::{Timestamp, HttpRequestId as RequestId, HttpRequestStatus as RequestStatus};
@@ -50,15 +51,6 @@ impl AsRef<str> for Method {
 			Method::Other(m) => m,
 		}
 	}
-}
-
-#[cfg(feature = "std")]
-fn from_utf8(chunk: &[u8]) -> Option<&str> {
-	std::str::from_utf8(chunk).ok()
-}
-#[cfg(not(feature = "std"))]
-fn from_utf8(chunk: &[u8]) -> Option<&str> {
-	core::str::from_utf8(chunk).ok()
 }
 
 /// An HTTP request builder.
@@ -137,8 +129,8 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 		for (header_name, header_value) in &self.headers {
 			crate::http_request_add_header(
 				id,
-				from_utf8(header_name).expect("Header names are always Vecs created from valid str; qed"),
-				from_utf8(header_value).expect("Header values are always Vecs created from valid str; qed"),
+				str::from_utf8(header_name).expect("Header names are always Vecs created from valid str; qed"),
+				str::from_utf8(header_value).expect("Header values are always Vecs created from valid str; qed"),
 			)?
 		}
 
@@ -348,9 +340,10 @@ impl Headers {
 	/// If you want to consume multiple headers it's better to iterate
 	/// and collect them on your own.
 	pub fn find(&self, name: &str) -> Option<&str> {
+		let raw = name.as_bytes();
 		for &(ref key, ref val) in &self.raw {
-			if from_utf8(&key) == Some(name) {
-				return from_utf8(&val)
+			if &**key == raw {
+				return str::from_utf8(&val)
 			}
 		}
 		None
@@ -385,7 +378,7 @@ impl<'a> HeadersIterator<'a> {
 	/// Note that you have to call `next` prior to calling this
 	pub fn current(&self) -> Option<(&str, &str)> {
 		self.collection.get(self.index.unwrap_or(0))
-			.map(|val| (from_utf8(&val.0).unwrap_or(""), from_utf8(&val.1).unwrap_or("")))
+			.map(|val| (str::from_utf8(&val.0).unwrap_or(""), str::from_utf8(&val.1).unwrap_or("")))
 	}
 }
 

@@ -260,7 +260,7 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn local_storage_read(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
 		unreachable!()
 	}
 

@@ -257,12 +257,12 @@ export_api! {
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
 		fn local_storage_set(key: &[u8], value: &[u8]);
 
-		/// Reads a value from the local storage.
+		/// Gets a value from the local storage.
 		///
 		/// If the value does not exist in the storage `None` will be returned.
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_read(key: &[u8]) -> Option<Vec<u8>>;
+		fn local_storage_get(key: &[u8]) -> Option<Vec<u8>>;
 
 		/// Initiaties a http request given HTTP verb and the URL.
 		///
@@ -297,7 +297,7 @@ export_api! {
 		///
 		/// Returns a vector of request statuses (the len is the same as ids).
 		/// Note that if deadline is not provided the method will block indefinitely,
-		/// otherwise unready responses will produce `WaitTimeout` status.
+		/// otherwise unready responses will produce `DeadlineReached` status.
 		///
 		/// Passing `None` as deadline blocks forever.
 		fn http_response_wait(
@@ -307,7 +307,8 @@ export_api! {
 
 		/// Read all response headers.
 		///
-		/// Resturns a vector of pairs `(HeaderKey, HeaderValue)`.
+		/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
+		/// NOTE response headers have to be read before response body.
 		fn http_response_headers(
 			request_id: HttpRequestId
 		) -> Vec<(Vec<u8>, Vec<u8>)>;
@@ -316,6 +317,9 @@ export_api! {
 		///
 		/// Returns the number of bytes written or an error in case a deadline
 		/// is reached or server closed the connection.
+		/// If `0` is returned it means that the response has been fully consumed
+		/// and the `request_id` is now invalid.
+		/// NOTE this implies that response headers must be read before draining the body.
 		/// Passing `None` as a deadline blocks forever.
 		fn http_response_read_body(
 			request_id: HttpRequestId,
