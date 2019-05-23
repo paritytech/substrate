@@ -65,15 +65,6 @@ pub trait SlotCompatible {
 	) -> Result<(u64, u64), consensus_common::Error>;
 }
 
-/// Convert an inherent error to common error.
-#[deprecated(
-	since = "2.0",
-	note = "This method is deprecated, use `consensus_common::Error::InherentData(err.into())` instead.",
-)]
-pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_common::Error {
-	consensus_common::Error::InherentData(err.into())
-}
-
 /// Start a new slot worker in a separate thread.
 #[deprecated(since = "1.1", note = "Please spawn a thread manually")]
 pub fn start_slot_worker_thread<B, C, W, SO, SC, T, OnExit>(

@@ -122,10 +122,6 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 	Some(current_author)
 }
 
-fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
-	consensus_common::Error::InherentData(err.into()).into()
-}
-
 /// A digest item which is usable with aura consensus.
 pub trait CompatibleDigestItem<T: Pair>: Sized {
 	/// Construct a digest item which contains a slot number and a signature on the
@@ -177,7 +173,8 @@ impl SlotCompatible for AuraSlotCompatible {
 	) -> Result<(TimestampInherent, AuraInherent), consensus_common::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
-			.map_err(inherent_to_common_error)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
 	}
 }
 
@@ -780,7 +777,8 @@ fn register_aura_inherent_data_provider(
 	if !inherent_data_providers.has_provider(&srml_aura::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_aura::InherentDataProvider::new(slot_duration))
-			.map_err(inherent_to_common_error)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
 	} else {
 		Ok(())
 	}

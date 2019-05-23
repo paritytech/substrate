@@ -36,7 +36,7 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
+use consensus::{Error as ConsensusError};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
@@ -411,7 +411,7 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 				Ok(Async::Ready(None)) => None,
 			}))
 		});
-	
+
 		if self.use_tokio {
 			fut.wait()
 		} else {
@@ -876,7 +876,7 @@ pub trait TestNetFactory: Sized {
 							),
 						ProtocolMsg::BlocksProcessed(hashes, has_error) =>
 							protocol.blocks_processed(&mut Ctxt(&network_sender), hashes, has_error),
-						ProtocolMsg::RestartSync => 
+						ProtocolMsg::RestartSync =>
 							protocol.restart(&mut Ctxt(&network_sender)),
 						ProtocolMsg::AnnounceBlock(hash) =>
 							protocol.announce_block(&mut Ctxt(&network_sender), hash),
@@ -1229,7 +1229,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
-			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+			.map_err(|_| ConsensusError::InvalidJustification.into())
 	}
 }
 

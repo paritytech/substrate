@@ -119,7 +119,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		block: ImportBlock<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(&*self.client, &mut *self.data.write(), block, new_cache)
+		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(
+			&*self.client, &mut *self.data.write(), block, new_cache
+		)
 	}
 
 	fn check_block(

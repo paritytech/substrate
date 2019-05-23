@@ -144,11 +144,15 @@ pub trait StateApi<Hash> {
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>);
+	fn subscribe_storage(
+		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
+	);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_storage(
+		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
+	) -> RpcResult<bool>;
 }
 
 /// State API with subscriptions support.
@@ -479,7 +483,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	}
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
-		let stream = match self.client.storage_changes_notification_stream(Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])) {
+		let stream = match self.client.storage_changes_notification_stream(
+				Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])
+		) {
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = subscriber.reject(error::Error::from(err).into());
