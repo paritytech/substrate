@@ -152,8 +152,7 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
-		println!("BUILDING IMPORT QUEUE in /core/service/lib");
-		
+
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info()?.chain;
 

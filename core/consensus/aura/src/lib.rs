@@ -489,6 +489,7 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 					Err(log_str)
 				},
 				Ok(None) => {
+					/// Tmp hack for testing, TODO: Add proper test.
 					submit_report_call(
 						client,
 						transaction_pool,
@@ -509,6 +510,8 @@ fn check_header<C, B: Block, P: Pair, A: txpool::ChainApi<Block=B>>(
 }
 
 /// Submit report call.
+/// TODO: Ask how to do submit an unsigned in the proper way
+/// and move the function to a better place so it can be used for Babe and Grandpa.
 pub fn submit_report_call<H, A, B: Block, C, P>(
 	client: &Arc<C>,
 	transaction_pool: &Arc<TransactionPool<A>>,
@@ -520,23 +523,8 @@ pub fn submit_report_call<H, A, B: Block, C, P>(
 	P: Pair,
 {
 	println!("SUBMIT_REPORT_CALL");
-	// let next_index = 10000u64;
-	// let signed: sr25519::Public = AccountKeyring::Alice.into();
-	// let payload = (
-	// 	Compact::from(next_index),
-	// 	Call::Grandpa(GrandpaCall::report_misbehavior(report_call)),
-	// 	Era::immortal(),
-	// 	genesis_hash,
-	// );
-	// let signature: sr25519::Signature = AccountKeyring::from_public(&signed).unwrap().sign(&payload.encode()).into();
-	// println!("payload = {:?}", payload);
-	// let local_id: sr25519::Public = signed.public();
-	// let any_signature = AnySignature::from(signature);
-	// println!("any signature = {:?}", any_signature);
-	// let extrinsic = UncheckedExtrinsic::new_signed(next_index, payload.1, Address::<_, u32>::Id(signed), any_signature, Era::Immortal);
 	let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Aura(AuraCall::report_equivocation(aura_proof.encode())));
 	let uxt = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-	// // assert_eq!(extrinsic, uxt);
 	let block_id = BlockId::<B>::number(client.info().unwrap().best_number);
 	if let Err(e) = transaction_pool.submit_one(&block_id, uxt) {
 		println!("Error importing misbehavior report: {:?}", e);
