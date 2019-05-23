@@ -846,7 +846,7 @@ mod tests {
 					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config"))
+					_ => Err(error::Error::Input("Unexpected node key config".into()))
 				})
 			})
 		}
@@ -872,7 +872,7 @@ mod tests {
 						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
 					NodeKeyConfig::Ed25519(network::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config"))
+					_ => Err(error::Error::Input("Unexpected node key config".into()))
 				})
 			})
 		}
@@ -906,7 +906,7 @@ mod tests {
 							if typ == NodeKeyType::Secp256k1 => Ok(()),
 						NodeKeyConfig::Ed25519(network::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config"))
+						_ => Err(error::Error::Input("Unexpected node key config".into()))
 					})
 			})
 		}
@@ -923,7 +923,7 @@ mod tests {
 						NodeKeyConfig::Ed25519(network::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config"))
+						_ => Err(error::Error::Input("Unexpected node key config".into()))
 				})
 			})
 		}
