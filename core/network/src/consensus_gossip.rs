@@ -281,7 +281,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
-	fn register_message(
+	fn register_message_hashed(
 		&mut self,
 		message_hash: B::Hash,
 		topic: B::Hash,
@@ -294,6 +294,20 @@ impl<B: BlockT> ConsensusGossip<B> {
 				message,
 			});
 		}
+	}
+
+	/// Registers a message without propagating it to any peers. The message
+	/// becomes available to new peers or when the service is asked to gossip
+	/// the message's topic. No validation is performed on the message, if the
+	/// message is already expired it should be dropped on the next garbage
+	/// collection.
+	pub fn register_message(
+		&mut self,
+		topic: B::Hash,
+		message: ConsensusMessage,
+	) {
+		let message_hash = HashFor::<B>::hash(&message.data[..]);
+		self.register_message_hashed(message_hash, topic, message);
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
@@ -447,7 +461,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					}
 				}
 				if keep {
-					self.register_message(message_hash, topic, message);
+					self.register_message_hashed(message_hash, topic, message);
 				}
 			} else {
 				trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -495,7 +509,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		force: bool,
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
-		self.register_message(message_hash, topic, message.clone());
+		self.register_message_hashed(message_hash, topic, message.clone());
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(protocol, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
 	}

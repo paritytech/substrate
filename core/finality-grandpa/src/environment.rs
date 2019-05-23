@@ -101,6 +101,10 @@ impl<Block: BlockT> CompletedRounds<Block> {
 		CompletedRounds { inner }
 	}
 
+	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
+		self.inner.iter()
+	}
+
 	/// Returns the last (latest) completed round.
 	pub fn last(&self) -> &CompletedRound<Block> {
 		self.inner.back()

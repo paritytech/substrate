@@ -166,9 +166,16 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	} = link;
 
 	let PersistentData { authority_set, consensus_changes, set_state } = persistent_data;
-	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
+	let (network, network_startup) = NetworkBridge::new(
+		network,
+		config.clone(),
+		authority_set.set_id(),
+		&set_state.read(),
+		on_exit.clone(),
+	);
+
+	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
 
 	let observer_work = future::loop_fn(initial_state, move |state| {
 		let (authority_set, consensus_changes, set_state, voter_commands_rx) = state;
