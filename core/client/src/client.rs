@@ -366,6 +366,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map(StorageData))
 	}
 
+	/// Given a `BlockId` and a key, return the value under the hash in that block.
+	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
+		-> error::Result<Option<Block::Hash>> {
+		Ok(self.state_at(id)?
+			.storage_hash(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+		)
+	}
+
 	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
 	pub fn child_storage_keys(
 		&self,
@@ -391,6 +399,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(self.state_at(id)?
 			.child_storage(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
+	}
+
+	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
+	pub fn child_storage_hash(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		key: &StorageKey
+	) -> error::Result<Option<Block::Hash>> {
+		Ok(self.state_at(id)?
+			.child_storage_hash(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+		)
 	}
 
 	/// Get the code at a given block.

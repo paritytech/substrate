@@ -355,8 +355,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	}
 
 	fn storage_hash(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<Block::Hash>> {
-		use runtime_primitives::traits::{Hash, Header as HeaderT};
-		Ok(self.storage(key, block)?.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0)))
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying storage hash at {:?} for key {}", block, HexDisplay::from(&key.0));
+		Ok(self.client.storage_hash(&BlockId::Hash(block), &key)?)
 	}
 
 	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<u64>> {
@@ -391,11 +392,13 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> Result<Option<Block::Hash>> {
-		use runtime_primitives::traits::{Hash, Header as HeaderT};
-		Ok(
-			self.child_storage(child_storage_key, key, block)?
-				.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
-		)
+		let block = self.unwrap_or_best(block)?;
+		trace!(
+			target: "rpc", "Querying child storage hash at {:?} for key {}",
+			block,
+			HexDisplay::from(&key.0),
+		);
+		Ok(self.client.child_storage_hash(&BlockId::Hash(block), &child_storage_key, &key)?)
 	}
 
 	fn child_storage_size(

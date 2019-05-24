@@ -573,6 +573,26 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		Ok(value)
 	}
 
+	fn child_storage_hash(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		let key = (storage_key.to_vec(), key.to_vec());
+		let local_cache = self.local_cache.upgradable_read();
+		if let Some(entry) = local_cache.child_hashes.get(&key).cloned() {
+			trace!("Found in local cache: {:?}", key);
+			return Ok(entry)
+		}
+		let mut cache = self.shared_cache.lock();
+		if Self::is_allowed(None, Some(&key), &self.parent_hash, &cache.modifications) {
+			if let Some(entry) = cache.lru_child_hashes.get_refresh(&key).map(|a| a.0.clone()) {
+				trace!("Found in shared cache: {:?}", key);
+				return Ok(entry)
+			}
+		}
+		trace!("Cache miss: {:?}", key);
+		let value = self.state.child_storage_hash(storage_key, &key.1[..])?;
+		RwLockUpgradableReadGuard::upgrade(local_cache).child_hashes.insert(key, value.clone());
+		Ok(value)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())
 	}
