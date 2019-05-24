@@ -295,7 +295,7 @@ fn decl_store_extra_genesis(
 						use #scrate::codec::{Encode, Decode};
 
 						let v = (#builder)(&self);
-						<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&v, &storage);
+						<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageValue<#typ>>::put(&v, storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -305,7 +305,7 @@ fn decl_store_extra_genesis(
 
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
+							<#name<#traitinstance, #instance> as #scrate::storage::hashed::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, storage);
 						}
 					}}
 				},
@@ -316,7 +316,7 @@ fn decl_store_extra_genesis(
 
 						let data = (#builder)(&self);
 						for (k1, k2, v) in data.into_iter() {
-							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
+							<#name<#traitinstance, #instance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, storage);
 						}
 					}}
 				},
@@ -451,12 +451,11 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			impl#fparam_impl #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
 				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
-					use #scrate::rstd::cell::RefCell;
-					let storage = RefCell::new(r);
+					let storage = r;
 
 					#builders
 
-					let r = storage.into_inner();
+					let r = storage;
 
 					#scall(r, c, &self);
 

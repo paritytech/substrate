@@ -10,7 +10,7 @@ use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
 	TaskExecutor,
-	error::{Error as ServiceError, ErrorKind as ServiceErrorKind},
+	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
@@ -46,10 +46,18 @@ construct_service_factory! {
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		FullTransactionPoolApi = transaction_pool::ChainApi<
+			client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>,
+			Block
+		> {
+			|config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+		},
+		LightTransactionPoolApi = transaction_pool::ChainApi<
+			client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>,
+			Block
+		> {
+			|config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+		},
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig,
 		FullService = FullComponents<Self>
@@ -67,7 +75,7 @@ construct_service_factory! {
 					});
 					let client = service.client();
 					let select_chain = service.select_chain()
-						.ok_or_else(|| ServiceError::from(ServiceErrorKind::SelectChainRequired))?;
+						.ok_or_else(|| ServiceError::SelectChainRequired)?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),

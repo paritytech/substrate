@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use self::error::{Error, ErrorKind};
+use self::error::Error;
 
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
@@ -80,7 +80,7 @@ fn should_call_contract() {
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
-		Err(Error(ErrorKind::Client(client::error::Error::Execution(_)), _))
+		Err(Error::Client(client::error::Error::Execution(_)))
 	)
 }
 

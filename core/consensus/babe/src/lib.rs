@@ -40,7 +40,7 @@ use primitives::{
 	sr25519::{Public, Signature, LocalizedSignature, self},
 };
 use merlin::Transcript;
-use inherents::{InherentDataProviders, InherentData, RuntimeString};
+use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use schnorrkel::{
 	keys::Keypair,
@@ -191,10 +191,6 @@ impl Config {
 	}
 }
 
-fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
-	consensus_common::ErrorKind::InherentData(err.into()).into()
-}
-
 /// A digest item which is usable with BABE consensus.
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a slot number and a signature
@@ -243,7 +239,8 @@ impl SlotCompatible for BabeSlotCompatible {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
-			.map_err(slots::inherent_to_common_error)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
 	}
 }
 
@@ -520,7 +517,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 				})
 				.map_err(|e| {
 					warn!("Client import failed: {:?}", e);
-					consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()
+					consensus_common::Error::ClientImport(format!("{:?}", e))
 				})
 		)
 	}
@@ -533,6 +530,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 /// This digest item will always return `Some` when used with `as_babe_seal`.
 //
 // FIXME #1018 needs misbehavior types
+#[forbid(warnings)]
 fn check_header<B: Block + Sized, C: AuxStore>(
 	client: &Arc<C>,
 	slot_now: u64,
@@ -796,7 +794,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<
 				panic!("We don’t support deprecated code with new consensus algorithms, \
 						therefore this is unreachable; qed")
 			}
-		}).ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
+		}).ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 }
 
 /// The BABE import queue type.
@@ -811,7 +809,8 @@ fn register_babe_inherent_data_provider(
 	if !inherent_data_providers.has_provider(&srml_babe::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_babe::InherentDataProvider::new(slot_duration))
-			.map_err(inherent_to_common_error)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
 	} else {
 		Ok(())
 	}

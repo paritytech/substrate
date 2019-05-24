@@ -130,6 +130,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 						deduct_block: <system::Module<T>>::block_number(),
 						rent_allowance: <BalanceOf<T>>::max_value(),
+						last_write: None,
 					}
 				} else {
 					// No contract exist and no code_hash provided
@@ -157,12 +158,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					)
 				});
 
+				if !changed.storage.is_empty() {
+					new_info.last_write = Some(<system::Module<T>>::block_number());
+				}
+
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(subtrie.node_ref(), &blake2_256(&k)) {
-						new_info.storage_size -= value.len() as u64;
+						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
-						new_info.storage_size += value.len() as u64;
+						new_info.storage_size += value.len() as u32;
 						child::put_raw(&subtrie, &blake2_256(&k), &value[..]);
 					} else {
 						child::kill(&subtrie, &blake2_256(&k));

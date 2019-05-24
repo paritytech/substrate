@@ -51,8 +51,7 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	min_blocks_to_keep: u64,
 	current_block: &AnchorBlockId<H::Out>,
 	mut remove_trie_node: F,
-)
-{
+) {
 	// select range for pruning
 	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number) {
 		Some((first, last)) => (first, last),

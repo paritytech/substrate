@@ -145,7 +145,7 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 			let header = best_block_hash()
 				.and_then(|hash| self.header(hash.into()))
 				.and_then(|header| {
-					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
+					header.ok_or_else(|| "Best header missing.".to_owned().into())
 				})
 				.map_err(Into::into);
 

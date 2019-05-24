@@ -16,7 +16,8 @@
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, Module, TombstoneContractInfo,
 	Trait, TempKeyspaceGen, prefixed_child_trie};
-use runtime_primitives::traits::{As, Bounded, CheckedDiv, CheckedMul, Saturating, Zero};
+use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
+	SaturatedConversion};
 use srml_support::traits::{Currency, ExistenceRequirement, Imbalance, WithdrawReason};
 use srml_support::StorageMap;
 use substrate_primitives::subtrie::SubTrie;
@@ -77,10 +78,10 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let fee_per_block = {
 		let free_storage = balance
 			.checked_div(&<Module<T>>::rent_deposit_offset())
-			.unwrap_or(<BalanceOf<T>>::sa(0));
+			.unwrap_or_else(Zero::zero);
 
 		let effective_storage_size =
-			<BalanceOf<T>>::sa(contract.storage_size).saturating_sub(free_storage);
+			<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
 
 		effective_storage_size
 			.checked_mul(&<Module<T>>::rent_byte_price())
@@ -97,7 +98,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let subsistence_threshold = T::Currency::minimum_balance() + <Module<T>>::tombstone_deposit();
 
 	let dues = fee_per_block
-		.checked_mul(&<BalanceOf<T>>::sa(blocks_passed.as_()))
+		.checked_mul(&blocks_passed.saturated_into::<u32>().into())
 		.unwrap_or(<BalanceOf<T>>::max_value());
 
 	let dues_limited = dues.min(contract.rent_allowance);
@@ -173,9 +174,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			// Note: this operation is heavy.
 			let child_storage_root = runtime_io::child_storage_root(&subtrie);
 
-			let tombstone = TombstoneContractInfo::new(
-				child_storage_root,
-				contract.storage_size,
+			let tombstone = <TombstoneContractInfo<T>>::new(
+				&child_storage_root[..],
 				contract.code_hash,
 			);
 			<ContractInfoOf<T>>::insert(account, ContractInfo::Tombstone(tombstone));

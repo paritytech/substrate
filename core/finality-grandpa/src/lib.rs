@@ -51,6 +51,8 @@
 //! number (this is num(signal) + N). When finalizing a block, we either apply
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
+#![forbid(warnings)]
+#![allow(deprecated)] // FIXME #2532: remove once the refactor is done https://github.com/paritytech/substrate/issues/2532
 
 use futures::prelude::*;
 use log::{debug, info, warn};
@@ -155,7 +157,7 @@ pub struct Config {
 	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
-	pub justification_period: u64,
+	pub justification_period: u32,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
@@ -439,7 +441,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 					},
 				}
 			}))
-			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
+			.map_err(|err| consensus_common::Error::InherentData(err.into()))
 	} else {
 		Ok(())
 	}

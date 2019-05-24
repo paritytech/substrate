@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use serde::Deserialize;
+use std::{convert::TryFrom, fmt::Debug};
 use primitives::U256;
-use runtime_primitives::traits;
 
 /// RPC Block number type
 ///
@@ -34,30 +34,28 @@ pub enum NumberOrHex<Number> {
 	Hex(U256),
 }
 
-impl<Number: traits::As<u64>> NumberOrHex<Number> {
+impl<Number: TryFrom<u64> + From<u32> + Debug + PartialOrd> NumberOrHex<Number> {
 	/// Attempts to convert into concrete block number.
 	///
 	/// Fails in case hex number is too big.
 	pub fn to_number(self) -> Result<Number, String> {
-		let num: u64 = match self {
-			NumberOrHex::Number(n) => n.as_(),
+		let num = match self {
+			NumberOrHex::Number(n) => n,
 			NumberOrHex::Hex(h) => {
-				// FIXME #1377 this only supports `u64` since `BlockNumber`
-				// is `As<u64>` we could possibly go with `u128`.
 				let l = h.low_u64();
 				if U256::from(l) != h {
-					return Err(format!("`{}` does not fit into the block number type.", h));
+					return Err(format!("`{}` does not fit into u64 type; unsupported for now.", h))
 				} else {
-					l
+					Number::try_from(l)
+						.map_err(|_| format!("`{}` does not fit into block number type.", h))?
 				}
 			},
 		};
 		// FIXME <2329>: Database seems to limit the block number to u32 for no reason
-		if num > u32::max_value() as u64 {
-			Err(format!("`{}` > u32::max_value(), the max block number is u32.", num))
-		} else {
-			Ok(traits::As::sa(num))
+		if num > Number::from(u32::max_value()) {
+			return Err(format!("`{:?}` > u32::max_value(), the max block number is u32.", num))
 		}
+		Ok(num)
 	}
 }
 
