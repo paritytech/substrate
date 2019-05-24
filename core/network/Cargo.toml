@@ -9,9 +9,9 @@ edition = "2018"
 [lib]
 
 [dependencies]
+derive_more = "0.14.0"
 log = "0.4"
 parking_lot = "0.7.1"
-error-chain = "0.12"
 bitflags = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"
