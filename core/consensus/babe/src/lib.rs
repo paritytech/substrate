@@ -162,7 +162,7 @@ pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, HashT, H>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	config,
 	local_key,
 	client,
@@ -177,18 +177,15 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, HashT, H>(BabeParams {
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	B: Block<Header=H, Hash=HashT>,
+	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	SC: SelectChain<B>,
-	generic::DigestItem<HashT, Public, Signature>: DigestItem<Hash=HashT>,
+	generic::DigestItem<B::Hash, Public, Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	HashT: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
-		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
-		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=HashT>,
+	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,

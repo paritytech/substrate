@@ -18,9 +18,8 @@
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
-use log::debug;
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert, Digest as _DigestT};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
