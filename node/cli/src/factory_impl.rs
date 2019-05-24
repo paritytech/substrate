@@ -24,7 +24,7 @@ use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
 use balances::Call as BalancesCall;
-use parity_codec::{Decode};
+use parity_codec::Decode;
 use keyring::sr25519::Keyring;
 use node_primitives::Hash;
 use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic};
