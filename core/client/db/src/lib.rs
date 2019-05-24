@@ -592,9 +592,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		).expect("failed to create test-db")
 	}
 
-
-
-	fn from_kvdb(db: Arc<KeyValueDB>, canonicalization_delay: u64, config: &DatabaseSettings) -> Result<Self, client::error::Error> {
+	fn from_kvdb(
+		db: Arc<KeyValueDB>,
+		canonicalization_delay: u64,
+		config: &DatabaseSettings
+	) -> Result<Self, client::error::Error> {
 		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
