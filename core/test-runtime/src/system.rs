@@ -101,7 +101,7 @@ pub fn polish_block(block: &mut Block) {
 	header.state_root = storage_root().into();
 
 	// check digest
-	let ref mut digest = header.digest;
+	let digest = &mut header.digest;
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
@@ -111,7 +111,7 @@ pub fn polish_block(block: &mut Block) {
 }
 
 pub fn execute_block(mut block: Block) {
-	let ref mut header = block.header;
+	let header = &mut block.header;
 
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
@@ -133,7 +133,7 @@ pub fn execute_block(mut block: Block) {
 	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
 
 	// check digest
-	let ref mut digest = header.digest;
+	let digest = &mut header.digest;
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
