@@ -41,8 +41,6 @@ use crate::config::Params;
 use crate::error::Error;
 use crate::specialization::NetworkSpecialization;
 
-use tokio::runtime::Builder as RuntimeBuilder;
-
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 /// Interval at which we update the `peers` field on the main thread.
@@ -249,8 +247,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			protocol_rx,
 			status_sinks: status_sinks.clone(),
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
-			status_interval: tokio::timer::Interval::new_interval(STATUS_INTERVAL),
-			connected_peers_interval: tokio::timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
+			status_interval: tokio_timer::Interval::new_interval(STATUS_INTERVAL),
+			connected_peers_interval: tokio_timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
 		};
 
 		let service = Arc::new(Service {
@@ -540,9 +538,9 @@ pub struct NetworkMut<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHas
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 
 	/// Interval at which we send status updates on the `status_sinks`.
-	status_interval: tokio::timer::Interval,
+	status_interval: tokio_timer::Interval,
 	/// Interval at which we update the `connected_peers` Arc.
-	connected_peers_interval: tokio::timer::Interval,
+	connected_peers_interval: tokio_timer::Interval,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkMut<B, S, H> {
