@@ -24,6 +24,7 @@ mod sync;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
+use crate::AlwaysBadChecker;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
@@ -36,7 +37,7 @@ use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
+use consensus::{Error as ConsensusError};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
@@ -957,7 +958,7 @@ pub trait TestNetFactory: Sized {
 		let protocol = Protocol::new(
 			config.clone(),
 			client.clone(),
-			None,
+			Arc::new(AlwaysBadChecker),
 			specialization,
 		).unwrap();
 
@@ -1011,7 +1012,7 @@ pub trait TestNetFactory: Sized {
 		let protocol = Protocol::new(
 			config,
 			client.clone(),
-			None,
+			Arc::new(AlwaysBadChecker),
 			specialization,
 		).unwrap();
 
@@ -1228,7 +1229,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
-			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+			.map_err(|_| ConsensusError::InvalidJustification.into())
 	}
 }
 

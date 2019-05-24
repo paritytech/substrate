@@ -21,7 +21,7 @@ pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfi
 use bitflags::bitflags;
 use crate::chain::{Client, FinalityProofProvider};
 use parity_codec;
-use crate::on_demand::OnDemandService;
+use crate::on_demand_layer::OnDemand;
 use runtime_primitives::traits::{Block as BlockT};
 use crate::service::{ExHashT, TransactionPool};
 use std::sync::Arc;
@@ -37,7 +37,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	/// Finality proof provider.
 	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	/// On-demand service reference.
-	pub on_demand: Option<Arc<OnDemandService<B>>>,
+	pub on_demand: Option<Arc<OnDemand<B>>>,
 	/// Transaction pool.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// Protocol specialization.

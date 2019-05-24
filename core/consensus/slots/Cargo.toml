@@ -15,5 +15,4 @@ inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"
-error-chain = "0.12"
 log = "0.4"

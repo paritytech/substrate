@@ -44,7 +44,7 @@ use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
+pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -182,7 +182,7 @@ impl<Components: components::Components> Service<Components> {
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
 		};
@@ -202,9 +202,6 @@ impl<Components: components::Components> Service<Components> {
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network = network::Service::new(network_params, protocol_id, import_queue)?;
-		if let Some(on_demand) = on_demand.as_ref() {
-			on_demand.set_network_interface(Box::new(Arc::downgrade(&network)));
-		}
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
@@ -518,7 +515,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
+					Ok(txpool::error::Error::AlreadyImported(hash)) => {
 						hash.downcast::<ComponentExHash<C>>().ok()
 							.map(|x| x.as_ref().clone())
 					},

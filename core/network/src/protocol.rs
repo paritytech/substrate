@@ -30,7 +30,7 @@ use crate::message::{
 };
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::on_demand::OnDemandService;
+use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
@@ -41,7 +41,7 @@ use std::sync::Arc;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use client::light::fetcher::ChangesProof;
+use client::light::fetcher::{FetchChecker, ChangesProof};
 use crate::{error, util::LruHashSet};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
@@ -83,7 +83,8 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `propagate_extrinsics`.
 	propagate_timeout: tokio::timer::Interval,
 	config: ProtocolConfig,
-	on_demand: Option<Arc<OnDemandService<B>>>,
+	/// Handler for on-demand requests.
+	on_demand_core: OnDemandCore<B>,
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
@@ -157,6 +158,20 @@ pub trait NetworkOut<B: BlockT> {
 
 	/// Send a message to a peer.
 	fn send_message(&mut self, who: PeerId, message: Message<B>);
+}
+
+impl<'a, 'b, B: BlockT> OnDemandNetwork<B> for &'a mut &'b mut dyn NetworkOut<B> {
+	fn report_peer(&mut self, who: &PeerId, reputation: i32) {
+		NetworkOut::report_peer(**self, who.clone(), reputation)
+	}
+
+	fn disconnect_peer(&mut self, who: &PeerId) {
+		NetworkOut::disconnect_peer(**self, who.clone())
+	}
+
+	fn send_request(&mut self, who: &PeerId, message: Message<B>) {
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
 }
 
 /// Context for a network-specific handler.
@@ -263,7 +278,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		on_demand: Option<Arc<OnDemandService<B>>>,
+		checker: Arc<dyn FetchChecker<B>>,
 		specialization: S,
 	) -> error::Result<Protocol<B, S, H>> {
 		let info = chain.info()?;
@@ -276,7 +291,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peers: HashMap::new(),
 				chain,
 			},
-			on_demand,
+			on_demand_core: OnDemandCore::new(checker),
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization: specialization,
@@ -307,6 +322,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.status().is_offline()
 	}
 
+	/// Starts a new data demand request.
+	///
+	/// The parameter contains a `Sender` where the result, once received, must be sent.
+	pub(crate) fn add_on_demand_request(&mut self, mut network_out: &mut dyn NetworkOut<B>, rq: RequestData<B>) {
+		self.on_demand_core.add_request(&mut network_out, rq);
+	}
+
 	pub fn poll(
 		&mut self,
 		network_out: &mut dyn NetworkOut<B>,
@@ -324,7 +346,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn is_on_demand_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
-		self.on_demand.as_ref().map_or(false, |od| od.is_on_demand_response(&who, response_id))
+		self.on_demand_core.is_on_demand_response(&who, response_id)
 	}
 
 	fn handle_response(
@@ -378,7 +400,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::BlockResponse(r) => {
 				// Note, this is safe because only `ordinary bodies` and `remote bodies` are received in this matter.
 				if self.is_on_demand_response(&who, r.id) {
-					self.on_remote_body_response(who, r);
+					self.on_remote_body_response(network_out, who, r);
 				} else {
 					if let Some(request) = self.handle_response(network_out, who.clone(), &r) {
 						let outcome = self.on_block_response(network_out, who.clone(), request, r);
@@ -394,13 +416,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::Transactions(m) =>
 				self.on_extrinsics(network_out, transaction_pool, who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(network_out, who, request),
-			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(who, response),
-			GenericMessage::RemoteReadRequest(request) => self.on_remote_read_request(network_out, who, request),
-			GenericMessage::RemoteReadResponse(response) => self.on_remote_read_response(who, response),
-			GenericMessage::RemoteHeaderRequest(request) => self.on_remote_header_request(network_out, who, request),
-			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(who, response),
-			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(network_out, who, request),
-			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
+			GenericMessage::RemoteCallResponse(response) =>
+				self.on_remote_call_response(network_out, who, response),
+			GenericMessage::RemoteReadRequest(request) =>
+				self.on_remote_read_request(network_out, who, request),
+			GenericMessage::RemoteReadResponse(response) =>
+				self.on_remote_read_response(network_out, who, response),
+			GenericMessage::RemoteHeaderRequest(request) =>
+				self.on_remote_header_request(network_out, who, request),
+			GenericMessage::RemoteHeaderResponse(response) =>
+				self.on_remote_header_response(network_out, who, response),
+			GenericMessage::RemoteChangesRequest(request) =>
+				self.on_remote_changes_request(network_out, who, request),
+			GenericMessage::RemoteChangesResponse(response) =>
+				self.on_remote_changes_response(network_out, who, response),
 			GenericMessage::FinalityProofRequest(request) =>
 				self.on_finality_proof_request(network_out, who, request, finality_proof_provider),
 			GenericMessage::FinalityProofResponse(response) =>
@@ -480,7 +509,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, network_out: &mut dyn NetworkOut<B>, peer: PeerId, debug_info: String) {
+	pub fn on_peer_disconnected(&mut self, mut network_out: &mut dyn NetworkOut<B>, peer: PeerId, debug_info: String) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, debug_info);
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
@@ -494,7 +523,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			self.sync.peer_disconnected(&mut context, peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
-			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
+			self.on_demand_core.on_disconnect(&mut network_out, peer);
 		}
 	}
 
@@ -514,7 +543,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_block_request(&mut self, network_out: &mut dyn NetworkOut<B>, peer: PeerId, request: message::BlockRequest<B>) {
+	fn on_block_request(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		peer: PeerId,
+		request: message::BlockRequest<B>
+	) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}",
 			request.id,
 			peer,
@@ -643,13 +677,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Perform time based maintenance.
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
-	pub fn tick(&mut self, network_out: &mut dyn NetworkOut<B>) {
+	pub fn tick(&mut self, mut network_out: &mut dyn NetworkOut<B>) {
 		self.consensus_gossip.tick(&mut ProtocolContext::new(&mut self.context_data, network_out));
 		self.maintain_peers(network_out);
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, network_out));
-		self.on_demand
-			.as_ref()
-			.map(|s| s.maintain_peers());
+		self.on_demand_core.maintain_peers(&mut network_out);
 	}
 
 	fn maintain_peers(&mut self, network_out: &mut dyn NetworkOut<B>) {
@@ -681,7 +713,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&mut self, network_out: &mut dyn NetworkOut<B>, who: PeerId, status: message::Status<B>) {
+	fn on_status_message(&mut self, mut network_out: &mut dyn NetworkOut<B>, who: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
@@ -756,10 +788,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			status.version
 		};
 
+		self.on_demand_core.on_connect(&mut network_out, who.clone(), status.roles, status.best_number);
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
-		self.on_demand
-			.as_ref()
-			.map(|s| s.on_connect(who.clone(), status.roles, status.best_number));
 		self.sync.new_peer(&mut context, who.clone());
 		if protocol_version > 2 {
 			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
@@ -875,7 +905,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_block_announce(
 		&mut self,
-		network_out: &mut dyn NetworkOut<B>,
+		mut network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		announce: message::BlockAnnounce<B::Header>
 	) {
@@ -886,9 +916,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
-		self.on_demand
-			.as_ref()
-			.map(|s| s.on_block_announce(who.clone(), *header.number()));
+		self.on_demand_core.on_block_announce(&mut network_out, who.clone(), *header.number());
 		self.sync.on_block_announce(
 			&mut ProtocolContext::new(&mut self.context_data, network_out),
 			who.clone(),
@@ -1029,7 +1057,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Request a finality proof for the given block.
 	///
 	/// Queues a new finality proof request and tries to dispatch all pending requests.
-	pub fn request_finality_proof(&mut self, network_out: &mut dyn NetworkOut<B>, hash: &B::Hash, number: NumberFor<B>) {
+	pub fn request_finality_proof(
+		&mut self,
+		network_out: &mut dyn NetworkOut<B>,
+		hash: &B::Hash,
+		number: NumberFor<B>
+	) {
 		let mut context = ProtocolContext::new(&mut self.context_data, network_out);
 		self.sync.request_finality_proof(&hash, number, &mut context);
 	}
@@ -1042,11 +1075,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.finality_proof_import_result(request_block, finalization_result)
 	}
 
-	fn on_remote_call_response(&mut self, who: PeerId, response: message::RemoteCallResponse) {
+	fn on_remote_call_response(
+		&mut self,
+		mut network_out: &mut dyn NetworkOut<B>,
+		who: PeerId,
+		response: message::RemoteCallResponse
+	) {
 		trace!(target: "sync", "Remote call response {} from {}", response.id, who);
-		self.on_demand
-			.as_ref()
-			.map(|s| s.on_remote_call_response(who, response));
+		self.on_demand_core.on_remote_call_response(&mut network_out, who, response);
 	}
 
 	fn on_remote_read_request(
@@ -1079,11 +1115,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}),
 		);
 	}
-	fn on_remote_read_response(&mut self, who: PeerId, response: message::RemoteReadResponse) {
+
+	fn on_remote_read_response(
+		&mut self,
+		mut network_out: &mut dyn NetworkOut<B>,
+		who: PeerId,
+		response: message::RemoteReadResponse
+	) {
 		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
-		self.on_demand
-			.as_ref()
-			.map(|s| s.on_remote_read_response(who, response));
+		self.on_demand_core.on_remote_read_response(&mut network_out, who, response);
 	}
 
 	fn on_remote_header_request(
@@ -1119,13 +1159,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_header_response(
 		&mut self,
+		mut network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		response: message::RemoteHeaderResponse<B::Header>,
 	) {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
-		self.on_demand
-			.as_ref()
-			.map(|s| s.on_remote_header_response(who, response));
+		self.on_demand_core.on_remote_header_response(&mut network_out, who, response);
 	}
 
 	fn on_remote_changes_request(
@@ -1182,6 +1221,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn on_remote_changes_response(
 		&mut self,
+		mut network_out: &mut dyn NetworkOut<B>,
 		who: PeerId,
 		response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>,
 	) {
@@ -1190,9 +1230,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			who,
 			response.max
 		);
-		self.on_demand
-			.as_ref()
-			.map(|s| s.on_remote_changes_response(who, response));
+		self.on_demand_core.on_remote_changes_response(&mut network_out, who, response);
 	}
 
 	fn on_finality_proof_request(
@@ -1250,10 +1288,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_remote_body_response(&self, peer: PeerId, response: message::BlockResponse<B>) {
-		self.on_demand
-			.as_ref()
-			.map(|od| od.on_remote_body_response(peer, response));
+	fn on_remote_body_response(
+		&mut self,
+		mut network_out: &mut dyn NetworkOut<B>,
+		peer: PeerId,
+		response: message::BlockResponse<B>
+	) {
+		self.on_demand_core.on_remote_body_response(&mut network_out, peer, response);
 	}
 }
 
