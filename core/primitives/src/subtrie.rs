@@ -67,21 +67,46 @@ impl<'a> SubTrieReadRef<'a> {
 	}
 	// should not be public as it produce incomplete content
 	fn enc(&self) -> Option<SubTrieReadEncode> {
-		self.root.map(|r| SubTrieReadEncode {keyspace: self.keyspace, root: r})
+		self.root.map(|r| SubTrieReadEncode {
+			version: LAST_SUBTRIE_CODEC_VERSION,
+			keyspace: self.keyspace,
+			root: r,
+		})
 	}
 }
+
+/// current codec version
+const LAST_SUBTRIE_CODEC_VERSION: u16 = 1u16;
 
 /// `SubTrieNode` encoder internal implementation
 /// shall never be exposed
 #[derive(Encode, Clone)]
 struct SubTrieReadEncode<'a> {
+	/// current codec version
+	#[codec(compact)]
+	pub version: u16,
 	/// subtrie unique keyspace
 	pub keyspace: &'a KeySpace,
 	/// subtrie root hash
 	pub root: &'a [u8],
 }
 
-#[derive(PartialEq, Eq, Clone, Decode)]
+#[derive(Decode)]
+struct SubTrieReadDecode {
+	#[codec(compact)]
+	pub version: u16,
+	pub keyspace: KeySpace,
+	pub root: Vec<u8>,
+}
+
+impl Into<SubTrieRead> for SubTrieReadDecode {
+	fn into(self) -> SubTrieRead {
+		let SubTrieReadDecode { keyspace, root, .. } = self;
+		SubTrieRead { keyspace, root }
+	}
+}
+
+#[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 /// Subtrie node info for query (with a valid root)
 pub struct SubTrieRead {
@@ -90,6 +115,7 @@ pub struct SubTrieRead {
 	/// subtrie root hash
 	pub root: Vec<u8>,
 }
+
 impl SubTrieRead {
 	/// get node ref for read only query
 	pub fn node_ref(&self) -> SubTrieReadRef {
@@ -101,9 +127,22 @@ impl SubTrieRead {
 impl parity_codec::Encode for SubTrieRead {
 	fn encode(&self) -> Vec<u8> {
 		SubTrieReadEncode {
+			version: LAST_SUBTRIE_CODEC_VERSION,
 			keyspace: &self.keyspace,
 			root: &self.root[..]
 		}.encode()
+	}
+}
+
+impl parity_codec::Decode for SubTrieRead {
+	fn decode<I: parity_codec::Input>(i: &mut I) -> Option<Self> {
+		SubTrieReadDecode::decode(i)
+			.and_then(|v| if v.version == LAST_SUBTRIE_CODEC_VERSION {
+				Some(v.into())
+			} else {
+				None
+			}
+		)
 	}
 }
 
@@ -208,6 +247,7 @@ impl SubTrie {
 	/// encdode with an updated root
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
 		let mut enc = parity_codec::Encode::encode(&SubTrieReadEncode{
+			version: LAST_SUBTRIE_CODEC_VERSION,
 			keyspace: &self.keyspace,
 			root: new_root,
 		});
