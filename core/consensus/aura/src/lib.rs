@@ -26,8 +26,7 @@
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
 #![forbid(missing_docs, unsafe_code)]
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash};
-use std::fmt::{Debug, Display};
+use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug};
 
 use parity_codec::{Encode, Decode};
 use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
@@ -49,9 +48,8 @@ use client::{
 use runtime_primitives::{generic::{self, BlockId}, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
-	SimpleBitOps, Zero, Member,
+	Zero, Member,
 };
-use runtime_support::serde::{Serialize, Deserialize};
 
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -329,20 +327,21 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			} else {
 				trace!(target: "aura", "Got correct number of seals.  Good!")
 			};
+
 			let header_num = header.number().clone();
 			let parent_hash = header.parent_hash().clone();
 
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let to_sign = (slot_num, header_hash).encode();
-			let signature = pair.sign(&to_sign[..]);
-			let item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
+			let header_hash = header.hash();
+			let signature = pair.sign(header_hash.as_ref());
+			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
 				header,
 				justification: None,
-				post_digests: vec![item],
+				post_digests: vec![signature_digest_item],
 				body: Some(body),
 				finalized: false,
 				auxiliary: Vec::new(),
@@ -367,7 +366,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 					"hash" => ?parent_hash, "err" => ?e
 				);
 			}
-		}).map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into()))
+		}).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into()))
 	}
 }
 
@@ -385,15 +384,12 @@ fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
 		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	let mut pre_digest: Option<u64> = None;
-	for i in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?}", i);
-		match i.as_aura_pre_digest() {
-			s @ Some(_) => if pre_digest.is_some() {
-				return Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))
-			} else {
-				pre_digest = s
-			},
-			None => trace!(target: "aura", "Ignoring digest not meant for us"),
+	for log in header.digest().logs() {
+		trace!(target: "aura", "Checking log {:?}", log);
+		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))?,
+			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
+			(s, false) => pre_digest = s,
 		}
 	}
 	pre_digest.ok_or_else(|| aura_err!("No AuRa pre-runtime digest found"))
@@ -441,16 +437,14 @@ fn check_header<C, B: Block, P: Pair>(
 		};
 
 		let pre_hash = header.hash();
-		let to_sign = (slot_num, pre_hash).encode();
-		let public = expected_author;
 
-		if P::verify(&sig, &to_sign[..], public) {
+		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
 			match check_equivocation::<_, _, <P as Pair>::Public>(
 				client,
 				slot_now,
 				slot_num,
 				header.clone(),
-				public.clone(),
+				expected_author.clone(),
 			) {
 				Ok(Some(equivocation_proof)) => {
 					let log_str = format!(
@@ -895,16 +889,12 @@ mod tests {
 			extrinsics_root: Default::default(),
 			digest: DigestTest { logs: vec![], },
 		};
-		let mut item = <DigestItemFor<TestBlock> as CompatibleDigestItem<sr25519::Pair>>::aura_pre_digest(slot_num);
+		let item = <DigestItemFor<TestBlock> as CompatibleDigestItem<sr25519::Pair>>::aura_pre_digest(slot_num);
 		header.digest_mut().push(item);
 		let header_hash: H256 = header.hash();
-		let to_sign = (slot_num, header_hash).encode();
-		let signature = pair.sign(&to_sign[..]);
+		let signature = pair.sign(&header_hash[..]);
 
-		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(
-			slot_num,
-			signature,
-		);
+		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(signature);
 		header.digest_mut().push(item);
 		(header, header_hash)
 	}
@@ -1019,7 +1009,7 @@ mod tests {
 		assert!(check_header::<_, B, P>(&c, 4, header2, header2_hash, &authorities).is_err());
 
 		// Different slot is ok.
-		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities, false).is_ok());
+		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities).is_ok());
 
 		// Here we trigger pruning and save header 4.
 		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities).is_ok());

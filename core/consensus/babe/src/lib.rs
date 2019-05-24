@@ -16,7 +16,7 @@
 
 //! # BABE consensus
 //!
-//! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
+//! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 //!
 //! # Stability
 //!
@@ -362,7 +362,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			let header_hash = header.hash();
 			let pre_digest: Result<BabePreDigest, String> = find_pre_digest::<B>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
@@ -376,8 +375,9 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
+			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = generic::DigestItem::babe_seal(signature);
+			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -428,15 +428,12 @@ fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	let mut pre_digest: Option<_> = None;
-	for i in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?}", i);
-		match i.as_babe_pre_digest() {
-			s @ Some(_) => if pre_digest.is_some() {
-				return Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))
-			} else {
-				pre_digest = s
-			},
-			None => trace!(target: "babe", "Ignoring digest not meant for us"),
+	for log in header.digest().logs() {
+		trace!(target: "babe", "Checking log {:?}", log);
+		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))?,
+			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+			(s, false) => pre_digest = s,
 		}
 	}
 	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
@@ -473,12 +470,8 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let BabePreDigest {
-		slot_num,
-		author,
-		proof,
-		vrf_output,
-	} = find_pre_digest::<B>(&header)?;
+	let pre_digest = find_pre_digest::<B>(&header)?;
+	let BabePreDigest { slot_num, ref author, ref proof, ref vrf_output } = pre_digest;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
@@ -487,9 +480,8 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		Err(babe_err!("Slot author not found"))
 	} else {
 		let pre_hash = header.hash();
-		let to_sign = pre_hash;
 
-		if sr25519::Pair::verify(&sig, to_sign.as_ref(), &author) {
+		if sr25519::Pair::verify(&sig, pre_hash, author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -498,7 +490,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					0,
 				);
 				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-					p.vrf_verify(transcript, &vrf_output, &proof)
+					p.vrf_verify(transcript, vrf_output, proof)
 				}).map_err(|s| {
 					babe_err!("VRF verification failed: {:?}", s)
 				})?
@@ -518,7 +510,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 						Err(log_str)
 					},
 					Ok(None) => {
-						let pre_digest = CompatibleDigestItem::babe_pre_digest(BabePreDigest { slot_num, author, proof, vrf_output });
+						let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
 						Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 					},
 					Err(e) => {
