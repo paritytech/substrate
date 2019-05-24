@@ -34,7 +34,7 @@ fn should_return_storage() {
 	assert!(
 		client.storage(key.clone(), Some(genesis_hash).into())
 			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap()
-		> 195_000
+		> 10_000
 	);
 	assert_matches!(
 		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
@@ -42,7 +42,7 @@ fn should_return_storage() {
 	);
 	assert!(
 		client.storage_size(key.clone(), None).unwrap().unwrap()
-		> 195_000
+		> 10_000
 	);
 }
 
