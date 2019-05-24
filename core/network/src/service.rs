@@ -23,9 +23,8 @@ use std::time::Duration;
 use log::{warn, debug, error, info};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{ProtocolId, NetworkConfiguration};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{RegisteredProtocol, NetworkState};
+use network_libp2p::{ProtocolId, RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -522,6 +521,7 @@ impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<
 
 /// Future tied to the `Network` service and that must be polled in order for the network to
 /// advance.
+#[must_use = "The NetworkMut must be polled in order for the network to work"]
 pub struct NetworkMut<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
