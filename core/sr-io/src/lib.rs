@@ -33,7 +33,7 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
-use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus};
+use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, HttpError};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -291,7 +291,7 @@ export_api! {
 			request_id: HttpRequestId,
 			chunk: &[u8],
 			deadline: Option<Timestamp>
-		) -> Result<(), ()>;
+		) -> Result<(), HttpError>;
 
 		/// Block and wait for the responses for given requests.
 		///
@@ -325,7 +325,7 @@ export_api! {
 			request_id: HttpRequestId,
 			buffer: &mut [u8],
 			deadline: Option<Timestamp>
-		) -> Result<usize, ()>;
+		) -> Result<usize, HttpError>;
 	}
 }
 

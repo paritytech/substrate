@@ -19,7 +19,10 @@ use futures::{Stream, Future, sync::mpsc};
 use inherents::pool::InherentsPool;
 use log::{info, debug, warn, error};
 use parity_codec::Decode;
-use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, Externalities as OffchainExt};
+use primitives::offchain::{
+	Timestamp, HttpRequestId, HttpRequestStatus, HttpError,
+	Externalities as OffchainExt,
+};
 use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, Extrinsic},
@@ -98,9 +101,9 @@ impl OffchainExt for AsyncApi {
 		_request_id: HttpRequestId,
 		_chunk: &[u8],
 		_deadline: Option<Timestamp>
-	) -> Result<(), ()> {
+	) -> Result<(), HttpError> {
 		unavailable_yet::<()>("http_request_write_body");
-		Err(())
+		Err(HttpError::IoError)
 	}
 
 	fn http_response_wait(
@@ -124,9 +127,9 @@ impl OffchainExt for AsyncApi {
 		_request_id: HttpRequestId,
 		_buffer: &mut [u8],
 		_deadline: Option<Timestamp>
-	) -> Result<usize, ()> {
+	) -> Result<usize, HttpError> {
 		unavailable_yet::<()>("http_response_read_body");
-		Err(())
+		Err(HttpError::IoError)
 	}
 }
 

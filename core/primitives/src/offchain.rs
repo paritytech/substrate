@@ -17,11 +17,35 @@
 //! Offchain workers types
 
 use rstd::prelude::{Vec, Box};
+use rstd::convert::TryFrom;
 
 /// Opaque type for offchain http requests.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct HttpRequestId(pub u16);
+
+/// An error enum returned by some http methods.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[repr(C)]
+pub enum HttpError {
+	/// The requested action couldn't been completed within a deadline.
+	DeadlineReached = 1,
+	/// There was an IO Error while processing the request.
+	IoError = 2,
+}
+
+impl TryFrom<u32> for HttpError {
+	type Error = ();
+
+	fn try_from(error: u32) -> Result<Self, Self::Error> {
+		match error {
+			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
+			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
+			_ => Err(())
+		}
+	}
+}
 
 /// Status of the HTTP request
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -44,30 +68,27 @@ pub enum HttpRequestStatus {
 	Finished(u16),
 }
 
-impl HttpRequestStatus {
-	/// Parse u32 as `HttpRequestStatus`.
-	///
-	/// The first hundred of codes indicate internal states.
-	/// The rest are http response status codes.
-	pub fn from_u32(status: u32) -> Option<Self> {
+impl From<HttpRequestStatus> for u32 {
+	fn from(status: HttpRequestStatus) -> Self {
 		match status {
-			0 => Some(HttpRequestStatus::Unknown),
-			10 => Some(HttpRequestStatus::DeadlineReached),
-			20 => Some(HttpRequestStatus::Timeout),
-			100...999 => Some(HttpRequestStatus::Finished(status as u16)),
-			_ => None,
-		}
-	}
-
-	/// Convert the status into `u32`.
-	///
-	/// This is an oposite conversion to `from_u32`
-	pub fn as_u32(&self) -> u32 {
-		match *self {
 			HttpRequestStatus::Unknown => 0,
 			HttpRequestStatus::DeadlineReached => 10,
 			HttpRequestStatus::Timeout => 20,
 			HttpRequestStatus::Finished(code) => code as u32,
+		}
+	}
+}
+
+impl TryFrom<u32> for HttpRequestStatus {
+	type Error = ();
+
+	fn try_from(status: u32) -> Result<Self, Self::Error> {
+		match status {
+			0 => Ok(HttpRequestStatus::Unknown),
+			10 => Ok(HttpRequestStatus::DeadlineReached),
+			20 => Ok(HttpRequestStatus::Timeout),
+			100...999 => Ok(HttpRequestStatus::Finished(status as u16)),
+			_ => Err(()),
 		}
 	}
 }
@@ -188,7 +209,7 @@ pub trait Externalities {
 		request_id: HttpRequestId,
 		chunk: &[u8],
 		deadline: Option<Timestamp>
-	) -> Result<(), ()>;
+	) -> Result<(), HttpError>;
 
 	/// Block and wait for the responses for given requests.
 	///
@@ -221,7 +242,7 @@ pub trait Externalities {
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
-	) -> Result<usize, ()>;
+	) -> Result<usize, HttpError>;
 
 }
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -267,7 +288,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		request_id: HttpRequestId,
 		chunk: &[u8],
 		deadline: Option<Timestamp>
-	) -> Result<(), ()> {
+	) -> Result<(), HttpError> {
 		(&mut **self).http_request_write_body(request_id, chunk, deadline)
 	}
 
@@ -284,7 +305,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
-	) -> Result<usize, ()> {
+	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 }

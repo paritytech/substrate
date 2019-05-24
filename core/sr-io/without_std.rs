@@ -19,7 +19,7 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, cell::Cell};
+use rstd::{vec::Vec, cell::Cell, convert::TryInto};
 use primitives::{offchain, Blake2Hasher};
 
 #[cfg(not(feature = "no_panic_handler"))]
@@ -396,7 +396,7 @@ pub mod ext {
 		///
 		/// Writing an empty chunks finalises the request.
 		/// Passing `0` as deadline blocks forever.
-		/// Returns `0` if successful, nonzero otherwise.
+		/// Returns `0` if successful, nonzero otherwise (see HttpError for the codes)
 		fn ext_http_request_write_body(
 			request_id: u32,
 			chunk: *const u8,
@@ -434,7 +434,11 @@ pub mod ext {
 		/// Passing `0` as deadline blocks forever.
 		/// Returns the number of bytes written if successful,
 		/// if it's `0` it means response has been fully consumed,
-		/// if it's `u32::max_value()` it means reading body failed.
+		/// if it's greater than `u32::max_value() - 255` it means reading body failed.
+		/// The error code should be mapped to `HttpError` in a following manner:
+		/// `u32::max_value()` HttpError code 1 (DeadlineReached)
+		/// `u32::max_value() - 1` HttpError code 2 (IoError)
+		/// The rest is reserved for potential future errors.
 		fn ext_http_response_read_body(
 			id: u32,
 			buffer: *mut u8,
@@ -855,7 +859,7 @@ impl OffchainApi for () {
 		request_id: offchain::HttpRequestId,
 		chunk: &[u8],
 		deadline: Option<offchain::Timestamp>
-	) -> Result<(), ()> {
+	) -> Result<(), offchain::HttpError> {
 		let res = unsafe {
 			ext_http_request_write_body.get()(
 				request_id.0 as u32,
@@ -865,7 +869,11 @@ impl OffchainApi for () {
 			)
 		};
 
-		if res == 0 { Ok(()) } else { Err(()) }
+		if res == 0 {
+			Ok(())
+		} else {
+			Err(res.try_into().unwrap_or(offchain::HttpError::IoError))
+		}
 	}
 
 	fn http_response_wait(
@@ -887,7 +895,7 @@ impl OffchainApi for () {
 
 		statuses
 			.into_iter()
-			.map(|status| offchain::HttpRequestStatus::from_u32(status).unwrap_or_else(|| offchain::HttpRequestStatus::Unknown))
+			.map(|status| status.try_into().unwrap_or(offchain::HttpRequestStatus::Unknown))
 			.collect()
 	}
 
@@ -913,7 +921,7 @@ impl OffchainApi for () {
 		request_id: offchain::HttpRequestId,
 		buffer: &mut [u8],
 		deadline: Option<offchain::Timestamp>,
-	) -> Result<usize, ()> {
+	) -> Result<usize, offchain::HttpError> {
 		unsafe {
 			let res = ext_http_response_read_body.get()(
 				request_id.0 as u32,
@@ -921,8 +929,9 @@ impl OffchainApi for () {
 				buffer.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),
 			);
-			if res == u32::max_value() {
-				Err(())
+			if res >= u32::max_value() - 255 {
+				let code = (u32::max_value() - res) + 1;
+				code.try_into().map_err(|_| offchain::HttpError::IoError)
 			} else {
 				Ok(res as usize)
 			}

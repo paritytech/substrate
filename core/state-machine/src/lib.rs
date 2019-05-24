@@ -287,7 +287,7 @@ impl offchain::Externalities for NeverOffchainExt {
 		_request_id: offchain::HttpRequestId,
 		_chunk: &[u8],
 		_deadline: Option<offchain::Timestamp>
-	) -> Result<(), ()> {
+	) -> Result<(), offchain::HttpError> {
 		unreachable!()
 	}
 
@@ -311,7 +311,7 @@ impl offchain::Externalities for NeverOffchainExt {
 		_request_id: offchain::HttpRequestId,
 		_buffer: &mut [u8],
 		_deadline: Option<offchain::Timestamp>
-	) -> Result<usize, ()> {
+	) -> Result<usize, offchain::HttpError> {
 		unreachable!()
 	}
 }

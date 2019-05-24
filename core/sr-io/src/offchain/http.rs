@@ -20,7 +20,12 @@ use rstd::prelude::Vec;
 use rstd::str;
 #[cfg(not(feature = "std"))]
 use rstd::prelude::vec;
-use primitives::offchain::{Timestamp, HttpRequestId as RequestId, HttpRequestStatus as RequestStatus};
+use primitives::offchain::{
+	Timestamp,
+	HttpRequestId as RequestId,
+	HttpRequestStatus as RequestStatus,
+	HttpError,
+};
 
 /// Request method (HTTP verb)
 #[derive(Clone, PartialEq, Eq)]
@@ -119,11 +124,11 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 	///
 	/// Err is returned in case the deadline is reached
 	/// or the request timeouts.
-	pub fn send(self) -> Result<PendingRequest, ()> {
+	pub fn send(self) -> Result<PendingRequest, HttpError> {
 		let meta = &[];
 
 		// start an http request.
-		let id = crate::http_request_start(self.method.as_ref(), self.url, meta)?;
+		let id = crate::http_request_start(self.method.as_ref(), self.url, meta).map_err(|_| HttpError::IoError)?;
 
 		// add custom headers
 		for (header_name, header_value) in &self.headers {
@@ -134,7 +139,7 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 				// or here.
 				unsafe { str::from_utf8_unchecked(header_name) },
 				unsafe { str::from_utf8_unchecked(header_value) },
-			)?
+			).map_err(|_| HttpError::IoError)?
 		}
 
 		// write body
@@ -258,6 +263,12 @@ impl Response {
 }
 
 /// A buffered byte iterator over response body.
+///
+/// Note that reading the body may return `None` in two cases:
+/// 1. Either the deadline you've set is reached (check via `#is_deadline_reached()`;
+///	   In such case you can resume the reader by setting a new deadline)
+/// 2. Or because of IOError. In such case the reader is not resumable and will keep
+///    returning `None`.
 pub struct ResponseBody {
 	id: RequestId,
 	is_deadline_reached: bool,
@@ -296,9 +307,12 @@ impl ResponseBody {
 	/// Set the deadline for reading the body.
 	pub fn deadline(&mut self, deadline: impl Into<Option<Timestamp>>) {
 		self.deadline = deadline.into();
+		self.is_deadline_reached = false;
 	}
 
 	/// Check if the iterator has finished because of reaching the deadline.
+	///
+	/// If that's the case you can resume the reader by setting a new deadline.
 	pub fn is_deadline_reached(&self) -> bool {
 		self.is_deadline_reached
 	}
@@ -313,13 +327,19 @@ impl Iterator for ResponseBody {
 		}
 
 		if self.filled_up_to.is_none() {
-			let result = crate::http_response_read_body(self.id, &mut self.buffer, self.deadline).ok();
-			if let Some(size) = result {
-				self.position = 0;
-				self.filled_up_to = Some(size);
-			} else {
-				self.is_deadline_reached = true;
-				return None;
+			let result = crate::http_response_read_body(self.id, &mut self.buffer, self.deadline);
+			match result {
+				Ok(size) => {
+					self.position = 0;
+					self.filled_up_to = Some(size);
+				}
+				Err(HttpError::DeadlineReached) => {
+					self.is_deadline_reached = true;
+					return None;
+				}
+				Err(HttpError::IoError) => {
+					return None;
+				}
 			}
 		}
 

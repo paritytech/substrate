@@ -326,7 +326,7 @@ impl OffchainApi for () {
 		request_id: offchain::HttpRequestId,
 		chunk: &[u8],
 		deadline: Option<offchain::Timestamp>
-	) -> Result<(), ()> {
+	) -> Result<(), offchain::HttpError> {
 		with_offchain(|ext| {
 			ext.http_request_write_body(request_id, chunk, deadline)
 		}, "http_request_write_body can be called only in the offchain worker context")
@@ -353,7 +353,7 @@ impl OffchainApi for () {
 		request_id: offchain::HttpRequestId,
 		buffer: &mut [u8],
 		deadline: Option<offchain::Timestamp>
-	) -> Result<usize, ()> {
+	) -> Result<usize, offchain::HttpError> {
 		with_offchain(|ext| {
 			ext.http_response_read_body(request_id, buffer, deadline)
 		}, "http_response_read_body can be called only in the offchain worker context")
