@@ -47,8 +47,8 @@ use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, Digest,
-	DigestItem, SaturatedConversion,
+	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, Digest, DigestItem,
+	SaturatedConversion
 };
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;

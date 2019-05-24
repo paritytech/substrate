@@ -17,7 +17,6 @@
 use serde::Deserialize;
 use std::{convert::TryFrom, fmt::Debug};
 use primitives::U256;
-use runtime_primitives::traits;
 
 /// RPC Block number type
 ///
