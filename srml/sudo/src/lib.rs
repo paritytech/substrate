@@ -16,51 +16,31 @@
 
 //! # Sudo Module
 //!
+//! - [`sudo::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
 //! ## Overview
 //!
-//! The sudo module allows for a single account (called the "sudo key")
+//! The Sudo module allows for a single account (called the "sudo key")
 //! to execute dispatchable functions that require a `Root` call
 //! or designate a new account to replace them as the sudo key.
 //! Only one account can be the sudo key at a time.
-//!
-//! You can start using the sudo module by implementing the sudo [`Trait`].
-//!
-//! Supported dispatchable functions are documented in the [`Call`] enum.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! Only the sudo key can call the dispatchable functions from the sudo module.
+//! Only the sudo key can call the dispatchable functions from the Sudo module.
 //!
 //! * `sudo` - Make a `Root` call to a dispatchable function.
 //! * `set_key` - Assign a new account to be the sudo key.
 //!
-//! Please refer to the [`Call`] enum and its associated variants for documentation on each function.
-//!
 //! ## Usage
-//!
-//! ### Prerequisites
-//!
-//! To use the sudo module in your runtime, you must implement the following trait in your runtime:
-//!
-//! ```ignore
-//! impl sudo::Trait for Runtime {
-//! 	type Event = Event;
-//! 	type Proposal = Call;
-//! }
-//! ```
-//!
-//! You can then import the Sudo module in your `construct_runtime!` macro with:
-//!
-//! ```ignore
-//! Sudo: sudo,
-//! ```
 //!
 //! ### Executing Privileged Functions
 //!
-//! The sudo module itself is not intended to be used within other modules.
-//! Instead, you can build "privileged functions" in other modules that require `Root` origin.
+//! The Sudo module itself is not intended to be used within other modules.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other modules.
 //! You can execute these privileged functions by calling `sudo` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
 //!
@@ -70,8 +50,8 @@
 //!
 //! This is an example of a module that exposes a privileged function:
 //!
-//! ```ignore
-//! use support::{decl_module, dispatch::Result};
+//! ```
+//! use srml_support::{decl_module, dispatch::Result};
 //! use system::ensure_root;
 //!
 //! pub trait Trait: system::Trait {}
@@ -87,31 +67,13 @@
 //!         }
 //!     }
 //! }
-//! ```
-//!
-//! ### Example from SRML
-//!
-//! The consensus module exposes a `set_code` privileged function
-//! that allows you to set the on-chain Wasm runtime code:
-//!
-//! ```ignore
-//! /// Set the new code.
-//! pub fn set_code(new: Vec<u8>) {
-//!     storage::unhashed::put_raw(well_known_keys::CODE, &new);
-//! }
+//! # fn main() {}
 //! ```
 //!
 //! ## Genesis Config
 //!
-//! To use the sudo module, you need to set an initial superuser account as the sudo `key`.
-//!
-//! ```ignore
-//! GenesisConfig {
-//!     sudo: Some(SudoConfig {
-//!         key: AccountId,
-//!     })
-//! }
-//! ```
+//! The Sudo module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! You need to set an initial superuser account as the sudo `key`.
 //!
 //! ## Related Modules
 //!
@@ -126,7 +88,10 @@
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{
+	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
+	decl_storage, ensure
+};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -150,8 +115,15 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
-			Self::deposit_event(RawEvent::Sudid(ok));
+			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
+				Ok(_) => true,
+				Err(e) => {
+					sr_io::print(e);
+					false
+				}
+			};
+
+			Self::deposit_event(RawEvent::Sudid(res));
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.

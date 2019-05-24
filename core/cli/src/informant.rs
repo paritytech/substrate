@@ -29,12 +29,19 @@ use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use log::{info, warn};
 
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, SaturatedConversion};
 
 /// Spawn informant on the event loop
+#[deprecated(note = "Please use informant::build instead, and then create the task manually")]
 pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
 	C: Components,
 {
+	handle.spawn(exit.until(build(service)).map(|_| ()));
+}
+
+/// Creates an informant in the form of a `Future` that must be polled regularly.
+pub fn build<C>(service: &Service<C>) -> impl Future<Item = (), Error = ()>
+where C: Components {
 	let network = service.network();
 	let client = service.client();
 	let txpool = service.transaction_pool();
@@ -47,7 +54,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let display_notifications = network.status().for_each(move |sync_status| {
 
 		if let Ok(info) = client.info() {
-			let best_number: u64 = info.chain.best_number.as_();
+			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
 			let num_peers = sync_status.num_peers;
 			let speed = move || speed(best_number, last_number, last_update);
@@ -59,7 +66,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			};
 			last_number = Some(best_number);
 			let txpool_status = txpool.status();
-			let finalized_number: u64 = info.chain.finalized_number.as_();
+			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
 			let bandwidth_download = network.average_download_per_sec();
 			let bandwidth_upload = network.average_upload_per_sec();
 			info!(
@@ -76,13 +83,19 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				TransferRateFormat(bandwidth_upload),
 			);
 
+			let backend = (*client).backend();
+			let used_state_cache_size = match backend.used_state_cache_size(){
+				Some(size) => size,
+				None => 0,
+			};
+
 			// get cpu usage and memory usage of this process
 			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
 				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
 				(proc.cpu_usage(), proc.memory())
 			} else { (0.0, 0) };
 
-			let network_state = serde_json::to_string(&network.network_state()).unwrap_or_default();
+			let network_state = network.network_state();
 
 			telemetry!(
 				SUBSTRATE_INFO;
@@ -99,6 +112,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"finalized_hash" => ?info.chain.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size,
 			);
 		} else {
 			warn!("Error getting best block information");
@@ -149,17 +163,17 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 		Ok(())
 	});
 
-	let informant_work = display_notifications.join3(display_block_import, display_txpool_import);
-	handle.spawn(exit.until(informant_work).map(|_| ()));
+	display_notifications.join3(display_block_import, display_txpool_import)
+		.map(|((), (), ())| ())
 }
 
 fn speed(best_number: u64, last_number: Option<u64>, last_update: time::Instant) -> String {
 	let since_last_millis = last_update.elapsed().as_secs() * 1000;
 	let since_last_subsec_millis = last_update.elapsed().subsec_millis() as u64;
-	let speed = match last_number {
-		Some(num) => (best_number.saturating_sub(num) * 10_000 / (since_last_millis + since_last_subsec_millis)) as f64,
-		None => 0.0
-	};
+	let speed = last_number
+		.and_then(|num|
+			(best_number.saturating_sub(num) * 10_000).checked_div(since_last_millis + since_last_subsec_millis))
+		.map_or(0.0, |s| s as f64);
 
 	if speed < 1.0 {
 		"".into()

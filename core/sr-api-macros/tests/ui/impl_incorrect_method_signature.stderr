@@ -1,0 +1,13 @@
+error[E0053]: method `test` has an incompatible type for trait
+  --> $DIR/impl_incorrect_method_signature.rs:20:17
+   |
+14 |         fn test(data: u64);
+   |                       --- type in trait
+...
+20 |         fn test(data: String) {}
+   |                       ^^^^^^ expected u64, found struct `std::string::String`
+   |
+   = note: expected type `fn(u64)`
+              found type `fn(std::string::String)`
+
+For more information about this error, try `rustc --explain E0053`.

@@ -19,6 +19,7 @@
 
 use std::sync::Arc;
 use std::io;
+use std::convert::TryInto;
 
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -28,7 +29,10 @@ use client;
 use parity_codec::Decode;
 use trie::DBValue;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Zero};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Zero, UniqueSaturatedFrom,
+	UniqueSaturatedInto, CheckedConversion
+};
 use crate::DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
@@ -78,10 +82,8 @@ pub type NumberIndexKey = [u8; 4];
 ///
 /// In the current database schema, this kind of key is only used for
 /// lookups into an index, NOT for storing header data or others.
-pub fn number_index_key<N>(n: N) -> NumberIndexKey where N: As<u64> {
-	let n: u64 = n.as_();
-	assert!(n & 0xffffffff00000000 == 0);
-
+pub fn number_index_key<N: TryInto<u32>>(n: N) -> NumberIndexKey {
+	let n = n.checked_into::<u32>().unwrap();
 	[
 		(n >> 24) as u8,
 		((n >> 16) & 0xff) as u8,
@@ -93,7 +95,7 @@ pub fn number_index_key<N>(n: N) -> NumberIndexKey where N: As<u64> {
 /// Convert number and hash into long lookup key for blocks that are
 /// not in the canonical chain.
 pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> Vec<u8> where
-	N: As<u64>,
+	N: TryInto<u32>,
 	H: AsRef<[u8]>
 {
 	let mut lookup_key = number_index_key(number).to_vec();
@@ -103,18 +105,20 @@ pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> Vec<u8> where
 
 /// Convert block lookup key into block number.
 /// all block lookup keys start with the block number.
-pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
+pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where
+	N: From<u32>
+{
 	if key.len() < 4 {
-		return Err(client::error::ErrorKind::Backend("Invalid block key".into()).into());
+		return Err(client::error::Error::Backend("Invalid block key".into()));
 	}
-	Ok((key[0] as u64) << 24
-		| (key[1] as u64) << 16
-		| (key[2] as u64) << 8
-		| (key[3] as u64)).map(As::sa)
+	Ok((key[0] as u32) << 24
+		| (key[1] as u32) << 16
+		| (key[2] as u32) << 8
+		| (key[3] as u32)).map(Into::into)
 }
 
 /// Delete number to hash mapping in DB transaction.
-pub fn remove_number_to_key_mapping<N: As<u64>>(
+pub fn remove_number_to_key_mapping<N: TryInto<u32>>(
 	transaction: &mut DBTransaction,
 	key_lookup_col: Option<u32>,
 	number: N,
@@ -123,7 +127,7 @@ pub fn remove_number_to_key_mapping<N: As<u64>>(
 }
 
 /// Remove key mappings.
-pub fn remove_key_mappings<N: As<u64>, H: AsRef<[u8]>>(
+pub fn remove_key_mappings<N: TryInto<u32>, H: AsRef<[u8]>>(
 	transaction: &mut DBTransaction,
 	key_lookup_col: Option<u32>,
 	number: N,
@@ -135,7 +139,7 @@ pub fn remove_key_mappings<N: As<u64>, H: AsRef<[u8]>>(
 
 /// Place a number mapping into the database. This maps number to current perceived
 /// block hash at that position.
-pub fn insert_number_to_key_mapping<N: As<u64> + Clone, H: AsRef<[u8]>>(
+pub fn insert_number_to_key_mapping<N: TryInto<u32> + Clone, H: AsRef<[u8]>>(
 	transaction: &mut DBTransaction,
 	key_lookup_col: Option<u32>,
 	number: N,
@@ -149,7 +153,7 @@ pub fn insert_number_to_key_mapping<N: As<u64> + Clone, H: AsRef<[u8]>>(
 }
 
 /// Insert a hash to key mapping in the database.
-pub fn insert_hash_to_key_mapping<N: As<u64>, H: AsRef<[u8]> + Clone>(
+pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 	transaction: &mut DBTransaction,
 	key_lookup_col: Option<u32>,
 	number: N,
@@ -171,7 +175,7 @@ pub fn block_id_to_lookup_key<Block>(
 	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, client::error::Error> where
 	Block: BlockT,
-	::runtime_primitives::traits::NumberFor<Block>: As<u64>,
+	::runtime_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 {
 	let res = match id {
 		BlockId::Number(n) => db.get(
@@ -187,21 +191,21 @@ pub fn block_id_to_lookup_key<Block>(
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {
 	use std::error::Error;
-	client::error::ErrorKind::Backend(err.description().into()).into()
+	client::error::Error::Backend(err.description().into())
 }
 
 /// Open RocksDB database.
 pub fn open_database(config: &DatabaseSettings, col_meta: Option<u32>, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;
-	let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
+	let path = config.path.to_str().ok_or_else(|| client::error::Error::Backend("Invalid database path".into()))?;
 	let db = Database::open(&db_config, &path).map_err(db_err)?;
 
 	// check database type
 	match db.get(col_meta, meta_keys::TYPE).map_err(db_err)? {
 		Some(stored_type) => {
 			if db_type.as_bytes() != &*stored_type {
-				return Err(client::error::ErrorKind::Backend(
+				return Err(client::error::Error::Backend(
 					format!("Unexpected database type. Expected: {}", db_type)).into());
 			}
 		},
@@ -237,7 +241,7 @@ pub fn read_header<Block: BlockT>(
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
 			Some(header) => Ok(Some(header)),
 			None => return Err(
-				client::error::ErrorKind::Backend("Error decoding header".into()).into()
+				client::error::Error::Backend("Error decoding header".into())
 			),
 		}
 		None => Ok(None),
@@ -252,7 +256,7 @@ pub fn require_header<Block: BlockT>(
 	id: BlockId<Block>,
 ) -> client::error::Result<Block::Header> {
 	read_header(db, col_index, col, id)
-		.and_then(|header| header.ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
+		.and_then(|header| header.ok_or_else(|| client::error::Error::UnknownBlock(format!("{}", id))))
 }
 
 /// Read meta from the database.
@@ -266,7 +270,7 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Opti
 	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Some(h) => h,
-			None => return Err(client::error::ErrorKind::Backend("Error decoding genesis hash".into()).into()),
+			None => return Err(client::error::Error::Backend("Error decoding genesis hash".into())),
 		},
 		None => return Ok(Meta {
 			best_hash: Default::default(),

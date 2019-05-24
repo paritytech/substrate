@@ -24,22 +24,21 @@
 pub use parity_codec as codec;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use serde_derive;
+pub use serde;
 
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::prelude::*;
-use substrate_primitives::{ed25519, sr25519, hash::H512};
+use rstd::{prelude::*, ops};
+use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
-
-#[cfg(feature = "std")]
-use substrate_primitives::hexdisplay::ascii_format;
 
 #[cfg(feature = "std")]
 pub mod testing;
 
 pub mod traits;
+use traits::{SaturatedConversion, UniqueSaturatedInto};
+
 pub mod generic;
 pub mod transaction_validity;
 
@@ -83,21 +82,11 @@ macro_rules! create_runtime_str {
 }
 
 #[cfg(feature = "std")]
-pub use serde::{Serialize, de::DeserializeOwned};
-#[cfg(feature = "std")]
-pub use serde_derive::{Serialize, Deserialize};
+pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
-	/// Hash given slice.
-	///
-	/// Default to xx128 hashing.
-	fn hash(data: &[u8]) -> [u8; 16] {
-		let r = runtime_io::twox_128(data);
-		log::trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
-		r
-	}
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		let mut storage = Default::default();
@@ -114,8 +103,28 @@ impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
 	}
-	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		_child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String> {
 		storage.extend(self);
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		Ok(self)
+	}
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	)-> Result<(), String> {
+		storage.extend(self.0);
+		child_storage.extend(self.1);
 		Ok(())
 	}
 }
@@ -129,24 +138,55 @@ pub type ConsensusEngineId = [u8; 4];
 pub struct Permill(u32);
 
 impl Permill {
-	/// Wraps the argument into `Permill` type.
-	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
+	/// Nothing.
+	pub fn zero() -> Self { Self(0) }
 
-	/// Converts percents into `Permill`.
-	pub fn from_percent(x: u32) -> Permill { Permill(x * 10_000) }
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
+	/// Everything.
+	pub fn one() -> Self { Self(1_000_000) }
+
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
+
+	/// Converts from a percent. Equal to `x / 100`.
+	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000) }
 
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
-	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Permill
+impl<N> ops::Mul<N> for Permill
 where
-	N: traits::As<u64>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+		+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000)
+		let million: N = 1_000_000.into();
+		let part: N = self.0.into();
+
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(million.clone());
+
+			// `rem` is inferior to one million, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
+
+			// `self` and `rem` are inferior to one million, thus the product is less than 10^12
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
+
+			// `rem_multiplied_u64` is less than 10^12 therefore divided by a million it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000) as u32;
+
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			rem_multiplied_divided_u32.into()
+		};
+
+		(b / million) * part + rem_multiplied_divided
 	}
 }
 
@@ -188,39 +228,57 @@ pub struct Perbill(u32);
 
 impl Perbill {
 	/// Nothing.
-	pub fn zero() -> Perbill { Perbill(0) }
+	pub fn zero() -> Self { Self(0) }
 
 	/// `true` if this is nothing.
 	pub fn is_zero(&self) -> bool { self.0 == 0 }
 
 	/// Everything.
-	pub fn one() -> Perbill { Perbill(1_000_000_000) }
+	pub fn one() -> Self { Self(1_000_000_000) }
 
-	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
-	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(1_000_000_000)) }
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
+
+	/// Converts from a percent. Equal to `x / 100`.
+	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000_000) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
-	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(1_000_000) * 1000) }
-
-	/// Construct new instance where `x` is a percent. Value equivalent to `x%`.
-	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(100) * 10_000_000) }
+	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }
 
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
-	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
-
-	#[cfg(feature = "std")]
-	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
-	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
 }
 
-impl<N> ::rstd::ops::Mul<N> for Perbill
+impl<N> ops::Mul<N> for Perbill
 where
-	N: traits::As<u64>
+	N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 {
 	type Output = N;
 	fn mul(self, b: N) -> Self::Output {
-		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000_000)
+		let billion: N = 1_000_000_000.into();
+		let part: N = self.0.into();
+
+		let rem_multiplied_divided = {
+			let rem = b.clone().rem(billion.clone());
+
+			// `rem` is inferior to one billion, thus it fits into u32
+			let rem_u32 = rem.saturated_into::<u32>();
+
+			// `self` and `rem` are inferior to one billion, thus the product is less than 10^18
+			// and fits into u64
+			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
+
+			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
+			// u32
+			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
+
+			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
+			rem_multiplied_divided_u32.into()
+		};
+
+		(b / billion) * part + rem_multiplied_divided
 	}
 }
 
@@ -266,11 +324,14 @@ impl PerU128 {
 	/// Nothing.
 	pub fn zero() -> Self { Self(0) }
 
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
 	/// Everything.
 	pub fn one() -> Self { Self(U128) }
 
-	/// Construct new instance where `x` is parts in u128::max_value. Equal to x/U128::max_value.
-	pub fn from_max_value(x: u128) -> Self { Self(x) }
+	/// From an explicitly defined number of parts per maximum of the type.
+	pub fn from_parts(x: u128) -> Self { Self(x) }
 
 	/// Construct new instance where `x` is denominator and the nominator is 1.
 	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
@@ -310,6 +371,18 @@ pub enum MultiSignature {
 	Sr25519(sr25519::Signature),
 }
 
+impl From<ed25519::Signature> for MultiSignature {
+	fn from(x: ed25519::Signature) -> Self {
+		MultiSignature::Ed25519(x)
+	}
+}
+
+impl From<sr25519::Signature> for MultiSignature {
+	fn from(x: sr25519::Signature) -> Self {
+		MultiSignature::Sr25519(x)
+	}
+}
+
 impl Default for MultiSignature {
 	fn default() -> Self {
 		MultiSignature::Ed25519(Default::default())
@@ -329,6 +402,45 @@ pub enum MultiSigner {
 impl Default for MultiSigner {
 	fn default() -> Self {
 		MultiSigner::Ed25519(Default::default())
+	}
+}
+
+/// NOTE: This implementations is required by `SimpleAddressDeterminator`,
+/// we convert the hash into some AccountId, it's fine to use any scheme.
+impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
+	fn unchecked_from(x: T) -> Self {
+		ed25519::Public::unchecked_from(x.into()).into()
+	}
+}
+
+impl AsRef<[u8]> for MultiSigner {
+	fn as_ref(&self) -> &[u8] {
+		match *self {
+			MultiSigner::Ed25519(ref who) => who.as_ref(),
+			MultiSigner::Sr25519(ref who) => who.as_ref(),
+		}
+	}
+}
+
+impl From<ed25519::Public> for MultiSigner {
+	fn from(x: ed25519::Public) -> Self {
+		MultiSigner::Ed25519(x)
+	}
+}
+
+impl From<sr25519::Public> for MultiSigner {
+	fn from(x: sr25519::Public) -> Self {
+		MultiSigner::Sr25519(x)
+	}
+}
+
+ #[cfg(feature = "std")]
+impl std::fmt::Display for MultiSigner {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		match *self {
+			MultiSigner::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
+			MultiSigner::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
+		}
 	}
 }
 
@@ -357,8 +469,14 @@ impl Verify for AnySignature {
 }
 
 impl From<sr25519::Signature> for AnySignature {
-	fn from(s: sr25519::Signature) -> AnySignature {
-		AnySignature(s.0.into())
+	fn from(s: sr25519::Signature) -> Self {
+		AnySignature(s.into())
+	}
+}
+
+impl From<ed25519::Signature> for AnySignature {
+	fn from(s: ed25519::Signature) -> Self {
+		AnySignature(s.into())
 	}
 }
 
@@ -471,7 +589,7 @@ macro_rules! impl_outer_config {
 	) => {
 		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
 		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde_derive::Serialize, $crate::serde_derive::Deserialize)]
+		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		pub struct $main {
@@ -519,7 +637,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -527,7 +645,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -671,7 +789,7 @@ mod tests {
 	mod a {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
-		use serde_derive::Serialize;
+		use serde::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -681,7 +799,7 @@ mod tests {
 	mod b {
 		use super::RuntimeT;
 		use crate::codec::{Encode, Decode};
-		use serde_derive::Serialize;
+		use serde::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -691,6 +809,24 @@ mod tests {
 	impl_outer_log! {
 		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
 			a(AuthoritiesChange), b()
+		}
+	}
+
+	macro_rules! per_thing_mul_upper_test {
+		($num_type:tt, $per:tt) => {
+			// all sort of from_percent
+			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
+			assert_eq!(
+				$per::from_percent(99) * $num_type::max_value(),
+				((Into::<U256>::into($num_type::max_value()) * 99u32) / 100u32).as_u128() as $num_type
+			);
+			assert_eq!($per::from_percent(50) * $num_type::max_value(), $num_type::max_value() / 2);
+			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
+			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
+
+			// bounds
+			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
+			assert_eq!($per::zero() * $num_type::max_value(), 0);
 		}
 	}
 
@@ -775,8 +911,36 @@ mod tests {
 	}
 
 	#[test]
-	fn saturating_mul() {
-		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
-		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
+	fn per_things_should_work() {
+		use super::{Perbill, Permill};
+		use primitive_types::U256;
+
+		per_thing_mul_upper_test!(u32, Perbill);
+		per_thing_mul_upper_test!(u64, Perbill);
+		per_thing_mul_upper_test!(u128, Perbill);
+
+		per_thing_mul_upper_test!(u32, Permill);
+		per_thing_mul_upper_test!(u64, Permill);
+		per_thing_mul_upper_test!(u128, Permill);
+	}
+
+	#[test]
+	fn per_things_operate_in_output_type() {
+		assert_eq!(super::Perbill::one() * 255_u64, 255);
+	}
+
+	#[test]
+	fn per_things_one_minus_one_part() {
+		use primitive_types::U256;
+
+		assert_eq!(
+			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
+		);
+
+		assert_eq!(
+			super::Permill::from_parts(999_999) * std::u128::MAX,
+			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
+		);
 	}
 }

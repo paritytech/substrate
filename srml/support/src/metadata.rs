@@ -16,9 +16,13 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
-	ModuleMetadata, RuntimeMetadataV3,
+	ModuleMetadata, RuntimeMetadataV4,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
+	StorageMetadata, StorageFunctionMetadata,
+	StorageFunctionType, StorageFunctionModifier,
+	DefaultByte, StorageHasher
 };
+
 
 /// Implements the metadata support for the given runtime and all its modules.
 ///
@@ -36,8 +40,8 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
-				$crate::metadata::RuntimeMetadata::V3 (
-					$crate::metadata::RuntimeMetadataV3 {
+				$crate::metadata::RuntimeMetadata::V4 (
+					$crate::metadata::RuntimeMetadataV4 {
 						modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
 				).into()
@@ -261,14 +265,14 @@ mod tests {
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
-			Inherent,
+			None,
 		}
 
 		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
 				match s {
 					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::Inherent,
+					None => RawOrigin::None,
 				}
 			}
 		}
@@ -377,8 +381,8 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V3(
-		RuntimeMetadataV3 {
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V4(
+		RuntimeMetadataV4 {
 		modules: DecodeDifferent::Encode(&[
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("system"),

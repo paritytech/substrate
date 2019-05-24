@@ -21,13 +21,14 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Zero,
+	NumberFor, SaturatedConversion, Digest, DigestItem
+};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
+use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
-use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
@@ -207,7 +208,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn set_head(&self, id: BlockId<Block>) -> error::Result<()> {
 		let header = match self.header(id)? {
 			Some(h) => h,
-			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+			None => return Err(error::Error::UnknownBlock(format!("{}", id))),
 		};
 
 		self.apply_head(&header)
@@ -258,7 +259,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
-			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+			None => return Err(error::Error::UnknownBlock(format!("{}", id))),
 		};
 
 		let mut storage = self.storage.write();
@@ -416,12 +417,12 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 
 	fn header_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
 		self.storage.read().header_cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::ErrorKind::Backend(format!("Header CHT for block {} not exists", block)).into())
+			.ok_or_else(|| error::Error::Backend(format!("Header CHT for block {} not exists", block)))
 	}
 
 	fn changes_trie_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::ErrorKind::Backend(format!("Changes trie CHT for block {} not exists", block)).into())
+			.ok_or_else(|| error::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 	}
 
 	fn cache(&self) -> Option<Arc<blockchain::Cache<Block>>> {
@@ -446,7 +447,7 @@ where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
 
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type State = InMemory<H>;
 
@@ -483,22 +484,17 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
-		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
+		let child_delta = children.into_iter()
+			.map(|(storage_key, child_overlay)|
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
-		for (child_key, child_map) in children {
-			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
-			transaction.consolidate(update);
-
-			if !is_default {
-				top.insert(child_key, root);
-			}
-		}
-
-		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
-		transaction.consolidate(update);
+		let (root, transaction) = self.old_state.full_storage_root(
+			top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta
+		);
 
 		self.new_state = Some(InMemory::from(transaction));
 		Ok(root)
@@ -532,7 +528,7 @@ pub struct Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: ChangesTrieStorage<H>,
@@ -543,7 +539,7 @@ impl<Block, H> Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend<Block, H> {
@@ -559,7 +555,7 @@ impl<Block, H> backend::AuxStore for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn insert_aux<
 		'a,
@@ -580,7 +576,7 @@ impl<Block, H> backend::Backend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
@@ -625,7 +621,11 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(
+						(*header.number()).saturated_into::<u64>(),
+						changes_trie_root,
+						changes_trie_update
+					);
 				}
 			}
 
@@ -651,6 +651,10 @@ where
 		&self.blockchain
 	}
 
+	fn used_state_cache_size(&self) -> Option<usize> {
+		None
+	}
+
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		Some(&self.changes_trie_storage)
 	}
@@ -665,12 +669,12 @@ where
 
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
-			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
+			None => Err(error::Error::UnknownBlock(format!("{}", block))),
 		}
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
-		Ok(As::sa(0))
+		Ok(Zero::zero())
 	}
 }
 
@@ -678,14 +682,14 @@ impl<Block, H> backend::LocalBackend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {}
 
 impl<Block, H> backend::RemoteBackend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-	H::Out: HeapSizeOf + Ord,
+	H::Out: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.blockchain.expect_block_number_from_id(block)
@@ -695,20 +699,20 @@ where
 }
 
 /// Prunable in-memory changes trie storage.
-pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>) where H::Out: HeapSizeOf;
-impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>);
+impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> {
 	fn oldest_changes_trie_block(&self, _config: &ChangesTrieConfiguration, _best_finalized: u64) -> u64 {
 		0
 	}
 }
 
-impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> {
 	fn root(&self, anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
 		self.0.root(anchor, block)
 	}
 }
 
-impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> {
 	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}
@@ -717,11 +721,11 @@ impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> w
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> error::Result<()> {
 	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(error::ErrorKind::GenesisInvalid.into());
+		return Err(error::Error::GenesisInvalid.into());
 	}
 
 	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-		return Err(error::ErrorKind::GenesisInvalid.into());
+		return Err(error::Error::GenesisInvalid.into());
 	}
 
 	Ok(())

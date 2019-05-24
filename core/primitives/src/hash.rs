@@ -78,11 +78,4 @@ mod tests {
 		assert!(ser::from_str::<H256>("\"0\"").unwrap_err().is_data());
 		assert!(ser::from_str::<H256>("\"10\"").unwrap_err().is_data());
 	}
-
-	#[test]
-	fn test_heapsizeof() {
-		use heapsize::HeapSizeOf;
-		let h = H256::zero();
-		assert_eq!(h.heap_size_of_children(), 0);
-	}
 }

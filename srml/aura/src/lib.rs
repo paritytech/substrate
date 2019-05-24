@@ -14,7 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for Aura consensus. This manages offline reporting.
+//! # Aura Module
+//!
+//! - [`aura::Trait`](./trait.Trait.html)
+//! - [`Module`](./struct.Module.html)
+//!
+//! ## Overview
+//!
+//! The Aura module extends Aura consensus by managing offline reporting.
+//!
+//! ## Interface
+//!
+//! ### Public Functions
+//!
+//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
+//!
+//! ## Related Modules
+//!
+//! - [Staking](../srml_staking/index.html): The Staking module is called in Aura to enforce slashing
+//!  if validators miss a certain number of slots (see the [`StakingSlasher`](./struct.StakingSlasher.html)
+//!  struct and associated method).
+//! - [Timestamp](../srml_timestamp/index.html): The Timestamp module is used in Aura to track
+//! consensus rounds (via `slots`).
+//! - [Consensus](../srml_consensus/index.html): The Consensus module does not relate directly to Aura,
+//!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
+//!
+//! ## References
+//!
+//! If you're interested in hacking on this module, it is useful to understand the interaction with
+//! `substrate/core/inherents/src/lib.rs` and, specifically, the required implementation of
+//! [`ProvideInherent`](../substrate_inherents/trait.ProvideInherent.html) and
+//! [`ProvideInherentData`](../substrate_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -23,7 +53,7 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{As, Zero};
+use primitives::traits::{SaturatedConversion, Saturating, Zero, One};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -35,13 +65,13 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 mod mock;
 mod tests;
 
-/// The aura inherent identifier.
+/// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
-/// The type of the aura inherent.
+/// The type of the Aura inherent.
 pub type InherentType = u64;
 
-/// Auxiliary trait to extract aura inherent data.
+/// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
 	/// Get aura inherent data.
 	fn aura_inherent_data(&self) -> result::Result<InherentType, RuntimeString>;
@@ -107,7 +137,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-/// Something which can handle Aura consensus reports.
+/// Something that can handle Aura consensus reports.
 pub trait HandleReport {
 	fn handle_report(report: AuraReport);
 }
@@ -123,8 +153,8 @@ pub trait Trait: timestamp::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
-		// The last timestamp.
-		LastTimestamp get(last) build(|_| T::Moment::sa(0)): T::Moment;
+		/// The last timestamp.
+		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
 	}
 }
 
@@ -132,7 +162,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
 }
 
-/// A report of skipped authorities in aura.
+/// A report of skipped authorities in Aura.
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
@@ -143,14 +173,14 @@ pub struct AuraReport {
 }
 
 impl AuraReport {
-	/// Call the closure with (validator_indices, punishment_count) for each
+	/// Call the closure with (`validator_indices`, `punishment_count`) for each
 	/// validator to punish.
 	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
 		where F: FnMut(usize, usize)
 	{
-		// If all validators have been skipped, then it implies some sort of 
+		// If all validators have been skipped, then it implies some sort of
 		// systematic problem common to all rather than a minority of validators
-		// unfulfilling their specific duties. In this case, it doesn't make
+		// not fulfilling their specific duties. In this case, it doesn't make
 		// sense to punish anyone, so we guard against it.
 		if self.skipped < validator_count {
 			for index in 0..self.skipped {
@@ -161,48 +191,46 @@ impl AuraReport {
 }
 
 impl<T: Trait> Module<T> {
-	/// Determine the Aura slot-duration based on the timestamp module configuration.
-	pub fn slot_duration() -> u64 {
+	/// Determine the Aura slot-duration based on the Timestamp module configuration.
+	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
-		// the majority of their slot.
-		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
+		// the majority of its slot.
+		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
 		<Self as Store>::LastTimestamp::put(now.clone());
 
-		if last == T::Moment::zero() {
+		if last.is_zero() {
 			return;
 		}
 
-		assert!(slot_duration > T::Moment::zero(), "Aura slot duration cannot be zero.");
+		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
 		let last_slot = last / slot_duration.clone();
-		let first_skipped = last_slot.clone() + T::Moment::sa(1);
+		let first_skipped = last_slot.clone() + One::one();
 		let cur_slot = now / slot_duration;
 
 		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
 		if cur_slot == first_skipped { return }
 
-		let slot_to_usize = |slot: T::Moment| { slot.as_() as usize };
-
-		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
+		let skipped_slots = cur_slot - last_slot - One::one();
 
 		H::handle_report(AuraReport {
-			start_slot: slot_to_usize(first_skipped),
-			skipped: slot_to_usize(skipped_slots),
+			start_slot: first_skipped.saturated_into::<usize>(),
+			skipped: skipped_slots.saturated_into::<usize>(),
 		})
 	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set::<T::HandleReport>(moment, T::Moment::sa(Self::slot_duration()))
+		Self::on_timestamp_set::<T::HandleReport>(moment, Self::slot_duration())
 	}
 }
 
-/// A type for performing slashing based on aura reports.
+/// A type for performing slashing based on Aura reports.
 pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
@@ -228,15 +256,16 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		None
 	}
 
+	/// Verify the validity of the inherent using the timestamp.
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
 			timestamp::Call::set(ref timestamp) => timestamp.clone(),
 			_ => return Ok(()),
 		};
 
-		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
+		let timestamp_based_slot = timestamp / Self::slot_duration();
 
-		let seal_slot = data.aura_inherent_data()?;
+		let seal_slot = data.aura_inherent_data()?.saturated_into();
 
 		if timestamp_based_slot == seal_slot {
 			Ok(())

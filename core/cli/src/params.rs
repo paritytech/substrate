@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
-/// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
+/// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
 	( $type:ident ) => {
 		impl $crate::GetLogFilter for $type {
@@ -119,7 +119,7 @@ pub struct NetworkConfigurationParams {
 	pub in_peers: u32,
 
 	/// By default, the network will use mDNS to discover other nodes on the local network. This
-	/// disables it.
+	/// disables it. Automatically implied when using --dev.
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
 
@@ -189,7 +189,7 @@ pub struct NodeKeyParams {
 		raw(
 			possible_values = "&NodeKeyType::variants()",
 			case_insensitive = "true",
-			default_value = r#""Secp256k1""#
+			default_value = r#""Ed25519""#
 		)
 	)]
 	pub node_key_type: NodeKeyType,
@@ -313,6 +313,10 @@ pub struct RunCmd {
 	#[structopt(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<u32>,
 
+	/// Specify the state cache size
+	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	pub state_cache_size: usize,
+
 	/// Listen to all RPC interfaces (default is local)
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
@@ -329,10 +333,15 @@ pub struct RunCmd {
 	#[structopt(long = "ws-port", value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
+	/// Maximum number of WS RPC server connections.
+	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
+	pub ws_max_connections: Option<usize>,
+
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	/// It's a comma-separated list of origins (protocol://domain or special `null` value).
 	/// Value of `all` will disable origin validation.
-	/// Default is to allow localhost and https://polkadot.js.org origin.
+	/// Default is to allow localhost, https://polkadot.js.org and https://substrate-ui.parity.io origins.
+	/// When running in --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = "parse_cors"))]
 	pub rpc_cors: Option<Option<Vec<String>>>,
 
@@ -390,6 +399,10 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
+
+	/// Interactive password for validator key.
+	#[structopt(short = "i")]
+	pub interactive_password: bool,
 }
 
 /// Stores all required Cli values for a keyring test account.
@@ -524,11 +537,11 @@ pub struct ExportBlocksCmd {
 
 	/// Specify starting block number. 1 by default.
 	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<u64>,
+	pub from: Option<u32>,
 
 	/// Specify last block number. Best block by default.
 	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<u64>,
+	pub to: Option<u32>,
 
 	/// Use JSON output rather than binary.
 	#[structopt(long = "json")]
@@ -559,12 +572,12 @@ pub struct ImportBlocksCmd {
 
 impl_get_log_filter!(ImportBlocksCmd);
 
-/// The `revert` command used revert the chain to a previos state.
+/// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]
-	pub num: u64,
+	pub num: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

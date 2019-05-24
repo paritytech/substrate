@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Hash, As, Zero};
+use primitives::traits::{Hash, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType, decl_module, decl_storage, decl_event, ensure};
@@ -113,10 +113,10 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as CouncilVoting {
-		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
+		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = 1000.into();
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = 3.into();
 		/// Number of blocks by which to delay enactment of successful, non-unanimous-council-instigated referendum proposals.
-		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
+		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = 0.into();
 		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
 		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
 		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
@@ -270,7 +270,7 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
+			assert_eq!(Democracy::active_referenda(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
@@ -282,7 +282,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![]);
+			assert_eq!(Democracy::active_referenda(), vec![]);
 			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
@@ -303,7 +303,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
+			assert_eq!(Democracy::active_referenda(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
 		});
 	}
 
@@ -322,7 +322,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
+			assert_eq!(Democracy::active_referenda(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
 		});
 	}
 
@@ -335,7 +335,7 @@ mod tests {
 			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(Origin::signed(2), hash));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums().len(), 0);
+			assert_eq!(Democracy::active_referenda().len(), 0);
 		});
 	}
 
@@ -386,7 +386,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(7, set_balance_proposal(42), VoteThreshold::SimpleMajority, 0))]);
+			assert_eq!(Democracy::active_referenda(), vec![(0, ReferendumInfo::new(7, set_balance_proposal(42), VoteThreshold::SimpleMajority, 0))]);
 		});
 	}
 
@@ -403,7 +403,7 @@ mod tests {
 			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(Origin::signed(3), hash));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums().len(), 0);
+			assert_eq!(Democracy::active_referenda().len(), 0);
 		});
 	}
 
@@ -433,7 +433,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums().len(), 0);
+			assert_eq!(Democracy::active_referenda().len(), 0);
 		});
 	}
 
@@ -451,7 +451,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(5, proposal, VoteThreshold::SuperMajorityAgainst, 0))]);
+			assert_eq!(Democracy::active_referenda(), vec![(0, ReferendumInfo::new(5, proposal, VoteThreshold::SuperMajorityAgainst, 0))]);
 		});
 	}
 
@@ -469,7 +469,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(5, proposal, VoteThreshold::SimpleMajority, 0))]);
+			assert_eq!(Democracy::active_referenda(), vec![(0, ReferendumInfo::new(5, proposal, VoteThreshold::SimpleMajority, 0))]);
 		});
 	}
 

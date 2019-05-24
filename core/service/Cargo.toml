@@ -1,21 +1,20 @@
 [package]
 name = "substrate-service"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+derive_more = "0.14.0"
 futures = "0.1.17"
 parking_lot = "0.7.1"
-error-chain = "0.12"
 lazy_static = "1.0"
 log = "0.4"
-slog = "^2"
+slog = {version = "^2", features = ["nested-values"]}
 tokio = "0.1.7"
 exit-future = "0.1"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_derive = "1.0"
 target_info = "0.1"
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
@@ -35,3 +34,7 @@ offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
+node-executor = { path = "../../node/executor" }
+node-primitives = { path = "../../node/primitives" }
+node-runtime = { path = "../../node/runtime" }
+grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }

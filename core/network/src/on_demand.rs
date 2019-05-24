@@ -19,75 +19,40 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
-use log::trace;
-use futures::{Async, Future, Poll};
-use futures::sync::oneshot::{channel, Receiver, Sender as OneShotSender};
-use linked_hash_map::LinkedHashMap;
-use linked_hash_map::Entry;
-use parking_lot::Mutex;
-use client::{error::{Error as ClientError, ErrorKind as ClientErrorKind}};
-use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
+use log::{trace, info};
+use futures::sync::oneshot::{Sender as OneShotSender};
+use linked_hash_map::{Entry, LinkedHashMap};
+use client::error::Error as ClientError;
+use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
+	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
+	RemoteReadChildRequest, RemoteBodyRequest};
 use crate::message;
-use network_libp2p::{Severity, PeerId};
+use network_libp2p::PeerId;
 use crate::config::Roles;
-use crate::service::{NetworkChan, NetworkMsg};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Default request retry count.
 const RETRY_COUNT: usize = 1;
+/// Reputation change for a peer when a request timed out.
+const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
-/// On-demand service API.
-pub trait OnDemandService<Block: BlockT>: Send + Sync {
-	/// When new node is connected.
-	fn on_connect(&self, peer: PeerId, role: Roles, best_number: NumberFor<Block>);
+/// Trait used by the `OnDemandCore` service to communicate messages back to the network.
+pub trait OnDemandNetwork<B: BlockT> {
+	/// Adjusts the reputation of the given peer.
+	fn report_peer(&mut self, who: &PeerId, reputation_change: i32);
 
-	/// When block is announced by the peer.
-	fn on_block_announce(&self, peer: PeerId, best_number: NumberFor<Block>);
+	/// Disconnect from the given peer. Used in case of misbehaviour.
+	fn disconnect_peer(&mut self, who: &PeerId);
 
-	/// When node is disconnected.
-	fn on_disconnect(&self, peer: PeerId);
-
-	/// Maintain peers requests.
-	fn maintain_peers(&self);
-
-	/// When header response is received from remote node.
-	fn on_remote_header_response(
-		&self,
-		peer: PeerId,
-		response: message::RemoteHeaderResponse<Block::Header>
-	);
-
-	/// When read response is received from remote node.
-	fn on_remote_read_response(&self, peer: PeerId, response: message::RemoteReadResponse);
-
-	/// When call response is received from remote node.
-	fn on_remote_call_response(&self, peer: PeerId, response: message::RemoteCallResponse);
-
-	/// When changes response is received from remote node.
-	fn on_remote_changes_response(
-		&self,
-		peer: PeerId,
-		response: message::RemoteChangesResponse<NumberFor<Block>, Block::Hash>
-	);
+	/// Send a request to a peer.
+	fn send_request(&mut self, who: &PeerId, message: message::Message<B>);
 }
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
-pub struct OnDemand<B: BlockT> {
-	core: Mutex<OnDemandCore<B>>,
-	checker: Arc<FetchChecker<B>>,
-	network_sender: Mutex<Option<NetworkChan<B>>>,
-}
-
-/// On-demand remote call response.
-pub struct RemoteResponse<T> {
-	receiver: Receiver<Result<T, ClientError>>,
-}
-
-#[derive(Default)]
-struct OnDemandCore<B: BlockT> {
+pub struct OnDemandCore<B: BlockT> {
+	checker: Arc<dyn FetchChecker<B>>,
 	next_request_id: u64,
 	pending_requests: VecDeque<Request<B>>,
 	active_peers: LinkedHashMap<PeerId, Request<B>>,
@@ -102,11 +67,22 @@ struct Request<Block: BlockT> {
 	data: RequestData<Block>,
 }
 
-enum RequestData<Block: BlockT> {
+/// One request for data made by the `Client`.
+///
+/// Contains a `Sender` where to send the result.
+pub(crate) enum RequestData<Block: BlockT> {
+	RemoteBody(RemoteBodyRequest<Block::Header>, OneShotSender<Result<Vec<Block::Extrinsic>, ClientError>>),
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, OneShotSender<Result<Block::Header, ClientError>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
+	RemoteReadChild(
+		RemoteReadChildRequest<Block::Header>,
+		OneShotSender<Result<Option<Vec<u8>>, ClientError>>
+	),
 	RemoteCall(RemoteCallRequest<Block::Header>, OneShotSender<Result<Vec<u8>, ClientError>>),
-	RemoteChanges(RemoteChangesRequest<Block::Header>, OneShotSender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
+	RemoteChanges(
+		RemoteChangesRequest<Block::Header>,
+		OneShotSender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>
+	),
 }
 
 enum Accept<Block: BlockT> {
@@ -115,143 +91,209 @@ enum Accept<Block: BlockT> {
 	Unexpected(RequestData<Block>),
 }
 
-impl<T> Future for RemoteResponse<T> {
-	type Item = T;
-	type Error = ClientError;
+/// Dummy implementation of `FetchChecker` that always assumes that responses are bad.
+///
+/// Considering that it is the responsibility of the client to build the fetcher, it can use this
+/// implementation if it knows that it will never perform any request.
+#[derive(Default, Clone)]
+pub struct AlwaysBadChecker;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.receiver.poll()
-			.map_err(|_| ClientErrorKind::RemoteFetchCancelled.into())
-			.and_then(|r| match r {
-				Async::Ready(Ok(ready)) => Ok(Async::Ready(ready)),
-				Async::Ready(Err(error)) => Err(error),
-				Async::NotReady => Ok(Async::NotReady),
-			})
+impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
+	fn check_header_proof(
+		&self,
+		_request: &RemoteHeaderRequest<Block::Header>,
+		_remote_header: Option<Block::Header>,
+		_remote_proof: Vec<Vec<u8>>
+	) -> Result<Block::Header, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_read_proof(
+		&self,
+		_request: &RemoteReadRequest<Block::Header>,
+		_remote_proof: Vec<Vec<u8>>
+	) -> Result<Option<Vec<u8>>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_read_child_proof(
+		&self,
+		_request: &RemoteReadChildRequest<Block::Header>,
+		_remote_proof: Vec<Vec<u8>>
+	) -> Result<Option<Vec<u8>>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_execution_proof(
+		&self,
+		_request: &RemoteCallRequest<Block::Header>,
+		_remote_proof: Vec<Vec<u8>>
+	) -> Result<Vec<u8>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_changes_proof(
+		&self,
+		_request: &RemoteChangesRequest<Block::Header>,
+		_remote_proof: ChangesProof<Block::Header>
+	) -> Result<Vec<(NumberFor<Block>, u32)>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_body_proof(
+		&self,
+		_request: &RemoteBodyRequest<Block::Header>,
+		_body: Vec<Block::Extrinsic>
+	) -> Result<Vec<Block::Extrinsic>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
 }
 
-impl<B: BlockT> OnDemand<B> where
+impl<B: BlockT> OnDemandCore<B> where
 	B::Header: HeaderT,
 {
-	/// Creates new on-demand service.
-	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
-		OnDemand {
+	/// Creates new on-demand requests processer.
+	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
+		OnDemandCore {
 			checker,
-			network_sender: Mutex::new(None),
-			core: Mutex::new(OnDemandCore {
-				next_request_id: 0,
-				pending_requests: VecDeque::new(),
-				active_peers: LinkedHashMap::new(),
-				idle_peers: VecDeque::new(),
-				best_blocks: HashMap::new(),
-			})
+			next_request_id: 0,
+			pending_requests: VecDeque::new(),
+			active_peers: LinkedHashMap::new(),
+			idle_peers: VecDeque::new(),
+			best_blocks: HashMap::new(),
 		}
 	}
 
-	/// Sets weak reference to network service.
-	pub fn set_network_sender(&self, network_sender: NetworkChan<B>) {
-		self.network_sender.lock().replace(network_sender);
+	/// Inserts a new request in the list of requests to execute.
+	pub(crate) fn add_request(&mut self, network: impl OnDemandNetwork<B>, data: RequestData<B>) {
+		self.insert(RETRY_COUNT, data);
+		self.dispatch(network);
 	}
 
-	fn send(&self, msg: NetworkMsg<B>) {
-		let _ = self.network_sender
-			.lock()
-			.as_ref()
-			.expect("1. OnDemand is passed a network sender upon initialization of the service, 2. it should bet set by now")
-		   	.send(msg);
-	}
+	/// Inserts a new request in the list of requests to execute.
+	fn insert(&mut self, retry_count: usize, data: RequestData<B>) {
+		let request_id = self.next_request_id;
+		self.next_request_id += 1;
 
-	/// Schedule && dispatch all scheduled requests.
-	fn schedule_request<R>(&self, retry_count: Option<usize>, data: RequestData<B>, result: R) -> R {
-		let mut core = self.core.lock();
-		core.insert(retry_count.unwrap_or(RETRY_COUNT), data);
-		core.dispatch(self);
-		result
+		self.pending_requests.push_back(Request {
+			id: request_id,
+			timestamp: Instant::now(),
+			retry_count,
+			data,
+		});
 	}
 
 	/// Try to accept response from given peer.
-	fn accept_response<F: FnOnce(Request<B>) -> Accept<B>>(&self, rtype: &str, peer: PeerId, request_id: u64, try_accept: F) {
-		let mut core = self.core.lock();
-		let request = match core.remove(peer.clone(), request_id) {
+	fn accept_response(
+		&mut self,
+		rtype: &str,
+		mut network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		request_id: u64,
+		try_accept: impl FnOnce(Request<B>, &Arc<dyn FetchChecker<B>>) -> Accept<B>
+	) {
+		let request = match self.remove(peer.clone(), request_id) {
 			Some(request) => request,
 			None => {
-				let reason = format!("Invalid remote {} response from peer", rtype);
-				self.send(NetworkMsg::ReportPeer(peer.clone(), Severity::Bad(reason)));
-				core.remove_peer(peer);
+				info!("Invalid remote {} response from peer {}", rtype, peer);
+				network.report_peer(&peer, i32::min_value());
+				network.disconnect_peer(&peer);
+				self.remove_peer(peer);
 				return;
 			},
 		};
 
 		let retry_count = request.retry_count;
-		let (retry_count, retry_request_data) = match try_accept(request) {
+		let (retry_count, retry_request_data) = match try_accept(request, &self.checker) {
 			Accept::Ok => (retry_count, None),
 			Accept::CheckFailed(error, retry_request_data) => {
-				let reason = format!("Failed to check remote {} response from peer: {}", rtype, error);
-				self.send(NetworkMsg::ReportPeer(peer.clone(), Severity::Bad(reason)));
-				core.remove_peer(peer);
+				info!("Failed to check remote {} response from peer {}: {}", rtype, peer, error);
+				network.report_peer(&peer, i32::min_value());
+				network.disconnect_peer(&peer);
+				self.remove_peer(peer);
 
 				if retry_count > 0 {
 					(retry_count - 1, Some(retry_request_data))
 				} else {
 					trace!(target: "sync", "Failed to get remote {} response for given number of retries", rtype);
-					retry_request_data.fail(ClientErrorKind::RemoteFetchFailed.into());
+					retry_request_data.fail(ClientError::RemoteFetchFailed.into());
 					(0, None)
 				}
 			},
 			Accept::Unexpected(retry_request_data) => {
-				let reason = format!("Unexpected response to remote {} from peer", rtype);
-				self.send(NetworkMsg::ReportPeer(peer.clone(), Severity::Bad(reason)));
-				core.remove_peer(peer);
+				info!("Unexpected response to remote {} from peer", rtype);
+				network.report_peer(&peer, i32::min_value());
+				network.disconnect_peer(&peer);
+				self.remove_peer(peer);
 
 				(retry_count, Some(retry_request_data))
 			},
 		};
 
 		if let Some(request_data) = retry_request_data {
-			core.insert(retry_count, request_data);
+			self.insert(retry_count, request_data);
 		}
 
-		core.dispatch(self);
+		self.dispatch(network);
 	}
-}
 
-impl<B> OnDemandService<B> for OnDemand<B> where
-	B: BlockT,
-	B::Header: HeaderT,
-{
-	fn on_connect(&self, peer: PeerId, role: Roles, best_number: NumberFor<B>) {
-		if !role.intersects(Roles::FULL | Roles::AUTHORITY) {
+	pub fn on_connect(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		role: Roles,
+		best_number: NumberFor<B>
+	) {
+		if !role.is_full() {
 			return;
 		}
 
-		let mut core = self.core.lock();
-		core.add_peer(peer, best_number);
-		core.dispatch(self);
+		self.idle_peers.push_back(peer.clone());
+		self.best_blocks.insert(peer, best_number);
+	
+		self.dispatch(network);
 	}
 
-	fn on_block_announce(&self, peer: PeerId, best_number: NumberFor<B>) {
-		let mut core = self.core.lock();
-		core.update_peer(peer, best_number);
-		core.dispatch(self);
+	pub fn on_block_announce(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId, best_number: NumberFor<B>) {
+		self.best_blocks.insert(peer, best_number);
+		self.dispatch(network);
 	}
 
-	fn on_disconnect(&self, peer: PeerId) {
-		let mut core = self.core.lock();
-		core.remove_peer(peer);
-		core.dispatch(self);
+	pub fn on_disconnect(&mut self, network: impl OnDemandNetwork<B>, peer: PeerId) {
+		self.remove_peer(peer);
+		self.dispatch(network);
 	}
 
-	fn maintain_peers(&self) {
-		let mut core = self.core.lock();
-		for bad_peer in core.maintain_peers() {
-			self.send(NetworkMsg::ReportPeer(bad_peer, Severity::Timeout));
+	pub fn maintain_peers(&mut self, mut network: impl OnDemandNetwork<B>) {
+		let now = Instant::now();
+
+		loop {
+			match self.active_peers.front() {
+				Some((_, request)) if now - request.timestamp >= REQUEST_TIMEOUT => (),
+				_ => break,
+			}
+
+			let (bad_peer, request) = self.active_peers.pop_front().expect("front() is Some as checked above");
+			self.pending_requests.push_front(request);
+			network.report_peer(&bad_peer, TIMEOUT_REPUTATION_CHANGE);
+			network.disconnect_peer(&bad_peer);
 		}
-		core.dispatch(self);
+
+		self.dispatch(network);
 	}
 
-	fn on_remote_header_response(&self, peer: PeerId, response: message::RemoteHeaderResponse<B::Header>) {
-		self.accept_response("header", peer, response.id, |request| match request.data {
-			RequestData::RemoteHeader(request, sender) => match self.checker.check_header_proof(&request, response.header, response.proof) {
+	pub fn on_remote_header_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteHeaderResponse<B::Header>
+	) {
+		self.accept_response("header", network, peer, response.id, |request, checker| match request.data {
+			RequestData::RemoteHeader(request, sender) => match checker.check_header_proof(
+				&request,
+				response.header,
+				response.proof
+			) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
@@ -263,23 +305,49 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 		})
 	}
 
-	fn on_remote_read_response(&self, peer: PeerId, response: message::RemoteReadResponse) {
-		self.accept_response("read", peer, response.id, |request| match request.data {
-			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
-				Ok(response) => {
-					// we do not bother if receiver has been dropped already
-					let _ = sender.send(Ok(response));
-					Accept::Ok
-				},
-				Err(error) => Accept::CheckFailed(error, RequestData::RemoteRead(request, sender)),
-			},
+	pub fn on_remote_read_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteReadResponse
+	) {
+		self.accept_response("read", network, peer, response.id, |request, checker| match request.data {
+			RequestData::RemoteRead(request, sender) => {
+				match checker.check_read_proof(&request, response.proof) {
+					Ok(response) => {
+						// we do not bother if receiver has been dropped already
+						let _ = sender.send(Ok(response));
+						Accept::Ok
+					},
+					Err(error) => Accept::CheckFailed(
+						error,
+						RequestData::RemoteRead(request, sender)
+					),
+			}},
+			RequestData::RemoteReadChild(request, sender) => {
+				match checker.check_read_child_proof(&request, response.proof) {
+					Ok(response) => {
+						// we do not bother if receiver has been dropped already
+						let _ = sender.send(Ok(response));
+						Accept::Ok
+					},
+					Err(error) => Accept::CheckFailed(
+						error,
+						RequestData::RemoteReadChild(request, sender)
+					),
+			}},
 			data => Accept::Unexpected(data),
 		})
 	}
 
-	fn on_remote_call_response(&self, peer: PeerId, response: message::RemoteCallResponse) {
-		self.accept_response("call", peer, response.id, |request| match request.data {
-			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, response.proof) {
+	pub fn on_remote_call_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteCallResponse
+	) {
+		self.accept_response("call", network, peer, response.id, |request, checker| match request.data {
+			RequestData::RemoteCall(request, sender) => match checker.check_execution_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
@@ -291,9 +359,14 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 		})
 	}
 
-	fn on_remote_changes_response(&self, peer: PeerId, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
-		self.accept_response("changes", peer, response.id, |request| match request.data {
-			RequestData::RemoteChanges(request, sender) => match self.checker.check_changes_proof(
+	pub fn on_remote_changes_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>
+	) {
+		self.accept_response("changes", network, peer, response.id, |request, checker| match request.data {
+			RequestData::RemoteChanges(request, sender) => match checker.check_changes_proof(
 				&request, ChangesProof {
 					max_block: response.max,
 					proof: response.proof,
@@ -310,53 +383,57 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 			data => Accept::Unexpected(data),
 		})
 	}
-}
 
-impl<B> Fetcher<B> for OnDemand<B> where
-	B: BlockT,
-	B::Header: HeaderT,
-{
-	type RemoteHeaderResult = RemoteResponse<B::Header>;
-	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
-	type RemoteCallResult = RemoteResponse<Vec<u8>>;
-	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
+	pub fn on_remote_body_response(
+		&mut self,
+		network: impl OnDemandNetwork<B>,
+		peer: PeerId,
+		response: message::BlockResponse<B>
+	) {
+		self.accept_response("body", network, peer, response.id, |request, checker| match request.data {
+			RequestData::RemoteBody(request, sender) => {
+				let mut bodies: Vec<_> = response
+					.blocks
+					.into_iter()
+					.filter_map(|b| b.body)
+					.collect();
 
-	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
-		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteHeader(request, sender),
-			RemoteResponse { receiver })
+				// Number of bodies are hardcoded to 1 for valid `RemoteBodyResponses`
+				if bodies.len() != 1 {
+					return Accept::CheckFailed(
+						"RemoteBodyResponse: invalid number of blocks".into(),
+						RequestData::RemoteBody(request, sender),
+					)
+				}
+				let body = bodies.remove(0);
+
+				match checker.check_body_proof(&request, body) {
+					Ok(body) => {
+						let _ = sender.send(Ok(body));
+						Accept::Ok
+					}
+					Err(error) => Accept::CheckFailed(error, RequestData::RemoteBody(request, sender)),
+				}
+			}
+			other => Accept::Unexpected(other),
+		})
 	}
 
-	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
-		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteRead(request, sender),
-			RemoteResponse { receiver })
+	pub fn is_on_demand_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
+		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
 	}
 
-	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
-		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
-			RemoteResponse { receiver })
-	}
-
-	fn remote_changes(&self, request: RemoteChangesRequest<B::Header>) -> Self::RemoteChangesResult {
-		let (sender, receiver) = channel();
-		self.schedule_request(request.retry_count.clone(), RequestData::RemoteChanges(request, sender),
-			RemoteResponse { receiver })
-	}
-}
-
-impl<B> OnDemandCore<B> where
-	B: BlockT,
-	B::Header: HeaderT,
-{
-	pub fn add_peer(&mut self, peer: PeerId, best_number: NumberFor<B>) {
-		self.idle_peers.push_back(peer.clone());
-		self.best_blocks.insert(peer, best_number);
-	}
-
-	pub fn update_peer(&mut self, peer: PeerId, best_number: NumberFor<B>) {
-		self.best_blocks.insert(peer, best_number);
+	fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
+		match self.active_peers.entry(peer.clone()) {
+			Entry::Occupied(entry) => match entry.get().id == id {
+				true => {
+					self.idle_peers.push_back(peer);
+					Some(entry.remove())
+				},
+				false => None,
+			},
+			Entry::Vacant(_) => None,
+		}
 	}
 
 	pub fn remove_peer(&mut self, peer: PeerId) {
@@ -372,48 +449,8 @@ impl<B> OnDemandCore<B> where
 		}
 	}
 
-	pub fn maintain_peers(&mut self) -> Vec<PeerId> {
-		let now = Instant::now();
-		let mut bad_peers = Vec::new();
-		loop {
-			match self.active_peers.front() {
-				Some((_, request)) if now - request.timestamp >= REQUEST_TIMEOUT => (),
-				_ => return bad_peers,
-			}
-
-			let (bad_peer, request) = self.active_peers.pop_front().expect("front() is Some as checked above");
-			self.pending_requests.push_front(request);
-			bad_peers.push(bad_peer);
-		}
-	}
-
-	pub fn insert(&mut self, retry_count: usize, data: RequestData<B>) {
-		let request_id = self.next_request_id;
-		self.next_request_id += 1;
-
-		self.pending_requests.push_back(Request {
-			id: request_id,
-			timestamp: Instant::now(),
-			retry_count,
-			data,
-		});
-	}
-
-	pub fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
-		match self.active_peers.entry(peer.clone()) {
-			Entry::Occupied(entry) => match entry.get().id == id {
-				true => {
-					self.idle_peers.push_back(peer);
-					Some(entry.remove())
-				},
-				false => None,
-			},
-			Entry::Vacant(_) => None,
-		}
-	}
-
-	pub fn dispatch(&mut self, on_demand: &OnDemand<B>) {
-
+	/// Dispatches pending requests.
+	fn dispatch(&mut self, mut network: impl OnDemandNetwork<B>) {
 		let mut last_peer = self.idle_peers.back().cloned();
 		let mut unhandled_requests = VecDeque::new();
 
@@ -458,7 +495,7 @@ impl<B> OnDemandCore<B> where
 			let mut request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 			request.timestamp = Instant::now();
 			trace!(target: "sync", "Dispatching remote request {} to peer {}", request.id, peer);
-			on_demand.send(NetworkMsg::Outgoing(peer.clone(), request.message()));
+			network.send_request(&peer, request.message());
 			self.active_peers.insert(peer, request);
 		}
 
@@ -467,16 +504,18 @@ impl<B> OnDemandCore<B> where
 }
 
 impl<Block: BlockT> Request<Block> {
-	pub fn required_block(&self) -> NumberFor<Block> {
+	fn required_block(&self) -> NumberFor<Block> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) => data.block,
 			RequestData::RemoteRead(ref data, _) => *data.header.number(),
+			RequestData::RemoteReadChild(ref data, _) => *data.header.number(),
 			RequestData::RemoteCall(ref data, _) => *data.header.number(),
 			RequestData::RemoteChanges(ref data, _) => data.max_block.0,
+			RequestData::RemoteBody(ref data, _) => *data.header.number(),
 		}
 	}
 
-	pub fn message(&self) -> message::Message<Block> {
+	fn message(&self) -> message::Message<Block> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) =>
 				message::generic::Message::RemoteHeaderRequest(message::RemoteHeaderRequest {
@@ -488,6 +527,14 @@ impl<Block: BlockT> Request<Block> {
 					id: self.id,
 					block: data.block,
 					key: data.key.clone(),
+				}),
+			RequestData::RemoteReadChild(ref data, _) =>
+				message::generic::Message::RemoteReadChildRequest(
+					message::RemoteReadChildRequest {
+						id: self.id,
+						block: data.block,
+						storage_key: data.storage_key.clone(),
+						key: data.key.clone(),
 				}),
 			RequestData::RemoteCall(ref data, _) =>
 				message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
@@ -505,39 +552,51 @@ impl<Block: BlockT> Request<Block> {
 					max: data.max_block.1.clone(),
 					key: data.key.clone(),
 				}),
+			RequestData::RemoteBody(ref data, _) => {
+				message::generic::Message::BlockRequest(message::BlockRequest::<Block> {
+					id: self.id,
+					fields: message::BlockAttributes::BODY,
+					from: message::FromBlock::Hash(data.header.hash()),
+					to: None,
+					direction: message::Direction::Ascending,
+					max: Some(1),
+				})
+			}
 		}
 	}
 }
 
 impl<Block: BlockT> RequestData<Block> {
-	pub fn fail(self, error: ClientError) {
+	fn fail(self, error: ClientError) {
 		// don't care if anyone is listening
 		match self {
 			RequestData::RemoteHeader(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteReadChild(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteChanges(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteBody(_, sender) => { let _ = sender.send(Err(error)); },
 		}
 	}
 }
 
 #[cfg(test)]
 pub mod tests {
+	use std::collections::HashSet;
 	use std::sync::Arc;
 	use std::time::Instant;
-	use futures::Future;
-	use runtime_primitives::traits::NumberFor;
-	use client::{error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
-	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
+	use futures::{Future, sync::oneshot};
+	use runtime_primitives::traits::{Block as BlockT, NumberFor};
+	use client::{error::{Error as ClientError, Result as ClientResult}};
+	use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
+		ChangesProof,	RemoteCallRequest, RemoteReadRequest,
+		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message;
-	use network_libp2p::{PeerId, Severity};
-	use crate::service::{network_channel, NetworkPort, NetworkMsg};
-	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
-	use test_client::runtime::{changes_trie_config, Block, Header};
+	use network_libp2p::PeerId;
+	use super::{REQUEST_TIMEOUT, OnDemandCore, OnDemandNetwork, RequestData};
+	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
 
-	pub struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
 
 	impl FetchChecker<Block> for DummyFetchChecker {
@@ -549,45 +608,73 @@ pub mod tests {
 		) -> ClientResult<Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
-				_ => Err(ClientErrorKind::Backend("Test error".into()).into()),
+				_ => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_read_proof(&self, _: &RemoteReadRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),
-				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_child_proof(
+			&self,
+			_: &RemoteReadChildRequest<Header>,
+			_: Vec<Vec<u8>>
+		) -> ClientResult<Option<Vec<u8>>> {
+			match self.ok {
+				true => Ok(Some(vec![42])),
+				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
-				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
+				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
-		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: ChangesProof<Header>) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
+		fn check_changes_proof(
+			&self,
+			_: &RemoteChangesRequest<Header>,
+			_: ChangesProof<Header>
+		) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
 			match self.ok {
 				true => Ok(vec![(100, 2)]),
-				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_body_proof(
+			&self,
+			_: &RemoteBodyRequest<Header>,
+			body: Vec<Extrinsic>
+		) -> ClientResult<Vec<Extrinsic>> {
+			match self.ok {
+				true => Ok(body),
+				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 	}
 
-	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<Block>>) {
-		let executor = Arc::new(DummyExecutor);
-		let service = Arc::new(OnDemand::new(Arc::new(DummyFetchChecker { ok })));
-		(executor, service)
+	fn dummy(ok: bool) -> OnDemandCore<Block> {
+		OnDemandCore::new(Arc::new(DummyFetchChecker { ok }))
 	}
 
-	fn total_peers(on_demand: &OnDemand<Block>) -> usize {
-		let core = on_demand.core.lock();
-		core.idle_peers.len() + core.active_peers.len()
+	fn total_peers(on_demand: &OnDemandCore<Block>) -> usize {
+		on_demand.idle_peers.len() + on_demand.active_peers.len()
 	}
 
-	fn receive_call_response(on_demand: &OnDemand<Block>, peer: PeerId, id: message::RequestId) {
-		on_demand.on_remote_call_response(peer, message::RemoteCallResponse {
+	fn receive_call_response(
+		network_interface: impl OnDemandNetwork<Block>,
+		on_demand: &mut OnDemandCore<Block>,
+		peer: PeerId,
+		id: message::RequestId
+	) {
+		on_demand.on_remote_call_response(network_interface, peer, message::RemoteCallResponse {
 			id: id,
 			proof: vec![vec![2]],
 		});
@@ -603,152 +690,151 @@ pub mod tests {
 		}
 	}
 
-	fn assert_disconnected_peer(network_port: NetworkPort<Block>, expected_severity: Severity) {
-		let mut disconnect_count = 0;
-		while let Ok(msg) = network_port.receiver().try_recv() {
-			match msg {
-				NetworkMsg::ReportPeer(_, severity) => {
-					if severity == expected_severity {
-						disconnect_count = disconnect_count + 1;
-					}
-				},
-				_ => {},
-			}
+	#[derive(Default)]
+	struct DummyNetwork {
+		disconnected_peers: HashSet<PeerId>,
+	}
+
+	impl<'a, B: BlockT> OnDemandNetwork<B> for &'a mut DummyNetwork {
+		fn report_peer(&mut self, _: &PeerId, _: i32) {}
+		fn disconnect_peer(&mut self, who: &PeerId) {
+			self.disconnected_peers.insert(who.clone());
 		}
-		assert_eq!(disconnect_count, 1);
+		fn send_request(&mut self, _: &PeerId, _: message::Message<B>) {}
+	}
+
+	fn assert_disconnected_peer(dummy: &DummyNetwork) {
+		assert_eq!(dummy.disconnected_peers.len(), 1);
 	}
 
 	#[test]
 	fn knows_about_peers_roles() {
-		let (_, on_demand) = dummy(true);
+		let mut network_interface = DummyNetwork::default();
+		let mut on_demand = dummy(true);
 		let peer0 = PeerId::random();
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
-		on_demand.on_connect(peer0, Roles::LIGHT, 1000);
-		on_demand.on_connect(peer1.clone(), Roles::FULL, 2000);
-		on_demand.on_connect(peer2.clone(), Roles::AUTHORITY, 3000);
-		assert_eq!(vec![peer1.clone(), peer2.clone()], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
-		assert_eq!(on_demand.core.lock().best_blocks.get(&peer1), Some(&2000));
-		assert_eq!(on_demand.core.lock().best_blocks.get(&peer2), Some(&3000));
+		on_demand.on_connect(&mut network_interface, peer0, Roles::LIGHT, 1000);
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 2000);
+		on_demand.on_connect(&mut network_interface, peer2.clone(), Roles::AUTHORITY, 3000);
+		assert_eq!(vec![peer1.clone(), peer2.clone()], on_demand.idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(on_demand.best_blocks.get(&peer1), Some(&2000));
+		assert_eq!(on_demand.best_blocks.get(&peer2), Some(&3000));
 	}
 
 	#[test]
 	fn disconnects_from_idle_peer() {
 		let peer0 = PeerId::random();
 
-		let (_, on_demand) = dummy(true);
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 100);
-		assert_eq!(1, total_peers(&*on_demand));
-		assert!(!on_demand.core.lock().best_blocks.is_empty());
+		let mut network_interface = DummyNetwork::default();
+		let mut on_demand = dummy(true);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 100);
+		assert_eq!(1, total_peers(&on_demand));
+		assert!(!on_demand.best_blocks.is_empty());
 
-		on_demand.on_disconnect(peer0);
-		assert_eq!(0, total_peers(&*on_demand));
-		assert!(on_demand.core.lock().best_blocks.is_empty());
+		on_demand.on_disconnect(&mut network_interface, peer0);
+		assert_eq!(0, total_peers(&on_demand));
+		assert!(on_demand.best_blocks.is_empty());
 	}
 
 	#[test]
 	fn disconnects_from_timeouted_peer() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
 		let peer1 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
-		on_demand.on_connect(peer1.clone(), Roles::FULL, 1000);
-		assert_eq!(vec![peer0.clone(), peer1.clone()], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
-		assert!(on_demand.core.lock().active_peers.is_empty());
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 1000);
+		assert_eq!(vec![peer0.clone(), peer1.clone()], on_demand.idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert!(on_demand.active_peers.is_empty());
 
-		on_demand.remote_call(RemoteCallRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
 			call_data: vec![],
 			retry_count: None,
-		});
-		assert_eq!(vec![peer1.clone()], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
-		assert_eq!(vec![peer0.clone()], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
+		}, oneshot::channel().0));
+		assert_eq!(vec![peer1.clone()], on_demand.idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(vec![peer0.clone()], on_demand.active_peers.keys().cloned().collect::<Vec<_>>());
 
-		on_demand.core.lock().active_peers[&peer0].timestamp = Instant::now() - REQUEST_TIMEOUT - REQUEST_TIMEOUT;
-		on_demand.maintain_peers();
-		assert!(on_demand.core.lock().idle_peers.is_empty());
-		assert_eq!(vec![peer1.clone()], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
-		assert_disconnected_peer(network_port, Severity::Timeout);
+		on_demand.active_peers[&peer0].timestamp = Instant::now() - REQUEST_TIMEOUT - REQUEST_TIMEOUT;
+		on_demand.maintain_peers(&mut network_interface);
+		assert!(on_demand.idle_peers.is_empty());
+		assert_eq!(vec![peer1.clone()], on_demand.active_peers.keys().cloned().collect::<Vec<_>>());
+		assert_disconnected_peer(&network_interface);
 	}
 
 	#[test]
 	fn disconnects_from_peer_on_response_with_wrong_id() {
-		let (_x, on_demand) = dummy(true);
+		let mut on_demand = dummy(true);
 		let peer0 = PeerId::random();
-		let (network_sender, network_port) = network_channel();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		let mut network_interface = DummyNetwork::default();
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		on_demand.remote_call(RemoteCallRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
 			call_data: vec![],
 			retry_count: None,
-		});
-		receive_call_response(&*on_demand, peer0, 1);
-		assert_disconnected_peer(network_port, Severity::Bad("Invalid remote call response from peer".to_string()));
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+		}, oneshot::channel().0));
+		receive_call_response(&mut network_interface, &mut on_demand, peer0, 1);
+		assert_disconnected_peer(&network_interface);
+		assert_eq!(on_demand.pending_requests.len(), 1);
 	}
 
 	#[test]
 	fn disconnects_from_peer_on_incorrect_response() {
-		let (_x, on_demand) = dummy(false);
-		let (network_sender, network_port) = network_channel();
+		let mut on_demand = dummy(false);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.remote_call(RemoteCallRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
 			call_data: vec![],
 			retry_count: Some(1),
-		});
+		}, oneshot::channel().0));
 
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
-		receive_call_response(&*on_demand, peer0.clone(), 0);
-		assert_disconnected_peer(network_port, Severity::Bad("Failed to check remote call response from peer: Backend error: Test error".to_string()));
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
+		receive_call_response(&mut network_interface, &mut on_demand, peer0.clone(), 0);
+		assert_disconnected_peer(&network_interface);
+		assert_eq!(on_demand.pending_requests.len(), 1);
 	}
 
 	#[test]
 	fn disconnects_from_peer_on_unexpected_response() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		receive_call_response(&*on_demand, peer0, 0);
-		assert_disconnected_peer(network_port, Severity::Bad("Invalid remote call response from peer".to_string()));
+		receive_call_response(&mut network_interface, &mut on_demand, peer0, 0);
+		assert_disconnected_peer(&network_interface);
 	}
 
 	#[test]
 	fn disconnects_from_peer_on_wrong_response_type() {
-		let (_x, on_demand) = dummy(false);
+		let mut on_demand = dummy(false);
 		let peer0 = PeerId::random();
-		let (network_sender, network_port) = network_channel();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		let mut network_interface = DummyNetwork::default();
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		on_demand.remote_call(RemoteCallRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
 			call_data: vec![],
 			retry_count: Some(1),
-		});
+		}, oneshot::channel().0));
 
-		on_demand.on_remote_read_response(peer0.clone(), message::RemoteReadResponse {
+		on_demand.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
 			proof: vec![vec![2]],
 		});
-		assert_disconnected_peer(network_port, Severity::Bad("Unexpected response to remote read from peer".to_string()));
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+		assert_disconnected_peer(&network_interface);
+		assert_eq!(on_demand.pending_requests.len(), 1);
 	}
 
 	#[test]
@@ -757,26 +843,26 @@ pub mod tests {
 
 		let retry_count = 2;
 		let peer_ids = (0 .. retry_count + 1).map(|_| PeerId::random()).collect::<Vec<_>>();
-		let (_x, on_demand) = dummy(false);
-		let (network_sender, _network_port) = network_channel();
-		on_demand.set_network_sender(network_sender.clone());
+		let mut on_demand = dummy(false);
+		let mut network_interface = DummyNetwork::default();
 		for i in 0..retry_count+1 {
-			on_demand.on_connect(peer_ids[i].clone(), Roles::FULL, 1000);
+			on_demand.on_connect(&mut network_interface, peer_ids[i].clone(), Roles::FULL, 1000);
 		}
 
 		let sync = Arc::new((Mutex::new(0), Mutex::new(0), Condvar::new()));
 		let thread_sync = sync.clone();
 
-		let response = on_demand.remote_call(RemoteCallRequest {
+		let (tx, response) = oneshot::channel();
+		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
 			call_data: vec![],
 			retry_count: Some(retry_count)
-		});
+		}, tx));
 		let thread = ::std::thread::spawn(move || {
 			let &(ref current, ref finished_at, ref finished) = &*thread_sync;
-			let _ = response.wait().unwrap_err();
+			let _ = response.wait().unwrap().unwrap_err();
 			*finished_at.lock() = *current.lock();
 			finished.notify_one();
 		});
@@ -785,7 +871,7 @@ pub mod tests {
 		for i in 0..retry_count+1 {
 			let mut current = current.lock();
 			*current = *current + 1;
-			receive_call_response(&*on_demand, peer_ids[i].clone(), i as u64);
+			receive_call_response(&mut network_interface, &mut on_demand, peer_ids[i].clone(), i as u64);
 		}
 
 		let mut finished_at = finished_at.lock();
@@ -797,48 +883,48 @@ pub mod tests {
 
 	#[test]
 	fn receives_remote_call_response() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		let response = on_demand.remote_call(RemoteCallRequest {
+		let (tx, response) = oneshot::channel();
+		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
 			call_data: vec![],
 			retry_count: None,
-		});
+		}, tx));
 		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap();
+			let result = response.wait().unwrap().unwrap();
 			assert_eq!(result, vec![42]);
 		});
 
-		receive_call_response(&*on_demand, peer0.clone(), 0);
+		receive_call_response(&mut network_interface, &mut on_demand, peer0.clone(), 0);
 		thread.join().unwrap();
 	}
 
 	#[test]
 	fn receives_remote_read_response() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		let response = on_demand.remote_read(RemoteReadRequest {
+		let (tx, response) = oneshot::channel();
+		on_demand.add_request(&mut network_interface, RequestData::RemoteRead(RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			key: b":key".to_vec(),
 			retry_count: None,
-		});
+		}, tx));
 		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap();
+			let result = response.wait().unwrap().unwrap();
 			assert_eq!(result, Some(vec![42]));
 		});
 
-		on_demand.on_remote_read_response(peer0.clone(), message::RemoteReadResponse {
+		on_demand.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
 			proof: vec![vec![2]],
 		});
@@ -846,20 +932,48 @@ pub mod tests {
 	}
 
 	#[test]
-	fn receives_remote_header_response() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+	fn receives_remote_read_child_response() {
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		let response = on_demand.remote_header(RemoteHeaderRequest {
+		let (tx, response) = oneshot::channel();
+		on_demand.add_request(&mut network_interface, RequestData::RemoteReadChild(RemoteReadChildRequest {
+			header: dummy_header(),
+			block: Default::default(),
+			storage_key: b":child_storage:sub".to_vec(),
+			key: b":key".to_vec(),
+			retry_count: None,
+		}, tx));
+		let thread = ::std::thread::spawn(move || {
+			let result = response.wait().unwrap().unwrap();
+			assert_eq!(result, Some(vec![42]));
+		});
+
+		on_demand.on_remote_read_response(&mut network_interface, 
+			peer0.clone(), message::RemoteReadResponse {
+				id: 0,
+				proof: vec![vec![2]],
+		});
+		thread.join().unwrap();
+	}
+
+	#[test]
+	fn receives_remote_header_response() {
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
+		let peer0 = PeerId::random();
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
+
+		let (tx, response) = oneshot::channel();
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
-		});
+		}, tx));
 		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap();
+			let result = response.wait().unwrap().unwrap();
 			assert_eq!(
 				result.hash(),
 				"6443a0b46e0412e626363028115a9f2c\
@@ -867,7 +981,7 @@ pub mod tests {
 			);
 		});
 
-		on_demand.on_remote_header_response(peer0.clone(), message::RemoteHeaderResponse {
+		on_demand.on_remote_header_response(&mut network_interface, peer0.clone(), message::RemoteHeaderResponse {
 			id: 0,
 			header: Some(Header {
 				parent_hash: Default::default(),
@@ -883,13 +997,13 @@ pub mod tests {
 
 	#[test]
 	fn receives_remote_changes_response() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer0 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
-		on_demand.on_connect(peer0.clone(), Roles::FULL, 1000);
+		on_demand.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
-		let response = on_demand.remote_changes(RemoteChangesRequest {
+		let (tx, response) = oneshot::channel();
+		on_demand.add_request(&mut network_interface, RequestData::RemoteChanges(RemoteChangesRequest {
 			changes_trie_config: changes_trie_config(),
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
@@ -897,13 +1011,13 @@ pub mod tests {
 			tries_roots: (1, Default::default(), vec![]),
 			key: vec![],
 			retry_count: None,
-		});
+		}, tx));
 		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap();
+			let result = response.wait().unwrap().unwrap();
 			assert_eq!(result, vec![(100, 2)]);
 		});
 
-		on_demand.on_remote_changes_response(peer0.clone(), message::RemoteChangesResponse {
+		on_demand.on_remote_changes_response(&mut network_interface, peer0.clone(), message::RemoteChangesResponse {
 			id: 0,
 			max: 1000,
 			proof: vec![vec![2]],
@@ -915,53 +1029,52 @@ pub mod tests {
 
 	#[test]
 	fn does_not_sends_request_to_peer_who_has_no_required_block() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
 
-		on_demand.on_connect(peer1.clone(), Roles::FULL, 100);
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 100);
 
-		on_demand.remote_header(RemoteHeaderRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 200,
 			retry_count: None,
-		});
-		on_demand.remote_header(RemoteHeaderRequest {
+		}, oneshot::channel().0));
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 250,
 			retry_count: None,
-		});
-		on_demand.remote_header(RemoteHeaderRequest {
+		}, oneshot::channel().0));
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 250,
 			retry_count: None,
-		});
+		}, oneshot::channel().0));
 
-		on_demand.on_connect(peer2.clone(), Roles::FULL, 150);
+		on_demand.on_connect(&mut network_interface, peer2.clone(), Roles::FULL, 150);
 
-		assert_eq!(vec![peer1.clone(), peer2.clone()], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 3);
+		assert_eq!(vec![peer1.clone(), peer2.clone()], on_demand.idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(on_demand.pending_requests.len(), 3);
 
-		on_demand.on_block_announce(peer1.clone(), 250);
+		on_demand.on_block_announce(&mut network_interface, peer1.clone(), 250);
 
-		assert_eq!(vec![peer2.clone()], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 2);
+		assert_eq!(vec![peer2.clone()], on_demand.idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(on_demand.pending_requests.len(), 2);
 
-		on_demand.on_block_announce(peer2.clone(), 250);
+		on_demand.on_block_announce(&mut network_interface, peer2.clone(), 250);
 
-		assert!(!on_demand.core.lock().idle_peers.iter().any(|_| true));
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+		assert!(!on_demand.idle_peers.iter().any(|_| true));
+		assert_eq!(on_demand.pending_requests.len(), 1);
 
-		on_demand.on_remote_header_response(peer1.clone(), message::RemoteHeaderResponse {
+		on_demand.on_remote_header_response(&mut network_interface, peer1.clone(), message::RemoteHeaderResponse {
 			id: 0,
 			header: Some(dummy_header()),
 			proof: vec![],
 		});
 
-		assert!(!on_demand.core.lock().idle_peers.iter().any(|_| true));
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 0);
+		assert!(!on_demand.idle_peers.iter().any(|_| true));
+		assert_eq!(on_demand.pending_requests.len(), 0);
 	}
 
 	#[test]
@@ -969,53 +1082,126 @@ pub mod tests {
 		// this test is a regression for a bug where the dispatch function would
 		// loop forever after dispatching a request to the last peer, since the
 		// last peer was not updated
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 		let peer3 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
 
-		on_demand.remote_header(RemoteHeaderRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 250,
 			retry_count: None,
-		});
-		on_demand.remote_header(RemoteHeaderRequest {
+		}, oneshot::channel().0));
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 250,
 			retry_count: None,
-		});
+		}, oneshot::channel().0));
 
-		on_demand.on_connect(peer1.clone(), Roles::FULL, 200);
-		on_demand.on_connect(peer2.clone(), Roles::FULL, 200);
-		on_demand.on_connect(peer3.clone(), Roles::FULL, 250);
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 200);
+		on_demand.on_connect(&mut network_interface, peer2.clone(), Roles::FULL, 200);
+		on_demand.on_connect(&mut network_interface, peer3.clone(), Roles::FULL, 250);
 
-		assert_eq!(vec![peer1.clone(), peer2.clone()], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+		assert_eq!(vec![peer1.clone(), peer2.clone()], on_demand.idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(on_demand.pending_requests.len(), 1);
 	}
 
 	#[test]
 	fn tries_to_send_all_pending_requests() {
-		let (_x, on_demand) = dummy(true);
-		let (network_sender, _network_port) = network_channel();
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
 		let peer1 = PeerId::random();
-		on_demand.set_network_sender(network_sender.clone());
 
-		on_demand.remote_header(RemoteHeaderRequest {
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 300,
 			retry_count: None,
-		});
-		on_demand.remote_header(RemoteHeaderRequest {
+		}, oneshot::channel().0));
+		on_demand.add_request(&mut network_interface, RequestData::RemoteHeader(RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 250,
 			retry_count: None,
-		});
+		}, oneshot::channel().0));
 
-		on_demand.on_connect(peer1.clone(), Roles::FULL, 250);
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 250);
 
-		assert!(on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>().is_empty());
-		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+		assert!(on_demand.idle_peers.iter().cloned().collect::<Vec<_>>().is_empty());
+		assert_eq!(on_demand.pending_requests.len(), 1);
+	}
+
+	#[test]
+	fn remote_body_with_one_block_body_should_succeed() {
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
+		let peer1 = PeerId::random();
+
+		let header = dummy_header();
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 250);
+
+		on_demand.add_request(&mut network_interface, RequestData::RemoteBody(RemoteBodyRequest {
+			header: header.clone(),
+			retry_count: None,
+		}, oneshot::channel().0));
+
+		assert!(on_demand.pending_requests.is_empty());
+		assert_eq!(on_demand.active_peers.len(), 1);
+
+		let block = message::BlockData::<Block> {
+			hash: primitives::H256::random(),
+			header: None,
+			body: Some(Vec::new()),
+			message_queue: None,
+			receipt: None,
+			justification: None,
+		};
+
+		let response = message::generic::BlockResponse {
+			id: 0,
+			blocks: vec![block],
+		};
+
+		on_demand.on_remote_body_response(&mut network_interface, peer1.clone(), response);
+
+		assert!(on_demand.active_peers.is_empty());
+		assert_eq!(on_demand.idle_peers.len(), 1);
+	}
+
+	#[test]
+	fn remote_body_with_three_bodies_should_fail() {
+		let mut on_demand = dummy(true);
+		let mut network_interface = DummyNetwork::default();
+		let peer1 = PeerId::random();
+
+		let header = dummy_header();
+		on_demand.on_connect(&mut network_interface, peer1.clone(), Roles::FULL, 250);
+
+		on_demand.add_request(&mut network_interface, RequestData::RemoteBody(RemoteBodyRequest {
+			header: header.clone(),
+			retry_count: None,
+		}, oneshot::channel().0));
+
+		assert!(on_demand.pending_requests.is_empty());
+		assert_eq!(on_demand.active_peers.len(), 1);
+
+		let response = {
+			let blocks: Vec<_> = (0..3).map(|_| message::BlockData::<Block> {
+				hash: primitives::H256::random(),
+				header: None,
+				body: Some(Vec::new()),
+				message_queue: None,
+				receipt: None,
+				justification: None,
+			}).collect();
+
+			message::generic::BlockResponse {
+				id: 0,
+				blocks,
+			}
+		};
+
+		on_demand.on_remote_body_response(&mut network_interface, peer1.clone(), response);
+		assert!(on_demand.active_peers.is_empty());
+		assert!(on_demand.idle_peers.is_empty(), "peer should be disconnected after bad response");
 	}
 }

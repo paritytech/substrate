@@ -59,7 +59,7 @@ impl network::SyncProvider<Block> for Status {
 		}
 	}
 
-	fn peers(&self) -> Vec<(PeerId, NetworkPeerInfo<Block>)> {
+	fn peers_debug_info(&self) -> Vec<(PeerId, NetworkPeerInfo<Block>)> {
 		let mut peers = vec![];
 		for _peer in 0..self.peers {
 			peers.push(

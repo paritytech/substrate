@@ -43,10 +43,12 @@ use std::collections::BTreeSet;
 
 use log::warn;
 
-use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, As, Zero};
+use client::error::{Error as ClientError, Result as ClientResult};
+use runtime_primitives::traits::{
+	Block as BlockT, NumberFor, Zero, Bounded, CheckedSub
+};
 
-use crate::cache::{CacheItemT, ComplexBlockId};
+use crate::cache::{CacheItemT, ComplexBlockId, EntryType};
 use crate::cache::list_entry::{Entry, StorageEntry};
 use crate::cache::list_storage::{Storage, StorageTransaction, Metadata};
 
@@ -135,7 +137,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 			// BUT since we're not guaranteeing to provide correct values for forks
 			// behind the finalized block, check if the block is finalized first
-			if !chain::is_finalized_block(&self.storage, at, As::sa(::std::u64::MAX))? {
+			if !chain::is_finalized_block(&self.storage, at, Bounded::max_value())? {
 				return Ok(None);
 			}
 
@@ -174,10 +176,10 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
 		value: Option<T>,
-		is_final: bool,
+		entry_type: EntryType,
 	) -> ClientResult<Option<CommitOperation<Block, T>>> {
 		// this guarantee is currently provided by LightStorage && we're relying on it here
-		debug_assert!(!is_final || self.best_finalized_block.hash == parent.hash);
+		debug_assert!(entry_type != EntryType::Final || self.best_finalized_block.hash == parent.hash);
 
 		// we do not store any values behind finalized
 		if block.number != Zero::zero() && self.best_finalized_block.number >= block.number {
@@ -185,6 +187,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		}
 
 		// if the block is not final, it is possibly appended to/forking from existing unfinalized fork
+		let is_final = entry_type == EntryType::Final || entry_type == EntryType::Genesis;
 		if !is_final {
 			let mut fork_and_action = None;
 
@@ -348,9 +351,9 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	) {
 		let mut do_pruning = || -> ClientResult<()> {
 			// calculate last ancient block number
-			let ancient_block = match block.number.as_().checked_sub(self.prune_depth.as_()) {
-				Some(number) => match self.storage.read_id(As::sa(number))? {
-					Some(hash) => ComplexBlockId::new(hash, As::sa(number)),
+			let ancient_block = match block.number.checked_sub(&self.prune_depth) {
+				Some(number) => match self.storage.read_id(number)? {
+					Some(hash) => ComplexBlockId::new(hash, number),
 					None => return Ok(()),
 				},
 				None => return Ok(()),
@@ -436,7 +439,7 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 		}
 	}
 
-	/// Try to append NEW block to the fork. This method willonly 'work' (return true) when block
+	/// Try to append NEW block to the fork. This method will only 'work' (return true) when block
 	/// is actually appended to the fork AND the best known block of the fork is known (i.e. some
 	/// block has been already appended to this fork after last restart).
 	pub fn try_append(&self, parent: &ComplexBlockId<Block>) -> bool {
@@ -537,10 +540,10 @@ mod chain {
 	) -> ClientResult<bool> {
 		let (begin, end) = if block1 > block2 { (block2, block1) } else { (block1, block2) };
 		let mut current = storage.read_header(&end.hash)?
-			.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", end.hash)))?;
+			.ok_or_else(|| ClientError::UnknownBlock(format!("{}", end.hash)))?;
 		while *current.number() > begin.number {
 			current = storage.read_header(current.parent_hash())?
-				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", current.parent_hash())))?;
+				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", current.parent_hash())))?;
 		}
 
 		Ok(begin.hash == current.hash())
@@ -831,12 +834,27 @@ pub mod tests {
 
 	#[test]
 	fn list_on_block_insert_works() {
+		let nfin = EntryType::NonFinal;
+		let fin = EntryType::Final;
+
 		// when trying to insert block < finalized number
 		assert!(ListCache::new(DummyStorage::new(), 1024, test_id(100))
-			.on_block_insert(&mut DummyTransaction::new(), test_id(49), test_id(50), Some(50), false).unwrap().is_none());
+			.on_block_insert(
+				&mut DummyTransaction::new(),
+				test_id(49),
+				test_id(50),
+				Some(50),
+				nfin,
+			).unwrap().is_none());
 		// when trying to insert block @ finalized number
 		assert!(ListCache::new(DummyStorage::new(), 1024, test_id(100))
-			.on_block_insert(&mut DummyTransaction::new(), test_id(99), test_id(100), Some(100), false).unwrap().is_none());
+			.on_block_insert(
+				&mut DummyTransaction::new(),
+				test_id(99),
+				test_id(100),
+				Some(100),
+				nfin,
+			).unwrap().is_none());
 
 		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
 		// AND new value is the same as in the fork' best block
@@ -848,7 +866,7 @@ pub mod tests {
 		);
 		cache.unfinalized[0].best_block = Some(test_id(4));
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, test_id(4), test_id(5), Some(4), false).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, test_id(4), test_id(5), Some(4), nfin).unwrap(),
 			Some(CommitOperation::AppendNewBlock(0, test_id(5))));
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
@@ -856,7 +874,7 @@ pub mod tests {
 		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
 		// AND new value is the same as in the fork' best block
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, test_id(4), test_id(5), Some(5), false).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, test_id(4), test_id(5), Some(5), nfin).unwrap(),
 			Some(CommitOperation::AppendNewEntry(0, Entry { valid_from: test_id(5), value: Some(5) })));
 		assert_eq!(*tx.inserted_entries(), vec![test_id(5).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
@@ -872,7 +890,7 @@ pub mod tests {
 			1024, test_id(2)
 		);
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(4), false).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(4), nfin).unwrap(),
 			Some(CommitOperation::AppendNewBlock(0, correct_id(5))));
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
@@ -880,7 +898,7 @@ pub mod tests {
 		// when trying to insert non-final block AND it is the first block that appends to the best block of unfinalized fork
 		// AND new value is the same as in the fork' best block
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(5), false).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(5), nfin).unwrap(),
 			Some(CommitOperation::AppendNewEntry(0, Entry { valid_from: correct_id(5), value: Some(5) })));
 		assert_eq!(*tx.inserted_entries(), vec![correct_id(5).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
@@ -898,7 +916,7 @@ pub mod tests {
 			1024, correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(3), fork_id(0, 3, 4), Some(14), false).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(3), fork_id(0, 3, 4), Some(14), nfin).unwrap(),
 			Some(CommitOperation::AddNewFork(Entry { valid_from: fork_id(0, 3, 4), value: Some(14) })));
 		assert_eq!(*tx.inserted_entries(), vec![fork_id(0, 3, 4).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
@@ -913,7 +931,7 @@ pub mod tests {
 			1024, correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), false).unwrap(), None);
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), nfin).unwrap(), None);
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
@@ -926,16 +944,16 @@ pub mod tests {
 			1024, correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), false).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), nfin).unwrap(),
 			Some(CommitOperation::AddNewFork(Entry { valid_from: correct_id(3), value: Some(3) })));
 		assert_eq!(*tx.inserted_entries(), vec![correct_id(3).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(3)] }));
 
-		// when inserting finalized entry AND there are no previous finalzed entries
+		// when inserting finalized entry AND there are no previous finalized entries
 		let cache = ListCache::new(DummyStorage::new(), 1024, correct_id(2));
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), true).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin).unwrap(),
 			Some(CommitOperation::BlockFinalized(correct_id(3), Some(Entry { valid_from: correct_id(3), value: Some(3) }), Default::default())));
 		assert_eq!(*tx.inserted_entries(), vec![correct_id(3).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
@@ -948,14 +966,14 @@ pub mod tests {
 			1024, correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), true).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin).unwrap(),
 			Some(CommitOperation::BlockFinalized(correct_id(3), None, Default::default())));
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
 		// when inserting finalized entry AND value differs from previous finalized
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), true).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin).unwrap(),
 			Some(CommitOperation::BlockFinalized(correct_id(3), Some(Entry { valid_from: correct_id(3), value: Some(3) }), Default::default())));
 		assert_eq!(*tx.inserted_entries(), vec![correct_id(3).hash].into_iter().collect());
 		assert!(tx.removed_entries().is_empty());
@@ -970,7 +988,7 @@ pub mod tests {
 			1024, correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
-		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), true).unwrap(),
+		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin).unwrap(),
 			Some(CommitOperation::BlockFinalized(correct_id(3), None, vec![0].into_iter().collect())));
 	}
 
@@ -1031,7 +1049,7 @@ pub mod tests {
 		// when new block is appended to unfinalized fork
 		cache.on_transaction_commit(CommitOperation::AppendNewBlock(0, correct_id(6)));
 		assert_eq!(cache.unfinalized[0].best_block, Some(correct_id(6)));
-		// when new entry is appnded to unfinalized fork
+		// when new entry is appended to unfinalized fork
 		cache.on_transaction_commit(CommitOperation::AppendNewEntry(0, Entry { valid_from: correct_id(7), value: Some(7) }));
 		assert_eq!(cache.unfinalized[0].best_block, Some(correct_id(7)));
 		assert_eq!(cache.unfinalized[0].head, Entry { valid_from: correct_id(7), value: Some(7) });

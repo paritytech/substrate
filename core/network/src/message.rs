@@ -23,7 +23,8 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
-	FromBlock
+	FinalityProofRequest, FinalityProofResponse,
+	FromBlock, RemoteReadChildRequest,
 };
 
 /// A unique ID of a request.
@@ -66,7 +67,7 @@ pub type BlockResponse<B> = generic::BlockResponse<
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
 
-/// Bits of block data and associated artifacts to request.
+// Bits of block data and associated artifacts to request.
 bitflags! {
 	/// Node roles bitmask.
 	pub struct BlockAttributes: u8 {
@@ -125,12 +126,12 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use parity_codec::{Encode, Decode};
-	use network_libp2p::{CustomMessage, CustomMessageId};
+	use network_libp2p::CustomMessage;
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
-		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
-		RequestId, Transactions, Direction, ConsensusEngineId,
+		RemoteReadResponse, Transactions, Direction,
+		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -198,7 +199,13 @@ pub mod generic {
 		RemoteChangesRequest(RemoteChangesRequest<Hash>),
 		/// Remote changes reponse.
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
-		/// Chain-specific message
+		/// Remote child storage read request.
+		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
+		/// Finality proof request.
+		FinalityProofRequest(FinalityProofRequest<Hash>),
+		/// Finality proof reponse.
+		FinalityProofResponse(FinalityProofResponse<Hash>),
+		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
 	}
@@ -212,26 +219,6 @@ pub mod generic {
 
 		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
 			Decode::decode(&mut &bytes[..]).ok_or(())
-		}
-
-		fn request_id(&self) -> CustomMessageId {
-			match *self {
-				Message::Status(_) => CustomMessageId::OneWay,
-				Message::BlockRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::BlockResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::BlockAnnounce(_) => CustomMessageId::OneWay,
-				Message::Transactions(_) => CustomMessageId::OneWay,
-				Message::Consensus(_) => CustomMessageId::OneWay,
-				Message::RemoteCallRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteCallResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::RemoteReadRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteReadResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::RemoteHeaderRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteHeaderResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::RemoteChangesRequest(ref req) => CustomMessageId::Request(req.id),
-				Message::RemoteChangesResponse(ref resp) => CustomMessageId::Response(resp.id),
-				Message::ChainSpecific(_) => CustomMessageId::OneWay,
-			}
 		}
 	}
 
@@ -312,6 +299,19 @@ pub mod generic {
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote storage read child request.
+	pub struct RemoteReadChildRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block at which to perform call.
+		pub block: H,
+		/// Child Storage key.
+		pub storage_key: Vec<u8>,
+		/// Storage key.
+		pub key: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote header request.
 	pub struct RemoteHeaderRequest<N> {
 		/// Unique request id.
@@ -363,5 +363,27 @@ pub mod generic {
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
 		pub roots_proof: Vec<Vec<u8>>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Finality proof request.
+	pub struct FinalityProofRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Hash of the block to request proof for.
+		pub block: H,
+		/// Additional data blob (that both requester and provider understood) required for proving finality.
+		pub request: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Finality proof response.
+	pub struct FinalityProofResponse<H> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Hash of the block (the same as in the FinalityProofRequest).
+		pub block: H,
+		/// Finality proof (if available).
+		pub proof: Option<Vec<u8>>,
 	}
 }

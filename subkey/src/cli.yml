@@ -40,6 +40,30 @@ subcommands:
             long: hex
             help: The message on STDIN is hex-encoded data
             takes_value: false
+  - transfer:
+      about: Author and sign a Node balances::Transfer transaction with a given (secret) key
+      args:
+        - from:
+            index: 1
+            required: true
+            help: The signing secret key URI.
+        - to:
+            index: 2
+            required: true
+            help: The destination account public key URI.
+        - amount:
+            index: 3
+            required: true
+            help: The number of units to transfer.
+        - index:
+            index: 4
+            required: true
+            help: The signing account's transaction index.
+        - genesis:
+            short: g
+            long: genesis
+            help: The genesis hash or a recognised chain identifier (dev, elm, alex).
+            takes_value: true
   - verify:
       about: Verify a signature for a message, provided on STDIN, with a given (public or secret) key
       args:
@@ -68,3 +92,36 @@ subcommands:
             help: Number of keys to generate
             takes_value: true
             default_value: "1"
+  - sign-transaction:
+      about: Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
+      args:
+        - call:
+            short: c
+            long: call
+            help: The call, hex-encoded.
+            takes_value: true
+            required: true
+        - nonce:
+            short: n
+            long: nonce
+            help: The nonce.
+            takes_value: true
+            required: true
+        - suri:
+            long: suri
+            short: s
+            help: The secret key URI.
+            takes_value: true
+            required: true
+        - password:
+            short: p
+            long: password
+            takes_value: true
+            help: The password for the key.
+            required: true
+        - prior-block-hash:
+            short: h
+            long: prior-block-hash
+            help: The prior block hash, hex-encoded.
+            takes_value: true
+            required: true

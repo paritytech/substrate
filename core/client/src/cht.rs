@@ -26,16 +26,20 @@
 use std::collections::HashSet;
 
 use hash_db;
-use heapsize::HeapSizeOf;
 use trie;
 
 use primitives::{H256, convert_hash};
-use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
+// We're using saturatedconversion in order to go back and forth to `u64`. this is stupid.
+// instead we should just make the CHT generic over the block number.
+use runtime_primitives::traits::{
+	Header as HeaderT, SimpleArithmetic, One, SaturatedConversion,
+	UniqueSaturatedInto
+};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
-use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, Result as ClientResult};
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.
@@ -88,7 +92,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 		BlocksI: IntoIterator<Item=Header::Number>,
 		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
@@ -120,7 +124,7 @@ pub fn check_proof<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 {
 	do_check_proof::<Header, Hasher, _>(local_root, local_number, remote_hash, move |local_root, local_cht_key|
 		read_proof_check::<Hasher>(local_root, remote_proof,
@@ -137,7 +141,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 {
 	do_check_proof::<Header, Hasher, _>(local_root, local_number, remote_hash, |_, local_cht_key|
 		read_proof_check_on_proving_backend::<Hasher>(
@@ -154,17 +158,17 @@ fn do_check_proof<Header, Hasher, F>(
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
-		Hasher::Out: Ord + HeapSizeOf,
+		Hasher::Out: Ord,
 		F: FnOnce(Hasher::Out, &[u8]) -> ClientResult<Option<Vec<u8>>>,
 {
 	let root: Hasher::Out = convert_hash(&local_root);
 	let local_cht_key = encode_cht_key(local_number);
 	let local_cht_value = checker(root, &local_cht_key)?;
-	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
-	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
+	let local_cht_value = local_cht_value.ok_or_else(|| ClientError::InvalidCHTProof)?;
+	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientError::InvalidCHTProof)?;
 	match &local_hash[..] == remote_hash.as_ref() {
 		true => Ok(()),
-		false => Err(ClientErrorKind::InvalidCHTProof.into()),
+		false => Err(ClientError::InvalidCHTProof.into()),
 	}
 
 }
@@ -184,9 +188,9 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	let mut current_cht_num = None;
 	let mut current_cht_blocks = Vec::new();
 	for block in blocks {
-		let new_cht_num = match block_to_cht_number(cht_size, block.as_()) {
+		let new_cht_num = match block_to_cht_number(cht_size, block.saturated_into()) {
 			Some(new_cht_num) => new_cht_num,
-			None => return Err(ClientErrorKind::Backend(format!(
+			None => return Err(ClientError::Backend(format!(
 				"Cannot compute CHT root for the block #{}", block)).into()
 			),
 		};
@@ -199,7 +203,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 
 			functor_param = functor(
 				functor_param,
-				As::sa(current_cht_num),
+				current_cht_num.saturated_into(),
 				::std::mem::replace(&mut current_cht_blocks, Vec::new()),
 			)?;
 		}
@@ -211,7 +215,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	if let Some(current_cht_num) = current_cht_num {
 		functor(
 			functor_param,
-			As::sa(current_cht_num),
+			current_cht_num.saturated_into(),
 			::std::mem::replace(&mut current_cht_blocks, Vec::new()),
 		)?;
 	}
@@ -234,7 +238,10 @@ fn build_pairs<Header, I>(
 	let mut hash_number = start_num;
 	for hash in hashes.into_iter().take(cht_size as usize) {
 		let hash = hash?.ok_or_else(|| ClientError::from(
-			ClientErrorKind::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_())
+			ClientError::MissingHashRequiredForCHT(
+				cht_num.saturated_into::<u64>(),
+				hash_number.saturated_into::<u64>()
+			)
 		))?;
 		pairs.push((
 			encode_cht_key(hash_number).to_vec(),
@@ -246,7 +253,10 @@ fn build_pairs<Header, I>(
 	if pairs.len() as u64 == cht_size {
 		Ok(pairs)
 	} else {
-		Err(ClientErrorKind::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()).into())
+		Err(ClientError::MissingHashRequiredForCHT(
+			cht_num.saturated_into::<u64>(),
+			hash_number.saturated_into::<u64>()
+		))
 	}
 }
 
@@ -257,12 +267,12 @@ fn build_pairs<Header, I>(
 /// This is because the genesis hash is assumed to be known
 /// and including it would be redundant.
 pub fn start_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N {
-	(cht_num * As::sa(cht_size)) + N::one()
+	(cht_num * cht_size.saturated_into()) + N::one()
 }
 
 /// Get the ending block of a given CHT.
 pub fn end_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N {
-	(cht_num + N::one()) * As::sa(cht_size)
+	(cht_num + N::one()) * cht_size.saturated_into()
 }
 
 /// Convert a block number to a CHT number.
@@ -271,13 +281,14 @@ pub fn block_to_cht_number<N: SimpleArithmetic>(cht_size: u64, block_num: N) -> 
 	if block_num == N::zero() {
 		None
 	} else {
-		Some((block_num - N::one()) / As::sa(cht_size))
+		Some((block_num - N::one()) / cht_size.saturated_into())
 	}
 }
 
 /// Convert header number into CHT key.
-pub fn encode_cht_key<N: As<u64>>(number: N) -> Vec<u8> {
-	let number: u64 = number.as_();
+pub fn encode_cht_key<N: UniqueSaturatedInto<u64>>(number: N) -> Vec<u8> {
+	// why not just use Encode?
+	let number: u64 = number.saturated_into();
 	vec![
 		(number >> 56) as u8,
 		((number >> 48) & 0xff) as u8,

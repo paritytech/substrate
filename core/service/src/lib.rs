@@ -20,14 +20,16 @@
 #![warn(missing_docs)]
 
 mod components;
-mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
+pub mod error;
 
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use futures::sync::mpsc;
+use parking_lot::Mutex;
 
 use client::BlockchainEvents;
 use exit_future::Signal;
@@ -38,11 +40,11 @@ use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
 use primitives::Pair;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
+pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -62,7 +64,7 @@ use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::OnDemand;
+pub use network::{FinalityProofProvider, OnDemand};
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 
@@ -71,6 +73,7 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
+	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
@@ -82,6 +85,7 @@ pub struct Service<Components: components::Components> {
 	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 }
 
 /// Creates bare client without any networking.
@@ -96,7 +100,27 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 	Ok(client)
 }
 
+/// Stream of events for connection established to a telemetry server.
+pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
+
+/// Used to hook on telemetry connection established events.
+pub struct TelemetryOnConnect<'a> {
+	/// Handle to a future that will resolve on exit.
+	pub on_exit: Box<Future<Item=(), Error=()> + Send + 'static>,
+	/// Event stream.
+	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
+	/// Executor to which the hook is spawned.
+	pub executor: &'a TaskExecutor,
+}
+
 impl<Components: components::Components> Service<Components> {
+	/// Get event stream for telemetry connection established events.
+	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+		let (sink, stream) = mpsc::unbounded();
+		self._telemetry_on_connect_sinks.lock().push(sink);
+		stream
+	}
+
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
@@ -118,7 +142,7 @@ impl<Components: components::Components> Service<Components> {
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
 			None => {
-				let key = keystore.generate("")?;
+				let key = keystore.generate(&config.password)?;
 				let public_key = key.public();
 				info!("Generated a new keypair: {:?}", public_key);
 
@@ -127,19 +151,28 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
-		let best_header = client.best_block_header()?;
+		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+		let import_queue = Box::new(Components::build_import_queue(
+			&mut config,
+			client.clone(),
+			select_chain.clone(),
+		)?);
+		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
+		let chain_info = client.info()?.chain;
 
 		let version = config.full_version();
-		info!("Best block: #{}", best_header.number());
-		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+		info!("Highest known block at #{}", chain_info.best_number);
+		telemetry!(SUBSTRATE_INFO; "node.start";
+			"height" => chain_info.best_number.saturated_into::<u64>(),
+			"best" => ?chain_info.best_hash
+		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !(config.roles == Roles::LIGHT),
+			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 });
@@ -148,7 +181,8 @@ impl<Components: components::Components> Service<Components> {
 			config: network::config::ProtocolConfig { roles: config.roles },
 			network_config: config.network.clone(),
 			chain: client.clone(),
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+			finality_proof_provider,
+			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
 		};
@@ -163,22 +197,11 @@ impl<Components: components::Components> Service<Components> {
 					DEFAULT_PROTOCOL_ID
 				}
 			}.as_bytes();
-			let mut protocol_id = network::ProtocolId::default();
-			if protocol_id_full.len() > protocol_id.len() {
-				warn!("Protocol ID truncated to {} chars", protocol_id.len());
-			}
-			let id_len = protocol_id_full.len().min(protocol_id.len());
-			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
-			protocol_id
+			network::ProtocolId::from(protocol_id_full)
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let (network, network_chan) = network::Service::new(
-			network_params,
-			protocol_id,
-			import_queue
-		)?;
-		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
+		let network = network::Service::new(network_params, protocol_id, import_queue)?;
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
@@ -300,9 +323,19 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			client.clone(),
+			network.clone(),
+			has_bootnodes,
+			system_info,
+			config.rpc_http,
+			config.rpc_ws,
+			config.rpc_ws_max_connections,
+			config.rpc_cors.clone(),
+			task_executor.clone(),
+			transaction_pool.clone(),
 		)?;
+
+		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
@@ -313,6 +346,7 @@ impl<Components: components::Components> Service<Components> {
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
+			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
 				on_connect: Box::new(move || {
@@ -326,6 +360,10 @@ impl<Components: components::Components> Service<Components> {
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
+
+					telemetry_connection_sinks_.lock().retain(|sink| {
+						sink.unbounded_send(()).is_ok()
+					});
 				}),
 			}))
 		});
@@ -333,6 +371,7 @@ impl<Components: components::Components> Service<Components> {
 		Ok(Service {
 			client,
 			network: Some(network),
+			select_chain,
 			transaction_pool,
 			inherents_pool,
 			signal: Some(signal),
@@ -342,6 +381,7 @@ impl<Components: components::Components> Service<Components> {
 			_rpc: Box::new(rpc),
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
+			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
 	}
 
@@ -350,7 +390,7 @@ impl<Components: components::Components> Service<Components> {
 		if self.config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
-				.map(|k| keystore.load(k, "")))
+				.map(|k| keystore.load(k, &self.config.password)))
 		{
 			Some(key)
 		} else {
@@ -358,7 +398,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
-	/// return a shared instance of Telemtry (if enabled)
+	/// return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}
@@ -368,6 +408,11 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
+	}
+
+	/// Get clone of select chain.
+	pub fn select_chain(&self) -> Option<<Components as components::Components>::SelectChain> {
+		self.select_chain.clone()
 	}
 
 	/// Get shared network instance.
@@ -470,7 +515,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
+					Ok(txpool::error::Error::AlreadyImported(hash)) => {
 						hash.downcast::<ComponentExHash<C>>().ok()
 							.map(|x| x.as_ref().clone())
 					},
@@ -503,33 +548,77 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 ///
 /// # Example
 ///
-/// ```nocompile
+/// ```
+/// # use substrate_service::{
+/// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, TaskExecutor
+/// # };
+/// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+/// # use network::construct_simple_protocol;
+/// # use client::{self, LongestChain};
+/// # use primitives::{Pair as PairT, ed25519};
+/// # use consensus_common::import_queue::{BasicQueue, Verifier};
+/// # use consensus_common::{BlockOrigin, ImportBlock};
+/// # use node_runtime::{GenesisConfig, RuntimeApi};
+/// # use std::sync::Arc;
+/// # use node_primitives::Block;
+/// # use runtime_primitives::Justification;
+/// # use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT};
+/// # use grandpa;
+/// # construct_simple_protocol! {
+/// # 	pub struct NodeProtocol where Block = Block { }
+/// # }
+/// # struct MyVerifier;
+/// # impl<B: BlockT> Verifier<B> for MyVerifier {
+/// # 	fn verify(
+/// # 		&self,
+/// # 		origin: BlockOrigin,
+/// # 		header: B::Header,
+/// # 		justification: Option<Justification>,
+/// # 		body: Option<Vec<B::Extrinsic>>,
+/// # 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+/// # 		unimplemented!();
+/// # 	}
+/// # }
+/// type FullChainApi<T> = transaction_pool::ChainApi<
+/// 	client::Client<FullBackend<T>, FullExecutor<T>, Block, RuntimeApi>, Block>;
+/// type LightChainApi<T> = transaction_pool::ChainApi<
+/// 	client::Client<LightBackend<T>, LightExecutor<T>, Block, RuntimeApi>, Block>;
+///
 /// construct_service_factory! {
 /// 	struct Factory {
-///         // Declare the block type
+/// 		// Declare the block type
 /// 		Block = Block,
-///         // Declare the network protocol and give an initializer.
+/// 		RuntimeApi = RuntimeApi,
+/// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 /// 		RuntimeDispatch = node_executor::Executor,
-/// 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
+/// 		FullTransactionPoolApi = FullChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-/// 		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
+/// 		LightTransactionPoolApi = LightChainApi<Self>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 /// 		Genesis = GenesisConfig,
 /// 		Configuration = (),
-/// 		FullService = Service<FullComponents<Self>>
-/// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
-///         // Setup as Consensus Authority (if the role and key are given)
+/// 		FullService = FullComponents<Self>
+/// 			{ |config, executor| <FullComponents<Factory>>::new(config, executor) },
+/// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| { Ok(service) }},
-/// 		LightService = Service<LightComponents<Self>>
-/// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
-///         // Declare the import queue. The import queue is special as it takes two initializers.
-///         // The first one is for the initializing the full import queue and the second for the
-///         // light import queue.
-/// 		ImportQueue = BasicQueue<Block, NoneVerifier>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) }
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) },
+/// 			|service: Self::FullService, executor: TaskExecutor, key: Option<Arc<ed25519::Pair>>| {
+/// 				Ok(service)
+/// 			}},
+/// 		LightService = LightComponents<Self>
+/// 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+/// 		FullImportQueue = BasicQueue<Block>
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 		LightImportQueue = BasicQueue<Block>
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
+/// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+/// 				Ok(LongestChain::new(client.backend().clone(), client.import_lock()))
+/// 			}},
+/// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
+/// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
+/// 			}},
 /// 	}
 /// }
 /// ```
@@ -553,6 +642,9 @@ macro_rules! construct_service_factory {
 				{ $( $full_import_queue_init:tt )* },
 			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
+			SelectChain = $select_chain:ty
+				{ $( $select_chain_init:tt )* },
+			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -572,6 +664,7 @@ macro_rules! construct_service_factory {
 			type LightService = $light_service;
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
+			type SelectChain = $select_chain;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -595,11 +688,19 @@ macro_rules! construct_service_factory {
 				( $( $protocol_init )* ) (config)
 			}
 
+			fn build_select_chain(
+				config: &mut $crate::FactoryFullConfiguration<Self>,
+				client: Arc<$crate::FullClient<Self>>
+			) -> $crate::Result<Self::SelectChain, $crate::Error> {
+				( $( $select_chain_init )* ) (config, client)
+			}
+
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
+				select_chain: Self::SelectChain
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client)
+				( $( $full_import_queue_init )* ) (config, client, select_chain)
 			}
 
 			fn build_light_import_queue(
@@ -607,6 +708,12 @@ macro_rules! construct_service_factory {
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
+			}
+
+			fn build_finality_proof_provider(
+				client: Arc<$crate::FullClient<Self>>
+			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
+				( $( $finality_proof_provider_init )* ) (client)
 			}
 
 			fn new_light(

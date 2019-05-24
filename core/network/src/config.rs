@@ -19,9 +19,9 @@
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfig, Secret};
 
 use bitflags::bitflags;
-use crate::chain::Client;
+use crate::chain::{Client, FinalityProofProvider};
 use parity_codec;
-use crate::on_demand::OnDemandService;
+use crate::on_demand_layer::OnDemand;
 use runtime_primitives::traits::{Block as BlockT};
 use crate::service::{ExHashT, TransactionPool};
 use std::sync::Arc;
@@ -34,10 +34,12 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub network_config: NetworkConfiguration,
 	/// Substrate relay chain access point.
 	pub chain: Arc<Client<B>>,
+	/// Finality proof provider.
+	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	/// On-demand service reference.
-	pub on_demand: Option<Arc<OnDemandService<B>>>,
+	pub on_demand: Option<Arc<OnDemand<B>>>,
 	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool<H, B>>,
+	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// Protocol specialization.
 	pub specialization: S,
 }
@@ -68,6 +70,18 @@ bitflags! {
 		const LIGHT = 0b00000010;
 		/// Act as an authority
 		const AUTHORITY = 0b00000100;
+	}
+}
+
+impl Roles {
+	/// Does this role represents a client that holds full chain data locally?
+	pub fn is_full(&self) -> bool {
+		self.intersects(Roles::FULL | Roles::AUTHORITY)
+	}
+
+	/// Does this role represents a client that does not hold full chain data locally?
+	pub fn is_light(&self) -> bool {
+		!self.is_full()
 	}
 }
 

@@ -23,19 +23,15 @@ use crate::{hash::H256, hash::H512};
 use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
-use untrusted;
-#[cfg(feature = "std")]
 use blake2_rfc;
-#[cfg(feature = "std")]
-use ring::{signature, signature::KeyPair, rand::{SecureRandom, SystemRandom}};
-#[cfg(feature = "std")]
-use base58::{ToBase58, FromBase58};
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive};
+use rand::Rng;
+#[cfg(feature = "std")]
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::UncheckedFrom;
@@ -52,12 +48,16 @@ pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 #[cfg(feature = "std")]
-pub struct Pair(signature::Ed25519KeyPair, Seed);
+pub struct Pair(ed25519_dalek::Keypair);
 
 #[cfg(feature = "std")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
-		Pair::from_seed(self.1.clone())
+		Pair(ed25519_dalek::Keypair {
+			public: self.0.public.clone(),
+			secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes())
+				.expect("key is always the correct size; qed")
+		})
 	}
 }
 
@@ -325,36 +325,6 @@ impl Public {
 impl Derive for Public {}
 
 #[cfg(feature = "std")]
-impl Public {
-	/// Some if the string is a properly encoded SS58Check address.
-	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?;	// failure here would be invalid encoding.
-		if d.len() != 35 {
-			// Invalid length.
-			return Err(PublicError::BadLength);
-		}
-		if d[0] != 42 {
-			// Invalid version.
-			return Err(PublicError::UnknownVersion);
-		}
-		if d[33..35] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..33]).as_bytes()[0..2] {
-			// Invalid checksum.
-			return Err(PublicError::InvalidChecksum);
-		}
-		Ok(Self::from_slice(&d[1..33]))
-	}
-
-	/// Return the ss58-check string for this key.
-	pub fn to_ss58check(&self) -> String {
-		let mut v = vec![42u8];
-		v.extend(self.as_slice());
-		let r = blake2_rfc::blake2b::blake2b(64, &[], &v);
-		v.extend(&r.as_bytes()[0..2]);
-		v.to_base58()
-	}
-}
-
-#[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
 		&self
@@ -391,7 +361,7 @@ impl TraitPair for Pair {
 	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
 	fn generate() -> Pair {
 		let mut seed: Seed = Default::default();
-		SystemRandom::new().fill(seed.as_mut()).expect("system random source should always work! qed");
+		rand::rngs::EntropyRng::new().fill(seed.as_mut());
 		Self::from_seed(seed)
 	}
 
@@ -421,9 +391,10 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrasee
 	fn from_seed(seed: Seed) -> Pair {
-		let key = signature::Ed25519KeyPair::from_seed_unchecked(untrusted::Input::from(&seed[..]))
+		let secret = ed25519_dalek::SecretKey::from_bytes(&seed[..])
 			.expect("seed has valid length; qed");
-		Pair(key, seed)
+		let public = ed25519_dalek::PublicKey::from(&secret);
+		Pair(ed25519_dalek::Keypair { secret, public })
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
@@ -442,7 +413,7 @@ impl TraitPair for Pair {
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, DeriveError> {
-		let mut acc = self.1.clone();
+		let mut acc = self.0.public.to_bytes();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -460,28 +431,20 @@ impl TraitPair for Pair {
 	/// Get the public key.
 	fn public(&self) -> Public {
 		let mut r = [0u8; 32];
-		let pk = self.0.public_key().as_ref();
+		let pk = self.0.public.as_bytes();
 		r.copy_from_slice(pk);
 		Public(r)
 	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let mut r = [0u8; 64];
-		r.copy_from_slice(self.0.sign(message).as_ref());
+		let r = self.0.sign(message).to_bytes();
 		Signature::from_raw(r)
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
-		let msg = untrusted::Input::from(message.as_ref());
-		let sig = untrusted::Input::from(&sig.0[..]);
-
-		match signature::verify(&signature::ED25519, public_key, msg, sig) {
-			Ok(_) => true,
-			_ => false,
-		}
+		Self::verify_weak(&sig.0[..], message.as_ref(), &pubkey.as_ref().0[..])
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -489,11 +452,17 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let public_key = untrusted::Input::from(pubkey.as_ref());
-		let msg = untrusted::Input::from(message.as_ref());
-		let sig = untrusted::Input::from(sig);
+		let public_key = match ed25519_dalek::PublicKey::from_bytes(pubkey.as_ref()) {
+			Ok(pk) => pk,
+			Err(_) => return false,
+		};
 
-		match signature::verify(&signature::ED25519, public_key, msg, sig) {
+		let sig = match ed25519_dalek::Signature::from_bytes(sig) {
+			Ok(s) => s,
+			Err(_) => return false
+		};
+
+		match public_key.verify(message.as_ref(), &sig) {
 			Ok(_) => true,
 			_ => false,
 		}
@@ -504,7 +473,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> &Seed {
-		&self.1
+		self.0.public.as_bytes()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
@@ -522,7 +491,7 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use hex_literal::{hex, hex_impl};
+	use hex_literal::hex;
 	use crate::crypto::DEV_PHRASE;
 
 	#[test]
@@ -562,6 +531,7 @@ mod test {
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
 		assert!(Pair::verify(&signature, &message[..], &public));
+		assert!(!Pair::verify(&signature, b"Something else", &public));
 	}
 
 	#[test]
@@ -573,6 +543,7 @@ mod test {
 		let signature = pair.sign(&message[..]);
 		println!("Correct signature: {:?}", signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
+		assert!(!Pair::verify(&signature, "Other message", &public));
 	}
 
 	#[test]

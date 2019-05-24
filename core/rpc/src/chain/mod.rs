@@ -147,7 +147,7 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 			let header = best_block_hash()
 				.and_then(|hash| self.header(hash.into()))
 				.and_then(|header| {
-					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
+					header.ok_or_else(|| "Best header missing.".to_owned().into())
 				})
 				.map_err(Into::into);
 
@@ -189,7 +189,6 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 	}
 
 	fn block_hash(&self, number: Option<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
-		let number: Option<number::NumberOrHex<NumberFor<Block>>> = number.into();
 		Ok(match number {
 			None => Some(self.client.info()?.chain.best_hash),
 			Some(num_or_hex) => self.client.header(&BlockId::number(num_or_hex.to_number()?))?.map(|h| h.hash()),

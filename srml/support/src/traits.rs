@@ -19,8 +19,47 @@
 use crate::rstd::result;
 use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic, As
+	MaybeSerializeDebug, SimpleArithmetic
 };
+
+/// New trait for querying a single fixed value from a type.
+pub trait Get<T> {
+	/// Return a constant value.
+	fn get() -> T;
+}
+
+/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
+/// how you would declare a `const`:
+///
+/// ```no_compile
+/// parameter_types! {
+///   pub const Argument: u64 = 42;
+/// }
+/// trait Config {
+///   type Parameter: Get<u64>;
+/// }
+/// struct Runtime;
+/// impl Config for Runtime {
+///   type Parameter = Argument;
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(pub const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
+		pub struct $name;
+		parameter_types!{IMPL $name , $type , $value}
+		parameter_types!{ $( $rest )* }
+	);
+	(const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
+		struct $name;
+		parameter_types!{IMPL $name , $type , $value}
+		parameter_types!{ $( $rest )* }
+	);
+	() => ();
+	(IMPL $name:ident , $type:ty , $value:expr) => {
+		impl $crate::traits::Get<$type> for $name { fn get() -> $type { $value } }
+	}
+}
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -195,7 +234,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default,
+	B: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -230,7 +269,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
