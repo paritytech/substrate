@@ -1854,8 +1854,8 @@ pub(crate) mod tests {
 		let client = test_client::new();
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		#[allow(deprecated)]
 		let longest_chain_select = test_client::client::LongestChain::new(
-			#[allow(deprecated)]
 			client.backend().clone(),
 			client.import_lock()
 		);
@@ -1875,6 +1875,7 @@ pub(crate) mod tests {
 		let uninserted_block = client.new_block().unwrap().bake().unwrap();
 		#[allow(deprecated)]
 		let backend = client.backend().as_in_memory();
+		#[allow(deprecated)]
 		let longest_chain_select = test_client::client::LongestChain::new(
 				Arc::new(backend),
 				client.import_lock());
@@ -2010,9 +2011,8 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
-
+		#[allow(deprecated)]
 		let longest_chain_select = test_client::client::LongestChain::new(
-				#[allow(deprecated)]
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
@@ -2100,8 +2100,8 @@ pub(crate) mod tests {
 		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		#[allow(deprecated)]
 		let longest_chain_select = test_client::client::LongestChain::new(
-				#[allow(deprecated)]
 				Arc::new(client.backend().as_in_memory()),
 				client.import_lock());
 
@@ -2331,8 +2331,8 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		#[allow(deprecated)]
 		let longest_chain_select = test_client::client::LongestChain::new(
-			#[allow(deprecated)]
 			Arc::new(client.backend().as_in_memory()),
 			client.import_lock()
 		);
