@@ -1439,10 +1439,10 @@ dependencies = [
  "libp2p-ping 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-plaintext 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-ratelimit 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libp2p-secio 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libp2p-secio 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-tcp 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-uds 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libp2p-wasm-ext 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libp2p-wasm-ext 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-websocket 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-yamux 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-multiaddr 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1680,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-secio"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "aes-ctr 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1693,11 +1693,11 @@ dependencies = [
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-send-wrapper 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 2.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rw-stream-sink 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "send_wrapper 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "twofish 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1735,13 +1735,13 @@ dependencies = [
 
 [[package]]
 name = "libp2p-wasm-ext"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "js-sys 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "send_wrapper 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-send-wrapper 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen 0.2.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen-futures 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2348,6 +2348,11 @@ dependencies = [
  "sha3 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsigned-varint 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "parity-send-wrapper"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "parity-wasm"
@@ -4988,7 +4993,7 @@ name = "twox-hash"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.23 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -5625,10 +5630,10 @@ dependencies = [
 "checksum libp2p-ping 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3b3bb3328d206ad3061e863f179a211fc978d7bce05f90440ed6b8a6a9d17ced"
 "checksum libp2p-plaintext 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4b23a8ece138f448572c5ff781d62323a954f1f681c303e6553368026764b0ae"
 "checksum libp2p-ratelimit 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "55918f058f118d72d83f9a976f12e02e54c8616ddfc795c779c4801a5042a44f"
-"checksum libp2p-secio 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9bff57806e0f71832cc02b5dea1010e5f1a9d16393fd104a4b64e4aaae40d885"
+"checksum libp2p-secio 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ea5c0636053e01575d6269b6112f9239e9d35ca861e3e5c7d6970a07f9e1682a"
 "checksum libp2p-tcp 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3629f9a667d9f5acb5876df59cf3b547250e340131c47587f9ace7c517f21327"
 "checksum libp2p-uds 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d65c15f89c0607d4a334664d759e54e847e1856a73ea78e7bb6a75e6f4039010"
-"checksum libp2p-wasm-ext 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "dff6c81d0f46261a6327219349753aefd3a92021a1e6102185fa112cfcddca97"
+"checksum libp2p-wasm-ext 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "318d727d5e8e0fe3bb70aacbf99bde57334eae9559deff447edd993422dc0f03"
 "checksum libp2p-websocket 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "04451aa166aa2040293f44c1c27144b65500e4a2ebbb723dfe732f39436eccbd"
 "checksum libp2p-yamux 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5369165359bea84e7ebe73f37b6240f31f8d924ce6710be3d8e1fa678985c9b8"
 "checksum librocksdb-sys 5.17.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7dfb546562f9b450237bb8df7a31961849ee9fb1186d9e356db1d7a6b7609ff2"
@@ -5676,6 +5681,7 @@ dependencies = [
 "checksum parity-codec-derive 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "00a486fd383382ddcb2de928364b1f82571c1e48274fc43b7667a4738ee4056c"
 "checksum parity-multiaddr 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "18a130a727008cfcd1068a28439fe939897ccad28664422aeca65b384d6de6d0"
 "checksum parity-multihash 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "05d6a68e07ab34a9e87bd8dd4936f6bb5be21e4f6dbcdbaf04d8e854eba0af01"
+"checksum parity-send-wrapper 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aa9777aa91b8ad9dd5aaa04a9b6bcb02c7f1deb952fca5a66034d5e63afc5c6f"
 "checksum parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)" = "511379a8194230c2395d2f5fa627a5a7e108a9f976656ce723ae68fca4097bfc"
 "checksum parity-ws 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2fec5048fba72a2e01baeb0d08089db79aead4b57e2443df172fb1840075a233"
 "checksum parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)" = "d4d05f1349491390b1730afba60bb20d55761bef489a954546b58b4b34e1e2ac"
