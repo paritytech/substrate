@@ -522,7 +522,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
 		let select_chain = select_chain
-			.ok_or_else(|| error::Error::from(error::ErrorKind::SelectChainRequired))?;
+			.ok_or(error::Error::SelectChainRequired)?;
 		Factory::build_full_import_queue(config, client, select_chain)
 	}
 

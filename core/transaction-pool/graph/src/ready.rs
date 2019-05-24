@@ -23,7 +23,6 @@ use std::{
 
 use serde::Serialize;
 use log::debug;
-use error_chain::bail;
 use parking_lot::RwLock;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
@@ -376,7 +375,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 			// bail - the transaction has too low priority to replace the old ones
 			if old_priority >= tx.priority {
-				bail!(error::ErrorKind::TooLowPriority(old_priority, tx.priority))
+				return Err(error::Error::TooLowPriority { old: old_priority, new: tx.priority })
 			}
 
 			replace_hashes.into_iter().cloned().collect::<Vec<_>>()

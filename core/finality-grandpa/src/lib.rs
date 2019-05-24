@@ -441,7 +441,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 					},
 				}
 			}))
-			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
+			.map_err(|err| consensus_common::Error::InherentData(err.into()))
 	} else {
 		Ok(())
 	}
