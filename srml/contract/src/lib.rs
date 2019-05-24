@@ -96,9 +96,14 @@ use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
 use rstd::{prelude::*, marker::PhantomData, convert::TryFrom};
 use parity_codec::{Codec, Encode, Decode};
-use runtime_primitives::traits::{Hash, SimpleArithmetic, Bounded, StaticLookup, Zero};
+use runtime_io::blake2_256;
+use runtime_primitives::traits::{
+	Hash, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
+};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child};
+use srml_support::{
+	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child
+};
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
 use system::{ensure_signed, RawOrigin};
 use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
@@ -120,6 +125,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),
@@ -177,12 +183,14 @@ impl<T: Trait> ContractInfo<T> {
 	}
 }
 
-pub type AliveContractInfo<T> = RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
+pub type AliveContractInfo<T> =
+	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as system::Trait>::BlockNumber>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -190,20 +198,32 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub storage_size: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
+	/// Pay rent at most up to this value.
 	pub rent_allowance: Balance,
+	/// Last block rent has been payed.
 	pub deduct_block: BlockNumber,
+	/// Last block child storage has been written.
+	pub last_write: Option<BlockNumber>,
 }
 
-#[derive(Encode, Decode)]
-pub struct TombstoneContractInfo<T: Trait>(T::Hash);
+pub type TombstoneContractInfo<T> =
+	RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
 
-impl<T: Trait> TombstoneContractInfo<T> {
-	fn new(storage_root: Vec<u8>, storage_size: u32, code_hash: CodeHash<T>) -> Self {
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
+
+impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
+where
+	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash,
+	Hasher: Hash<Output=H>,
+{
+	fn new(storage_root: &[u8], code_hash: H) -> Self {
 		let mut buf = Vec::new();
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
-		storage_size.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
-		TombstoneContractInfo(T::Hashing::hash(&buf[..]))
+		RawTombstoneContractInfo(Hasher::hash(&buf[..]), PhantomData)
 	}
 }
 
@@ -235,7 +255,10 @@ where
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = <AccountCounter<T>>::mutate(|v| v.wrapping_add(1));
+		let new_seed = <AccountCounter<T>>::mutate(|v| {
+			*v = v.wrapping_add(1);
+			*v
+		});
 
 		let mut buf = Vec::new();
 		buf.extend_from_slice(account_id.as_ref());
@@ -506,6 +529,84 @@ decl_module! {
 			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
 				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
 			}
+		}
+
+		/// Allows a contract to restore a tombstone by giving its storage.
+		///
+		/// The contract that wants to restore (i.e. origin of the call, or `msg.sender` in Solidity terms) will compute a
+		/// tombstone with its storage and the given code_hash. If the computed tombstone
+		/// match the destination one, the destination contract is restored with the rent_allowance` specified,
+		/// while the origin sends all its funds to the destination and is removed.
+		fn restore_to(
+			origin,
+			dest: T::AccountId,
+			code_hash: CodeHash<T>,
+			rent_allowance: BalanceOf<T>,
+			delta: Vec<exec::StorageKey>
+		) {
+			let origin = ensure_signed(origin)?;
+
+			let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
+				.and_then(|c| c.get_alive())
+				.ok_or("Cannot restore from inexisting or tombstone contract")?;
+
+			let current_block = <system::Module<T>>::block_number();
+
+			if origin_contract.last_write == Some(current_block) {
+				return Err("Origin TrieId written in the current block");
+			}
+
+			let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
+				.and_then(|c| c.get_tombstone())
+				.ok_or("Cannot restore to inexisting or alive contract")?;
+
+			let last_write = if !delta.is_empty() {
+				Some(current_block)
+			} else {
+				origin_contract.last_write
+			};
+
+			let key_values_taken = delta.iter()
+				.filter_map(|key| {
+					child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
+						child::kill(&origin_contract.trie_id, &blake2_256(key));
+						(key, value)
+					})
+				})
+				.collect::<Vec<_>>();
+
+			let tombstone = <TombstoneContractInfo<T>>::new(
+				// This operation is cheap enough because last_write (delta not included)
+				// is not this block as it has been checked earlier.
+				&runtime_io::child_storage_root(&origin_contract.trie_id)[..],
+				code_hash,
+			);
+
+			if tombstone != dest_tombstone {
+				for (key, value) in key_values_taken {
+					child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
+				}
+
+				return Err("Tombstones don't match");
+			}
+
+			origin_contract.storage_size -= key_values_taken.iter()
+				.map(|(_, value)| value.len() as u32)
+				.sum::<u32>();
+
+			<ContractInfoOf<T>>::remove(&origin);
+			<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
+				trie_id: origin_contract.trie_id,
+				storage_size: origin_contract.storage_size,
+				code_hash,
+				rent_allowance,
+				deduct_block: current_block,
+				last_write,
+			}));
+
+			let origin_free_balance = T::Currency::free_balance(&origin);
+			T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
+			T::Currency::deposit_creating(&dest, origin_free_balance);
 		}
 
 		fn on_finalize() {

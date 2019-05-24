@@ -182,7 +182,7 @@ impl<Components: components::Components> Service<Components> {
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
 		};
@@ -202,9 +202,6 @@ impl<Components: components::Components> Service<Components> {
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network = network::Service::new(network_params, protocol_id, import_queue)?;
-		if let Some(on_demand) = on_demand.as_ref() {
-			on_demand.set_network_interface(Box::new(Arc::downgrade(&network)));
-		}
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
@@ -326,8 +323,16 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			client.clone(),
+			network.clone(),
+			has_bootnodes,
+			system_info,
+			config.rpc_http,
+			config.rpc_ws,
+			config.rpc_ws_max_connections,
+			config.rpc_cors.clone(),
+			task_executor.clone(),
+			transaction_pool.clone(),
 		)?;
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
