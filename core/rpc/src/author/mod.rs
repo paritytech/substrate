@@ -104,13 +104,13 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	type Metadata = crate::metadata::Metadata;
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
-		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
+		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::BadFormat)?;
 		let best_block_hash = self.client.info()?.chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.map_err(|e| e.into_pool_error()
 				.map(Into::into)
-				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
+				.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
 			)
 	}
 
@@ -121,12 +121,13 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
-			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
+			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
+				.ok_or(error::Error::BadFormat)?;
 			self.pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
 				.map_err(|e| e.into_pool_error()
 					.map(Into::into)
-					.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
+					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
 				)
 		};
 

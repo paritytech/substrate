@@ -643,9 +643,8 @@ mod tests {
 		let res = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
 		assert_eq!(res.is_err(), true);
 		if let Err(err) = res {
-			let inner_err = err.iter().next().unwrap();
 			assert_eq!(
-				format!("{}", inner_err),
+				format!("{}", err),
 				format!("{}", wasmi::Error::Trap(trap(allocator::OUT_OF_SPACE)))
 			);
 		}

@@ -50,7 +50,7 @@ use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
 };
 use primitives::Pair;
-use inherents::{InherentDataProviders, InherentData, RuntimeString};
+use inherents::{InherentDataProviders, InherentData};
 use authorities::AuthoritiesApi;
 
 use futures::{Future, IntoFuture, future, stream::Stream};
@@ -122,10 +122,6 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 	Some(current_author)
 }
 
-fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
-	consensus_common::ErrorKind::InherentData(err.into()).into()
-}
-
 /// A digest item which is usable with aura consensus.
 pub trait CompatibleDigestItem<T: Pair>: Sized {
 	/// Construct a digest item which contains a slot number and a signature on the
@@ -177,7 +173,8 @@ impl SlotCompatible for AuraSlotCompatible {
 	) -> Result<(TimestampInherent, AuraInherent), consensus_common::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
-			.map_err(inherent_to_common_error)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
 	}
 }
 
@@ -448,7 +445,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 						);
 					}
 				})
-				.map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into())
+				.map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into())
 		)
 	}
 }
@@ -738,7 +735,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 		return Ok(());
 	}
 
-	let map_err = |error| consensus_common::Error::from(consensus_common::ErrorKind::ClientImport(
+	let map_err = |error| consensus_common::Error::from(consensus_common::Error::ClientImport(
 		format!(
 			"Error initializing authorities cache: {}",
 			error,
@@ -766,7 +763,7 @@ fn authorities<B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B
 			} else {
 				CoreApi::authorities(&*client.runtime_api(), at).ok()
 			}
-		}).ok_or_else(|| consensus_common::ErrorKind::InvalidAuthoritiesSet.into())
+		}).ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
 /// The Aura import queue type.
@@ -780,7 +777,8 @@ fn register_aura_inherent_data_provider(
 	if !inherent_data_providers.has_provider(&srml_aura::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_aura::InherentDataProvider::new(slot_duration))
-			.map_err(inherent_to_common_error)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
 	} else {
 		Ok(())
 	}
@@ -1000,7 +998,7 @@ mod tests {
 		let header_hash: H256 = header.hash();
 		let to_sign = (slot_num, header_hash).encode();
 		let signature = pair.sign(&to_sign[..]);
-		
+
 		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(
 			slot_num,
 			signature,
@@ -1120,7 +1118,7 @@ mod tests {
 
 		// Different slot is ok.
 		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities, false).is_ok());
-		
+
 		// Here we trigger pruning and save header 4.
 		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities, false).is_ok());
 

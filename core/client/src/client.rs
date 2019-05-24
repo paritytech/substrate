@@ -29,7 +29,7 @@ use runtime_primitives::{
 	generic::{BlockId, SignedBlock},
 };
 use consensus::{
-	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock,
+	Error as ConsensusError, ImportBlock,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
@@ -1387,7 +1387,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)
-		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+		}).map_err(|e| ConsensusError::ClientImport(e.to_string()).into())
 	}
 
 	/// Check block preconditions.
@@ -1397,7 +1397,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
 		match self.block_status(&BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
 			BlockStatus::Unknown | BlockStatus::InChainPruned => return Ok(ImportResult::UnknownParent),
@@ -1405,7 +1405,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		}
 
 		match self.block_status(&BlockId::Hash(hash))
-			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
@@ -1641,14 +1641,14 @@ where
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
 		LongestChain::leaves(self)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 
 	fn best_chain(&self)
 		-> Result<<Block as BlockT>::Header, ConsensusError>
 	{
 		LongestChain::best_block_header(&self)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 
 	fn finality_target(
@@ -1657,7 +1657,7 @@ where
 		maybe_max_number: Option<NumberFor<Block>>
 	) -> Result<Option<Block::Hash>, ConsensusError> {
 		LongestChain::best_containing(self, target_hash, maybe_max_number)
-			.map_err(|e| ConsensusErrorKind::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }
 
