@@ -172,6 +172,15 @@ pub trait Externalities {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&mut self, key: &[u8], value: &[u8]);
 
+	/// Sets a value in the local storage if it matches current value.
+	///
+	/// Since multiple offchain workers may be running concurrently, to prevent
+	/// data races use CAS to coordinate between them.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]);
+
 	/// Gets a value from the local storage.
 	///
 	/// If the value does not exist in the storage `None` will be returned.
@@ -270,6 +279,9 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).local_storage_set(key, value)
 	}
 
+	fn local_storage_compare_and_set(&mut self, key: &[u8], old_value: &[u8], new_value: &[u8]) {
+		(&mut **self).local_storage_compare_and_set(key, old_value, new_value)
+	}
 
 	fn local_storage_get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		(&mut **self).local_storage_get(key)

@@ -359,6 +359,16 @@ pub mod ext {
 		/// Write a value to local storage.
 		fn ext_local_storage_set(key: *const u8, key_len: u32, value: *const u8, value_len: u32);
 
+		/// Write a value to local storage in atomic fashion.
+		fn ext_local_storage_compare_and_set(
+			key: *const u8,
+			key_len: u32,
+			old_value: *const u8,
+			old_value_len: u32,
+			new_value: *const u8,
+			new_value_len: u32
+		);
+
 		/// Read a value from local storage.
 		///
 		/// if `value_len` is u32::max_value the value has not been found.
@@ -787,6 +797,19 @@ impl OffchainApi for () {
 				key.len() as u32,
 				value.as_ptr(),
 				value.len() as u32,
+			)
+		}
+	}
+
+	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+		unsafe {
+			ext_local_storage_compare_and_set.get()(
+				key.as_ptr(),
+				key.len() as u32,
+				old_value.as_ptr(),
+				old_value.len() as u32,
+				new_value.as_ptr(),
+				new_value.len() as u32,
 			)
 		}
 	}

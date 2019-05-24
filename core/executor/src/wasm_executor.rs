@@ -775,7 +775,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map(|api| api.http_response_wait(&ids, deadline_to_timestamp(deadline)))
 			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_wait: wasm"))?
 			.into_iter()
-			.map(|status| status.as_u32())
+			.map(|status| status.into())
 			.zip(0..ids_len);
 
 		for (status, i) in res {

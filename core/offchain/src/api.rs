@@ -72,6 +72,10 @@ impl OffchainExt for AsyncApi {
 		unavailable_yet("local_storage_set")
 	}
 
+	fn local_storage_compare_and_set(&mut self, _key: &[u8], _old_value: &[u8], _new_value: &[u8]) {
+		unavailable_yet("local_storage_compare_and_set")
+	}
+
 	fn local_storage_get(&mut self, _key: &[u8]) -> Option<Vec<u8>> {
 		unavailable_yet("local_storage_get")
 	}
