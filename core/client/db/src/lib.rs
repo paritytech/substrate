@@ -100,7 +100,10 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
-) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error>
+) -> Result<
+	client::Client<Backend<Block>,
+	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
+>
 	where
 		Block: BlockT<Hash=H256>,
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
@@ -568,7 +571,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
-    Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
+		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
