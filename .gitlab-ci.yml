@@ -104,6 +104,8 @@ check-web-wasm:
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
     - time cargo web build -p substrate-consensus-common
+    - time cargo web build -p substrate-keyring
+    - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network-libp2p
     - time cargo web build -p substrate-panic-handler

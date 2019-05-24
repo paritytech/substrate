@@ -44,7 +44,9 @@ use std::collections::BTreeSet;
 use log::warn;
 
 use client::error::{Error as ClientError, Result as ClientResult};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, As, Zero};
+use runtime_primitives::traits::{
+	Block as BlockT, NumberFor, Zero, Bounded, CheckedSub
+};
 
 use crate::cache::{CacheItemT, ComplexBlockId, EntryType};
 use crate::cache::list_entry::{Entry, StorageEntry};
@@ -135,7 +137,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 			// BUT since we're not guaranteeing to provide correct values for forks
 			// behind the finalized block, check if the block is finalized first
-			if !chain::is_finalized_block(&self.storage, at, As::sa(::std::u64::MAX))? {
+			if !chain::is_finalized_block(&self.storage, at, Bounded::max_value())? {
 				return Ok(None);
 			}
 
@@ -349,9 +351,9 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	) {
 		let mut do_pruning = || -> ClientResult<()> {
 			// calculate last ancient block number
-			let ancient_block = match block.number.as_().checked_sub(self.prune_depth.as_()) {
-				Some(number) => match self.storage.read_id(As::sa(number))? {
-					Some(hash) => ComplexBlockId::new(hash, As::sa(number)),
+			let ancient_block = match block.number.checked_sub(&self.prune_depth) {
+				Some(number) => match self.storage.read_id(number)? {
+					Some(hash) => ComplexBlockId::new(hash, number),
 					None => return Ok(()),
 				},
 				None => return Ok(()),

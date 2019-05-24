@@ -11,7 +11,10 @@ GOOD_LINE_WIDTH="101"
 
 git diff --name-only ${BASE_BRANCH}...${CI_COMMIT_SHA} \*.rs | ( while read file
 do
-  if git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} | grep -q "^+.\{${LINE_WIDTH}\}"
+  if [ ! -f ${file} ];
+  then
+	echo "Skipping removed file."
+  elif git diff ${BASE_BRANCH}...${CI_COMMIT_SHA} ${file} | grep -q "^+.\{${LINE_WIDTH}\}"
   then
     if [ -z "${FAIL}" ]
     then

@@ -355,7 +355,7 @@ where
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		info!(target: "sub-libp2p", "Discovered external node address: {}", new_addr);
+		info!(target: "sub-libp2p", "Discovered new external address for our node: {}", new_addr);
 	}
 
 	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {

@@ -20,7 +20,7 @@
 
 use rstd::prelude::*;
 use rstd::result;
-use primitives::traits::{Zero, As, Bounded};
+use primitives::traits::{Zero, Bounded};
 use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
@@ -196,7 +196,7 @@ decl_module! {
 			// Indefinite lock is reduced to the maximum voting lock that could be possible.
 			let lock_period = Self::public_delay();
 			let now = <system::Module<T>>::block_number();
-			let locked_until = now + lock_period * T::BlockNumber::sa(d.1 as u64);
+			let locked_until = now + lock_period * (d.1 as u32).into();
 			T::Currency::set_lock(DEMOCRACY_ID, &who, Bounded::max_value(), locked_until, WithdrawReason::Transfer.into());
 			Self::deposit_event(RawEvent::Undelegated(who));
 		}
@@ -234,7 +234,7 @@ decl_storage! {
 		/// Those who have locked a deposit.
 		pub DepositOf get(deposit_of): map PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 		/// How often (in blocks) new public referenda are launched.
-		pub LaunchPeriod get(launch_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub LaunchPeriod get(launch_period) config(): T::BlockNumber = 1000.into();
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		pub MinimumDeposit get(minimum_deposit) config(): BalanceOf<T>;
 		/// The delay before enactment for all public referenda.
@@ -243,7 +243,7 @@ decl_storage! {
 		pub MaxLockPeriods get(max_lock_periods) config(): LockPeriods;
 
 		/// How often (in blocks) to check for new votes.
-		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = 1000.into();
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -290,7 +290,7 @@ impl<T: Trait> Module<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
-		Self::deposit_of(proposal).map(|(d, l)| d * BalanceOf::<T>::sa(l.len() as u64))
+		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.
@@ -325,9 +325,9 @@ impl<T: Trait> Module<T> {
 			))
 			.map(|(bal, vote)|
 				if vote.is_aye() {
-					(bal * BalanceOf::<T>::sa(vote.multiplier() as u64), Zero::zero(), bal)
+					(bal * (vote.multiplier() as u32).into(), Zero::zero(), bal)
 				} else {
-					(Zero::zero(), bal * BalanceOf::<T>::sa(vote.multiplier() as u64), bal)
+					(Zero::zero(), bal * (vote.multiplier() as u32).into(), bal)
 				}
 			).fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f));
 		let (del_approve, del_against, del_capital) = Self::tally_delegation(ref_index);
@@ -361,7 +361,7 @@ impl<T: Trait> Module<T> {
 			.fold((Zero::zero(), Zero::zero()), |(votes_acc, balance_acc), (delegator, (_delegate, periods))| {
 				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
 				let balance = T::Currency::total_balance(&delegator);
-				let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
+				let votes = T::Currency::total_balance(&delegator) * (lock_periods as u32).into();
 				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1);
 				(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
 			})
@@ -469,7 +469,7 @@ impl<T: Trait> Module<T> {
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter offered to
 			// lock should they win...
-			let locked_until = now + lock_period * T::BlockNumber::sa((vote.multiplier()) as u64);
+			let locked_until = now + lock_period * (vote.multiplier() as u32).into();
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(DEMOCRACY_ID, &a, Bounded::max_value(), locked_until, WithdrawReason::Transfer.into());
 		}

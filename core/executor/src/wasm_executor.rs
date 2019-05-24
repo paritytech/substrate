@@ -26,7 +26,7 @@ use wasmi::{
 use wasmi::RuntimeValue::{I32, I64, self};
 use wasmi::memory_units::{Pages};
 use state_machine::{Externalities, ChildStorageKey};
-use crate::error::{Error, ErrorKind, Result};
+use crate::error::{Error, Result};
 use crate::wasm_utils::UserError;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
@@ -769,9 +769,9 @@ impl WasmExecutor {
 	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
 		Ok(module
 			.export_by_name("memory")
-			.ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
+			.ok_or_else(|| Error::InvalidMemoryReference)?
 			.as_memory()
-			.ok_or_else(|| Error::from(ErrorKind::InvalidMemoryReference))?
+			.ok_or_else(|| Error::InvalidMemoryReference)?
 			.clone())
 	}
 
@@ -795,7 +795,7 @@ impl WasmExecutor {
 				if let Some(I64(r)) = res {
 					let offset = r as u32;
 					let length = (r as u64 >> 32) as usize;
-					memory.get(offset, length).map_err(|_| ErrorKind::Runtime.into()).map(Some)
+					memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
 				} else {
 					Ok(None)
 				}
@@ -828,7 +828,7 @@ impl WasmExecutor {
 		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 		let parameters = create_parameters(&mut |data: &[u8]| {
-			let offset = fec.heap.allocate(data.len() as u32).map_err(|_| ErrorKind::Runtime)?;
+			let offset = fec.heap.allocate(data.len() as u32).map_err(|_| Error::Runtime)?;
 			memory.set(offset, &data)?;
 			Ok(offset)
 		})?;
@@ -841,7 +841,7 @@ impl WasmExecutor {
 		let result = match result {
 			Ok(val) => match filter_result(val, &memory)? {
 				Some(val) => Ok(val),
-				None => Err(ErrorKind::InvalidReturn.into()),
+				None => Err(Error::InvalidReturn),
 			},
 			Err(e) => {
 				trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);
@@ -877,7 +877,7 @@ impl WasmExecutor {
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
-		memory.grow(Pages(heap_pages)).map_err(|_| Error::from(ErrorKind::Runtime))?;
+		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
 		let table: Option<TableRef> = intermediate_instance
 			.not_started_instance()
 			.export_by_name("__indirect_function_table")

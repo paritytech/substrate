@@ -45,7 +45,7 @@ fn sync_peers_works() {
 	net.sync();
 	for peer in 0..3 {
 		// Assert peers is up to date.
-		assert_eq!(net.peer(peer).peers.read().len(), 2);
+		assert_eq!(net.peer(peer).protocol_status.read().num_peers, 2);
 		// And then disconnect.
 		for other in 0..3 {
 			if other != peer {
@@ -56,8 +56,8 @@ fn sync_peers_works() {
 	net.sync();
 	// Now peers are disconnected.
 	for peer in 0..3 {
-		let peers = net.peer(peer).peers.read();
-		assert_eq!(peers.len(), 0);
+		let status = net.peer(peer).protocol_status.read();
+		assert_eq!(status.num_peers, 0);
 	}
 }
 
