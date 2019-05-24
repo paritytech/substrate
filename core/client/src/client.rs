@@ -2375,27 +2375,26 @@ pub(crate) mod tests {
 		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
 		assert_eq!(
-			#[allow(deprecated)]
-			client.backend().blockchain().last_finalized().unwrap(),
+			blockchain.last_finalized().unwrap(),
 			a3.hash(),
 		);
 
 		assert_eq!(
-			#[allow(deprecated)]
-			client.backend().blockchain().justification(BlockId::Hash(a3.hash())).unwrap(),
+			blockchain.justification(BlockId::Hash(a3.hash())).unwrap(),
 			Some(justification),
 		);
 
 		assert_eq!(
-			#[allow(deprecated)]
-			client.backend().blockchain().justification(BlockId::Hash(a1.hash())).unwrap(),
+			blockchain.justification(BlockId::Hash(a1.hash())).unwrap(),
 			None,
 		);
 
 		assert_eq!(
-			#[allow(deprecated)]
-			client.backend().blockchain().justification(BlockId::Hash(a2.hash())).unwrap(),
+			blockchain.justification(BlockId::Hash(a2.hash())).unwrap(),
 			None,
 		);
 	}
