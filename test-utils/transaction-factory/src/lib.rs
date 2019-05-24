@@ -135,11 +135,11 @@ where
 		_ =>
 			simple_modes::next::<F, RA>(&mut curr, &client, prior_block_hash, last_ts)
 	} {
-			prior_block_hash = block.header().hash().into();
-			import_block::<F>(&client, block);
-			last_ts = ts;
+		prior_block_hash = block.header().hash().into();
+		import_block::<F>(&client, block);
+		last_ts = ts;
 
-			info!("Imported block at {}", curr.block_no);
+		info!("Imported block at {}", curr.block_no);
 	}
 
 	Ok(())
