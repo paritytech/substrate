@@ -23,7 +23,7 @@ use log::debug;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
 use crate::traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug,
-	MaybeSerializeDebugButNotDeserialize, Digest as DigestT};
+	MaybeSerializeDebugButNotDeserialize};
 use crate::generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.

@@ -347,9 +347,7 @@ mod tests {
 			number,
 			extrinsics_root,
 			state_root: Default::default(),
-			digest: generic::Digest {
-				logs: vec![],
-			},
+			digest: Default::default(),
 		};
 
 		// execute the block to get the real header.
