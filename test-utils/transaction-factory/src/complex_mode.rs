@@ -44,13 +44,13 @@ use log::info;
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{As, Block as BlockT, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, One, Zero};
 use substrate_service::{FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents};
 
-use crate::{FactoryState, RuntimeAdapter, create_block};
+use crate::{RuntimeAdapter, create_block};
 
 pub fn next<F, RA>(
-	curr: &mut FactoryState,
+	factory_state: &mut RA,
 	client: &Arc<ComponentClient<FullComponents<F>>>,
 	prior_block_hash: <RA::Block as BlockT>::Hash,
 	prior_block_id: BlockId<F::Block>,
@@ -60,103 +60,95 @@ where
 	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
 	FullClient<F>: ProvideRuntimeApi,
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
-
 	RA: RuntimeAdapter,
 {
-	if !(curr.block_no < curr.num * curr.rounds && curr.round < curr.rounds) {
+	let total = factory_state.start_number() + factory_state.num() * factory_state.rounds();
+
+	if !(factory_state.block_no() < total && factory_state.round() < factory_state.rounds()) {
 		return None;
 	}
 
 	info!(
 		"Round {}: Creating {} transactions in total, {} per round. {} rounds in total.",
-		curr.round + 1,
-		curr.num * curr.rounds,
-		curr.num,
-		curr.rounds,
+		factory_state.round() + RA::Number::one(),
+		factory_state.num() * factory_state.rounds(),
+		factory_state.num(),
+		factory_state.rounds(),
 	);
 
-	let from = from::<RA>(curr);
+	let from = from::<RA>(factory_state);
 
-	let seed = curr.start_number + curr.block_no;
-	let to = RA::gen_random_account_id(seed);
+	let seed = factory_state.start_number() + factory_state.block_no();
+	let to = RA::gen_random_account_id(&seed);
 
-	let amount = match curr.round {
-		0 => RA::minimum_balance().as_() * curr.rounds,
-		_ => {
-			let rounds_left = curr.rounds - curr.round;
-			RA::minimum_balance().as_() * rounds_left
-		}
+	let mut amount;
+	if factory_state.round() == RA::Number::zero() {
+		amount = RA::minimum_balance() * factory_state.rounds();
+	} else {
+		let rounds_left = factory_state.rounds() - factory_state.round();
+		amount = RA::minimum_balance() * rounds_left;
 	};
 
-	let transfer = RA::transfer_extrinsic(
+	let transfer = factory_state.transfer_extrinsic(
 		&from.0,
 		&from.1,
 		&to,
-		RA::Balance::sa(amount),
-		RA::Index::sa(curr.index),
-		RA::Phase::sa(curr.phase),
+		&amount,
 		&prior_block_hash,
 	);
 
-	let inherents = RA::inherent_extrinsics(curr);
+	let inherents = factory_state.inherent_extrinsics();
 	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
 		.expect("Failed to create inherent extrinsics");
 
 	let block = create_block::<F, RA>(&client, transfer, inherents);
 	info!(
 		"Created block {} with hash {}. Transferring {} from {} to {}.",
-		curr.block_no + 1,
+		factory_state.block_no() + RA::Number::one(),
 		prior_block_hash,
 		amount,
 		from.0,
 		to
 	);
 
-	curr.block_no += 1;
+	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
 
-	let new_round = curr.block_no > 0 && curr.block_no % curr.num == 0;
+	let new_round = factory_state.block_no() > RA::Number::zero()
+		&& factory_state.block_no() % factory_state.num() == RA::Number::zero();
 	if new_round {
-		curr.round += 1;
-		curr.block_in_round = 0;
+		factory_state.set_round(factory_state.round() + RA::Number::one());
+		factory_state.set_block_in_round(RA::Number::zero());
 	} else {
-		curr.block_in_round += 1;
+		factory_state.set_block_in_round(factory_state.block_in_round() + RA::Number::one());
 	}
-
-	curr.phase += 1;
-
-	curr.index = match curr.round {
-		// if round is 0 all transactions will be done with master as a sender
-		0 => curr.index + 1,
-
-		// if round is 1 every sender account will be new and not yet have any
-		// transactions done
-		_ => 0,
-	};
 
 	Some(block)
 }
 
 /// Return the account which received tokens at this point in the previous round.
 fn from<RA>(
-	curr: &mut FactoryState,
+	factory_state: &mut RA
 ) -> (<RA as RuntimeAdapter>::AccountId, <RA as RuntimeAdapter>::Secret)
 where RA: RuntimeAdapter
 {
-	match curr.round {
-		0 => {
+	let is_first_round = factory_state.round() == RA::Number::zero();
+	match is_first_round {
+		true => {
 			// first round always uses master account
 			(RA::master_account_id(), RA::master_account_secret())
 		},
 		_ => {
 			// the account to which was sent in the last round
-			let seed = match curr.round {
-				1 => curr.start_number + curr.block_in_round,
+			let is_round_one = factory_state.round() == RA::Number::one();
+			let seed = match is_round_one {
+				true => factory_state.start_number() + factory_state.block_in_round(),
 				_ => {
-					let block_no_in_prior_round = curr.num * (curr.round - 1) + curr.block_in_round;
-					curr.start_number + block_no_in_prior_round
+					let block_no_in_prior_round =
+						factory_state.num() * (factory_state.round() - RA::Number::one()) + factory_state.block_in_round();
+					factory_state.start_number() + block_no_in_prior_round
 				}
 			};
-			(RA::gen_random_account_id(seed), RA::gen_random_account_secret(seed))
+			(RA::gen_random_account_id(&seed), RA::gen_random_account_secret(&seed))
 		},
 	}
 }

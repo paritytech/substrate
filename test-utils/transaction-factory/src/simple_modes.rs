@@ -38,14 +38,14 @@ use std::sync::Arc;
 use log::info;
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
-use sr_primitives::traits::{As, Block as BlockT, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, One};
 use sr_primitives::generic::BlockId;
 use substrate_service::{FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents};
 
-use crate::{FactoryState, Mode, RuntimeAdapter, create_block};
+use crate::{Mode, RuntimeAdapter, create_block};
 
 pub fn next<F, RA>(
-	curr: &mut FactoryState,
+	factory_state: &mut RA,
 	client: &Arc<ComponentClient<FullComponents<F>>>,
 	prior_block_hash: <RA::Block as BlockT>::Hash,
 	prior_block_id: BlockId<F::Block>,
@@ -57,51 +57,48 @@ where
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
 	RA: RuntimeAdapter,
 {
-	if curr.block_no >= curr.num {
+	if factory_state.block_no() >= factory_state.num() {
 		return None;
 	}
 
 	let from = (RA::master_account_id(), RA::master_account_secret());
 
-	let seed = match curr.mode {
+	let seed = match factory_state.mode() {
 		// choose the same receiver for all transactions
-		Mode::MasterTo1 => curr.start_number,
+		Mode::MasterTo1 => factory_state.start_number(),
 
 		// different receiver for each transaction
-		Mode::MasterToN => curr.start_number + curr.block_no,
+		Mode::MasterToN => factory_state.start_number() + factory_state.block_no(),
 		_ => unreachable!("Mode not covered!"),
 	};
-	let to = RA::gen_random_account_id(seed);
+	let to = RA::gen_random_account_id(&seed);
 
-	let amount = RA::minimum_balance().as_();
+	let amount = RA::minimum_balance();
 
-	let transfer = RA::transfer_extrinsic(
+	let transfer = factory_state.transfer_extrinsic(
 		&from.0,
 		&from.1,
 		&to,
-		RA::Balance::sa(amount),
-		RA::Index::sa(curr.index),
-		RA::Phase::sa(curr.phase),
+		&amount,
 		&prior_block_hash,
 	);
 
-	let inherents = RA::inherent_extrinsics(&curr);
+	let inherents = RA::inherent_extrinsics(&factory_state);
 	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
 		.expect("Failed to create inherent extrinsics");
 
 	let block = create_block::<F, RA>(&client, transfer, inherents);
+
+	factory_state.set_block_no(factory_state.block_no() + RA::Number::one());
+
 	info!(
 		"Created block {} with hash {}. Transferring {} from {} to {}.",
-		curr.block_no + 1,
+		factory_state.block_no(),
 		prior_block_hash,
 		amount,
 		from.0,
 		to
 	);
-
-	curr.block_no += 1;
-	curr.phase += 1;
-	curr.index += 1;
 
 	Some(block)
 }

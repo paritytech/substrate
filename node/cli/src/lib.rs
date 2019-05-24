@@ -32,7 +32,8 @@ use std::ops::Deref;
 use log::info;
 use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter};
-use crate::factory_impl::RuntimeAdapterImpl;
+use crate::factory_impl::FactoryState;
+use transaction_factory::RuntimeAdapter;
 
 /// The chain specification option.
 #[derive(Clone, Debug, PartialEq)]
@@ -186,11 +187,14 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				panic!("Factory is only supported for development and local testnet.");
 			}
 
-			transaction_factory::factory::<service::Factory, RuntimeAdapterImpl>(
-				config,
+			let factory_state = FactoryState::new(
 				cli_args.mode.clone(),
 				cli_args.num,
 				cli_args.rounds,
+			);
+			transaction_factory::factory::<service::Factory, FactoryState<_>>(
+				factory_state,
+				config,
 			).map_err(|e| format!("Error in transaction factory: {}", e))?;
 
 			Ok(())

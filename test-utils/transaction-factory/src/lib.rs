@@ -23,6 +23,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::ops::Mul;
+use std::cmp::PartialOrd;
 use std::fmt::Display;
 
 use log::info;
@@ -33,64 +34,65 @@ use consensus_common::{BlockOrigin, ImportBlock, InherentData, ForkChoiceStrateg
 use consensus_common::block_import::BlockImport;
 use parity_codec::{Decode, Encode};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{As, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic};
+use sr_primitives::traits::{
+	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
+	One, Zero,
+};
 use substrate_service::{FactoryBlock, FactoryFullConfiguration, FullClient, new_client, ServiceFactory, ComponentClient, FullComponents};
 pub use crate::modes::Mode;
 
-mod modes;
+pub mod modes;
 mod complex_mode;
 mod simple_modes;
 
 pub trait RuntimeAdapter {
 	type AccountId: Display;
-	type Balance: Display + Mul + As<u64>;
+	type Balance: Display + Mul;
 	type Block: BlockT;
-	type Index: Copy + As<u64>;
-	type Phase: Copy + As<u64>;
+	type Index: Copy;
+	type Number: Display + PartialOrd + SimpleArithmetic + Zero + One;
+	type Phase: Copy;
 	type Secret;
 
+	fn new(mode: Mode, rounds: u64, start_number: u64) -> Self;
+
+	fn block_no(&self) -> Self::Number;
+	fn block_in_round(&self) -> Self::Number;
+	fn mode(&self) -> &Mode;
+	fn num(&self) -> Self::Number;
+	fn rounds(&self) -> Self::Number;
+	fn round(&self) -> Self::Number;
+	fn start_number(&self) -> Self::Number;
+
+	fn set_block_in_round(&mut self, val: Self::Number);
+	fn set_block_no(&mut self, val: Self::Number);
+	fn set_round(&mut self, val: Self::Number);
+
 	fn transfer_extrinsic(
+		&self,
 		sender: &Self::AccountId,
 		key: &Self::Secret,
 		destination: &Self::AccountId,
-		amount: Self::Balance,
-		index: Self::Index,
-		phase: Self::Phase,
+		amount: &Self::Number,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
 
-	fn inherent_extrinsics(
-		curr: &FactoryState
-	) -> InherentData;
+	fn inherent_extrinsics(&self) -> InherentData;
 
-	fn minimum_balance() -> Self::Balance;
+	fn minimum_balance() -> Self::Number;
 	fn master_account_id() -> Self::AccountId;
 	fn master_account_secret() -> Self::Secret;
-	fn extract_index(account_id: Self::AccountId, block_hash: <Self::Block as BlockT>::Hash) -> Self::Index;
-	fn extract_phase(block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase;
-	fn gen_random_account_id(seed: u64) -> Self::AccountId;
-	fn gen_random_account_secret(seed: u64) -> Self::Secret;
-}
-
-pub struct FactoryState {
-	pub block_no: u64,
-	block_in_round: u64,
-	mode: Mode,
-	rounds: u64,
-	num: u64,
-	index: u64,
-	phase: u64,
-	round: u64,
-	start_number: u64,
+	fn extract_index(&self, account_id: &Self::AccountId, block_hash: &<Self::Block as BlockT>::Hash) -> Self::Index;
+	fn extract_phase(&self, block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase;
+	fn gen_random_account_id(seed: &Self::Number) -> Self::AccountId;
+	fn gen_random_account_secret(seed: &Self::Number) -> Self::Secret;
 }
 
 /// Manufactures transactions. The exact amount depends on
 /// `mode`, `num` and `rounds`.
 pub fn factory<F, RA>(
+	mut factory_state: RA,
 	mut config: FactoryFullConfiguration<F>,
-	mode: Mode,
-	num: u64,
-	rounds: u64,
 ) -> cli::error::Result<()>
 where
 	F: ServiceFactory,
@@ -104,35 +106,21 @@ where
 
 	let select_chain = F::build_select_chain(&mut config, client.clone())?;
 
-	let start_number: u64 = client.info()?.chain.best_number.as_();
-
-	let mut curr = FactoryState {
-		mode: mode.clone(),
-		num: num,
-		index: 0,
-		phase: 0,
-		round: 0,
-		rounds: rounds,
-		block_in_round: 0,
-		block_no: 0,
-		start_number: start_number,
-	};
-
 	let best_header: Result<<F::Block as BlockT>::Header, cli::error::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let best_block_id = BlockId::<F::Block>::hash(best_hash);
 
-	while let Some(block) = match mode {
+	while let Some(block) = match factory_state.mode() {
 		Mode::MasterToNToM =>
-			complex_mode::next::<F, RA>(&mut curr, &client, best_hash.into(), best_block_id),
+			complex_mode::next::<F, RA>(&mut factory_state, &client, best_hash.into(), best_block_id),
 		_ =>
-			simple_modes::next::<F, RA>(&mut curr, &client, best_hash.into(), best_block_id)
+			simple_modes::next::<F, RA>(&mut factory_state, &client, best_hash.into(), best_block_id)
 	} {
 		best_hash = block.header().hash();
 		import_block::<F>(&client, block);
 
-		info!("Imported block at {}", curr.block_no);
+		info!("Imported block at {}", factory_state.block_no());
 	}
 
 	Ok(())
