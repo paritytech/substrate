@@ -240,6 +240,12 @@ impl_runtime_apis! {
 		fn initialize_block(header: &<Block as BlockT>::Header) {
 			Executive::initialize_block(header)
 		}
+
+		// Suppress a warning for implementing a mandatory deprecated method.
+		#[allow(deprecated)]
+		fn authorities() -> Vec<AuthorityId> {
+			panic!("Deprecated, please use `AuthoritiesApi`.")
+		}
 	}
 
 	impl runtime_api::Metadata<Block> for Runtime {
