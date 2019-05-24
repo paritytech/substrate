@@ -197,6 +197,10 @@ sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 [source, shell]
 brew install cmake pkg-config openssl git llvm
 
+ - Nix/NixOS:
+[source, shell]
+nix-shell
+
 To finish installation of Substrate, jump down to <<shared-steps,shared steps>>.
 
 ==== Windows
