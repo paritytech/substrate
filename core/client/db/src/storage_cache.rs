@@ -35,21 +35,19 @@ type StorageValue = Vec<u8>;
 /// Shared canonical state cache.
 pub struct Cache<B: Block, H: Hasher> {
 	/// Storage cache. `None` indicates that key is known to be missing.
-	lru_storage: LinkedHashMap<StorageKey, Option<StorageValue>>,
+	lru_storage: LRUMap<StorageKey, Option<StorageValue>>,
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
-	lru_hashes: LinkedHashMap<StorageKey, OptionHOut<H::Out>>,
+	lru_hashes: LRUMap<StorageKey, OptionHOut<H::Out>>,
 	/// Storage cache for child trie. `None` indicates that key is known to be missing.
-	lru_child_storage: LinkedHashMap<ChildStorageKey, Option<StorageValue>>,
+	lru_child_storage: LRUMap<ChildStorageKey, Option<StorageValue>>,
 	/// Storage hashes cache for chid trie. `None` indicates that key is known to be missing.
-	lru_child_hashes: LinkedHashMap<ChildStorageKey, OptionHOut<H::Out>>,
+	lru_child_hashes: LRUMap<ChildStorageKey, OptionHOut<H::Out>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
-	/// Maximum cache size available, in Bytes.
-	shared_cache_size: usize,
-	/// Used storage size, in Bytes.
-	storage_used_size: usize,
 }
+
+struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
 /// internal trait similar to heapsize of but without
 /// overhead as our current cache content size
@@ -95,92 +93,105 @@ impl<T: EstimateSize> EstimateSize for (T, T) {
 // do not account for std hashmap inner implementation
 const LINKED_HASHMAP_ENTRY_OVERHEAD:	usize = 64 / 8; 
 
-// warning there is no safe guard on direct usage of linked hashmap, this 
-// function should always be use
-fn lru_remove<K: EstimateSize + Eq + StdHash, V: EstimateSize> (
-	map: &mut LinkedHashMap<K,V>,
-	storage_used_size: &mut usize,
-	k: &K,
-) {
-	if let Some(v) = map.remove(k) {
-		*storage_used_size -= k.estimate_size();
-		*storage_used_size -= LINKED_HASHMAP_ENTRY_OVERHEAD;
-		*storage_used_size -= v.estimate_size();
-	}
-}
 
-// warning there is no safe guard on direct usage of linked hashmap, this 
-// function should always be use
-// Note insert in case of eixsting value does not count as an access
-// (position does not change in lru)
-fn lru_add<K: EstimateSize + Eq + StdHash, V: EstimateSize> (
-	lmap: &mut LinkedHashMap<K,V>,
-	storage_used_size: &mut usize,
-	limit: usize,
-	k: K,
-	v: V
-) {
-	let klen = k.estimate_size();
-	*storage_used_size += v.estimate_size();
-	// TODO assert k v size fit into limit?? to avoid insert remove?
-	match lmap.entry(k) {
-		Entry::Occupied(mut entry) => {
-			// note that in this case we are not running pure lru as 
-			// it would require to remove first
-			*storage_used_size -= entry.get().estimate_size();
-			entry.insert(v);
-		},
-		Entry::Vacant(entry) => {
-			*storage_used_size += klen;
-			*storage_used_size += LINKED_HASHMAP_ENTRY_OVERHEAD;
-			entry.insert(v);
-		},
-	};
-
-	while *storage_used_size > limit {
-		if let Some((k,v)) = lmap.pop_front() {
+impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
+	fn remove(&mut self, k: &K) {
+		let map = &mut self.0;
+		let storage_used_size = &mut self.1;
+		if let Some(v) = map.remove(k) {
 			*storage_used_size -= k.estimate_size();
 			*storage_used_size -= LINKED_HASHMAP_ENTRY_OVERHEAD;
 			*storage_used_size -= v.estimate_size();
-		} else {
-			// can happen fairly often as we get value from multiple lru
-			// and only remove from a single lru
-			break;
 		}
 	}
-}
 
+	fn add(&mut self, k: K, v: V) {
+		let lmap = &mut self.0;
+		let storage_used_size = &mut self.1;
+		let limit = self.2;
+		let klen = k.estimate_size();
+		*storage_used_size += v.estimate_size();
+		// TODO assert k v size fit into limit?? to avoid insert remove?
+		match lmap.entry(k) {
+			Entry::Occupied(mut entry) => {
+				// note that in this case we are not running pure lru as 
+				// it would require to remove first
+				*storage_used_size -= entry.get().estimate_size();
+				entry.insert(v);
+			},
+			Entry::Vacant(entry) => {
+				*storage_used_size += klen;
+				*storage_used_size += LINKED_HASHMAP_ENTRY_OVERHEAD;
+				entry.insert(v);
+			},
+		};
+
+		while *storage_used_size > limit {
+			if let Some((k,v)) = lmap.pop_front() {
+				*storage_used_size -= k.estimate_size();
+				*storage_used_size -= LINKED_HASHMAP_ENTRY_OVERHEAD;
+				*storage_used_size -= v.estimate_size();
+			} else {
+				// can happen fairly often as we get value from multiple lru
+				// and only remove from a single lru
+				break;
+			}
+		}
+	}
+
+	fn get<Q:?Sized>(&mut self, k: &Q) -> Option<&mut V>
+		where K: std::borrow::Borrow<Q>,
+			Q: StdHash + Eq {
+		self.0.get_refresh(k)
+	}
+
+	fn used_size(&self) -> usize {
+		self.1
+	}
+	fn clear(&mut self) {
+		self.0.clear();
+		self.1 = 0;
+	}
+
+}
+ 
 impl<B: Block, H: Hasher> Cache<B, H> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
-		self.storage_used_size
+		self.lru_storage.used_size()
+			+ self.lru_hashes.used_size()
+			+ self.lru_child_storage.used_size()
+			+ self.lru_child_hashes.used_size()
 	}
 }
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
 /// Create new shared cache instance with given max memory usage.
-pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> SharedCache<B, H> {
-	// we need to supply a max capacity to `LinkedHashMap`, but since
-	// we don't have any idea how large the size of each item
-	// that is stored will be we can't calculate the max amount
-	// of items properly from `shared_cache_size`.
-	//
-	// what we do instead is to supply `shared_cache_size` as the
-	// max upper bound capacity (this would only be reached if each
-	// item would be one byte).
-	// each time we store to the storage cache we verify the memory
-	// constraint and pop the lru item if space needs to be freed.
-
-	Arc::new(Mutex::new(Cache {
-		lru_storage: LinkedHashMap::new(),
-		lru_hashes: LinkedHashMap::new(),
-		lru_child_storage: LinkedHashMap::new(),
-		lru_child_hashes: LinkedHashMap::new(),
+pub fn new_shared_cache<B: Block, H: Hasher>(
+	shared_cache_size: usize,
+	hash_ratio: (usize, usize),
+	child_ratio: (usize, usize),
+) -> SharedCache<B, H> {
+	let non_hash = hash_ratio.1.saturating_sub(hash_ratio.0);
+	let top = child_ratio.1.saturating_sub(child_ratio.0);
+	let res = Cache {
+		lru_storage: LRUMap(LinkedHashMap::new(), 0,
+			shared_cache_size * non_hash * top / hash_ratio.1 / child_ratio.1),
+		lru_hashes: LRUMap(LinkedHashMap::new(), 0,
+			shared_cache_size * hash_ratio.0 * top / hash_ratio.1 / child_ratio.1),
+		lru_child_storage: LRUMap(LinkedHashMap::new(), 0,
+			shared_cache_size * non_hash * child_ratio.0 / hash_ratio.1 / child_ratio.1),
+		lru_child_hashes: LRUMap(LinkedHashMap::new(), 0,
+			shared_cache_size * hash_ratio.0 * child_ratio.0 / hash_ratio.1 / child_ratio.1),
 		modifications: VecDeque::new(),
-		shared_cache_size: shared_cache_size,
-		storage_used_size: 0,
-	}))
+	};
+  println!("lrust {}", res.lru_storage.2);
+  println!("lruha {}", res.lru_hashes.2);
+  println!("lrucst {}", res.lru_child_storage.2);
+  println!("lrucha {}", res.lru_child_hashes.2);
+
+  Arc::new(Mutex::new(res))
 }
 
 #[derive(Debug)]
@@ -278,19 +289,11 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = true;
 					for a in &m.storage {
 						trace!("Reverting enacted key {:?}", a);
-						lru_remove(
-							&mut cache.lru_storage,
-							&mut cache.storage_used_size,
-							a
-						);
+						cache.lru_storage.remove(a);
 					}
 					for a in &m.child_storage {
 						trace!("Reverting enacted child key {:?}", a);
-						lru_remove(
-							&mut cache.lru_child_storage,
-							&mut cache.storage_used_size,
-							a
-						);
+						cache.lru_child_storage.remove(a);
 					}
 					false
 				} else {
@@ -306,19 +309,11 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					m.is_canon = false;
 					for a in &m.storage {
 						trace!("Retracted key {:?}", a);
-						lru_remove(
-							&mut cache.lru_storage,
-							&mut cache.storage_used_size,
-							a
-						);
+						cache.lru_storage.remove(a);
 					}
 					for a in &m.child_storage {
 						trace!("Retracted child key {:?}", a);
-						lru_remove(
-							&mut cache.lru_child_storage,
-							&mut cache.storage_used_size,
-							a
-						);
+						cache.lru_child_storage.remove(a);
 					}
 					false
 				} else {
@@ -333,7 +328,6 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			cache.lru_child_storage.clear();
 			cache.lru_hashes.clear();
 			cache.lru_child_hashes.clear();
-      cache.storage_used_size = 0;
 			cache.modifications.clear();
 		}
 
@@ -351,40 +345,16 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					child_changes.iter().map(|v|v.1.len()).sum::<usize>(),
 				);
 				for (k, v) in local_cache.storage.drain() {
-					lru_add(
-						&mut cache.lru_storage,
-						&mut cache.storage_used_size,
-						cache.shared_cache_size,
-						k,
-						v,
-					);
+					cache.lru_storage.add(k, v);
 				}
 				for (k, v) in local_cache.child_storage.drain() {
-					lru_add(
-						&mut cache.lru_child_storage,
-						&mut cache.storage_used_size,
-						cache.shared_cache_size,
-						k,
-						v,
-					);
+					cache.lru_child_storage.add(k, v);
 				}
 				for (k, v) in local_cache.hashes.drain() {
-					lru_add(
-						&mut cache.lru_hashes,
-						&mut cache.storage_used_size,
-						cache.shared_cache_size,
-						k,
-						OptionHOut(v),
-					);
+					cache.lru_hashes.add(k, OptionHOut(v));
 				}
 				for (k, v) in local_cache.child_hashes.drain() {
-					lru_add(
-						&mut cache.lru_child_hashes,
-						&mut cache.storage_used_size,
-						cache.shared_cache_size,
-						k,
-						OptionHOut(v),
-					);
+					cache.lru_child_hashes.add(k, OptionHOut(v));
 				}
 			}
 		}
@@ -402,36 +372,16 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				for (k, v) in changes.into_iter() {
 					let k = (sk.clone(), k);
 					if is_best {
-						lru_remove(
-							&mut cache.lru_child_hashes,
-							&mut cache.storage_used_size,
-							&k,
-						);
-						lru_add(
-							&mut cache.lru_child_storage,
-							&mut cache.storage_used_size,
-							cache.shared_cache_size,
-							k.clone(),
-							v,
-						)
+						cache.lru_child_hashes.remove(&k);
+						cache.lru_child_storage.add(k.clone(), v);
 					}
 					child_modifications.insert(k);
 				}
 			);
 			for (k, v) in changes.into_iter() {
 				if is_best {
-					lru_remove(
-						&mut cache.lru_hashes,
-						&mut cache.storage_used_size,
-						&k,
-					);
-					lru_add(
-						&mut cache.lru_storage,
-						&mut cache.storage_used_size,
-						cache.shared_cache_size,
-						k.clone(),
-						v,
-					)
+					cache.lru_hashes.remove(&k);
+					cache.lru_storage.add(k.clone(), v);
 				}
 				modifications.insert(k);
 			}
@@ -523,7 +473,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		}
 		let mut cache = self.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_storage.get_refresh(key).map(|a| a.clone()) {
+			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
 				trace!("Found in shared cache: {:?}", key);
 				return Ok(entry)
 			}
@@ -542,7 +492,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		}
 		let mut cache = self.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_hashes.get_refresh(key).map(|a| a.0.clone()) {
+			if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
 				trace!("Found hash in shared cache: {:?}", key);
 				return Ok(entry)
 			}
@@ -562,7 +512,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		}
 		let mut cache = self.shared_cache.lock();
 		if Self::is_allowed(None, Some(&key), &self.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_child_storage.get_refresh(&key).map(|a| a.clone()) {
+			if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
 				trace!("Found in shared cache: {:?}", key);
 				return Ok(entry)
 			}
@@ -582,7 +532,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		}
 		let mut cache = self.shared_cache.lock();
 		if Self::is_allowed(None, Some(&key), &self.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_child_hashes.get_refresh(&key).map(|a| a.0.clone()) {
+			if let Some(entry) = cache.lru_child_hashes.get(&key).map(|a| a.0.clone()) {
 				trace!("Found in shared cache: {:?}", key);
 				return Ok(entry)
 			}
@@ -663,7 +613,7 @@ mod tests {
 		let h3a = H256::random();
 		let h3b = H256::random();
 
-		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024);
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1), (0,1));
 
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
 		// state   [ 5     5     4  3  2     2 ]
@@ -716,7 +666,7 @@ mod tests {
 	#[test]
 	fn should_track_used_size_correctly() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block, Blake2Hasher>(117);
+		let shared = new_shared_cache::<Block, Blake2Hasher>(117, (0,1), ((117-43), 117));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
@@ -752,7 +702,7 @@ mod tests {
 	#[test]
 	fn should_remove_lru_items_based_on_tracking_used_size() {
 		let root_parent = H256::random();
-		let shared = new_shared_cache::<Block, Blake2Hasher>(45);
+		let shared = new_shared_cache::<Block, Blake2Hasher>(45*3, (0,1), (2,3));
 		let h0 = H256::random();
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));

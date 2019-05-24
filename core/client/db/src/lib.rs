@@ -70,6 +70,11 @@ use client::in_mem::Backend as InMemoryBackend;
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u64 = 32768;
 
+/// Default value for storage cache hash ratio
+const DEFAULT_HASH_RATIO: (usize, usize) = (1, 10);
+/// Default value for storage cache child ratio
+const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
+
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
@@ -79,6 +84,10 @@ pub struct DatabaseSettings {
 	pub cache_size: Option<usize>,
 	/// State cache size.
 	pub state_cache_size: usize,
+	/// Ratio of cache size dedicated to hashes
+	pub state_cache_hash_ratio: Option<(usize, usize)>,
+	/// Ratio of cache size dedicated to child tries
+	pub state_cache_child_ratio: Option<(usize, usize)>,
 	/// Path to the database.
 	pub path: PathBuf,
 	/// Pruning mode.
@@ -551,7 +560,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
 		let db = open_database(&config, columns::META, "full")?;
 
-		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay, config.state_cache_size)
+		Backend::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -559,21 +568,35 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
+    Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
+	}
 
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<KeyValueDB>) -> Self {
+
+		let db_setting = DatabaseSettings {
+			cache_size: None,
+			state_cache_size: 16777216,
+			state_cache_hash_ratio: Some((10, 100)),
+			state_cache_child_ratio: Some((50, 100)),
+			path: Default::default(),
+			pruning: PruningMode::keep_blocks(keep_blocks),
+		};
 		Backend::from_kvdb(
-			db as Arc<_>,
-			PruningMode::keep_blocks(keep_blocks),
+			db,
 			canonicalization_delay,
-			16777216,
+			&db_setting,
 		).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, canonicalization_delay: u64, state_cache_size: usize) -> Result<Self, client::error::Error> {
-		let is_archive_pruning = pruning.is_archive();
+
+
+	fn from_kvdb(db: Arc<KeyValueDB>, canonicalization_delay: u64, config: &DatabaseSettings) -> Result<Self, client::error::Error> {
+		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
-		let state_db: StateDb<_, _> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
+		let state_db: StateDb<_, _> = StateDb::new(config.pruning.clone(), &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
 			state_db,
@@ -591,7 +614,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			changes_trie_config: Mutex::new(None),
 			blockchain,
 			canonicalization_delay,
-			shared_cache: new_shared_cache(state_cache_size),
+			shared_cache: new_shared_cache(
+				config.state_cache_size,
+				config.state_cache_hash_ratio.unwrap_or(DEFAULT_HASH_RATIO),
+				config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
+			),
 		})
 	}
 
@@ -1150,7 +1177,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 
-					best -= One::one();  // prev block
+					best -= One::one();	// prev block
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
@@ -1335,7 +1362,7 @@ mod tests {
 			db.storage.db.clone()
 		};
 
-		let backend = Backend::<Block>::from_kvdb(backing, PruningMode::keep_blocks(1), 0, 16777216).unwrap();
+		let backend = Backend::<Block>::new_test_db(1, 0, backing);
 		assert_eq!(backend.blockchain().info().unwrap().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
