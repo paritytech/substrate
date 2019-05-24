@@ -32,9 +32,16 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, SaturatedConversion};
 
 /// Spawn informant on the event loop
+#[deprecated(note = "Please use informant::build instead, and then create the task manually")]
 pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
 	C: Components,
 {
+	handle.spawn(exit.until(build(service)).map(|_| ()));
+}
+
+/// Creates an informant in the form of a `Future` that must be polled regularly.
+pub fn build<C>(service: &Service<C>) -> impl Future<Item = (), Error = ()>
+where C: Components {
 	let network = service.network();
 	let client = service.client();
 	let txpool = service.transaction_pool();
@@ -156,8 +163,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 		Ok(())
 	});
 
-	let informant_work = display_notifications.join3(display_block_import, display_txpool_import);
-	handle.spawn(exit.until(informant_work).map(|_| ()));
+	display_notifications.join3(display_block_import, display_txpool_import)
+		.map(|((), (), ())| ())
 }
 
 fn speed(best_number: u64, last_number: Option<u64>, last_update: time::Instant) -> String {

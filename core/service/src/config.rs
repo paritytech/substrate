@@ -66,6 +66,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
+	/// Maximum number of connections for WebSockets RPC server. `None` if default.
+	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// Telemetry service URL. `None` if disabled.
@@ -104,6 +106,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
+			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
 			telemetry_endpoints: None,
 			default_heap_pages: None,

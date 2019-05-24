@@ -30,6 +30,7 @@ mod protocol;
 mod chain;
 mod blocks;
 mod on_demand;
+mod on_demand_layer;
 mod util;
 pub mod config;
 pub mod consensus_gossip;
@@ -56,6 +57,7 @@ pub use network_libp2p::{
 };
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
-pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
+pub use on_demand::AlwaysBadChecker;
+pub use on_demand_layer::{OnDemand, RemoteResponse};
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;

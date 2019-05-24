@@ -143,6 +143,7 @@ pub trait StartRPC<C: Components> {
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		rpc_ws_max_connections: Option<usize>,
 		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -162,6 +163,7 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		rpc_ws_max_connections: Option<usize>,
 		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -186,8 +188,19 @@ impl<C: Components> StartRPC<Self> for C where
 		};
 
 		Ok((
-			maybe_start_server(rpc_http, |address| rpc::start_http(address, rpc_cors.as_ref(), handler()))?,
-			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, rpc_cors.as_ref(), handler()))?.map(Mutex::new),
+			maybe_start_server(
+				rpc_http,
+				|address| rpc::start_http(address, rpc_cors.as_ref(), handler()),
+			)?,
+			maybe_start_server(
+				rpc_ws,
+				|address| rpc::start_ws(
+					address,
+					rpc_ws_max_connections,
+					rpc_cors.as_ref(),
+					handler(),
+				),
+			)?.map(Mutex::new),
 		))
 	}
 }
@@ -330,7 +343,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self>,
-		client: Arc<FullClient<Self>>, 
+		client: Arc<FullClient<Self>>,
 	) -> Result<Self::SelectChain, error::Error>;
 
 	/// Build full service.
@@ -497,7 +510,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_transaction_pool(
-		config: TransactionPoolOptions, 
+		config: TransactionPoolOptions,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<TransactionPool<Self::TransactionPoolApi>, error::Error> {
 		Factory::build_full_transaction_pool(config, client)
