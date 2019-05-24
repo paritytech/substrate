@@ -374,7 +374,7 @@ pub mod ext {
 		/// only reserved for future use.
 		fn ext_http_request_start(
 			method: *const u8,
-			method_len: u8,
+			method_len: u32,
 			url: *const u8,
 			url_len: u32,
 			meta: *const u8,
@@ -423,6 +423,7 @@ pub mod ext {
 		///
 		/// Note the headers are only available before response body is fully consumed.
 		/// Returns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		/// In case invalid `id` is passed it returns an empty vector.
 		fn ext_http_response_headers(
 			id: u32,
 			written_out: *mut u32
@@ -814,7 +815,7 @@ impl OffchainApi for () {
 		unsafe {
 			let result = ext_http_request_start.get()(
 				method.as_ptr(),
-				method.len() as u8,
+				method.len() as u32,
 				url.as_ptr(),
 				url.len() as u32,
 				meta.as_ptr(),

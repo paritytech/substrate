@@ -129,8 +129,11 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 		for (header_name, header_value) in &self.headers {
 			crate::http_request_add_header(
 				id,
-				str::from_utf8(header_name).expect("Header names are always Vecs created from valid str; qed"),
-				str::from_utf8(header_value).expect("Header values are always Vecs created from valid str; qed"),
+				// Header (key, values) are always produced from `&str` so this is safe.
+				// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+				// or here.
+				unsafe { str::from_utf8_unchecked(header_name) },
+				unsafe { str::from_utf8_unchecked(header_value) },
 			)?
 		}
 
@@ -166,11 +169,14 @@ pub struct PendingRequest {
 	pub id: RequestId,
 }
 
+/// A result of waiting for a pending request.
+pub type HttpResult = Result<Response, Error>;
+
 impl PendingRequest {
 	/// Wait for the request to complete.
 	///
 	/// NOTE this waits for the request indefinitely.
-	pub fn wait(self) -> Result<Response, Error> {
+	pub fn wait(self) -> HttpResult {
 		match self.try_wait(None) {
 			Ok(res) => res,
 			Err(_) => panic!("Since `None` is passed we will never get a deadline error; qed"),
@@ -179,12 +185,12 @@ impl PendingRequest {
 
 	/// Attempts to wait for the request to finish,
 	/// but will return `Err` in case the deadline is reached.
-	pub fn try_wait(self, deadline: impl Into<Option<Timestamp>>) -> Result<Result<Response, Error>, PendingRequest> {
+	pub fn try_wait(self, deadline: impl Into<Option<Timestamp>>) -> Result<HttpResult, PendingRequest> {
 		Self::try_wait_all(vec![self], deadline).pop().expect("One request passed, one status received; qed")
 	}
 
 	/// Wait for all provided requests.
-	pub fn wait_all(requests: Vec<PendingRequest>) -> Vec<Result<Response, Error>> {
+	pub fn wait_all(requests: Vec<PendingRequest>) -> Vec<HttpResult> {
 		Self::try_wait_all(requests, None)
 			.into_iter()
 			.map(|r| match r {
@@ -197,7 +203,10 @@ impl PendingRequest {
 	/// Attempt to wait for all provided requests, but up to given deadline.
 	///
 	/// Requests that are complete will resolve to an `Ok` others will return a `DeadlineReached` error.
-	pub fn try_wait_all(requests: Vec<PendingRequest>, deadline: impl Into<Option<Timestamp>>) -> Vec<Result<Result<Response, Error>, PendingRequest>> {
+	pub fn try_wait_all(
+		requests: Vec<PendingRequest>,
+		deadline: impl Into<Option<Timestamp>>
+	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
 		let statuses = crate::http_response_wait(&ids, deadline.into());
 
@@ -377,7 +386,7 @@ impl<'a> HeadersIterator<'a> {
 	///
 	/// Note that you have to call `next` prior to calling this
 	pub fn current(&self) -> Option<(&str, &str)> {
-		self.collection.get(self.index.unwrap_or(0))
+		self.collection.get(self.index?)
 			.map(|val| (str::from_utf8(&val.0).unwrap_or(""), str::from_utf8(&val.1).unwrap_or("")))
 	}
 }
