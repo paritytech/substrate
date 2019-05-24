@@ -18,8 +18,6 @@
 //! using the cli to manufacture transactions and distribute them
 //! to accounts.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
@@ -32,17 +30,22 @@ use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
 use sr_primitives::generic::Era;
-use sr_primitives::traits::{As, Block as BlockT};
+use sr_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use substrate_service::ServiceFactory;
-use transaction_factory::RuntimeAdapter;
+use transaction_factory::{RuntimeAdapter, FactoryState};
 use crate::service;
+use inherents::InherentData;
+use timestamp;
+use finality_tracker;
 
 pub struct RuntimeAdapterImpl;
+
+// TODO get via api: <timestamp::Module<T>>::minimum_period(). See #2587.
+const MINIMUM_PERIOD: u64 = 99;
 
 impl RuntimeAdapter for RuntimeAdapterImpl {
 	type AccountId = node_primitives::AccountId;
 	type Balance = node_primitives::Balance;
-	type Moment = node_primitives::Timestamp;
 	type Index = node_primitives::Index;
 	type Phase = sr_primitives::generic::Phase;
 	type Secret = sr25519::Pair;
@@ -70,27 +73,23 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 		}, key, &prior_block_hash, phase.as_())
 	}
 
-	fn timestamp_inherent(
-		ts: Self::Moment,
-		key: Self::Secret,
-		phase: Self::Phase,
-		prior_block_hash: &<Self::Block as BlockT>::Hash,
-	) -> <Self::Block as BlockT>::Extrinsic {
-		let cex = CheckedExtrinsic {
-			signed: None,
-			function: Call::Timestamp(timestamp::Call::set(ts)),
-		};
-		sign::<service::Factory, Self>(cex, &key, &prior_block_hash, phase.as_())
+	fn inherent_extrinsics(
+		curr: &FactoryState
+	) -> InherentData {
+		let no = <<Self::Block as BlockT>::Header as HeaderT>::Number::sa(curr.block_no);
+		let timestamp = no * MINIMUM_PERIOD;
+
+		let mut inherent = InherentData::new();
+		inherent.put_data(timestamp::INHERENT_IDENTIFIER, &timestamp)
+			.expect("timestamp put data");
+		inherent.put_data(finality_tracker::INHERENT_IDENTIFIER, &no)
+			.expect("finality put data");
+		inherent
 	}
 
 	fn minimum_balance() -> Self::Balance {
 		// TODO get correct amount via api. See #2587.
 		1337
-	}
-
-	fn minimum_period() -> Self::Moment {
-		// TODO get via api: <timestamp::Module<T>>::minimum_period(). See #2587.
-		99
 	}
 
 	fn master_account_id() -> Self::AccountId {
@@ -111,13 +110,6 @@ impl RuntimeAdapter for RuntimeAdapterImpl {
 	fn gen_random_account_secret(seed: u64) -> Self::Secret {
 		let pair: sr25519::Pair = sr25519::Pair::from_seed(gen_seed_bytes(seed));
 		pair
-	}
-
-	fn extract_timestamp(_block_hash: <Self::Block as BlockT>::Hash) -> Self::Moment {
-		// TODO get correct timestamp from inherent. See #2587.
-		let now = SystemTime::now();
-		now.duration_since(UNIX_EPOCH)
-			.expect("now always later than unix epoch; qed").as_secs()
 	}
 
 	fn extract_index(

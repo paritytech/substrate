@@ -43,6 +43,7 @@ use std::sync::Arc;
 use log::info;
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
+use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{As, Block as BlockT, ProvideRuntimeApi};
 use substrate_service::{FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents};
 
@@ -52,8 +53,8 @@ pub fn next<F, RA>(
 	curr: &mut FactoryState,
 	client: &Arc<ComponentClient<FullComponents<F>>>,
 	prior_block_hash: <RA::Block as BlockT>::Hash,
-	last_ts: RA::Moment,
-) -> Option<(RA::Moment, <F as ServiceFactory>::Block)>
+	prior_block_id: BlockId<F::Block>,
+) -> Option<<F as ServiceFactory>::Block>
 where
 	F: ServiceFactory,
 	F::RuntimeApi: ConstructRuntimeApi<FactoryBlock<F>, FullClient<F>>,
@@ -97,15 +98,11 @@ where
 		&prior_block_hash,
 	);
 
-	let new_ts = last_ts + RA::minimum_period();
-	let timestamp = RA::timestamp_inherent(
-		new_ts.clone(),
-		RA::master_account_secret(),
-		RA::Phase::sa(curr.phase),
-		&prior_block_hash
-	);
+	let inherents = RA::inherent_extrinsics(curr);
+	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+		.expect("Failed to create inherent extrinsics");
 
-	let block = create_block::<F, RA>(&client, transfer, timestamp);
+	let block = create_block::<F, RA>(&client, transfer, inherents);
 	info!(
 		"Created block {} with hash {}. Transferring {} from {} to {}.",
 		curr.block_no + 1,
@@ -136,12 +133,12 @@ where
 		_ => 0,
 	};
 
-	Some((new_ts, block))
+	Some(block)
 }
 
 /// Return the account which received tokens at this point in the previous round.
 fn from<RA>(
-	curr: &mut FactoryState
+	curr: &mut FactoryState,
 ) -> (<RA as RuntimeAdapter>::AccountId, <RA as RuntimeAdapter>::Secret)
 where RA: RuntimeAdapter
 {

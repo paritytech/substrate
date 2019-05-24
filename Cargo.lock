@@ -2066,6 +2066,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "srml-balances 2.0.0",
+ "srml-finality-tracker 2.0.0",
  "srml-indices 2.0.0",
  "srml-timestamp 2.0.0",
  "structopt 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",

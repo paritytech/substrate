@@ -29,10 +29,11 @@ use log::info;
 
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
-use consensus_common::{BlockOrigin, ImportBlock, ForkChoiceStrategy, SelectChain};
+use consensus_common::{BlockOrigin, ImportBlock, InherentData, ForkChoiceStrategy, SelectChain};
 use consensus_common::block_import::BlockImport;
 use parity_codec::{Decode, Encode};
-use sr_primitives::traits::{As, Block as BlockT, Header, ProvideRuntimeApi, SimpleArithmetic};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{As, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic};
 use substrate_service::{FactoryBlock, FactoryFullConfiguration, FullClient, new_client, ServiceFactory, ComponentClient, FullComponents};
 pub use crate::modes::Mode;
 
@@ -45,7 +46,6 @@ pub trait RuntimeAdapter {
 	type Balance: Display + Mul + As<u64>;
 	type Block: BlockT;
 	type Index: Copy + As<u64>;
-	type Moment: SimpleArithmetic + Copy;
 	type Phase: Copy + As<u64>;
 	type Secret;
 
@@ -59,18 +59,13 @@ pub trait RuntimeAdapter {
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
 
-	fn timestamp_inherent(
-		ts: Self::Moment,
-		key: Self::Secret,
-		phase: Self::Phase,
-		prior_block_hash: &<Self::Block as BlockT>::Hash,
-	) -> <Self::Block as BlockT>::Extrinsic;
+	fn inherent_extrinsics(
+		curr: &FactoryState
+	) -> InherentData;
 
 	fn minimum_balance() -> Self::Balance;
-	fn minimum_period() -> Self::Moment;
 	fn master_account_id() -> Self::AccountId;
 	fn master_account_secret() -> Self::Secret;
-	fn extract_timestamp(block_hash: <Self::Block as BlockT>::Hash) -> Self::Moment;
 	fn extract_index(account_id: Self::AccountId, block_hash: <Self::Block as BlockT>::Hash) -> Self::Index;
 	fn extract_phase(block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase;
 	fn gen_random_account_id(seed: u64) -> Self::AccountId;
@@ -109,12 +104,6 @@ where
 
 	let select_chain = F::build_select_chain(&mut config, client.clone())?;
 
-	let best_header: Result<<F::Block as BlockT>::Header, cli::error::Error> =
-		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
-	let mut prior_block_hash = best_header?.hash().into();
-
-	let mut last_ts = RA::extract_timestamp(prior_block_hash);
-
 	let start_number: u64 = client.info()?.chain.best_number.as_();
 
 	let mut curr = FactoryState {
@@ -129,15 +118,19 @@ where
 		start_number: start_number,
 	};
 
-	while let Some((ts, block)) = match mode {
+	let best_header: Result<<F::Block as BlockT>::Header, cli::error::Error> =
+		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
+	let mut best_hash = best_header?.hash();
+	let best_block_id = BlockId::<F::Block>::hash(best_hash);
+
+	while let Some(block) = match mode {
 		Mode::MasterToNToM =>
-			complex_mode::next::<F, RA>(&mut curr, &client, prior_block_hash, last_ts),
+			complex_mode::next::<F, RA>(&mut curr, &client, best_hash.into(), best_block_id),
 		_ =>
-			simple_modes::next::<F, RA>(&mut curr, &client, prior_block_hash, last_ts)
+			simple_modes::next::<F, RA>(&mut curr, &client, best_hash.into(), best_block_id)
 	} {
-		prior_block_hash = block.header().hash().into();
+		best_hash = block.header().hash();
 		import_block::<F>(&client, block);
-		last_ts = ts;
 
 		info!("Imported block at {}", curr.block_no);
 	}
@@ -149,7 +142,7 @@ where
 pub fn create_block<F, RA>(
 	client: &Arc<ComponentClient<FullComponents<F>>>,
 	transfer: <RA::Block as BlockT>::Extrinsic,
-	timestamp: <RA::Block as BlockT>::Extrinsic,
+	inherent_extrinsics: Vec<<F::Block as BlockT>::Extrinsic>,
 ) -> <F as ServiceFactory>::Block
 where
 	F: ServiceFactory,
@@ -164,10 +157,9 @@ where
 			.expect("Failed to decode transfer extrinsic")
 	).expect("Failed to push transfer extrinsic into block");
 
-	block.push(
-		Decode::decode(&mut &timestamp.encode()[..])
-			.expect("Failed to decode timestamp extrinsic")
-	).expect("Failed to push timestamp inherent into block");
+	for inherent in inherent_extrinsics {
+		block.push(inherent).expect("Failed ...");
+	}
 
 	block.bake().expect("Failed to bake block")
 }
