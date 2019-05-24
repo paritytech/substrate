@@ -98,7 +98,43 @@ pub trait CompatibleDigestItem: Sized {
 	fn babe_seal(signature: Signature) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
-	fn as_babe_seal(&self) -> Option<&Signature>;
+	fn as_babe_seal(&self) -> Option<Signature>;
+}
+
+impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
+{
+	fn babe_pre_digest(digest: BabePreDigest) -> Self {
+		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
+	}
+
+	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
+		match self {
+			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => {
+				match Decode::decode(&mut &seal[..]) {
+					s @ Some(_) => s,
+					s @ None => {
+						info!(target: "babe", "Failed to decode {:?}", seal);
+						s
+					}
+				}
+			}
+			_ => {
+				info!(target: "babe", "Invalid consensus: {:?}!", self);
+				None
+			}
+		}
+	}
+
+	fn babe_seal(signature: Signature) -> Self {
+		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
+	}
+
+	fn as_babe_seal(&self) -> Option<Signature> {
+		match self {
+			DigestItem::Seal(BABE_ENGINE_ID, signature) => Decode::decode(&mut &signature[..]),
+			_ => None,
+		}
+	}
 }
 
 impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
@@ -129,9 +165,9 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
 		DigestItem::Seal(BABE_ENGINE_ID, signature)
 	}
 
-	fn as_babe_seal(&self) -> Option<&Signature> {
+	fn as_babe_seal(&self) -> Option<Signature> {
 		match self {
-			DigestItem::Seal(BABE_ENGINE_ID, signature) => Some(signature),
+			DigestItem::Seal(BABE_ENGINE_ID, signature) => Some(signature.clone()),
 			_ => None,
 		}
 	}

@@ -325,9 +325,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			}
 
 			let (header, body) = b.deconstruct();
-			// TODO is better debug logging worth hashing the header again?
-			let header_hash = header.hash();
-			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header, header_hash);
+			let pre_digest: Result<u64, String> = find_pre_digest::<B, P>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "aura", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -384,20 +382,17 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<B: Block, P: Pair>(
-	header: &B::Header,
-	hash: B::Hash,
-) -> Result<u64, String>
+fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
 		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	let mut pre_digest: Option<u64> = None;
 	for i in header.digest().logs() {
-		trace!(target: "aura", "Checking log {:?} in header {:?}", i, hash);
+		trace!(target: "aura", "Checking log {:?}", i);
 		match i.as_aura_pre_digest() {
 			s @ Some(_) => if pre_digest.is_some() {
-				return Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting header {:?}", hash))
+				return Err(aura_err!("Multiple AuRa pre-runtime headers, rejecting!"))
 			} else {
 				pre_digest = s
 			},
@@ -435,7 +430,7 @@ fn check_header<C, B: Block, P: Pair>(
 		aura_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let slot_num = find_pre_digest::<B, _>(&header, hash)?;
+	let slot_num = find_pre_digest::<B, _>(&header)?;
 
 	if slot_num > slot_now {
 		header.digest_mut().push(seal);
@@ -583,7 +578,8 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 		);
 
 		// we add one to allow for some small drift.
-		// FIXME #1019 in the future, alter this queue to allow deferring of headers
+		// FIXME #1019 in the future, alter this queue to allow deferring of
+		// headers
 		let checked_header = check_header::<C, B, P>(
 			&self.client,
 			slot_now + 1,

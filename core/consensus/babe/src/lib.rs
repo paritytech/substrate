@@ -293,7 +293,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let (proposal_work, inherent_digest): (_, BabePreDigest) = if let Some((inout, proof, _batchable_proof)) = claim_slot(
+		let proposal_work = if let Some((inout, proof, _batchable_proof)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -332,7 +332,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 
 			// deadline our production to approx. the end of the slot
 			let remaining_duration = slot_info.remaining_duration();
-			(Timeout::new(
+			Timeout::new(
 				proposer.propose(
 					slot_info.inherent_data,
 					remaining_duration,
@@ -343,7 +343,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					},
 				).into_future(),
 				remaining_duration,
-			), inherent_digest)
+			)
 		} else {
 			return Box::new(future::ok(()));
 		};
@@ -364,27 +364,22 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				return
 			}
 
-			let (mut header, body) = b.deconstruct();
+			let (header, body) = b.deconstruct();
 			let header_hash = header.hash();
-			match find_pre_digest::<B>(&mut header, header_hash) {
-				Ok(_pre_digest) => (),
-				Err((true, e)) => {
-					warn!(target: "babe", "Bad header: {}: Multiple distinct BABE pre-runtime digests", e);
-					return
-				}
-				Err((false, e)) => {
-					warn!(target: "babe", "Bad header: {}: No BABE pre-runtime digest", e);
-					header.digest_mut().push(CompatibleDigestItem::babe_pre_digest(inherent_digest))
-				}
+			let pre_digest: Result<BabePreDigest, String> = find_pre_digest::<B>(&header);
+			if let Err(e) = pre_digest {
+				error!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
+				return
+			} else {
+				trace!(target: "babe", "Got correct number of seals.  Good!")
 			};
 
 			let header_num = header.number().clone();
-			let pre_hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
 
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let signature = pair.sign(pre_hash.as_ref());
+			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = generic::DigestItem::babe_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
@@ -402,12 +397,12 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 					header_num,
 					import_block.post_header().hash(),
-					pre_hash
+					header_hash,
 			);
 			telemetry!(CONSENSUS_INFO; "babe.pre_sealed_block";
 				"header_num" => ?header_num,
 				"hash_now" => ?import_block.post_header().hash(),
-				"hash_previously" => ?pre_hash
+				"hash_previously" => ?header_hash,
 			);
 
 			if let Err(e) = block_import.import_block(import_block, Default::default()) {
@@ -432,25 +427,22 @@ macro_rules! babe_err {
 	};
 }
 
-fn find_pre_digest<B: Block>(
-	header: &B::Header,
-	hash: B::Hash,
-) -> Result<BabePreDigest, (bool, String)>
+fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	let mut pre_digest: Option<_> = None;
 	for i in header.digest().logs() {
-		trace!(target: "babe", "Checking log {:?} in header {:?}", i, hash);
+		trace!(target: "babe", "Checking log {:?}", i);
 		match i.as_babe_pre_digest() {
 			s @ Some(_) => if pre_digest.is_some() {
-				return Err((true, babe_err!("Multiple BABE pre-runtime headers, rejecting header {:?}", hash)))
+				return Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))
 			} else {
 				pre_digest = s
 			},
 			None => trace!(target: "babe", "Ignoring digest not meant for us"),
 		}
 	}
-	pre_digest.ok_or_else(|| (false, babe_err!("No BABE pre-runtime digest found")))
+	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
 }
 
 /// check a header has been signed by the right key. If the slot is too far in
@@ -475,12 +467,12 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
-	let digest_item = match header.digest_mut().pop() {
+	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
 		None => return Err(babe_err!("Header {:?} is unsealed", hash)),
 	};
 
-	let signature = digest_item.as_babe_seal().ok_or_else(|| {
+	let sig = seal.as_babe_seal().ok_or_else(|| {
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
@@ -489,10 +481,10 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		author,
 		proof,
 		vrf_output,
-	} = find_pre_digest::<B>(&header, hash).map_err(|x|x.1)?;
+	} = find_pre_digest::<B>(&header)?;
 
 	if slot_num > slot_now {
-		header.digest_mut().push(digest_item);
+		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_num))
 	} else if !authorities.contains(&author) {
 		Err(babe_err!("Slot author not found"))
@@ -500,7 +492,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 		let pre_hash = header.hash();
 		let to_sign = pre_hash;
 
-		if sr25519::Pair::verify(signature, to_sign.as_ref(), &author) {
+		if sr25519::Pair::verify(&sig, to_sign.as_ref(), &author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -530,7 +522,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					},
 					Ok(None) => {
 						let pre_digest = CompatibleDigestItem::babe_pre_digest(BabePreDigest { slot_num, author, proof, vrf_output });
-						Ok(CheckedHeader::Checked(header, (pre_digest, digest_item)))
+						Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 					},
 					Err(e) => {
 						Err(e.to_string())
@@ -642,7 +634,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			self.threshold,
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(mut pre_header, (pre_digest, seal)) => {
+			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
 				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
@@ -669,9 +661,11 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				pre_header.digest_mut().push(pre_digest);
-
 				extra_verification.into_future().wait()?;
+
+				let new_authorities = pre_header.digest()
+					.log(DigestItem::as_authorities_change)
+					.map(|digest| digest.to_vec());
 
 				let import_block = ImportBlock {
 					origin,
@@ -685,7 +679,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				};
 
 				// FIXME #1019 extract authorities
-				Ok((import_block, None))
+				Ok((import_block, new_authorities))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
