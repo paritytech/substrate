@@ -585,6 +585,7 @@ pub mod tests {
 	use std::collections::HashSet;
 	use std::sync::Arc;
 	use std::time::Instant;
+	use futures::{Future, sync::oneshot};
 	use primitives::subtrie::SubTrieRead;
 	use runtime_primitives::traits::{Block as BlockT, NumberFor};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
