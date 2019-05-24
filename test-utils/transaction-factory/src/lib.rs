@@ -162,7 +162,7 @@ where
 	block.push(
 		Decode::decode(&mut &transfer.encode()[..])
 			.expect("Failed to decode transfer extrinsic")
-	).unwrap();
+	).expect("Failed to push transfer extrinsic into block");
 
 	block.push(
 		Decode::decode(&mut &timestamp.encode()[..])
