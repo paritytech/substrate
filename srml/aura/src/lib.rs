@@ -53,7 +53,6 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use substrate_primitives::Pair;
 use primitives::traits::{self, As, Zero, ValidateUnsigned};
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
@@ -64,8 +63,8 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use aura_primitives::{AuraEquivocationProof, CompatibleDigestItem};
-use common::EquivocationProof;
 use system::ensure_signed;
+use consensus::EquivocationProof;
 
 mod mock;
 mod tests;
@@ -154,8 +153,7 @@ impl HandleReport for () {
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
-	type Pair:  Pair;
-	type CompatibleDigestItem: CompatibleDigestItem<Self::Pair> + traits::DigestItem<Hash = Self::Hash>;
+	type CompatibleDigestItem: CompatibleDigestItem + traits::DigestItem<Hash = Self::Hash>;
 	type D: traits::Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Encode + Decode;
 	type H: traits::Header<Digest = Self::D, Hash = Self::Hash>;
 }
@@ -182,14 +180,14 @@ impl<T: Trait> ValidateUnsigned for Module<T> {
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
 			Call::report_equivocation(proof) => {
-				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H, T::Pair>> = Decode::decode(&mut proof.as_slice());
+				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H>> = Decode::decode(&mut proof.as_slice());
 				if let Some(equivocation_proof) = maybe_equivocation_proof {
 					if equivocation_proof.is_valid() {
 						return TransactionValidity::Valid {
 							priority: 0,
 							requires: vec![],
 							provides: vec![],
-							longevity: std::u64::MAX,
+							longevity: 1000,
 						}
 					}
 				}

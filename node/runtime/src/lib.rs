@@ -42,7 +42,7 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::{OpaqueMetadata, ed25519::Pair};
+use substrate_primitives::{OpaqueMetadata, ed25519};
 use support::inherent::Extrinsic;
 
 #[cfg(any(feature = "std", test))]
@@ -104,8 +104,7 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
-	type Pair = Pair;
-	type CompatibleDigestItem = generic::DigestItem<Self::Hash, AuthorityId, AuthoritySignature>;
+	type CompatibleDigestItem = generic::DigestItem<Self::Hash, ed25519::Public, ed25519::Signature>;
 	type D = generic::Digest<Self::CompatibleDigestItem>;
 	type H = generic::Header<BlockNumber, BlakeTwo256, Self::CompatibleDigestItem>;
 }

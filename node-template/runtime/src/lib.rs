@@ -136,6 +136,9 @@ impl system::Trait for Runtime {
 
 impl aura::Trait for Runtime {
 	type HandleReport = ();
+	type CompatibleDigestItem = generic::DigestItem<Self::Hash, ed25519::Public, ed25519::Signature>;
+	type D = generic::Digest<Self::CompatibleDigestItem>;
+	type H = generic::Header<BlockNumber, BlakeTwo256, Self::CompatibleDigestItem>;
 }
 
 impl consensus::Trait for Runtime {

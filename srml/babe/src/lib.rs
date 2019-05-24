@@ -132,7 +132,7 @@ impl<T: Trait> ValidateUnsigned for Module<T> {
 							priority: 0,
 							requires: vec![],
 							provides: vec![],
-							longevity: std::u64::MAX,
+							longevity: 1000,
 						}
 					}
 				}

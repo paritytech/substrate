@@ -11,6 +11,7 @@ client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
+consensus_srml = { package = "srml-consensus", path = "../../../srml/consensus" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures = "0.1.17"
 tokio = "0.1.7"

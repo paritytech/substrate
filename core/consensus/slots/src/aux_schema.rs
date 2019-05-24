@@ -21,7 +21,7 @@ use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use runtime_primitives::traits::Header;
-use consensus_common::EquivocationProof;
+use consensus_srml::EquivocationProof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
