@@ -120,14 +120,6 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	#[cfg(not(feature = "std"))]
 	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
 
-	fn append_digest(&mut self, digest: Self::Digest) {
-		#[cfg(feature = "std")]
-		debug!(target: "import", "Importing {} logs", digest.logs.len());
-		for i in digest.logs {
-			self.digest.push(i)
-		}
-	}
-
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
