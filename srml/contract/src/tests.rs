@@ -263,7 +263,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&1, 110);
 				ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
 					trie_id: trie_id1.clone(),
-					storage_size: Contract::storage_size_offset(),
+					storage_size: Contract::storage_size_offset() as u64,
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(1),
 					rent_allowance: 40,
@@ -278,7 +278,7 @@ fn account_removal_removes_storage() {
 				Balances::deposit_creating(&2, 110);
 				ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
 					trie_id: trie_id2.clone(),
-					storage_size: Contract::storage_size_offset(),
+					storage_size: Contract::storage_size_offset() as u64,
 					deduct_block: System::block_number(),
 					code_hash: H256::repeat_byte(2),
 					rent_allowance: 40,
@@ -701,15 +701,15 @@ fn storage_size() {
 				<Test as balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 			));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() as u64 + 4);
 
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::set_storage_4_byte()));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4 + 4);
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() as u64 + 4 + 4);
 
 			assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::remove_storage_4_byte()));
 			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() + 4);
+			assert_eq!(bob_contract.storage_size, Contract::storage_size_offset() as u64 + 4);
 		}
 	);
 }
