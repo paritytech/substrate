@@ -201,7 +201,12 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
+		let (network, network_mut) = network::Service::new(network_params, protocol_id, import_queue)?;
+
+		task_executor.spawn(network_mut
+			.map_err(|_| ())
+			.select(exit.clone())
+			.then(|_| Ok(())));
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
