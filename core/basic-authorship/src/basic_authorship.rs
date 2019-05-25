@@ -54,7 +54,8 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 	/// The error used by this API type.
 	type Error: std::error::Error;
 
-	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
+	/// Build a block on top of the given block, with inherent extrinsics and
+	/// inherent digests pre-pushed.
 	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
