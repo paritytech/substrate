@@ -66,7 +66,7 @@ where
 {
 	let total = factory_state.start_number() + factory_state.num() * factory_state.rounds();
 
-	if !(factory_state.block_no() < total && factory_state.round() < factory_state.rounds()) {
+	if factory_state.block_no() >= total || factory_state.round() >= factory_state.rounds() {
 		return None;
 	}
 

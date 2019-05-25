@@ -180,12 +180,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				&version,
 			)?;
 
-			let supported = match ChainSpec::from(config.chain_spec.id()) {
-				Some(c) => c == ChainSpec::Development || c == ChainSpec::LocalTestnet,
-				_ => false,
-			};
-			if !supported {
-				panic!("Factory is only supported for development and local testnet.");
+			match ChainSpec::from(config.chain_spec.id()) {
+				Some(c) if ChainSpec::Development || c == ChainSpec::LocalTestnet => {}.
+				_ => panic!("Factory is only supported for development and local testnet."),
 			}
 
 			let factory_state = FactoryState::new(
