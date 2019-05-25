@@ -19,7 +19,6 @@
 //!
 //! The factory currently only works on an empty database!
 
-#![cfg_attr(not(feature = "std"), no_std)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
