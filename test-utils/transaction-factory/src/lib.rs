@@ -30,7 +30,10 @@ use log::info;
 
 use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
-use consensus_common::{BlockOrigin, ImportBlock, InherentData, ForkChoiceStrategy, SelectChain};
+use consensus_common::{
+	BlockOrigin, ImportBlock, InherentData, ForkChoiceStrategy,
+	SelectChain
+};
 use consensus_common::block_import::BlockImport;
 use parity_codec::{Decode, Encode};
 use sr_primitives::generic::BlockId;
@@ -38,7 +41,9 @@ use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
 	One, Zero,
 };
-use substrate_service::{FactoryBlock, FactoryFullConfiguration, FullClient, new_client, ServiceFactory, ComponentClient, FullComponents};
+use substrate_service::{
+	FactoryBlock, FactoryFullConfiguration, FullClient, new_client,
+	ServiceFactory, ComponentClient, FullComponents};
 pub use crate::modes::Mode;
 
 pub mod modes;

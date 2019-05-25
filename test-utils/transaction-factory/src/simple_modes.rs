@@ -40,7 +40,9 @@ use client::block_builder::api::BlockBuilder;
 use client::runtime_api::ConstructRuntimeApi;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, One};
 use sr_primitives::generic::BlockId;
-use substrate_service::{FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents};
+use substrate_service::{
+	FactoryBlock, FullClient, ServiceFactory, ComponentClient, FullComponents
+};
 
 use crate::{Mode, RuntimeAdapter, create_block};
 
