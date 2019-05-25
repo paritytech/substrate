@@ -19,7 +19,6 @@
 //!
 //! The factory currently only works on an empty database!
 
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::ops::Mul;

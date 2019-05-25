@@ -21,11 +21,10 @@
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use balances::Call as BalancesCall;
 use parity_codec::Decode;
 use keyring::sr25519::Keyring;
 use node_primitives::Hash;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic};
+use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, BalancesCall};
 use primitives::sr25519;
 use primitives::crypto::Pair;
 use parity_codec::Encode;
