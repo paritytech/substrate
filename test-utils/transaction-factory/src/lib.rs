@@ -102,6 +102,10 @@ where
 	RA: RuntimeAdapter,
 	<<RA as RuntimeAdapter>::Block as BlockT>::Hash: From<primitives::H256>,
 {
+	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
+		return Err("The factory can only be used with rounds set to 1 in this mode.".into());
+	}
+
 	let client = new_client::<F>(&config)?;
 
 	let select_chain = F::build_select_chain(&mut config, client.clone())?;
