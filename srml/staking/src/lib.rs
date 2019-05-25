@@ -194,8 +194,9 @@
 //! to all validators and prevents them from getting immediately slashed.
 //!
 //! Essentially, a validator gets slashed once they have been reported more than
-//! [`OfflineSlashGrace`] + [`ValidatorPrefs::unstake_threshold`] times. Getting slashed due to offline report always leads
-//! to being _unstaked_ (_i.e._ removed as a validator candidate) as the consequence.
+//! [`OfflineSlashGrace`] + [`ValidatorPrefs::unstake_threshold`] times. Getting slashed due to
+//! offline report always leads to being _unstaked_ (_i.e._ removed as a validator candidate) as
+//! the consequence.
 //!
 //! The base slash value is computed _per slash-event_ by multiplying
 //! [`OfflineSlash`](./struct.Module.html#method.offline_slash) and the `total` `Exposure`. This value is then
