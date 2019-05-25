@@ -886,7 +886,7 @@ mod tests {
 		let header_hash: H256 = header.hash();
 		let signature = pair.sign(&header_hash[..]);
 
-		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(signature);
+		let item = CompatibleDigestItem::<sr25519::Pair>::aura_seal(signature);
 		header.digest_mut().push(item);
 		(header, header_hash)
 	}

@@ -46,7 +46,13 @@ use primitives::{
 };
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use substrate_telemetry::{
+	telemetry,
+	CONSENSUS_TRACE,
+	CONSENSUS_DEBUG,
+	CONSENSUS_WARN,
+	CONSENSUS_INFO,
+};
 use schnorrkel::{
 	keys::Keypair,
 	vrf::{
@@ -54,7 +60,8 @@ use schnorrkel::{
 	},
 };
 use authorities::AuthoritiesApi;
-use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
+use consensus_common::{
+	self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
@@ -185,10 +192,13 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
+	H: Header<
+		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
+		Hash=B::Hash,
+	>,
 	E: Environment<B, Error=Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	OnExit: Future<Item=(), Error=()>,
 {
@@ -233,7 +243,10 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
 		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
 		std::hash::Hash + Display + Send + Sync + 'static,
-	H: Header<Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>, Hash=B::Hash>,
+	H: Header<
+		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
+		Hash=B::Hash,
+	>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -374,7 +387,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			// add it to a digest item.
 			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
+			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
 
 			let import_block: ImportBlock<B> = ImportBlock {
 				origin: BlockOrigin::Own,
@@ -493,29 +506,29 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 				})?
 			};
 
-			if check(&inout, threshold) {
-				match check_equivocation(&client, slot_now, slot_num, header.clone(), author.clone()) {
-					Ok(Some(equivocation_proof)) => {
-						let log_str = format!(
-							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-							author,
-							slot_num,
-							equivocation_proof.fst_header().hash(),
-							equivocation_proof.snd_header().hash(),
-						);
-						info!(target: "babe", "{}", log_str);
-						Err(log_str)
-					},
-					Ok(None) => {
-						let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-						Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
-					},
-					Err(e) => {
-						Err(e.to_string())
-					},
-				}
-			} else {
-				Err(babe_err!("VRF verification of block by author {:?} failed: threshold {} exceeded", author, threshold))
+			if !check(&inout, threshold) {
+				return Err(babe_err!("VRF verification of block by author {:?} failed: \
+									threshold {} exceeded", author, threshold))
+			}
+			match check_equivocation(&client, slot_now, slot_num, header.clone(), author.clone()) {
+				Ok(Some(equivocation_proof)) => {
+					let log_str = format!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						author,
+						slot_num,
+						equivocation_proof.fst_header().hash(),
+						equivocation_proof.snd_header().hash(),
+					);
+					info!(target: "babe", "{}", log_str);
+					Err(log_str)
+				},
+				Ok(None) => {
+					let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
+					Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+				},
+				Err(e) => {
+					Err(e.to_string())
+				},
 			}
 		} else {
 			Err(babe_err!("Bad signature on {:?}", hash))
@@ -787,7 +800,8 @@ fn claim_slot(
 
 #[cfg(test)]
 #[allow(dead_code, unused_imports, deprecated)]
-// FIXME #2532: need to allow deprecated until refactor is done https://github.com/paritytech/substrate/issues/2532
+// FIXME #2532: need to allow deprecated until refactor is done
+// https://github.com/paritytech/substrate/issues/2532
 
 mod tests {
 	use super::*;
@@ -938,17 +952,23 @@ mod tests {
 
 		let (inout, proof, _batchable_proof) = get_keypair(&pair).vrf_sign_n_check(transcript, |inout| check(inout, u64::MAX)).unwrap();
 		let pre_hash: H256 = header.hash();
-		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem>::babe_pre_digest(BabePreDigest {
+		let pre_digest = BabePreDigest {
 			proof,
 			author: pair.public(),
 			slot_num,
 			vrf_output: inout.to_output(),
-		});
+		};
+		assert_eq!(
+			Decode::decode(&mut &pre_digest.encode()[..]).as_ref(),
+			Some(&pre_digest),
+			"Pre-digest encoding and decoding did not round-trip",
+		);
+		let item = generic::DigestItem::babe_pre_digest(pre_digest);
 		header.digest_mut().push(item);
 
 		let to_sign = header.hash();
 		let signature = pair.sign(&to_sign[..]);
-		header.digest_mut().push(<generic::DigestItem<_, _, _> as CompatibleDigestItem>::babe_seal(signature));
+		header.digest_mut().push(generic::DigestItem::babe_seal(signature));
 		(header, pre_hash)
 	}
 

@@ -20,7 +20,7 @@ use babe_primitives::BABE_ENGINE_ID;
 use runtime_primitives::generic::DigestItem;
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Input};
-use log::{info, error};
+use log::info;
 use schnorrkel::{
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
 	PUBLIC_KEY_LENGTH,
@@ -43,24 +43,6 @@ pub struct BabePreDigest {
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
-macro_rules! babe_assert_eq {
-	($a: expr, $b: expr) => {
-		{
-			let ref a = $a;
-			let ref b = $b;
-			if a != b {
-				error!(
-					target: "babe",
-					"Expected {:?} to equal {:?}, but they were not",
-					stringify!($a),
-					stringify!($b),
-				);
-				assert_eq!(a, b);
-			}
-		}
-	};
-}
-
 type TmpDecode = (
 	[u8; VRF_OUTPUT_LENGTH],
 	[u8; VRF_PROOF_LENGTH],
@@ -76,13 +58,7 @@ impl Encode for BabePreDigest {
 			self.author.0,
 			self.slot_num,
 		);
-		let encoded = parity_codec::Encode::encode(&tmp);
-		if cfg!(any(test, debug_assertions)) {
-			let decoded_version = Self::decode(&mut &encoded[..])
-				.expect("we just encoded this ourselves, so it is correct; qed");
-			babe_assert_eq!(self, &decoded_version);
-		}
-		encoded
+		parity_codec::Encode::encode(&tmp)
 	}
 }
 
@@ -155,19 +131,8 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
 		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => {
-				match Decode::decode(&mut &seal[..]) {
-					s @ Some(_) => s,
-					s @ None => {
-						info!(target: "babe", "Failed to decode {:?}", seal);
-						s
-					}
-				}
-			}
-			_ => {
-				info!(target: "babe", "Invalid consensus: {:?}!", self);
-				None
-			}
+			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
+			_ => None,
 		}
 	}
 
