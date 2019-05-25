@@ -20,7 +20,7 @@ use babe_primitives::BABE_ENGINE_ID;
 use runtime_primitives::generic::DigestItem;
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode, Input};
-use log::{debug, info, error};
+use log::{info, error};
 use schnorrkel::{
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
 	PUBLIC_KEY_LENGTH,
@@ -78,14 +78,9 @@ impl Encode for BabePreDigest {
 		);
 		let encoded = parity_codec::Encode::encode(&tmp);
 		if cfg!(any(test, debug_assertions)) {
-			debug!(target: "babe", "Checking if encoding was correct");
 			let decoded_version = Self::decode(&mut &encoded[..])
 				.expect("we just encoded this ourselves, so it is correct; qed");
-			babe_assert_eq!(decoded_version.proof, self.proof);
-			babe_assert_eq!(decoded_version.vrf_output, self.vrf_output);
-			babe_assert_eq!(decoded_version.author, self.author);
-			babe_assert_eq!(decoded_version.slot_num, self.slot_num);
-			debug!(target: "babe", "Encoding was correct")
+			babe_assert_eq!(self, &decoded_version);
 		}
 		encoded
 	}
