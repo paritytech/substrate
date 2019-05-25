@@ -181,7 +181,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			)?;
 
 			match ChainSpec::from(config.chain_spec.id()) {
-				Some(c) if ChainSpec::Development || c == ChainSpec::LocalTestnet => {}.
+				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
 				_ => panic!("Factory is only supported for development and local testnet."),
 			}
 
