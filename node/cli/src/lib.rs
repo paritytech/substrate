@@ -67,6 +67,7 @@ impl GetLogFilter for CustomSubcommands {
 }
 
 /// The `factory` command used to generate transactions.
+/// Please note: this command currently only works on an empty database!
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
 	/// How often to repeat. This option only has an effect in mode `MasterToNToM`.
