@@ -124,14 +124,6 @@ impl SlotCompatible for AuraSlotCompatible {
 	}
 }
 
-mod simple {
-	use super::{Member, Encode, Decode};
-	pub trait Simple: Member + Encode + Decode + std::hash::Hash {}
-	impl<T> Simple for T where T: Member + Encode + Decode + std::hash::Hash {}
-}
-
-use simple::Simple;
-
 /// Start the aura worker. The returned future should be run in a tokio runtime.
 pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	slot_duration: SlotDuration,
@@ -153,8 +145,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, OnExit, H>(
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Simple,
-	P::Signature: Simple,
+	P::Public: Hash + Member + Encode + Decode,
+	P::Signature: Encode,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>>,
 	H: Header<
 		Digest=generic::Digest<generic::DigestItem<B::Hash, P::Public, P::Signature>>,
@@ -208,8 +200,8 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Simple,
-	P::Signature: Simple,
+	P::Public: Member + Encode + Decode + Hash,
+	P::Signature: Encode,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem<P> + DigestItem<AuthorityId=AuthorityId<P>, Hash=B::Hash>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
