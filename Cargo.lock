@@ -2065,7 +2065,6 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
- "srml-balances 2.0.0",
  "srml-finality-tracker 2.0.0",
  "srml-indices 2.0.0",
  "srml-timestamp 2.0.0",
