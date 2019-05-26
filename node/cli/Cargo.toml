@@ -36,7 +36,6 @@ keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 rand = "0.6"
-balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 
 [dev-dependencies]
