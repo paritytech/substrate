@@ -63,17 +63,13 @@ fn do_phragmen(b: &mut Bencher, num_vals: u64, num_noms: u64, count: usize, vote
 			});
 
 		b.iter(|| {
-			let maybe_res = phragmen::elect::<Test, _, _, _>(
+			let _ = phragmen::elect::<Test, _, _, _>(
 				count,
 				1_usize,
 				<Validators<Test>>::enumerate(),
 				<Nominators<Test>>::enumerate(),
 				Staking::slashable_balance_of
 			);
-			assert!(maybe_res.is_some());
-			let res = maybe_res.unwrap();
-			assert_eq!(res.0.len(), TO_ELECT);
-			assert_eq!(res.1.len(), NOMINATORS as usize);
 		})
 	})
 }
