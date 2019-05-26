@@ -44,7 +44,7 @@ use client::{
 	error::Result as CResult,
 	backend::AuxStore,
 };
-use aura_primitives::AURA_ENGINE_ID;
+use aura_primitives::{AURA_ENGINE_ID, slot_author};
 use runtime_primitives::{generic, generic::BlockId, Justification, generic::Era, AnySignature};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
@@ -116,20 +116,6 @@ impl SlotDuration {
 	}
 }
 
-/// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
-	if authorities.is_empty() { return None }
-
-	let idx = slot_num % (authorities.len() as u64);
-	assert!(idx <= usize::max_value() as u64,
-		"It is impossible to have a vector with length beyond the address space; qed");
-
-	let current_author = authorities.get(idx as usize)
-		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed");
-
-	Some(current_author)
-}
 
 fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 	consensus_common::ErrorKind::InherentData(err.into()).into()
@@ -308,7 +294,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 			);
 			return Box::new(future::ok(()));
 		}
-		let maybe_author = slot_author::<ed25519::Pair>(slot_num, &authorities);
+		let maybe_author = slot_author(slot_num, &authorities);
 		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
 			Some(author) => if author == &public_key {
@@ -450,7 +436,7 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author::<ed25519::Pair>(slot_num, &authorities) {
+		let expected_author = match slot_author(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author,
 		};

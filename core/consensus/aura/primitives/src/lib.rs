@@ -18,14 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::marker::PhantomData;
 use substrate_client::decl_runtime_apis;
 use runtime_primitives::{
-	ConsensusEngineId, generic,
-	traits::{Block, Header, Digest, DigestItemFor}
+	ConsensusEngineId, generic, traits::{Block, Header, Digest, Verify}
 };
 use parity_codec::{Encode, Decode};
-use primitives::ed25519::{Signature, Public};
+use primitives::ed25519::{self, Signature, Public};
 use consensus::EquivocationProof;
 
 /// The `ConsensusEngineId` of AuRa.
@@ -93,6 +91,8 @@ pub struct AuraEquivocationProof<H: Header> {
 	second_header: H,
 }
 
+
+// #[cfg(feature = "std")]
 impl<H> EquivocationProof<H> for AuraEquivocationProof<H>
 where
 	H: Header,
@@ -124,13 +124,45 @@ where
 
 	/// Check if the proof is valid.
 	fn is_valid(&self) -> bool {
-		let first_digest_item = match self.first_header.digest().logs().last() {
-			Some(x) => x,
-			None => return false,
+		let authorities = [];
+		let verify_header = |header: &H| {
+			let digest_item = match header.digest().logs().last() {
+				Some(x) => x,
+				None => return None,
+			};
+			if let Some((slot_num, sig)) = digest_item.as_aura_seal() {
+				let author = match slot_author(slot_num, &authorities) {
+					None => return None,
+					Some(author) => author,
+				};
+				let pre_hash = header.hash();
+				let to_sign = (slot_num, pre_hash).encode();
+				if sig.verify(&to_sign[..], author) {
+					return Some(author)
+				}
+			};
+			None
 		};
-		if let Some((slot_num, sig)) = first_digest_item.as_aura_seal() {
-			return true
-		}
-		false
+
+		let fst_author = verify_header(&self.first_header);
+		let snd_author = verify_header(&self.second_header);
+		fst_author.is_some() && snd_author.is_some()
+			&& fst_author.unwrap() == snd_author.unwrap()
 	}
 }
+
+/// Get slot author for given block along with authorities.
+pub fn slot_author(slot_num: u64, authorities: &[Public]) -> Option<&Public> {
+	if authorities.is_empty() { return None }
+
+	let idx = slot_num % (authorities.len() as u64);
+	assert!(idx <= usize::max_value() as u64,
+		"It is impossible to have a vector with length beyond the address space; qed");
+
+	let current_author = authorities.get(idx as usize)
+		.expect("authorities not empty; index constrained to list length;\
+				this is a valid index; qed");
+
+	Some(current_author)
+}
+

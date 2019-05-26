@@ -34,11 +34,13 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert, ValidateUnsigned
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, AuthorityIdFor, Convert,
 };
+// #[cfg(feature = "std")]
+// use runtime_primitives::traits::ValidateUnsigned;
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
-#[cfg(feature = "std")]
+// #[cfg(feature = "std")]
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
@@ -219,7 +221,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module, Call, Inherent(Timestamp), ValidateUnsigned},
+		Aura: aura::{Module, Call, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
