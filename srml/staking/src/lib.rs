@@ -621,8 +621,8 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			ensure!(
-				ledger.unlocking.len() + 1 > MAX_UNLOCKING_CHUNKS,
-				"can't create schedule more unlock schedules."
+				ledger.unlocking.len() + 1 < MAX_UNLOCKING_CHUNKS,
+				"can not schedule more unlock chunks."
 			);
 
 			let mut value = value.min(ledger.active);
