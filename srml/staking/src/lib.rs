@@ -216,7 +216,7 @@
 //!
 //! Note that there is a limitation to the number of fund-chunks that can be scheduled to be unlocked in the future
 //! via [`unbond`](enum.Call.html#variant.unbond).
-//! In case, this maximum (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
+//! In case this maximum (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
 //! call to `withdraw_unbonded` to remove some of the chunks.
 //!
 //! ### Election Algorithm
@@ -621,7 +621,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			ensure!(
-				ledger.unlocking.len() + 1 < MAX_UNLOCKING_CHUNKS,
+				ledger.unlocking.len() + 1 > MAX_UNLOCKING_CHUNKS,
 				"can't create schedule more unlock schedules."
 			);
 
