@@ -10,7 +10,6 @@ build = "build.rs"
 edition = "2018"
 
 [dependencies]
-error-chain = "0.12"
 cli = { package = "node-cli", path = "node/cli" }
 futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }

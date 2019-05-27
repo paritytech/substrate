@@ -31,7 +31,7 @@ use trie::DBValue;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, UniqueSaturatedFrom,
-	UniqueSaturatedInto, SaturatedConversion, CheckedConversion
+	UniqueSaturatedInto, CheckedConversion
 };
 use crate::DatabaseSettings;
 

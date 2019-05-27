@@ -48,7 +48,7 @@ use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, Digest, DigestItem,
-	SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto
+	SaturatedConversion,
 };
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
