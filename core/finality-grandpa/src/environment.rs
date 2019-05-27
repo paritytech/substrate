@@ -34,7 +34,7 @@ use grandpa::{
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
-	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -99,6 +99,10 @@ impl<Block: BlockT> CompletedRounds<Block> {
 		let mut inner = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		inner.push_back(genesis);
 		CompletedRounds { inner }
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
+		self.inner.iter()
 	}
 
 	/// Returns the last (latest) completed round.
@@ -676,7 +680,7 @@ where
 			&*self.inner,
 			&self.authority_set,
 			&self.consensus_changes,
-			Some(As::sa(self.config.justification_period)),
+			Some(self.config.justification_period.into()),
 			hash,
 			number,
 			(round, commit).into(),

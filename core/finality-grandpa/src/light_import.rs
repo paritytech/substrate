@@ -29,7 +29,7 @@ use parity_codec::{Encode, Decode};
 use consensus_common::{
 	import_queue::{Verifier, SharedFinalityProofRequestBuilder}, well_known_cache_keys,
 	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
-	Error as ConsensusError, ErrorKind as ConsensusErrorKind, FinalityProofRequestBuilder,
+	Error as ConsensusError, FinalityProofRequestBuilder,
 };
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
@@ -120,7 +120,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		block: ImportBlock<Block>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(&*self.client, &mut *self.data.write(), block, new_cache)
+		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(
+			&*self.client, &mut *self.data.write(), block, new_cache
+		)
 	}
 
 	fn check_block(
@@ -239,7 +241,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
 		Ok(r) => return Ok(r),
-		Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 	};
 
 	match justification {
@@ -296,12 +298,13 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 		authorities,
 		authority_set_provider,
 		finality_proof,
-	).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+	).map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
 	// try to import all new headers
 	let block_origin = BlockOrigin::NetworkBroadcast;
 	for header_to_import in finality_effects.headers_to_import {
-		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)?;
+		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)
+			.map_err(|e| ConsensusError::ClientImport(e))?;
 		assert!(block_to_import.justification.is_none(), "We have passed None as justification to verifier.verify");
 
 		let mut cache = HashMap::new();
@@ -316,7 +319,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	#[allow(deprecated)]
 	let finalized_block_number = client.backend().blockchain()
 		.expect_block_number_from_id(&BlockId::Hash(finality_effects.block))
-		.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 	do_finalize_block(
 		client,
 		data,
@@ -386,7 +389,7 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA, J>(
 				hash,
 			);
 
-			return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+			return Err(ConsensusError::ClientImport(e.to_string()).into());
 		},
 		Ok(justification) => {
 			trace!(
@@ -420,7 +423,7 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 	// finalize the block
 	client.finalize_block(BlockId::Hash(hash), Some(justification), true).map_err(|e| {
 		warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-		ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string()))
+		ConsensusError::ClientImport(e.to_string())
 	})?;
 
 	// forget obsoleted consensus changes
@@ -517,7 +520,7 @@ fn require_insert_aux<T: Encode, B, E, Block: BlockT<Hash=H256>, RA>(
 fn on_post_finalization_error(error: ClientError, value_type: &str) -> ConsensusError {
 	warn!(target: "finality", "Failed to write updated {} to disk. Bailing.", value_type);
 	warn!(target: "finality", "Node is in a potentially inconsistent state.");
-	ConsensusError::from(ConsensusErrorKind::ClientImport(error.to_string()))
+	ConsensusError::ClientImport(error.to_string())
 }
 
 #[cfg(test)]

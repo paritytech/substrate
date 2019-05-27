@@ -275,8 +275,6 @@ impl<T: Trait> Module<T> {
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
 	) -> Result {
-		use primitives::traits::As;
-
 		if Self::pending_change().is_none() {
 			let scheduled_at = system::ChainContext::<T>::default().current_height();
 
@@ -287,7 +285,7 @@ impl<T: Trait> Module<T> {
 
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				<NextForced<T>>::put(scheduled_at + in_blocks * T::BlockNumber::sa(2));
+				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
 			}
 
 			<PendingChange<T>>::put(StoredPendingChange {

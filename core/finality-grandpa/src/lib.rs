@@ -156,7 +156,7 @@ pub struct Config {
 	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
-	pub justification_period: u64,
+	pub justification_period: u32,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
@@ -442,7 +442,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 					},
 				}
 			}))
-			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
+			.map_err(|err| consensus_common::Error::InherentData(err.into()))
 	} else {
 		Ok(())
 	}
@@ -491,15 +491,21 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	use futures::future::{self, Loop as FutureLoop};
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
-
 	let LinkHalf {
 		client,
 		select_chain,
 		persistent_data,
 		voter_commands_rx,
 	} = link;
+
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
+
+	let (network, network_startup) = NetworkBridge::new(
+		network,
+		config.clone(),
+		Some((authority_set.set_id(), &set_state.read())),
+		on_exit.clone(),
+	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 

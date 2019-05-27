@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData};
+use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
@@ -27,7 +27,7 @@ use crate::transaction_validity::TransactionValidity;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, Saturating
+	CheckedShl, CheckedShr
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -157,70 +157,142 @@ impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
-/// Simple trait similar to `Into`, except that it can be used to convert numerics between each
-/// other.
-pub trait As<T> {
-	/// Convert forward (ala `Into::into`).
-	fn as_(self) -> T;
-	/// Convert backward (ala `From::from`).
-	fn sa(_: T) -> Self;
-}
-
-macro_rules! impl_numerics {
-	( $( $t:ty ),* ) => {
-		$(
-			impl_numerics!($t: u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize,);
-		)*
-	};
-	( $f:ty : $t:ty, $( $rest:ty, )* ) => {
-		impl As<$t> for $f {
-			fn as_(self) -> $t { self as $t }
-			fn sa(t: $t) -> Self { t as Self }
-		}
-		impl_numerics!($f: $( $rest, )*);
-	};
-	( $f:ty : ) => {}
-}
-
-impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
-
 /// A meta trait for arithmetic.
+///
+/// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
+/// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
+/// and smaller ints. All other conversions are fallible.
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot +
+	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl +
-	CheckedShr +
-	CheckedAdd +
-	CheckedSub +
-	CheckedMul +
-	CheckedDiv +
-	Saturating +
-	PartialOrd<Self> + Ord + Bounded +
-	HasCompact
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
+	Saturating + PartialOrd<Self> + Ord + Bounded +
+	HasCompact + Sized
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot +
+	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
+	UniqueSaturatedInto<u128> + UniqueSaturatedFrom<usize> + UniqueSaturatedInto<usize> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl +
-	CheckedShr +
-	CheckedAdd +
-	CheckedSub +
-	CheckedMul +
-	CheckedDiv +
-	Saturating +
-	PartialOrd<Self> + Ord + Bounded +
-	HasCompact
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
+	Saturating + PartialOrd<Self> + Ord + Bounded +
+	HasCompact + Sized
 > SimpleArithmetic for T {}
+
+/// Just like `From` except that if the source value is too big to fit into the destination type
+/// then it'll saturate the destination.
+pub trait UniqueSaturatedFrom<T: Sized>: Sized {
+	/// Convert from a value of `T` into an equivalent instance of `Self`.
+	fn unique_saturated_from(t: T) -> Self;
+}
+
+/// Just like `Into` except that if the source value is too big to fit into the destination type
+/// then it'll saturate the destination.
+pub trait UniqueSaturatedInto<T: Sized>: Sized {
+	/// Consume self to return an equivalent value of `T`.
+	fn unique_saturated_into(self) -> T;
+}
+
+impl<T: Sized, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
+	fn unique_saturated_from(t: T) -> Self {
+		S::try_from(t).unwrap_or_else(|_| Bounded::max_value())
+	}
+}
+
+impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
+	fn unique_saturated_into(self) -> T {
+		self.try_into().unwrap_or_else(|_| Bounded::max_value())
+	}
+}
+
+/// Simple trait to use checked mul and max value to give a saturated mul operation over
+/// supported types.
+pub trait Saturating {
+	/// Saturated addition - if the product can't fit in the type then just use max-value.
+	fn saturating_add(self, o: Self) -> Self;
+
+	/// Saturated subtraction - if the product can't fit in the type then just use max-value.
+	fn saturating_sub(self, o: Self) -> Self;
+
+	/// Saturated multiply - if the product can't fit in the type then just use max-value.
+	fn saturating_mul(self, o: Self) -> Self;
+}
+
+impl<T: CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+	fn saturating_add(self, o: Self) -> Self {
+		<Self as num_traits::Saturating>::saturating_add(self, o)
+	}
+	fn saturating_sub(self, o: Self) -> Self {
+		<Self as num_traits::Saturating>::saturating_sub(self, o)
+	}
+	fn saturating_mul(self, o: Self) -> Self {
+		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
+	}
+}
+
+/// Convenience type to work around the highly unergonomic syntax needed
+/// to invoke the functions of overloaded generic traits, in this case
+/// `SaturatedFrom` and `SaturatedInto`.
+pub trait SaturatedConversion {
+	/// Convert from a value of `T` into an equivalent instance of `Self`.
+	///
+	/// This just uses `UniqueSaturatedFrom` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn saturated_from<T>(t: T) -> Self where Self: UniqueSaturatedFrom<T> {
+		<Self as UniqueSaturatedFrom<T>>::unique_saturated_from(t)
+	}
+
+	/// Consume self to return an equivalent value of `T`.
+	///
+	/// This just uses `UniqueSaturatedInto` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn saturated_into<T>(self) -> T where Self: UniqueSaturatedInto<T> {
+		<Self as UniqueSaturatedInto<T>>::unique_saturated_into(self)
+	}
+}
+impl<T: Sized> SaturatedConversion for T {}
+
+/// Convenience type to work around the highly unergonomic syntax needed
+/// to invoke the functions of overloaded generic traits, in this case
+/// `TryFrom` and `TryInto`.
+pub trait CheckedConversion {
+	/// Convert from a value of `T` into an equivalent instance of `Option<Self>`.
+	///
+	/// This just uses `TryFrom` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_from<T>(t: T) -> Option<Self> where Self: TryFrom<T> {
+		<Self as TryFrom<T>>::try_from(t).ok()
+	}
+	/// Consume self to return `Some` equivalent value of `Option<T>`.
+	///
+	/// This just uses `TryInto` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_into<T>(self) -> Option<T> where Self: TryInto<T> {
+		<Self as TryInto<T>>::try_into(self).ok()
+	}
+}
+impl<T: Sized> CheckedConversion for T {}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.
