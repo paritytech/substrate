@@ -23,7 +23,7 @@ use std::time::Duration;
 use log::{warn, debug, error, info};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
+use network_libp2p::{start_service, parse_str_addr, Service as Libp2pNetService, ServiceEvent as Libp2pNetServiceEvent};
 use network_libp2p::{ProtocolId, RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
@@ -175,7 +175,7 @@ impl ReportHandle {
 }
 
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
+pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Sinks to propagate status updates.
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	/// Are we connected to any peer?
@@ -187,7 +187,7 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Channel for networking messages processed by the background thread.
 	network_chan: mpsc::UnboundedSender<NetworkMsg<B>>,
 	/// Network service
-	network: Arc<Mutex<NetworkService<Message<B>>>>,
+	network: Arc<Mutex<Libp2pNetService<Message<B>>>>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
@@ -195,17 +195,17 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	protocol_sender: mpsc::UnboundedSender<ProtocolMsg<B, S>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 	/// Creates the network service.
 	///
-	/// Returns the service itself that can be shared throughout the codebase, and a `NetworkMut`
+	/// Returns the service itself that can be shared throughout the codebase, and a `NetworkWorker`
 	/// that implements `Future` and must be regularly polled in order for the network processing
 	/// to advance.
 	pub fn new<H: ExHashT>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: Box<ImportQueue<B>>,
-	) -> Result<(Arc<Service<B, S>>, NetworkMut<B, S, H>), Error> {
+	) -> Result<(Arc<NetworkService<B, S>>, NetworkWorker<B, S, H>), Error> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
@@ -232,7 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			},
 		};
 
-		let network_mut = NetworkMut {
+		let network_mut = NetworkWorker {
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			network_service: network.clone(),
@@ -250,7 +250,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			connected_peers_interval: tokio_timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
 		};
 
-		let service = Arc::new(Service {
+		let service = Arc::new(NetworkService {
 			status_sinks,
 			is_offline,
 			is_major_syncing,
@@ -376,7 +376,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for NetworkService<B, S> {
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
@@ -386,7 +386,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle f
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for NetworkService<B, S> {
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing()
 	}
@@ -420,7 +420,7 @@ pub trait ManageNetwork {
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for NetworkService<B, S> {
 	fn accept_unreserved_peers(&self) {
 		self.peerset.set_reserved_only(false);
 	}
@@ -441,7 +441,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 	}
 }
 
-/// Messages to be handled by NetworkService.
+/// Messages to be handled by Libp2pNetService.
 #[derive(Debug)]
 pub enum NetworkMsg<B: BlockT + 'static> {
 	/// Send an outgoing custom message.
@@ -521,12 +521,12 @@ impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<
 
 /// Future tied to the `Network` service and that must be polled in order for the network to
 /// advance.
-#[must_use = "The NetworkMut must be polled in order for the network to work"]
-pub struct NetworkMut<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
+#[must_use = "The NetworkWorker must be polled in order for the network to work"]
+pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
-	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
+	network_service: Arc<Mutex<Libp2pNetService<Message<B>>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -543,13 +543,13 @@ pub struct NetworkMut<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHas
 	connected_peers_interval: tokio_timer::Interval,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkMut<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
 	type Item = ();
 	type Error = io::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Implementation of `protocol::NetworkOut` using the available local variables.
-		struct Ctxt<'a, B: BlockT>(&'a mut NetworkService<Message<B>>, &'a PeersetHandle);
+		struct Ctxt<'a, B: BlockT>(&'a mut Libp2pNetService<Message<B>>, &'a PeersetHandle);
 		impl<'a, B: BlockT> NetworkOut<B> for Ctxt<'a, B> {
 			fn report_peer(&mut self, who: PeerId, reputation: i32) {
 				self.1.report_peer(who, reputation)
@@ -665,7 +665,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(NetworkServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. }))) => {
+				Ok(Async::Ready(Some(Libp2pNetServiceEvent::OpenedCustomProtocol { peer_id, version, debug_info, .. }))) => {
 					debug_assert!(
 						version <= protocol::CURRENT_VERSION as u8
 						&& version >= protocol::MIN_VERSION as u8
@@ -673,11 +673,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					self.protocol.on_peer_connected(&mut network_out, peer_id, debug_info);
 					CustomMessageOutcome::None
 				}
-				Ok(Async::Ready(Some(NetworkServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) => {
+				Ok(Async::Ready(Some(Libp2pNetServiceEvent::ClosedCustomProtocol { peer_id, debug_info, .. }))) => {
 					self.protocol.on_peer_disconnected(&mut network_out, peer_id, debug_info);
 					CustomMessageOutcome::None
 				},
-				Ok(Async::Ready(Some(NetworkServiceEvent::CustomMessage { peer_id, message, .. }))) =>
+				Ok(Async::Ready(Some(Libp2pNetServiceEvent::CustomMessage { peer_id, message, .. }))) =>
 					self.protocol.on_custom_message(
 						&mut network_out,
 						&*self.transaction_pool,
@@ -685,7 +685,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 						message,
 						self.finality_proof_provider.as_ref().map(|p| &**p)
 					),
-				Ok(Async::Ready(Some(NetworkServiceEvent::Clogged { peer_id, messages, .. }))) => {
+				Ok(Async::Ready(Some(Libp2pNetServiceEvent::Clogged { peer_id, messages, .. }))) => {
 					debug!(target: "sync", "{} clogging messages:", messages.len());
 					for msg in messages.into_iter().take(5) {
 						debug!(target: "sync", "{:?}", msg);
