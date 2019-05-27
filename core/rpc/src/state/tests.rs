@@ -21,34 +21,35 @@ use assert_matches::assert_matches;
 use consensus::BlockOrigin;
 use primitives::storage::well_known_keys;
 use sr_io::blake2_256;
-use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt};
+use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt, LocalExecutor};
+use substrate_executor::NativeExecutionDispatch;
 
 #[test]
 fn should_return_storage() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
 	let key = StorageKey(b":code".to_vec());
 
-	assert!(
+	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into())
-			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap()
-		> 10_000
+			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		LocalExecutor::native_equivalent().len(),
 	);
 	assert_matches!(
 		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
 		Ok(true)
 	);
-	assert!(
-		client.storage_size(key.clone(), None).unwrap().unwrap()
-		> 10_000
+	assert_eq!(
+		client.storage_size(key.clone(), None).unwrap().unwrap() as usize,
+		LocalExecutor::native_equivalent().len(),
 	);
 }
 
 #[test]
 fn should_return_child_storage() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
@@ -73,7 +74,7 @@ fn should_return_child_storage() {
 
 #[test]
 fn should_call_contract() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
@@ -86,7 +87,7 @@ fn should_call_contract() {
 
 #[test]
 fn should_notify_about_storage_changes() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
@@ -117,7 +118,7 @@ fn should_notify_about_storage_changes() {
 
 #[test]
 fn should_send_initial_storage_changes_and_notifications() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
@@ -163,7 +164,7 @@ fn should_query_storage() {
 	>;
 
 	fn run_tests(client: Arc<TestClient>) {
-		let core = ::tokio::runtime::Runtime::new().unwrap();
+		let core = tokio::runtime::Runtime::new().unwrap();
 		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
 		let add_block = |nonce| {
@@ -250,20 +251,20 @@ fn should_split_ranges() {
 
 #[test]
 fn should_return_runtime_version() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 
 	let client = Arc::new(test_client::new());
 	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
 	assert_eq!(
-		::serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
+		serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
 		r#"{"specName":"test","implName":"parity-test","authoringVersion":1,"specVersion":1,"implVersion":1,"apis":[["0xdf6acb689907609b",2],["0x37e397fc7c91f5e4",1],["0xd2bc9897eed08f15",1],["0x40fe3ad401f8959a",3],["0xc6e9a76309f39b09",1],["0xdd718d5cc53262d4",1],["0xcbca25e39f142387",1],["0xf78b278be53f454c",1],["0x7801759919ee83e5",1]]}"#
 	);
 }
 
 #[test]
 fn should_notify_on_runtime_version_initially() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{

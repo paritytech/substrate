@@ -490,15 +490,21 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	use futures::future::{self, Loop as FutureLoop};
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
-
 	let LinkHalf {
 		client,
 		select_chain,
 		persistent_data,
 		voter_commands_rx,
 	} = link;
+
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
+
+	let (network, network_startup) = NetworkBridge::new(
+		network,
+		config.clone(),
+		Some((authority_set.set_id(), &set_state.read())),
+		on_exit.clone(),
+	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
