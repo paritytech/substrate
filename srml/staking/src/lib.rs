@@ -187,15 +187,16 @@
 //! A validator can be _reported_ to be offline at any point via the public function
 //! [`on_offline_validator`](enum.Call.html#variant.on_offline_validator). Each validator declares how many times it
 //! can be _reported_ before it actually gets slashed via its
-//! [`unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold).
+//! [`ValidatorPrefs::unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold).
 //!
 //! On top of this, the Staking module also introduces an
 //! [`OfflineSlashGrace`](./struct.Module.html#method.offline_slash_grace), which applies
 //! to all validators and prevents them from getting immediately slashed.
 //!
 //! Essentially, a validator gets slashed once they have been reported more than
-//! [`OfflineSlashGrace`] + [`unstake_threshold`] times. Getting slashed due to offline report always leads
-//! to being _unstaked_ (_i.e._ removed as a validator candidate) as the consequence.
+//! [`OfflineSlashGrace`] + [`ValidatorPrefs::unstake_threshold`] times. Getting slashed due to
+//! offline report always leads to being _unstaked_ (_i.e._ removed as a validator candidate) as
+//! the consequence.
 //!
 //! The base slash value is computed _per slash-event_ by multiplying
 //! [`OfflineSlash`](./struct.Module.html#method.offline_slash) and the `total` `Exposure`. This value is then

@@ -253,6 +253,11 @@ impl Network<Block> for MessageRouting {
 		})
 	}
 
+	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
+		// NOTE: only required to restore previous state on startup
+		//       not required for tests currently
+	}
+
 	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
 
 	}
@@ -1242,7 +1247,12 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 		};
 		let routing = MessageRouting::new(net.clone(), 1);
-		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone(), Exit);
+		let (network, routing_work) = communication::NetworkBridge::new(
+			routing,
+			config.clone(),
+			None,
+			Exit,
+		);
 		runtime.block_on(routing_work).unwrap();
 
 		let (round_rx, round_tx) = network.round_communication(
