@@ -44,9 +44,6 @@ use parking_lot::RwLock;
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
 
-#[cfg(feature = "std")]
-pub mod pool;
-
 pub use runtime_primitives::RuntimeString;
 
 /// An identifier for an inherent.

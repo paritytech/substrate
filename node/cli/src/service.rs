@@ -87,7 +87,6 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						inherents_pool: service.inherents_pool(),
 					});
 
 					let client = service.client();

@@ -34,7 +34,6 @@ use parking_lot::Mutex;
 use client::BlockchainEvents;
 use exit_future::Signal;
 use futures::prelude::*;
-use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
 use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
@@ -76,7 +75,6 @@ pub struct Service<Components: components::Components> {
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
@@ -203,11 +201,9 @@ impl<Components: components::Components> Service<Components> {
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network = network::Service::new(network_params, protocol_id, import_queue)?;
 
-		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
 				client.clone(),
-				inherents_pool.clone(),
 				task_executor.clone(),
 			)))
 		} else {
@@ -373,7 +369,6 @@ impl<Components: components::Components> Service<Components> {
 			network: Some(network),
 			select_chain,
 			transaction_pool,
-			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
@@ -423,11 +418,6 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
-	}
-
-	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
-		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.
