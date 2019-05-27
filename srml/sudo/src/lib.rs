@@ -88,7 +88,10 @@
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{
+	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
+	decl_storage, ensure
+};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -112,8 +115,15 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
-			Self::deposit_event(RawEvent::Sudid(ok));
+			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
+				Ok(_) => true,
+				Err(e) => {
+					sr_io::print(e);
+					false
+				}
+			};
+
+			Self::deposit_event(RawEvent::Sudid(res));
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.

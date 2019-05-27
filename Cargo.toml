@@ -4,13 +4,12 @@ path = "node/src/main.rs"
 
 [package]
 name = "substrate"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 edition = "2018"
 
 [dependencies]
-error-chain = "0.12"
 cli = { package = "node-cli", path = "node/cli" }
 futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
@@ -85,12 +84,12 @@ members = [
 	"node/runtime",
 	"node-template",
 	"subkey",
+	"test-utils/chain-spec-builder",
 ]
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
 	"core/test-runtime/wasm",
-	"test-utils/chain-spec-builder"
 ]
 
 [badges]

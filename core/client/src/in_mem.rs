@@ -21,10 +21,12 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Zero,
+	NumberFor, SaturatedConversion, Digest, DigestItem
+};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
+use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use trie::MemoryDB;
@@ -482,22 +484,17 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
-		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
+		let child_delta = children.into_iter()
+			.map(|(storage_key, child_overlay)|
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
 
-		for (child_key, child_map) in children {
-			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
-			transaction.consolidate(update);
-
-			if !is_default {
-				top.insert(child_key, root);
-			}
-		}
-
-		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
-		transaction.consolidate(update);
+		let (root, transaction) = self.old_state.full_storage_root(
+			top.into_iter().map(|(k, v)| (k, Some(v))),
+			child_delta
+		);
 
 		self.new_state = Some(InMemory::from(transaction));
 		Ok(root)
@@ -624,7 +621,11 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(
+						(*header.number()).saturated_into::<u64>(),
+						changes_trie_root,
+						changes_trie_update
+					);
 				}
 			}
 
@@ -673,7 +674,7 @@ where
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
-		Ok(As::sa(0))
+		Ok(Zero::zero())
 	}
 }
 

@@ -24,7 +24,6 @@ use proc_macro::TokenStream;
 mod impl_runtime_apis;
 mod decl_runtime_apis;
 mod utils;
-mod compile_fail_tests;
 
 /// Tags given trait implementations as runtime apis.
 ///

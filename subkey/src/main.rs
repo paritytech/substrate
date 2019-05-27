@@ -223,6 +223,48 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
+		("sign-transaction", Some(matches)) => {
+			let s = matches.value_of("suri")
+				.expect("secret URI parameter is required; thus it can't be None; qed");
+			let signer = Sr25519::pair_from_suri(s, password);
+
+			let index = matches.value_of("nonce")
+				.expect("nonce is required; thus it can't be None; qed");
+			let index = str::parse::<Index>(index)
+				.expect("Invalid 'index' parameter; expecting an integer.");
+
+			let call = matches.value_of("call")
+				.expect("call is required; thus it can't be None; qed");
+			let function: Call = hex::decode(&call).ok()
+				.and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+
+			let h = matches.value_of("prior-block-hash")
+				.expect("prior-block-hash is required; thus it can't be None; qed");
+			let prior_block_hash: Hash = hex::decode(h).ok()
+				.and_then(|x| Decode::decode(&mut &x[..]))
+				.expect("Invalid prior block hash");
+
+			let era = Era::immortal();
+
+			let raw_payload = (Compact(index), function, era, prior_block_hash);
+			let signature = raw_payload.using_encoded(|payload|
+				if payload.len() > 256 {
+					signer.sign(&blake2_256(payload)[..])
+				} else {
+					signer.sign(payload)
+				}
+			);
+
+			let extrinsic = UncheckedExtrinsic::new_signed(
+				index,
+				raw_payload.1,
+				signer.public().into(),
+				signature.into(),
+				era,
+			);
+
+			println!("0x{}", hex::encode(&extrinsic.encode()));
+		}
 		("verify", Some(matches)) => {
 			let sig_data = matches.value_of("sig")
 				.expect("signature parameter is required; thus it can't be None; qed");

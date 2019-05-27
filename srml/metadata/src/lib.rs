@@ -292,22 +292,6 @@ pub enum StorageFunctionModifier {
 	Default,
 }
 
-/// All metadata about the outer dispatch.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct OuterDispatchMetadata {
-	pub name: DecodeDifferentStr,
-	pub calls: DecodeDifferentArray<OuterDispatchCall>,
-}
-
-/// A Call from the outer dispatch.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct OuterDispatchCall {
-	pub name: DecodeDifferentStr,
-	pub index: u16,
-}
-
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 /// Metadata prefixed by a u32 for reserved usage

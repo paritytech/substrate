@@ -197,12 +197,12 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> Self::Query {
+			fn take<S: $crate::HashedStorage<$crate::Twox128>>(storage: &mut S) -> Self::Query {
 				storage.$taker($key)
 			}
 
 			/// Mutate this value.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Twox128>>(f: F, storage: &S) -> R {
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Twox128>>(f: F, storage: &mut S) -> R {
 				let mut val = <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::get(storage);
 
 				let ret = f(&mut val);
@@ -256,13 +256,13 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Take the value, reading and removing it.
-			fn take<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &S) -> Self::Query {
+			fn take<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &mut S) -> Self::Query {
 				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
 
 			/// Mutate the value under a key.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, f: F, storage: &S) -> R {
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, f: F, storage: &mut S) -> R {
 				let mut val = <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
@@ -287,13 +287,13 @@ macro_rules! __storage_items_internal {
 		$($vis)* struct $name;
 
 		impl $name {
-			fn clear_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, storage: &S) {
+			fn clear_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, storage: &mut S) {
 				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					storage.kill(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
-			fn set_len<S: $crate::HashedStorage<$crate::Twox128>>(count: u32, storage: &S) {
+			fn set_len<S: $crate::HashedStorage<$crate::Twox128>>(count: u32, storage: &mut S) {
 				(count..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
 				storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len_key(), &count);
 			}
@@ -327,14 +327,14 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Set the current set of items.
-			fn set_items<S: $crate::HashedStorage<$crate::Twox128>>(items: &[$ty], storage: &S) {
+			fn set_items<S: $crate::HashedStorage<$crate::Twox128>>(items: &[$ty], storage: &mut S) {
 				$name::set_len(items.len() as u32, storage);
 				items.iter()
 					.enumerate()
 					.for_each(|(i, item)| <$name as $crate::storage::hashed::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
-			fn set_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, item: &$ty, storage: &S) {
+			fn set_item<S: $crate::HashedStorage<$crate::Twox128>>(index: u32, item: &$ty, storage: &mut S) {
 				if index < <$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					storage.put(&<$name as $crate::storage::hashed::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
@@ -351,7 +351,7 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Clear the list.
-			fn clear<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) {
+			fn clear<S: $crate::HashedStorage<$crate::Twox128>>(storage: &mut S) {
 				for i in 0..<$name as $crate::storage::hashed::generator::StorageList<$ty>>::len(storage) {
 					$name::clear_item(i, storage);
 				}
@@ -383,7 +383,6 @@ macro_rules! __handle_wrap_internal {
 #[allow(dead_code)]
 mod tests {
 	use std::collections::HashMap;
-	use std::cell::RefCell;
 	use super::*;
 	use crate::metadata::*;
 	use crate::metadata::StorageHasher;
@@ -398,43 +397,40 @@ mod tests {
 
 	#[test]
 	fn value() {
-		let mut overlay = HashMap::new();
-		let storage = RefCell::new(&mut overlay);
+		let mut storage = HashMap::new();
 		assert!(Value::get(&storage).is_none());
-		Value::put(&100_000, &storage);
+		Value::put(&100_000, &mut storage);
 		assert_eq!(Value::get(&storage), Some(100_000));
-		Value::kill(&storage);
+		Value::kill(&mut storage);
 		assert!(Value::get(&storage).is_none());
 	}
 
 	#[test]
 	fn list() {
-		let mut overlay = HashMap::new();
-		let storage = RefCell::new(&mut overlay);
+		let mut storage = HashMap::new();
 		assert_eq!(List::len(&storage), 0);
 		assert!(List::items(&storage).is_empty());
 
-		List::set_items(&[0, 2, 4, 6, 8], &storage);
+		List::set_items(&[0, 2, 4, 6, 8], &mut storage);
 		assert_eq!(List::items(&storage), &[0, 2, 4, 6, 8]);
 		assert_eq!(List::len(&storage), 5);
 
-		List::set_item(2, &10, &storage);
+		List::set_item(2, &10, &mut storage);
 		assert_eq!(List::items(&storage), &[0, 2, 10, 6, 8]);
 		assert_eq!(List::len(&storage), 5);
 
-		List::clear(&storage);
+		List::clear(&mut storage);
 		assert_eq!(List::len(&storage), 0);
 		assert!(List::items(&storage).is_empty());
 	}
 
 	#[test]
 	fn map() {
-		let mut overlay = HashMap::new();
-		let storage = RefCell::new(&mut overlay);
+		let mut storage = HashMap::new();
 		assert!(Map::get(&5, &storage).is_none());
-		Map::insert(&5, &[1; 32], &storage);
+		Map::insert(&5, &[1; 32], &mut storage);
 		assert_eq!(Map::get(&5, &storage), Some([1; 32]));
-		assert_eq!(Map::take(&5, &storage), Some([1; 32]));
+		assert_eq!(Map::take(&5, &mut storage), Some([1; 32]));
 		assert!(Map::get(&5, &storage).is_none());
 		assert!(Map::get(&999, &storage).is_none());
 	}

@@ -70,6 +70,7 @@ pub trait Backend<H: Hasher> {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
+	/// Does not include child storage updates.
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -87,10 +88,60 @@ pub trait Backend<H: Hasher> {
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Get all keys with given prefix
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>>;
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		let mut all = Vec::new();
+		self.for_keys_with_prefix(prefix, |k| all.push(k.to_vec()));
+		all
+	}
+
+	/// Get all keys of child storage with given prefix
+	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+		let mut all = Vec::new();
+		self.for_keys_in_child_storage(child_storage_key, |k| {
+			if k.starts_with(prefix) {
+				all.push(k.to_vec());
+			}
+		});
+		all
+	}
 
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
+
+	/// Calculate the storage root, with given delta over what is already stored
+	/// in the backend, and produce a "transaction" that can be used to commit.
+	/// Does include child storage updates.
+	fn full_storage_root<I1, I2i, I2>(
+		&self,
+		delta: I1,
+		child_deltas: I2)
+	-> (H::Out, Self::Transaction)
+	where
+		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
+		<H as Hasher>::Out: Ord,
+	{
+		let mut txs: Self::Transaction = Default::default();
+		let mut child_roots: Vec<_> = Default::default();
+		// child first
+		for (storage_key, child_delta) in child_deltas {
+			let (child_root, empty, child_txs) =
+				self.child_storage_root(&storage_key[..], child_delta);
+			txs.consolidate(child_txs);
+			if empty {
+				child_roots.push((storage_key, None));
+			} else {
+				child_roots.push((storage_key, Some(child_root)));
+			}
+		}
+		let (root, parent_txs) = self.storage_root(
+			delta.into_iter().chain(child_roots.into_iter())
+		);
+		txs.consolidate(parent_txs);
+		(root, txs)
+	}
+
 }
 
 /// Trait that allows consolidate two transactions together.
@@ -213,6 +264,13 @@ impl<H> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
 
 impl super::Error for Void {}
 
+impl<H: Hasher> InMemory<H> {
+	/// child storage key iterator
+	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
+		self.inner.iter().filter_map(|item| item.0.as_ref().map(|v|&v[..]))
+	}
+}
+
 impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
@@ -243,7 +301,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let existing_pairs = self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
@@ -264,7 +324,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	{
 		let storage_key = storage_key.to_vec();
 
-		let existing_pairs = self.inner.get(&Some(storage_key.clone())).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+		let existing_pairs = self.inner.get(&Some(storage_key.clone()))
+			.into_iter()
+			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = child_trie_root::<H, _, _, _>(
@@ -283,22 +345,47 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone()))).collect()
+		self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone())))
+			.collect()
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
-		self.inner.get(&None).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.inner.get(&None)
+			.into_iter()
+			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.collect()
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+	fn child_keys(&self, storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.inner.get(&Some(storage_key.to_vec()))
+			.into_iter()
+			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.collect()
+	}
+
+	fn try_into_trie_backend(
+		self
+	)-> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;
+		let mut new_child_roots = Vec::new();
+		let mut root_map = None;
 		for (storage_key, map) in self.inner {
-			if storage_key != None {
-				let _ = insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?;
+			if let Some(storage_key) = storage_key.as_ref() {
+				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?;
+				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
 			} else {
-				root = Some(insert_into_memory_db::<H, _>(&mut mdb, map.into_iter())?);
+				root_map = Some(map);
 			}
+		}
+		// root handling
+		if let Some(map) = root_map.take() {
+			root = Some(insert_into_memory_db::<H, _>(
+				&mut mdb,
+				map.into_iter().chain(new_child_roots.into_iter())
+			)?);
 		}
 		let root = match root {
 			Some(root) => root,

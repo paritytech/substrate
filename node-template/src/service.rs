@@ -10,10 +10,11 @@ use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
 	TaskExecutor,
+	error::{Error as ServiceError},
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
-use substrate_client as client;
+use substrate_client::{self as client, LongestChain};
 use primitives::{ed25519::Pair, Pair as PairT};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
@@ -45,10 +46,18 @@ construct_service_factory! {
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		FullTransactionPoolApi = transaction_pool::ChainApi<
+			client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>,
+			Block
+		> {
+			|config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+		},
+		LightTransactionPoolApi = transaction_pool::ChainApi<
+			client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>,
+			Block
+		> {
+			|config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+		},
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig,
 		FullService = FullComponents<Self>
@@ -65,10 +74,13 @@ construct_service_factory! {
 						inherents_pool: service.inherents_pool(),
 					});
 					let client = service.client();
+					let select_chain = service.select_chain()
+						.ok_or_else(|| ServiceError::SelectChainRequired)?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client.clone(),
+						select_chain,
 						client,
 						proposer,
 						service.network(),
@@ -86,10 +98,12 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
 					import_queue::<_, _, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
+						None,
+						None,
 						None,
 						client,
 						NothingExtra,
@@ -105,11 +119,24 @@ construct_service_factory! {
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
+						None,
+						None,
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}
 			},
+		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
+			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+				Ok(LongestChain::new(
+					client.backend().clone(),
+					client.import_lock()
+				))
+			}
+		},
+		FinalityProofProvider = { |_client: Arc<FullClient<Self>>| {
+			Ok(None)
+		}},
 	}
 }

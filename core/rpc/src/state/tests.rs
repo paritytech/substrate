@@ -15,42 +15,79 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use self::error::{Error, ErrorKind};
+use self::error::Error;
 
-use sr_io::blake2_256;
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
-use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt};
+use primitives::storage::well_known_keys;
+use sr_io::blake2_256;
+use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt, LocalExecutor};
+use substrate_executor::NativeExecutionDispatch;
 
 #[test]
 fn should_return_storage() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
+	let key = StorageKey(b":code".to_vec());
+
+	assert_eq!(
+		client.storage(key.clone(), Some(genesis_hash).into())
+			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		LocalExecutor::native_equivalent().len(),
+	);
+	assert_matches!(
+		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_eq!(
+		client.storage_size(key.clone(), None).unwrap().unwrap() as usize,
+		LocalExecutor::native_equivalent().len(),
+	);
+}
+
+#[test]
+fn should_return_child_storage() {
+	let core = tokio::runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let genesis_hash = client.genesis_hash();
+	let client = State::new(client, Subscriptions::new(core.executor()));
+	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
+	let key = StorageKey(b"key".to_vec());
+
 
 	assert_matches!(
-		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
-		Ok(None)
-	)
+		client.child_storage(child_key.clone(), key.clone(), Some(genesis_hash).into()),
+		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
+	);
+	assert_matches!(
+		client.child_storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into())
+			.map(|x| x.is_some()),
+		Ok(true)
+	);
+	assert_matches!(
+		client.child_storage_size(child_key.clone(), key.clone(), None),
+		Ok(Some(1))
+	);
 }
 
 #[test]
 fn should_call_contract() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(core.executor()));
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
-		Err(Error(ErrorKind::Client(client::error::Error::Execution(_)), _))
+		Err(Error::Client(client::error::Error::Execution(_)))
 	)
 }
 
 #[test]
 fn should_notify_about_storage_changes() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
@@ -81,7 +118,7 @@ fn should_notify_about_storage_changes() {
 
 #[test]
 fn should_send_initial_storage_changes_and_notifications() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
@@ -127,7 +164,7 @@ fn should_query_storage() {
 	>;
 
 	fn run_tests(client: Arc<TestClient>) {
-		let core = ::tokio::runtime::Runtime::new().unwrap();
+		let core = tokio::runtime::Runtime::new().unwrap();
 		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
 		let add_block = |nonce| {
@@ -214,20 +251,20 @@ fn should_split_ranges() {
 
 #[test]
 fn should_return_runtime_version() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let core = tokio::runtime::Runtime::new().unwrap();
 
 	let client = Arc::new(test_client::new());
 	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
 	assert_eq!(
-		::serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
+		serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
 		r#"{"specName":"test","implName":"parity-test","authoringVersion":1,"specVersion":1,"implVersion":1,"apis":[["0xdf6acb689907609b",2],["0x37e397fc7c91f5e4",1],["0xd2bc9897eed08f15",1],["0x40fe3ad401f8959a",3],["0xc6e9a76309f39b09",1],["0xdd718d5cc53262d4",1],["0xcbca25e39f142387",1],["0xf78b278be53f454c",1],["0x7801759919ee83e5",1]]}"#
 	);
 }
 
 #[test]
 fn should_notify_on_runtime_version_initially() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
