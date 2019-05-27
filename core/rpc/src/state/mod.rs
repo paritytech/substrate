@@ -22,7 +22,6 @@ use std::{
 	sync::Arc,
 };
 
-use error_chain::bail;
 use log::{warn, trace};
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
 use jsonrpc_derive::rpc;
@@ -148,11 +147,15 @@ pub trait StateApi<Hash> {
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>);
+	fn subscribe_storage(
+		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
+	);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_storage(
+		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
+	) -> RpcResult<bool>;
 }
 
 /// State API with subscriptions support.
@@ -213,7 +216,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 							blocks.push(hdr.hash());
 							last = hdr;
 						} else {
-							bail!(invalid_block_range(
+							return Err(invalid_block_range(
 								Some(from),
 								Some(to),
 								format!("Parent of {} ({}) not found", last.number(), last.hash()),
@@ -221,7 +224,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 						}
 					}
 					if last.hash() != from.hash() {
-						bail!(invalid_block_range(
+						return Err(invalid_block_range(
 							Some(from),
 							Some(to),
 							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
@@ -241,7 +244,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 					filtered_range,
 				})
 			},
-			(from, to) => bail!(
+			(from, to) => Err(
 				invalid_block_range(from.as_ref(), to.as_ref(), "Invalid range or unknown block".into())
 			),
 		}
@@ -483,7 +486,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	}
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
-		let stream = match self.client.storage_changes_notification_stream(Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])) {
+		let stream = match self.client.storage_changes_notification_stream(
+				Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])
+		) {
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = subscriber.reject(error::Error::from(err).into());
@@ -551,11 +556,15 @@ pub(crate) fn split_range(size: usize, middle: Option<usize>) -> (Range<usize>, 
 	(range1, range2)
 }
 
-fn invalid_block_range<H: Header>(from: Option<&H>, to: Option<&H>, reason: String) -> error::ErrorKind {
+fn invalid_block_range<H: Header>(from: Option<&H>, to: Option<&H>, reason: String) -> error::Error {
 	let to_string = |x: Option<&H>| match x {
 		None => "unknown hash".into(),
 		Some(h) => format!("{} ({})", h.number(), h.hash()),
 	};
 
-	error::ErrorKind::InvalidBlockRange(to_string(from), to_string(to), reason)
+	error::Error::InvalidBlockRange {
+		from: to_string(from),
+		to: to_string(to),
+		details: reason,
+	}
 }

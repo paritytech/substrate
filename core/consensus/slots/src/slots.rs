@@ -19,7 +19,7 @@
 //! This is used instead of `tokio_timer::Interval` because it was unreliable.
 
 use super::SlotCompatible;
-use consensus_common::{Error, ErrorKind};
+use consensus_common::Error;
 use futures::prelude::*;
 use futures::try_ready;
 use inherents::{InherentData, InherentDataProviders};
@@ -125,7 +125,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 		if let Some(ref mut inner_delay) = self.inner_delay {
 			try_ready!(inner_delay
 				.poll()
-				.map_err(|e| Error::from(ErrorKind::FaultyTimer(e))));
+				.map_err(Error::FaultyTimer));
 		}
 
 		// timeout has fired.
@@ -133,7 +133,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 		let inherent_data = self
 			.inherent_data_providers
 			.create_inherent_data()
-			.map_err(crate::inherent_to_common_error)?;
+			.map_err(|s| consensus_common::Error::InherentData(s.into_owned()))?;
 		let (timestamp, slot_num) = SC::extract_timestamp_and_slot(&inherent_data)?;
 
 		// reschedule delay for next slot.

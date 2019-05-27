@@ -25,7 +25,6 @@ use std::{
 	sync::Arc,
 };
 
-use error_chain::bail;
 use log::{trace, debug, warn};
 use serde::Serialize;
 use substrate_primitives::hexdisplay::HexDisplay;
@@ -184,7 +183,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		tx: Transaction<Hash, Ex>,
 	) -> error::Result<Imported<Hash, Ex>> {
 		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
-			bail!(error::ErrorKind::AlreadyImported(Box::new(tx.hash.clone())))
+			return Err(error::Error::AlreadyImported(Box::new(tx.hash.clone())))
 		}
 
 		let tx = WaitingTransaction::new(
@@ -259,7 +258,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 			self.ready.remove_invalid(&promoted);
 
 			debug!(target: "txpool", "[{:?}] Cycle detected, bailing.", hash);
-			bail!(error::ErrorKind::CycleDetected)
+			return Err(error::Error::CycleDetected)
 		}
 
 		Ok(Imported::Ready {
@@ -742,9 +741,9 @@ mod tests {
 		assert_eq!(it.next(), None);
 		assert_eq!(pool.ready.len(), 0);
 		assert_eq!(pool.future.len(), 0);
-		if let error::ErrorKind::CycleDetected = *err.kind() {
+		if let error::Error::CycleDetected = err {
 		} else {
-			assert!(false, "Invalid error kind: {:?}", err.kind());
+			assert!(false, "Invalid error kind: {:?}", err);
 		}
 	}
 
