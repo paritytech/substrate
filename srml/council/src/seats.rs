@@ -138,6 +138,9 @@ pub trait Trait: democracy::Trait {
 
 	/// Handler for the unbalanced reduction when slashing an invalid reaping attempt.
 	type BadReaper: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Handler for the unbalanced reduction when submitting a bad `voter_index`.
+	type BadVoterIndex: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 decl_module! {
@@ -614,12 +617,13 @@ impl<T: Trait> Module<T> {
 					// Caused a new set to be created. Pay for it.
 					// This is the last potential error. Writes will begin afterwards.
 					if set.len() == 0 {
-						let _ = T::Currency::withdraw(
+						let imbalance = T::Currency::withdraw(
 							&who,
 							Self::voting_fee(),
 							WithdrawReason::Fee,
 							ExistenceRequirement::KeepAlive,
 						)?;
+						T::BadVoterIndex::on_unbalanced(imbalance);
 					}
 					set.push(Some(who.clone()));
 					if set.len() == VOTER_SET_SIZE {

@@ -90,6 +90,7 @@ mod tests {
 		type Event = Event;
 		type BadPresentation = ();
 		type BadReaper = ();
+		type BadVoterIndex = ();
 	}
 	impl motions::Trait for Test {
 		type Origin = Origin;
