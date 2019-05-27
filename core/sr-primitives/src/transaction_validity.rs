@@ -20,7 +20,17 @@ use rstd::prelude::*;
 use crate::codec::{Encode, Decode};
 
 /// Priority for a transaction. Additive. Higher is better.
+///
+/// Setting the highest bit (see `#DO_NOT_PROPAGATE_BIT`) priority
+/// field will prevent the transaction from being propagated.
 pub type TransactionPriority = u64;
+
+/// Mark transaction to not be propagated to other peers.
+///
+/// Setting this bit on the priority field will prevent this transaction
+/// to be sent out to other peers. However such transactions will be first
+/// to get included in a local block.
+pub const DO_NOT_PROPAGATE_BIT: u64 = 1_u64 << 63;
 
 /// Minimum number of blocks a transaction will remain valid for.
 /// `TransactionLongevity::max_value()` means "forever".
@@ -41,6 +51,8 @@ pub enum TransactionValidity {
 		///
 		/// Priority determines the ordering of two transactions that have all
 		/// their dependencies (required tags) satisfied.
+		/// Use `#DO_NOT_PROPAGATE_BIT` to mark transactions that should
+		/// only be considered for local block creation.
 		priority: TransactionPriority,
 		/// Transaction dependencies
 		///

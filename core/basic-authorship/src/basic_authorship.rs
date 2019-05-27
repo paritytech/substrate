@@ -20,7 +20,7 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug, warn, trace};
+use log::{info, debug, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,

@@ -123,5 +123,6 @@ mod tests {
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();
 		assert_eq!(pool.status().ready, 1);
+		assert_eq!(pool.ready().next().unwrap().is_propagateable(), false);
 	}
 }

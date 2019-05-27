@@ -33,6 +33,7 @@ use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 	TransactionLongevity as Longevity,
 	TransactionPriority as Priority,
+	DO_NOT_PROPAGATE_BIT,
 };
 
 use crate::error;
@@ -100,6 +101,13 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub requires: Vec<Tag>,
 	/// Tags that this transaction provides.
 	pub provides: Vec<Tag>,
+}
+
+impl<Hash, Extrinsic> Transaction<Hash, Extrinsic> {
+	/// Returns `true` if the transaction should be propagated to other peers.
+	pub fn is_propagateable(&self) -> bool {
+		self.priority & DO_NOT_PROPAGATE_BIT == 0
+	}
 }
 
 impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
@@ -904,5 +912,28 @@ mod tests {
 			}),
 			r#"Transaction { hash: 4, priority: 1000, valid_till: 64, bytes: 1, requires: [03,02], provides: [04], data: [4]}"#.to_owned()
 		);
+	}
+
+	#[test]
+	fn transaction_propagation() {
+		assert_eq!(Transaction {
+				data: vec![4u8],
+				bytes: 1,
+				hash: 4,
+				priority: 1_000u64,
+				valid_till: 64u64,
+				requires: vec![vec![3], vec![2]],
+				provides: vec![vec![4]],
+		}.is_propagateable(), true);
+
+		assert_eq!(Transaction {
+				data: vec![4u8],
+				bytes: 1,
+				hash: 4,
+				priority: 1_000u64 | DO_NOT_PROPAGATE_BIT,
+				valid_till: 64u64,
+				requires: vec![vec![3], vec![2]],
+				provides: vec![vec![4]],
+		}.is_propagateable(), false);
 	}
 }
