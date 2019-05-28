@@ -1178,7 +1178,7 @@ mod tests {
 		let subtrie2 = SubTrie::new(&mut ks_gen, &[0x23]);
 		let mut tr1 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
-			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let changes_trie_storage = InMemoryChangesTrieStorage::<_, u64>::new();
 			let mut overlay = OverlayedChanges::default();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.set_child_storage(&subtrie1, b"abc".to_vec(), b"def".to_vec());
@@ -1187,7 +1187,7 @@ mod tests {
 		};
 		let mut tr2 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
-			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let changes_trie_storage = InMemoryChangesTrieStorage::<_, u64>::new();
 			let mut overlay = OverlayedChanges::default();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.set_child_storage(&subtrie2, b"abc".to_vec(), b"def".to_vec());
@@ -1229,7 +1229,7 @@ mod tests {
 		use std::collections::HashSet;
 		let mut tr1 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
-			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let changes_trie_storage = InMemoryChangesTrieStorage::<_, u64>::new();
 			let mut overlay = OverlayedChanges::default();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.set_storage(b"branch".to_vec(), [40;42].to_vec());
@@ -1239,7 +1239,7 @@ mod tests {
 		};
 		let mut tr2 = {
 			let backend = test_trie().try_into_trie_backend().unwrap();
-			let changes_trie_storage = InMemoryChangesTrieStorage::new();
+			let changes_trie_storage = InMemoryChangesTrieStorage::<_, u64>::new();
 			let mut overlay = OverlayedChanges::default();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.set_storage(b"Branch".to_vec(), [40;42].to_vec());
