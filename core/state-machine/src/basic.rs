@@ -160,8 +160,8 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		unreachable!("basic not used for child trie");
 	}
 
-	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
-		None
+	fn storage_changes_root(&mut self, _parent: H::Out) -> Result<Option<H::Out>, ()> {
+		Ok(None)
 	}
 
 	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {

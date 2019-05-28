@@ -433,7 +433,7 @@ impl Stream for Peerset {
 				return Ok(Async::Ready(Some(message)));
 			}
 			match try_ready!(self.rx.poll()) {
-				None => return Ok(Async::Ready(None)),
+				None => return Ok(Async::NotReady),
 				Some(action) => match action {
 					Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),

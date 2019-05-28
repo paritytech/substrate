@@ -773,6 +773,7 @@ macro_rules! decl_module {
 				$type,
 			}
 			variant $fn_name;
+			$( #[doc = $doc_attr] )*
 			$( $rest )*
 		}
 	};
@@ -800,6 +801,7 @@ macro_rules! decl_module {
 				$type,
 			}
 			variant $fn_name;
+			$( #[doc = $doc_attr] )*
 			$( $rest )*
 		}
 	};
@@ -859,7 +861,10 @@ macro_rules! decl_module {
 
 	(@imp
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident
+			$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$(
 				$(#[doc = $doc_attr:tt])*
@@ -881,7 +886,10 @@ macro_rules! decl_module {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
-		pub struct $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable $( = $module_default_instance)?)?>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>);
+		pub struct $mod_type<
+			$trait_instance: $trait_name
+			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
+		>($crate::rstd::marker::PhantomData<($trait_instance $(, $instance)?)>);
 
 		$crate::decl_module! {
 			@impl_on_initialize

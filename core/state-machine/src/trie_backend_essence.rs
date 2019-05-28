@@ -292,12 +292,3 @@ impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
-
-// This implementation is used by changes trie clients.
-impl<'a, S, H: Hasher> TrieBackendStorage<H> for &'a S where S: ChangesTrieStorage<H> {
-	type Overlay = MemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
-		ChangesTrieStorage::<H>::get(*self, key, prefix)
-	}
-}

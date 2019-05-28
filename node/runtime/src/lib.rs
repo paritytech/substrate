@@ -60,6 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 10,
 	spec_version: 81,
 	impl_version: 83,
+	spec_version: 82,
+	impl_version: 83,
 	apis: RUNTIME_API_VERSIONS,
 };
 
