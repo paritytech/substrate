@@ -91,6 +91,8 @@ test-linux-stable:                 &test
   except:
     variables:
       - $DEPLOY_TAG
+  before_script:
+    - git fetch origin && git merge origin/master
   script:
     - ./scripts/build.sh
     - time cargo test --all --release --verbose --locked
