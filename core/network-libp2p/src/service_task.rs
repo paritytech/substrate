@@ -89,7 +89,10 @@ where TMessage: CustomMessage + Send + 'static {
 		let user_agent = format!("{} ({})", config.client_version, config.node_name);
 		let proto = CustomProto::new(registered_custom, peerset);
 		let behaviour = Behaviour::new(proto, user_agent, local_public, known_addresses, config.enable_mdns);
-		let (transport, bandwidth) = transport::build_transport(local_identity);
+		let (transport, bandwidth) = transport::build_transport(
+			local_identity,
+			config.wasm_external_transport
+		);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
 

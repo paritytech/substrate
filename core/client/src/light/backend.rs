@@ -112,7 +112,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
-	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
