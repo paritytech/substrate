@@ -892,6 +892,7 @@ mod tests {
 	}
 
 	#[test]
+	#[allow(deprecated)]
 	fn authoring_blocks() {
 		let _ = ::env_logger::try_init();
 		let mut net = AuraTestNet::new(3);
