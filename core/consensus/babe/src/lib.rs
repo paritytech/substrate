@@ -1079,11 +1079,15 @@ mod tests {
 				&inherent_data_providers, config.get()
 			).expect("Registers babe inherent data provider");
 
+
+			#[allow(deprecated)]
+			let select_chain = LongestChain::new(client.backend().clone(), client.import_lock().clone());
+
 			let babe = start_babe(BabeParams {
 				config,
 				local_key: Arc::new(key.clone().into()),
 				block_import: client.clone(),
-				select_chain: LongestChain::new(client.backend().clone(), client.import_lock().clone()),
+				select_chain,
 				client,
 				env: environ.clone(),
 				sync_oracle: DummyOracle,

@@ -52,7 +52,6 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 #![forbid(warnings)]
-#![allow(deprecated)] // FIXME #2532: remove once the refactor is done https://github.com/paritytech/substrate/issues/2532
 
 use futures::prelude::*;
 use log::{debug, info, warn};
@@ -321,6 +320,7 @@ where
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
+		#[allow(deprecated)]
 		&**client.backend(),
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
@@ -430,6 +430,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	if !inherent_data_providers.has_provider(&srml_finality_tracker::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
+				#[allow(deprecated)]
 				match client.backend().blockchain().info() {
 					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
 					Ok(info) => {
@@ -653,6 +654,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						current_round: HasVoted::No,
 					};
 
+					#[allow(deprecated)]
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
@@ -678,6 +680,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					env.update_voter_set_state(|voter_set_state| {
 						let completed_rounds = voter_set_state.completed_rounds();
 						let set_state = VoterSetState::Paused { completed_rounds };
+
+						#[allow(deprecated)]
 						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 						Ok(Some(set_state))
 					})?;
