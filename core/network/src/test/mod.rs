@@ -24,19 +24,20 @@ mod sync;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
+use crate::AlwaysBadChecker;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
-use crate::config::{ProtocolConfig, Roles};
+use crate::config::Roles;
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
 	SharedFinalityProofRequestBuilder,
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
+use consensus::{Error as ConsensusError};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, TopicNotification};
 use futures::{prelude::*, sync::{mpsc, oneshot}};
@@ -44,7 +45,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
-use crate::protocol::{ConnectedPeer, Context, Protocol, ProtocolStatus, CustomMessageOutcome, NetworkOut};
+use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -142,6 +143,7 @@ impl PeersClient {
 	}
 
 	pub fn as_in_memory_backend(&self) -> InMemoryBackend<Block, Blake2Hasher> {
+		#[allow(deprecated)]
 		match *self {
 			PeersClient::Full(ref client) => client.backend().as_in_memory(),
 			PeersClient::Light(_) => unimplemented!("TODO"),
@@ -149,6 +151,7 @@ impl PeersClient {
 	}
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		#[allow(deprecated)]
 		match *self {
 			PeersClient::Full(ref client) => client.backend().get_aux(key),
 			PeersClient::Light(ref client) => client.backend().get_aux(key),
@@ -274,7 +277,6 @@ impl<S: NetworkSpecialization<Block>> Link<Block> for TestLink<S> {
 }
 
 pub struct Peer<D, S: NetworkSpecialization<Block>> {
-	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 	peer_id: PeerId,
 	client: PeersClient,
 	net_proto_channel: ProtocolChannel<S>,
@@ -411,7 +413,7 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 				Ok(Async::Ready(None)) => None,
 			}))
 		});
-	
+
 		if self.use_tokio {
 			fut.wait()
 		} else {
@@ -423,7 +425,6 @@ impl<S: NetworkSpecialization<Block>> ProtocolChannel<S> {
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	fn new(
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
-		peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>>,
 		client: PeersClient,
 		import_queue: Box<BasicQueue<Block>>,
 		use_tokio: bool,
@@ -447,7 +448,6 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		import_queue.start(Box::new(network_link)).expect("Test ImportQueue always starts");
 		Peer {
 			protocol_status,
-			peers,
 			peer_id: PeerId::random(),
 			client,
 			import_queue,
@@ -792,6 +792,8 @@ pub trait TestNetFactory: Sized {
 		&mut self,
 		protocol_status: Arc<RwLock<ProtocolStatus<Block>>>,
 		import_queue: Box<BasicQueue<Block>>,
+		tx_pool: EmptyTransactionPool,
+		finality_proof_provider: Option<Arc<FinalityProofProvider<Block>>>,
 		mut protocol: Protocol<Block, Self::Specialization, Hash>,
 		network_sender: mpsc::UnboundedSender<NetworkMsg<Block>>,
 		mut network_to_protocol_rx: mpsc::UnboundedReceiver<FromNetworkMsg<Block>>,
@@ -825,7 +827,13 @@ pub trait TestNetFactory: Sized {
 							CustomMessageOutcome::None
 						},
 						Some(FromNetworkMsg::CustomMessage(peer_id, message)) =>
-							protocol.on_custom_message(&mut Ctxt(&network_sender), peer_id, message),
+							protocol.on_custom_message(
+								&mut Ctxt(&network_sender),
+								&tx_pool,
+								peer_id,
+								message,
+								finality_proof_provider.as_ref().map(|p| &**p)
+							),
 						Some(FromNetworkMsg::Synchronize) => {
 							let _ = network_sender.unbounded_send(NetworkMsg::Synchronized);
 							CustomMessageOutcome::None
@@ -876,7 +884,7 @@ pub trait TestNetFactory: Sized {
 							),
 						ProtocolMsg::BlocksProcessed(hashes, has_error) =>
 							protocol.blocks_processed(&mut Ctxt(&network_sender), hashes, has_error),
-						ProtocolMsg::RestartSync => 
+						ProtocolMsg::RestartSync =>
 							protocol.restart(&mut Ctxt(&network_sender)),
 						ProtocolMsg::AnnounceBlock(hash) =>
 							protocol.announce_block(&mut Ctxt(&network_sender), hash),
@@ -894,7 +902,8 @@ pub trait TestNetFactory: Sized {
 							protocol.request_finality_proof(&mut Ctxt(&network_sender), &hash, number),
 						ProtocolMsg::FinalityProofImportResult(requested_block, finalziation_result) =>
 							protocol.finality_proof_import_result(requested_block, finalziation_result),
-						ProtocolMsg::PropagateExtrinsics => protocol.propagate_extrinsics(&mut Ctxt(&network_sender)),
+						ProtocolMsg::PropagateExtrinsics =>
+							protocol.propagate_extrinsics(&mut Ctxt(&network_sender), &tx_pool),
 						#[cfg(any(test, feature = "test-helpers"))]
 						ProtocolMsg::Tick => protocol.tick(&mut Ctxt(&network_sender)),
 						#[cfg(any(test, feature = "test-helpers"))]
@@ -905,7 +914,7 @@ pub trait TestNetFactory: Sized {
 					}
 				}
 
-				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender)).unwrap() {
+				if let Async::Ready(_) = protocol.poll(&mut Ctxt(&network_sender), &tx_pool).unwrap() {
 					return Ok(Async::Ready(()))
 				}
 
@@ -930,7 +939,6 @@ pub trait TestNetFactory: Sized {
 	/// Add a full peer.
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
-		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Full(client.clone()));
@@ -944,18 +952,14 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 		));
 		let specialization = self::SpecializationFactory::create();
-		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
 		let (network_to_protocol_sender, network_to_protocol_rx) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 
 		let protocol = Protocol::new(
-			peers.clone(),
 			config.clone(),
 			client.clone(),
-			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
-			None,
-			tx_pool,
+			Arc::new(AlwaysBadChecker),
 			specialization,
 		).unwrap();
 
@@ -963,13 +967,14 @@ pub trait TestNetFactory: Sized {
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
+			EmptyTransactionPool,
+			self.make_finality_proof_provider(PeersClient::Full(client.clone())),
 			protocol,
 			network_sender.clone(),
 			network_to_protocol_rx,
 			protocol_rx,
 			Arc::new(Peer::new(
 				protocol_status,
-				peers,
 				PeersClient::Full(client),
 				import_queue,
 				self.uses_tokio(),
@@ -988,7 +993,6 @@ pub trait TestNetFactory: Sized {
 		config.roles = Roles::LIGHT;
 
 		let client = Arc::new(test_client::new_light());
-		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Light(client.clone()));
@@ -1002,18 +1006,14 @@ pub trait TestNetFactory: Sized {
 			finality_proof_request_builder,
 		));
 		let specialization = self::SpecializationFactory::create();
-		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 
 		let (network_to_protocol_sender, network_to_protocol_rx) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 
 		let protocol = Protocol::new(
-			peers.clone(),
 			config,
 			client.clone(),
-			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
-			None,
-			tx_pool,
+			Arc::new(AlwaysBadChecker),
 			specialization,
 		).unwrap();
 
@@ -1021,13 +1021,14 @@ pub trait TestNetFactory: Sized {
 		self.add_peer(
 			protocol_status.clone(),
 			import_queue.clone(),
+			EmptyTransactionPool,
+			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
 			protocol,
 			network_sender.clone(),
 			network_to_protocol_rx,
 			protocol_rx,
 			Arc::new(Peer::new(
 				protocol_status,
-				peers,
 				PeersClient::Light(client),
 				import_queue,
 				self.uses_tokio(),
@@ -1229,7 +1230,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
-			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+			.map_err(|_| ConsensusError::InvalidJustification.into())
 	}
 }
 

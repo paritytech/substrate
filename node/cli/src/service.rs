@@ -31,7 +31,7 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	error::{Error as ServiceError, ErrorKind as ServiceErrorKind},
+	error::{Error as ServiceError},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -92,7 +92,7 @@ construct_service_factory! {
 
 					let client = service.client();
 					let select_chain = service.select_chain()
-						.ok_or_else(|| ServiceError::from(ServiceErrorKind::SelectChainRequired))?;
+						.ok_or(ServiceError::SelectChainRequired)?;
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
@@ -180,6 +180,7 @@ construct_service_factory! {
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+				#[allow(deprecated)]
 				let fetch_checker = client.backend().blockchain().fetcher()
 					.upgrade()
 					.map(|fetcher| fetcher.checker().clone())
@@ -204,6 +205,7 @@ construct_service_factory! {
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+				#[allow(deprecated)]
 				Ok(LongestChain::new(
 					client.backend().clone(),
 					client.import_lock()

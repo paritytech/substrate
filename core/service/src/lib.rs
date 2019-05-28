@@ -44,7 +44,7 @@ use runtime_primitives::traits::{Header, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::{ErrorKind, Error};
+pub use self::error::Error;
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -177,16 +177,6 @@ impl<Components: components::Components> Service<Components> {
 			client: client.clone(),
 		 });
 
-		let network_params = network::config::Params {
-			config: network::config::ProtocolConfig { roles: config.roles },
-			network_config: config.network.clone(),
-			chain: client.clone(),
-			finality_proof_provider,
-			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
-			transaction_pool: transaction_pool_adapter.clone() as _,
-			specialization: network_protocol,
-		};
-
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
 				Some(pid) => pid,
@@ -200,11 +190,20 @@ impl<Components: components::Components> Service<Components> {
 			network::ProtocolId::from(protocol_id_full)
 		};
 
+		let network_params = network::config::Params {
+			roles: config.roles,
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			finality_proof_provider,
+			on_demand,
+			transaction_pool: transaction_pool_adapter.clone() as _,
+			import_queue,
+			protocol_id,
+			specialization: network_protocol,
+		};
+
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
-		if let Some(on_demand) = on_demand.as_ref() {
-			on_demand.set_network_interface(Box::new(Arc::downgrade(&network)));
-		}
+		let network = network::Service::new(network_params)?;
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
@@ -326,8 +325,16 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RuntimeServices::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
-			config.rpc_ws, config.rpc_cors.clone(), task_executor.clone(), transaction_pool.clone(),
+			client.clone(),
+			network.clone(),
+			has_bootnodes,
+			system_info,
+			config.rpc_http,
+			config.rpc_ws,
+			config.rpc_ws_max_connections,
+			config.rpc_cors.clone(),
+			task_executor.clone(),
+			transaction_pool.clone(),
 		)?;
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
@@ -510,7 +517,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
+					Ok(txpool::error::Error::AlreadyImported(hash)) => {
 						hash.downcast::<ComponentExHash<C>>().ok()
 							.map(|x| x.as_ref().clone())
 					},

@@ -14,22 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate service possible errors.
+//! Substrate network possible errors.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
-use error_chain::*;
-use std::io::Error as IoError;
 use client;
 
-error_chain! {
-	foreign_links {
-		Io(IoError) #[doc = "IO error."];
-		Client(client::error::Error) #[doc="Client error"];
-	}
+/// Result type alias for the network.
+pub type Result<T> = std::result::Result<T, Error>;
 
-	errors {
+/// Error type for the network.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// Io error
+	Io(std::io::Error),
+	/// Client error
+	Client(client::error::Error),
+}
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Io(ref err) => Some(err),
+			Error::Client(ref err) => Some(err),
+		}
 	}
 }

@@ -14,34 +14,47 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use error_chain::*;
 use client;
 use crate::rpc;
 use crate::errors;
 
-error_chain! {
-	foreign_links {
-		Client(client::error::Error) #[doc = "Client error"];
-	}
+/// State RPC Result type.
+pub type Result<T> = std::result::Result<T, Error>;
 
-	errors {
-		/// Provided block range couldn't be resolved to a list of blocks.
-		InvalidBlockRange(from: String, to: String, details: String) {
-			description("Invalid block range"),
-			display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
-		}
-		/// Not implemented yet
-		Unimplemented {
-			description("not implemented yet"),
-			display("Method Not Implemented"),
+/// State RPC errors.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// Client error.
+	Client(client::error::Error),
+	/// Provided block range couldn't be resolved to a list of blocks.
+	#[display(fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details)]
+	InvalidBlockRange {
+		from: String,
+		to: String,
+		details: String,
+	},
+}
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			_ => None,
 		}
 	}
 }
 
+/// Base code for all state errors.
+const BASE_ERROR: i64 = 4000;
+
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+			Error::InvalidBlockRange { .. } => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+				message: format!("{}", e),
+				data: None,
+			},
 			e => errors::internal(e),
 		}
 	}

@@ -166,9 +166,15 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	} = link;
 
 	let PersistentData { authority_set, consensus_changes, set_state } = persistent_data;
-	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
+	let (network, network_startup) = NetworkBridge::new(
+		network,
+		config.clone(),
+		None,
+		on_exit.clone(),
+	);
+
+	let initial_state = (authority_set, consensus_changes, set_state, voter_commands_rx.into_future());
 
 	let observer_work = future::loop_fn(initial_state, move |state| {
 		let (authority_set, consensus_changes, set_state, voter_commands_rx) = state;
@@ -212,6 +218,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 					let completed_rounds = set_state.read().completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
+					#[allow(deprecated)]
 					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					set_state
@@ -232,6 +239,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 						current_round: HasVoted::No,
 					};
 
+					#[allow(deprecated)]
 					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					set_state

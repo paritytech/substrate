@@ -35,7 +35,7 @@ mod list_cache;
 mod list_entry;
 mod list_storage;
 
-/// Minimal post-finalization age age of finalized blocks before they'll pruned.
+/// Minimal post-finalization age of finalized blocks before they'll pruned.
 const PRUNE_DEPTH: u32 = 1024;
 
 /// The type of entry that is inserted to the cache.

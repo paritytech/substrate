@@ -22,6 +22,7 @@ use std::io;
 use std::convert::TryInto;
 
 use kvdb::{KeyValueDB, DBTransaction};
+#[cfg(feature = "kvdb-rocksdb")]
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
@@ -31,7 +32,7 @@ use trie::DBValue;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, UniqueSaturatedFrom,
-	UniqueSaturatedInto, SaturatedConversion, CheckedConversion
+	UniqueSaturatedInto, CheckedConversion
 };
 use crate::DatabaseSettings;
 
@@ -195,6 +196,7 @@ pub fn db_err(err: io::Error) -> client::error::Error {
 }
 
 /// Open RocksDB database.
+#[cfg(feature = "kvdb-rocksdb")]
 pub fn open_database(config: &DatabaseSettings, col_meta: Option<u32>, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;

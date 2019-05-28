@@ -333,6 +333,10 @@ pub struct RunCmd {
 	#[structopt(long = "ws-port", value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
+	/// Maximum number of WS RPC server connections.
+	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
+	pub ws_max_connections: Option<usize>,
+
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	/// It's a comma-separated list of origins (protocol://domain or special `null` value).
 	/// Value of `all` will disable origin validation.

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,19 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Initialization errors.
+//! The transaction factory can operate in different modes. See
+//! the `simple_mode` and `complex_mode` modules for details.
 
-use client;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed
-};
+use std::str::FromStr;
 
-error_chain! {
-	foreign_links {
-		Io(::std::io::Error) #[doc="IO error"];
-		Cli(::clap::Error) #[doc="CLI error"];
-	}
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
+/// Token distribution modes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Mode {
+	MasterToN,
+	MasterTo1,
+	MasterToNToM
+}
+
+impl FromStr for Mode {
+	type Err = String;
+	fn from_str(mode: &str) -> Result<Self, Self::Err> {
+		match mode {
+			"MasterToN" => Ok(Mode::MasterToN),
+			"MasterTo1" => Ok(Mode::MasterTo1),
+			"MasterToNToM" => Ok(Mode::MasterToNToM),
+			_ => Err(format!("Invalid mode: {}", mode)),
+		}
 	}
 }
+

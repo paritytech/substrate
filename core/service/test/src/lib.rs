@@ -99,6 +99,7 @@ fn node_config<F: ServiceFactory> (
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
 		enable_mdns: false,
+		wasm_external_transport: None,
 	};
 
 	Configuration {
@@ -120,6 +121,7 @@ fn node_config<F: ServiceFactory> (
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
+		rpc_ws_max_connections: None,
 		rpc_cors: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
@@ -194,7 +196,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(|_index, service|
-				service.network().peers().len() == NUM_NODES as usize - 1
+				service.network().peers_debug_info().len() == NUM_NODES as usize - 1
 			);
 			network.runtime
 		};
@@ -214,7 +216,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				address = node_id.clone();
 			}
 			network.run_until_all_full(|_index, service| {
-				service.network().peers().len() == NUM_NODES as usize - 1
+				service.network().peers_debug_info().len() == NUM_NODES as usize - 1
 			});
 		}
 		temp.close().expect("Error removing temp dir");
