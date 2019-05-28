@@ -49,10 +49,10 @@ use structopt::{StructOpt, clap::AppSettings};
 pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, SharedParams, MergeParameters, TransactionPoolParams,
+	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType
 };
-pub use params::{NoCustom, CoreParams};
+pub use params::{NoCustom, CoreParams, SharedParams};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -178,7 +178,7 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 ///
 /// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
 /// `NoCustom` can be used as type here.
-/// `RP` is are custom parameters for the run command. This needs to be a `struct`! The custom
+/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
 pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
@@ -582,7 +582,8 @@ where
 	Ok(())
 }
 
-fn create_config_with_db_path<F, S>(
+/// Creates a configuration including the database path.
+pub fn create_config_with_db_path<F, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
 ) -> error::Result<FactoryFullConfiguration<F>>
 where
