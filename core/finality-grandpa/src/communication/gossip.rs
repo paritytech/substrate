@@ -78,6 +78,9 @@ use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
 
+
+use crate::ed25519::Public as AuthorityId;
+
 use crate::{CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
@@ -436,7 +439,7 @@ struct Inner<Block: BlockT> {
 	live_topics: KeepTopics<Block>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
-	votes_tally: HashMap<PeerId, VoteTally>,
+	votes_tally: HashMap<AuthorityId, VoteTally>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -493,8 +496,8 @@ impl<Block: BlockT> Inner<Block> {
 		}
 	}
 
-	fn consider_vote(&mut self, round: Round, set_id: SetId, msg: &SignedMessage<Block>, id: &PeerId) -> Consider {
-		let mut tally = self.votes_tally.entry(id.clone()).or_insert(Default::default());
+	fn consider_vote(&mut self, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
+		let mut tally = self.votes_tally.entry(msg.id.clone()).or_insert(Default::default());
 
 		match &msg.message {
 			PrimaryPropose(_propose) => {
@@ -531,7 +534,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn validate_round_message(&mut self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
-		match self.consider_vote(full.round, full.set_id, &full.message, who) {
+		match self.consider_vote(full.round, full.set_id, &full.message) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
             Consider::RejectEquivocation => return Action::Discard(Misbehavior::Equivocation.cost()),
 			Consider::RejectPast =>
