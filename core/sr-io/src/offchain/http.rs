@@ -16,8 +16,8 @@
 
 //! A non-std set of HTTP types.
 
-use rstd::prelude::Vec;
 use rstd::str;
+use rstd::prelude::Vec;
 #[cfg(not(feature = "std"))]
 use rstd::prelude::vec;
 use primitives::offchain::{
@@ -58,6 +58,44 @@ impl AsRef<str> for Method {
 	}
 }
 
+mod header {
+	use rstd::str;
+
+	/// A header type.
+	#[derive(Clone, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Debug))]
+	pub struct Header {
+		name: Vec<u8>,
+		value: Vec<u8>,
+	}
+
+	impl Header {
+		/// Creates new header given it's name and value.
+		pub fn new(name: &str, value: &str) -> Self {
+			Header {
+				name: name.as_bytes().to_vec(),
+				value: value.as_bytes().to_vec(),
+			}
+		}
+
+		/// Returns the name of this header.
+		pub fn name(&self) -> &str {
+			// Header keys are always produced from `&str` so this is safe.
+			// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+			// or here.
+			unsafe { str::from_utf8_unchecked(&self.name) }
+		}
+
+		/// Returns the value of this header.
+		pub fn value(&self) -> &str {
+			// Header values are always produced from `&str` so this is safe.
+			// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
+			// or here.
+			unsafe { str::from_utf8_unchecked(&self.value) }
+		}
+	}
+}
+
 /// An HTTP request builder.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -71,7 +109,7 @@ pub struct Request<'a, T = Vec<&'static [u8]>> {
 	/// Deadline to finish sending the request
 	pub deadline: Option<Timestamp>,
 	/// Request list of headers.
-	headers: Vec<(Vec<u8>, Vec<u8>)>,
+	headers: Vec<header::Header>,
 }
 
 impl<T: Default> Default for Request<'static, T> {
@@ -134,7 +172,7 @@ impl<'a, T: Default> Request<'a, T> {
 
 	/// Add a header.
 	pub fn add_header(mut self, name: &str, value: &str) -> Self {
-		self.headers.push((name.as_bytes().to_vec(), value.as_bytes().to_vec()));
+		self.headers.push(header::Header::new(name, value));
 		self
 	}
 
@@ -157,14 +195,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let id = crate::http_request_start(self.method.as_ref(), self.url, meta).map_err(|_| HttpError::IoError)?;
 
 		// add custom headers
-		for (header_name, header_value) in &self.headers {
+		for header in &self.headers {
 			crate::http_request_add_header(
 				id,
-				// Header (key, values) are always produced from `&str` so this is safe.
-				// we don't store them as `Strings` to avoid bringing `alloc::String` to rstd
-				// or here.
-				unsafe { str::from_utf8_unchecked(header_name) },
-				unsafe { str::from_utf8_unchecked(header_value) },
+				header.name(),
+				header.value(),
 			).map_err(|_| HttpError::IoError)?
 		}
 
@@ -396,7 +431,8 @@ pub struct Headers {
 impl Headers {
 	/// Retrieve a single header from the list of headers.
 	///
-	/// Note this method is linearly looking from all the headers.
+	/// Note this method is linearly looking from all the headers
+	/// comparing them with the needle byte-by-byte.
 	/// If you want to consume multiple headers it's better to iterate
 	/// and collect them on your own.
 	pub fn find(&self, name: &str) -> Option<&str> {
@@ -456,7 +492,7 @@ mod tests {
 		t.set_offchain_externalities(offchain);
 
 		with_externalities(&mut t, || {
-			let mut request: Request = Request::get("http://localhost:1234");
+			let request: Request = Request::get("http://localhost:1234");
 			let pending = request
 				.add_header("X-Auth", "hunter2")
 				.send()

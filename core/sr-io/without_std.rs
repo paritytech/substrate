@@ -416,12 +416,11 @@ pub mod ext {
 
 		/// Block and wait for the responses for given requests.
 		///
-		/// Note that if deadline is not provided the method will block indefinitely,
+		/// Note that if deadline is 0 the method will block indefinitely,
 		/// otherwise unready responses will produce `DeadlineReached` status.
 		/// (see #primitives::offchain::HttpRequestStatus)
 		///
 		/// Make sure that `statuses` have the same length as ids.
-		/// Passing `0` as deadline blocks forever.
 		fn ext_http_response_wait(
 			ids: *const u32,
 			ids_len: u32,
@@ -432,8 +431,8 @@ pub mod ext {
 		/// Read all response headers.
 		///
 		/// Note the headers are only available before response body is fully consumed.
-		/// Returns parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
-		/// In case invalid `id` is passed it returns an empty vector.
+		/// Returns a pointer to parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		/// In case invalid `id` is passed it returns a pointer to parity-encoded empty vector.
 		fn ext_http_response_headers(
 			id: u32,
 			written_out: *mut u32
@@ -931,6 +930,7 @@ impl OffchainApi for () {
 				request_id.0 as u32,
 				&mut len,
 			);
+
 			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
 			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
 			// See #300 for more details.

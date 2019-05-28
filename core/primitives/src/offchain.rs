@@ -58,9 +58,10 @@ pub enum HttpRequestStatus {
 	DeadlineReached,
 	/// Request timed out.
 	///
-	/// This means that the request couldn't be completed within a resonable time
-	/// by the host environment, has now been terminated and is considered finished.
-	/// To re-try the request you need to construct it again.
+	/// This means that the request couldn't be completed by the host environment
+	/// within a reasonable time (according to the host), has now been terminated
+	/// and is considered finished.
+	/// To retry the request you need to construct it again.
 	Timeout,
 	/// Request status of this ID is not known.
 	Unknown,

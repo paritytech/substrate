@@ -776,10 +776,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_wait: wasm"))?
 			.into_iter()
 			.map(|status| status.into())
-			.zip(0..ids_len);
+			.enumerate()
+			// make sure to take up to `ids_len` to avoid exceeding the mem.
+			.take(ids_len as usize);
 
-		for (status, i) in res {
-			this.memory.write_primitive(statuses + i * 4, status)
+		for (i, status) in res {
+			this.memory.write_primitive(statuses + i as u32 * 4, status)
 				.map_err(|_| UserError("Invalid attempt to set memory in ext_http_response_wait"))?;
 		}
 

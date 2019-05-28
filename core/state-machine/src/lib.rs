@@ -230,7 +230,7 @@ pub enum NeverOffchainExt {}
 
 impl NeverOffchainExt {
 	/// Create new offchain extensions.
-	pub fn new<'a>() -> Option<&'a mut NeverOffchainExt> {
+	pub fn new<'a>() -> Option<&'a mut Self> {
 		None
 	}
 }
