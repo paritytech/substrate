@@ -508,18 +508,20 @@ fn check_header<C, B: Block, P: Pair>(
 				public.clone(),
 			) {
 				Ok(Some(equivocation_proof)) => {
-					let log_str = format!(
+					// NOTE: we'll want to report this equivocation to some
+					// runtime module once that's implemented.
+					info!(
 						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 						slot_num,
 						equivocation_proof.fst_header().hash(),
 						equivocation_proof.snd_header().hash(),
 					);
-					info!("{}", log_str);
-					Err(log_str)
 				},
-				Ok(None) => Ok(CheckedHeader::Checked(header, digest_item)),
-				Err(e) => Err(e.to_string()),
+				Ok(None) => {},
+				Err(e) => return Err(e.to_string()),
 			}
+
+			Ok(CheckedHeader::Checked(header, digest_item))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}

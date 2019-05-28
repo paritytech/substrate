@@ -586,23 +586,21 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			if check(&inout, threshold) {
 				match check_equivocation(&client, slot_now, slot_num, header.clone(), signer.clone()) {
 					Ok(Some(equivocation_proof)) => {
-						let log_str = format!(
+						// NOTE: we'll want to report this equivocation to some
+						// runtime module once that's implemented.
+						info!(
 							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 							signer,
 							slot_num,
 							equivocation_proof.fst_header().hash(),
 							equivocation_proof.snd_header().hash(),
 						);
-						info!("{}", log_str);
-						Err(log_str)
 					},
-					Ok(None) => {
-						Ok(CheckedHeader::Checked(header, digest_item))
-					},
-					Err(e) => {
-						Err(e.to_string())
-					},
+					Ok(None) => {},
+					Err(e) => return Err(e.to_string()),
 				}
+
+				Ok(CheckedHeader::Checked(header, digest_item))
 			} else {
 				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
 				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
