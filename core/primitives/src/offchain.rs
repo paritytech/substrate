@@ -20,7 +20,7 @@ use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 
 /// Opaque type for offchain http requests.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct HttpRequestId(pub u16);
 

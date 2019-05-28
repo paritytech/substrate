@@ -37,6 +37,7 @@ pub struct TestExternalities<H: Hasher> {
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
+	offchain: Option<Box<offchain::Externalities>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -63,6 +64,7 @@ impl<H: Hasher> TestExternalities<H> {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: inner.into(),
+			offchain: None,
 			_hasher: Default::default(),
 		}
 	}
@@ -81,6 +83,11 @@ impl<H: Hasher> TestExternalities<H> {
 			.collect::<BTreeMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+	}
+
+	/// Set offchain externaltiies.
+	pub fn set_offchain_externalities(&mut self, offchain: impl offchain::Externalities + 'static) {
+		self.offchain = Some(Box::new(offchain));
 	}
 }
 
@@ -220,7 +227,9 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord {
 	}
 
 	fn offchain(&mut self) -> Option<&mut offchain::Externalities> {
-		unimplemented!()
+		self.offchain
+			.as_mut()
+			.map(|x| &mut **x as _)
 	}
 }
 

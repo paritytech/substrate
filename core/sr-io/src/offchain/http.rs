@@ -61,7 +61,7 @@ impl AsRef<str> for Method {
 /// An HTTP request builder.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Request<'a, T = &'static [&'static [u8]]> {
+pub struct Request<'a, T = Vec<&'static [u8]>> {
 	/// Request method
 	pub method: Method,
 	/// Request URL
@@ -86,40 +86,66 @@ impl<T: Default> Default for Request<'static, T> {
 	}
 }
 
+impl<'a> Request<'a> {
+	/// Start a simple GET request
+	pub fn get(url: &'a str) -> Self {
+		Self::new(url)
+	}
+}
+
+impl<'a, T> Request<'a, T> {
+	/// Create new POST request with given body.
+	pub fn post(url: &'a str, body: T) -> Self {
+		let req: Request = Request::default();
+
+		Request {
+			url,
+			body,
+			method: Method::Post,
+			headers: req.headers,
+			deadline: req.deadline,
+		}
+	}
+}
+
 impl<'a, T: Default> Request<'a, T> {
-	/// Create new Request builder with given URL.
+	/// Create new Request builder with given URL and body.
 	pub fn new(url: &'a str) -> Self {
-		let mut req = Request::default();
-		req.url(url);
-		req
+		Request::default().url(url)
+	}
+
+	/// Change the method of the request
+	pub fn method(mut self, method: Method) -> Self {
+		self.method = method;
+		self
 	}
 
 	/// Change the URL of the request.
-	pub fn url(&mut self, url: &'a str) -> &mut Self {
+	pub fn url(mut self, url: &'a str) -> Self {
 		self.url = url;
 		self
 	}
 
 	/// Set the body of the request.
-	pub fn body(&mut self, body: T) -> &mut Self {
+	pub fn body(mut self, body: T) -> Self {
 		self.body = body;
 		self
 	}
 
 	/// Add a header.
-	pub fn add_header(&mut self, name: &str, value: &str) -> &mut Self {
+	pub fn add_header(mut self, name: &str, value: &str) -> Self {
 		self.headers.push((name.as_bytes().to_vec(), value.as_bytes().to_vec()));
 		self
 	}
 
 	/// Set the deadline of the request.
-	pub fn deadline(&mut self, deadline: Timestamp) -> &mut Self {
+	pub fn deadline(mut self, deadline: Timestamp) -> Self {
 		self.deadline = Some(deadline);
 		self
 	}
 }
 
-impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
+impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 	/// Send the request and return a handle.
 	///
 	/// Err is returned in case the deadline is reached
@@ -144,7 +170,7 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 
 		// write body
 		for chunk in self.body {
-			crate::http_request_write_body(id, chunk, self.deadline)?;
+			crate::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
 		// finalise the request
@@ -157,6 +183,8 @@ impl<'a, 'b, T: IntoIterator<Item=&'b [u8]>> Request<'a, T> {
 }
 
 /// A request error
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum Error {
 	/// Deadline has been reached.
 	DeadlineReached,
@@ -264,14 +292,16 @@ impl Response {
 
 /// A buffered byte iterator over response body.
 ///
-/// Note that reading the body may return `None` in two cases:
-/// 1. Either the deadline you've set is reached (check via `#is_deadline_reached()`;
+/// Note that reading the body may return `None` in following cases:
+/// 1. Either the deadline you've set is reached (check via `#error`;
 ///	   In such case you can resume the reader by setting a new deadline)
 /// 2. Or because of IOError. In such case the reader is not resumable and will keep
 ///    returning `None`.
+/// 3. The body has been returned. The reader will keep returning `None`.
+#[derive(Clone)]
 pub struct ResponseBody {
 	id: RequestId,
-	is_deadline_reached: bool,
+	error: Option<HttpError>,
 	buffer: [u8; 4096],
 	filled_up_to: Option<usize>,
 	position: usize,
@@ -283,7 +313,7 @@ impl std::fmt::Debug for ResponseBody {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		fmt.debug_struct("ResponseBody")
 			.field("id", &self.id)
-			.field("is_deadline_reached", &self.is_deadline_reached)
+			.field("error", &self.error)
 			.field("buffer", &self.buffer.len())
 			.field("filled_up_to", &self.filled_up_to)
 			.field("position", &self.position)
@@ -296,7 +326,7 @@ impl ResponseBody {
 	fn new(id: RequestId) -> Self {
 		ResponseBody {
 			id,
-			is_deadline_reached: false,
+			error: None,
 			buffer: [0_u8; 4096],
 			filled_up_to: None,
 			position: 0,
@@ -307,14 +337,15 @@ impl ResponseBody {
 	/// Set the deadline for reading the body.
 	pub fn deadline(&mut self, deadline: impl Into<Option<Timestamp>>) {
 		self.deadline = deadline.into();
-		self.is_deadline_reached = false;
+		self.error = None;
 	}
 
-	/// Check if the iterator has finished because of reaching the deadline.
+	/// Return an error that caused the iterator to return `None`.
 	///
-	/// If that's the case you can resume the reader by setting a new deadline.
-	pub fn is_deadline_reached(&self) -> bool {
-		self.is_deadline_reached
+	/// If the error is `DeadlineReached` you can resume the iterator by setting
+	/// a new deadline.
+	pub fn error(&self) -> &Option<HttpError> {
+		&self.error
 	}
 }
 
@@ -322,23 +353,23 @@ impl Iterator for ResponseBody {
 	type Item = u8;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.is_deadline_reached {
+		if self.error.is_some() {
 			return None;
 		}
 
 		if self.filled_up_to.is_none() {
 			let result = crate::http_response_read_body(self.id, &mut self.buffer, self.deadline);
 			match result {
+				Err(e) => {
+					self.error = Some(e);
+					return None;
+				}
+				Ok(0) => {
+					return None;
+				}
 				Ok(size) => {
 					self.position = 0;
 					self.filled_up_to = Some(size);
-				}
-				Err(HttpError::DeadlineReached) => {
-					self.is_deadline_reached = true;
-					return None;
-				}
-				Err(HttpError::IoError) => {
-					return None;
 				}
 			}
 		}
@@ -413,8 +444,92 @@ impl<'a> HeadersIterator<'a> {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use crate::{TestExternalities, with_externalities};
+	use substrate_offchain::testing;
+
 	#[test]
-	fn write_some() {
-		assert_eq!(true, false)
+	fn should_send_a_basic_request_and_get_response() {
+		let offchain = testing::TestOffchainExt::default();
+		let mut t = TestExternalities::default();
+		let state = offchain.0.clone();
+		t.set_offchain_externalities(offchain);
+
+		with_externalities(&mut t, || {
+			let mut request: Request = Request::get("http://localhost:1234");
+			let pending = request
+				.add_header("X-Auth", "hunter2")
+				.send()
+				.unwrap();
+			// make sure it's sent correctly
+			state.write().fulfill_pending_request(
+				0,
+				testing::PendingRequest {
+					method: "GET".into(),
+					uri: "http://localhost:1234".into(),
+					headers: vec![("X-Auth".into(), "hunter2".into())],
+					sent: true,
+					..Default::default()
+				},
+				b"1234".to_vec(),
+				None,
+			);
+
+			// wait
+			let mut response = pending.wait().unwrap();
+
+			// then check the response
+			let mut headers = response.headers().into_iter();
+			assert_eq!(headers.current(), None);
+			assert_eq!(headers.next(), false);
+			assert_eq!(headers.current(), None);
+
+			let body = response.body();
+			assert_eq!(body.clone().collect::<Vec<_>>(), b"1234".to_vec());
+			assert_eq!(body.error(), &None);
+		})
+	}
+
+	#[test]
+	fn should_send_a_post_request() {
+		let offchain = testing::TestOffchainExt::default();
+		let mut t = TestExternalities::default();
+		let state = offchain.0.clone();
+		t.set_offchain_externalities(offchain);
+
+		with_externalities(&mut t, || {
+			let pending = Request::default()
+				.method(Method::Post)
+				.url("http://localhost:1234")
+				.body(vec![b"1234"])
+				.send()
+				.unwrap();
+			// make sure it's sent correctly
+			state.write().fulfill_pending_request(
+				0,
+				testing::PendingRequest {
+					method: "POST".into(),
+					uri: "http://localhost:1234".into(),
+					body: b"1234".to_vec(),
+					sent: true,
+					..Default::default()
+				},
+				b"1234".to_vec(),
+				Some(("Test".to_owned(), "Header".to_owned())),
+			);
+
+			// wait
+			let mut response = pending.wait().unwrap();
+
+			// then check the response
+			let mut headers = response.headers().into_iter();
+			assert_eq!(headers.current(), None);
+			assert_eq!(headers.next(), true);
+			assert_eq!(headers.current(), Some(("Test", "Header")));
+
+			let body = response.body();
+			assert_eq!(body.clone().collect::<Vec<_>>(), b"1234".to_vec());
+			assert_eq!(body.error(), &None);
+		})
 	}
 }
