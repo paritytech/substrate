@@ -173,6 +173,7 @@ impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofPro
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
+				#[allow(deprecated)]
 				&*self.client.backend().blockchain(),
 				&*self.authority_provider,
 				request.authorities_set_id,

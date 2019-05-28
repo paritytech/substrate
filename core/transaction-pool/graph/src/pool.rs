@@ -27,7 +27,6 @@ use crate::listener::Listener;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
 use serde::Serialize;
-use error_chain::bail;
 use log::debug;
 
 use futures::sync::mpsc;
@@ -119,14 +118,14 @@ impl<B: ChainApi> Pool<B> {
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
 		let block_number = self.api.block_id_to_number(at)?
-			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
 
 		let results = xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
 				let (hash, bytes) = self.api.hash_and_length(&xt);
 				if self.rotator.is_banned(&hash) {
-					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
+					return Err(error::Error::TemporarilyBanned.into())
 				}
 
 				match self.api.validate_transaction(at, xt.clone())? {
@@ -144,11 +143,11 @@ impl<B: ChainApi> Pool<B> {
 						})
 					},
 					TransactionValidity::Invalid(e) => {
-						bail!(error::Error::from(error::ErrorKind::InvalidTransaction(e)))
+						Err(error::Error::InvalidTransaction(e).into())
 					},
 					TransactionValidity::Unknown(e) => {
 						self.listener.write().invalid(&hash);
-						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity(e)))
+						Err(error::Error::UnknownTransactionValidity(e).into())
 					},
 				}
 			})
@@ -168,7 +167,7 @@ impl<B: ChainApi> Pool<B> {
 		let removed = self.enforce_limits();
 
 		Ok(results.into_iter().map(|res| match res {
-			Ok(ref hash) if removed.contains(hash) => Err(error::Error::from(error::ErrorKind::ImmediatelyDropped).into()),
+			Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
 			other => other,
 		}).collect())
 	}
@@ -308,10 +307,7 @@ impl<B: ChainApi> Pool<B> {
 
 		// Collect the hashes of transactions that now became invalid (meaning that they are succesfully pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
-			Err(Ok(err)) => match err.kind() {
-				error::ErrorKind::InvalidTransaction(_) => Some(hashes[idx].clone()),
-				_ => None,
-			},
+			Err(Ok(error::Error::InvalidTransaction(_))) => Some(hashes[idx].clone()),
 			_ => None,
 		});
 		// Fire `pruned` notifications for collected hashes and make sure to include
@@ -319,7 +315,7 @@ impl<B: ChainApi> Pool<B> {
 		let hashes = hashes.chain(known_imported_hashes.into_iter());
 		{
 			let header_hash = self.api.block_id_to_hash(at)?
-				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
 			let mut listener = self.listener.write();
 			for h in hashes {
 				listener.pruned(header_hash, &h);
@@ -338,7 +334,7 @@ impl<B: ChainApi> Pool<B> {
 	/// See `prune_tags` if you want this.
 	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
 		let block_number = self.api.block_id_to_number(at)?
-				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?
+				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
 				.saturated_into::<u64>();
 		let now = time::Instant::now();
 		let to_remove = {
@@ -569,7 +565,7 @@ mod tests {
 		assert_eq!(pool.status().future, 0);
 
 		// then
-		assert_matches!(res.unwrap_err().kind(), error::ErrorKind::TemporarilyBanned);
+		assert_matches!(res.unwrap_err(), error::Error::TemporarilyBanned);
 	}
 
 	#[test]

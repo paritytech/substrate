@@ -302,7 +302,7 @@ where
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+						.flat_map(|map| map.1.clone().into_iter()));
 
 			let root = self.backend.child_storage_root(storage_key, delta).0;
 
