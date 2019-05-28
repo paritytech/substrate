@@ -605,6 +605,7 @@ impl<T: Trait> Module<T> {
 	/// # <weight>
 	/// - Safe.
 	/// - Not called from a dispatch.
+	/// - But, will be called from every block (?)
 	/// # </weight>
 	fn end_block(now: T::BlockNumber) -> Result {
 		// pick out another public referendum if it's time.

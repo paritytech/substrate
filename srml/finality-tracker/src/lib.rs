@@ -116,6 +116,11 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
+		///
+		/// # <weight>
+		/// - Only makes a `put` to storage.
+		/// - Safe.
+		/// # </weight>
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::Update::exists(), "Final hint must be updated only once in the block");
@@ -133,6 +138,9 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// # <weight>
+	/// - 
+	/// # </weight>
 	fn update_hint(hint: Option<T::BlockNumber>) {
 		if !Self::initialized() {
 			<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);
