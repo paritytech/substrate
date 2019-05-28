@@ -676,7 +676,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Create a new block, built on the head of the chain.
 	pub fn new_block(
-		&self, inherent_digests: DigestFor<Block>,
+		&self, 
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
@@ -688,7 +689,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Create a new block, built on top of `parent`.
 	pub fn new_block_at(
-		&self, parent: &BlockId<Block>, inherent_digests: DigestFor<Block>,
+		&self, 
+		parent: &BlockId<Block>, 
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
@@ -704,7 +707,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// These recorded trie nodes can be used by a third party to proof the
 	/// output of this block builder without having access to the full storage.
 	pub fn new_block_at_with_proof_recording(
-		&self, parent: &BlockId<Block>, inherent_digests: DigestFor<Block>,
+		&self, 
+		parent: &BlockId<Block>, 
+		inherent_digests: DigestFor<Block>,
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,

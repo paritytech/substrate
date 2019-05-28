@@ -22,6 +22,7 @@ use primitives::Pair;
 use aura_primitives::AURA_ENGINE_ID;
 use runtime_primitives::generic::DigestItem;
 use parity_codec::{Encode, Decode};
+
 type Signature<P> = <P as Pair>::Signature;
 
 /// A digest item which is usable with aura consensus.
