@@ -90,8 +90,8 @@ pub trait Proposer<B: Block> {
 	fn propose(
 		&self,
 		inherent_data: InherentData,
-		max_duration: Duration,
 		inherent_digests: DigestFor<B>,
+		max_duration: Duration,
 	) -> Self::Create;
 }
 

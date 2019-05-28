@@ -282,12 +282,12 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				Timeout::new(
 					proposer.propose(
 						slot_info.inherent_data,
-						remaining_duration,
 						generic::Digest {
 							logs: vec![
 								<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_num),
 							],
 						},
+						remaining_duration,
 					).into_future(),
 					remaining_duration,
 				)
@@ -795,8 +795,8 @@ mod tests {
 		fn propose(
 			&self,
 			_: InherentData,
-			_: Duration,
 			digests: DigestFor<TestBlock>,
+			_: Duration,
 		) -> Result<TestBlock, Error> {
 			self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 		}

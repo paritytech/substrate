@@ -182,13 +182,13 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	fn propose(
 		&self,
 		inherent_data: InherentData,
-		max_duration: time::Duration,
 		inherent_digests: DigestFor<Block>,
+		max_duration: time::Duration,
 	) -> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		// leave some time for evaluation and block finalization (33%)
 		let deadline = (self.now)() + max_duration - max_duration / 3;
-		self.propose_with(inherent_data, deadline, inherent_digests)
+		self.propose_with(inherent_data, inherent_digests, deadline)
 	}
 }
 
@@ -202,12 +202,11 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	fn propose_with(
 		&self,
 		inherent_data: InherentData,
-		deadline: time::Instant,
 		inherent_digests: DigestFor<Block>,
+		deadline: time::Instant,
 	) -> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		warn!(target: "aura", "Found {:?} inherent digests", inherent_digests.logs().len());
-		use runtime_primitives::traits::{BlakeTwo256, Digest};
+		use runtime_primitives::traits::BlakeTwo256;
 
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -344,7 +343,7 @@ mod tests {
 			cell.replace(new)
 		});
 		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), deadline, Default::default()).unwrap();
+		let block = proposer.propose(Default::default(), Default::default(), deadline).unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.
@@ -375,7 +374,7 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), deadline, Default::default()).unwrap();
+		let block = proposer.propose(Default::default(), Default::default(), deadline).unwrap();
 
 		// then
 		assert_eq!(block.extrinsics().len(), 1);
