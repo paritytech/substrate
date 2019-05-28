@@ -465,7 +465,7 @@ where
 		config.keys.push(key);
 	}
 
-	if cli.shared_params.dev {
+	if cli.shared_params.dev && cli.keyring.account.is_none() {
 		config.keys.push("//Alice".into());
 	}
 
