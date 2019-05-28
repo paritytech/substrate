@@ -24,7 +24,7 @@ use log::{warn, debug, error, info};
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{start_service, parse_str_addr, Service as Libp2pNetService, ServiceEvent as Libp2pNetServiceEvent};
-use network_libp2p::{ProtocolId, RegisteredProtocol, NetworkState};
+use network_libp2p::{RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -203,25 +203,31 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 	/// to advance.
 	pub fn new<H: ExHashT>(
 		params: Params<B, S, H>,
-		protocol_id: ProtocolId,
-		import_queue: Box<ImportQueue<B>>,
 	) -> Result<(Arc<NetworkService<B, S>>, NetworkWorker<B, S, H>), Error> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
+
+		// connect the import-queue to the network service.
+		let link = NetworkLink {
+			protocol_sender: protocol_sender.clone(),
+			network_sender: network_chan.clone(),
+		};
+		params.import_queue.start(Box::new(link))?;
+
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let protocol = Protocol::new(
-			params.config,
+			protocol::ProtocolConfig { roles: params.roles },
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
 				.unwrap_or(Arc::new(AlwaysBadChecker)),
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
-		let registered = RegisteredProtocol::new(protocol_id, &versions);
+		let registered = RegisteredProtocol::new(params.protocol_id, &versions);
 
 		// Start the main service.
 		let (network, peerset) = match start_service(params.network_config, registered) {
@@ -239,7 +245,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 			peerset: peerset.clone(),
 			protocol,
 			peers: peers.clone(),
-			import_queue: import_queue.clone(),
+			import_queue: params.import_queue,
 			transaction_pool: params.transaction_pool,
 			finality_proof_provider: params.finality_proof_provider,
 			network_port,
@@ -254,20 +260,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 			status_sinks,
 			is_offline,
 			is_major_syncing,
-			network_chan: network_chan.clone(),
+			network_chan,
 			peers,
 			peerset,
 			network,
 			protocol_sender: protocol_sender.clone(),
 		});
-
-		// connect the import-queue to the network service.
-		let link = NetworkLink {
-			protocol_sender,
-			network_sender: network_chan,
-		};
-
-		import_queue.start(Box::new(link))?;
 
 		Ok((service, network_mut))
 	}
