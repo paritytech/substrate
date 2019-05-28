@@ -320,8 +320,8 @@ decl_module! {
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
 			let bad_presentation_punishment =
-      	Self::present_slash_per_voter()
-      	* BalanceOf::<T>::from(Self::voter_count() as u32);
+				Self::present_slash_per_voter()
+				* BalanceOf::<T>::from(Self::voter_count() as u32);
 			ensure!(
 				T::Currency::can_slash(&who, bad_presentation_punishment),
 				"presenter must have sufficient slashable funds"
