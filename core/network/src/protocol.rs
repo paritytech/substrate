@@ -28,6 +28,7 @@ use crate::message::{
 	self, BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
 };
+use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
@@ -169,7 +170,102 @@ impl<'a, 'b, B: BlockT> OnDemandNetwork<B> for &'a mut &'b mut dyn NetworkOut<B>
 		NetworkOut::disconnect_peer(**self, who.clone())
 	}
 
-	fn send_request(&mut self, who: &PeerId, message: Message<B>) {
+	fn send_header_request(&mut self, who: &PeerId, id: RequestId, block: <<B as BlockT>::Header as HeaderT>::Number) {
+		let message = message::generic::Message::RemoteHeaderRequest(message::RemoteHeaderRequest {
+			id,
+			block,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_read_request(&mut self, who: &PeerId, id: RequestId, block: <B as BlockT>::Hash, key: Vec<u8>) {
+		let message = message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
+			id,
+			block,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_read_child_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		storage_key: Vec<u8>,
+		key: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
+			id,
+			block,
+			storage_key,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_call_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		method: String,
+		data: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
+			id,
+			block,
+			method,
+			data,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_changes_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		first: <B as BlockT>::Hash,
+		last: <B as BlockT>::Hash,
+		min: <B as BlockT>::Hash,
+		max: <B as BlockT>::Hash,
+		key: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
+			id,
+			first,
+			last,
+			min,
+			max,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_body_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		fields: BlockAttributes,
+		from: FromBlock<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>,
+		to: Option<<B as BlockT>::Hash>,
+		direction: Direction,
+		max: Option<u32>
+	) {
+		let message = message::generic::Message::BlockRequest(message::BlockRequest::<B> {
+			id,
+			fields,
+			from,
+			to,
+			direction,
+			max,
+		});
+
 		NetworkOut::send_message(**self, who.clone(), message)
 	}
 }
