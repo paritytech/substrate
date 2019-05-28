@@ -224,11 +224,12 @@ decl_module! {
 		/// # <weight>
 		/// - Accepts only a Moment (u64).
 		/// - Number of storage reads and writes is constrained.
-		/// - Performs validation and stores a new timestamp.
+		/// - Performs minimum validation and stores.
+		/// - Safe.
 		/// # </weight>
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
-			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block"); // read storage
+			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
 				Self::now().is_zero() || now >= Self::now() + <MinimumPeriod<T>>::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"

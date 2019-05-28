@@ -86,10 +86,10 @@ decl_module! {
 
 		/// Propose a sensitive action to be taken.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Overall storage weight depends on the size of `proposal` input.
 		/// - No iterations or unbounded computation.
-		/// #</weight>
+		/// # </weight>
 		fn propose(
 			origin,
 			proposal: Box<T::Proposal>,
@@ -114,9 +114,9 @@ decl_module! {
 
 		/// Propose a sensitive action to be taken.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - No iteration or unbounded computation.
-		/// #</weight>
+		/// # </weight>
 		fn second(origin, #[compact] proposal: PropIndex) {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
@@ -130,10 +130,10 @@ decl_module! {
 		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Weight depends on Self::do_vote
 		/// - See Self::do_vote
-		/// #</weight>
+		/// # </weight>
 		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_vote(who, ref_index, vote)
@@ -142,9 +142,9 @@ decl_module! {
 		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - See Self::do_vote
-		/// #</weight>
+		/// # </weight>
 		fn proxy_vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_vote(who, ref_index, vote)
@@ -152,9 +152,9 @@ decl_module! {
 
 		/// Start a referendum.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Depends on Self::inject_referendum
-		/// #</weight>
+		/// # </weight>
 		fn start_referendum(proposal: Box<T::Proposal>, threshold: VoteThreshold, delay: T::BlockNumber) -> Result {
 			Self::inject_referendum(
 				<system::Module<T>>::block_number() + Self::voting_period(),
@@ -166,20 +166,20 @@ decl_module! {
 
 		/// Remove a referendum.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Depends on Self::clear_referendum
-		/// #</weight>
+		/// # </weight>
 		fn cancel_referendum(#[compact] ref_index: ReferendumIndex) {
 			Self::clear_referendum(ref_index);
 		}
 
 		/// Cancel a proposal queued for enactment.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Safe.
 		/// - No unbounded computation.
 		/// - Submitting a value for `which` that exceeds length will not write but still read from storage
-		/// #</weight>
+		/// # </weight>
 		pub fn cancel_queued(#[compact] when: T::BlockNumber, #[compact] which: u32) {
 			let which = which as usize;
 			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
@@ -193,10 +193,10 @@ decl_module! {
 
 		/// Specify a proxy. Called by the stash.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Storage accessor.
 		/// - Safe.
-		/// #</weight>
+		/// # </weight>
 		fn set_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<Proxy<T>>::exists(&proxy), "already a proxy");
@@ -205,20 +205,20 @@ decl_module! {
 
 		/// Clear the proxy. Called by the proxy.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Storage accessor.
 		/// - Safe.
-		/// #</weight>
+		/// # </weight>
 		fn resign_proxy(origin) {
 			let who = ensure_signed(origin)?;
 			<Proxy<T>>::remove(who);
 		}
 
 		/// Clear the proxy. Called by the stash.
-		/// #<weight>
+		/// # <weight>
 		/// - Storage accessor.
 		/// - Safe.
-		/// #</weight>
+		/// # </weight>
 		fn remove_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			ensure!(&Self::proxy(&proxy).ok_or("not a proxy")? == &who, "wrong proxy");
@@ -227,10 +227,10 @@ decl_module! {
 
 		/// Delegate vote.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Depends on weight of `T::Currency::extend_lock`
 		/// - Otherwise safe.
-		/// #</weight>
+		/// # </weight>
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
@@ -241,10 +241,10 @@ decl_module! {
 
 		/// Undelegate vote.
 		///
-		/// #<weight>
+		/// # <weight>
 		/// - Depends on weight of `T::Currency::set_lock()`
 		/// - More likely than not safe.
-		/// #</weight>
+		/// # </weight>
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(<Delegations<T>>::exists(&who), "not delegated");
@@ -346,27 +346,27 @@ impl<T: Trait> Module<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
-	/// #</weight>
+	/// # </weight>
 	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
 		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
-	/// #</weight>
+	/// # </weight>
 	pub fn is_active_referendum(ref_index: ReferendumIndex) -> bool {
 		<ReferendumInfoOf<T>>::exists(ref_index)
 	}
 
 	/// Get all referenda currently active.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
-	/// #</weight>
+	/// # </weight>
 	pub fn active_referenda() -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
@@ -377,9 +377,9 @@ impl<T: Trait> Module<T> {
 
 	/// Get all referenda ready for tally at block `n`.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
-	/// #</weight>
+	/// # </weight>
 	pub fn maturing_referenda_at(n: T::BlockNumber) -> Vec<(ReferendumIndex, ReferendumInfo<T::BlockNumber, T::Proposal>)> {
 		let next = Self::next_tally();
 		let last = Self::referendum_count();
@@ -391,9 +391,10 @@ impl<T: Trait> Module<T> {
 
 	/// Get the voters for the current proposal.
 	///
-	/// #<weight>
+	/// # <weight>
+	/// - **FLAG**
 	/// - Dependent on the size of `voters_for`, could the array be inflated?
-	/// #</weight>
+	/// # </weight>
 	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		let (approve, against, capital): (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) = Self::voters_for(ref_index).iter()
 			.map(|voter| (
@@ -413,10 +414,10 @@ impl<T: Trait> Module<T> {
 	/// Get the delegated voters for the current proposal.
 	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Dependent on size of `voters_for` could the array be inflated?
 	/// - Dependent on weight of `delegated_votes()`
-	/// #</weight>
+	/// # </weight>
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
@@ -430,11 +431,11 @@ impl<T: Trait> Module<T> {
 			})
 	}
 
-	/// #<weight>
+	/// # <weight>
 	/// - Enumerates over the delegations held in storage.
 	/// - Recursively calls `delegated_votes`
 	/// - Special attention to `recursion_limit` to prevent too many recursive calls.
-	/// #</weight>
+	/// # </weight>
 	fn delegated_votes(
 		ref_index: ReferendumIndex,
 		to: T::AccountId,
@@ -475,9 +476,9 @@ impl<T: Trait> Module<T> {
 
 	/// Actually enact a vote, if legit.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Safe, just inserts storage.
-	/// #</weight>
+	/// # </weight>
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(vote.multiplier() <= Self::max_lock_periods(), "vote has too great a strength");
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
@@ -490,9 +491,9 @@ impl<T: Trait> Module<T> {
 
 	/// Start a referendum
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Should be okay assuming the proposal input is sanitized.
-	/// #</weight>
+	/// # </weight>
 	fn inject_referendum(
 		end: T::BlockNumber,
 		proposal: T::Proposal,
@@ -512,9 +513,10 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all info on a referendum.
 	///
-	/// #<weight>
+	/// # <weight>
+	/// - **FLAG**
 	/// - Depends on size of `voters_for` array, is it possible to grow this array?
-	/// #</weight>
+	/// # </weight>
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
 		<VotersFor<T>>::remove(ref_index);
@@ -525,17 +527,17 @@ impl<T: Trait> Module<T> {
 
 	/// Enact a proposal from a referendum.
 	///
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
-	/// #</weight>
+	/// # </weight>
 	fn enact_proposal(proposal: T::Proposal, index: ReferendumIndex) {
 		let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
 		Self::deposit_event(RawEvent::Executed(index, ok));
 	}
 
-	/// #<weight>
+	/// # <weight>
 	/// - Not part of dispatches.
-	/// #</weight>
+	/// # </weight>
 	fn launch_next(now: T::BlockNumber) -> Result {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter()
@@ -558,10 +560,10 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
 	/// - Not called from a dispatch.
-	/// #</weight>
+	/// # </weight>
 	fn bake_referendum(now: T::BlockNumber, index: ReferendumIndex, info: ReferendumInfo<T::BlockNumber, T::Proposal>) -> Result {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
@@ -600,10 +602,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
-	/// #<weight>
+	/// # <weight>
 	/// - Safe.
 	/// - Not called from a dispatch.
-	/// #</weight>
+	/// # </weight>
 	fn end_block(now: T::BlockNumber) -> Result {
 		// pick out another public referendum if it's time.
 		if (now % Self::launch_period()).is_zero() {

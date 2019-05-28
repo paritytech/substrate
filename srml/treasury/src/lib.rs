@@ -105,7 +105,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Input value may have bearing on complexity.
-		/// - Complexity in `calculate_bond`
+		/// - Complexity in `calculate_bond` *
 		/// - Otherwise bounded complexity.
 		/// # </weight>
 		fn propose_spend(
@@ -132,7 +132,7 @@ decl_module! {
 		/// # <weight>
 		/// - Input is an integer.
 		/// - Only makes a storage call.
-		/// - High likelihood of safe.
+		/// - Safe.
 		/// # </weight>
 		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
 			// Put the new value into storage.
@@ -144,7 +144,7 @@ decl_module! {
 		/// # <weight>
 		/// - Constant storage writes.
 		/// - Not exploitable to user input.
-		/// - Very likely it is safe.
+		/// - Safe.
 		/// # </weight>
 		fn configure(
 			#[compact] proposal_bond: Permill,
@@ -162,7 +162,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - proposal_id is a u32
-		/// - possible complexity in `on_unbalanced`
+		/// - possible complexity in `on_unbalanced` *
 		/// - Otherwise low complexity.
 		/// # </weight>
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
