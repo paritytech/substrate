@@ -16,6 +16,7 @@
 
 //! Configuration for the networking layer of Substrate.
 
+pub use crate::protocol::ProtocolConfig;
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeKeyConfig, ProtocolId, Secret};
 
 use bitflags::bitflags;
