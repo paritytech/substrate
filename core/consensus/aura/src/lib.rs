@@ -1026,6 +1026,7 @@ mod tests {
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
 			let client = net.lock().peer(*peer_id).client().as_full().expect("full clients are created").clone();
+			#[allow(deprecated)]
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
 				client.import_lock().clone(),
