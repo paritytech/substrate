@@ -59,7 +59,7 @@ impl AsRef<str> for Method {
 }
 
 mod header {
-	use rstd::str;
+	use super::*;
 
 	/// A header type.
 	#[derive(Clone, PartialEq, Eq)]
