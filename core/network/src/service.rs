@@ -22,9 +22,8 @@ use std::{io, thread, time::Duration};
 use log::{warn, debug, error, info};
 use futures::{Async, Future, Stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{ProtocolId, NetworkConfiguration};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{RegisteredProtocol, NetworkState};
+use network_libp2p::{NetworkConfiguration, RegisteredProtocol, NetworkState};
 use peerset::PeersetHandle;
 use consensus::import_queue::{ImportQueue, Link, SharedFinalityProofRequestBuilder};
 use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
@@ -205,8 +204,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
 	pub fn new<H: ExHashT>(
 		params: Params<B, S, H>,
-		protocol_id: ProtocolId,
-		import_queue: Box<ImportQueue<B>>,
 	) -> Result<Arc<Service<B, S>>, Error> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
@@ -216,20 +213,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let protocol = Protocol::new(
-			params.config,
+			protocol::ProtocolConfig { roles: params.roles },
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
 				.unwrap_or(Arc::new(AlwaysBadChecker)),
 			params.specialization,
 		)?;
 		let versions: Vec<_> = ((protocol::MIN_VERSION as u8)..=(protocol::CURRENT_VERSION as u8)).collect();
-		let registered = RegisteredProtocol::new(protocol_id, &versions);
+		let registered = RegisteredProtocol::new(params.protocol_id, &versions);
 		let (thread, network, peerset) = start_thread(
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			protocol,
 			peers.clone(),
-			import_queue.clone(),
+			params.import_queue.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider,
 			network_port,
@@ -258,7 +255,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			network_sender: network_chan,
 		};
 
-		import_queue.start(Box::new(link))?;
+		params.import_queue.start(Box::new(link))?;
 
 		Ok(service)
 	}

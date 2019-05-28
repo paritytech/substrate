@@ -34,7 +34,7 @@ use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::{ProtocolConfig, Roles};
+use crate::config::Roles;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -271,6 +271,21 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
 	pub chain: Arc<Client<B>>,
+}
+
+/// Configuration for the Substrate-specific part of the networking layer.
+#[derive(Clone)]
+pub struct ProtocolConfig {
+	/// Assigned roles.
+	pub roles: Roles,
+}
+
+impl Default for ProtocolConfig {
+	fn default() -> ProtocolConfig {
+		ProtocolConfig {
+			roles: Roles::FULL,
+		}
+	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
