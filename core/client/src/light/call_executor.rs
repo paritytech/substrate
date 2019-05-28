@@ -435,7 +435,7 @@ pub fn check_execution_proof<Header, E, H>(
 		Header: HeaderT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord,
+		H::Out: Ord + 'static,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);

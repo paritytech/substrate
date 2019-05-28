@@ -83,6 +83,7 @@ where C: Components {
 				TransferRateFormat(bandwidth_upload),
 			);
 
+			#[allow(deprecated)]
 			let backend = (*client).backend();
 			let used_state_cache_size = match backend.used_state_cache_size(){
 				Some(size) => size,
@@ -132,6 +133,7 @@ where C: Components {
 		if let Some((ref last_num, ref last_hash)) = last {
 			if n.header.parent_hash() != last_hash {
 				let tree_route = ::client::blockchain::tree_route(
+					#[allow(deprecated)]
 					client.backend().blockchain(),
 					BlockId::Hash(last_hash.clone()),
 					BlockId::Hash(n.hash),

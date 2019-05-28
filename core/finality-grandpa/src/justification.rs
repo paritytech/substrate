@@ -72,6 +72,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			loop {
 				if current_hash == commit.target_hash { break; }
 
+				#[allow(deprecated)]
 				match client.backend().blockchain().header(BlockId::Hash(current_hash))? {
 					Some(current_header) => {
 						if *current_header.number() <= commit.target_number {

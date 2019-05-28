@@ -414,7 +414,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
 		Ok(offset)
 	},
-	ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_number: u64, result: *mut u8) -> u32 => {
+	ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, result: *mut u8) -> u32 => {
 		let mut parent_hash = H256::default();
 		if parent_hash_len != parent_hash.as_ref().len() as u32 {
 			return Err(UserError("Invalid parent_hash_len in ext_storage_changes_root").into());
@@ -422,7 +422,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let raw_parent_hash = this.memory.get(parent_hash_data, parent_hash_len as usize)
 			.map_err(|_| UserError("Invalid attempt to get parent_hash in ext_storage_changes_root"))?;
 		parent_hash.as_mut().copy_from_slice(&raw_parent_hash[..]);
-		let r = this.ext.storage_changes_root(parent_hash, parent_number);
+		let r = this.ext.storage_changes_root(parent_hash)
+			.map_err(|_| UserError("Invaid parent_hash passed to ext_storage_changes_root"))?;
 		if let Some(r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
 			Ok(1)
@@ -896,9 +897,11 @@ mod tests {
 
 	use parity_codec::Encode;
 
-	use state_machine::TestExternalities;
+	use state_machine::TestExternalities as CoreTestExternalities;
 	use hex_literal::hex;
 	use primitives::map;
+
+	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
 	#[test]
 	fn returning_should_work() {

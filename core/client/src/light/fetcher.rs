@@ -22,11 +22,11 @@ use std::marker::PhantomData;
 use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher};
-use parity_codec::Encode;
+use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	UniqueSaturatedInto, UniqueSaturatedFrom, SaturatedConversion
+	SimpleArithmetic, CheckedConversion,
 };
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check,
@@ -236,7 +236,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		&self,
 		request: &RemoteChangesRequest<B::Header>,
 		remote_proof: ChangesProof<B::Header>,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
@@ -284,30 +284,27 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		}
 
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<_, H>(
+		key_changes_proof_check::<_, H, _>(
 			&request.changes_trie_config,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.2),
 				prev_roots: remote_roots,
 			},
 			remote_proof,
-			request.first_block.0.saturated_into::<u64>(),
+			request.first_block.0,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0.saturated_into::<u64>(),
+				number: request.last_block.0,
 			},
-			remote_max_block.saturated_into::<u64>(),
+			remote_max_block,
 			&request.key)
-		.map(|pairs| pairs.into_iter().map(|(b, x)|
-			(b.saturated_into::<NumberFor<B>>(), x)
-		).collect())
 		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
 	/// Check CHT-based proof for changes tries roots.
 	fn check_changes_tries_proof(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 		remote_roots: &BTreeMap<NumberFor<B>, B::Hash>,
 		remote_roots_proof: Vec<Vec<u8>>,
 	) -> ClientResult<()>
@@ -363,7 +360,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord,
+		H::Out: Ord + 'static,
 		S: BlockchainStorage<Block>,
 		F: Send + Sync,
 {
@@ -419,7 +416,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteChangesRequest<Block::Header>,
 		remote_proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
-		self.check_changes_proof_with_cht_size(request, remote_proof, cht::SIZE)
+		self.check_changes_proof_with_cht_size(request, remote_proof, cht::size())
 	}
 
 	fn check_body_proof(
@@ -443,26 +440,38 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 }
 
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Number: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u64>, Hash: 'a> {
+struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
 	prev_roots: BTreeMap<Number, Hash>,
 }
 
-impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
+impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + UniqueSaturatedInto<u64>
-			+ UniqueSaturatedFrom<u64>,
+		Number: ::std::fmt::Display + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
-	fn root(&self, _anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+	fn build_anchor(
+		&self,
+		_hash: H::Out,
+	) -> Result<state_machine::ChangesTrieAnchorBlockId<H::Out, Number>, String> {
+		Err("build_anchor is only called when building block".into())
+	}
+
+	fn root(
+		&self,
+		_anchor: &ChangesTrieAnchorBlockId<H::Out, Number>,
+		block: Number,
+	) -> Result<Option<H::Out>, String> {
 		// we can't ask for roots from parallel forks here => ignore anchor
-		let root = if block < self.roots.0.saturated_into::<u64>() {
+		let root = if block < self.roots.0 {
 			self.prev_roots.get(&Number::unique_saturated_from(block)).cloned()
 		} else {
-			block.checked_sub(self.roots.0.saturated_into::<u64>())
-				.and_then(|index| self.roots.1.get(index as usize))
-				.cloned()
+			let index: Option<usize> = block.checked_sub(&self.roots.0).and_then(|index| index.checked_into());
+			match index {
+				Some(index) => self.roots.1.get(index as usize).cloned(),
+				None => None,
+			}
 		};
 
 		Ok(root.map(|root| {

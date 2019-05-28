@@ -17,6 +17,7 @@
 //! Libp2p network configuration.
 
 use libp2p::identity::{Keypair, secp256k1, ed25519};
+use libp2p::wasm_ext;
 use libp2p::{Multiaddr, multiaddr::Protocol};
 use std::error::Error;
 use std::{io::{self, Write}, iter, fs, net::Ipv4Addr, path::{Path, PathBuf}};
@@ -52,6 +53,13 @@ pub struct NetworkConfiguration {
 	/// If true, the network will use mDNS to discover other libp2p nodes on the local network
 	/// and connect to them if they support the same chain.
 	pub enable_mdns: bool,
+	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
+	/// some binding between the networking provided by the operating system or environment and
+	/// libp2p.
+	///
+	/// This parameter exists whatever the target platform is, but it is expected to be set to
+	/// `Some` only when compiling for WASM.
+	pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
 impl Default for NetworkConfiguration {
@@ -70,6 +78,7 @@ impl Default for NetworkConfiguration {
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
 			enable_mdns: false,
+			wasm_external_transport: None,
 		}
 	}
 }

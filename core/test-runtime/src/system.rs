@@ -102,7 +102,7 @@ pub fn polish_block(block: &mut Block) {
 
 	// check digest
 	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
+	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
@@ -134,7 +134,7 @@ pub fn execute_block(mut block: Block) {
 
 	// check digest
 	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
+	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
@@ -217,7 +217,7 @@ pub fn finalize_block() -> Header {
 	// This MUST come after all changes to storage are done.  Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
-	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash, number - 1);
+	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
 
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));

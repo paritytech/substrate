@@ -31,7 +31,7 @@ use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
-use crate::config::{ProtocolConfig, Roles};
+use crate::config::Roles;
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{
 	Link, SharedBlockImport, SharedJustificationImport, Verifier, SharedFinalityProofImport,
@@ -45,7 +45,7 @@ use crate::message::Message;
 use network_libp2p::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, sr25519::Public as AuthorityId, Blake2Hasher};
-use crate::protocol::{Context, Protocol, ProtocolStatus, CustomMessageOutcome, NetworkOut};
+use crate::protocol::{Context, Protocol, ProtocolConfig, ProtocolStatus, CustomMessageOutcome, NetworkOut};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::{Justification, ConsensusEngineId};
@@ -143,6 +143,7 @@ impl PeersClient {
 	}
 
 	pub fn as_in_memory_backend(&self) -> InMemoryBackend<Block, Blake2Hasher> {
+		#[allow(deprecated)]
 		match *self {
 			PeersClient::Full(ref client) => client.backend().as_in_memory(),
 			PeersClient::Light(_) => unimplemented!("TODO"),
@@ -150,6 +151,7 @@ impl PeersClient {
 	}
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		#[allow(deprecated)]
 		match *self {
 			PeersClient::Full(ref client) => client.backend().get_aux(key),
 			PeersClient::Light(ref client) => client.backend().get_aux(key),
