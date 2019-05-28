@@ -208,6 +208,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
+
+		// connect the import-queue to the network service.
+		let link = NetworkLink {
+			protocol_sender: protocol_sender.clone(),
+			network_sender: network_chan.clone(),
+		};
+		params.import_queue.start(Box::new(link))?;
+
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
@@ -226,7 +234,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			is_major_syncing.clone(),
 			protocol,
 			peers.clone(),
-			params.import_queue.clone(),
+			params.import_queue,
 			params.transaction_pool,
 			params.finality_proof_provider,
 			network_port,
@@ -237,27 +245,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			params.on_demand.and_then(|od| od.extract_receiver()),
 		)?;
 
-		let service = Arc::new(Service {
+		Ok(Arc::new(Service {
 			status_sinks,
 			is_offline,
 			is_major_syncing,
-			network_chan: network_chan.clone(),
+			network_chan,
 			peers,
 			peerset,
 			network,
-			protocol_sender: protocol_sender.clone(),
-			bg_thread: Some(thread),
-		});
-
-		// connect the import-queue to the network service.
-		let link = NetworkLink {
 			protocol_sender,
-			network_sender: network_chan,
-		};
-
-		params.import_queue.start(Box::new(link))?;
-
-		Ok(service)
+			bg_thread: Some(thread),
+		}))
 	}
 
 	/// Returns the downloaded bytes per second averaged over the past few seconds.

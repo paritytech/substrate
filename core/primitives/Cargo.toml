@@ -25,7 +25,8 @@ sha2 = { version = "0.8", optional = true }
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39", optional = true }
 tiny-bip39 = { version = "0.6.1", optional = true }
 hex = { version = "0.3", optional = true }
-regex = {version = "1.1", optional = true }
+regex = { version = "1.1", optional = true }
+num-traits = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -71,4 +72,5 @@ std = [
 	"sha2",
 	"schnorrkel",
 	"regex",
+	"num-traits/std",
 ]
