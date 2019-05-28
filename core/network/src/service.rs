@@ -206,7 +206,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	pub fn new<H: ExHashT>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
-		import_queue: Box<ImportQueue<B>>,
+		import_queue: Arc<ImportQueue<B>>,
 	) -> Result<Arc<Service<B, S>>, Error> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
@@ -527,7 +527,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
-	import_queue: Box<ImportQueue<B>>,
+	import_queue: Arc<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
@@ -588,7 +588,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	mut protocol: Protocol<B, S, H>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
-	import_queue: Box<ImportQueue<B>>,
+	import_queue: Arc<ImportQueue<B>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	mut network_port: mpsc::UnboundedReceiver<NetworkMsg<B>>,
