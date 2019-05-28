@@ -51,7 +51,7 @@ pub enum TransactionValidity {
 		///
 		/// A list of tags this transaction provides. Successfully importing the transaction
 		/// will enable other transactions that depend on (require) those tags to be included as well.
-		/// Provided and requried tags allow Substrate to build a dependency graph of transactions
+		/// Provided and required tags allow Substrate to build a dependency graph of transactions
 		/// and import them in the right (linear) order.
 		provides: Vec<TransactionTag>,
 		/// Transaction longevity
