@@ -41,46 +41,49 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	//		A1 -> D2
 
 	let client = new_with_backend(backend.clone(), false);
+	let blockchain = backend.blockchain();
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
 	assert_eq!(
-		client.backend().blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![genesis_hash]);
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a1.hash()]);
 
 	// A1 -> A2
 	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+	#[allow(deprecated)]
 	assert_eq!(
-		client.backend().blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a2.hash()]);
 
 	// A2 -> A3
 	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a3.hash()]);
 
 	// A3 -> A4
 	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a4.hash()]);
 
 	// A4 -> A5
 	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a5.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a5.hash()]);
 
 	// A1 -> B2
@@ -95,21 +98,21 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	let b2 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, b2.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b2.hash()]);
 
 	// B2 -> B3
 	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b3.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b3.hash()]);
 
 	// B3 -> B4
 	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b4.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b4.hash()]);
 
 	// // B2 -> C3
@@ -124,7 +127,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	let c3 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, c3.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b4.hash(), c3.hash()]);
 
 	// A1 -> D2
@@ -139,7 +142,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	let d2 = builder.bake().unwrap();
 	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 	assert_eq!(
-		backend.blockchain().leaves().unwrap(),
+		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
 }
 
@@ -154,6 +157,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	//		A1 -> D2
 
 	let client = new_with_backend(backend.clone(), false);
+	let blockchain = backend.blockchain();
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();
@@ -221,16 +225,16 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
-	let children1 = backend.blockchain().children(a4.hash()).unwrap();
+	let children1 = blockchain.children(a4.hash()).unwrap();
 	assert_eq!(vec![a5.hash()], children1);
 
-	let children2 = backend.blockchain().children(a1.hash()).unwrap();
+	let children2 = blockchain.children(a1.hash()).unwrap();
 	assert_eq!(vec![a2.hash(), b2.hash(), d2.hash()], children2);
 
-	let children3 = backend.blockchain().children(genesis_hash).unwrap();
+	let children3 = blockchain.children(genesis_hash).unwrap();
 	assert_eq!(vec![a1.hash()], children3);
 
-	let children4 = backend.blockchain().children(b2.hash()).unwrap();
+	let children4 = blockchain.children(b2.hash()).unwrap();
 	assert_eq!(vec![b3.hash(), c3.hash()], children4);
 }
 
@@ -242,7 +246,8 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	//		A1 -> B2 -> B3 -> B4
 	//			  B2 -> C3
 	//		A1 -> D2
-	let client = new_with_backend(backend, false);
+	let client = new_with_backend(backend.clone(), false);
+	let blockchain = backend.blockchain();
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();
@@ -310,21 +315,21 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
-	assert_eq!(client.backend().blockchain().header(BlockId::Number(0)).unwrap().unwrap().hash(), genesis_hash);
-	assert_eq!(client.backend().blockchain().hash(0).unwrap().unwrap(), genesis_hash);
+	assert_eq!(blockchain.header(BlockId::Number(0)).unwrap().unwrap().hash(), genesis_hash);
+	assert_eq!(blockchain.hash(0).unwrap().unwrap(), genesis_hash);
 
-	assert_eq!(client.backend().blockchain().header(BlockId::Number(1)).unwrap().unwrap().hash(), a1.hash());
-	assert_eq!(client.backend().blockchain().hash(1).unwrap().unwrap(), a1.hash());
+	assert_eq!(blockchain.header(BlockId::Number(1)).unwrap().unwrap().hash(), a1.hash());
+	assert_eq!(blockchain.hash(1).unwrap().unwrap(), a1.hash());
 
-	assert_eq!(client.backend().blockchain().header(BlockId::Number(2)).unwrap().unwrap().hash(), a2.hash());
-	assert_eq!(client.backend().blockchain().hash(2).unwrap().unwrap(), a2.hash());
+	assert_eq!(blockchain.header(BlockId::Number(2)).unwrap().unwrap().hash(), a2.hash());
+	assert_eq!(blockchain.hash(2).unwrap().unwrap(), a2.hash());
 
-	assert_eq!(client.backend().blockchain().header(BlockId::Number(3)).unwrap().unwrap().hash(), a3.hash());
-	assert_eq!(client.backend().blockchain().hash(3).unwrap().unwrap(), a3.hash());
+	assert_eq!(blockchain.header(BlockId::Number(3)).unwrap().unwrap().hash(), a3.hash());
+	assert_eq!(blockchain.hash(3).unwrap().unwrap(), a3.hash());
 
-	assert_eq!(client.backend().blockchain().header(BlockId::Number(4)).unwrap().unwrap().hash(), a4.hash());
-	assert_eq!(client.backend().blockchain().hash(4).unwrap().unwrap(), a4.hash());
+	assert_eq!(blockchain.header(BlockId::Number(4)).unwrap().unwrap().hash(), a4.hash());
+	assert_eq!(blockchain.hash(4).unwrap().unwrap(), a4.hash());
 
-	assert_eq!(client.backend().blockchain().header(BlockId::Number(5)).unwrap().unwrap().hash(), a5.hash());
-	assert_eq!(client.backend().blockchain().hash(5).unwrap().unwrap(), a5.hash());
+	assert_eq!(blockchain.header(BlockId::Number(5)).unwrap().unwrap().hash(), a5.hash());
+	assert_eq!(blockchain.hash(5).unwrap().unwrap(), a5.hash());
 }

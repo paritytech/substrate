@@ -138,7 +138,7 @@ export_api! {
 		fn child_storage_root(storage_key: &[u8]) -> Vec<u8>;
 
 		/// "Commit" all existing operations and get the resultant storage change root.
-		fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]>;
+		fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]>;
 
 		/// A trie root formed from the enumerated items.
 		/// TODO [#2382] remove (just use `ordered_trie_root` (NOTE currently not implemented for without_std))
@@ -251,6 +251,10 @@ mod imp {
 }
 
 #[cfg(feature = "std")]
-pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage, with_externalities, TestExternalities};
+pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage, with_externalities};
 #[cfg(not(feature = "std"))]
 pub use self::imp::ext::*;
+
+/// Type alias for Externalities implementation used in tests.
+#[cfg(feature = "std")]
+pub type TestExternalities<H> = self::imp::TestExternalities<H, u64>;
