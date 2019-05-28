@@ -399,6 +399,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
 	let tree_route_res = ::client::blockchain::tree_route(
+		#[allow(deprecated)]
 		client.backend().blockchain(),
 		BlockId::Hash(block),
 		BlockId::Hash(base),
@@ -521,6 +522,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -562,6 +564,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -601,6 +604,7 @@ where
 				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -644,6 +648,7 @@ where
 				current_round: HasVoted::No,
 			};
 
+			#[allow(deprecated)]
 			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			Ok(Some(set_state))
@@ -655,8 +660,10 @@ where
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
 		use client::blockchain::HeaderBackend;
 
-		let status = self.inner.backend().blockchain().info()?;
-		if number <= status.finalized_number && self.inner.backend().blockchain().hash(number)? == Some(hash) {
+		#[allow(deprecated)]
+		let blockchain = self.inner.backend().blockchain();
+		let status = blockchain.info()?;
+		if number <= status.finalized_number && blockchain.hash(number)? == Some(hash) {
 			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 			// the voter will be restarted at the median last finalized block, which can be lower than the local best
 			// finalized block.
@@ -974,6 +981,7 @@ where B: Backend<Block, Blake2Hasher>,
 		}
 
 		let tree_route = client::blockchain::tree_route(
+			#[allow(deprecated)]
 			client.backend().blockchain(),
 			BlockId::Hash(*hash),
 			BlockId::Hash(*base),

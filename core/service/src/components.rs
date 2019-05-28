@@ -646,6 +646,7 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
+		#[allow(deprecated)]
 		let best = LongestChain::new(client.backend().clone(), client.import_lock())
 			.best_chain().unwrap();
 

@@ -64,6 +64,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA::Api: GrandpaApi<Block>,
 {
 	let info = client.info()?;
+	#[allow(deprecated)]
 	let import_data = load_aux_import_data(info.chain.finalized_hash, &**client.backend(), api)?;
 	Ok(GrandpaLightBlockImport {
 		client,
@@ -291,6 +292,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	let authority_set_id = data.authority_set.set_id();
 	let authorities = data.authority_set.authorities();
 	let finality_effects = crate::finality_proof::check_finality_proof(
+		#[allow(deprecated)]
 		&*client.backend().blockchain(),
 		authority_set_id,
 		authorities,
@@ -314,6 +316,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 
 	// try to import latest justification
 	let finalized_block_hash = finality_effects.block;
+	#[allow(deprecated)]
 	let finalized_block_number = client.backend().blockchain()
 		.expect_block_number_from_id(&BlockId::Hash(finality_effects.block))
 		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
@@ -502,6 +505,7 @@ fn require_insert_aux<T: Encode, B, E, Block: BlockT<Hash=H256>, RA>(
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 {
+	#[allow(deprecated)]
 	let backend = &**client.backend();
 	let encoded = value.encode();
 	let update_res = Backend::insert_aux(backend, &[(key, &encoded[..])], &[]);
