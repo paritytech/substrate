@@ -69,7 +69,7 @@ impl InherentData {
 	///
 	/// # Return
 	///
-	/// Returns `Ok(())` if the data could be inserted an no data for an inherent with the same
+	/// Returns `Ok(())` if the data could be inserted and no data for an inherent with the same
 	/// identifier existed, otherwise an error is returned.
 	///
 	/// Inherent identifiers need to be unique, otherwise decoding of these values will not work!

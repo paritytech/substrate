@@ -158,10 +158,10 @@ impl StorageApi for () {
 		}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]> {
+	fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]> {
 		ext::with(|ext|
-			ext.storage_changes_root(parent_hash.into(), parent_num).map(Into::into)
-		).unwrap_or(None)
+			ext.storage_changes_root(parent_hash.into()).map(|h| h.map(|h| h.into()))
+		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
 	}
 
 	fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
