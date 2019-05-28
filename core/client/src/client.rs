@@ -448,7 +448,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Reads given header and generates CHT-based header proof.
 	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
-		self.header_proof_with_cht_size(id, cht::SIZE)
+		self.header_proof_with_cht_size(id, cht::size())
 	}
 
 	/// Get block hash by number.
@@ -459,16 +459,23 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
-	pub fn header_proof_with_cht_size(&self,
+	pub fn header_proof_with_cht_size(
+		&self,
 		id: &BlockId<Block>,
-		cht_size: u64
+		cht_size: NumberFor<Block>,
 	) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
 		let proof_error = || error::Error::Backend(format!("Failed to generate header proof for {:?}", id));
 		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.saturated_into()..).map(|num| self.block_hash(num.saturated_into()));
+		let mut current_num = cht_start;
+		let cht_range = ::std::iter::from_fn(|| {
+			let old_current_num = current_num;
+			current_num = current_num + One::one();
+			Some(old_current_num)
+		});
+		let headers = cht_range.map(|num| self.block_hash(num));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, ::std::iter::once(block_num), headers)?;
 		Ok((header, proof))
 	}
@@ -486,14 +493,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some((config, storage)) => (config, storage),
 			None => return Ok(None),
 		};
- 		let first = first.saturated_into::<u64>();
-		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.saturated_into::<u64>();
+		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		if first > last_num {
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
  		let finalized_number = self.backend.blockchain().info()?.finalized_number;
-		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.saturated_into::<u64>());
-		let first = ::std::cmp::max(first, oldest).saturated_into::<NumberFor<Block>>();
+		let oldest = storage.oldest_changes_trie_block(&config, finalized_number);
+		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
 	}
 
@@ -506,20 +512,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let (config, storage) = self.require_changes_trie()?;
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?.saturated_into::<u64>();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		key_changes::<_, Blake2Hasher>(
+		key_changes::<_, Blake2Hasher, _>(
 			&config,
 			&*storage,
-			first.saturated_into::<u64>(),
+			first,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last_hash),
 				number: last_number,
 			},
-			self.backend.blockchain().info()?.best_number.saturated_into::<u64>(),
+			self.backend.blockchain().info()?.best_number,
 			&key.0)
-		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block.saturated_into(), tx))).collect::<Result<_, _>>())
+		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
 	}
 
@@ -543,7 +549,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			min,
 			max,
 			key,
-			cht::SIZE,
+			cht::size(),
 		)
 	}
 
@@ -555,21 +561,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		min: Block::Hash,
 		max: Block::Hash,
 		key: &StorageKey,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 	) -> error::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a ChangesTrieStorage<Blake2Hasher>,
-			min: u64,
+			storage: &'a ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>,
+			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, H256>>,
 		};
 
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
-			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
+			fn build_anchor(&self, hash: H256) -> Result<ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+				self.storage.build_anchor(hash)
+			}
+
+			fn root(
+				&self,
+				anchor: &ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+				block: NumberFor<Block>,
+			) -> Result<Option<H256>, String> {
 				let root = self.storage.root(anchor, block)?;
 				if block < self.min {
 					if let Some(ref root) = root {
 						self.required_roots_proofs.lock().insert(
-							block.saturated_into(),
+							block,
 							root.clone()
 						);
 					}
@@ -578,7 +592,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
 			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -589,7 +603,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
 			storage,
-			min: min_number.saturated_into::<u64>(),
+			min: min_number,
 			required_roots_proofs: Mutex::new(BTreeMap::new()),
 		};
 
@@ -600,12 +614,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// fetch key changes proof
 		let first_number = self.backend.blockchain()
-			.expect_block_number_from_id(&BlockId::Hash(first))?
-			.saturated_into::<u64>();
+			.expect_block_number_from_id(&BlockId::Hash(first))?;
 		let last_number = self.backend.blockchain()
-			.expect_block_number_from_id(&BlockId::Hash(last))?
-			.saturated_into::<u64>();
-		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
+			.expect_block_number_from_id(&BlockId::Hash(last))?;
+		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
 			&config,
 			&recording_storage,
 			first_number,
@@ -613,7 +625,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				hash: convert_hash(&last),
 				number: last_number,
 			},
-			max_number.saturated_into::<u64>(),
+			max_number,
 			&key.0
 		)
 		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
@@ -634,7 +646,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Generate CHT-based proof for roots of changes tries at given blocks.
 	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 		blocks: I
 	) -> error::Result<Vec<Vec<u8>>> {
 		// most probably we have touched several changes tries that are parts of the single CHT
@@ -653,12 +665,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
 	fn changes_trie_roots_proof_at_cht(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<Block>,
 		cht_num: NumberFor<Block>,
 		blocks: Vec<NumberFor<Block>>
 	) -> error::Result<Vec<Vec<u8>>> {
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let roots = (cht_start.saturated_into()..).map(|num| self.header(&BlockId::Number(num.saturated_into()))
+		let mut current_num = cht_start;
+		let cht_range = ::std::iter::from_fn(|| {
+			let old_current_num = current_num;
+			current_num = current_num + One::one();
+			Some(old_current_num)
+		});
+		let roots = cht_range
+			.map(|num| self.header(&BlockId::Number(num))
 			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
 		Ok(proof)

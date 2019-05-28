@@ -48,7 +48,7 @@ use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, Digest, DigestItem,
-	SaturatedConversion,
+	SaturatedConversion
 };
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
@@ -67,7 +67,7 @@ pub use state_db::PruningMode;
 use client::in_mem::Backend as InMemoryBackend;
 
 const CANONICALIZATION_DELAY: u64 = 4096;
-const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u64 = 32768;
+const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
@@ -423,11 +423,11 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
-	min_blocks_to_keep: Option<u64>,
+	min_blocks_to_keep: Option<u32>,
 	_phantom: ::std::marker::PhantomData<Block>,
 }
 
-impl<Block: BlockT> DbChangesTrieStorage<Block> {
+impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	/// Commit new changes trie.
 	pub fn commit(&self, tx: &mut DBTransaction, mut changes_trie: MemoryDB<Blake2Hasher>) {
 		for (key, (val, _)) in changes_trie.drain() {
@@ -446,53 +446,79 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 		state_machine::prune_changes_tries(
 			config,
 			&*self,
-			min_blocks_to_keep,
+			min_blocks_to_keep.into(),
 			&state_machine::ChangesTrieAnchorBlockId {
 				hash: convert_hash(&block_hash),
-				number: block_num.saturated_into::<u64>(),
+				number: block_num,
 			},
 			|node| tx.delete(columns::CHANGES_TRIE, node.as_ref()));
 	}
 }
 
-impl<Block: BlockT> client::backend::PrunableStateChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
+impl<Block> client::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
+	for DbChangesTrieStorage<Block>
+where
+	Block: BlockT<Hash=H256>,
+{
 	fn oldest_changes_trie_block(
 		&self,
 		config: &ChangesTrieConfiguration,
-		best_finalized_block: u64
-	) -> u64 {
+		best_finalized_block: NumberFor<Block>,
+	) -> NumberFor<Block> {
 		match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => state_machine::oldest_non_pruned_changes_trie(
 				config,
-				min_blocks_to_keep,
+				min_blocks_to_keep.into(),
 				best_finalized_block,
 			),
-			None => 1,
+			None => One::one(),
 		}
 	}
 }
 
-impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
-	fn root(&self, anchor: &state_machine::ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
+impl<Block> state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>>
+	for DbChangesTrieStorage<Block>
+where
+	Block: BlockT<Hash=H256>,
+{
+	fn build_anchor(
+		&self,
+		hash: H256,
+	) -> Result<state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>, String> {
+		utils::read_header::<Block>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Hash(hash))
+			.map_err(|e| e.to_string())
+			.and_then(|maybe_header| maybe_header.map(|header|
+				state_machine::ChangesTrieAnchorBlockId {
+					hash,
+					number: *header.number(),
+				}
+			).ok_or_else(|| format!("Unknown header: {}", hash)))
+	}
+
+	fn root(
+		&self,
+		anchor: &state_machine::ChangesTrieAnchorBlockId<H256, NumberFor<Block>>,
+		block: NumberFor<Block>,
+	) -> Result<Option<H256>, String> {
 		// check API requirement: we can't get NEXT block(s) based on anchor
 		if block > anchor.number {
 			return Err(format!("Can't get changes trie root at {} using anchor at {}", block, anchor.number));
 		}
 
 		// we need to get hash of the block to resolve changes trie root
-		let block_id = if block <= self.meta.read().finalized_number.saturated_into::<u64>() {
+		let block_id = if block <= self.meta.read().finalized_number {
 			// if block is finalized, we could just read canonical hash
-			BlockId::Number(block.saturated_into())
+			BlockId::Number(block)
 		} else {
 			// the block is not finalized
 			let mut current_num = anchor.number;
 			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
 			let maybe_anchor_header: Block::Header = utils::require_header::<Block>(
-				&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(current_num.saturated_into())
+				&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(current_num)
 			).map_err(|e| e.to_string())?;
 			if maybe_anchor_header.hash() == current_hash {
 				// if anchor is canonicalized, then the block is also canonicalized
-				BlockId::Number(block.saturated_into())
+				BlockId::Number(block)
 			} else {
 				// else (block is not finalized + anchor is not canonicalized):
 				// => we should find the required block hash by traversing
@@ -503,7 +529,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 					).map_err(|e| e.to_string())?;
 
 					current_hash = *current_header.parent_hash();
-					current_num = current_num - 1;
+					current_num = current_num - One::one();
 				}
 
 				BlockId::Hash(current_hash)
@@ -517,7 +543,11 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 	}
 }
 
-impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
+impl<Block> state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
+	for DbChangesTrieStorage<Block>
+where
+	Block: BlockT<Hash=H256>,
+{
 	fn get(&self, key: &H256, _prefix: &[u8]) -> Result<Option<DBValue>, String> {
 		self.db.get(columns::CHANGES_TRIE, &key[..])
 			.map_err(|err| format!("{}", err))
