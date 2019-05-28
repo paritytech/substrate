@@ -51,7 +51,8 @@
 //! deleted, then the account is said to be dead.
 //! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
 //! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
-//! return an object of the `Imbalance` trait that must be handled.
+//! return an object of the `Imbalance` trait that can be managed within your runtime logic. When an imbalance is
+//! dropped, it automatically updates the total issuance accordingly.
 //! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //! - **Vesting:** Similar to a lock, this is another, but independent, liquidity restriction that reduces linearly
