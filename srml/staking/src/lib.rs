@@ -552,6 +552,19 @@ decl_module! {
 		/// account that controls it.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
+		///
+		/// # <weight> FLAG
+		/// - Independent of the arguments. Moderate complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `origin` and the provided `controller`.
+		///
+		/// NOTE: two of the storage writes (`Self::bonded()`, `Self::payee()`) are _never_ cleaned unless
+		/// if the `origin` falls below _existential deposit_ and gets removed as dust.
+		///
+		/// NOTE: at the moment, there are no financial restriction to bond
+		/// (which creates a bunch of storage items for an account). In essence, nothing prevents many accounts to
+		/// spam Staking's storage by bonding 1 UNIT. see test case: `bond_with_no_staked_value()`.
+		/// # </weight>
 		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: RewardDestination) {
 			let stash = ensure_signed(origin)?;
 
@@ -566,7 +579,7 @@ decl_module! {
 			}
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
-			// you actually validate/nominate.
+			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, controller.clone());
 			<Payee<T>>::insert(&stash, payee);
 
@@ -581,6 +594,12 @@ decl_module! {
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `origin` account key.
+		/// # </weight>
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
@@ -607,6 +626,14 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// See also [`Call::withdraw_unbonded`].
+		///
+		/// # <weight> FLAG
+		/// - Independent of the arguments. Limited but --potentially-- exploitable complexity.
+		/// - Contains a limited number of reads.
+		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance()`)
+		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
+		///   The only way to clean the aforementioned storage item is also user controlled via `withdraw_unbonded()`.
+		/// </weight>
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -636,6 +663,14 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// See also [`Call::unbond`].
+		///
+		/// # <weight>
+		/// - Could be dependent on the `origin` argument and how much `unlocking` chunks exist. It implies
+		///   `consolidate_unlocked()` which loops over `Ledger.unlocking`, which is --indirectly--
+		///   user-controlled. See [`unbond`] for more detail.
+		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
+		/// - Writes are limited to the `origin` account key.
+		/// # </weight>
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -648,6 +683,12 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `origin` account key.
+		///# </weight>
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -662,6 +703,12 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
+		/// # <weight>
+		/// - The transaction's complexity is proportional to the size of `targets`,
+		/// which is capped at `MAX_NOMINATIONS`.
+		/// - Both the reads and writes follow a similar pattern.
+		/// # </weight>
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -681,6 +728,12 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains one read.
+		/// - Writes are limited to the `origin` account key.
+		/// # </weight>
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -694,6 +747,12 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant complexity..
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `origin` account key.
+		/// # </weight>
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -706,6 +765,12 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `origin` account key.
+		/// # </weight>
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
@@ -719,7 +784,12 @@ decl_module! {
 			}
 		}
 
+		// ----- Root calls.
+
 		/// Set the number of sessions in an era.
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant.
+		/// # </weight>
 		fn set_sessions_per_era(#[compact] new: T::BlockNumber) {
 			<NextSessionsPerEra<T>>::put(new);
 		}
@@ -730,22 +800,36 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant.
+		/// # </weight>
 		fn set_validator_count(#[compact] new: u32) {
 			<ValidatorCount<T>>::put(new);
 		}
 
 		/// Force there to be a new era. This also forces a new session immediately after.
 		/// `apply_rewards` should be true for validators to get the session reward.
+		/// # <weight>
+		/// - Independent on arguments.
+		/// - Triggers the phragmen election. Expensive but not user controlled.
+		/// - Depends on state: `O(|edges| * |validators|)`.
+		/// # </weight>
 		fn force_new_era(apply_rewards: bool) -> Result {
 			Self::apply_force_new_era(apply_rewards)
 		}
 
 		/// Set the offline slash grace period.
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant.
+		/// # </weight>
 		fn set_offline_slash_grace(#[compact] new: u32) {
 			<OfflineSlashGrace<T>>::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant.
+		/// # </weight>
 		fn set_invulnerables(validators: Vec<T::AccountId>) {
 			<Invulnerables<T>>::put(validators);
 		}
