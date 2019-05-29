@@ -74,7 +74,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn with_subtrie<R>(
 		&mut self,
 		storage_key: &[u8],
-		f: impl Fn(&mut Self, SubTrie) -> R
+		f: impl FnOnce(&mut Self, SubTrie) -> R
 	) -> std::result::Result<R, UserError> {
 		self.ext.child_trie(storage_key).map(|s| f(self,s))
 			.ok_or(UserError("No child trie at given address."))
@@ -199,8 +199,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				HexDisplay::from(&key)
 			);
 		}
-		this.with_subtrie(&storage_key[..], |this, subtrie|
-			this.ext.set_child_storage(&subtrie, key.clone(), value.clone())
+		this.with_subtrie(&storage_key[..], move |this, subtrie|
+			this.ext.set_child_storage(&subtrie, key, value)
 		)?;
 		Ok(())
 	},
@@ -253,7 +253,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		key_len: u32
 	) -> u32 => {
 		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize)
-			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
 		let root;
@@ -321,7 +321,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		written_out: *mut u32
 	) -> *mut u8 => {
 		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize)
-			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
 		let root;
@@ -403,7 +403,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		value_offset: u32
 	) -> u32 => {
 		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize)
-			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
+			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
 		let root;

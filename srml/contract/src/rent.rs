@@ -165,7 +165,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			let subtrie = runtime_io::child_trie(&p_key[..]).unwrap_or_else(|| {
 				SubTrie::new(
 					&mut TempKeyspaceGen(&contract.trie_id[..]),
-					//TrieIdFromParentCounter(&address),
 					&p_key[..]
 				)
 			});
