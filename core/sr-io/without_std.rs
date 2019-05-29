@@ -219,7 +219,6 @@ pub mod ext {
 		/// # Returns
 		///
 		/// - `0` if no value exists to the given key. `written_out` is set to `u32::max_value()`.
-		///
 		/// - Otherwise, pointer to the value in memory. `written_out` contains the length of the value.
 		fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 		/// Gets the value of the given key from storage.
@@ -333,13 +332,20 @@ pub mod ext {
 
 		/// Submit transaction.
 		///
-		/// Returns 0 if it was successfuly added to the pool, nonzero otherwise.
+		/// # Returns
+		///
+		/// - 0 if it was successfuly added to the pool
+		/// - nonzero otherwise.
 		fn ext_submit_transaction(data: *const u8, len: u32) -> u32;
 
 		/// Sign a piece of data with authority key.
 		///
 		/// `sig_data` has to be a pointer to a slice of 64 bytes.
-		/// Returns `0` if successful, nonzero otherwise.
+		///
+		/// # Returns
+		///
+		/// - `0` if successful and sig_data was written
+		/// - nonzero otherwise.
 		fn ext_sign(data: *const u8, len: u32, sig_data: *mut u8) -> u32;
 
 		/// Returns current UNIX timestamp (milliseconds)
@@ -371,17 +377,23 @@ pub mod ext {
 
 		/// Read a value from local storage.
 		///
-		/// if `value_len` is u32::max_value the value has not been found.
+		///
+		/// # Returns
+		///
+		/// - 0 if the value has not been found, the `value_len` is set to `u32::max_value`.
+		/// - Otherwise, pointer to the value in memory. `value_len` contains the length of the value.
 		fn ext_local_storage_get(key: *const u8, key_len: u32, value_len: *mut u32) -> *mut u8;
 
 		/// Initiaties a http request.
 		///
-		/// Returns a `RequestId(u16)` of initiated request, any value beyond `u16::max_value`
-		/// signifies an error.
-		///
 		/// `meta` is parity-codec encoded additional parameters to the request (like redirection policy,
 		/// timeouts, certificates policy, etc). The format is not yet specified and the field is currently
 		/// only reserved for future use.
+		///
+		/// # Returns
+		///
+		///	`RequestId(u16)` of initiated request, any value beyond `u16::max_value`
+		/// signifies an error.
 		fn ext_http_request_start(
 			method: *const u8,
 			method_len: u32,
@@ -393,7 +405,10 @@ pub mod ext {
 
 		/// Add a header to the request.
 		///
-		/// Returns `0` if successful, nonzero otherwise.
+		/// # Returns
+		///
+		/// - `0` if successful (and the request id exists)
+		/// - nonzero otherwise
 		fn ext_http_request_add_header(
 			request_id: u32,
 			name: *const u8,
@@ -406,7 +421,11 @@ pub mod ext {
 		///
 		/// Writing an empty chunks finalises the request.
 		/// Passing `0` as deadline blocks forever.
-		/// Returns `0` if successful, nonzero otherwise (see HttpError for the codes)
+		///
+		/// # Returns
+		///
+		/// - `0` if successful,
+		/// - nonzero otherwise (see HttpError for the codes)
 		fn ext_http_request_write_body(
 			request_id: u32,
 			chunk: *const u8,
@@ -431,8 +450,11 @@ pub mod ext {
 		/// Read all response headers.
 		///
 		/// Note the headers are only available before response body is fully consumed.
-		/// Returns a pointer to parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
-		/// In case invalid `id` is passed it returns a pointer to parity-encoded empty vector.
+		///
+		/// # Returns
+		///
+		/// - A pointer to parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		/// - In case invalid `id` is passed it returns a pointer to parity-encoded empty vector.
 		fn ext_http_response_headers(
 			id: u32,
 			written_out: *mut u32
@@ -441,12 +463,17 @@ pub mod ext {
 		/// Read a chunk of body response to given buffer.
 		///
 		/// Passing `0` as deadline blocks forever.
-		/// Returns the number of bytes written if successful,
-		/// if it's `0` it means response has been fully consumed,
-		/// if it's greater than `u32::max_value() - 255` it means reading body failed.
-		/// The error code should be mapped to `HttpError` in a following manner:
-		/// `u32::max_value()` HttpError code 1 (DeadlineReached)
-		/// `u32::max_value() - 1` HttpError code 2 (IoError)
+		///
+		/// # Returns
+		///
+		/// The number of bytes written if successful,
+		/// - if it's `0` it means response has been fully consumed,
+		/// - if it's greater than `u32::max_value() - 255` it means reading body failed.
+		///
+		/// In case of failure, the error code should be mapped to `HttpError`
+		/// in a following manner:
+		/// - `u32::max_value()` HttpError code 1 (DeadlineReached)
+		/// - `u32::max_value() - 1` HttpError code 2 (IoError)
 		/// The rest is reserved for potential future errors.
 		fn ext_http_response_read_body(
 			id: u32,
