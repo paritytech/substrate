@@ -492,6 +492,7 @@ mod tests {
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: vec![vec![nonce as u8]],
 					longevity: 3,
+					propagate: true,
 				})
 			}
 		}
