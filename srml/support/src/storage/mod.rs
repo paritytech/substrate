@@ -330,7 +330,7 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 	}
 }
 
-/// A storage map that can be enumerated.
+/// A storage map with values that can be appended to.
 ///
 /// Primarily useful for off-chain computations.
 /// Runtime implementors should avoid enumerating storage entries on-chain.
