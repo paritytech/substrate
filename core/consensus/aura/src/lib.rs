@@ -507,8 +507,6 @@ fn check_header<C, B: Block, P: Pair>(
 				&header,
 				public,
 			).map_err(|e| e.to_string())? {
-				// NOTE: we'll want to report this equivocation to some
-				// runtime module once that's implemented.
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 					slot_num,

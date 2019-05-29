@@ -591,8 +591,6 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					&header,
 					&signer,
 				).map_err(|e| e.to_string())? {
-					// NOTE: we'll want to report this equivocation to some
-					// runtime module once that's implemented.
 					info!(
 						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 						signer,
