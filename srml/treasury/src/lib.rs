@@ -161,8 +161,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `proposal_id` is a u32
-		/// - possible complexity in `on_unbalanced` *
-		/// - Otherwise low complexity.
+		/// - Low complexity / Safe.
 		/// # </weight>
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
