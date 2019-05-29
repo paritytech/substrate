@@ -272,7 +272,7 @@ macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path, $code:expr) => {
 		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 		$pub struct $name;
-		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
+		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
 		impl $crate::NativeExecutionDispatch for $name {
