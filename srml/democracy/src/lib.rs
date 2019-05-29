@@ -132,7 +132,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Weight depends on `Self::do_vote`.
-		/// - See Self::do_vote
+		/// - See `Self::do_vote`
 		/// # </weight>
 		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = ensure_signed(origin)?;
@@ -417,7 +417,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// # <weight>
 	/// - Dependent on size of `voters_for` could the vector be inflated?
-	/// - Dependent on weight of `delegated_votes()`
+	/// - Dependent on weight of `delegated_votes`.
 	/// # </weight>
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
@@ -435,7 +435,7 @@ impl<T: Trait> Module<T> {
 	/// # <weight>
 	/// - Enumerates over the delegations held in storage.
 	/// - Recursively calls `delegated_votes`
-	/// - Special attention to `recursion_limit` to prevent too many recursive calls.
+	/// - Recursive function with recursion limit set as module constant.
 	/// # </weight>
 	fn delegated_votes(
 		ref_index: ReferendumIndex,
@@ -602,10 +602,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
+	///
 	/// # <weight>
 	/// - Safe.
 	/// - Not called from a dispatch.
-	/// - But, will be called from every block (?)
+	/// - Will be called at every block `on_finalize`.
 	/// # </weight>
 	fn end_block(now: T::BlockNumber) -> Result {
 		// pick out another public referendum if it's time.

@@ -161,8 +161,8 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Sets the session key of a validator (`origin`) to `key`.
-		///
+		/// Sets the session key of the function caller to `key`.
+		/// Allows an account to set its session key prior to becoming a validator.
 		/// This doesn't take effect until the next session.
 		///
 		/// The dispatch origin of this function must be signed.
@@ -194,7 +194,7 @@ decl_module! {
 		/// Dispatch origin of this call must be _root_.
 		///
 		/// # <weight>
-		///	- Independent of inputs and insignificant.
+		/// - Independent of inputs and insignificant.
 		/// - Will imply more complexity on the next `check_rotate_session` by paying rewards.
 		/// # </weight>
 		fn force_new_session(apply_rewards: bool) -> Result {

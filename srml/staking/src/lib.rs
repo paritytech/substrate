@@ -559,12 +559,12 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` and the provided `controller`.
 		///
-		/// NOTE: two of the storage writes (`Self::bonded()`, `Self::payee()`) are _never_ cleaned unless
-		/// if the `origin` falls below _existential deposit_ and gets removed as dust.
+		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned unless
+		/// the `origin` falls below _existential deposit_ and gets removed as dust.
 		///
-		/// NOTE: at the moment, there are no financial restriction to bond
-		/// (which creates a bunch of storage items for an account). In essence, nothing prevents many accounts to
-		/// spam `Staking` storage by bonding 1 UNIT. see test case: `bond_with_no_staked_value()`.
+		/// NOTE: At the moment, there are no financial restrictions to bond
+		/// (which creates a bunch of storage items for an account). In essence, nothing prevents many accounts from
+		/// spamming `Staking` storage by bonding 1 UNIT. See test case: `bond_with_no_staked_value`.
 		/// # </weight>
 		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: RewardDestination) {
 			let stash = ensure_signed(origin)?;
@@ -629,11 +629,11 @@ decl_module! {
 		/// See also [`Call::withdraw_unbonded`].
 		///
 		/// # <weight> FLAG
-		/// - Independent of the arguments. Limited but --potentially-- exploitable complexity.
+		/// - Independent of the arguments. Limited but potentially exploitable complexity.
 		/// - Contains a limited number of reads.
 		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
-		///   The only way to clean the aforementioned storage item is also user controlled via `withdraw_unbonded`.
+		///   The only way to clean the aforementioned storage item is also user-controlled via `withdraw_unbonded`.
 		/// </weight>
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -667,7 +667,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Could be dependent on the `origin` argument and how much `unlocking` chunks exist. It implies
-		///   `consolidate_unlocked` which loops over `Ledger.unlocking`, which is --indirectly--
+		///   `consolidate_unlocked` which loops over `Ledger.unlocking`, which is indirectly
 		///   user-controlled. See [`unbond`] for more detail.
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
@@ -819,7 +819,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Independent on arguments.
-		/// - Triggers the Phragmen election. Expensive but not user controlled.
+		/// - Triggers the Phragmen election. Expensive but not user-controlled.
 		/// - Depends on state: `O(|edges| * |validators|)`.
 		/// # </weight>
 		fn force_new_era(apply_rewards: bool) -> Result {

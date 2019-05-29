@@ -157,15 +157,15 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	/// Implementation of the config type managing the creation of new accounts.
-	/// See `Balances` module for a concrete example.
+	/// See Balances module for a concrete example.
 	///
 	/// # <weight>
 	/// - Independent of the arguments.
-	/// - Given the correct value of `Self::next_enum_set()`, it always has a limited
+	/// - Given the correct value of `Self::next_enum_set`, it always has a limited
 	///   number of reads and writes and no complex computation.
 	///
 	/// As for storage, calling this function with _non-dead-indices_ will linearly grow the length of
-	/// of `Self::enum_set()`. Appropriate economic incentives should exist to make callers of this
+	/// of `Self::enum_set`. Appropriate economic incentives should exist to make callers of this
 	/// function provide a `who` argument that reclaims a dead account.
 	///
 	/// At the time of this writing, only the balances module calls this function upon creation

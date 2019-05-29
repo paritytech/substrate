@@ -407,7 +407,10 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	///
-	/// # <weight>
+	/// # <weight> FLAG
+	/// - This is quite a large number, and it is iterated twice. Is topics typically limited at the origin of this call?
+
+
 	/// - The `topics` argument affects complexity. 
 	/// - Each passed topic will be written to storage.
 	/// - Limited to `u32::max_value` topics.
