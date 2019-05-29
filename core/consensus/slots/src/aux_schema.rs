@@ -148,3 +148,119 @@ pub fn check_equivocation<C, H, P>(
 
 	Ok(None)
 }
+
+#[cfg(test)]
+mod test {
+	use primitives::{sr25519, Pair};
+	use primitives::hash::H256;
+	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
+	use runtime_primitives::traits::Header;
+	use test_client;
+
+	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
+
+	fn create_header(number: u64) -> HeaderTest {
+		// so that different headers for the same number get different hashes
+		let parent_hash = H256::random();
+
+		let header = HeaderTest {
+			parent_hash,
+			number,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: DigestTest { logs: vec![], },
+		};
+
+		header
+	}
+
+	#[test]
+	fn check_equivocation_works() {
+		let client = test_client::new();
+		let pair = sr25519::Pair::generate();
+		let public = pair.public();
+
+		let header1 = create_header(1); // @ slot 2
+		let header2 = create_header(2); // @ slot 2
+		let header3 = create_header(2); // @ slot 4
+		let header4 = create_header(3); // @ slot MAX_SLOT_CAPACITY + 4
+		let header5 = create_header(4); // @ slot MAX_SLOT_CAPACITY + 4
+		let header6 = create_header(3); // @ slot 4
+
+		// It's ok to sign same headers.
+		assert!(
+			check_equivocation(
+				&client,
+				2,
+				2,
+				&header1,
+				&public,
+			).unwrap().is_none(),
+		);
+
+		assert!(
+			check_equivocation(
+				&client,
+				3,
+				2,
+				&header1,
+				&public,
+			).unwrap().is_none(),
+		);
+
+		// But not two different headers at the same slot.
+		assert!(
+			check_equivocation(
+				&client,
+				4,
+				2,
+				&header2,
+				&public,
+			).unwrap().is_some(),
+		);
+
+		// Different slot is ok.
+		assert!(
+			check_equivocation(
+				&client,
+				5,
+				4,
+				&header3,
+				&public,
+			).unwrap().is_none(),
+		);
+
+		// Here we trigger pruning and save header 4.
+		assert!(
+			check_equivocation(
+				&client,
+				PRUNING_BOUND + 2,
+				MAX_SLOT_CAPACITY + 4,
+				&header4,
+				&public,
+			).unwrap().is_none(),
+		);
+
+		// This fails because header 5 is an equivocation of header 4.
+		assert!(
+			check_equivocation(
+				&client,
+				PRUNING_BOUND + 3,
+				MAX_SLOT_CAPACITY + 4,
+				&header5,
+				&public,
+			).unwrap().is_some(),
+		);
+
+		// This is ok because we pruned the corresponding header. Shows that we are pruning.
+		assert!(
+			check_equivocation(
+				&client,
+				PRUNING_BOUND + 4,
+				4,
+				&header6,
+				&public,
+			).unwrap().is_none(),
+		);
+	}
+}
