@@ -148,7 +148,7 @@ where
 	<FullClient<F> as ProvideRuntimeApi>::Api: BlockBuilder<FactoryBlock<F>>,
 	RA: RuntimeAdapter,
 {
-	let mut block = client.new_block().expect("Failed to create new block");
+	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
 	block.push(
 		Decode::decode(&mut &transfer.encode()[..])
 			.expect("Failed to decode transfer extrinsic")

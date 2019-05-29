@@ -483,10 +483,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
 			let hashed_key = twox_128(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
-				if let Ok(_skey) = ::std::str::from_utf8(&key) {
-					_skey
+				&if let Ok(_skey) = ::std::str::from_utf8(&key) {
+					*_skey
 				} else {
-					&format!("{}", HexDisplay::from(&key))
+					format!("{}", HexDisplay::from(&key))
 				},
 				HexDisplay::from(&hashed_key)
 			);

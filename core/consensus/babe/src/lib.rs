@@ -16,7 +16,7 @@
 
 //! # BABE consensus
 //!
-//! BABE (Blind Assignment for Blockchain Extension) consensus in substrate.
+//! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 //!
 //! # Stability
 //!
@@ -26,32 +26,42 @@
 #![forbid(unsafe_code, missing_docs)]
 #![deny(warnings)]
 extern crate core;
+mod digest;
+use digest::CompatibleDigestItem;
+pub use digest::{BabePreDigest, BABE_VRF_PREFIX};
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ExtraVerification;
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
+	SimpleBitOps,
 };
-use std::{sync::Arc, u64, fmt::Debug};
-use parity_codec::{Decode, Encode, Input};
+use std::{sync::Arc, u64, fmt::{Debug, Display}};
+use runtime_support::serde::{Serialize, Deserialize};
+use parity_codec::{Decode, Encode};
 use primitives::{
 	crypto::Pair,
-	sr25519::{Public, Signature, LocalizedSignature, self},
+	sr25519::{Public, Signature, self},
 };
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use substrate_telemetry::{
+	telemetry,
+	CONSENSUS_TRACE,
+	CONSENSUS_DEBUG,
+	CONSENSUS_WARN,
+	CONSENSUS_INFO,
+};
 use schnorrkel::{
 	keys::Keypair,
 	vrf::{
-		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
-		VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+		VRFProof, VRFProofBatchable, VRFInOut,
 	},
-	PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH,
 };
 use authorities::AuthoritiesApi;
-use consensus_common::{self, Authorities, BlockImport, Environment, Proposer,
+use consensus_common::{
+	self, Authorities, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
@@ -74,92 +84,10 @@ use log::{error, warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotInfo, SlotCompatible, slot_now};
 
-/// A BABE seal.  It includes:
-///
-/// * The public key
-/// * The VRF proof
-/// * The signature
-/// * The slot number
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BabeSeal {
-	vrf_output: VRFOutput,
-	proof: VRFProof,
-	signature: LocalizedSignature,
-	slot_num: u64,
-}
-
-/// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
-
-macro_rules! babe_assert_eq {
-	($a: expr, $b: expr) => {
-		{
-			let ref a = $a;
-			let ref b = $b;
-			if a != b {
-				error!(
-					target: "babe",
-					"Expected {:?} to equal {:?}, but they were not",
-					stringify!($a),
-					stringify!($b),
-				);
-				assert_eq!(a, b);
-			}
-		}
-	};
-}
-
-type TmpDecode = (
-	[u8; VRF_OUTPUT_LENGTH],
-	[u8; VRF_PROOF_LENGTH],
-	[u8; SIGNATURE_LENGTH],
-	[u8; PUBLIC_KEY_LENGTH],
-	u64,
-);
-
-impl Encode for BabeSeal {
-	fn encode(&self) -> Vec<u8> {
-		let tmp: TmpDecode = (
-			*self.vrf_output.as_bytes(),
-			self.proof.to_bytes(),
-			self.signature.signature.0,
-			self.signature.signer.0,
-			self.slot_num,
-		);
-		let encoded = parity_codec::Encode::encode(&tmp);
-		if cfg!(any(test, debug_assertions)) {
-			debug!(target: "babe", "Checking if encoding was correct");
-			let decoded_version = Self::decode(&mut &encoded[..])
-				.expect("we just encoded this ourselves, so it is correct; qed");
-			babe_assert_eq!(decoded_version.proof, self.proof);
-			babe_assert_eq!(decoded_version.vrf_output, self.vrf_output);
-			babe_assert_eq!(decoded_version.signature.signature, self.signature.signature);
-			babe_assert_eq!(decoded_version.signature.signer, self.signature.signer);
-			babe_assert_eq!(decoded_version.slot_num, self.slot_num);
-			debug!(target: "babe", "Encoding was correct")
-		}
-		encoded
-	}
-}
-
-impl Decode for BabeSeal {
-	fn decode<R: Input>(i: &mut R) -> Option<Self> {
-		let (output, proof, sig, public_key, slot_num): TmpDecode = Decode::decode(i)?;
-		Some(BabeSeal {
-			proof: VRFProof::from_bytes(&proof).ok()?,
-			vrf_output: VRFOutput::from_bytes(&output).ok()?,
-			signature: LocalizedSignature {
-				signature: Signature(sig),
-				signer: Public(public_key),
-			},
-			slot_num,
-		})
-	}
-}
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::aura::Config` can be eliminated.
+// and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
 pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
@@ -188,45 +116,6 @@ impl Config {
 	/// Retrieve the threshold for BABE
 	pub fn threshold(&self) -> u64 {
 		self.0.threshold
-	}
-}
-
-/// A digest item which is usable with BABE consensus.
-pub trait CompatibleDigestItem: Sized {
-	/// Construct a digest item which contains a slot number and a signature
-	/// on the hash.
-	fn babe_seal(signature: BabeSeal) -> Self;
-
-	/// If this item is an Babe seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabeSeal>;
-}
-
-impl<T, Hash> CompatibleDigestItem for generic::DigestItem<Hash, Public, T>
-	where T: Debug, Hash: Debug
-{
-	/// Construct a digest item which contains a slot number and a signature
-	/// on the hash.
-	fn babe_seal(signature: BabeSeal) -> Self {
-		generic::DigestItem::Consensus(BABE_ENGINE_ID, signature.encode())
-	}
-
-	/// If this item is an BABE seal, return the slot number and signature.
-	fn as_babe_seal(&self) -> Option<BabeSeal> {
-		match self {
-			generic::DigestItem::Consensus(BABE_ENGINE_ID, seal) => {
-				match Decode::decode(&mut &seal[..]) {
-					s @ Some(_) => s,
-					s @ None => {
-						info!(target: "babe", "Failed to decode {:?}", seal);
-						s
-					}
-				}
-			}
-			_ => {
-				info!(target: "babe", "Invalid consensus: {:?}!", self);
-				None
-			}
-		}
 	}
 }
 
@@ -280,7 +169,7 @@ pub struct BabeParams<C, E, I, SO, SC, OnExit> {
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, E, I, SO, SC, Error, OnExit>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, Error, OnExit, H>(BabeParams {
 	config,
 	local_key,
 	client,
@@ -295,17 +184,22 @@ pub fn start_babe<B, C, E, I, SO, SC, Error, OnExit>(BabeParams {
 	impl Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	B: Block,
+	B: Block<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
-	E: Environment<B, Error=Error>,
+	SC: SelectChain<B>,
+	generic::DigestItem<B::Hash, Public, Signature>: DigestItem<Hash=B::Hash>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	SC: SelectChain<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	H: Header<
+		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
+		Hash=B::Hash,
+	>,
+	E: Environment<B, Error=Error>,
+	I: BlockImport<B> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = BabeWorker {
@@ -339,15 +233,22 @@ struct BabeWorker<C, E, I, SO> {
 	threshold: u64,
 }
 
-impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
+impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
+	B: Block<Header=H, Hash=Hash>,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuthoritiesApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	Hash: Debug + Eq + Copy + SimpleBitOps + Encode + Decode + Serialize +
+		for<'de> Deserialize<'de> + Debug + Default + AsRef<[u8]> + AsMut<[u8]> +
+		std::hash::Hash + Display + Send + Sync + 'static,
+	H: Header<
+		Digest=generic::Digest<generic::DigestItem<B::Hash, Public, Signature>>,
+		Hash=B::Hash,
+	>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Public>,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -399,7 +300,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 		// FIXME replace the dummy empty slices with real data
 		// https://github.com/paritytech/substrate/issues/2435
 		// https://github.com/paritytech/substrate/issues/2436
-		let authoring_result = if let Some((inout, proof, _batchable_proof)) = claim_slot(
+		let proposal_work = if let Some((inout, proof, _batchable_proof)) = claim_slot(
 			&[0u8; 0],
 			slot_info.number,
 			&[0u8; 0],
@@ -429,105 +330,133 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> whe
 				}
 			};
 
+			let inherent_digest = BabePreDigest {
+				proof,
+				vrf_output: inout.to_output(),
+				author: pair.public(),
+				slot_num,
+			};
+
+			// deadline our production to approx. the end of the slot
 			let remaining_duration = slot_info.remaining_duration();
-			// deadline our production to approx. the end of the
-			// slot
-			(Timeout::new(
+			Timeout::new(
 				proposer.propose(
 					slot_info.inherent_data,
+					generic::Digest {
+						logs: vec![
+							generic::DigestItem::babe_pre_digest(inherent_digest.clone()),
+						],
+					},
 					remaining_duration,
 				).into_future(),
 				remaining_duration,
-			),
-			inout.to_output(),
-			proof)
+			)
 		} else {
 			return Box::new(future::ok(()));
 		};
 
-		let (proposal_work, vrf_output, proof) = authoring_result;
+		Box::new(proposal_work.map(move |b| {
+			// minor hack since we don't have access to the timestamp
+			// that is actually set by the proposer.
+			let slot_after_building = slot_now(slot_duration);
+			if slot_after_building != Some(slot_num) {
+				info!(
+					target: "babe",
+					"Discarding proposal for slot {}; block production took too long",
+					slot_num
+				);
+				telemetry!(CONSENSUS_INFO; "babe.discarding_proposal_took_too_long";
+					"slot" => slot_num
+				);
+				return
+			}
 
-		Box::new(
-			proposal_work
-				.map(move |b| {
-					// minor hack since we don't have access to the timestamp
-					// that is actually set by the proposer.
-					let slot_after_building = slot_now(slot_duration);
-					if slot_after_building != Some(slot_num) {
-						info!(
-							target: "babe",
-							"Discarding proposal for slot {}; block production took too long",
-							slot_num
-						);
-						telemetry!(CONSENSUS_INFO; "babe.discarding_proposal_took_too_long";
-							"slot" => slot_num
-						);
-						return
-					}
+			let (header, body) = b.deconstruct();
+			let pre_digest: Result<BabePreDigest, String> = find_pre_digest::<B>(&header);
+			if let Err(e) = pre_digest {
+				error!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
+				return
+			} else {
+				trace!(target: "babe", "Got correct number of seals.  Good!")
+			};
 
-					let (header, body) = b.deconstruct();
-					let header_num = header.number().clone();
-					let pre_hash = header.hash();
-					let parent_hash = header.parent_hash().clone();
+			let header_num = header.number().clone();
+			let parent_hash = header.parent_hash().clone();
 
-					// sign the pre-sealed hash of the block and then
-					// add it to a digest item.
-					let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
-					let signature = pair.sign(&to_sign[..]);
-					let item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(BabeSeal {
-						proof,
-						signature: LocalizedSignature {
-							signature,
-							signer: pair.public(),
-						},
-						slot_num,
-						vrf_output,
-					});
+			// sign the pre-sealed hash of the block and then
+			// add it to a digest item.
+			let header_hash = header.hash();
+			let signature = pair.sign(header_hash.as_ref());
+			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
 
-					let import_block: ImportBlock<B> = ImportBlock {
-						origin: BlockOrigin::Own,
-						header,
-						justification: None,
-						post_digests: vec![item],
-						body: Some(body),
-						finalized: false,
-						auxiliary: Vec::new(),
-						fork_choice: ForkChoiceStrategy::LongestChain,
-					};
+			let import_block: ImportBlock<B> = ImportBlock {
+				origin: BlockOrigin::Own,
+				header,
+				justification: None,
+				post_digests: vec![signature_digest_item],
+				body: Some(body),
+				finalized: false,
+				auxiliary: Vec::new(),
+				fork_choice: ForkChoiceStrategy::LongestChain,
+			};
 
-					info!(target: "babe",
-						  "Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
-						  header_num,
-						  import_block.post_header().hash(),
-						  pre_hash
-					);
-					telemetry!(CONSENSUS_INFO; "babe.pre_sealed_block";
-						"header_num" => ?header_num,
-						"hash_now" => ?import_block.post_header().hash(),
-						"hash_previously" => ?pre_hash
-					);
+			info!(target: "babe",
+					"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+					header_num,
+					import_block.post_header().hash(),
+					header_hash,
+			);
+			telemetry!(CONSENSUS_INFO; "babe.pre_sealed_block";
+				"header_num" => ?header_num,
+				"hash_now" => ?import_block.post_header().hash(),
+				"hash_previously" => ?header_hash,
+			);
 
-					if let Err(e) = block_import.import_block(import_block, Default::default()) {
-						warn!(target: "babe", "Error with block built on {:?}: {:?}",
-							  parent_hash, e);
-						telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
-							"hash" => ?parent_hash, "err" => ?e
-						);
-					}
-				})
-				.map_err(|e| {
-					warn!("Client import failed: {:?}", e);
-					consensus_common::Error::ClientImport(format!("{:?}", e))
-				})
-		)
+			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+				warn!(target: "babe", "Error with block built on {:?}: {:?}",
+						parent_hash, e);
+				telemetry!(CONSENSUS_WARN; "babe.err_with_block_built_on";
+					"hash" => ?parent_hash, "err" => ?e
+				);
+			}
+		}).map_err(|e| {
+			warn!("Client import failed: {:?}", e);
+			consensus_common::Error::ClientImport(format!("{:?}", e)).into()
+		}))
 	}
+}
+
+macro_rules! babe_err {
+	($($i: expr),+) => {
+		{ debug!(target: "babe", $($i),+)
+		; format!($($i),+)
+		}
+	};
+}
+
+fn find_pre_digest<B: Block>(header: &B::Header) -> Result<BabePreDigest, String>
+	where DigestItemFor<B>: CompatibleDigestItem,
+{
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "babe", "Checking log {:?}", log);
+		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err(babe_err!("Multiple BABE pre-runtime headers, rejecting!"))?,
+			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| babe_err!("No BABE pre-runtime digest found"))
 }
 
 /// check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
 ///
-/// This digest item will always return `Some` when used with `as_babe_seal`.
+/// The seal must be the last digest.  Otherwise, the whole header is considered
+/// unsigned.  This is required for security and must not be changed.
+///
+/// This digest item will always return `Some` when used with `as_babe_pre_digest`.
 //
 // FIXME #1018 needs misbehavior types
 #[forbid(warnings)]
@@ -538,36 +467,31 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 	hash: B::Hash,
 	authorities: &[Public],
 	threshold: u64,
-) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
+) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
-	let digest_item = match header.digest_mut().pop() {
+	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => return Err(format!("Header {:?} is unsealed", hash)),
+		None => return Err(babe_err!("Header {:?} is unsealed", hash)),
 	};
 
-	let BabeSeal {
-		slot_num,
-		signature: LocalizedSignature { signer, signature },
-		proof,
-		vrf_output,
-	} = digest_item.as_babe_seal().ok_or_else(|| {
-		debug!(target: "babe", "Header {:?} is unsealed", hash);
-		format!("Header {:?} is unsealed", hash)
+	let sig = seal.as_babe_seal().ok_or_else(|| {
+		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
+	let pre_digest = find_pre_digest::<B>(&header)?;
+	let BabePreDigest { slot_num, ref author, ref proof, ref vrf_output } = pre_digest;
+
 	if slot_num > slot_now {
-		header.digest_mut().push(digest_item);
+		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_num))
-	} else if !authorities.contains(&signer) {
-		debug!(target: "babe", "Slot Author not found");
-		Err("Slot Author not found".to_string())
+	} else if !authorities.contains(&author) {
+		Err(babe_err!("Slot author not found"))
 	} else {
 		let pre_hash = header.hash();
-		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
 
-		if sr25519::Pair::verify(&signature, &to_sign[..], &signer) {
+		if sr25519::Pair::verify(&sig, pre_hash, author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					Default::default(),
@@ -575,41 +499,39 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 					Default::default(),
 					0,
 				);
-				schnorrkel::PublicKey::from_bytes(signer.as_slice()).and_then(|p| {
-					p.vrf_verify(transcript, &vrf_output, &proof)
+				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
+					p.vrf_verify(transcript, vrf_output, proof)
 				}).map_err(|s| {
-					debug!(target: "babe", "VRF verification failed: {:?}", s);
-					format!("VRF verification failed")
+					babe_err!("VRF verification failed: {:?}", s)
 				})?
 			};
 
-			if check(&inout, threshold) {
-				match check_equivocation(&client, slot_now, slot_num, header.clone(), signer.clone()) {
-					Ok(Some(equivocation_proof)) => {
-						let log_str = format!(
-							"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-							signer,
-							slot_num,
-							equivocation_proof.fst_header().hash(),
-							equivocation_proof.snd_header().hash(),
-						);
-						info!("{}", log_str);
-						Err(log_str)
-					},
-					Ok(None) => {
-						Ok(CheckedHeader::Checked(header, digest_item))
-					},
-					Err(e) => {
-						Err(e.to_string())
-					},
-				}
-			} else {
-				debug!(target: "babe", "VRF verification failed: threshold {} exceeded", threshold);
-				Err(format!("Validator {:?} made seal when it wasn’t its turn", signer))
+			if !check(&inout, threshold) {
+				return Err(babe_err!("VRF verification of block by author {:?} failed: \
+									threshold {} exceeded", author, threshold))
+			}
+			match check_equivocation(&client, slot_now, slot_num, header.clone(), author.clone()) {
+				Ok(Some(equivocation_proof)) => {
+					let log_str = format!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						author,
+						slot_num,
+						equivocation_proof.fst_header().hash(),
+						equivocation_proof.snd_header().hash(),
+					);
+					info!(target: "babe", "{}", log_str);
+					Err(log_str)
+				},
+				Ok(None) => {
+					let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
+					Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+				},
+				Err(e) => {
+					Err(e.to_string())
+				},
 			}
 		} else {
-			debug!(target: "babe", "Bad signature on {:?}", hash);
-			Err(format!("Bad signature on {:?}", hash))
+			Err(babe_err!("Bad signature on {:?}", hash))
 		}
 	}
 }
@@ -681,6 +603,8 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			justification,
 			body,
 		);
+
+		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
 		let mut inherent_data = self
 			.inherent_data_providers
 			.create_inherent_data()
@@ -709,9 +633,9 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 			self.threshold,
 		)?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, seal) => {
-				let BabeSeal { slot_num, .. } = seal.as_babe_seal()
-					.expect("check_header always returns a seal digest item; qed");
+			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
+				let BabePreDigest { slot_num, .. } = pre_digest.as_babe_pre_digest()
+					.expect("check_header always returns a pre-digest digest item; qed");
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -738,6 +662,10 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 
 				extra_verification.into_future().wait()?;
 
+				let new_authorities = pre_header.digest()
+					.log(DigestItem::as_authorities_change)
+					.map(|digest| digest.to_vec());
+
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
@@ -750,7 +678,7 @@ impl<B: Block, C, E> Verifier<B> for BabeVerifier<C, E> where
 				};
 
 				// FIXME #1019 extract authorities
-				Ok((import_block, None))
+				Ok((import_block, new_authorities))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -820,6 +748,7 @@ fn get_keypair(q: &sr25519::Pair) -> &Keypair {
 	q.as_ref()
 }
 
+#[allow(deprecated)]
 fn make_transcript(
 	randomness: &[u8],
 	slot_number: u64,
@@ -871,7 +800,8 @@ fn claim_slot(
 
 #[cfg(test)]
 #[allow(dead_code, unused_imports, deprecated)]
-// FIXME #2532: need to allow deprecated until refactor is done https://github.com/paritytech/substrate/issues/2532
+// FIXME #2532: need to allow deprecated until refactor is done
+// https://github.com/paritytech/substrate/issues/2532
 
 mod tests {
 	use super::*;
@@ -880,16 +810,18 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
-	use runtime_primitives::traits::Block as BlockT;
+	use runtime_primitives::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
+	use super::generic::DigestItem;
 	use client::BlockchainEvents;
 	use test_client;
 	use futures::stream::Stream;
 	use log::debug;
 	use std::time::Duration;
+	type Item = generic::DigestItem<Hash, Public, Signature>;
 	use test_client::AuthorityKeyring;
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
@@ -922,8 +854,8 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
-			self.1.new_block().unwrap().bake().map_err(|e| e.into())
+		fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
+			self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 		}
 	}
 
@@ -1020,26 +952,30 @@ mod tests {
 
 		let (inout, proof, _batchable_proof) = get_keypair(&pair).vrf_sign_n_check(transcript, |inout| check(inout, u64::MAX)).unwrap();
 		let pre_hash: H256 = header.hash();
-		let to_sign = (slot_num, pre_hash, proof.to_bytes()).encode();
-		let signature = pair.sign(&to_sign[..]);
-		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem>::babe_seal(BabeSeal {
+		let pre_digest = BabePreDigest {
 			proof,
-			signature: LocalizedSignature {
-				signature,
-				signer: pair.public(),
-			},
+			author: pair.public(),
 			slot_num,
 			vrf_output: inout.to_output(),
-		});
-
+		};
+		assert_eq!(
+			Decode::decode(&mut &pre_digest.encode()[..]).as_ref(),
+			Some(&pre_digest),
+			"Pre-digest encoding and decoding did not round-trip",
+		);
+		let item = generic::DigestItem::babe_pre_digest(pre_digest);
 		header.digest_mut().push(item);
+
+		let to_sign = header.hash();
+		let signature = pair.sign(&to_sign[..]);
+		header.digest_mut().push(generic::DigestItem::babe_seal(signature));
 		(header, pre_hash)
 	}
 
 	#[test]
 	fn can_serialize_block() {
 		drop(env_logger::try_init());
-		assert!(BabeSeal::decode(&mut &b""[..]).is_none());
+		assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
 	}
 
 	#[test]
@@ -1118,26 +1054,28 @@ mod tests {
 	}
 
 	#[test]
-	#[allow(deprecated)]
-	#[should_panic]
-	fn old_seals_rejected() {
+	fn wrong_consensus_engine_id_rejected() {
 		drop(env_logger::try_init());
-		generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Seal(0, Signature([0; 64])).as_babe_seal().unwrap();
-	}
-
-	#[test]
-	fn wrong_number_rejected() {
-		drop(env_logger::try_init());
-		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus([0; 4], Signature([0; 64]).encode());
+		let sig = sr25519::Pair::generate().sign(b"");
+		let bad_seal: Item = DigestItem::Seal([0; 4], sig);
+		assert!(bad_seal.as_babe_pre_digest().is_none());
 		assert!(bad_seal.as_babe_seal().is_none())
 	}
 
 	#[test]
-	#[should_panic]
-	fn bad_seal_rejected() {
+	fn malformed_pre_digest_rejected() {
 		drop(env_logger::try_init());
-		let bad_seal = generic::DigestItem::<network::test::Hash, Public, primitives::sr25519::Signature>::Consensus(BABE_ENGINE_ID, Signature([0; 64]).encode());
-		bad_seal.as_babe_seal().expect("we should not decode this successfully");
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, Signature([0; 64]));
+		assert!(bad_seal.as_babe_pre_digest().is_none());
+	}
+
+	#[test]
+	fn sig_is_not_pre_digest() {
+		drop(env_logger::try_init());
+		let sig = sr25519::Pair::generate().sign(b"");
+		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig);
+		assert!(bad_seal.as_babe_pre_digest().is_none());
+		assert!(bad_seal.as_babe_seal().is_some())
 	}
 
 	#[test]
@@ -1172,6 +1110,7 @@ mod tests {
 
 	#[test]
 	fn check_header_works_with_equivocation() {
+		drop(env_logger::try_init());
 		let client = test_client::new();
 		let pair = sr25519::Pair::generate();
 		let public = pair.public();

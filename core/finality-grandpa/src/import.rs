@@ -317,7 +317,7 @@ where
 					// for the canon block the new authority set should start
 					// with. we use the minimum between the median and the local
 					// best finalized block.
-					
+
 					#[allow(deprecated)]
 					let best_finalized_number = self.inner.backend().blockchain().info()
 						.map_err(|e| ConsensusError::ClientImport(e.to_string()))?

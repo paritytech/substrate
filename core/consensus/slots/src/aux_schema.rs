@@ -30,7 +30,7 @@ pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
 pub const PRUNING_BOUND: u64 = 2 * MAX_SLOT_CAPACITY;
 
-fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
+fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 	where
 		C: AuxStore,
 		T: Decode,
