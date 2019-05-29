@@ -342,12 +342,12 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			Timeout::new(
 				proposer.propose(
 					slot_info.inherent_data,
-					remaining_duration,
 					generic::Digest {
 						logs: vec![
 							generic::DigestItem::babe_pre_digest(inherent_digest.clone()),
 						],
 					},
+					remaining_duration,
 				).into_future(),
 				remaining_duration,
 			)
