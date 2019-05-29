@@ -143,7 +143,7 @@ decl_module! {
 		/// otherwise it is a vote to keep the status quo.
 		///
 		/// # <weight>
-		/// - See Self::do_vote
+		/// - See `Self::do_vote`.
 		/// # </weight>
 		fn proxy_vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
@@ -153,7 +153,7 @@ decl_module! {
 		/// Start a referendum.
 		///
 		/// # <weight>
-		/// - Depends on Self::inject_referendum
+		/// - Depends on `Self::inject_referendum`.
 		/// # </weight>
 		fn start_referendum(proposal: Box<T::Proposal>, threshold: VoteThreshold, delay: T::BlockNumber) -> Result {
 			Self::inject_referendum(
@@ -167,7 +167,7 @@ decl_module! {
 		/// Remove a referendum.
 		///
 		/// # <weight>
-		/// - Depends on Self::clear_referendum
+		/// - Depends on `Self::clear_referendum`.
 		/// # </weight>
 		fn cancel_referendum(#[compact] ref_index: ReferendumIndex) {
 			Self::clear_referendum(ref_index);
@@ -229,7 +229,7 @@ decl_module! {
 		/// Delegate vote.
 		///
 		/// # <weight>
-		/// - Depends on weight of `T::Currency::extend_lock`
+		/// - Depends on weight of `T::Currency::extend_lock`.
 		/// - Otherwise safe.
 		/// # </weight>
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) {
@@ -394,7 +394,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// # <weight>
 	/// - **FLAG**
-	/// - Dependent on the size of `voters_for`, could the array be inflated?
+	/// - Dependent on the size of `VotersFor`, could the vector be inflated?
 	/// # </weight>
 	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		let (approve, against, capital): (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) = Self::voters_for(ref_index).iter()
@@ -416,7 +416,7 @@ impl<T: Trait> Module<T> {
 	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done.
 	///
 	/// # <weight>
-	/// - Dependent on size of `voters_for` could the array be inflated?
+	/// - Dependent on size of `voters_for` could the vector be inflated?
 	/// - Dependent on weight of `delegated_votes()`
 	/// # </weight>
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {

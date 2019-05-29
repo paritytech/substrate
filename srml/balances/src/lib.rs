@@ -354,7 +354,7 @@ decl_module! {
 		/// Related functions:
 		///
 		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
-		///   - Transferring balances to accounts that did not existed before will cause
+		///   - Transferring balances to accounts that did not exist before will cause
 		///      `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
@@ -721,7 +721,7 @@ where
 
 	/// # <weight>
 	/// Despite iterating over a list of locks, they are limited by the number of
-	/// lock ids, which means the number of runtime modules that intend to use and create locks.
+	/// lock IDs, which means the number of runtime modules that intend to use and create locks.
 	/// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
