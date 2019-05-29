@@ -682,7 +682,7 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after an extrinsic has been applied.
 	///
 	/// <weight>
-	/// Transaction is IO bound and safe. Possible overflow on next_extrinsic_index. 
+	/// Transaction is I/O bound and safe. Possible overflow on `next_extrinsic_index`. 
 	/// </weight>
 	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
