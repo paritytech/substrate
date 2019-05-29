@@ -34,7 +34,6 @@ use parking_lot::Mutex;
 use client::BlockchainEvents;
 use exit_future::Signal;
 use futures::prelude::*;
-use inherents::pool::InherentsPool;
 use keystore::Store as Keystore;
 use log::{info, warn, debug};
 use parity_codec::{Encode, Decode};
@@ -76,7 +75,6 @@ pub struct Service<Components: components::Components> {
 	select_chain: Option<<Components as components::Components>::SelectChain>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
@@ -211,11 +209,9 @@ impl<Components: components::Components> Service<Components> {
 			.select(exit.clone())
 			.then(|_| Ok(())));
 
-		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {
 			Some(Arc::new(offchain::OffchainWorkers::new(
 				client.clone(),
-				inherents_pool.clone(),
 				task_executor.clone(),
 			)))
 		} else {
@@ -381,7 +377,6 @@ impl<Components: components::Components> Service<Components> {
 			network: Some(network),
 			select_chain,
 			transaction_pool,
-			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
@@ -431,11 +426,6 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
-	}
-
-	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
-		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.
@@ -498,17 +488,32 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
+/// Get transactions for propagation.
+///
+/// Function extracted to simplify the test and prevent creating `ServiceFactory`.
+fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+	-> Vec<(H, B::Extrinsic)>
+where
+	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	B: BlockT,
+	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+{
+	pool.ready()
+		.filter(|t| t.is_propagateable())
+		.map(|t| {
+			let hash = t.hash.clone();
+			let ex: B::Extrinsic = t.data.clone();
+			(hash, ex)
+		})
+		.collect()
+}
+
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
 	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
 {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready()
-			.map(|t| {
-				let hash = t.hash.clone();
-				let ex: ComponentExtrinsic<C> = t.data.clone();
-				(hash, ex)
-			})
-			.collect()
+		transactions_to_propagate(&self.pool)
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
@@ -743,5 +748,44 @@ macro_rules! construct_service_factory {
 				})
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use client::LongestChain;
+	use consensus_common::SelectChain;
+	use runtime_primitives::traits::BlindCheckable;
+	use substrate_test_client::{AccountKeyring, runtime::{Extrinsic, Transfer}};
+
+	#[test]
+	fn should_not_propagate_transactions_that_are_marked_as_such() {
+		// given
+		let client = Arc::new(substrate_test_client::new());
+		let pool = Arc::new(TransactionPool::new(
+			Default::default(),
+			transaction_pool::ChainApi::new(client.clone())
+		));
+		let best = LongestChain::new(client.backend().clone(), client.import_lock())
+			.best_chain().unwrap();
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+		pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])).unwrap();
+		assert_eq!(pool.status().ready, 2);
+
+		// when
+		let transactions = transactions_to_propagate(&pool);
+
+		// then
+		assert_eq!(transactions.len(), 1);
+		assert!(transactions[0].1.clone().check().is_ok());
+		// this should not panic
+		let _ = transactions[0].1.transfer();
 	}
 }
