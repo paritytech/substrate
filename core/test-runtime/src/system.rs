@@ -21,7 +21,7 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT, Header as _};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
@@ -38,6 +38,7 @@ storage_items! {
 	Number: b"sys:num" => BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
+	StorageDigest: b"sys:digest" => Digest;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -67,6 +68,7 @@ pub fn initialize_block(header: &Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
+	<StorageDigest>::put(header.digest());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 }
 
@@ -99,18 +101,17 @@ pub fn polish_block(block: &mut Block) {
 	header.state_root = storage_root().into();
 
 	// check digest
-	let mut digest = Digest::default();
+	let digest = &mut header.digest;
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
-	header.digest = digest;
 }
 
-pub fn execute_block(block: Block) {
-	let ref header = block.header;
+pub fn execute_block(mut block: Block) {
+	let header = &mut block.header;
 
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
@@ -132,14 +133,13 @@ pub fn execute_block(block: Block) {
 	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
 
 	// check digest
-	let mut digest = Digest::default();
+	let digest = &mut header.digest;
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
-	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
 
 /// The block executor.
@@ -209,13 +209,16 @@ pub fn finalize_block() -> Header {
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
-
+	// let mut digest = Digest::default();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
+	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
+
+	// This MUST come after all changes to storage are done.  Otherwise we will fail the
+	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
 
-	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
