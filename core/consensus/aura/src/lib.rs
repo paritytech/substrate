@@ -395,7 +395,7 @@ fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
 //
 // FIXME #1018 needs misbehavior types
 fn check_header<C, B: Block, P: Pair>(
-	client: &Arc<C>,
+	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -431,26 +431,22 @@ fn check_header<C, B: Block, P: Pair>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			match check_equivocation::<_, _, <P as Pair>::Public>(
+			if let Some(equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
 				slot_num,
-				header.clone(),
-				expected_author.clone(),
-			) {
-				Ok(Some(equivocation_proof)) => {
-					let log_str = format!(
-						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
-						slot_num,
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
-					);
-					info!("{}", log_str);
-					Err(log_str)
-				},
-				Ok(None) => Ok(CheckedHeader::Checked(header, (slot_num, seal))),
-				Err(e) => Err(e.to_string()),
+				&header,
+				expected_author,
+			).map_err(|e| e.to_string())? {
+				info!(
+					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
+					slot_num,
+					equivocation_proof.fst_header().hash(),
+					equivocation_proof.snd_header().hash(),
+				);
 			}
+
+			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))
 		}
@@ -766,9 +762,6 @@ mod tests {
 	use primitives::sr25519;
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
-	use primitives::hash::H256;
-	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest, Block as RawBlock, ExtrinsicWrapper};
-	use slots::{MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 	type Error = client::error::Error;
 
@@ -873,24 +866,6 @@ mod tests {
 		}
 	}
 
-	fn create_header(slot_num: u64, number: u64, pair: &sr25519::Pair) -> (HeaderTest, H256) {
-		let mut header = HeaderTest {
-			parent_hash: Default::default(),
-			number,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: DigestTest { logs: vec![], },
-		};
-		let item = <DigestItemFor<TestBlock> as CompatibleDigestItem<sr25519::Pair>>::aura_pre_digest(slot_num);
-		header.digest_mut().push(item);
-		let header_hash: H256 = header.hash();
-		let signature = pair.sign(&header_hash[..]);
-
-		let item = CompatibleDigestItem::<sr25519::Pair>::aura_seal(signature);
-		header.digest_mut().push(item);
-		(header, header_hash)
-	}
-
 	#[test]
 	#[allow(deprecated)]
 	fn authoring_blocks() {
@@ -974,44 +949,5 @@ mod tests {
 			Keyring::Bob.into(),
 			Keyring::Charlie.into()
 		]);
-	}
-
-	#[test]
-	fn check_header_works_with_equivocation() {
-		let client = test_client::new();
-		let pair = sr25519::Pair::generate();
-		let public = pair.public();
-		let authorities = vec![public.clone(), sr25519::Pair::generate().public()];
-
-		let (header1, header1_hash) = create_header(2, 1, &pair);
-		let (header2, header2_hash) = create_header(2, 2, &pair);
-		let (header3, header3_hash) = create_header(4, 2, &pair);
-		let (header4, header4_hash) = create_header(MAX_SLOT_CAPACITY + 4, 3, &pair);
-		let (header5, header5_hash) = create_header(MAX_SLOT_CAPACITY + 4, 4, &pair);
-		let (header6, header6_hash) = create_header(4, 3, &pair);
-
-		type B = RawBlock<ExtrinsicWrapper<u64>>;
-		type P = sr25519::Pair;
-
-		let c = Arc::new(client);
-
-		// It's ok to sign same headers.
-		check_header::<_, B, P>(&c, 2, header1.clone(), header1_hash, &authorities).unwrap();
-		assert!(check_header::<_, B, P>(&c, 3, header1, header1_hash, &authorities).is_ok());
-
-		// But not two different headers at the same slot.
-		assert!(check_header::<_, B, P>(&c, 4, header2, header2_hash, &authorities).is_err());
-
-		// Different slot is ok.
-		assert!(check_header::<_, B, P>(&c, 5, header3, header3_hash, &authorities).is_ok());
-
-		// Here we trigger pruning and save header 4.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 2, header4, header4_hash, &authorities).is_ok());
-
-		// This fails because header 5 is an equivocation of header 4.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 3, header5, header5_hash, &authorities).is_err());
-
-		// This is ok because we pruned the corresponding header. Shows that we are pruning.
-		assert!(check_header::<_, B, P>(&c, PRUNING_BOUND + 4, header6, header6_hash, &authorities).is_ok());
 	}
 }
