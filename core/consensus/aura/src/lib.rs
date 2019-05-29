@@ -500,25 +500,21 @@ fn check_header<C, B: Block, P: Pair>(
 		let public = expected_author;
 
 		if P::verify(&sig, &to_sign[..], public) {
-			match check_equivocation::<_, _, <P as Pair>::Public>(
+			if let Some(equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
 				slot_num,
 				header.clone(),
 				public.clone(),
-			) {
-				Ok(Some(equivocation_proof)) => {
-					// NOTE: we'll want to report this equivocation to some
-					// runtime module once that's implemented.
-					info!(
-						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
-						slot_num,
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
-					);
-				},
-				Ok(None) => {},
-				Err(e) => return Err(e.to_string()),
+			).map_err(|e| e.to_string())? {
+				// NOTE: we'll want to report this equivocation to some
+				// runtime module once that's implemented.
+				info!(
+					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
+					slot_num,
+					equivocation_proof.fst_header().hash(),
+					equivocation_proof.snd_header().hash(),
+				);
 			}
 
 			Ok(CheckedHeader::Checked(header, digest_item))
