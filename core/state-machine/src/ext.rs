@@ -146,7 +146,6 @@ where
 	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	O: 'a + OffchainExt,
 	O: 'a + offchain::Externalities,
 	N: crate::changes_trie::BlockNumber,
 {
