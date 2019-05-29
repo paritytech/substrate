@@ -22,7 +22,6 @@ use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::H256;
-use substrate_primitives::U256;
 use substrate_primitives::sr25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 /// Authority Id
@@ -31,7 +30,7 @@ use substrate_primitives::sr25519::{Public as AuthorityId, Signature as Authorit
 pub struct UintAuthorityId(pub u64);
 impl Into<AuthorityId> for UintAuthorityId {
 	fn into(self) -> AuthorityId {
-		let bytes: [u8; 32] = U256::from(self.0).into();
+		let bytes: [u8; 32] = H256::from_low_u64_be(self.0).into();
 		AuthorityId(bytes)
 	}
 }

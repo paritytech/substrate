@@ -329,13 +329,15 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use serde::{Deserialize, Serialize};
 	use std::cell::RefCell;
 	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use substrate_primitives::{H256, U256, Blake2Hasher, ed25519, sr25519};
+	use parity_codec::{Decode, Encode};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -356,9 +358,40 @@ mod tests {
 	pub struct Test;
 	impl consensus::Trait for Test {
 		type Log = DigestItem;
-		type SessionKey = UintAuthorityId;
+		type SessionKey = TestSessionKey;
 		type InherentOfflineReport = ();
 	}
+
+	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+	pub struct TestSessionKey(u64, u64);
+
+	impl From<TestSessionKey> for sr25519::Public {
+		fn from(key: TestSessionKey) -> Self {
+			let bytes: [u8; 32] = H256::from_low_u64_be(key.0).into();
+			Self(bytes)
+		}
+	}
+
+	impl From<TestSessionKey> for ed25519::Public {
+		fn from(key: TestSessionKey) -> Self {
+			let bytes: [u8; 32] = H256::from_low_u64_be(key.1).into();
+			Self(bytes)
+		}
+	}
+
+	pub struct ConvertU64ToTestSessionKey;
+	impl Convert<u64, Option<TestSessionKey>> for ConvertU64ToTestSessionKey {
+		fn convert(a: u64) -> Option<TestSessionKey> {
+				Some(TestSessionKey::from(a))
+		}
+	}
+
+	impl From<u64> for TestSessionKey {
+		fn from(id: u64) -> Self {
+			Self(id, id + 100)
+		}
+	}
+
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -377,7 +410,7 @@ mod tests {
 		type OnTimestampSet = ();
 	}
 	impl Trait for Test {
-		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
+		type ConvertAccountIdToSessionKey = ConvertU64ToTestSessionKey;
 		type OnSessionChange = TestOnSessionChange;
 		type Event = ();
 	}
@@ -390,7 +423,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
-			authorities: NEXT_VALIDATORS.with(|l| l.borrow().iter().cloned().map(UintAuthorityId).collect()),
+			authorities: NEXT_VALIDATORS.with(|l| l.borrow().iter().cloned().map(TestSessionKey::from).collect()),
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			minimum_period: 5,
@@ -403,10 +436,14 @@ mod tests {
 		runtime_io::TestExternalities::new(t)
 	}
 
+	fn account_ids_to_session_keys(account_ids: Vec<u64>) -> Vec<TestSessionKey> {
+		account_ids.into_iter().map(TestSessionKey::from).collect()
+	}
+
 	#[test]
 	fn simple_setup_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 3]));
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
@@ -419,19 +456,19 @@ mod tests {
 			assert_ok!(Session::force_new_session(false));
 			Session::check_rotate_session(1);
 			assert_eq!(Session::validators(), vec![1, 2]);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2]));
 
 			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 4]);
 			assert_ok!(Session::force_new_session(false));
 			Session::check_rotate_session(2);
 			assert_eq!(Session::validators(), vec![1, 2, 4]);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 4]));
 
 			NEXT_VALIDATORS.with(|v| *v.borrow_mut() = vec![1, 2, 3]);
 			assert_ok!(Session::force_new_session(false));
 			Session::check_rotate_session(3);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 3]));
 		});
 	}
 
@@ -525,25 +562,25 @@ mod tests {
 			// Block 1: No change
 			System::set_block_number(1);
 			Session::check_rotate_session(1);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 3]));
 
 			// Block 2: Session rollover, but no change.
 			System::set_block_number(2);
 			Session::check_rotate_session(2);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 3]));
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			assert_ok!(Session::set_key(Origin::signed(2), UintAuthorityId(5)));
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert_ok!(Session::set_key(Origin::signed(2), TestSessionKey::from(5)));
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 3]));
 
 			Session::check_rotate_session(3);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 2, 3]));
 
 			// Block 4: Session rollover, authority 2 changes.
 			System::set_block_number(4);
 			Session::check_rotate_session(4);
-			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
+			assert_eq!(Consensus::authorities(), account_ids_to_session_keys(vec![1, 5, 3]));
 		});
 	}
 }
