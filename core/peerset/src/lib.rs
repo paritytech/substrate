@@ -32,7 +32,6 @@ const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
 /// Reserved peers group ID
 const RESERVED_NODES: &'static str = "reserved";
 
-
 #[derive(Debug)]
 enum Action {
 	AddReservedPeer(PeerId),
