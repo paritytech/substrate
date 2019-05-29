@@ -73,12 +73,11 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	// or pass by value the Subtrie.
 	fn with_subtrie<R>(
 		&mut self,
-		prefixed_storage_key: &[u8],
+		storage_key: &[u8],
 		f: impl Fn(&mut Self, SubTrie) -> R
-	) -> Option<R> {
-		// note that we use empty prefix which result in a subtrie that requires
-		// key + prefix but the subtrie is quickly drop so it is not an issue).
-		self.ext.child_trie(prefixed_storage_key).map(|s| f(self,s))
+	) -> std::result::Result<R, UserError> {
+		self.ext.child_trie(storage_key).map(|s| f(self,s))
+			.ok_or(UserError("No child trie at given address."))
 	}
 }
 
@@ -171,13 +170,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_set_child_storage(
-		prefixed_storage_key_data: *const u8,
+		storage_key_data: *const u8,
 		storage_key_len: u32,
 		key_data: *const u8,
 		key_len: u32,
 		value_data: *const u8,
 		value_len: u32) => {
-		let storage_key = this.memory.get(prefixed_storage_key_data, storage_key_len as usize)
+		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
@@ -202,16 +201,16 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		}
 		this.with_subtrie(&storage_key[..], |this, subtrie|
 			this.ext.set_child_storage(&subtrie, key.clone(), value.clone())
-		).expect("Called from a valid SubTrie instance");
+		)?;
 		Ok(())
 	},
 	ext_clear_child_storage(
-		prefixed_storage_key_data: *const u8,
+		storage_key_data: *const u8,
 		storage_key_len: u32,
 		key_data: *const u8,
 		key_len: u32
 	) => {
-		let storage_key = this.memory.get(prefixed_storage_key_data, storage_key_len as usize)
+		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_clear_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_clear_child_storage"))?;
@@ -224,7 +223,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			}, HexDisplay::from(&key));
 			this.with_subtrie(&storage_key[..], |this, subtrie|
 				this.ext.clear_child_storage(&subtrie, &key)
-			).expect("Called from a valid SubTrie instance");
+			)?;
 
 		Ok(())
 	},
@@ -272,11 +271,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
-	ext_kill_child_storage(prefixed_storage_key_data: *const u8, storage_key_len: u32) => {
-		let storage_key = this.memory.get(prefixed_storage_key_data, storage_key_len as usize)
+	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
+		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
-		this.with_subtrie(&storage_key[..], |this, subtrie| this.ext.kill_child_storage(&subtrie))
-			.expect("Called from a valid SubTrie instance");
+		this.with_subtrie(&storage_key[..], |this, subtrie| this.ext.kill_child_storage(&subtrie))?;
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
@@ -453,7 +451,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let value = this.with_subtrie(&storage_key[..], |this, subtrie|
 			this.ext.child_storage_root(&subtrie)
-		).expect("Called from a valid SubTrie instance");
+		)?;
 
 		let offset = this.heap.allocate(value.len() as u32)? as u32;
 		this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
