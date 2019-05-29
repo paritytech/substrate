@@ -408,7 +408,7 @@ impl<T: Trait> Module<T> {
 	/// It is expected that light-clients could subscribe to this topics.
 	///
 	/// <weight>
-	/// - The `topics` argument effects complexity. 
+	/// - The `topics` argument affects complexity. 
 	/// - Each passed topic will be written to storage.
 	/// - Is topics limited by the functions that call this?
 	/// </weight>
