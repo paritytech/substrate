@@ -207,36 +207,6 @@ pub trait StorageValue<T: codec::Codec> {
 	}
 }
 
-/// A strongly-typed list in storage.
-pub trait StorageList<T: codec::Codec> {
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
-
-	/// Get the key used to put the length field.
-	fn len_key() -> Vec<u8>;
-
-	/// Get the storage key used to fetch a value at a given index.
-	fn key_for(index: u32) -> Vec<u8>;
-
-	/// Read out all the items.
-	fn items<S: HashedStorage<Twox128>>(storage: &S) -> Vec<T>;
-
-	/// Set the current set of items.
-	fn set_items<S: HashedStorage<Twox128>>(items: &[T], storage: &mut S);
-
-	/// Set the item at the given index.
-	fn set_item<S: HashedStorage<Twox128>>(index: u32, item: &T, storage: &mut S);
-
-	/// Load the value at given index. Returns `None` if the index is out-of-bounds.
-	fn get<S: HashedStorage<Twox128>>(index: u32, storage: &S) -> Option<T>;
-
-	/// Load the length of the list
-	fn len<S: HashedStorage<Twox128>>(storage: &S) -> u32;
-
-	/// Clear the list.
-	fn clear<S: HashedStorage<Twox128>>(storage: &mut S);
-}
-
 /// A strongly-typed map in storage.
 pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// The type that get/take returns.
