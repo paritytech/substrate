@@ -64,6 +64,7 @@ mod cost {
 	pub(super) const BAD_SIGNATURE: i32 = -100;
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
+	pub(super) const UNKNOWN_VOTER: i32 = -150;
 
 	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
@@ -663,7 +664,7 @@ fn check_compact_commit<Block: BlockT>(
 	let f = voters.total_weight() - voters.threshold();
 	let full_threshold = voters.total_weight() + f;
 
-	// check total weight is not too high.
+	// check total weight is not out of range.
 	let mut total_weight = 0;
 	for (_, ref id) in &msg.auth_data {
 		if let Some(weight) = voters.info(id).map(|info| info.weight()) {
