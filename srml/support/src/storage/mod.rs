@@ -331,9 +331,6 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 }
 
 /// A storage map with values that can be appended to.
-///
-/// Primarily useful for off-chain computations.
-/// Runtime implementors should avoid enumerating storage entries on-chain.
 pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Append the given item to the value in the storage.
 	///
