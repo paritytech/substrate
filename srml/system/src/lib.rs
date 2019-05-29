@@ -672,7 +672,7 @@ impl<T: Trait> Module<T> {
 	/// `execute_block` doesn't note any extrinsics.
 	///
 	/// <weight>
-	/// The parameter encoded_xt is potentially exploitable since no check is made on its size and gets inserted to 
+	/// The parameter `encoded_xt` is potentially exploitable since no check is made on its size and it gets inserted in
 	/// storage.
 	/// </weight>
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
