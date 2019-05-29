@@ -177,16 +177,6 @@ impl<Components: components::Components> Service<Components> {
 			client: client.clone(),
 		 });
 
-		let network_params = network::config::Params {
-			config: network::config::ProtocolConfig { roles: config.roles },
-			network_config: config.network.clone(),
-			chain: client.clone(),
-			finality_proof_provider,
-			on_demand,
-			transaction_pool: transaction_pool_adapter.clone() as _,
-			specialization: network_protocol,
-		};
-
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
 				Some(pid) => pid,
@@ -200,8 +190,26 @@ impl<Components: components::Components> Service<Components> {
 			network::ProtocolId::from(protocol_id_full)
 		};
 
+		let network_params = network::config::Params {
+			roles: config.roles,
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			finality_proof_provider,
+			on_demand,
+			transaction_pool: transaction_pool_adapter.clone() as _,
+			import_queue,
+			protocol_id,
+			specialization: network_protocol,
+		};
+
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
+		let network_mut = network::NetworkWorker::new(network_params)?;
+		let network = network_mut.service().clone();
+
+		task_executor.spawn(network_mut
+			.map_err(|_| ())
+			.select(exit.clone())
+			.then(|_| Ok(())));
 
 		let inherents_pool = Arc::new(InherentsPool::default());
 		let offchain_workers =  if config.offchain_worker {

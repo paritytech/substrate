@@ -43,8 +43,8 @@ pub mod test;
 
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
-	Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg,
-	SyncProvider, ExHashT, ReportHandle,
+	NetworkService, NetworkWorker, FetchFuture, TransactionPool, ManageNetwork,
+	NetworkMsg, SyncProvider, ExHashT, ReportHandle,
 };
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};

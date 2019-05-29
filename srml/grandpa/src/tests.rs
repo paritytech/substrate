@@ -30,7 +30,7 @@ use super::*;
 #[test]
 fn authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
-		System::initialize(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0, None).unwrap();
 
 		System::note_finished_extrinsics();
@@ -56,7 +56,7 @@ fn authorities_change_logged() {
 #[test]
 fn authorities_change_logged_after_delay() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
-		System::initialize(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, None).unwrap();
 		Grandpa::on_finalize(1);
 		let header = System::finalize();
@@ -69,7 +69,7 @@ fn authorities_change_logged_after_delay() {
 		// no change at this height.
 		assert_eq!(System::events(), vec![]);
 
-		System::initialize(&2, &header.hash(), &Default::default());
+		System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
 		System::note_finished_extrinsics();
 		Grandpa::on_finalize(2);
 
@@ -87,7 +87,7 @@ fn authorities_change_logged_after_delay() {
 #[test]
 fn cannot_schedule_change_when_one_pending() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
-		System::initialize(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, None).unwrap();
 		assert!(Grandpa::pending_change().is_some());
 		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
@@ -95,14 +95,14 @@ fn cannot_schedule_change_when_one_pending() {
 		Grandpa::on_finalize(1);
 		let header = System::finalize();
 
-		System::initialize(&2, &header.hash(), &Default::default());
+		System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
 		assert!(Grandpa::pending_change().is_some());
 		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
 
 		Grandpa::on_finalize(2);
 		let header = System::finalize();
 
-		System::initialize(&3, &header.hash(), &Default::default());
+		System::initialize(&3, &header.hash(), &Default::default(), &Default::default());
 		assert!(Grandpa::pending_change().is_none());
 		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_ok());
 
@@ -130,7 +130,7 @@ fn new_decodes_from_old() {
 #[test]
 fn dispatch_forced_change() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
-		System::initialize(&1, &Default::default(), &Default::default());
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(
 			vec![(4, 1), (5, 1), (6, 1)],
 			5,
@@ -144,7 +144,7 @@ fn dispatch_forced_change() {
 		let mut header = System::finalize();
 
 		for i in 2..7 {
-			System::initialize(&i, &header.hash(), &Default::default());
+			System::initialize(&i, &header.hash(), &Default::default(), &Default::default());
 			assert!(Grandpa::pending_change().unwrap().forced.is_some());
 			assert_eq!(Grandpa::next_forced(), Some(11));
 			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
@@ -157,7 +157,7 @@ fn dispatch_forced_change() {
 		// change has been applied at the end of block 6.
 		// add a normal change.
 		{
-			System::initialize(&7, &header.hash(), &Default::default());
+			System::initialize(&7, &header.hash(), &Default::default(), &Default::default());
 			assert!(Grandpa::pending_change().is_none());
 			assert_eq!(Grandpa::grandpa_authorities(), vec![(4, 1), (5, 1), (6, 1)]);
 			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_ok());
@@ -167,7 +167,7 @@ fn dispatch_forced_change() {
 
 		// run the normal change.
 		{
-			System::initialize(&8, &header.hash(), &Default::default());
+			System::initialize(&8, &header.hash(), &Default::default(), &Default::default());
 			assert!(Grandpa::pending_change().is_some());
 			assert_eq!(Grandpa::grandpa_authorities(), vec![(4, 1), (5, 1), (6, 1)]);
 			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
@@ -178,7 +178,7 @@ fn dispatch_forced_change() {
 		// normal change applied. but we can't apply a new forced change for some
 		// time.
 		for i in 9..11 {
-			System::initialize(&i, &header.hash(), &Default::default());
+			System::initialize(&i, &header.hash(), &Default::default(), &Default::default());
 			assert!(Grandpa::pending_change().is_none());
 			assert_eq!(Grandpa::grandpa_authorities(), vec![(5, 1)]);
 			assert_eq!(Grandpa::next_forced(), Some(11));
@@ -188,7 +188,7 @@ fn dispatch_forced_change() {
 		}
 
 		{
-			System::initialize(&11, &header.hash(), &Default::default());
+			System::initialize(&11, &header.hash(), &Default::default(), &Default::default());
 			assert!(Grandpa::pending_change().is_none());
 			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1), (7, 1)], 5, Some(0)).is_ok());
 			assert_eq!(Grandpa::next_forced(), Some(21));

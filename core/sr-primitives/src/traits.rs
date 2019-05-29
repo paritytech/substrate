@@ -435,7 +435,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn storage_root() -> Self::Output;
 
 	/// Acquire the global storage changes root.
-	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output>;
+	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -468,8 +468,8 @@ impl Hash for BlakeTwo256 {
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
-	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(parent_hash.into(), parent_number).map(Into::into)
+	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
 	}
 }
 
@@ -641,8 +641,6 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	fn digest(&self) -> &Self::Digest;
 	/// Get a mutable reference to the digest.
 	fn digest_mut(&mut self) -> &mut Self::Digest;
-	/// Sets the digest.
-	fn set_digest(&mut self, digest: Self::Digest);
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -780,11 +778,14 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// `AuthorityChange` payload.
 	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
-	/// Returns Some if the entry is the `AuthoritiesChange` entry.
+	/// Returns `Some` if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
 
-	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
+	/// Returns `Some` if the entry is the `ChangesTrieRoot` entry.
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
+
+	/// Returns `Some` if this entry is the `PreRuntime` entry.
+	fn as_pre_runtime(&self) -> Option<(super::ConsensusEngineId, &[u8])>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
