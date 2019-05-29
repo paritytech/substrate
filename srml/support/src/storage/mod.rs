@@ -334,6 +334,28 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 ///
 /// Primarily useful for off-chain computations.
 /// Runtime implementors should avoid enumerating storage entries on-chain.
+pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	/// Append the given item to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+		where V: EncodeAppend<Item=I>;
+}
+
+impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
+	where U: hashed::generator::AppendableStorageMap<K, V>
+{
+	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+		where V: EncodeAppend<Item=I>
+	{
+		U::append(key.borrow(), items, &mut RuntimeStorage)
+	}
+}
+
+/// A storage map that can be enumerated.
+///
+/// Primarily useful for off-chain computations.
+/// Runtime implementors should avoid enumerating storage entries on-chain.
 pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Return current head element.
 	fn head() -> Option<K>;
@@ -342,7 +364,9 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: hashed::generator::EnumerableStorageMap<K, V> {
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
+	where U: hashed::generator::EnumerableStorageMap<K, V>
+{
 	fn head() -> Option<K> {
 		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
