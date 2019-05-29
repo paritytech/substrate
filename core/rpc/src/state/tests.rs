@@ -99,7 +99,7 @@ fn should_notify_about_storage_changes() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let mut builder = api.client.new_block().unwrap();
+		let mut builder = api.client.new_block(Default::default()).unwrap();
 		builder.push_transfer(runtime::Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
@@ -134,7 +134,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let mut builder = api.client.new_block().unwrap();
+		let mut builder = api.client.new_block(Default::default()).unwrap();
 		builder.push_transfer(runtime::Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
@@ -168,7 +168,7 @@ fn should_query_storage() {
 		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
 		let add_block = |nonce| {
-			let mut builder = client.new_block().unwrap();
+			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_transfer(runtime::Transfer {
 				from: AccountKeyring::Alice.into(),
 				to: AccountKeyring::Ferdie.into(),

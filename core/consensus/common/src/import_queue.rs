@@ -37,7 +37,7 @@ use std::sync::Arc;
 use std::thread;
 
 use runtime_primitives::traits::{
-	AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor
+	AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor, Digest,
 };
 use runtime_primitives::Justification;
 
@@ -872,6 +872,8 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			return Err(BlockImportError::IncompleteHeader(peer))
 		},
 	};
+
+	trace!(target: "sync", "Header {} has {:?} logs", block.hash, header.digest().logs().len());
 
 	let number = header.number().clone();
 	let hash = header.hash();
