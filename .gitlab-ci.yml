@@ -218,7 +218,7 @@ publish-docker-release:
     - docker build
       --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      --tag $CONTAINER_IMAGE:$VERSION 
+      --tag $CONTAINER_IMAGE:$VERSION
       --tag $CONTAINER_IMAGE:latest .
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
@@ -272,7 +272,7 @@ publish-s3-doc:
         --human-readable --summarize
 
 .deploy-template:                  &deploy
-  stage:                           kubernetes 
+  stage:                           kubernetes
   when:                            manual
   retry:                           1
   image:                           parity/kubetools:latest

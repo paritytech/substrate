@@ -38,4 +38,3 @@ impl FromStr for Mode {
 		}
 	}
 }
-

@@ -107,21 +107,20 @@ impl traits::Header for Header {
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
 	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
-	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Self::Digest,
 	) -> Self {
 		Header {
 			number,
-			extrinsics_root: extrinsics_root,
+			extrinsics_root,
 			state_root,
 			parent_hash,
-			digest
+			digest,
 		}
 	}
 }

@@ -68,7 +68,7 @@ fn should_return_a_block() {
 		subscriptions: Subscriptions::new(remote),
 	};
 
-	let block = api.client.new_block().unwrap().bake().unwrap();
+	let block = api.client.new_block(Default::default()).unwrap().bake().unwrap();
 	let block_hash = block.hash();
 	api.client.import(BlockOrigin::Own, block).unwrap();
 
@@ -138,7 +138,7 @@ fn should_return_block_hash() {
 		Ok(None)
 	);
 
-	let block = client.client.new_block().unwrap().bake().unwrap();
+	let block = client.client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
@@ -172,7 +172,7 @@ fn should_return_finalized_hash() {
 	);
 
 	// import new block
-	let builder = client.client.new_block().unwrap();
+	let builder = client.client.new_block(Default::default()).unwrap();
 	client.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	// no finalization yet
 	assert_matches!(
@@ -205,7 +205,7 @@ fn should_notify_about_latest_block() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let builder = api.client.new_block().unwrap();
+		let builder = api.client.new_block(Default::default()).unwrap();
 		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
@@ -236,7 +236,7 @@ fn should_notify_about_finalized_block() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let builder = api.client.new_block().unwrap();
+		let builder = api.client.new_block(Default::default()).unwrap();
 		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 		api.client.finalize_block(BlockId::number(1), None, true).unwrap();
 	}

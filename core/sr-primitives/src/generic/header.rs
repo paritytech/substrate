@@ -18,9 +18,12 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+#[cfg(feature = "std")]
+use log::debug;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
 use crate::traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
-	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
+	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug,
+	MaybeSerializeDebugButNotDeserialize};
 use crate::generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
@@ -107,22 +110,29 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
+
+	#[cfg(feature = "std")]
+	fn digest_mut(&mut self) -> &mut Self::Digest {
+		debug!(target: "header", "Retrieving mutable reference to digest");
+		&mut self.digest
+	}
+
+	#[cfg(not(feature = "std"))]
 	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
-	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Self::Digest
+		digest: Self::Digest,
 	) -> Self {
 		Header {
 			number,
 			extrinsics_root,
 			state_root,
 			parent_hash,
-			digest
+			digest,
 		}
 	}
 }
