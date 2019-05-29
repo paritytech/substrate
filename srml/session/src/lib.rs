@@ -165,7 +165,7 @@ decl_module! {
 		/// This doesn't take effect until the next session.
 		fn set_key(origin, key: T::SessionKey) {
 			let who = ensure_signed(origin)?;
-			if <KeyFilterMap<T>>::get(&key) == None {
+			if <KeyFilterMap<T>>::get(&key).is_none() {
 				// set new value for next session
 				<NextKeyFor<T>>::insert(who.clone(), key.clone());
 				<KeyFilterMap<T>>::insert(key, who);
