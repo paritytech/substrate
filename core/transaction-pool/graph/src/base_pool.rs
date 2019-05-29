@@ -100,6 +100,15 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub requires: Vec<Tag>,
 	/// Tags that this transaction provides.
 	pub provides: Vec<Tag>,
+	/// Should that transaction be propagated.
+	pub propagate: bool,
+}
+
+impl<Hash, Extrinsic> Transaction<Hash, Extrinsic> {
+	/// Returns `true` if the transaction should be propagated to other peers.
+	pub fn is_propagateable(&self) -> bool {
+		self.propagate
+	}
 }
 
 impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
@@ -123,6 +132,7 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 		write!(fmt, "priority: {:?}, ", &self.priority)?;
 		write!(fmt, "valid_till: {:?}, ", &self.valid_till)?;
 		write!(fmt, "bytes: {:?}, ", &self.bytes)?;
+		write!(fmt, "propagate: {:?}, ", &self.propagate)?;
 		write!(fmt, "requires: [")?;
 		print_tags(fmt, &self.requires)?;
 		write!(fmt, "], provides: [")?;
@@ -473,6 +483,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 
 		// then
@@ -494,6 +505,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![1u8],
@@ -503,6 +515,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap_err();
 
 		// then
@@ -525,6 +538,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -536,6 +550,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
+			propagate: true,
 		}).unwrap();
 
 		// then
@@ -557,6 +572,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -566,6 +582,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![2]],
 			provides: vec![],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
@@ -575,6 +592,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![1]],
 			provides: vec![vec![3], vec![2]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
@@ -584,6 +602,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![3], vec![4]],
 			provides: vec![],
+			propagate: true,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -596,6 +615,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![0], vec![4]],
+			propagate: true,
 		}).unwrap();
 
 		// then
@@ -627,6 +647,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -636,6 +657,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
+			propagate: true,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -649,6 +671,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![2]],
 			provides: vec![vec![0]],
+			propagate: true,
 		}).unwrap();
 
 		// then
@@ -668,6 +691,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
+			propagate: true,
 		}).unwrap();
 		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 		assert_eq!(it.next(), Some(4));
@@ -695,6 +719,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -704,6 +729,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
+			propagate: true,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -717,6 +743,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![2]],
 			provides: vec![vec![0]],
+			propagate: true,
 		}).unwrap();
 
 		// then
@@ -736,6 +763,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
+			propagate: true,
 		}).unwrap_err();
 		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 		assert_eq!(it.next(), None);
@@ -759,6 +787,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![0], vec![4]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![1u8],
@@ -768,6 +797,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -777,6 +807,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![2]],
 			provides: vec![],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
@@ -786,6 +817,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![1]],
 			provides: vec![vec![3], vec![2]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
@@ -795,6 +827,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![3], vec![4]],
 			provides: vec![],
+			propagate: true,
 		}).unwrap();
 		// future
 		pool.import(Transaction {
@@ -805,6 +838,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![11]],
 			provides: vec![],
+			propagate: true,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 5);
 		assert_eq!(pool.future.len(), 1);
@@ -830,6 +864,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![0]],
 			provides: vec![vec![100]],
+			propagate: true,
 		}).unwrap();
 		// ready
 		pool.import(Transaction {
@@ -840,6 +875,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![],
 			provides: vec![vec![1]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
@@ -849,6 +885,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![2]],
 			provides: vec![vec![3]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -858,6 +895,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
+			propagate: true,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
@@ -867,6 +905,7 @@ mod tests {
 			valid_till: 64u64,
 			requires: vec![vec![3], vec![2]],
 			provides: vec![vec![4]],
+			propagate: true,
 		}).unwrap();
 
 		assert_eq!(pool.ready().count(), 4);
@@ -901,8 +940,36 @@ mod tests {
 				valid_till: 64u64,
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
+				propagate: true,
 			}),
-			r#"Transaction { hash: 4, priority: 1000, valid_till: 64, bytes: 1, requires: [03,02], provides: [04], data: [4]}"#.to_owned()
+			"Transaction { \
+hash: 4, priority: 1000, valid_till: 64, bytes: 1, propagate: true, \
+requires: [03,02], provides: [04], data: [4]}".to_owned()
 		);
+	}
+
+	#[test]
+	fn transaction_propagation() {
+		assert_eq!(Transaction {
+				data: vec![4u8],
+				bytes: 1,
+				hash: 4,
+				priority: 1_000u64,
+				valid_till: 64u64,
+				requires: vec![vec![3], vec![2]],
+				provides: vec![vec![4]],
+				propagate: true,
+		}.is_propagateable(), true);
+
+		assert_eq!(Transaction {
+				data: vec![4u8],
+				bytes: 1,
+				hash: 4,
+				priority: 1_000u64,
+				valid_till: 64u64,
+				requires: vec![vec![3], vec![2]],
+				provides: vec![vec![4]],
+				propagate: false,
+		}.is_propagateable(), false);
 	}
 }
