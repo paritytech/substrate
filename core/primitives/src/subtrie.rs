@@ -45,7 +45,7 @@ pub fn keyspace_prefixed_expected_len(ks: &KeySpace, prefix: &[u8]) -> usize {
 
 /// keyspace and prefix with allocation
 pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
-	let mut res = rstd::vec![0;keyspace_prefixed_expected_len(ks, prefix)];
+	let mut res = rstd::vec![0; keyspace_prefixed_expected_len(ks, prefix)];
 	keyspace_in_prefix(ks, prefix, res.as_mut());
 	res
 }
@@ -192,7 +192,7 @@ impl SubTrie {
 	}
 	/// node ref of subtrie
 	pub fn node_ref(&self) -> SubTrieReadRef {
-		SubTrieReadRef::new(&self.keyspace, self.root.as_ref().map(|r|&r[..]))
+		SubTrieReadRef::new(&self.keyspace, self.root.as_ref().map(|r| &r[..]))
 	}
 	/// instantiate subtrie from a read node value
 	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {

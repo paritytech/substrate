@@ -244,15 +244,15 @@ impl<H: Hasher> InMemory<H> {
 		for (subtrie, key, val) in changes {
 			match val {
 				Some(v) => {
-					let mut entry = inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
-						.or_insert_with(||(Default::default(), subtrie.clone()));
+					let mut entry = inner.entry(subtrie.as_ref().map(|s| s.keyspace().clone()))
+						.or_insert_with(|| (Default::default(), subtrie.clone()));
 					entry.0.insert(key, v);
 					// very costy clone
 					entry.1 = subtrie.as_ref().cloned();
 				},
 				None => {
-					inner.entry(subtrie.as_ref().map(|s|s.keyspace().clone()))
-						.or_insert_with(||(Default::default(), subtrie.clone()))
+					inner.entry(subtrie.as_ref().map(|s| s.keyspace().clone()))
+						.or_insert_with(|| (Default::default(), subtrie.clone()))
 						.0.remove(&key);
 				},
 			}

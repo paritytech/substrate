@@ -681,6 +681,10 @@ macro_rules! impl_outer_log {
 			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 				self.dref().and_then(|dref| dref.as_changes_trie_root())
 			}
+
+			fn as_pre_runtime(&self) -> Option<($crate::ConsensusEngineId, &[u8])> {
+				self.dref().and_then(|dref| dref.as_pre_runtime())
+			}
 		}
 
 		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {

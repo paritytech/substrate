@@ -77,11 +77,11 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, _account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>> {
-		// TODO pass optional SubTrie or change def to use subtrie (put the subtrie in cache (rc one of
-		// the overlays)) EMCH TODO create an issue for a following pr
-		trie_id.and_then(|id|{
-			child::child_trie(&prefixed_child_trie(&id)[..]).and_then(|subtrie|
-			child::get_raw(subtrie.node_ref(), &blake2_256(location))
+		// EMCH TODO create an issue for a following pr to avoid this query on child trie at every
+		// call
+		trie_id.and_then(|id| {
+			child::child_trie(&prefixed_child_trie(&id)[..])
+				.and_then(|subtrie|	child::get_raw(subtrie.node_ref(), &blake2_256(location))
 		)})
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {

@@ -397,7 +397,7 @@ impl StorageApi for () {
 		let prefixed_key = SubTrie::prefix_parent_key(storage_key);
 		let prefixed_key_cat = SubTrie::parent_key_slice(&prefixed_key);
 		storage(prefixed_key_cat)
-			.and_then(|enc_node|SubTrie::decode_node_with_parent(&enc_node, prefixed_key))
+			.and_then(|enc_node| SubTrie::decode_node_with_parent(&enc_node, prefixed_key))
 	}
 
 	fn child_storage(subtrie: SubTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {

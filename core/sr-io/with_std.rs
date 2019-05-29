@@ -95,7 +95,7 @@ impl StorageApi for () {
 			ext.child_storage(subtrie, key)
 				.map(|value| {
 					let value = &value[value_offset..];
-					let written = ::std::cmp::min(value.len(), value_out.len());
+					let written = std::cmp::min(value.len(), value_out.len());
 					value_out[..written].copy_from_slice(&value[..written]);
 					value.len()
 				})

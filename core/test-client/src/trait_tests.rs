@@ -50,14 +50,14 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 		vec![genesis_hash]);
 
 	// G -> A1
-	let a1 = client.new_block().unwrap().bake().unwrap();
+	let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
 		vec![a1.hash()]);
 
 	// A1 -> A2
-	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+	let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	#[allow(deprecated)]
@@ -66,28 +66,28 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 		vec![a2.hash()]);
 
 	// A2 -> A3
-	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+	let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
 		vec![a3.hash()]);
 
 	// A3 -> A4
-	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+	let a4 = client.new_block_at(&BlockId::Hash(a3.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
 		vec![a4.hash()]);
 
 	// A4 -> A5
-	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+	let a5 = client.new_block_at(&BlockId::Hash(a4.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a5.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
 		vec![a5.hash()]);
 
 	// A1 -> B2
-	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -102,21 +102,21 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 		vec![a5.hash(), b2.hash()]);
 
 	// B2 -> B3
-	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+	let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b3.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b3.hash()]);
 
 	// B3 -> B4
-	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+	let b4 = client.new_block_at(&BlockId::Hash(b3.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b4.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
 		vec![a5.hash(), b4.hash()]);
 
 	// // B2 -> C3
-	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -131,7 +131,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 		vec![a5.hash(), b4.hash(), c3.hash()]);
 
 	// A1 -> D2
-	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -160,27 +160,27 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	let blockchain = backend.blockchain();
 
 	// G -> A1
-	let a1 = client.new_block().unwrap().bake().unwrap();
+	let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 	// A1 -> A2
-	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+	let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	// A2 -> A3
-	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+	let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 	// A3 -> A4
-	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+	let a4 = client.new_block_at(&BlockId::Hash(a3.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 	// A4 -> A5
-	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+	let a5 = client.new_block_at(&BlockId::Hash(a4.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 	// A1 -> B2
-	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -192,15 +192,15 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 	// B2 -> B3
-	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+	let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 	// B3 -> B4
-	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+	let b4 = client.new_block_at(&BlockId::Hash(b3.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 	// // B2 -> C3
-	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -212,7 +212,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 	// A1 -> D2
-	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -250,27 +250,27 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	let blockchain = backend.blockchain();
 
 	// G -> A1
-	let a1 = client.new_block().unwrap().bake().unwrap();
+	let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 	// A1 -> A2
-	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+	let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	// A2 -> A3
-	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+	let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 	// A3 -> A4
-	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+	let a4 = client.new_block_at(&BlockId::Hash(a3.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 	// A4 -> A5
-	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+	let a5 = client.new_block_at(&BlockId::Hash(a4.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 	// A1 -> B2
-	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -282,15 +282,15 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 	// B2 -> B3
-	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+	let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 	// B3 -> B4
-	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+	let b4 = client.new_block_at(&BlockId::Hash(b3.hash()), Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 	// // B2 -> C3
-	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default()).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
@@ -302,7 +302,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 	// A1 -> D2
-	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 	builder.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
