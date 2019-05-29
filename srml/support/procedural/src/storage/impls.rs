@@ -225,8 +225,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#mutate_impl ;
 					ret
 				}
-
 			}
+
+			impl<#traitinstance: 'static + #traittype, #instance #bound_instantiable>
+				#scrate::storage::hashed::generator::AppendableStorageMap<#kty, #typ> for #name<#traitinstance, #instance>
+			{}
 		}
 	}
 
