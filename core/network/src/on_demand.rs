@@ -297,7 +297,7 @@ impl<B: BlockT> OnDemandCore<B> where
 
 		self.idle_peers.push_back(peer.clone());
 		self.best_blocks.insert(peer, best_number);
-	
+
 		self.dispatch(network);
 	}
 
@@ -1010,7 +1010,7 @@ pub mod tests {
 			assert_eq!(result, Some(vec![42]));
 		});
 
-		on_demand.on_remote_read_response(&mut network_interface, 
+		on_demand.on_remote_read_response(&mut network_interface,
 			peer0.clone(), message::RemoteReadResponse {
 				id: 0,
 				proof: vec![vec![2]],
