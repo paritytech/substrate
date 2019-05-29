@@ -514,8 +514,7 @@ impl<T: Trait> Module<T> {
 	/// Remove all info on a referendum.
 	///
 	/// # <weight>
-	/// - **FLAG**
-	/// - Depends on size of `voters_for` array, is it possible to grow this array?
+	/// - Depends on size of `VotersFor` vector.
 	/// # </weight>
 	fn clear_referendum(ref_index: ReferendumIndex) {
 		<ReferendumInfoOf<T>>::remove(ref_index);
