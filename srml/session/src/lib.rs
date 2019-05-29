@@ -193,9 +193,9 @@ decl_module! {
 		///
 		/// Dispatch origin of this call must be _root_.
 		///
-		/// /// # <weight>
+		/// # <weight>
 		///	- Independent of inputs and insignificant.
-		/// - Will imply more complexity on the next `check_rotate_session()` by paying rewards.
+		/// - Will imply more complexity on the next `check_rotate_session` by paying rewards.
 		/// # </weight>
 		fn force_new_session(apply_rewards: bool) -> Result {
 			Self::apply_force_new_session(apply_rewards)

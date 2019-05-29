@@ -112,7 +112,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - Very little overhead over the supplied dispatch.
+		/// - Very little overhead on the supplied dispatch.
 		/// - Safe if the supplied dispatch is safe.
 		/// # </weight>
 		fn sudo(origin, proposal: Box<T::Proposal>) {

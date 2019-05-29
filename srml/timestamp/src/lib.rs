@@ -222,7 +222,7 @@ decl_module! {
 		/// The dispatch origin for this call must be `Inherent`.
 		///
 		/// # <weight>
-		/// - Accepts only a Moment (u64).
+		/// - Accepts only a `Moment` (`u64`).
 		/// - Number of storage reads and writes is constrained.
 		/// - Performs minimum validation and stores.
 		/// - Safe.

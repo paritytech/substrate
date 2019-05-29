@@ -138,9 +138,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// # <weight>
-	/// - 
-	/// # </weight>
 	fn update_hint(hint: Option<T::BlockNumber>) {
 		if !Self::initialized() {
 			<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);

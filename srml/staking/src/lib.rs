@@ -564,7 +564,7 @@ decl_module! {
 		///
 		/// NOTE: at the moment, there are no financial restriction to bond
 		/// (which creates a bunch of storage items for an account). In essence, nothing prevents many accounts to
-		/// spam Staking's storage by bonding 1 UNIT. see test case: `bond_with_no_staked_value()`.
+		/// spam `Staking` storage by bonding 1 UNIT. see test case: `bond_with_no_staked_value()`.
 		/// # </weight>
 		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: RewardDestination) {
 			let stash = ensure_signed(origin)?;
@@ -631,9 +631,9 @@ decl_module! {
 		/// # <weight> FLAG
 		/// - Independent of the arguments. Limited but --potentially-- exploitable complexity.
 		/// - Contains a limited number of reads.
-		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance()`)
+		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
-		///   The only way to clean the aforementioned storage item is also user controlled via `withdraw_unbonded()`.
+		///   The only way to clean the aforementioned storage item is also user controlled via `withdraw_unbonded`.
 		/// </weight>
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -667,7 +667,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Could be dependent on the `origin` argument and how much `unlocking` chunks exist. It implies
-		///   `consolidate_unlocked()` which loops over `Ledger.unlocking`, which is --indirectly--
+		///   `consolidate_unlocked` which loops over `Ledger.unlocking`, which is --indirectly--
 		///   user-controlled. See [`unbond`] for more detail.
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
@@ -689,7 +689,7 @@ decl_module! {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
-		///# </weight>
+		/// # </weight>
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -750,7 +750,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// # <weight>
-		/// - Independent of the arguments. Insignificant complexity..
+		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
@@ -788,6 +788,7 @@ decl_module! {
 		// ----- Root calls.
 
 		/// Set the number of sessions in an era.
+		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant.
 		/// # </weight>
@@ -796,11 +797,16 @@ decl_module! {
 		}
 
 		/// The length of the bonding duration in eras.
+		///
+		/// # <weight>
+		/// - Independent of arguments. Insignificant.
+		/// # </weight>
 		fn set_bonding_duration(#[compact] new: T::BlockNumber) {
 			<BondingDuration<T>>::put(new);
 		}
 
 		/// The ideal number of validators.
+		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant.
 		/// # </weight>
@@ -810,9 +816,10 @@ decl_module! {
 
 		/// Force there to be a new era. This also forces a new session immediately after.
 		/// `apply_rewards` should be true for validators to get the session reward.
+		///
 		/// # <weight>
 		/// - Independent on arguments.
-		/// - Triggers the phragmen election. Expensive but not user controlled.
+		/// - Triggers the Phragmen election. Expensive but not user controlled.
 		/// - Depends on state: `O(|edges| * |validators|)`.
 		/// # </weight>
 		fn force_new_era(apply_rewards: bool) -> Result {
@@ -820,6 +827,7 @@ decl_module! {
 		}
 
 		/// Set the offline slash grace period.
+		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant.
 		/// # </weight>
@@ -828,6 +836,7 @@ decl_module! {
 		}
 
 		/// Set the validators who cannot be slashed (if any).
+		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant.
 		/// # </weight>

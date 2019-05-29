@@ -407,11 +407,11 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	///
-	/// <weight>
+	/// # <weight>
 	/// - The `topics` argument affects complexity. 
 	/// - Each passed topic will be written to storage.
-	/// - Is topics limited by the functions that call this?
-	/// </weight>
+	/// - Limited to `u32::max_value` topics.
+	/// # </weight>
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let extrinsic_index = Self::extrinsic_index();
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
@@ -457,36 +457,40 @@ impl<T: Trait> Module<T> {
 
 	/// Gets the index of extrinsic that is currently executing.
 	///
-	/// <weight>
-	/// The transaction only performs a single storage read. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - Single storage read.
+	/// - Safe.
+	/// # </weight>
 	pub fn extrinsic_index() -> Option<u32> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
 	/// Gets extrinsics count.
 	///
-	/// <weight>
-	/// The transaction only performs a single storage read. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - Single storage read.
+	/// - Safe.
+	/// # </weight>
 	pub fn extrinsic_count() -> u32 {
 		<ExtrinsicCount<T>>::get().unwrap_or_default()
 	}
 
 	/// Gets a total length of all executed extrinsics.
 	///
-	/// <weight>
-	/// The transaction only performs a single storage read. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - Single storage read.
+	/// - Safe.
+	/// # </weight>
 	pub fn all_extrinsics_len() -> u32 {
 		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
 	///
-	/// <weight>
-	/// Transaction is I/O bound. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - I/O bound.
+	/// - Safe.
+	/// # </weight>
 	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -507,9 +511,10 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	///
-	/// <weight>
-	/// Transaction is I/O bound. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - I/O bound.
+	/// - Safe.
+	/// # </weight>
 	pub fn finalize() -> T::Header {
 		<ExtrinsicCount<T>>::kill();
 		<AllExtrinsicsLen<T>>::kill();
@@ -543,9 +548,10 @@ impl<T: Trait> Module<T> {
 
 	/// Deposits a log and ensures it matches the block's log data.
 	///
-	/// <weight>
-	/// The transaction only makes a single storage write. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - Single storage write.
+	/// - Safe.
+	/// # </weight>
 	pub fn deposit_log(item: <T::Digest as traits::Digest>::Item) {
 		let mut l = <Digest<T>>::get();
 		traits::Digest::push(&mut l, item);
@@ -554,9 +560,9 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	///
-	/// <weight>
-	/// No external inputs. Transaction is safe.
-	/// </weight>
+	/// # <weight>
+	/// - Safe.
+	/// # </weight>
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
@@ -569,9 +575,10 @@ impl<T: Trait> Module<T> {
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	///
-	/// <weight>
-	/// Transaction is IO bound and safe.
-	/// </weight>
+	/// # <weight>
+	/// - Single storage write.
+	/// - Safe.
+	/// # </weight>
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
@@ -579,9 +586,10 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the index of extrinsic that is currently executing.
 	///
-	/// <weight>
-	/// Transaction is IO bound and safe.
-	/// </weight>
+	/// # <weight>
+	/// - Single storage write.
+	/// - Safe.
+	/// # </weight>
 	#[cfg(any(feature = "std", test))]
 	pub fn set_extrinsic_index(extrinsic_index: u32) {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)
@@ -590,9 +598,10 @@ impl<T: Trait> Module<T> {
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	///
-	/// <weight>
-	/// Transaction is IO bound and safe.
-	/// </weight>
+	/// # <weight>
+	/// - I/O bound.
+	/// - Safe.
+	/// # </weight>
 	#[cfg(any(feature = "std", test))]
 	pub fn set_parent_hash(n: T::Hash) {
 		<ParentHash<T>>::put(n);
@@ -603,9 +612,10 @@ impl<T: Trait> Module<T> {
 	/// In general you won't want to use this, but rather `Self::random` which allows you to give a subject for the
 	/// random result and whose value will be independently low-influence random from any other such seeds.
 	///
-	/// <weight>
-	/// Transaction is IO bound and safe, assuming random is safe.
-	/// </weight>
+	/// # <weight>
+	/// - I/O bound.
+	/// - Depends on `Self::random`.
+	/// # </weight>
 	pub fn random_seed() -> T::Hash {
 		Self::random(&[][..])
 	}
@@ -637,9 +647,10 @@ impl<T: Trait> Module<T> {
 	/// all bits of the resulting value are entirely manipulatable by the author of the parent block, who can determine
 	/// the value of `parent_hash`.
 	///
-	/// <weight>
-	/// The transaction complexity is IO safe. Complexity depends on the hashing function used.
-	/// </weight>
+	/// # <weight>
+	/// - I/O safe.
+	/// - Depends on complexity of hashing algorithm used.
+	/// # </weight>
 	pub fn random(subject: &[u8]) -> T::Hash {
 		let (index, hash_series) = <RandomMaterial<T>>::get();
 		if hash_series.len() > 0 {
@@ -658,9 +669,10 @@ impl<T: Trait> Module<T> {
 
 	/// Increment a particular account's nonce by 1.
 	///
-	/// <weight>
-	/// IO safe. One storage write.
-	/// </weight>
+	/// # <weight>
+	/// - I/O bound.
+	/// - Safe.
+	/// # </weight>
 	pub fn inc_account_nonce(who: &T::AccountId) {
 		<AccountNonce<T>>::insert(who, Self::account_nonce(who) + T::Index::one());
 	}
@@ -671,19 +683,19 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This function is called only when the block is being constructed locally.
 	/// `execute_block` doesn't note any extrinsics.
 	///
-	/// <weight>
-	/// The parameter `encoded_xt` is potentially exploitable since no check is made on its size and it gets inserted in
-	/// storage.
-	/// </weight>
+	/// # <weight>
+	/// - Depends on size of `encoded_xt` since it will be input in storage.
+	/// # </weight>
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
 		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
 	///
-	/// <weight>
-	/// Transaction is I/O bound and safe. Possible overflow on `next_extrinsic_index`. 
-	/// </weight>
+	/// # <weight>
+	/// - I/O safe.
+	/// - Possible overflow on `next_extrinsic_length`.
+	/// # </weight>
 	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
@@ -700,9 +712,10 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	///
-	/// <weight>
-	/// Transaction has no input. Makes storage writes. It is safe.
-	/// </weight>
+	/// # <weight>
+	/// - I/O bound.
+	/// - Safe.
+	/// # </weight>
 	pub fn note_finished_extrinsics() {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
 		<ExtrinsicCount<T>>::put(extrinsic_index);

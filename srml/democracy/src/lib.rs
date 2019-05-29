@@ -178,7 +178,7 @@ decl_module! {
 		/// # <weight>
 		/// - Safe.
 		/// - No unbounded computation.
-		/// - Submitting a value for `which` that exceeds length will not write but still read from storage
+		/// - Submitting a value for `which` that exceeds length will not write but still read from storage.
 		/// # </weight>
 		pub fn cancel_queued(#[compact] when: T::BlockNumber, #[compact] which: u32) {
 			let which = which as usize;
@@ -215,6 +215,7 @@ decl_module! {
 		}
 
 		/// Clear the proxy. Called by the stash.
+		///
 		/// # <weight>
 		/// - Storage accessor.
 		/// - Safe.

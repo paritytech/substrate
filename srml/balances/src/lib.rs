@@ -352,11 +352,13 @@ decl_module! {
 		/// - It contains a limited number of reads and writes internally and no complex computation.
 		///
 		/// Related functions:
-		///   - `ensure_can_withdraw()` is always called internally but has a bounded complexity.
+		///
+		///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
 		///   - Transferring balances to accounts that did not existed before will cause
-		///      `T::OnNewAccount::on_new_account()` to be called.
+		///      `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger
-		///     `T::DustRemoval::on_unbalanced()` and `T::OnFreeBalanceZero::on_free_balance_zero()`.
+		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///
 		/// # </weight>
 		pub fn transfer(
 			origin,
