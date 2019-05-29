@@ -252,7 +252,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		key_data: *const u8,
 		key_len: u32
 	) -> u32 => {
-		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize)
+		let keyspace = &this.memory.get(keyspace_data, keyspace_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
@@ -262,7 +262,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 			Some(&root[..])
 		} else { None };
-		let subtrie = SubTrieReadRef::new(&keyspace, root);
+		let subtrie = SubTrieReadRef { keyspace, root };
 		Ok(if this.ext.exists_child_storage(subtrie, &key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
@@ -320,7 +320,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		key_len: u32,
 		written_out: *mut u32
 	) -> *mut u8 => {
-		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize)
+		let keyspace = &this.memory.get(keyspace_data, keyspace_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
@@ -330,7 +330,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 			Some(&root[..])
 		} else { None };
-		let subtrie = SubTrieReadRef::new(&keyspace, root);
+		let subtrie = SubTrieReadRef { keyspace, root };
 		let maybe_value = this.ext.child_storage(subtrie, &key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
@@ -402,7 +402,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		value_len: u32,
 		value_offset: u32
 	) -> u32 => {
-		let keyspace = this.memory.get(keyspace_data, keyspace_len as usize)
+		let keyspace = &this.memory.get(keyspace_data, keyspace_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
@@ -412,7 +412,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 			Some(&root[..])
 		} else { None };
-		let subtrie = SubTrieReadRef::new(&keyspace, root);
+		let subtrie = SubTrieReadRef { keyspace, root };
 
 		let maybe_value = this.ext.child_storage(subtrie, &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",

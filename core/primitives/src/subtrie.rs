@@ -32,14 +32,14 @@ pub type KeySpace = Vec<u8>;
 pub type ParentTrie = Vec<u8>;
 
 /// temp function to keyspace data above the db level
-pub fn keyspace_in_prefix(ks: &KeySpace, prefix: &[u8], dst: &mut[u8]) {
-	assert!(dst.len() == keyspace_prefixed_expected_len(ks, prefix));
+fn keyspace_in_prefix(ks: &KeySpace, prefix: &[u8], dst: &mut[u8]) {
+	debug_assert!(dst.len() == keyspace_prefixed_expected_len(ks, prefix));
 	dst[..ks.len()].copy_from_slice(&ks);
 	dst[ks.len()..].copy_from_slice(prefix);
 }
 
 /// len of targeted prefix with keyspace
-pub fn keyspace_prefixed_expected_len(ks: &KeySpace, prefix: &[u8]) -> usize {
+fn keyspace_prefixed_expected_len(ks: &KeySpace, prefix: &[u8]) -> usize {
 	ks.len() + prefix.len()
 }
 
@@ -50,21 +50,21 @@ pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
 	res
 }
 
-/// `SubTrieReadRef` used for non changing state query
-/// so it is safe to build
+/// `SubTrieReadRef` is used for non changing state query
+/// so it is safe to build.
+/// Generally this should not be build directly but accessed
+/// through `node_ref` function.
 #[derive(Clone)]
 pub struct SubTrieReadRef<'a> {
 	/// subtrie unique keyspace
 	pub keyspace: &'a KeySpace,
-	/// subtrie root hash
+	/// subtrie root hash.
+  /// `None` for query limited to local modification,
+  /// for instance if a subtrie is pending creation.
 	pub root: Option<&'a [u8]>,
 }
 
 impl<'a> SubTrieReadRef<'a> {
-	/// create a SubTrieReadRef
-	pub fn new(keyspace: &'a KeySpace, root: Option<&'a[u8]>) -> Self {
-		SubTrieReadRef {keyspace, root}
-	}
 	// should not be public as it produce incomplete content
 	fn enc(&self) -> Option<SubTrieReadEncode> {
 		self.root.map(|r| SubTrieReadEncode {
@@ -84,19 +84,19 @@ const LAST_SUBTRIE_CODEC_VERSION: u16 = 1u16;
 struct SubTrieReadEncode<'a> {
 	/// current codec version
 	#[codec(compact)]
-	pub version: u16,
+	version: u16,
 	/// subtrie unique keyspace
-	pub keyspace: &'a KeySpace,
+	keyspace: &'a KeySpace,
 	/// subtrie root hash
-	pub root: &'a [u8],
+	root: &'a [u8],
 }
 
 #[derive(Decode)]
 struct SubTrieReadDecode {
 	#[codec(compact)]
-	pub version: u16,
-	pub keyspace: KeySpace,
-	pub root: Vec<u8>,
+	version: u16,
+	keyspace: KeySpace,
+	root: Vec<u8>,
 }
 
 impl Into<SubTrieRead> for SubTrieReadDecode {
@@ -120,7 +120,10 @@ impl SubTrieRead {
 	/// get node ref for read only query
 	pub fn node_ref(&self) -> SubTrieReadRef {
 		debug_assert!(self.root.len() > 0);
-		SubTrieReadRef::new(&self.keyspace, Some(&self.root[..]))
+		SubTrieReadRef {
+			keyspace: &self.keyspace,
+			root: Some(&self.root[..]),
+		}
 	}
 }
 
@@ -192,7 +195,10 @@ impl SubTrie {
 	}
 	/// node ref of subtrie
 	pub fn node_ref(&self) -> SubTrieReadRef {
-		SubTrieReadRef::new(&self.keyspace, self.root.as_ref().map(|r| &r[..]))
+		SubTrieReadRef {
+			keyspace: &self.keyspace,
+			root: self.root.as_ref().map(|r| &r[..]),
+		}
 	}
 	/// instantiate subtrie from a read node value
 	pub fn decode_node(encoded_node: &[u8], parent: &[u8]) -> Option<Self> {
