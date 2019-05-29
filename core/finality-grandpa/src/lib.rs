@@ -107,7 +107,7 @@ pub use observer::run_grandpa_observer;
 use aux_schema::PersistentData;
 use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
-use until_imported::UntilCommitBlocksImported;
+use until_imported::{UntilCatchUpBlocksImported, UntilCommitBlocksImported};
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
 
@@ -413,12 +413,17 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		voter::CommunicationIn::Commit(round, commit, callback)
 	});
 
-	// FIXME: read from same gossip topic stream. block until ref'd blocks imported like for commits.
-	let catch_ups_in = network.catch_up_stream(communication::SetId(set_id))
+	let catch_ups_in = UntilCatchUpBlocksImported::new(
+		client.import_notification_stream(),
+		client.clone(),
+		network.catch_up_stream(communication::SetId(set_id)),
+	);
+
+	// FIXME: read from same gossip topic stream.
+	let catch_ups_in = catch_ups_in.map_err(CommandOrError::from)
 		.map(|catch_up| {
 			voter::CommunicationIn::Auxiliary(voter::AuxiliaryCommunication::CatchUp(catch_up))
-		})
-		.map_err(CommandOrError::from);
+		});
 
 	let global_in = commits_in.select(catch_ups_in);
 
