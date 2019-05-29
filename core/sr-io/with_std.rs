@@ -266,10 +266,34 @@ impl OffchainApi for () {
 		}, "submit_transaction can be called only in the offchain worker context")
 	}
 
-	fn sign(data: &[u8]) -> Option<[u8; 64]> {
+	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
 		with_offchain(|ext| {
-			ext.sign(data)
+			ext.new_crypto_key(crypto)
+		}, "new_crypto_key can be called only in the offchain worker context")
+	}
+
+	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.encrypt(key, data)
+		}, "encrypt can be called only in the offchain worker context")
+	}
+
+	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.decrypt(key, data)
+		}, "decrypt can be called only in the offchain worker context")
+	}
+
+	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.sign(key, data)
 		}, "sign can be called only in the offchain worker context")
+	}
+
+	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+		with_offchain(|ext| {
+			ext.verify(key, msg, signature)
+		}, "verify can be called only in the offchain worker context")
 	}
 
 	fn timestamp() -> offchain::Timestamp {

@@ -22,6 +22,7 @@ use parity_codec::Decode;
 use primitives::offchain::{
 	Timestamp, HttpRequestId, HttpRequestStatus, HttpError,
 	Externalities as OffchainExt,
+	CryptoKind, CryptoKeyId,
 };
 use runtime_primitives::{
 	generic::BlockId,
@@ -52,8 +53,29 @@ impl OffchainExt for AsyncApi {
 			.map_err(|_| ())
 	}
 
-	fn sign(&mut self, _data: &[u8]) -> Option<[u8; 64]> {
-		unavailable_yet("sign")
+	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
+		unavailable_yet::<()>("new_crypto_key");
+		Err(())
+	}
+
+	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unavailable_yet::<()>("encrypt");
+		Err(())
+	}
+
+	fn decrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unavailable_yet::<()>("decrypt");
+		Err(())
+	}
+
+	fn sign(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unavailable_yet::<()>("sign");
+		Err(())
+	}
+
+	fn verify(&mut self, _key: Option<CryptoKeyId>, _msg: &[u8], _signature: &[u8]) -> Result<bool, ()> {
+		unavailable_yet::<()>("verify");
+		Err(())
 	}
 
 	fn timestamp(&mut self) -> Timestamp {

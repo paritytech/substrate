@@ -338,15 +338,64 @@ pub mod ext {
 		/// - nonzero otherwise.
 		fn ext_submit_transaction(data: *const u8, len: u32) -> u32;
 
-		/// Sign a piece of data with authority key.
-		///
-		/// `sig_data` has to be a pointer to a slice of 64 bytes.
+		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// # Returns
 		///
-		/// - `0` if successful and sig_data was written
-		/// - nonzero otherwise.
-		fn ext_sign(data: *const u8, len: u32, sig_data: *mut u8) -> u32;
+		/// - A crypto key id (if the value is less than u16::max_value)
+		/// - `u32::max_value` in case the crypto is not supported
+		fn ext_new_crypto_key(crypto: u32) -> u32;
+
+		/// Encrypt a piece of data using given crypto key.
+		///
+		/// If `key` is `0`, it will attempt to use current authority key.
+		///
+		/// # Returns
+		///
+		/// - `0` in case the key is invalid, `msg_len` is set to `u32::max_value`
+		/// - Otherwise, pointer to the encrypted message in memory,
+		///	`msg_len` contains the length of the message.
+		fn ext_encrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8;
+
+		/// Decrypt a piece of data using given crypto key.
+		///
+		/// If `key `is `0`, it will attempt to use current authority key.
+		///
+		/// # Returns
+		///
+		/// - `0` in case the key is invalid or data couldn't be decrypted,
+		/// `msg_len` is set to `u32::max_value`
+		/// - Otherwise, pointer to the decrypted message in memory,
+		///	`msg_len` contains the length of the message.
+		fn ext_decrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8;
+
+		/// Sign a piece of data using given crypto key.
+		///
+		/// If `key` is `0`, it will attempt to use current authority key.
+		///
+		/// # Returns
+		///
+		/// - `0` in case the key is invalid,
+		/// `sig_data_len` is set to `u32::max_value`
+		/// - Otherwise, pointer to the signature in memory,
+		///	`sig_data_len` contains the length of the signature.
+		fn ext_sign(key: u32, data: *const u8, data_len: u32, sig_data_len: *mut u32) -> *mut u8;
+
+		/// Verifies that `signature` for `msg` matches given `key`.
+		///
+		/// If `key` is `0`, it will attempt to use current authority key.
+		///
+		/// # Returns
+		/// - `0` in case the signature is correct
+		/// - `1` in case it doesn't match the key
+		/// - `u32::max_value` if the key is invalid.
+		fn ext_verify(
+			key: u32,
+			msg: *const u8,
+			msg_len: u32,
+			signature: *const u8,
+			signature_len: u32
+		) -> u32;
 
 		/// Returns current UNIX timestamp (milliseconds)
 		fn ext_timestamp() -> u64;
@@ -491,14 +540,7 @@ impl StorageApi for () {
 		let mut length: u32 = 0;
 		unsafe {
 			let ptr = ext_get_allocated_storage.get()(key.as_ptr(), key.len() as u32, &mut length);
-			if length == u32::max_value() {
-				None
-			} else {
-				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-				// See #300 for more details.
-				Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
-			}
+			from_raw_parts(ptr, length)
 		}
 	}
 
@@ -512,14 +554,7 @@ impl StorageApi for () {
 				key.len() as u32,
 				&mut length
 			);
-			if length == u32::max_value() {
-				None
-			} else {
-				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-				// See #300 for more details.
-				Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
-			}
+			from_raw_parts(ptr, length)
 		}
 	}
 
@@ -639,10 +674,7 @@ impl StorageApi for () {
 				storage_key.len() as u32,
 				&mut length
 			);
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize)
+			from_raw_parts(ptr, length).expect("ext_child_storage_root never returns u32::max_value; qed")
 		}
 	}
 
@@ -774,25 +806,76 @@ impl CryptoApi for () {
 impl OffchainApi for () {
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		let encoded_data = codec::Encode::encode(data);
-		unsafe {
-			let ret = ext_submit_transaction.get()(encoded_data.as_ptr(), encoded_data.len() as u32);
-			if ret == 0 {
-				Ok(())
-			} else {
-				Err(())
-			}
+		let ret = unsafe {
+			ext_submit_transaction.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
+		};
+
+		if ret == 0 {
+			Ok(())
+		} else {
+			Err(())
 		}
 	}
 
-	fn sign(data: &[u8]) -> Option<[u8; 64]> {
-		let mut result = [0_u8; 64];
+	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
+		let crypto = crypto as u8 as u32;
+		let ret = unsafe {
+			ext_new_crypto_key.get()(crypto)
+		};
+
+		if ret > u16::max_value() as u32 {
+			Err(())
+		} else {
+			Ok(offchain::CryptoKeyId(ret as u16))
+		}
+	}
+
+	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+		let mut len = 0_u32;
 		unsafe {
-			let res = ext_sign.get()(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
-			if res == 0 {
-				Some(result)
-			} else {
-				None
-			}
+			let ptr = ext_encrypt.get()(key, data.as_ptr(), data.len() as u32, &mut len);
+
+			from_raw_parts(ptr, len).ok_or(())
+		}
+	}
+
+	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+		let mut len = 0_u32;
+		unsafe {
+			let ptr = ext_decrypt.get()(key, data.as_ptr(), data.len() as u32, &mut len);
+
+			from_raw_parts(ptr, len).ok_or(())
+		}
+	}
+
+	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+		let mut len = 0_u32;
+		unsafe {
+			let ptr = ext_sign.get()(key, data.as_ptr(), data.len() as u32, &mut len);
+
+			from_raw_parts(ptr, len).ok_or(())
+		}
+	}
+
+	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+		let key = key.map(|x| x.0 as u32).unwrap_or(0);
+		let val = unsafe {
+			ext_verify.get()(
+				key,
+				msg.as_ptr(),
+				msg.len() as u32,
+				signature.as_ptr(),
+				signature.len() as u32,
+			)
+		};
+
+		match val {
+			0 => Ok(true),
+			1 => Ok(false),
+			_ => Err(()),
 		}
 	}
 
@@ -849,15 +932,7 @@ impl OffchainApi for () {
 				&mut len,
 			);
 
-			if len == u32::max_value() {
-				None
-			} else {
-
-				// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-				// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-				// See #300 for more details.
-				Some(<Vec<u8>>::from_raw_parts(ptr, len as usize, len as usize))
-			}
+			from_raw_parts(ptr, len)
 		}
 	}
 
@@ -865,21 +940,21 @@ impl OffchainApi for () {
 		let method = method.as_bytes();
 		let url = url.as_bytes();
 
-		unsafe {
-			let result = ext_http_request_start.get()(
+		let result = unsafe {
+			ext_http_request_start.get()(
 				method.as_ptr(),
 				method.len() as u32,
 				url.as_ptr(),
 				url.len() as u32,
 				meta.as_ptr(),
 				meta.len() as u32,
-			);
+			)
+		};
 
-			if result > u16::max_value() as u32 {
-				Err(())
-			} else {
-				Ok(offchain::HttpRequestId(result as u16))
-			}
+		if result > u16::max_value() as u32 {
+			Err(())
+		} else {
+			Ok(offchain::HttpRequestId(result as u16))
 		}
 	}
 
@@ -887,20 +962,20 @@ impl OffchainApi for () {
 		let name = name.as_bytes();
 		let value = value.as_bytes();
 
-		unsafe {
-			let result = ext_http_request_add_header.get()(
+		let result = unsafe {
+			ext_http_request_add_header.get()(
 				request_id.0 as u32,
 				name.as_ptr(),
 				name.len() as u32,
 				value.as_ptr(),
 				value.len() as u32,
-			);
+			)
+		};
 
-			if result == 0 {
-				Ok(())
-			} else {
-				Err(())
-			}
+		if result == 0 {
+			Ok(())
+		} else {
+			Err(())
 		}
 	}
 
@@ -958,10 +1033,7 @@ impl OffchainApi for () {
 				&mut len,
 			);
 
-			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
-			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
-			// See #300 for more details.
-			<Vec<u8>>::from_raw_parts(ptr, len as usize, len as usize)
+			from_raw_parts(ptr, len).expect("ext_http_response_headers never return u32::max_value; qed")
 		};
 
 		codec::Decode::decode(&mut &*raw_result).unwrap_or_default()
@@ -972,20 +1044,32 @@ impl OffchainApi for () {
 		buffer: &mut [u8],
 		deadline: Option<offchain::Timestamp>,
 	) -> Result<usize, offchain::HttpError> {
-		unsafe {
-			let res = ext_http_response_read_body.get()(
+		let res = unsafe {
+			ext_http_response_read_body.get()(
 				request_id.0 as u32,
 				buffer.as_mut_ptr(),
 				buffer.len() as u32,
 				deadline.map_or(0, |x| x.unix_millis()),
-			);
-			if res >= u32::max_value() - 255 {
-				let code = (u32::max_value() - res) + 1;
-				code.try_into().map_err(|_| offchain::HttpError::IoError)
-			} else {
-				Ok(res as usize)
-			}
+			)
+		};
+
+		if res >= u32::max_value() - 255 {
+			let code = (u32::max_value() - res) + 1;
+			code.try_into().map_err(|_| offchain::HttpError::IoError)
+		} else {
+			Ok(res as usize)
 		}
+	}
+}
+
+unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
+	if len == u32::max_value() {
+		None
+	} else {
+		// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+		// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+		// See #300 for more details.
+		Some(<Vec<u8>>::from_raw_parts(ptr, len as usize, len as usize))
 	}
 }
 

@@ -19,6 +19,34 @@
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 
+/// A type of supported crypto.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[repr(C)]
+pub enum CryptoKind {
+	/// SR25519 crypto (Schnorrkel)
+	Sr25519 = 1,
+	/// ED25519 crypto (Edwards)
+	Ed25519 = 2,
+}
+
+impl TryFrom<u32> for CryptoKind {
+	type Error = ();
+
+	fn try_from(kind: u32) -> Result<Self, Self::Error> {
+		match kind {
+			e if e == CryptoKind::Sr25519 as u8 as u32 => Ok(CryptoKind::Sr25519),
+			e if e == CryptoKind::Ed25519 as u8 as u32 => Ok(CryptoKind::Ed25519),
+			_ => Err(())
+		}
+	}
+}
+
+/// Opaque type for created crypto keys.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct CryptoKeyId(pub u16);
+
 /// Opaque type for offchain http requests.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -150,10 +178,38 @@ pub trait Externalities {
 	/// The transaction will end up in the pool and be propagated to others.
 	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 
-	/// Sign given piece of data with current authority key.
+	/// Create new key(pair) for signing/encryption/decryption.
 	///
-	/// Returns `None` if signing is not available.
-	fn sign(&mut self, data: &[u8]) -> Option<[u8; 64]>;
+	/// Returns an error if given crypto kind is not supported.
+	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKeyId, ()>;
+
+	/// Encrypt a piece of data using given crypto key.
+	///
+	/// If `key` is `None`, it will attempt to use current authority key.
+	///
+	/// Returns an error if `key` is not available or does not exist.
+	fn encrypt(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+
+	/// Decrypt a piece of data using given crypto key.
+	///
+	/// If `key` is `None`, it will attempt to use current authority key.
+	///
+	/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
+	fn decrypt(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+
+	/// Sign a piece of data using given crypto key.
+	///
+	/// If `key` is `None`, it will attempt to use current authority key.
+	///
+	/// Returns an error if `key` is not available or does not exist.
+	fn sign(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+
+	/// Verifies that `signature` for `msg` matches given `key`.
+	///
+	/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
+	/// Returns an error in case the key is not available or does not exist or the parameters
+	/// lengths are incorrect.
+	fn verify(&mut self, key: Option<CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&mut self) -> Timestamp;
@@ -260,8 +316,24 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).submit_transaction(ex)
 	}
 
-	fn sign(&mut self, data: &[u8]) -> Option<[u8; 64]> {
-		(&mut **self).sign(data)
+	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
+		(&mut **self).new_crypto_key(crypto)
+	}
+
+	fn encrypt(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		(&mut **self).encrypt(key, data)
+	}
+
+	fn decrypt(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		(&mut **self).decrypt(key, data)
+	}
+
+	fn sign(&mut self, key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+		(&mut **self).sign(key, data)
+	}
+
+	fn verify(&mut self, key: Option<CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+		(&mut **self).verify(key, msg, signature)
 	}
 
 	fn timestamp(&mut self) -> Timestamp {

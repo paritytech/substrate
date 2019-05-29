@@ -33,7 +33,7 @@ use rstd::vec::Vec;
 pub use codec;
 
 pub use primitives::Blake2Hasher;
-use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, HttpError};
+use primitives::offchain::{Timestamp, HttpRequestId, HttpRequestStatus, HttpError, CryptoKind, CryptoKeyId};
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -234,10 +234,38 @@ export_api! {
 		/// The transaction will end up in the pool.
 		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
 
-		/// Sign given piece of data with current authority key.
+		/// Create new key(pair) for signing/encryption/decryption.
 		///
-		/// Returns `None` if signing is not available.
-		fn sign(data: &[u8]) -> Option<[u8; 64]>;
+		/// Returns an error if given crypto kind is not supported.
+		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKeyId, ()>;
+
+		/// Encrypt a piece of data using given crypto key.
+		///
+		/// If `key` is `None`, it will attempt to use current authority key.
+		///
+		/// Returns an error if `key` is not available or does not exist.
+		fn encrypt(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+
+		/// Decrypt a piece of data using given crypto key.
+		///
+		/// If `key` is `None`, it will attempt to use current authority key.
+		///
+		/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
+		fn decrypt(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+
+		/// Sign a piece of data using given crypto key.
+		///
+		/// If `key` is `None`, it will attempt to use current authority key.
+		///
+		/// Returns an error if `key` is not available or does not exist.
+		fn sign(key: Option<CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()>;
+
+		/// Verifies that `signature` for `msg` matches given `key`.
+		///
+		/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
+		/// Returns an error in case the key is not available or does not exist or the parameters
+		/// lengths are incorrect.
+		fn verify(key: Option<CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 		/// Returns current UNIX timestamp (in millis)
 		fn timestamp() -> Timestamp;

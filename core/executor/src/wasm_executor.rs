@@ -17,6 +17,7 @@
 //! Rust implementation of Substrate contracts.
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::str;
 use tiny_keccak;
 use secp256k1;
@@ -120,6 +121,16 @@ fn deadline_to_timestamp(deadline: u64) -> Option<offchain::Timestamp> {
 		None
 	} else {
 		Some(offchain::Timestamp::from_unix_millis(deadline))
+	}
+}
+
+fn u32_to_key(key: u32) -> std::result::Result<Option<offchain::CryptoKeyId>, ()> {
+	if key > u16::max_value() as u32 {
+		Err(())
+	} else if key == 0 {
+		Ok(None)
+	} else {
+		Ok(Some(offchain::CryptoKeyId(key as u16)))
 	}
 }
 
@@ -610,20 +621,119 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
-	ext_sign(msg_data: *const u8, len: u32, sig_data: *mut u8) -> u32 => {
-		let message = this.memory.get(msg_data, len as usize)
+	ext_new_crypto_key(crypto: u32) -> u32 => {
+		let kind = offchain::CryptoKind::try_from(crypto)
+			.map_err(|_| UserError("crypto kind OOB while ext_new_crypto_key: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.new_crypto_key(kind))
+			.ok_or_else(|| UserError("Calling unavailable API ext_new_crypto_key: wasm"))?;
+
+		match res {
+			Ok(key_id) => Ok(key_id.0 as u32),
+			Err(()) => Ok(u32::max_value()),
+		}
+	},
+	ext_encrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8 => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_encrypt: wasm"))?;
+		let message = this.memory.get(data, data_len as usize)
+			.map_err(|_| UserError("OOB while ext_encrypt: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.encrypt(key, &*message))
+			.ok_or_else(|| UserError("Calling unavailable API ext_encrypt: wasm"))?;
+
+		let (offset,len) = match res {
+			Ok(encrypted) => {
+				let len = encrypted.len() as u32;
+				let offset = this.heap.allocate(len)? as u32;
+				this.memory.set(offset, &encrypted)
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_encrypt"))?;
+				(offset, len)
+			},
+			Err(()) => (0, u32::max_value()),
+		};
+
+		this.memory.write_primitive(msg_len, len)
+			.map_err(|_| UserError("Invalid attempt to write msg_len in ext_encrypt"))?;
+
+		Ok(offset)
+	},
+	ext_decrypt(key: u32, data: *const u8, data_len: u32, msg_len: *mut u32) -> *mut u8 => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_decrypt: wasm"))?;
+		let message = this.memory.get(data, data_len as usize)
+			.map_err(|_| UserError("OOB while ext_decrypt: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.decrypt(key, &*message))
+			.ok_or_else(|| UserError("Calling unavailable API ext_decrypt: wasm"))?;
+
+		let (offset,len) = match res {
+			Ok(decrypted) => {
+				let len = decrypted.len() as u32;
+				let offset = this.heap.allocate(len)? as u32;
+				this.memory.set(offset, &decrypted)
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_decrypt"))?;
+				(offset, len)
+			},
+			Err(()) => (0, u32::max_value()),
+		};
+
+		this.memory.write_primitive(msg_len, len)
+			.map_err(|_| UserError("Invalid attempt to write msg_len in ext_decrypt"))?;
+
+		Ok(offset)
+	},
+	ext_sign(key: u32, data: *const u8, data_len: u32, sig_data_len: *mut u32) -> *mut u8  => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_sign: wasm"))?;
+		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| UserError("OOB while ext_sign: wasm"))?;
 
-		// NOTE the runtime as assumptions about signature size.
-		let res: Option<[u8; 64]> = this.ext.offchain()
-			.map(|api| api.sign(&*message))
+		let res = this.ext.offchain()
+			.map(|api| api.sign(key, &*message))
 			.ok_or_else(|| UserError("Calling unavailable API ext_sign: wasm"))?;
 
-		if let Some(signature) = res {
-			this.memory.set(sig_data, &signature).map_err(|_| UserError("Invalid attempt to set value in ext_sign"))?;
-			Ok(0)
-		} else {
-			Ok(1)
+		let (offset,len) = match res {
+			Ok(signature) => {
+				let len = signature.len() as u32;
+				let offset = this.heap.allocate(len)? as u32;
+				this.memory.set(offset, &signature)
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_sign"))?;
+				(offset, len)
+			},
+			Err(()) => (0, u32::max_value()),
+		};
+
+		this.memory.write_primitive(sig_data_len, len)
+			.map_err(|_| UserError("Invalid attempt to write sig_data_len in ext_sign"))?;
+
+		Ok(offset)
+	},
+	ext_verify(
+		key: u32,
+		msg: *const u8,
+		msg_len: u32,
+		signature: *const u8,
+		signature_len: u32
+	) -> u32 => {
+		let key = u32_to_key(key)
+			.map_err(|_| UserError("key OOB while ext_verify: wasm"))?;
+		let message = this.memory.get(msg, msg_len as usize)
+			.map_err(|_| UserError("OOB while ext_verify: wasm"))?;
+		let signature = this.memory.get(signature, signature_len as usize)
+			.map_err(|_| UserError("OOB while ext_verify: wasm"))?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.verify(key, &*message, &*signature))
+			.ok_or_else(|| UserError("Calling unavailable API ext_verify: wasm"))?;
+
+		match res {
+			Ok(true) => Ok(0),
+			Ok(false) => Ok(1),
+			Err(()) => Ok(u32::max_value()),
 		}
 	},
 	ext_timestamp() -> u64 => {
@@ -756,7 +866,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			))
 			.ok_or_else(|| UserError("Calling unavailable API ext_http_request_write_body: wasm"))?;
 
-		Ok(if res.is_ok() { 0 } else { 1 })
+		Ok(match res {
+			Ok(()) => 0,
+			Err(e) => e as u8 as u32,
+		})
 	},
 	ext_http_response_wait(
 		ids: *const u32,
@@ -825,14 +938,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			))
 			.ok_or_else(|| UserError("Calling unavailable API ext_http_response_read_body: wasm"))?;
 
-		if let Ok(read) = res {
-			this.memory.set(buffer, &internal_buffer[..read])
-				.map_err(|_| UserError("Invalid attempt to set memory in ext_http_response_read_body"))?;
+		Ok(match res {
+			Ok(read) => {
+				this.memory.set(buffer, &internal_buffer[..read])
+					.map_err(|_| UserError("Invalid attempt to set memory in ext_http_response_read_body"))?;
 
-			Ok(read as u32)
-		} else {
-			Ok(u32::max_value())
-		}
+				read as u32
+			},
+			Err(err) => {
+				u32::max_value() - err as u8 as u32 + 1
+			}
+		})
 	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,

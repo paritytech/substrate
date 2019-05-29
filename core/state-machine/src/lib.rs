@@ -240,7 +240,39 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn sign(&mut self, _data: &[u8]) -> Option<[u8; 64]> {
+	fn new_crypto_key(
+		&mut self,
+		_crypto: offchain::CryptoKind,
+	) -> Result<offchain::CryptoKeyId, ()> {
+		unreachable!()
+	}
+
+	fn encrypt(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn decrypt(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn sign(&mut self, _key: Option<offchain::CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unreachable!()
+	}
+
+	fn verify(
+		&mut self,
+		_key: Option<offchain::CryptoKeyId>,
+		_msg: &[u8],
+		_signature: &[u8],
+	) -> Result<bool, ()> {
 		unreachable!()
 	}
 

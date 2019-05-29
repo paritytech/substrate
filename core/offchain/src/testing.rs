@@ -27,6 +27,8 @@ use primitives::offchain::{
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
+	CryptoKind,
+	CryptoKeyId,
 };
 
 /// Pending request.
@@ -95,7 +97,23 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn sign(&mut self, _data: &[u8]) -> Option<[u8; 64]> {
+	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn decrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn sign(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn verify(&mut self, _key: Option<CryptoKeyId>, _msg: &[u8], _signature: &[u8]) -> Result<bool, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
