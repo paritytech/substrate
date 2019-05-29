@@ -118,7 +118,7 @@
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, Convert};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::{dispatch::Result, traits::OnFreeBalanceZero};
+use srml_support::traits::OnFreeBalanceZero;
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -126,6 +126,12 @@ use rstd::ops::Mul;
 pub trait OnSessionChange<T> {
 	/// Session has changed.
 	fn on_session_change(time_elapsed: T, should_reward: bool);
+}
+
+/// A validator was disabled.
+pub trait OnDisable<T> {
+	/// Validator was disabled.
+	fn on_disable(account_id: T);
 }
 
 macro_rules! impl_session_change {
@@ -146,12 +152,33 @@ macro_rules! impl_session_change {
 
 for_each_tuple!(impl_session_change);
 
+macro_rules! impl_disable {
+	() => (
+		impl<T> OnDisable<T> for () {
+			fn on_disable(_: T) {}
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<T: Clone, $($t: OnDisable<T>),*> OnDisable<T> for ($($t,)*) {
+			fn on_disable(account_id: T) {
+				$($t::on_disable(account_id.clone());)*
+			}
+		}
+	}
+}
+
+for_each_tuple!(impl_disable);
+
 pub trait Trait: timestamp::Trait + consensus::Trait {
 	/// Create a session key from an account key.
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Option<Self::SessionKey>>;
 
 	/// Handler when a session changes.
 	type OnSessionChange: OnSessionChange<Self::Moment>;
+
+	/// Handler when a validator is disabled.
+	type OnDisable: OnDisable<Self::AccountId>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -175,8 +202,8 @@ decl_module! {
 		}
 
 		/// Forces a new session.
-		fn force_new_session(apply_rewards: bool) -> Result {
-			Self::apply_force_new_session(apply_rewards)
+		fn force_new_session(apply_rewards: bool) {
+			Self::apply_force_new_session(apply_rewards);
 		}
 
 		/// Called when a block is finalized. Will rotate session if it is the last
@@ -237,9 +264,8 @@ impl<T: Trait> Module<T> {
 
 	// INTERNAL API (available to other runtime modules)
 	/// Forces a new session, no origin.
-	pub fn apply_force_new_session(apply_rewards: bool) -> Result {
+	pub fn apply_force_new_session(apply_rewards: bool) {
 		<ForcingNewSession<T>>::put(apply_rewards);
-		Ok(())
 	}
 
 	/// Set the current set of validators.
@@ -318,6 +344,11 @@ impl<T: Trait> Module<T> {
 		let block_number = <system::Module<T>>::block_number();
 		length_minus_1 - (block_number - Self::last_length_change() + length_minus_1) % length
 	}
+
+	/// Disables a validator.
+	pub fn disable_validator(val: T::AccountId) {
+		T::OnDisable::on_disable(val);
+	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
@@ -343,12 +374,21 @@ mod tests {
 
 	thread_local!{
 		static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
+		static DISABLED_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	}
 
 	pub struct TestOnSessionChange;
 	impl OnSessionChange<u64> for TestOnSessionChange {
 		fn on_session_change(_elapsed: u64, _should_reward: bool) {
 			NEXT_VALIDATORS.with(|v| Session::set_validators(&*v.borrow()));
+			DISABLED_VALIDATORS.with(|v| v.borrow_mut().clear());
+		}
+	}
+
+	pub struct TestOnDisable;
+	impl OnDisable<u64> for TestOnDisable {
+		fn on_disable(account_id: u64) {
+			DISABLED_VALIDATORS.with(|v| v.borrow_mut().push(account_id));
 		}
 	}
 
@@ -379,6 +419,7 @@ mod tests {
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 		type OnSessionChange = TestOnSessionChange;
+		type OnDisable = TestOnDisable;
 		type Event = ();
 	}
 

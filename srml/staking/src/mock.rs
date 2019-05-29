@@ -76,6 +76,7 @@ impl balances::Trait for Test {
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 	type OnSessionChange = Staking;
+	type OnDisable = Staking;
 	type Event = ();
 }
 impl timestamp::Trait for Test {

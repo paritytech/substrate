@@ -245,7 +245,7 @@
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
 use parity_codec::{HasCompact, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
+use srml_support::{StorageValue, StorageMap, EnumerableStorageMap};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
 	Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency, WithdrawReasons,
@@ -750,8 +750,8 @@ decl_module! {
 
 		/// Force there to be a new era. This also forces a new session immediately after.
 		/// `apply_rewards` should be true for validators to get the session reward.
-		fn force_new_era(apply_rewards: bool) -> Result {
-			Self::apply_force_new_era(apply_rewards)
+		fn force_new_era(apply_rewards: bool) {
+			Self::apply_force_new_era(apply_rewards);
 		}
 
 		/// Set the offline slash grace period.
@@ -780,9 +780,9 @@ decl_event!(
 
 impl<T: Trait> Module<T> {
 	/// Just force_new_era without origin check.
-	fn apply_force_new_era(apply_rewards: bool) -> Result {
+	fn apply_force_new_era(apply_rewards: bool) {
 		<ForcingNewEra<T>>::put(());
-		<session::Module<T>>::apply_force_new_session(apply_rewards)
+		<session::Module<T>>::apply_force_new_session(apply_rewards);
 	}
 
 	// PUBLIC IMMUTABLES
@@ -1104,7 +1104,7 @@ impl<T: Trait> Module<T> {
 					.unwrap_or(slash_exposure);
 				let _ = Self::slash_validator(&stash, slash);
 				<Validators<T>>::remove(&stash);
-				let _ = Self::apply_force_new_era(false);
+				<session::Module<T>>::disable_validator(controller);
 
 				RawEvent::OfflineSlash(stash.clone(), slash)
 			} else {
@@ -1119,6 +1119,12 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 	fn on_session_change(elapsed: T::Moment, should_reward: bool) {
 		Self::new_session(elapsed, should_reward);
+	}
+}
+
+impl<T: Trait> session::OnDisable<T::AccountId> for Module<T> {
+	fn on_disable(_account: T::AccountId) {
+		Self::apply_force_new_era(false);
 	}
 }
 
