@@ -80,9 +80,9 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: tokio::timer::Interval,
+	tick_timeout: tokio_timer::Interval,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: tokio::timer::Interval,
+	propagate_timeout: tokio_timer::Interval,
 	config: ProtocolConfig,
 	/// Handler for on-demand requests.
 	on_demand_core: OnDemandCore<B>,
@@ -395,8 +395,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info);
 		Ok(Protocol {
-			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
-			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
+			propagate_timeout: tokio_timer::Interval::new_interval(PROPAGATE_TIMEOUT),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
