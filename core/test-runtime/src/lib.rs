@@ -36,7 +36,7 @@ use substrate_client::{
 use runtime_primitives::{
 	ApplyResult,
 	create_runtime_str,
-	transaction_validity::{TransactionValidity, DO_NOT_PROPAGATE_BIT},
+	transaction_validity::TransactionValidity,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, AuthorityIdFor, Verify,
@@ -368,10 +368,11 @@ cfg_if! {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return TransactionValidity::Valid {
-							priority: DO_NOT_PROPAGATE_BIT | data.len() as u64,
+							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
+							propagate: false,
 						};
 					}
 
@@ -515,10 +516,11 @@ cfg_if! {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return TransactionValidity::Valid {
-							priority: DO_NOT_PROPAGATE_BIT | data.len() as u64,
+							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
+							propagate: false,
 						};
 					}
 

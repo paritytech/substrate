@@ -355,6 +355,7 @@ where
 					requires,
 					provides,
 					longevity: TransactionLongevity::max_value(),
+					propagate: true,
 				}
 			},
 			(None, None) => UnsignedValidator::validate_unsigned(&xt.deconstruct().0),

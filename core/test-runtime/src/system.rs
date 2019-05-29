@@ -190,6 +190,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		requires,
 		provides,
 		longevity: 64,
+		propagate: true,
 	}
 }
 
