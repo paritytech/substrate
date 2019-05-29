@@ -286,7 +286,7 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
 }
 
-/// A `StorageMap` with enumerable entries.
+/// A `StorageMap` with appendable entries.
 pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
 	/// Append the given items to the value in the storage.
 	///
