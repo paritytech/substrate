@@ -131,7 +131,7 @@ decl_module! {
 		/// otherwise it is a vote to keep the status quo.
 		///
 		/// # <weight>
-		/// - Weight depends on Self::do_vote
+		/// - Weight depends on `Self::do_vote`.
 		/// - See Self::do_vote
 		/// # </weight>
 		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
