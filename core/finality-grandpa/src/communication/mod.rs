@@ -64,7 +64,8 @@ mod cost {
 	pub(super) const BAD_SIGNATURE: i32 = -100;
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
-    pub(super) const EQUIVOCATION: i32 = -500;
+    pub(super) const EQUIVOCATION: i32 = 500;
+	pub(super) const REDUNDANT: i32 = 0;
 
 	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
@@ -470,7 +471,7 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 }
 
 /// Type-safe wrapper around u64 when indicating that it's a round number.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct Round(pub u64);
 
 /// Type-safe wrapper around u64 when indicating that it's a set ID.

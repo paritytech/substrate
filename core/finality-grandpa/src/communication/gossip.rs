@@ -98,8 +98,9 @@ enum Consider {
 	RejectPast,
 	/// Message is from the future. Reject.
 	RejectFuture,
-    /// Message is an equivocation. Reject.
-    RejectEquivocation,
+    /// Message is redundant. Reject.
+    RejectRedundant,
+	RejectEquivocation,
 }
 
 #[derive(Debug, Default)]
@@ -315,6 +316,7 @@ pub(super) enum Misbehavior {
 	FutureMessage,
     // Equivocation received
     Equivocation,
+	Redundant,
 }
 
 impl Misbehavior {
@@ -335,6 +337,7 @@ impl Misbehavior {
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
             Equivocation => cost::EQUIVOCATION,
+			Redundant => cost::REDUNDANT,
 		}
 	}
 }
@@ -439,7 +442,8 @@ struct Inner<Block: BlockT> {
 	live_topics: KeepTopics<Block>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
-	votes_tally: HashMap<AuthorityId, VoteTally>,
+	incoming_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
+	outgoing_votes_tally: HashMap<Round, HashMap<AuthorityId, VoteTally>>,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
@@ -452,7 +456,8 @@ impl<Block: BlockT> Inner<Block> {
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			config,
-			votes_tally: Default::default(),
+			incoming_votes_tally: Default::default(),
+			outgoing_votes_tally: Default::default(),
 		}
 	}
 
@@ -468,7 +473,7 @@ impl<Block: BlockT> Inner<Block> {
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
 		// Reset the votes-tally for a new round.
-        self.votes_tally = Default::default();
+        self.incoming_votes_tally.insert(round, Default::default());
 
 		self.live_topics.push(round, set_id);
 		self.multicast_neighbor_packet()
@@ -497,26 +502,46 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn consider_vote(&mut self, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
-		let mut tally = self.votes_tally.entry(msg.id.clone()).or_insert(Default::default());
+		let tally_for_round = self.incoming_votes_tally.get_mut(&round).expect("");
+		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
+		let outgoing_tally_for_round = self.outgoing_votes_tally.get_mut(&round).expect("");
+		let outgoing_tally = outgoing_tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
 
-		match &msg.message {
+		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
-				tally.handled_primary_proposals += 1;
+				if tally.handled_primary_proposals > 1 {
+					(true, outgoing_tally.handled_primary_proposals > 0)
+				} else {
+					tally.handled_primary_proposals += 1;
+					(false, false)
+				}
 			},
 			Prevote(_prevote) => {
-				tally.handled_pre_votes += 1;
+				if tally.handled_pre_votes > 1 {
+					(true, outgoing_tally.handled_pre_votes > 0)
+				} else {
+					tally.handled_pre_votes += 1;
+					(false, false)
+				}
 			},
 			Precommit(_precommit) => {
-				tally.handled_pre_commits += 1;
+				if tally.handled_pre_commits > 1 {
+					(true, outgoing_tally.handled_pre_votes > 0)
+				} else {
+					tally.handled_pre_commits += 1;
+					(false, false)
+				}
 			},
+		};
+
+		if should_report {
+			return Consider::RejectEquivocation
 		}
 
 		// When we're processed 2 votes of each type,
 		// or if it is an equivocator, reject the message.
-		if tally.handled_primary_proposals > 2
-			|| tally.handled_pre_votes > 2
-			|| tally.handled_pre_commits > 2 {
-			return Consider::RejectEquivocation
+		if should_reject {
+			return Consider::RejectRedundant
 		}
 
 		self.local_view.consider_vote(round, set_id)
@@ -536,7 +561,8 @@ impl<Block: BlockT> Inner<Block> {
 	{
 		match self.consider_vote(full.round, full.set_id, &full.message) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
-            Consider::RejectEquivocation => return Action::Discard(Misbehavior::Equivocation.cost()),
+            Consider::RejectRedundant => return Action::Discard(Misbehavior::Redundant.cost()),
+			Consider::RejectEquivocation => return Action::Discard(Misbehavior::Equivocation.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
@@ -571,7 +597,7 @@ impl<Block: BlockT> Inner<Block> {
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
-			Consider::RejectEquivocation => {},
+			Consider::RejectRedundant | Consider::RejectEquivocation => {},
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -750,8 +776,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn message_allowed<'a>(&'a self)
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
-		let (inner, do_rebroadcast) = {
-			use parking_lot::RwLockWriteGuard;
+		let (mut inner, do_rebroadcast) = {
 
 			let mut inner = self.inner.write();
 			let now = Instant::now();
@@ -761,9 +786,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			} else {
 				false
 			};
-
-			// downgrade to read-lock.
-			(RwLockWriteGuard::downgrade(inner), do_rebroadcast)
+			(inner, do_rebroadcast)
 		};
 
 		Box::new(move |who, intent, topic, mut data| {
@@ -783,16 +806,48 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(x) => x,
 			};
 
+			let message = GossipMessage::<Block>::decode(&mut data);
+
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
-				return peer.view.consider_vote(round, set_id) == Consider::Accept
+				if let Some(GossipMessage::VoteOrPrecommit(msg)) = message {
+					let allowed = peer.view.consider_vote(round, set_id) == Consider::Accept;
+					if allowed {
+						let tally_for_round = inner.outgoing_votes_tally.get_mut(&round).expect("");
+						let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
+						match &msg.message.message {
+							PrimaryPropose(_propose) => {
+								if tally.handled_primary_proposals > 1 {
+									return false;
+								} else {
+									tally.handled_primary_proposals += 1;
+								}
+							},
+							Prevote(_prevote) => {
+								if tally.handled_pre_votes > 1 {
+									return false;
+								} else {
+									tally.handled_pre_votes += 1;
+								}
+							},
+							Precommit(_precommit) => {
+								if tally.handled_pre_commits > 1 {
+									return false;
+								} else {
+									tally.handled_pre_commits += 1;
+								}
+							},
+						}
+					}
+					return allowed
+				}
 			}
 
 			// global message.
 			let our_best_commit = inner.local_view.last_commit;
 			let peer_best_commit = peer.view.last_commit;
 
-			match GossipMessage::<Block>::decode(&mut data) {
+			match message {
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
 					// we only broadcast our best commit and only if it's
