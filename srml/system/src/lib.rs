@@ -508,7 +508,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	///
 	/// <weight>
-	/// Transaction is IO bound. It is safe.
+	/// Transaction is I/O bound. It is safe.
 	/// </weight>
 	pub fn finalize() -> T::Header {
 		<ExtrinsicCount<T>>::kill();
