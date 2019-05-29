@@ -131,7 +131,7 @@ decl_module! {
 		/// otherwise it is a vote to keep the status quo.
 		///
 		/// # <weight>
-		/// - Weight depends on Self::do_vote
+		/// - Weight depends on `Self::do_vote`.
 		/// - See Self::do_vote
 		/// # </weight>
 		fn vote(origin, #[compact] ref_index: ReferendumIndex, vote: Vote) -> Result {
@@ -242,7 +242,7 @@ decl_module! {
 		/// Undelegate vote.
 		///
 		/// # <weight>
-		/// - Depends on weight of `T::Currency::set_lock()`
+		/// - Depends on weight of `T::Currency::set_lock`.
 		/// - More likely than not safe.
 		/// # </weight>
 		fn undelegate(origin) {

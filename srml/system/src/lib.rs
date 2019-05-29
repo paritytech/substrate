@@ -408,7 +408,7 @@ impl<T: Trait> Module<T> {
 	/// It is expected that light-clients could subscribe to this topics.
 	///
 	/// <weight>
-	/// - The `topics` argument effects complexity. 
+	/// - The `topics` argument affects complexity. 
 	/// - Each passed topic will be written to storage.
 	/// - Is topics limited by the functions that call this?
 	/// </weight>
@@ -485,7 +485,7 @@ impl<T: Trait> Module<T> {
 	/// Start the execution of a particular block.
 	///
 	/// <weight>
-	/// Transaction is IO bound. It is safe.
+	/// Transaction is I/O bound. It is safe.
 	/// </weight>
 	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment
@@ -672,7 +672,7 @@ impl<T: Trait> Module<T> {
 	/// `execute_block` doesn't note any extrinsics.
 	///
 	/// <weight>
-	/// The parameter encoded_xt is potentially exploitable since no check is made on its size and gets inserted to 
+	/// The parameter `encoded_xt` is potentially exploitable since no check is made on its size and it gets inserted in
 	/// storage.
 	/// </weight>
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
@@ -682,7 +682,7 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after an extrinsic has been applied.
 	///
 	/// <weight>
-	/// Transaction is IO bound and safe. Possible overflow on next_extrinsic_index. 
+	/// Transaction is I/O bound and safe. Possible overflow on `next_extrinsic_index`. 
 	/// </weight>
 	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
