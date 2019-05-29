@@ -233,7 +233,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
-		set_state: Option<(u64, &crate::environment::VoterSetState<B>)>,
+		set_state: Option<&crate::environment::VoterSetState<B>>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 	) -> (
 		Self,
@@ -244,15 +244,18 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
-		if let Some((set_id, set_state)) = set_state {
+		if let Some(set_state) = set_state {
 			// register all previous votes with the gossip service so that they're
 			// available to peers potentially stuck on a previous round.
-			for round in set_state.completed_rounds().iter() {
+			let completed = set_state.completed_rounds();
+			let (set_id, voters) = completed.set_info();
+			validator.note_set(SetId(set_id), voters.to_vec(), |_, _| {});
+			for round in completed.iter() {
 				let topic = round_topic::<B>(round.number, set_id);
 
 				// we need to note the round with the gossip validator otherwise
 				// messages will be ignored.
-				validator.note_round(Round(round.number), SetId(set_id), |_, _| {});
+				validator.note_round(Round(round.number), |_, _| {});
 
 				for signed in round.votes.iter() {
 					let message = gossip::GossipMessage::VoteOrPrecommit(
@@ -295,7 +298,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		(bridge, startup_work)
 	}
 
-	/// Get the round messages for a round in a given set ID. These are signature-checked.
+	/// Get the round messages for a round in the current set ID. These are signature-checked.
 	pub(crate) fn round_communication(
 		&self,
 		round: Round,
@@ -307,9 +310,18 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
+		// is a no-op if currently in that set.
+		self.validator.note_set(
+			set_id,
+			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			|to, neighbor| self.service.send_message(
+				to,
+				GossipMessage::<B>::from(neighbor).encode()
+			),
+		);
+
 		self.validator.note_round(
 			round,
-			set_id,
 			|to, neighbor| self.service.send_message(
 				to,
 				GossipMessage::<B>::from(neighbor).encode()
@@ -410,6 +422,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	) {
 		self.validator.note_set(
 			set_id,
+			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
 		);
 

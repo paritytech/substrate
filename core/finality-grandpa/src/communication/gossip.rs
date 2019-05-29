@@ -71,6 +71,7 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
+use crate::ed25519::Public as AuthorityId;
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
@@ -421,6 +422,7 @@ struct Inner<Block: BlockT> {
 	local_view: View<NumberFor<Block>>,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
+	authorities: Vec<AuthorityId>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
 }
@@ -434,18 +436,21 @@ impl<Block: BlockT> Inner<Block> {
 			peers: Peers::default(),
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
+			authorities: Vec::new(),
 			config,
 		}
 	}
 
-	/// Note a round in a set has started.
-	fn note_round(&mut self, round: Round, set_id: SetId) -> MaybeMessage<Block> {
-		if self.local_view.round == round && self.local_view.set_id == set_id {
+	/// Note a round in the current set has started.
+	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
+		if self.local_view.round == round {
 			return None;
 		}
 
+		let set_id = self.local_view.set_id;
+
 		debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
-			self.config.name(), (round, set_id));
+			self.config.name(), (round,set_id));
 
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
@@ -456,13 +461,14 @@ impl<Block: BlockT> Inner<Block> {
 
 	/// Note that a voter set with given ID has started. Does nothing if the last
 	/// call to the function was with the same `set_id`.
-	fn note_set(&mut self, set_id: SetId) -> MaybeMessage<Block> {
+	fn note_set(&mut self, set_id: SetId, authorities: Vec<AuthorityId>) -> MaybeMessage<Block> {
 		if self.local_view.set_id == set_id {
 			return None;
 		}
 
 		self.local_view.update_set(set_id);
 		self.live_topics.push(Round(0), set_id);
+		self.authorities = authorities;
 		self.multicast_neighbor_packet()
 	}
 
@@ -579,7 +585,7 @@ pub(super) struct GossipValidator<Block: BlockT> {
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
-	/// Create a new gossip-validator.
+	/// Create a new gossip-validator. This initialized the current set to 0.
 	pub(super) fn new(config: crate::Config) -> (GossipValidator<Block>, ReportStream) {
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
@@ -590,21 +596,22 @@ impl<Block: BlockT> GossipValidator<Block> {
 		(val, ReportStream { reports: rx })
 	}
 
-	/// Note a round in a set has started.
-	pub(super) fn note_round<F>(&self, round: Round, set_id: SetId, send_neighbor: F)
+	/// Note a round in the current set has started.
+	pub(super) fn note_round<F>(&self, round: Round, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		let maybe_msg = self.inner.write().note_round(round, set_id);
+		let maybe_msg = self.inner.write().note_round(round);
 		if let Some((to, msg)) = maybe_msg {
 			send_neighbor(to, msg);
 		}
 	}
 
-	/// Note that a voter set with given ID has started.
-	pub(super) fn note_set<F>(&self, set_id: SetId, send_neighbor: F)
+	/// Note that a voter set with given ID has started. Updates the current set to given
+	/// value and initializes the round to 0.
+	pub(super) fn note_set<F>(&self, set_id: SetId, authorities: Vec<AuthorityId>, send_neighbor: F)
 		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
 	{
-		let maybe_msg = self.inner.write().note_set(set_id);
+		let maybe_msg = self.inner.write().note_set(set_id, authorities);
 		if let Some((to, msg)) = maybe_msg {
 			send_neighbor(to, msg);
 		}
@@ -1004,8 +1011,10 @@ mod tests {
 
 		let set_id = 1;
 
+		val.note_set(SetId(set_id), Vec::new(), |_, _| {});
+
 		for round_num in 1u64..10 {
-			val.note_round(Round(round_num), SetId(set_id), |_, _| {});
+			val.note_round(Round(round_num), |_, _| {});
 		}
 
 		{
