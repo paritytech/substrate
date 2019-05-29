@@ -22,7 +22,6 @@
 //! Three kinds of data types are currently supported:
 //!   - values
 //!   - maps
-//!   - lists
 //!
 //! # Examples:
 //!
@@ -39,8 +38,6 @@
 //!     pub Value: b"putd_key" => SessionKey;
 //!     // private map.
 //!     Balances: b"private_map:" => map [AuthorityId => Balance];
-//!     // private list.
-//!     Authorities: b"auth:" => list [AuthorityId];
 //! }
 //!
 //!# fn main() { }
@@ -159,16 +156,6 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 
-
-	// lists
-	($name:ident : $prefix:expr => list [$ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() $name: $prefix => list [$ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $prefix:expr => list [$ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) $name: $prefix => list [$ty]);
-		storage_items!($($t)*);
-	};
 	() => ()
 }
 
