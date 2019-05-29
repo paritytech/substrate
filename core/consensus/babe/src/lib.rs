@@ -584,8 +584,14 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 			};
 
 			if check(&inout, threshold) {
-				match check_equivocation(&client, slot_now, slot_num, header.clone(), signer.clone()) {
-					Ok(Some(equivocation_proof)) => {
+				match check_equivocation(
+					&client,
+					slot_now,
+					slot_num,
+					header.clone(),
+					signer.clone()
+				).map_err(ToString::to_string)? {
+					Some(equivocation_proof) => {
 						// NOTE: we'll want to report this equivocation to some
 						// runtime module once that's implemented.
 						info!(
@@ -596,8 +602,7 @@ fn check_header<B: Block + Sized, C: AuxStore>(
 							equivocation_proof.snd_header().hash(),
 						);
 					},
-					Ok(None) => {},
-					Err(e) => return Err(e.to_string()),
+					None => {},
 				}
 
 				Ok(CheckedHeader::Checked(header, digest_item))
