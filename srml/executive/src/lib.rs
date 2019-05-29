@@ -80,7 +80,7 @@ use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
-	ValidateUnsigned,
+	ValidateUnsigned, DigestItem,
 };
 use srml_support::{Dispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
@@ -152,11 +152,13 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
-		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root());
+		let mut digests = System::Digest::default();
+		header.digest().logs().iter().for_each(|d| if d.as_pre_runtime().is_some() { digests.push(d.clone()) });
+		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
 	}
 
-	fn initialize_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash) {
-		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root);
+	fn initialize_block_impl(block_number: &System::BlockNumber, parent_hash: &System::Hash, extrinsics_root: &System::Hash, digest: &System::Digest) {
+		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 	}
 
@@ -262,7 +264,8 @@ where
 			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
-
+			// FIXME: ensure this at compile-time (such as by not defining a panic function, forcing
+			// a linker error unless the compiler can prove it cannot be called).
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_nonce(sender);
 		}

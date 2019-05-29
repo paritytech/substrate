@@ -28,13 +28,14 @@ use crate::message::{
 	self, BlockRequest as BlockRequestMessage,
 	FinalityProofRequest as FinalityProofRequestMessage, Message,
 };
+use crate::message::{BlockAttributes, Direction, FromBlock, RequestId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
 use crate::specialization::NetworkSpecialization;
 use crate::sync::{ChainSync, Context as SyncContext, Status as SyncStatus, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::{ProtocolConfig, Roles};
+use crate::config::Roles;
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -79,9 +80,9 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: tokio::timer::Interval,
+	tick_timeout: tokio_timer::Interval,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: tokio::timer::Interval,
+	propagate_timeout: tokio_timer::Interval,
 	config: ProtocolConfig,
 	/// Handler for on-demand requests.
 	on_demand_core: OnDemandCore<B>,
@@ -169,7 +170,102 @@ impl<'a, 'b, B: BlockT> OnDemandNetwork<B> for &'a mut &'b mut dyn NetworkOut<B>
 		NetworkOut::disconnect_peer(**self, who.clone())
 	}
 
-	fn send_request(&mut self, who: &PeerId, message: Message<B>) {
+	fn send_header_request(&mut self, who: &PeerId, id: RequestId, block: <<B as BlockT>::Header as HeaderT>::Number) {
+		let message = message::generic::Message::RemoteHeaderRequest(message::RemoteHeaderRequest {
+			id,
+			block,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_read_request(&mut self, who: &PeerId, id: RequestId, block: <B as BlockT>::Hash, key: Vec<u8>) {
+		let message = message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
+			id,
+			block,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_read_child_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		storage_key: Vec<u8>,
+		key: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
+			id,
+			block,
+			storage_key,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_call_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		method: String,
+		data: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
+			id,
+			block,
+			method,
+			data,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_changes_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		first: <B as BlockT>::Hash,
+		last: <B as BlockT>::Hash,
+		min: <B as BlockT>::Hash,
+		max: <B as BlockT>::Hash,
+		key: Vec<u8>
+	) {
+		let message = message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
+			id,
+			first,
+			last,
+			min,
+			max,
+			key,
+		});
+
+		NetworkOut::send_message(**self, who.clone(), message)
+	}
+
+	fn send_body_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		fields: BlockAttributes,
+		from: FromBlock<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>,
+		to: Option<<B as BlockT>::Hash>,
+		direction: Direction,
+		max: Option<u32>
+	) {
+		let message = message::generic::Message::BlockRequest(message::BlockRequest::<B> {
+			id,
+			fields,
+			from,
+			to,
+			direction,
+			max,
+		});
+
 		NetworkOut::send_message(**self, who.clone(), message)
 	}
 }
@@ -273,6 +369,21 @@ struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
+/// Configuration for the Substrate-specific part of the networking layer.
+#[derive(Clone)]
+pub struct ProtocolConfig {
+	/// Assigned roles.
+	pub roles: Roles,
+}
+
+impl Default for ProtocolConfig {
+	fn default() -> ProtocolConfig {
+		ProtocolConfig {
+			roles: Roles::FULL,
+		}
+	}
+}
+
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
@@ -284,8 +395,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info);
 		Ok(Protocol {
-			tick_timeout: tokio::timer::Interval::new_interval(TICK_TIMEOUT),
-			propagate_timeout: tokio::timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
+			propagate_timeout: tokio_timer::Interval::new_interval(PROPAGATE_TIMEOUT),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
