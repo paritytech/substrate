@@ -485,7 +485,7 @@ impl<T: Trait> Module<T> {
 	/// Start the execution of a particular block.
 	///
 	/// <weight>
-	/// Transaction is IO bound. It is safe.
+	/// Transaction is I/O bound. It is safe.
 	/// </weight>
 	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment
