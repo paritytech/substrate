@@ -195,15 +195,15 @@ pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	protocol_sender: mpsc::UnboundedSender<ProtocolMsg<B, S>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker<B, S, H> {
 	/// Creates the network service.
 	///
-	/// Returns the service itself that can be shared throughout the codebase, and a `NetworkWorker`
-	/// that implements `Future` and must be regularly polled in order for the network processing
-	/// to advance.
-	pub fn new<H: ExHashT>(
+	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
+	/// for the network processing to advance. From it, you can extract a `NetworkService` using
+	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
+	pub fn new(
 		params: Params<B, S, H>,
-	) -> Result<(Arc<NetworkService<B, S>>, NetworkWorker<B, S, H>), Error> {
+	) -> Result<NetworkWorker<B, S, H>, Error> {
 		let (network_chan, network_port) = mpsc::unbounded();
 		let (protocol_sender, protocol_rx) = mpsc::unbounded();
 		let status_sinks = Arc::new(Mutex::new(Vec::new()));
@@ -238,38 +238,45 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 			},
 		};
 
-		let network_mut = NetworkWorker {
+		let service = Arc::new(NetworkService {
+			status_sinks: status_sinks.clone(),
 			is_offline: is_offline.clone(),
 			is_major_syncing: is_major_syncing.clone(),
-			network_service: network.clone(),
-			peerset: peerset.clone(),
-			protocol,
+			network_chan,
 			peers: peers.clone(),
+			peerset: peerset.clone(),
+			network: network.clone(),
+			protocol_sender: protocol_sender.clone(),
+		});
+
+		Ok(NetworkWorker {
+			is_offline,
+			is_major_syncing,
+			network_service: network,
+			peerset,
+			service,
+			protocol,
+			peers,
 			import_queue: params.import_queue,
 			transaction_pool: params.transaction_pool,
 			finality_proof_provider: params.finality_proof_provider,
 			network_port,
 			protocol_rx,
-			status_sinks: status_sinks.clone(),
+			status_sinks,
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
 			status_interval: tokio_timer::Interval::new_interval(STATUS_INTERVAL),
 			connected_peers_interval: tokio_timer::Interval::new_interval(CONNECTED_PEERS_INTERVAL),
-		};
-
-		let service = Arc::new(NetworkService {
-			status_sinks,
-			is_offline,
-			is_major_syncing,
-			network_chan,
-			peers,
-			peerset,
-			network,
-			protocol_sender: protocol_sender.clone(),
-		});
-
-		Ok((service, network_mut))
+		})
 	}
 
+	/// Return a `NetworkService` that can be shared through the code base and can be used to
+	/// manipulate the worker.
+	pub fn service(&self) -> &Arc<NetworkService<B, S>> {
+		&self.service
+	}
+}
+
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> NetworkService<B, S> {
 	/// Returns the downloaded bytes per second averaged over the past few seconds.
 	#[inline]
 	pub fn average_download_per_sec(&self) -> u64 {
@@ -524,6 +531,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
 	protocol: Protocol<B, S, H>,
+	/// The network service that can be extracted and shared through the codebase.
+	service: Arc<NetworkService<B, S>>,
 	network_service: Arc<Mutex<Libp2pNetService<Message<B>>>>,
 	peers: Arc<RwLock<HashMap<PeerId, ConnectedPeer<B>>>>,
 	import_queue: Box<ImportQueue<B>>,

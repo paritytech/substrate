@@ -203,7 +203,8 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let (network, network_mut) = network::NetworkService::new(network_params)?;
+		let network_mut = network::NetworkWorker::new(network_params)?;
+		let network = network_mut.service().clone();
 
 		task_executor.spawn(network_mut
 			.map_err(|_| ())
