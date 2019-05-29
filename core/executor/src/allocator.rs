@@ -163,8 +163,7 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	fn le_bytes_to_u32(arr: [u8; 4]) -> u32 {
-		let bytes = [arr[0], arr[1], arr[2], arr[3]];
-		unsafe { std::mem::transmute::<[u8; 4], u32>(bytes) }.to_le()
+		u32::from_le_bytes(arr)
 	}
 
 	fn write_u32_into_le_bytes(bytes: u32, slice: &mut [u8]) {

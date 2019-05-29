@@ -30,7 +30,7 @@ pub type TransactionLongevity = u64;
 pub type TransactionTag = Vec<u8>;
 
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
 	/// Transaction is invalid. Details are described by the error code.
@@ -59,7 +59,74 @@ pub enum TransactionValidity {
 		/// Longevity describes minimum number of blocks the validity is correct.
 		/// After this period transaction should be removed from the pool or revalidated.
 		longevity: TransactionLongevity,
+		/// A flag indicating if the transaction should be propagated to other peers.
+		///
+		/// By setting `false` here the transaction will still be considered for
+		/// including in blocks that are authored on the current node, but will
+		/// never be sent to other peers.
+		propagate: bool,
 	},
 	/// Transaction validity can't be determined.
 	Unknown(i8),
+}
+
+impl Decode for TransactionValidity {
+	fn decode<I: crate::codec::Input>(value: &mut I) -> Option<Self> {
+		match value.read_byte()? {
+			0 => Some(TransactionValidity::Invalid(i8::decode(value)?)),
+			1 => {
+				let priority = TransactionPriority::decode(value)?;
+				let requires = Vec::decode(value)?;
+				let provides = Vec::decode(value)?;
+				let longevity = TransactionLongevity::decode(value)?;
+				let propagate = bool::decode(value).unwrap_or(true);
+
+				Some(TransactionValidity::Valid {
+					priority, requires, provides, longevity, propagate,
+				})
+			},
+			2 => Some(TransactionValidity::Unknown(i8::decode(value)?)),
+			_ => None,
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_decode_with_backward_compat() {
+		let old_encoding = vec![
+			1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0
+		];
+
+		assert_eq!(TransactionValidity::decode(&mut &*old_encoding), Some(TransactionValidity::Valid {
+			priority: 5,
+			requires: vec![vec![1, 2, 3, 4]],
+			provides: vec![vec![4, 5, 6]],
+			longevity: 42,
+			propagate: true,
+		}));
+	}
+
+	#[test]
+	fn should_encode_and_decode() {
+		let v = TransactionValidity::Valid {
+			priority: 5,
+			requires: vec![vec![1, 2, 3, 4]],
+			provides: vec![vec![4, 5, 6]],
+			longevity: 42,
+			propagate: false,
+		};
+
+		let encoded = v.encode();
+		assert_eq!(
+			encoded,
+			vec![1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0, 0]
+		);
+
+		// decode back
+		assert_eq!(TransactionValidity::decode(&mut &*encoded), Some(v));
+	}
 }
