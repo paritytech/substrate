@@ -16,7 +16,6 @@
 
 //! Schema for slots in the aux-db.
 
-use std::sync::Arc;
 use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
@@ -30,7 +29,7 @@ pub const MAX_SLOT_CAPACITY: u64 = 1000;
 /// We prune slots when they reach this number.
 pub const PRUNING_BOUND: u64 = 2 * MAX_SLOT_CAPACITY;
 
-fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>> 
+fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	where
 		C: AuxStore,
 		T: Decode,
@@ -74,16 +73,16 @@ impl<H> EquivocationProof<H> {
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
 pub fn check_equivocation<C, H, P>(
-	backend: &Arc<C>,
+	backend: &C,
 	slot_now: u64,
 	slot: u64,
-	header: H,
-	signer: P,
+	header: &H,
+	signer: &P,
 ) -> ClientResult<Option<EquivocationProof<H>>>
 	where
 		H: Header,
 		C: AuxStore,
-		P: Encode + Decode + PartialEq,
+		P: Clone + Encode + Decode + PartialEq,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -95,18 +94,18 @@ pub fn check_equivocation<C, H, P>(
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend.clone(), &curr_slot_key[..])?
+	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?
 		.unwrap_or_else(Vec::new);
 
 	// Get first slot saved.
 	let slot_header_start = SLOT_HEADER_START.to_vec();
-	let first_saved_slot = load_decode::<_, u64>(backend.clone(), &slot_header_start[..])?
+	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
 		.unwrap_or(slot);
 
 	for (prev_header, prev_signer) in headers_with_sig.iter() {
 		// A proof of equivocation consists of two headers:
 		// 1) signed by the same voter,
-		if *prev_signer == signer {
+		if prev_signer == signer {
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
@@ -137,7 +136,7 @@ pub fn check_equivocation<C, H, P>(
 		}
 	}
 
-	headers_with_sig.push((header, signer));
+	headers_with_sig.push((header.clone(), signer.clone()));
 
 	backend.insert_aux(
 		&[

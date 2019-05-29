@@ -457,7 +457,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 //
 // FIXME #1018 needs misbehavior types
 fn check_header<C, B: Block, P: Pair>(
-	client: &Arc<C>,
+	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
@@ -504,8 +504,8 @@ fn check_header<C, B: Block, P: Pair>(
 				client,
 				slot_now,
 				slot_num,
-				header.clone(),
-				public.clone(),
+				&header,
+				public,
 			).map_err(|e| e.to_string())? {
 				// NOTE: we'll want to report this equivocation to some
 				// runtime module once that's implemented.
