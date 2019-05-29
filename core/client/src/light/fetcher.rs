@@ -588,7 +588,7 @@ pub mod tests {
 		let remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let builder = remote_client.new_block().unwrap();
+			let builder = remote_client.new_block(Default::default()).unwrap();
 			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 			local_headers_hashes.push(remote_client.block_hash(i + 1)
 				.map_err(|_| ClientError::Backend("TestError".into())));

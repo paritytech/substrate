@@ -16,7 +16,6 @@
 
 use std::sync::Arc;
 use futures::{Stream, Future, sync::mpsc};
-use inherents::pool::InherentsPool;
 use log::{info, debug, warn};
 use parity_codec::Decode;
 use primitives::OffchainExt;
@@ -46,21 +45,18 @@ impl OffchainExt for AsyncApi {
 pub(crate) struct Api<A: ChainApi> {
 	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
 	transaction_pool: Arc<Pool<A>>,
-	inherents_pool: Arc<InherentsPool<<A::Block as traits::Block>::Extrinsic>>,
 	at: BlockId<A::Block>,
 }
 
 impl<A: ChainApi> Api<A> {
 	pub fn new(
 		transaction_pool: Arc<Pool<A>>,
-		inherents_pool: Arc<InherentsPool<<A::Block as traits::Block>::Extrinsic>>,
 		at: BlockId<A::Block>,
 	) -> (AsyncApi, Self) {
 		let (tx, rx) = mpsc::unbounded();
 		let api = Self {
 			receiver: Some(rx),
 			transaction_pool,
-			inherents_pool,
 			at,
 		};
 		(AsyncApi(tx), api)
@@ -90,9 +86,8 @@ impl<A: ChainApi> Api<A> {
 		info!("Submitting to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
 		match self.transaction_pool.submit_one(&self.at, xt.clone()) {
 			Ok(hash) => debug!("[{:?}] Offchain transaction added to the pool.", hash),
-			Err(_) => {
-				debug!("Offchain inherent added to the pool.");
-				self.inherents_pool.add(xt);
+			Err(e) => {
+				debug!("Couldn't submit transaction: {:?}", e);
 			},
 		}
 	}

@@ -635,7 +635,7 @@ mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
 	use client::LongestChain;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
@@ -655,7 +655,7 @@ mod tests {
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 
 		// import the block
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.bake().unwrap();
 		let id = BlockId::hash(block.header().hash());
