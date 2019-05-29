@@ -281,5 +281,25 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	fn head<S: HashedStorage<Self::Hasher>>(storage: &S) -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate<'a, S: HashedStorage<Self::Hasher>>(storage: &'a S) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
+	fn enumerate<'a, S: HashedStorage<Self::Hasher>>(
+		storage: &'a S
+	) -> Box<dyn Iterator<Item = (K, V)> + 'a> where K: 'a, V: 'a;
+}
+
+/// A `StorageMap` with appendable entries.
+pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<S: HashedStorage<Self::Hasher>, I: codec::Encode>(
+		key : &K, items: &[I], storage: &mut S
+	) -> Result<(), &'static str> where V: codec::EncodeAppend<Item=I> {
+		let k = Self::key_for(key);
+		let new_val = <V as codec::EncodeAppend>::append(
+			storage.get_raw(&k[..]).unwrap_or_default(),
+			items,
+		).ok_or_else(|| "Could not append given item")?;
+		storage.put_raw(&k[..], &new_val);
+		Ok(())
+	}
 }
