@@ -161,7 +161,7 @@ decl_module! {
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// # <weight>
-		/// - proposal_id is a u32
+		/// - `proposal_id` is a u32
 		/// - possible complexity in `on_unbalanced` *
 		/// - Otherwise low complexity.
 		/// # </weight>
