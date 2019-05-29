@@ -569,8 +569,10 @@ mod tests {
 	use crate::allocator;
 	use crate::sandbox::trap;
 	use crate::wasm_executor::WasmExecutor;
-	use state_machine::TestExternalities;
+	use state_machine::TestExternalities as CoreTestExternalities;
 	use wabt;
+
+	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
 	#[test]
 	fn sandbox_should_work() {

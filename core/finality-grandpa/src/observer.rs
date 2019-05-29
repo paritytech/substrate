@@ -218,6 +218,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 					let completed_rounds = set_state.read().completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
+					#[allow(deprecated)]
 					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					set_state
@@ -238,6 +239,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 						current_round: HasVoted::No,
 					};
 
+					#[allow(deprecated)]
 					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					set_state

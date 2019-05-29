@@ -38,7 +38,7 @@ variables:
   environment:
     name: parity-build
 
-.compiler_info:                         &compiler_info
+.compiler_info:                    &compiler_info
   before_script:
     - rustup show
     - cargo --version
@@ -125,7 +125,7 @@ check-web-wasm:
   tags:
     - linux-docker
 
-.build-only:                      &build-only
+.build-only:                       &build-only
   only:
     - master
     - tags
@@ -216,7 +216,7 @@ publish-docker-release:
     - test -z "${VERSION}" && exit 1
     - cd ./artifacts
     - docker build
-      --build-arg VCS_REF="${CI_COMMIT_SHORT_SHA}"
+      --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       --tag $CONTAINER_IMAGE:$VERSION 
       --tag $CONTAINER_IMAGE:latest .
@@ -337,7 +337,7 @@ deploy-ew3-tag:
 deploy-ue1-tag:
   <<:                              *deploy-tag
   environment:
-    name: parity-prod-ue1
+    name:                          parity-prod-ue1
 
 .validator-deploy:                 &validator-deploy
   stage:                           flaming-fir
