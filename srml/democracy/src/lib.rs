@@ -242,7 +242,7 @@ decl_module! {
 		/// Undelegate vote.
 		///
 		/// # <weight>
-		/// - Depends on weight of `T::Currency::set_lock()`
+		/// - Depends on weight of `T::Currency::set_lock`.
 		/// - More likely than not safe.
 		/// # </weight>
 		fn undelegate(origin) {
