@@ -154,7 +154,6 @@ mod test {
 	use primitives::{sr25519, Pair};
 	use primitives::hash::H256;
 	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
-	use runtime_primitives::traits::Header;
 	use test_client;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
