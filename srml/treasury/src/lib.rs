@@ -105,8 +105,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Input value may have bearing on complexity.
-		/// - Complexity in `calculate_bond` *
-		/// - Otherwise bounded complexity.
+		/// - Bounded complexity.
 		/// # </weight>
 		fn propose_spend(
 			origin,

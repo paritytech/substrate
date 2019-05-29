@@ -134,6 +134,7 @@ decl_module! {
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		///
 		/// # <weight>
 		/// - No significant complexity.
 		/// # </weight>
