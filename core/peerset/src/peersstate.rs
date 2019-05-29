@@ -603,4 +603,24 @@ mod tests {
 		let peer = peers_state.peer(&id).into_not_connected().unwrap().try_outgoing().unwrap();
 		peer.disconnect();
 	}
+
+	#[test]
+	fn multiple_priority_groups_slot_count() {
+		let mut peers_state = PeersState::new(1, 1);
+		let id = PeerId::random();
+
+		if let Peer::Unknown(p) = peers_state.peer(&id) {
+			assert!(p.discover().try_accept_incoming().is_ok());
+		} else { panic!() }
+
+		assert_eq!(peers_state.num_in, 1);
+		peers_state.set_priority_group("test1", vec![id.clone()].into_iter().collect());
+		assert_eq!(peers_state.num_in, 0);
+		peers_state.set_priority_group("test2", vec![id.clone()].into_iter().collect());
+		assert_eq!(peers_state.num_in, 0);
+		peers_state.set_priority_group("test1", vec![].into_iter().collect());
+		assert_eq!(peers_state.num_in, 0);
+		peers_state.set_priority_group("test2", vec![].into_iter().collect());
+		assert_eq!(peers_state.num_in, 1);
+	}
 }
