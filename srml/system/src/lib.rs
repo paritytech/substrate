@@ -641,7 +641,7 @@ impl<T: Trait> Module<T> {
 	/// The transaction complexity is IO safe. Complexity depends on the hashing function used.
 	/// </weight>
 	pub fn random(subject: &[u8]) -> T::Hash {
-		let (index, hash_series) = <RandomMaterial<T>>::get(); // Read
+		let (index, hash_series) = <RandomMaterial<T>>::get();
 		if hash_series.len() > 0 {
 			// Always the case after block 1 is initialised.
 			hash_series.iter()
