@@ -71,4 +71,6 @@ std = [
 	"hex-literal",
 	"serde",
 	"substrate-keyring",
+  "consensus_authorities/std",
+  "offchain-primitives/std",
 ]
