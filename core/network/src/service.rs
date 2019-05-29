@@ -547,8 +547,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Implementation of `protocol::NetworkOut` using the available local variables.
-		struct Ctxt<'a, B: BlockT>(&'a mut Libp2pNetService<Message<B>>, &'a PeersetHandle);
-		impl<'a, B: BlockT> NetworkOut<B> for Ctxt<'a, B> {
+		struct Context<'a, B: BlockT>(&'a mut Libp2pNetService<Message<B>>, &'a PeersetHandle);
+		impl<'a, B: BlockT> NetworkOut<B> for Context<'a, B> {
 			fn report_peer(&mut self, who: PeerId, reputation: i32) {
 				self.1.report_peer(who, reputation)
 			}
@@ -572,7 +572,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			*self.peers.write() = infos;
 		}
 
-		match self.protocol.poll(&mut Ctxt(&mut self.network_service.lock(), &self.peerset), &*self.transaction_pool) {
+		match self.protocol.poll(&mut Context(&mut self.network_service.lock(), &self.peerset), &*self.transaction_pool) {
 			Ok(Async::Ready(v)) => void::unreachable(v),
 			Ok(Async::NotReady) => {}
 			Err(err) => void::unreachable(err),
@@ -581,7 +581,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		// Check for new incoming on-demand requests.
 		if let Some(on_demand_in) = self.on_demand_in.as_mut() {
 			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
-				self.protocol.add_on_demand_request(&mut Ctxt(&mut self.network_service.lock(), &self.peerset), rq);
+				self.protocol.add_on_demand_request(&mut Context(&mut self.network_service.lock(), &self.peerset), rq);
 			}
 		}
 
@@ -610,7 +610,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			};
 
 			let mut network_service = self.network_service.lock();
-			let mut network_out = Ctxt(&mut network_service, &self.peerset);
+			let mut network_out = Context(&mut network_service, &self.peerset);
 
 			match msg {
 				ProtocolMsg::BlockImported(hash, header) =>
@@ -659,7 +659,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		loop {
 			let mut network_service = self.network_service.lock();
 			let poll_value = network_service.poll();
-			let mut network_out = Ctxt(&mut network_service, &self.peerset);
+			let mut network_out = Context(&mut network_service, &self.peerset);
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
