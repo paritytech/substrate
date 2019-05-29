@@ -358,6 +358,7 @@ where
 					requires,
 					provides,
 					longevity: TransactionLongevity::max_value(),
+					propagate: true,
 				}
 			},
 			(None, None) => UnsignedValidator::validate_unsigned(&xt.deconstruct().0),
@@ -432,6 +433,7 @@ mod tests {
 					requires: vec![],
 					provides: vec![],
 					longevity: std::u64::MAX,
+					propagate: false,
 				},
 				_ => TransactionValidity::Invalid(0),
 			}
@@ -569,7 +571,8 @@ mod tests {
 			priority: 0,
 			requires: vec![],
 			provides: vec![],
-			longevity: 18446744073709551615
+			longevity: 18446744073709551615,
+			propagate: false,
 		};
 		let mut t = new_test_ext();
 

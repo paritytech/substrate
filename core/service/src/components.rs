@@ -635,7 +635,7 @@ mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
 	use client::LongestChain;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
