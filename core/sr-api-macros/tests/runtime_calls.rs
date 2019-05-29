@@ -171,7 +171,7 @@ fn record_proof_works() {
 
 	// Build the block and record proof
 	let mut builder = client
-		.new_block_at_with_proof_recording(&block_id)
+		.new_block_at_with_proof_recording(&block_id, Default::default())
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
 	let (block, proof) = builder.bake_and_extract_proof().expect("Bake block");
