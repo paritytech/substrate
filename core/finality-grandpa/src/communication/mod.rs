@@ -64,7 +64,7 @@ mod cost {
 	pub(super) const BAD_SIGNATURE: i32 = -100;
 	pub(super) const MALFORMED_COMMIT: i32 = -1000;
 	pub(super) const FUTURE_MESSAGE: i32 = -500;
-    pub(super) const EQUIVOCATION: i32 = 500;
+	pub(super) const WILLFULREDUNDANT: i32 = -500;
 	pub(super) const REDUNDANT: i32 = 0;
 
 	pub(super) const INVALID_VIEW_CHANGE: i32 = -500;

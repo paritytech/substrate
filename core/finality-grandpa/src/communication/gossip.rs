@@ -98,16 +98,19 @@ enum Consider {
 	RejectPast,
 	/// Message is from the future. Reject.
 	RejectFuture,
-    /// Message is redundant. Reject.
-    RejectRedundant,
-	RejectEquivocation,
+	/// Message is redundant. Reject.
+	RejectRedundant,
+	/// Message is redundant and peer should have known. Reject.
+	RejectWillfulRedundant,
 }
 
+/// A tally of votes,
+/// used both to tally incoming votes we receive and outgoing votes we sent out.
 #[derive(Debug, Default)]
 pub(crate) struct VoteTally {
-    handled_pre_commits: usize,
-    handled_pre_votes: usize,
-    handled_primary_proposals: usize,
+	handled_pre_commits: usize,
+	handled_pre_votes: usize,
+	handled_primary_proposals: usize,
 }
 
 /// A view of protocol state.
@@ -318,8 +321,9 @@ pub(super) enum Misbehavior {
 	// A message received that's from the future relative to our view.
 	// always misbehavior.
 	FutureMessage,
-    // Equivocation received
-    Equivocation,
+	// A redundant message is received from a peer who should have known.
+	WillfulRedundant,
+	// A redundant message is received from a peer who couldn't have known.
 	Redundant,
 }
 
@@ -340,7 +344,7 @@ impl Misbehavior {
 				(benefit as i32).saturating_add(cost as i32)
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
-            Equivocation => cost::EQUIVOCATION,
+			WillfulRedundant => cost::WILLFULREDUNDANT,
 			Redundant => cost::REDUNDANT,
 		}
 	}
@@ -476,8 +480,6 @@ impl<Block: BlockT> Inner<Block> {
 
 		self.local_view.round = round;
 		self.local_view.set_id = set_id;
-		// Reset the votes-tally for a new round.
-        self.incoming_votes_tally.insert(round, Default::default());
 
 		self.live_topics.push(round, set_id);
 
@@ -494,6 +496,9 @@ impl<Block: BlockT> Inner<Block> {
 				self.outgoing_votes_tally.remove(&round);
 			}
 		}
+		// Reset the votes-tally for a new round.
+        self.incoming_votes_tally.insert(round, Default::default());
+
 		self.multicast_neighbor_packet()
 	}
 
@@ -553,7 +558,7 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		if should_report {
-			return Consider::RejectEquivocation
+			return Consider::RejectWillfulRedundant
 		}
 
 		// When we're processed 2 votes of each type,
@@ -579,8 +584,8 @@ impl<Block: BlockT> Inner<Block> {
 	{
 		match self.consider_vote(full.round, full.set_id, &full.message) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
-            Consider::RejectRedundant => return Action::Discard(Misbehavior::Redundant.cost()),
-			Consider::RejectEquivocation => return Action::Discard(Misbehavior::Equivocation.cost()),
+			Consider::RejectRedundant => return Action::Discard(Misbehavior::Redundant.cost()),
+			Consider::RejectWillfulRedundant => return Action::Discard(Misbehavior::WillfulRedundant.cost()),
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
@@ -615,7 +620,7 @@ impl<Block: BlockT> Inner<Block> {
 			Consider::RejectPast =>
 				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
 			Consider::Accept => {},
-			Consider::RejectRedundant | Consider::RejectEquivocation => {},
+			Consider::RejectRedundant | Consider::RejectWillfulRedundant => {},
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
