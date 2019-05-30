@@ -18,6 +18,7 @@
 
 use libp2p::PeerId;
 use std::{borrow::Cow, collections::{HashSet, HashMap}};
+use log::warn;
 
 /// State storage behind the peerset.
 ///
@@ -214,8 +215,9 @@ impl PeersState {
 						debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
 				}
 			}
-
 			node.connection_state = ConnectionState::NotConnected;
+		} else {
+			warn!(target: "peerset", "Attempting to disconnect unknown peer {}", peer_id);
 		}
 	}
 
