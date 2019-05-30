@@ -1036,10 +1036,19 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			&header,
 		);
 
+		// try_import is only true when we have all data required to import block
+		// in the BlockAnnounce message. This is only when:
+		// 1) we're on light client;
+		// AND
+		// - EITHER 2.1) announced block is stale;
+		// - OR 2.2) announced block is NEW and we normally only want to download this single block (i.e.
+		//           there are no ascendants of this block scheduled for retrieval)
 		if !try_import {
 			return CustomMessageOutcome::None;
 		}
 
+		// to import header from announced block let's construct response to request that normally would have
+		// been sent over network (but it is not in our case)
 		let blocks_to_import = self.sync.on_block_data(
 			&mut ProtocolContext::new(&mut self.context_data, network_out),
 			who.clone(),
