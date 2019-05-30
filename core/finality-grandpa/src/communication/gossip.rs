@@ -498,6 +498,7 @@ impl<Block: BlockT> Inner<Block> {
 		}
 		// Reset the votes-tally for a new round.
         self.incoming_votes_tally.insert(round, Default::default());
+		self.outgoing_votes_tally.insert(round, Default::default());
 
 		self.multicast_neighbor_packet()
 	}
@@ -525,9 +526,18 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn consider_vote(&mut self, round: Round, set_id: SetId, msg: &SignedMessage<Block>) -> Consider {
-		let tally_for_round = self.incoming_votes_tally.get_mut(&round).expect("");
+		let tally_for_round = match self.incoming_votes_tally.get_mut(&round) {
+			  Some(tally_for_round) =>  tally_for_round,
+			  None => {
+				  // We don't know about this round,
+				  // let the local-view handle it and likely treat it as past or future.
+				  return self.local_view.consider_vote(round, set_id)
+			  }
+		};
 		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
-		let outgoing_tally_for_round = self.outgoing_votes_tally.get_mut(&round).expect("");
+		let outgoing_tally_for_round = self.outgoing_votes_tally
+			.get_mut(&round)
+			.expect("If incoming votes knows about this round, so should outgoing ones; qed");
 		let outgoing_tally = outgoing_tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
 
 		let (should_reject, should_report) = match &msg.message {
@@ -836,7 +846,11 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				if let Some(GossipMessage::VoteOrPrecommit(msg)) = message {
 					let allowed = peer.view.consider_vote(round, set_id) == Consider::Accept;
 					if allowed {
-						let tally_for_round = inner.outgoing_votes_tally.get_mut(&round).expect("");
+						// If we haven't noted this round yet, the message is not allowed.
+						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
+							Some(tally_for_round) => tally_for_round,
+							None => return false
+						};
 						let mut tally = tally_for_round.entry(msg.message.id.clone()).or_insert(Default::default());
 						match &msg.message.message {
 							PrimaryPropose(_propose) => {
