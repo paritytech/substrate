@@ -546,7 +546,11 @@ pub mod child {
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry.
-	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(child_trie: ChildTrieReadRef, key: &[u8], default_value: F) -> T {
+	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(
+		child_trie: ChildTrieReadRef,
+		key: &[u8],
+		default_value: F,
+	) -> T {
 		get(child_trie, key).unwrap_or_else(default_value)
 	}
 
@@ -555,7 +559,8 @@ pub mod child {
 		value.using_encoded(|slice| runtime_io::set_child_storage(child_trie, key, slice));
 	}
 
-	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
+	/// Remove `key` from storage, returning its value if it had an explicit entry
+	/// or `None` otherwise.
 	pub fn take<T: Codec + Sized>(child_trie: &ChildTrie, key: &[u8]) -> Option<T> {
 		let r = get(child_trie.node_ref(), key);
 		if r.is_some() {
@@ -578,7 +583,11 @@ pub mod child {
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(child_trie: &ChildTrie, key: &[u8], default_value: F) -> T {
+	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
+		child_trie: &ChildTrie,
+		key: &[u8],
+		default_value: F,
+	) -> T {
 		take(child_trie, key).unwrap_or_else(default_value)
 	}
 
