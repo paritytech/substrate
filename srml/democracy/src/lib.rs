@@ -116,7 +116,7 @@ impl Conviction {
 			Conviction::Unlocked =>
 				balance.checked_div(&10u8.into()).unwrap_or_else(Zero::zero),
 			x =>
-				balance.checked_mul(&u8::from(x).into()).unwrap_or_else(|| B::max_value()),
+				balance.checked_mul(&u8::from(x).into()).unwrap_or_else(B::max_value),
 		}
 	}
 }
