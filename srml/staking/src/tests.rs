@@ -1238,6 +1238,38 @@ fn bond_extra_and_withdraw_unbonded_works() {
 }
 
 #[test]
+fn too_many_unbond_calls_should_not_work() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// locked at era 0 until 3
+		for _ in 0..MAX_UNLOCKING_CHUNKS-1 {
+			assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		}
+
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+
+		// locked ar era 1 until 4
+		assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		// can't do more.
+		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
+
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		System::set_block_number(3);
+		Session::check_rotate_session(System::block_number());
+
+		assert_noop!(Staking::unbond(Origin::signed(10), 1), "can not schedule more unlock chunks");
+		// free up.
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10)));
+
+		// Can add again.
+		assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
+	})
+}
+
+#[test]
 fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator

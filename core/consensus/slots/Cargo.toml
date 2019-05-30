@@ -16,3 +16,6 @@ futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"
 log = "0.4"
+
+[dev-dependencies]
+test_client = { package = "substrate-test-client", path = "../../test-client" }

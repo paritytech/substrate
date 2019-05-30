@@ -56,10 +56,18 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
 
 	/// Get headers CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
-	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Block::Hash>;
 
 	/// Get changes trie CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
-	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Block::Hash>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>>;
@@ -116,7 +124,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 
 				self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 					.remote_header(RemoteHeaderRequest {
-						cht_root: self.storage.header_cht_root(cht::SIZE, number)?,
+						cht_root: self.storage.header_cht_root(cht::size(), number)?,
 						block: number,
 						retry_count: None,
 					})

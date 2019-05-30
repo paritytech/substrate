@@ -99,6 +99,7 @@ fn node_config<F: ServiceFactory> (
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
 		enable_mdns: false,
+		wasm_external_transport: None,
 	};
 
 	Configuration {

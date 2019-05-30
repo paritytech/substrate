@@ -27,10 +27,10 @@ use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
 
-/// in memory storage values
+/// In memory array of storage values.
 pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
-/// in memory multiple children storage values
+/// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
 /// State of a new block.
@@ -137,7 +137,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.
-	type ChangesTrieStorage: PrunableStateChangesTrieStorage<H>;
+	type ChangesTrieStorage: PrunableStateChangesTrieStorage<Block, H>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -187,9 +187,15 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 }
 
 /// Changes trie storage that supports pruning.
-pub trait PrunableStateChangesTrieStorage<H: Hasher>: StateChangesTrieStorage<H> {
+pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
+	StateChangesTrieStorage<H, NumberFor<Block>>
+{
 	/// Get number block of oldest, non-pruned changes trie.
-	fn oldest_changes_trie_block(&self, config: &ChangesTrieConfiguration, best_finalized: u64) -> u64;
+	fn oldest_changes_trie_block(
+		&self,
+		config: &ChangesTrieConfiguration,
+		best_finalized: NumberFor<Block>,
+	) -> NumberFor<Block>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

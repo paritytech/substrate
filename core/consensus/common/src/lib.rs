@@ -33,13 +33,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block};
+use runtime_primitives::traits::{AuthorityIdFor, Block, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
 pub mod offline_tracker;
 pub mod error;
-mod block_import;
+pub mod block_import;
 mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
@@ -87,7 +87,12 @@ pub trait Proposer<B: Block> {
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B, Error=Self::Error>;
 	/// Create a proposal.
-	fn propose(&self, inherent_data: InherentData, max_duration: Duration) -> Self::Create;
+	fn propose(
+		&self,
+		inherent_data: InherentData,
+		inherent_digests: DigestFor<B>,
+		max_duration: Duration,
+	) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.

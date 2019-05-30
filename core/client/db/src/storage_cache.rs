@@ -49,12 +49,11 @@ pub struct Cache<B: Block, H: Hasher> {
 
 struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
-/// internal trait similar to heapsize of but without
-/// overhead as our current cache content size
-/// is easy to approximate
+/// Internal trait similar to `heapsize` but using
+/// a simply estimation.
 trait EstimateSize {
-	/// size estimation for management of
-	/// storage cache (in bytes)
+	/// Return a size estimation of additional size needed
+  /// to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
 }
 
@@ -85,14 +84,13 @@ impl<T: EstimateSize> EstimateSize for (T, T) {
 	}
 }
 
-// estimation of size for a vec v as linked hash map key
-// note that it is related to linked hash map implementation
-// Note that this should be removed
-// do not account for linked hashmap pointer, so there is the key and its hash
-// current hash is `RandomState` `SipHasher13` so u64
-// do not account for std hashmap inner implementation
+// Estimation of size for a vec v as linked hash map key.
+// This is related to linked hash map implementation.
+// It does not account for linked hashmap pointer,
+// only the key hash.
+// Current hash is `RandomState` `SipHasher13` so u64.
+// Do not account for std hashmap inner implementation details.
 const LINKED_HASHMAP_ENTRY_OVERHEAD:	usize = 64 / 8; 
-
 
 impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 	fn remove(&mut self, k: &K) {
@@ -167,7 +165,7 @@ impl<B: Block, H: Hasher> Cache<B, H> {
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
-/// Create new shared cache instance with given max memory usage.
+/// Create a new shared cache instance with given max memory usage.
 pub fn new_shared_cache<B: Block, H: Hasher>(
 	shared_cache_size: usize,
 	hash_ratio: (usize, usize),
@@ -175,7 +173,7 @@ pub fn new_shared_cache<B: Block, H: Hasher>(
 ) -> SharedCache<B, H> {
 	let non_hash = hash_ratio.1.saturating_sub(hash_ratio.0);
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
-	let res = Cache {
+	Arc::new(Mutex::new(Cache {
 		lru_storage: LRUMap(LinkedHashMap::new(), 0,
 			shared_cache_size * non_hash * top / hash_ratio.1 / child_ratio.1),
 		lru_hashes: LRUMap(LinkedHashMap::new(), 0,
@@ -185,13 +183,7 @@ pub fn new_shared_cache<B: Block, H: Hasher>(
 		lru_child_hashes: LRUMap(LinkedHashMap::new(), 0,
 			shared_cache_size * hash_ratio.0 * child_ratio.0 / hash_ratio.1 / child_ratio.1),
 		modifications: VecDeque::new(),
-	};
-  println!("lrust {}", res.lru_storage.2);
-  println!("lruha {}", res.lru_hashes.2);
-  println!("lrucst {}", res.lru_child_storage.2);
-  println!("lrucha {}", res.lru_child_hashes.2);
-
-  Arc::new(Mutex::new(res))
+	}))
 }
 
 #[derive(Debug)]

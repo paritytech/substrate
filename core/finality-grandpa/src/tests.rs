@@ -119,6 +119,7 @@ impl TestNetFactory for GrandpaTestNet {
 	{
 		match client {
 			PeersClient::Full(ref client) => {
+				#[allow(deprecated)]
 				let select_chain = LongestChain::new(
 					client.backend().clone(),
 					client.import_lock().clone()
@@ -251,6 +252,11 @@ impl Network<Block> for MessageRouting {
 				}
 			)
 		})
+	}
+
+	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
+		// NOTE: only required to restore previous state on startup
+		//       not required for tests currently
 	}
 
 	fn report(&self, _who: network::PeerId, _cost_benefit: i32) {
@@ -671,6 +677,7 @@ fn transition_3_voters_twice_1_full_observer() {
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+			#[allow(deprecated)]
 			&**full_client.backend()
 		).unwrap();
 
@@ -760,6 +767,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.map(move |()| {
 					let full_client = client.as_full().expect("only full clients are used in test");
 					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+						#[allow(deprecated)]
 						&**full_client.backend()
 					).unwrap();
 
@@ -1030,6 +1038,7 @@ fn force_change_to_new_set() {
 
 			let full_client = peer.client().as_full().expect("only full clients are used in test");
 			let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
+				#[allow(deprecated)]
 				&**full_client.backend()
 			).unwrap();
 
@@ -1058,7 +1067,7 @@ fn allows_reimporting_change_blocks() {
 	let (block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
-	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1107,7 +1116,7 @@ fn test_bad_justification() {
 	let (block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
-	let builder = full_client.new_block_at(&BlockId::Number(0)).unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
 	let block = builder.bake().unwrap();
 	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
 		next_authorities: make_ids(peers_b),
@@ -1242,7 +1251,12 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 		};
 		let routing = MessageRouting::new(net.clone(), 1);
-		let (network, routing_work) = communication::NetworkBridge::new(routing, config.clone(), Exit);
+		let (network, routing_work) = communication::NetworkBridge::new(
+			routing,
+			config.clone(),
+			None,
+			Exit,
+		);
 		runtime.block_on(routing_work).unwrap();
 
 		let (round_rx, round_tx) = network.round_communication(
@@ -1278,6 +1292,7 @@ fn voter_persists_its_votes() {
 				assert_eq!(net.lock().peer(0).client().info().unwrap().chain.best_number, 40,
 						   "Peer #{} failed to sync", 0);
 
+				#[allow(deprecated)]
 				let block_30_hash =
 					net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
 
@@ -1465,7 +1480,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	runner_net.lock().add_light_peer(&GrandpaTestNet::default_config());
 	runner_net.lock().sync_without_disconnects();
 
- 	// check block, finalized on light client
+	// check block, finalized on light client
 	assert_eq!(
 		runner_net.lock().peer(3).client().info().unwrap().chain.finalized_number,
 		if FORCE_CHANGE { 0 } else { 10 },

@@ -158,6 +158,7 @@ fn record_proof_works() {
 	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
 
 	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	#[allow(deprecated)]
 	let storage_root = LongestChain::new(client.backend().clone(), client.import_lock())
 		.best_chain().unwrap().state_root().clone();
 
@@ -170,7 +171,7 @@ fn record_proof_works() {
 
 	// Build the block and record proof
 	let mut builder = client
-		.new_block_at_with_proof_recording(&block_id)
+		.new_block_at_with_proof_recording(&block_id, Default::default())
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
 	let (block, proof) = builder.bake_and_extract_proof().expect("Bake block");

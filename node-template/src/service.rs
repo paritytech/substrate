@@ -71,7 +71,6 @@ construct_service_factory! {
 					let proposer = Arc::new(ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						inherents_pool: service.inherents_pool(),
 					});
 					let client = service.client();
 					let select_chain = service.select_chain()
@@ -129,6 +128,7 @@ construct_service_factory! {
 			},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
+				#[allow(deprecated)]
 				Ok(LongestChain::new(
 					client.backend().clone(),
 					client.import_lock()
