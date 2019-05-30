@@ -188,6 +188,10 @@ impl<B: BlockT> KeepTopics<B> {
 		}
 	}
 
+	fn is_recent(&self, round: &Round) -> bool {
+		self.rounds.contains(&(round.clone(), self.current_set))
+	}
+
 	fn push(&mut self, round: Round, set_id: SetId) {
 		self.current_set = std::cmp::max(self.current_set, set_id);
 		self.rounds.push_back((round, set_id));
@@ -476,6 +480,20 @@ impl<Block: BlockT> Inner<Block> {
         self.incoming_votes_tally.insert(round, Default::default());
 
 		self.live_topics.push(round, set_id);
+
+		// Prune the vote tallies
+		let rounds_kept_incoming: Vec<Round> = self.incoming_votes_tally.keys().map(|round| round.clone()).collect();
+		for round in rounds_kept_incoming {
+			if !self.live_topics.is_recent(&round) {
+				self.incoming_votes_tally.remove(&round);
+			}
+		}
+		let rounds_kept_outgoing: Vec<Round> = self.outgoing_votes_tally.keys().map(|round| round.clone()).collect();
+		for round in rounds_kept_outgoing {
+			if !self.live_topics.is_recent(&round) {
+				self.outgoing_votes_tally.remove(&round);
+			}
+		}
 		self.multicast_neighbor_packet()
 	}
 
@@ -526,7 +544,7 @@ impl<Block: BlockT> Inner<Block> {
 			},
 			Precommit(_precommit) => {
 				if tally.handled_pre_commits > 1 {
-					(true, outgoing_tally.handled_pre_votes > 0)
+					(true, outgoing_tally.handled_pre_commits > 0)
 				} else {
 					tally.handled_pre_commits += 1;
 					(false, false)
