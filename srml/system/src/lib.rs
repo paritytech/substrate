@@ -78,7 +78,7 @@ use rstd::prelude::*;
 use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, Verify
 };
 #[cfg(any(feature = "std", test))]
 use primitives::traits::Zero;

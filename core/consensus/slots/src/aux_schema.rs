@@ -20,7 +20,7 @@ use std::sync::Arc;
 use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use runtime_primitives::traits::Header;
+use runtime_primitives::traits::{Header, Verify};
 use consensus_srml::EquivocationProof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -49,18 +49,19 @@ fn load_decode<C, T>(backend: Arc<C>, key: &[u8]) -> ClientResult<Option<T>>
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, P, E>(
+pub fn check_equivocation<C, H, E, V>(
 	backend: &Arc<C>,
 	slot_now: u64,
 	slot: u64,
 	header: H,
-	signer: P,
+	signer: V::Signer,
 ) -> ClientResult<Option<E>>
 	where
 		H: Header,
 		C: AuxStore,
-		P: Encode + Decode + PartialEq,
-		E: EquivocationProof<H>,
+		V: Verify,
+		<V as Verify>::Signer: Encode + Decode + PartialEq,
+		E: EquivocationProof<H, V>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -72,7 +73,7 @@ pub fn check_equivocation<C, H, P, E>(
 	slot.using_encoded(|s| curr_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend.clone(), &curr_slot_key[..])?
+	let mut headers_with_sig = load_decode::<_, Vec<(H, V::Signer)>>(backend.clone(), &curr_slot_key[..])?
 		.unwrap_or_else(Vec::new);
 
 	// Get first slot saved.

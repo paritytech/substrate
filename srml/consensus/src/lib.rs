@@ -134,7 +134,7 @@ use codec::{Encode, Decode};
 use srml_support::{storage, Parameter, decl_storage, decl_module};
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, Member};
+use primitives::traits::{MaybeSerializeDebug, Member, Verify};
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_none};
 use inherents::{
@@ -438,7 +438,10 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 
 /// Trait for Equivocation proofs.
-pub trait EquivocationProof<H> {
+pub trait EquivocationProof<H, V> 
+where
+	V: Verify,
+{
 	/// Create an equivocation proof.
 	fn new(slot: u64, first_header: H, second_header: H) -> Self;
 
@@ -452,5 +455,5 @@ pub trait EquivocationProof<H> {
 	fn second_header(&self) -> &H;
 
 	/// Check if the proof is valid.
-	fn is_valid(&self) -> bool;
+	fn is_valid(&self, authorities: &[V::Signer]) -> bool;
 }

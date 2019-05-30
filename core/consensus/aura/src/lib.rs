@@ -47,7 +47,7 @@ use client::{
 use aura_primitives::{AURA_ENGINE_ID, slot_author};
 use runtime_primitives::{generic, generic::BlockId, Justification, generic::Era, AnySignature};
 use runtime_primitives::traits::{
-	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero,
+	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor, Zero, Verify
 };
 use primitives::{Pair, ed25519, H256};
 use keyring::AccountKeyring;
@@ -159,7 +159,7 @@ pub fn start_aura_thread<B, C, SC, E, I, SO, Error, OnExit>(
 	Error: From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	OnExit: Future<Item=(), Error=()> + Send + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>> + 'static,
+	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
@@ -205,7 +205,7 @@ pub fn start_aura<B, C, SC, E, I, SO, Error, OnExit>(
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	OnExit: Future<Item=(), Error=()>,
 {
@@ -246,7 +246,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
@@ -294,7 +294,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 			);
 			return Box::new(future::ok(()));
 		}
-		let maybe_author = slot_author(slot_num, &authorities);
+		let maybe_author = slot_author::<ed25519::Signature>(slot_num, &authorities);
 		let proposal_work = match maybe_author {
 			None => return Box::new(future::ok(())),
 			Some(author) => if author == &public_key {
@@ -357,7 +357,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					// add it to a digest item.
 					let to_sign = (slot_num, pre_hash).encode();
 					let signature = pair.sign(&to_sign[..]);
-					let item = <DigestItemFor<B> as CompatibleDigestItem>::aura_seal(
+					let item = <DigestItemFor<B> as CompatibleDigestItem<ed25519::Signature>>::aura_seal(
 						slot_num,
 						signature,
 					);
@@ -412,7 +412,7 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 	authorities: &[AuthorityId<ed25519::Pair>],
 	allow_old_seals: bool,
 ) -> Result<CheckedHeader<B::Header, DigestItemFor<B>>, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
+	where DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature>,
 		C: client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 {
 	let digest_item = match header.digest_mut().pop() {
@@ -436,7 +436,7 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author(slot_num, &authorities) {
+		let expected_author = match slot_author::<ed25519::Signature>(slot_num, &authorities) {
 			None => return Err("Slot Author not found".to_string()),
 			Some(author) => author,
 		};
@@ -446,7 +446,7 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 		let public = expected_author;
 
 		if ed25519::Pair::verify(&sig, &to_sign[..], public) {
-			match check_equivocation::<_, _, ed25519::Public, AuraEquivocationProof<_>>(
+			match check_equivocation::<_, _, AuraEquivocationProof<_, _>, _>(
 				client,
 				slot_now,
 				slot_num,
@@ -488,14 +488,15 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 /// Submit report call.
 /// TODO: Ask how to do submit an unsigned in the proper way
 /// and move the function to a better place so it can be used for Babe and Grandpa.
-pub fn submit_report_call<H, A, B: Block, C>(
+pub fn submit_report_call<H, A, B: Block, C, V>(
 	client: &Arc<C>,
 	transaction_pool: &Arc<TransactionPool<A>>,
-	aura_proof: AuraEquivocationProof<H>,
+	aura_proof: AuraEquivocationProof<H, V>,
 ) where
 	A: txpool::ChainApi<Block=B>,
 	C: client::blockchain::HeaderBackend<B>,
 	H: Header + Encode + Decode,
+	V: Verify,
 {
 	println!("SUBMIT_REPORT_CALL");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Aura(AuraCall::report_equivocation(aura_proof.encode())));
@@ -585,7 +586,7 @@ impl<B: Block, C, E, A> Verifier<B> for AuraVerifier<C, E, A> where
 	A: txpool::ChainApi<Block=B>,
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
 	E: ExtraVerification<B>,
 	Self: Authorities<B>,
 {
@@ -780,7 +781,7 @@ pub fn import_queue<A, B, C, E>(
 	A: txpool::ChainApi<Block=B> + 'static,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
 	E: 'static + ExtraVerification<B>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
@@ -824,7 +825,7 @@ pub fn import_queue_accept_old_seals<B, C, E, A>(
 	A: txpool::ChainApi<Block=B> + 'static,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore + client::blockchain::HeaderBackend<B>,
 	C::Api: BlockBuilderApi<B> + AuthoritiesApi<B>,
-	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
+	DigestItemFor<B>: CompatibleDigestItem<ed25519::Signature> + DigestItem<AuthorityId=AuthorityId<ed25519::Pair>>,
 	E: 'static + ExtraVerification<B>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
@@ -973,7 +974,7 @@ mod tests {
 		let to_sign = (slot_num, header_hash).encode();
 		let signature = pair.sign(&to_sign[..]);
 		
-		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Pair>>::aura_seal(
+		let item = <generic::DigestItem<_, _, _> as CompatibleDigestItem<sr25519::Signature>>::aura_seal(
 			slot_num,
 			signature,
 		);

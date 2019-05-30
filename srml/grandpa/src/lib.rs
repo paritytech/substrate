@@ -40,7 +40,7 @@ use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
-use primitives::traits::CurrentHeight;
+use primitives::traits::{CurrentHeight};
 use substrate_primitives::ed25519;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
@@ -341,6 +341,7 @@ impl<T> Default for SyncedAuthorities<T> {
 
 impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 	T: Trait + consensus::Trait<SessionKey=<T as Trait>::SessionKey>,
+	// <T as Trait>::SessionKey: Verify,
 	<T as consensus::Trait>::Log: From<consensus::RawLog<<T as Trait>::SessionKey>>
 {
 	fn on_session_change(_: X, _: bool) {

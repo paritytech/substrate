@@ -49,11 +49,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use timestamp;
+pub use consensus;
 
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{self, As, Zero, ValidateUnsigned};
+use primitives::traits::{self, As, Zero, ValidateUnsigned, MaybeSerializeDebug};
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -65,6 +66,7 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 use aura_primitives::{AuraEquivocationProof, CompatibleDigestItem};
 use system::ensure_signed;
 use consensus::EquivocationProof;
+use core::fmt::Debug;
 
 mod mock;
 mod tests;
@@ -153,9 +155,11 @@ impl HandleReport for () {
 pub trait Trait: timestamp::Trait {
 	/// The logic for handling reports.
 	type HandleReport: HandleReport;
-	type CompatibleDigestItem: CompatibleDigestItem + traits::DigestItem<Hash = Self::Hash>;
+	type Signature: traits::Verify;
+	type CompatibleDigestItem: CompatibleDigestItem<Self::Signature> + traits::DigestItem<Hash = Self::Hash>;
 	type D: traits::Digest<Item = Self::CompatibleDigestItem, Hash = Self::Hash> + Encode + Decode;
 	type H: traits::Header<Digest = Self::D, Hash = Self::Hash>;
+	// type SessionKey: Into<<<Self as Trait>::Signature as traits::Verify>::Signer>;
 }
 
 decl_storage! {
@@ -174,15 +178,22 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> ValidateUnsigned for Module<T> {
+impl<T> ValidateUnsigned for Module<T> 
+where
+	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as traits::Verify>::Signer>>,
+	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
+	// for<'de> <<T as Trait>::Signature as traits::Verify>::Signer: Deserialize<'de>,
+{
 	type Call = Call<T>;
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
 			Call::report_equivocation(proof) => {
-				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H>> = Decode::decode(&mut proof.as_slice());
+				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H, T::Signature>> = Decode::decode(&mut proof.as_slice());
 				if let Some(equivocation_proof) = maybe_equivocation_proof {
-					if equivocation_proof.is_valid() {
+					let authorities = <consensus::Module<T>>::authorities();
+					if equivocation_proof.is_valid(authorities.as_slice()) {
 						return TransactionValidity::Valid {
 							priority: 0,
 							requires: vec![],

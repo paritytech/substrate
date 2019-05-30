@@ -22,7 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use substrate_primitives::{self, Hasher, Blake2Hasher};
-use crate::codec::{Codec, Encode, HasCompact};
+use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::TransactionValidity;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -49,7 +49,7 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
-	type Signer;
+	type Signer: PartialEq;
 	/// Verify a signature. Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
