@@ -37,7 +37,7 @@ use std::fmt;
 use parking_lot::RwLock;
 use parity_codec as codec;
 use codec::Codec;
-use std::collections::HashSet;
+use std::collections::{VecDeque, HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
@@ -165,8 +165,9 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	mode: PruningMode,
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
+	canonicalization_queue: VecDeque<BlockHash>,
 	pruning: Option<RefWindow<BlockHash, Key>>,
-	pinned: HashSet<BlockHash>,
+	pinned: HashMap<BlockHash, u32>,
 }
 
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
@@ -186,6 +187,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			non_canonical,
 			pruning,
 			pinned: Default::default(),
+			canonicalization_queue: Default::default(),
 		})
 	}
 
@@ -206,21 +208,28 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
-		let mut commit = match self.mode {
-			PruningMode::ArchiveAll => {
-				CommitSet::default()
-			},
-			PruningMode::ArchiveCanonical => {
-				let mut commit = self.non_canonical.canonicalize(hash)?;
-				commit.data.deleted.clear();
-				commit
-			},
-			PruningMode::Constrained(_) => {
-				self.non_canonical.canonicalize(hash)?
-			},
-		};
-		if let Some(ref mut pruning) = self.pruning {
-			pruning.note_canonical(hash, &mut commit);
+		self.canonicalization_queue.push_back(hash.clone());
+		let mut commit = CommitSet::default();
+		while let Some(hash) = self.canonicalization_queue.pop_front() {
+			if self.pinned.contains_key(&hash) {
+				break;
+			}
+
+			match self.mode {
+				PruningMode::ArchiveAll => {
+					break;
+				},
+				PruningMode::ArchiveCanonical => {
+					self.non_canonical.canonicalize(&hash, &mut commit)?;
+					commit.data.deleted.clear();
+				},
+				PruningMode::Constrained(_) => {
+					self.non_canonical.canonicalize(&hash, &mut commit)?
+				},
+			};
+			if let Some(ref mut pruning) = self.pruning {
+				pruning.note_canonical(&hash, &mut commit);
+			}
 		}
 		self.prune(&mut commit);
 		Ok(commit)
@@ -255,7 +264,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				}
 
 				let pinned = &self.pinned;
-				if pruning.next_hash().map_or(false, |h| pinned.contains(&h)) {
+				if pruning.next_hash().map_or(false, |h| pinned.contains_key(&h)) {
 					break;
 				}
 				pruning.prune_one(commit);
@@ -278,11 +287,19 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn pin(&mut self, hash: &BlockHash) {
-		self.pinned.insert(hash.clone());
+		*self.pinned.entry(hash.clone()).or_default() += 1;
 	}
 
 	pub fn unpin(&mut self, hash: &BlockHash) {
-		self.pinned.remove(hash);
+		match self.pinned.entry(hash.clone()) {
+			Entry::Occupied(mut entry) => {
+				*entry.get_mut() -= 1;
+				if *entry.get() == 0 {
+					entry.remove();
+				}
+			},
+			Entry::Vacant(_) => {},
+		}
 	}
 
 	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>

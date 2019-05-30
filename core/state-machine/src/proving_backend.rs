@@ -269,7 +269,7 @@ mod tests {
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
-		let in_memory = in_memory.update(contents);
+		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -302,7 +302,7 @@ mod tests {
 			.chain((10..15).map(|i| (Some(own2.clone()), vec![i], Some(vec![i]))))
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
-		let in_memory = in_memory.update(contents);
+		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
       in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new()))
