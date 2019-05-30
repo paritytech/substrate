@@ -41,7 +41,7 @@ pub type KeySpace = Vec<u8>;
 /// needed to access a parent trie.
 /// Currently only a single depth is supported for child trie,
 /// so it only contains the top trie key to the child trie.
-/// Internally this key is stored with its full path (with
+/// Internally this contains a full path key (with
 /// `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
 pub type ParentTrie = Vec<u8>;
 
@@ -59,8 +59,8 @@ pub fn keyspace_as_prefix_alloc(ks: &KeySpace, prefix: &[u8]) -> Vec<u8> {
 /// `ChildTrieReadRef` contains a reference to information
 /// needed to access a child trie content.
 /// Generally this should not be build directly but accessed
-/// through a `node_ref` function.
-/// But struct can be build directly with invalid data, so
+/// through a `node_ref` function call.
+/// The struct can be build directly with invalid data, so
 /// its usage is limited to read only querying.
 #[derive(Clone)]
 pub struct ChildTrieReadRef<'a> {
@@ -170,15 +170,15 @@ pub struct ChildTrie {
 }
 
 impl ChildTrie {
-	/// Primitive to build a `ParentTrie` reference from its
-	/// key (the key does not contain `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
+	/// Primitive to build a `ParentTrie` from its
+	/// key.
 	pub fn prefix_parent_key(parent: &[u8]) -> ParentTrie {
 		let mut key_full = CHILD_STORAGE_KEY_PREFIX.to_vec();
 		key_full.extend_from_slice(parent);
 		key_full
 	}
-	/// Function to access the relevant portion of a key to
-	/// a child trie (key without `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
+	/// Function to access the current key to a child trie.
+	/// This does not include `well_known_keys::CHILD_STORAGE_KEY_PREFIX`.
 	pub fn parent_key_slice(p: &ParentTrie) -> &[u8] {
 		&p[CHILD_STORAGE_KEY_PREFIX.len()..]
 	}
@@ -224,8 +224,8 @@ impl ChildTrie {
 	}
 	/// Function to access the full key buffer pointing to 
 	/// a child trie. This contains technical information
-  /// and should only be used for backend implementation.
-	pub fn raw_parent_key(&self) -> &ParentTrie {
+	/// and should only be used for backend implementation.
+	pub fn parent_trie(&self) -> &ParentTrie {
 		&self.parent
 	}
 	/// Getter function to the original root value of this

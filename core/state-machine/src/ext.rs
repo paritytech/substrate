@@ -313,7 +313,7 @@ where
 			let root = self.backend.child_storage_root(child_trie, delta).0;
 
 			self.overlay.set_storage(
-				child_trie.raw_parent_key().clone(),
+				child_trie.parent_trie().clone(),
 				Some(child_trie.encoded_with_root(&root[..]))
 			);
 

@@ -203,7 +203,7 @@ pub mod tests {
 		{
 			let enc_sub_root = child_trie1.encoded_with_root(&sub_root[..]);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(&child_trie1.raw_parent_key()[..], &enc_sub_root).expect("insert failed");
+			trie.insert(&child_trie1.parent_trie()[..], &enc_sub_root).expect("insert failed");
 
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");

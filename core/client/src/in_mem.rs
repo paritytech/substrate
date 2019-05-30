@@ -756,7 +756,7 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 	}
 
 	debug_assert!(!children.iter()
-		.any(|(_, (_, subtrie))| !well_known_keys::is_child_storage_key(&subtrie.raw_parent_key()[..])));
+		.any(|(_, (_, subtrie))| !well_known_keys::is_child_storage_key(&subtrie.parent_trie()[..])));
 
 	Ok(())
 }

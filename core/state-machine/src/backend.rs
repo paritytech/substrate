@@ -151,10 +151,10 @@ pub trait Backend<H: Hasher> {
 				self.child_storage_root(child_trie.as_ref(), child_delta);
 			txs.consolidate(child_txs);
 			if empty {
-				child_roots.push((child_trie.as_ref().raw_parent_key().to_vec(), None));
+				child_roots.push((child_trie.as_ref().parent_trie().to_vec(), None));
 			} else {
 				child_roots.push(
-					(child_trie.as_ref().raw_parent_key().to_vec(),
+					(child_trie.as_ref().parent_trie().to_vec(),
 					Some(child_trie.as_ref().encoded_with_root(&child_root[..])))
 				);
 			}
@@ -412,7 +412,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				)?;
 				new_child_roots.push(
 					o_child_trie.as_ref().map(|s|(
-						s.raw_parent_key().to_vec(),
+						s.parent_trie().to_vec(),
 						s.encoded_with_root(ch.as_ref()))
 					).expect("is_some previously checked;qed"),
 				);

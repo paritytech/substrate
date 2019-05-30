@@ -215,7 +215,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			self.backend.child_storage_root(child_trie, delta)
 		};
 
-		self.overlay.set_storage(child_trie.raw_parent_key().clone(), Some(child_trie.encoded_with_root(&root[..])));
+		self.overlay.set_storage(
+			child_trie.parent_trie().clone(),
+			Some(child_trie.encoded_with_root(&root[..])),
+		);
 
 		root
 	}
