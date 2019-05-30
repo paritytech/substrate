@@ -833,16 +833,18 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				return do_rebroadcast;
 			}
 
-			match inner.read().peers.peer(who) {
-				None => return false,
-				Some(_) => {},
-			}
-
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let (maybe_round, set_id) = match inner.read().live_topics.topic_info(&topic) {
-				None => return false,
-				Some(x) => x,
+			let (maybe_round, set_id) = {
+				let inner = inner.read();
+				match inner.peers.peer(who) {
+					None => return false,
+					Some(_) => {},
+				};
+				match inner.live_topics.topic_info(&topic) {
+					None => return false,
+					Some(x) => x,
+				}
 			};
 
 			let message = GossipMessage::<Block>::decode(&mut data);
@@ -893,13 +895,16 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			}
 
 			// global message.
-			let our_best_commit = inner.read().local_view.last_commit;
-			let peer_best_commit =  {
-				match inner.read().peers.peer(who) {
+			let (our_best_commit, peer_best_commit) = {
+				let inner = inner.read();
+				let peer_best_commit = match inner.peers.peer(who) {
 					None => return false,
 					Some(peer) => peer.view.last_commit,
-				}
+				};
+				let our_best_commit = inner.local_view.last_commit;
+				(our_best_commit, peer_best_commit)
 			};
+
 			match message {
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
@@ -917,16 +922,19 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn message_expired<'a>(&'a self) -> Box<FnMut(Block::Hash, &[u8]) -> bool + 'a> {
 		let inner = Arc::clone(&self.inner);
 		Box::new(move |topic, mut data| {
-			// if the topic is not one of the ones that we are keeping at the moment,
-			// it is expired.
-			match inner.read().live_topics.topic_info(&topic) {
-				None => return true,
-				Some((Some(_), _)) => return false, // round messages don't require further checking.
-				Some((None, _)) => {},
-			};
 
-			// global messages -- only keep the best commit.
-			let best_commit = inner.read().local_view.last_commit;
+			let best_commit = {
+				let inner = inner.read();
+				// if the topic is not one of the ones that we are keeping at the moment,
+				// it is expired.
+				match inner.live_topics.topic_info(&topic) {
+					None => return true,
+					Some((Some(_), _)) => return false, // round messages don't require further checking.
+					Some((None, _)) => {},
+				};
+				// global messages -- only keep the best commit.
+				inner.local_view.last_commit
+			};
 
 			match GossipMessage::<Block>::decode(&mut data) {
 				None => true,
