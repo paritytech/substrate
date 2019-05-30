@@ -89,18 +89,15 @@ where
 
 /// Represents an equivocation proof.
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct AuraEquivocationProof<H, V> {
+pub struct AuraEquivocationProof<H> {
 	slot: u64,
 	first_header: H,
 	second_header: H,
-	phantom: PhantomData<V>,
 }
 
-impl<H, V> EquivocationProof<H, V> for AuraEquivocationProof<H, V>
+impl<H> EquivocationProof<H> for AuraEquivocationProof<H>
 where
 	H: Header,
-	V: Verify,
-	<H::Digest as Digest>::Item: CompatibleDigestItem<V>,
 {
 	/// Create a new Aura equivocation proof.
 	fn new(slot: u64, first_header: H, second_header: H) -> Self {
@@ -108,7 +105,6 @@ where
 			slot,
 			first_header,
 			second_header,
-			phantom: PhantomData,
 		}
 	}
 
@@ -126,41 +122,12 @@ where
 	fn second_header(&self) -> &H {
 		&self.second_header
 	}
-
-	/// Check if the proof is valid.
-	fn is_valid(&self, authorities: &[V::Signer]) -> bool 
-	 {
-		let verify_header = |header: &H| {
-			let digest_item = match header.digest().logs().last() {
-				Some(x) => x,
-				None => return None,
-			};
-			if let Some((slot_num, sig)) = digest_item.as_aura_seal() {
-				let author = match slot_author::<V>(slot_num, authorities) {
-					None => return None,
-					Some(author) => author,
-				};
-				let pre_hash = header.hash();
-				let to_sign = (slot_num, pre_hash).encode();
-				if sig.verify(&to_sign[..], author) {
-					return Some(author)
-				}
-			};
-			None
-		};
-
-		let fst_author = verify_header(&self.first_header);
-		let snd_author = verify_header(&self.second_header);
-		fst_author.is_some() && snd_author.is_some()
-			&& fst_author.unwrap() == snd_author.unwrap()
-	}
 }
 
 /// Get slot author for given block along with authorities.
 pub fn slot_author<V>(slot_num: u64, authorities: &[V::Signer]) -> Option<&V::Signer> 
 where
 	V: Verify,
-	// S: Into<<V as Verify>::Signer>,
 {
 	if authorities.is_empty() { return None }
 

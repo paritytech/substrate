@@ -446,7 +446,7 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 		let public = expected_author;
 
 		if ed25519::Pair::verify(&sig, &to_sign[..], public) {
-			match check_equivocation::<_, _, AuraEquivocationProof<_, _>, _>(
+			match check_equivocation::<_, _, AuraEquivocationProof<_>, ed25519::Signature>(
 				client,
 				slot_now,
 				slot_num,
@@ -488,15 +488,14 @@ fn check_header<C, B: Block, A: txpool::ChainApi<Block=B>>(
 /// Submit report call.
 /// TODO: Ask how to do submit an unsigned in the proper way
 /// and move the function to a better place so it can be used for Babe and Grandpa.
-pub fn submit_report_call<H, A, B: Block, C, V>(
+pub fn submit_report_call<H, A, B: Block, C>(
 	client: &Arc<C>,
 	transaction_pool: &Arc<TransactionPool<A>>,
-	aura_proof: AuraEquivocationProof<H, V>,
+	aura_proof: AuraEquivocationProof<H>,
 ) where
 	A: txpool::ChainApi<Block=B>,
 	C: client::blockchain::HeaderBackend<B>,
 	H: Header + Encode + Decode,
-	V: Verify,
 {
 	println!("SUBMIT_REPORT_CALL");
 	let extrinsic = UncheckedExtrinsic::new_unsigned(Call::Aura(AuraCall::report_equivocation(aura_proof.encode())));

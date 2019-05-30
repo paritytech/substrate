@@ -436,11 +436,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 }
 
-
 /// Trait for Equivocation proofs.
-pub trait EquivocationProof<H, V> 
-where
-	V: Verify,
+pub trait EquivocationProof<H>
 {
 	/// Create an equivocation proof.
 	fn new(slot: u64, first_header: H, second_header: H) -> Self;
@@ -453,7 +450,4 @@ where
 
 	/// Get the second header involved in the equivocation.
 	fn second_header(&self) -> &H;
-
-	/// Check if the proof is valid.
-	fn is_valid(&self, authorities: &[V::Signer]) -> bool;
 }

@@ -61,7 +61,7 @@ pub fn check_equivocation<C, H, E, V>(
 		C: AuxStore,
 		V: Verify,
 		<V as Verify>::Signer: Encode + Decode + PartialEq,
-		E: EquivocationProof<H, V>,
+		E: EquivocationProof<H>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {

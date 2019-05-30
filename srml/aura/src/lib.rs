@@ -178,8 +178,10 @@ decl_module! {
 	}
 }
 
-fn verify_header<'a, T>(header: &T::H, authorities: &'a [<<T as Trait>::Signature as Verify>::Signer])
-	-> Option<&'a <T::Signature as Verify>::Signer>
+fn verify_header<'a, T>(
+	header: &T::H,
+	authorities: &'a [<<T as Trait>::Signature as Verify>::Signer]
+) -> Option<&'a <T::Signature as Verify>::Signer>
 where 
 	T: Trait,
 	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
@@ -202,7 +204,6 @@ where
 	None
 }
 
-
 impl<T> ValidateUnsigned for Module<T> 
 where
 	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
@@ -214,13 +215,14 @@ where
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
 			Call::report_equivocation(proof) => {
-				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H, T::Signature>> = Decode::decode(&mut proof.as_slice());
+				let maybe_equivocation_proof: Option<AuraEquivocationProof::<T::H>> = Decode::decode(&mut proof.as_slice());
 				if let Some(equivocation_proof) = maybe_equivocation_proof {
 					let authorities = <consensus::Module<T>>::authorities();
 					let fst_author = verify_header::<T>(equivocation_proof.first_header(), &authorities);
 					let snd_author = verify_header::<T>(equivocation_proof.second_header(), &authorities);
 				
-					let proof_is_valid = fst_author.is_some() && snd_author.is_some()
+					let proof_is_valid = fst_author.is_some()
+						&& snd_author.is_some()
 						&& fst_author.unwrap() == snd_author.unwrap();
 
 					if  proof_is_valid {
