@@ -92,12 +92,12 @@ pub trait CompatibleDigestItem: Sized {
 impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
 {
 	fn babe_pre_digest(digest: BabePreDigest) -> Self {
-		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
+		DigestItem::Inherent(BABE_ENGINE_ID, digest.encode())
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
 		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => {
+			DigestItem::Inherent(BABE_ENGINE_ID, seal) => {
 				let decoded = Decode::decode(&mut &seal[..]);
 				if decoded.is_none() {
 					info!(target: "babe", "Failed to decode {:?}", seal)
@@ -126,12 +126,12 @@ impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Vec<u8>>
 impl<Hash: Debug> CompatibleDigestItem for DigestItem<Hash, Public, Signature>
 {
 	fn babe_pre_digest(digest: BabePreDigest) -> Self {
-		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
+		DigestItem::Inherent(BABE_ENGINE_ID, digest.encode())
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
 		match self {
-			DigestItem::PreRuntime(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
+			DigestItem::Inherent(BABE_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
 			_ => None,
 		}
 	}
