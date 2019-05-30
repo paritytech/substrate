@@ -59,8 +59,8 @@ pub struct SubTrieReadRef<'a> {
 	/// subtrie unique keyspace
 	pub keyspace: &'a KeySpace,
 	/// subtrie root hash.
-  /// `None` for query limited to local modification,
-  /// for instance if a subtrie is pending creation.
+	/// `None` for query limited to local modification,
+	/// for instance if a subtrie is pending creation.
 	pub root: Option<&'a [u8]>,
 }
 

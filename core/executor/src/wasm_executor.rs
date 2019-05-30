@@ -175,7 +175,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		key_data: *const u8,
 		key_len: u32,
 		value_data: *const u8,
-		value_len: u32) => {
+		value_len: u32
+	) => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize)
