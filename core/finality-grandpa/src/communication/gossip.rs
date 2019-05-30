@@ -534,6 +534,7 @@ impl<Block: BlockT> Inner<Block> {
 				  return self.local_view.consider_vote(round, set_id)
 			  }
 		};
+
 		let mut tally = tally_for_round.entry(msg.id.clone()).or_insert(Default::default());
 		let outgoing_tally_for_round = self.outgoing_votes_tally
 			.get_mut(&round)
@@ -567,6 +568,8 @@ impl<Block: BlockT> Inner<Block> {
 			},
 		};
 
+		// When a peer sends us a redundant message, and should have known better,
+		// ignore the message and report the peer.
 		if should_report {
 			return Consider::RejectWillfulRedundant
 		}
