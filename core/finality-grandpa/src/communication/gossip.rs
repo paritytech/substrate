@@ -574,8 +574,8 @@ impl<Block: BlockT> Inner<Block> {
 			return Consider::RejectWillfulRedundant
 		}
 
-		// When we're processed 2 votes of each type,
-		// or if it is an equivocator, reject the message.
+		// When we're processed 2 votes of a given type,
+		// reject all further messages for this voter.
 		if should_reject {
 			return Consider::RejectRedundant
 		}
