@@ -673,7 +673,15 @@ impl<B: BlockT> ChainSync<B> {
 			} else {
 				peer.best_number
 			};
-			trace!(target: "sync", "Updating peer {} info, ours={}, common={}->{}, their best={}", n, number, peer.common_number, new_common_number, peer.best_number);
+			trace!(
+				target: "sync",
+				"Updating peer {} info, ours={}, common={}->{}, their best={}",
+				n,
+				number,
+				peer.common_number,
+				new_common_number,
+				peer.best_number,
+			);
 			peer.common_number = new_common_number;
 		}
 	}
@@ -903,7 +911,13 @@ impl<B: BlockT> ChainSync<B> {
 		let peer = self.peers.get_mut(&who)?;
 		match peer.state {
 			PeerSyncState::Available => {
-				trace!(target: "sync", "Considering new block download from {}, common block is {}, best is {:?}", who, peer.common_number, peer.best_number);
+				trace!(
+					target: "sync",
+					"Considering new block download from {}, common block is {}, best is {:?}",
+					who,
+					peer.common_number,
+					peer.best_number,
+				);
 				let range = self.blocks.needed_blocks(who.clone(), MAX_BLOCKS_TO_REQUEST, peer.best_number, peer.common_number);
 				match range {
 					Some(range) => {
