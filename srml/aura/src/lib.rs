@@ -181,8 +181,7 @@ decl_module! {
 fn verify_header<'a, T>(header: &T::H, authorities: &'a [<<T as Trait>::Signature as Verify>::Signer])
 	-> Option<&'a <T::Signature as Verify>::Signer>
 where 
-	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
-	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as traits::Verify>::Signer>>,
+	T: Trait,
 	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
 {
 	let digest_item = match header.digest().logs().last() {
@@ -209,7 +208,6 @@ where
 	T: Trait + consensus::Trait<SessionKey=<<T as Trait>::Signature as traits::Verify>::Signer>,
 	<T as consensus::Trait>::Log: From<consensus::RawLog<<<T as Trait>::Signature as traits::Verify>::Signer>>,
 	<<T as Trait>::Signature as traits::Verify>::Signer: Default + Clone + Eq + Encode + Decode + MaybeSerializeDebug,
-	// for<'de> <<T as Trait>::Signature as traits::Verify>::Signer: Deserialize<'de>,
 {
 	type Call = Call<T>;
 
