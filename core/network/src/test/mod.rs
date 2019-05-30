@@ -521,7 +521,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Synchronize with import queue.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn import_queue_sync(&self) {
+	pub fn import_queue_sync(&self) {
 		self.import_queue.synchronize();
 		let _ = self.net_proto_channel.wait_sync();
 	}
@@ -675,7 +675,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
+	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
