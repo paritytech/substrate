@@ -85,6 +85,7 @@ use crate::{CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
@@ -680,7 +681,7 @@ impl<Block: BlockT> Inner<Block> {
 
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
-	inner: parking_lot::RwLock<Inner<Block>>,
+	inner: Arc<parking_lot::RwLock<Inner<Block>>>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
@@ -689,7 +690,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(config: crate::Config) -> (GossipValidator<Block>, ReportStream) {
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
-			inner: parking_lot::RwLock::new(Inner::new(config)),
+			inner: Arc::new(parking_lot::RwLock::new(Inner::new(config))),
 			report_sender: tx,
 		};
 
@@ -765,13 +766,15 @@ impl<Block: BlockT> GossipValidator<Block> {
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
 	fn new_peer(&self, context: &mut ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
 		let packet_data = {
-			let mut inner = self.inner.write();
-			inner.peers.new_peer(who.clone());
+			self.inner.write().peers.new_peer(who.clone());
 
-			let packet = NeighborPacket {
-				round: inner.local_view.round,
-				set_id: inner.local_view.set_id,
-				commit_finalized_height: inner.local_view.last_commit.unwrap_or(Zero::zero()),
+			let packet = {
+				let inner = self.inner.read();
+				NeighborPacket {
+					round: inner.local_view.round,
+					set_id: inner.local_view.set_id,
+					commit_finalized_height: inner.local_view.last_commit.unwrap_or(Zero::zero()),
+				}
 			};
 
 			GossipMessage::<Block>::from(packet).encode()
@@ -812,12 +815,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	fn message_allowed<'a>(&'a self)
 		-> Box<FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
 	{
-		let (mut inner, do_rebroadcast) = {
+		let (inner, do_rebroadcast) = {
 
-			let mut inner = self.inner.write();
+			let inner = Arc::clone(&self.inner);
 			let now = Instant::now();
-			let do_rebroadcast = if now >= inner.next_rebroadcast {
-				inner.next_rebroadcast = now + REBROADCAST_AFTER;
+			let do_rebroadcast = if now >= inner.read().next_rebroadcast {
+				(*inner.write()).next_rebroadcast = now + REBROADCAST_AFTER;
 				true
 			} else {
 				false
@@ -830,14 +833,14 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				return do_rebroadcast;
 			}
 
-			let peer = match inner.peers.peer(who) {
+			match inner.read().peers.peer(who) {
 				None => return false,
-				Some(x) => x,
-			};
+				Some(_) => {},
+			}
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+			let (maybe_round, set_id) = match inner.read().live_topics.topic_info(&topic) {
 				None => return false,
 				Some(x) => x,
 			};
@@ -847,8 +850,14 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
 				if let Some(GossipMessage::VoteOrPrecommit(msg)) = message {
-					let allowed = peer.view.consider_vote(round, set_id) == Consider::Accept;
+					let allowed = {
+						match inner.read().peers.peer(who) {
+							None => false,
+							Some(peer) => peer.view.consider_vote(round, set_id) == Consider::Accept,
+						}
+					};
 					if allowed {
+						let mut inner = inner.write();
 						// If we haven't noted this round yet, the message is not allowed.
 						let tally_for_round = match inner.outgoing_votes_tally.get_mut(&round) {
 							Some(tally_for_round) => tally_for_round,
@@ -884,9 +893,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			}
 
 			// global message.
-			let our_best_commit = inner.local_view.last_commit;
-			let peer_best_commit = peer.view.last_commit;
-
+			let our_best_commit = inner.read().local_view.last_commit;
+			let peer_best_commit =  {
+				match inner.read().peers.peer(who) {
+					None => return false,
+					Some(peer) => peer.view.last_commit,
+				}
+			};
 			match message {
 				None => false,
 				Some(GossipMessage::Commit(full)) => {
@@ -902,18 +915,18 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<FnMut(Block::Hash, &[u8]) -> bool + 'a> {
-		let inner = self.inner.read();
+		let inner = Arc::clone(&self.inner);
 		Box::new(move |topic, mut data| {
 			// if the topic is not one of the ones that we are keeping at the moment,
 			// it is expired.
-			match inner.live_topics.topic_info(&topic) {
+			match inner.read().live_topics.topic_info(&topic) {
 				None => return true,
 				Some((Some(_), _)) => return false, // round messages don't require further checking.
 				Some((None, _)) => {},
 			};
 
 			// global messages -- only keep the best commit.
-			let best_commit = inner.local_view.last_commit;
+			let best_commit = inner.read().local_view.last_commit;
 
 			match GossipMessage::<Block>::decode(&mut data) {
 				None => true,
