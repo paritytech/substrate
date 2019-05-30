@@ -533,7 +533,7 @@ impl<Block: BlockT> Inner<Block> {
 		let (should_reject, should_report) = match &msg.message {
 			PrimaryPropose(_propose) => {
 				if tally.handled_primary_proposals > 1 {
-					(true, outgoing_tally.handled_primary_proposals > 0)
+					(true, outgoing_tally.handled_primary_proposals > 1)
 				} else {
 					tally.handled_primary_proposals += 1;
 					(false, false)
@@ -541,7 +541,7 @@ impl<Block: BlockT> Inner<Block> {
 			},
 			Prevote(_prevote) => {
 				if tally.handled_pre_votes > 1 {
-					(true, outgoing_tally.handled_pre_votes > 0)
+					(true, outgoing_tally.handled_pre_votes > 1)
 				} else {
 					tally.handled_pre_votes += 1;
 					(false, false)
@@ -549,7 +549,7 @@ impl<Block: BlockT> Inner<Block> {
 			},
 			Precommit(_precommit) => {
 				if tally.handled_pre_commits > 1 {
-					(true, outgoing_tally.handled_pre_commits > 0)
+					(true, outgoing_tally.handled_pre_commits > 1)
 				} else {
 					tally.handled_pre_commits += 1;
 					(false, false)
