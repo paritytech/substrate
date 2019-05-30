@@ -28,6 +28,8 @@ use primitives::ed25519::{self, Signature, Public};
 use consensus::EquivocationProof;
 use rstd::marker::PhantomData;
 
+mod digest;
+pub use digest::CompatibleDigestItem;
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
@@ -44,48 +46,48 @@ decl_runtime_apis! {
 }
 
 
-/// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<V: Verify>: Sized {
-	/// Construct a digest item which contains a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_num: u64, signature: V) -> Self;
+// /// A digest item which is usable with aura consensus.
+// pub trait CompatibleDigestItem<V: Verify>: Sized {
+// 	/// Construct a digest item which contains a slot number and a signature on the
+// 	/// hash.
+// 	fn aura_seal(slot_num: u64, signature: V) -> Self;
 
-	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, V)>;
+// 	/// If this item is an Aura seal, return the slot number and signature.
+// 	fn as_aura_seal(&self) -> Option<(u64, V)>;
 
-	/// Return `true` if this seal type is deprecated.  Otherwise, return
-	/// `false`.
-	fn is_deprecated(&self) -> bool;
-}
+// 	/// Return `true` if this seal type is deprecated.  Otherwise, return
+// 	/// `false`.
+// 	fn is_deprecated(&self) -> bool;
+// }
 
-impl<Hash, V> CompatibleDigestItem<V> for generic::DigestItem<Hash, Public, V>
-where
-	V: Verify + Encode + Decode + Clone,
-{
-	/// Construct a digest item which is a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_number: u64, signature: V) -> Self {
-		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
-	}
+// impl<Hash, V> CompatibleDigestItem<V> for generic::DigestItem<Hash, Public, V>
+// where
+// 	V: Verify + Encode + Decode + Clone,
+// {
+// 	/// Construct a digest item which is a slot number and a signature on the
+// 	/// hash.
+// 	fn aura_seal(slot_number: u64, signature: V) -> Self {
+// 		generic::DigestItem::Consensus(AURA_ENGINE_ID, (slot_number, signature).encode())
+// 	}
 
-	/// If this item is an Aura seal, return the slot number and signature.
-	#[allow(deprecated)]
-	fn as_aura_seal(&self) -> Option<(u64, V)> {
-		match self {
-			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
-			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
-			_ => None,
-		}
-	}
+// 	/// If this item is an Aura seal, return the slot number and signature.
+// 	#[allow(deprecated)]
+// 	fn as_aura_seal(&self) -> Option<(u64, V)> {
+// 		match self {
+// 			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, (*sig).clone())),
+// 			generic::DigestItem::Consensus(AURA_ENGINE_ID, seal) => Decode::decode(&mut &seal[..]),
+// 			_ => None,
+// 		}
+// 	}
 
-	#[allow(deprecated)]
-	fn is_deprecated(&self) -> bool {
-		match self {
-			generic::DigestItem::Seal(_, _) => true,
-			_ => false,
-		}
-	}
-}
+// 	#[allow(deprecated)]
+// 	fn is_deprecated(&self) -> bool {
+// 		match self {
+// 			generic::DigestItem::Seal(_, _) => true,
+// 			_ => false,
+// 		}
+// 	}
+// }
 
 /// Represents an equivocation proof.
 #[derive(Debug, Clone, Encode, Decode)]

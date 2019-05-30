@@ -21,7 +21,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use log::trace;
 use network_libp2p::PeerId;
-use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, One};
 use crate::message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
@@ -48,7 +48,7 @@ impl<B: BlockT> BlockRangeState<B> {
 	pub fn len(&self) -> NumberFor<B> {
 		match *self {
 			BlockRangeState::Downloading { len, .. } => len,
-			BlockRangeState::Complete(ref blocks) => As::sa(blocks.len() as u64),
+			BlockRangeState::Complete(ref blocks) => (blocks.len() as u32).into(),
 		}
 	}
 }
@@ -102,8 +102,8 @@ impl<B: BlockT> BlockCollection<B> {
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
 	pub fn needed_blocks(&mut self, who: PeerId, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
 		// First block number that we need to download
-		let first_different = common + As::sa(1);
-		let count = As::sa(count as u64);
+		let first_different = common + <NumberFor<B>>::one();
+		let count = (count as u32).into();
 		let (mut range, downloading) = {
 			let mut downloading_iter = self.blocks.iter().peekable();
 			let mut prev: Option<(&NumberFor<B>, &BlockRangeState<B>)> = None;
@@ -132,7 +132,7 @@ impl<B: BlockT> BlockCollection<B> {
 			trace!(target: "sync", "Out of range for peer {} ({} vs {})", who, range.start, peer_best);
 			return None;
 		}
-		range.end = cmp::min(peer_best + As::sa(1), range.end);
+		range.end = cmp::min(peer_best + One::one(), range.end);
 		self.peer_requests.insert(who, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading { len: range.end - range.start, downloading: downloading + 1 });
 		if range.end <= range.start {
@@ -150,7 +150,7 @@ impl<B: BlockT> BlockCollection<B> {
 			for (start, range_data) in &mut self.blocks {
 				match range_data {
 					&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
-							prev = *start + As::sa(blocks.len() as u64);
+							prev = *start + (blocks.len() as u32).into();
 							let mut blocks = mem::replace(blocks, Vec::new());
 							drained.append(&mut blocks);
 							ranges.push(*start);

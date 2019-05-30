@@ -26,7 +26,6 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../trans
 futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"
-error-chain = "0.12"
 log = "0.4"
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 node-runtime = { path = "../../../node/runtime" }

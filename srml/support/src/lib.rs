@@ -57,7 +57,9 @@ pub mod unsigned;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
+pub use self::storage::{
+	StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
+};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
@@ -381,7 +383,7 @@ mod tests {
 			let key2 = 18u32;
 
 			DoubleMap::insert(key1, key2, vec![1]);
-			DoubleMap::append(key1, key2, &[2, 3]);
+			DoubleMap::append(key1, key2, &[2, 3]).unwrap();
 			assert_eq!(DoubleMap::get(key1, key2), vec![1, 2, 3]);
 		});
 	}

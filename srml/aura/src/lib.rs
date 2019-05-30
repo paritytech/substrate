@@ -54,16 +54,22 @@ pub use consensus;
 use rstd::{result, prelude::*};
 use srml_support::storage::StorageValue;
 use srml_support::{decl_storage, decl_module};
-use primitives::traits::{self, As, Zero, ValidateUnsigned, MaybeSerializeDebug, Verify, Header, Digest};
+use primitives::traits::{
+	Zero, One, ValidateUnsigned, SaturatedConversion, Saturating,
+	MaybeSerializeDebug, Verify, Header, Digest
+};
 use primitives::transaction_validity::TransactionValidity;
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode, Input, Output};
-use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+use inherents::{
+	RuntimeString, InherentIdentifier, InherentData, ProvideInherent,
+	MakeFatalError
+};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use aura_primitives::{AuraEquivocationProof, CompatibleDigestItem, slot_author};
+use aura_primitives::{AuraEquivocationProof, digest::CompatibleDigestItem, slot_author};
 use system::ensure_signed;
 use consensus::EquivocationProof;
 use core::fmt::Debug;
@@ -165,7 +171,7 @@ pub trait Trait: timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
-		LastTimestamp get(last) build(|_| T::Moment::sa(0)): T::Moment;
+		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
 	}
 }
 
@@ -271,43 +277,41 @@ impl AuraReport {
 
 impl<T: Trait> Module<T> {
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> u64 {
+	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<timestamp::Module<T>>::minimum_period().as_().saturating_mul(2)
+		<timestamp::Module<T>>::minimum_period().saturating_mul(2.into())
 	}
 
 	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
 		<Self as Store>::LastTimestamp::put(now.clone());
 
-		if last == T::Moment::zero() {
+		if last.is_zero() {
 			return;
 		}
 
-		assert!(slot_duration > T::Moment::zero(), "Aura slot duration cannot be zero.");
+		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
 		let last_slot = last / slot_duration.clone();
-		let first_skipped = last_slot.clone() + T::Moment::sa(1);
+		let first_skipped = last_slot.clone() + One::one();
 		let cur_slot = now / slot_duration;
 
 		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
 		if cur_slot == first_skipped { return }
 
-		let slot_to_usize = |slot: T::Moment| { slot.as_() as usize };
-
-		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
+		let skipped_slots = cur_slot - last_slot - One::one();
 
 		H::handle_report(AuraReport {
-			start_slot: slot_to_usize(first_skipped),
-			skipped: slot_to_usize(skipped_slots),
+			start_slot: first_skipped.saturated_into::<usize>(),
+			skipped: skipped_slots.saturated_into::<usize>(),
 		})
 	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set::<T::HandleReport>(moment, T::Moment::sa(Self::slot_duration()))
+		Self::on_timestamp_set::<T::HandleReport>(moment, Self::slot_duration())
 	}
 }
 
@@ -344,9 +348,9 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			_ => return Ok(()),
 		};
 
-		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
+		let timestamp_based_slot = timestamp / Self::slot_duration();
 
-		let seal_slot = data.aura_inherent_data()?;
+		let seal_slot = data.aura_inherent_data()?.saturated_into();
 
 		if timestamp_based_slot == seal_slot {
 			Ok(())

@@ -47,13 +47,13 @@ pub trait Get<T> {
 macro_rules! parameter_types {
 	(pub const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
 		pub struct $name;
-		parameter_types!{IMPL $name , $type , $value}
-		parameter_types!{ $( $rest )* }
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
 	);
 	(const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
 		struct $name;
-		parameter_types!{IMPL $name , $type , $value}
-		parameter_types!{ $( $rest )* }
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
 	);
 	() => ();
 	(IMPL $name:ident , $type:ty , $value:expr) => {

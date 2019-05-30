@@ -52,7 +52,6 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 #![forbid(warnings)]
-#![allow(deprecated)] // FIXME #2532: remove once the refactor is done https://github.com/paritytech/substrate/issues/2532
 
 use futures::prelude::*;
 use log::{debug, info, warn};
@@ -157,7 +156,7 @@ pub struct Config {
 	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
-	pub justification_period: u64,
+	pub justification_period: u32,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
@@ -321,6 +320,7 @@ where
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
+		#[allow(deprecated)]
 		&**client.backend(),
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
@@ -430,6 +430,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	if !inherent_data_providers.has_provider(&srml_finality_tracker::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
+				#[allow(deprecated)]
 				match client.backend().blockchain().info() {
 					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
 					Ok(info) => {
@@ -441,7 +442,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 					},
 				}
 			}))
-			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
+			.map_err(|err| consensus_common::Error::InherentData(err.into()))
 	} else {
 		Ok(())
 	}
@@ -490,15 +491,21 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	use futures::future::{self, Loop as FutureLoop};
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone(), on_exit.clone());
-
 	let LinkHalf {
 		client,
 		select_chain,
 		persistent_data,
 		voter_commands_rx,
 	} = link;
+
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
+
+	let (network, network_startup) = NetworkBridge::new(
+		network,
+		config.clone(),
+		Some((authority_set.set_id(), &set_state.read())),
+		on_exit.clone(),
+	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
@@ -647,6 +654,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 						current_round: HasVoted::No,
 					};
 
+					#[allow(deprecated)]
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					let set_state: SharedVoterSetState<_> = set_state.into();
@@ -672,6 +680,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					env.update_voter_set_state(|voter_set_state| {
 						let completed_rounds = voter_set_state.completed_rounds();
 						let set_state = VoterSetState::Paused { completed_rounds };
+
+						#[allow(deprecated)]
 						aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 						Ok(Some(set_state))
 					})?;
