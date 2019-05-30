@@ -30,7 +30,7 @@ use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as Bloc
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache};
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
-use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
+use crate::light::fetcher::{Fetcher, RemoteBodyRequest, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
@@ -56,10 +56,18 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
 
 	/// Get headers CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
-	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
+	fn header_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Block::Hash>;
 
 	/// Get changes trie CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
-	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
+	fn changes_trie_cht_root(
+		&self,
+		cht_size: NumberFor<Block>,
+		block: NumberFor<Block>,
+	) -> ClientResult<Block::Hash>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>>;
@@ -116,7 +124,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 
 				self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 					.remote_header(RemoteHeaderRequest {
-						cht_root: self.storage.header_cht_root(cht::SIZE, number)?,
+						cht_root: self.storage.header_cht_root(cht::size(), number)?,
 						block: number,
 						retry_count: None,
 					})
@@ -144,9 +152,19 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 }
 
 impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: BlockT, S: Storage<Block>, F: Fetcher<Block> {
-	fn body(&self, _id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
-		// TODO: #1445 fetch from remote node
-		Ok(None)
+	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
+		let header = match self.header(id)? {
+			Some(header) => header,
+			None => return Ok(None),
+		};
+
+		self.fetcher().upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
+			.remote_body(RemoteBodyRequest {
+				header,
+				retry_count: None,
+			})
+			.into_future().wait()
+			.map(Some)
 	}
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {

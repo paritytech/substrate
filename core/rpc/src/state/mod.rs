@@ -22,7 +22,6 @@ use std::{
 	sync::Arc,
 };
 
-use error_chain::bail;
 use log::{warn, trace};
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
 use jsonrpc_derive::rpc;
@@ -33,7 +32,10 @@ use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use crate::rpc::Result as RpcResult;
 use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Header, ProvideRuntimeApi, NumberFor,
+	SaturatedConversion
+};
 use runtime_version::RuntimeVersion;
 use state_machine::{self, ExecutionStrategy};
 
@@ -57,7 +59,7 @@ pub trait StateApi<Hash> {
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
@@ -70,6 +72,40 @@ pub trait StateApi<Hash> {
 	/// Returns the size of a storage entry at a block's state.
 	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
 	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<u64>>;
+
+	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
+	#[rpc(name = "state_getChildKeys")]
+	fn child_storage_keys(
+		&self,
+		child_storage_key: StorageKey,
+		prefix: StorageKey,
+		hash: Option<Hash>
+	) -> Result<Vec<StorageKey>>;
+
+	/// Returns a child storage entry at a specific block's state.
+	#[rpc(name = "state_getChildStorage")]
+	fn child_storage(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey, hash: Option<Hash>
+	) -> Result<Option<StorageData>>;
+
+	/// Returns the hash of a child storage entry at a block's state.
+	#[rpc(name = "state_getChildStorageHash")]
+	fn child_storage_hash(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey, hash: Option<Hash>
+	) -> Result<Option<Hash>>;
+
+	/// Returns the size of a child storage entry at a block's state.
+	#[rpc(name = "state_getChildStorageSize")]
+	fn child_storage_size(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		hash: Option<Hash>
+	) -> Result<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[rpc(name = "state_getMetadata")]
@@ -84,7 +120,12 @@ pub trait StateApi<Hash> {
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
 	#[rpc(name = "state_queryStorage")]
-	fn query_storage(&self, keys: Vec<StorageKey>, block: Hash, hash: Option<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
+	fn query_storage(
+		&self,
+		keys: Vec<StorageKey>,
+		block: Hash,
+		hash: Option<Hash>
+	) -> Result<Vec<StorageChangeSet<Hash>>>;
 
 	/// New runtime version subscription
 	#[pubsub(
@@ -106,11 +147,15 @@ pub trait StateApi<Hash> {
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>);
+	fn subscribe_storage(
+		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
+	);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_storage(
+		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
+	) -> RpcResult<bool>;
 }
 
 /// State API with subscriptions support.
@@ -171,7 +216,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 							blocks.push(hdr.hash());
 							last = hdr;
 						} else {
-							bail!(invalid_block_range(
+							return Err(invalid_block_range(
 								Some(from),
 								Some(to),
 								format!("Parent of {} ({}) not found", last.number(), last.hash()),
@@ -179,7 +224,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 						}
 					}
 					if last.hash() != from.hash() {
-						bail!(invalid_block_range(
+						return Err(invalid_block_range(
 							Some(from),
 							Some(to),
 							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
@@ -190,7 +235,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 				};
 				// check if we can filter blocks-with-changes from some (sub)range using changes tries
 				let changes_trie_range = self.client.max_key_changes_range(from_number, BlockId::Hash(to.hash()))?;
-				let filtered_range_begin = changes_trie_range.map(|(begin, _)| (begin - from_number).as_() as usize);
+				let filtered_range_begin = changes_trie_range.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
 				let (unfiltered_range, filtered_range) = split_range(blocks.len(), filtered_range_begin);
 				Ok(QueryStorageRange {
 					hashes: blocks,
@@ -199,7 +244,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 					filtered_range,
 				})
 			},
-			(from, to) => bail!(
+			(from, to) => Err(
 				invalid_block_range(from.as_ref(), to.as_ref(), "Invalid range or unknown block".into())
 			),
 		}
@@ -242,7 +287,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 	) -> Result<()> {
 		let (begin, end) = match range.filtered_range {
 			Some(ref filtered_range) => (
-				range.first_number + As::sa(filtered_range.start as u64),
+				range.first_number + filtered_range.start.saturated_into(),
 				BlockId::Hash(range.hashes[filtered_range.end - 1].clone())
 			),
 			None => return Ok(()),
@@ -254,7 +299,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 				if last_block == Some(block) {
 					continue;
 				}
-				let block_hash = range.hashes[(block - range.first_number).as_() as usize].clone();
+				let block_hash = range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
 				let id = BlockId::Hash(block_hash);
 				let value_at_block = self.client.storage(&id, key)?;
 				changes_map.entry(block)
@@ -322,6 +367,50 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 
 	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<u64>> {
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
+	}
+
+	fn child_storage(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Option<StorageData>> {
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying child storage at {:?} for key {}", block, HexDisplay::from(&key.0));
+		Ok(self.client.child_storage(&BlockId::Hash(block), &child_storage_key, &key)?)
+	}
+
+	fn child_storage_keys(
+		&self,
+		child_storage_key: StorageKey,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Vec<StorageKey>> {
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying child storage keys at {:?}", block);
+		Ok(self.client.child_storage_keys(&BlockId::Hash(block), &child_storage_key, &key_prefix)?)
+	}
+
+	fn child_storage_hash(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Option<Block::Hash>> {
+		use runtime_primitives::traits::{Hash, Header as HeaderT};
+		Ok(
+			self.child_storage(child_storage_key, key, block)?
+				.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0))
+		)
+	}
+
+	fn child_storage_size(
+		&self,
+		child_storage_key: StorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> Result<Option<u64>> {
+		Ok(self.child_storage(child_storage_key, key, block)?.map(|x| x.0.len() as u64))
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes> {
@@ -397,7 +486,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	}
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
-		let stream = match self.client.storage_changes_notification_stream(Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])) {
+		let stream = match self.client.storage_changes_notification_stream(
+				Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])
+		) {
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = subscriber.reject(error::Error::from(err).into());
@@ -465,11 +556,15 @@ pub(crate) fn split_range(size: usize, middle: Option<usize>) -> (Range<usize>, 
 	(range1, range2)
 }
 
-fn invalid_block_range<H: Header>(from: Option<&H>, to: Option<&H>, reason: String) -> error::ErrorKind {
+fn invalid_block_range<H: Header>(from: Option<&H>, to: Option<&H>, reason: String) -> error::Error {
 	let to_string = |x: Option<&H>| match x {
 		None => "unknown hash".into(),
 		Some(h) => format!("{} ({})", h.number(), h.hash()),
 	};
 
-	error::ErrorKind::InvalidBlockRange(to_string(from), to_string(to), reason)
+	error::Error::InvalidBlockRange {
+		from: to_string(from),
+		to: to_string(to),
+		details: reason,
+	}
 }

@@ -19,8 +19,8 @@
 //! The offchain workers is a special function of the runtime that
 //! gets executed after block is imported. During execution
 //! it's able to asynchronously submit extrinsics that will either
-//! be propagated to other nodes (transactions) or will be
-//! added to the next block produced by the node as inherents.
+//! be propagated to other nodes added to the next block
+//! produced by the node as unsigned transactions.
 //!
 //! Offchain workers can be used for computation-heavy tasks
 //! that are not feasible for execution during regular block processing.
@@ -39,7 +39,6 @@ use std::{
 };
 
 use client::runtime_api::ApiExt;
-use inherents::pool::InherentsPool;
 use log::{debug, warn};
 use primitives::ExecutionContext;
 use runtime_primitives::{
@@ -57,7 +56,6 @@ pub use offchain_primitives::OffchainWorkerApi;
 #[derive(Debug)]
 pub struct OffchainWorkers<C, Block: traits::Block> {
 	client: Arc<C>,
-	inherents_pool: Arc<InherentsPool<<Block as traits::Block>::Extrinsic>>,
 	executor: TaskExecutor,
 	_block: PhantomData<Block>,
 }
@@ -66,12 +64,10 @@ impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<C>,
-		inherents_pool: Arc<InherentsPool<<Block as traits::Block>::Extrinsic>>,
 		executor: TaskExecutor,
 	) -> Self {
 		Self {
 			client,
-			inherents_pool,
 			executor,
 			_block: PhantomData,
 		}
@@ -97,7 +93,7 @@ impl<C, Block> OffchainWorkers<C, Block> where
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {
-			let (api, runner) = api::Api::new(pool.clone(), self.inherents_pool.clone(), at.clone());
+			let (api, runner) = api::Api::new(pool.clone(), at.clone());
 			self.executor.spawn(runner.process());
 
 			debug!("Running offchain workers at {:?}", at);
@@ -119,14 +115,14 @@ mod tests {
 		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
-		let inherents = Arc::new(InherentsPool::default());
 
 		// when
-		let offchain = OffchainWorkers::new(client, inherents.clone(), runtime.executor());
+		let offchain = OffchainWorkers::new(client, runtime.executor());
 		offchain.on_block_imported(&0u64, &pool);
 
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();
-		assert_eq!(inherents.drain().len(), 1);
+		assert_eq!(pool.status().ready, 1);
+		assert_eq!(pool.ready().next().unwrap().is_propagateable(), false);
 	}
 }

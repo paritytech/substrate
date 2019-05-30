@@ -18,14 +18,13 @@ srml-consensus = { path = "../../../srml/consensus" }
 srml-aura = { path = "../../../srml/aura" }
 client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
-futures = "0.1.17"
-tokio = "0.1.7"
-parking_lot = "0.7.1"
-error-chain = "0.12"
-log = "0.4"
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 authorities = { package = "substrate-consensus-authorities", path = "../authorities" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+futures = "0.1.17"
+tokio = "0.1.7"
+parking_lot = "0.7.1"
+log = "0.4"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }

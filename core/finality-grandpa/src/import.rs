@@ -26,7 +26,7 @@ use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use consensus_common::{
-	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
+	BlockImport, Error as ConsensusError,
 	ImportBlock, ImportResult, JustificationImport, well_known_cache_keys,
 	SelectChain,
 };
@@ -187,11 +187,11 @@ where
 
 			match maybe_change {
 				Err(e) => match api.has_api_with::<GrandpaApi<Block>, _>(&at, |v| v >= 2) {
-					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+					Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 					Ok(true) => {
 						// API version is high enough to support forced changes
 						// but got error, so it is legitimate.
-						return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
+						return Err(ConsensusError::ClientImport(e.to_string()).into())
 					},
 					Ok(false) => {
 						// API version isn't high enough to support forced changes
@@ -216,7 +216,7 @@ where
 			);
 
 			match maybe_change {
-				Err(e) => Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+				Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
 				Ok(Some(change)) => Ok(Some(PendingChange {
 					next_authorities: change.next_authorities,
 					delay: change.delay,
@@ -301,12 +301,12 @@ where
 			guard.as_mut().add_pending_change(
 				change,
 				&is_descendent_of,
-			).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+			).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 		}
 
 		let applied_changes = {
 			let forced_change_set = guard.as_mut().apply_forced_changes(hash, number, &is_descendent_of)
-				.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
+				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
 
 			if let Some((median_last_finalized_number, new_set)) = forced_change_set {
@@ -317,15 +317,18 @@ where
 					// for the canon block the new authority set should start
 					// with. we use the minimum between the median and the local
 					// best finalized block.
+
+					#[allow(deprecated)]
 					let best_finalized_number = self.inner.backend().blockchain().info()
-						.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))?
+						.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 						.finalized_number;
 
 					let canon_number = best_finalized_number.min(median_last_finalized_number);
 
+					#[allow(deprecated)]
 					let canon_hash =
 						self.inner.backend().blockchain().header(BlockId::Number(canon_number))
-							.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))?
+							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 							.expect("the given block number is less or equal than the current best finalized number; \
 									 current best finalized number must exist in chain; qed.")
 							.hash();
@@ -343,7 +346,7 @@ where
 				AppliedChanges::Forced(new_authorities)
 			} else {
 				let did_standard = guard.as_mut().enacts_standard_change(hash, number, &is_descendent_of)
-					.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
+					.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 					.map_err(ConsensusError::from)?;
 
 				if let Some(root) = did_standard {
@@ -396,10 +399,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
+		#[allow(deprecated)]
 		match self.inner.backend().blockchain().status(BlockId::Hash(hash)) {
 			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			Ok(blockchain::BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
@@ -420,7 +424,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 				Err(e) => {
 					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
 					pending_changes.revert();
-					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+					return Err(ConsensusError::ClientImport(e.to_string()).into());
 				},
 			}
 		};
@@ -509,7 +513,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
 	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
 {
 	pub(crate) fn new(
@@ -559,7 +563,7 @@ where
 		);
 
 		let justification = match justification {
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 			Ok(justification) => justification,
 		};
 
@@ -579,17 +583,17 @@ where
 					command {}, signaling voter.", number, command);
 
 				if let Err(e) = self.send_voter_commands.unbounded_send(command) {
-					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+					return Err(ConsensusError::ClientImport(e.to_string()).into());
 				}
 			},
 			Err(CommandOrError::Error(e)) => {
 				return Err(match e {
-					Error::Grandpa(error) => ConsensusErrorKind::ClientImport(error.to_string()),
-					Error::Network(error) => ConsensusErrorKind::ClientImport(error),
-					Error::Blockchain(error) => ConsensusErrorKind::ClientImport(error),
-					Error::Client(error) => ConsensusErrorKind::ClientImport(error.to_string()),
-					Error::Safety(error) => ConsensusErrorKind::ClientImport(error),
-					Error::Timer(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+					Error::Grandpa(error) => ConsensusError::ClientImport(error.to_string()),
+					Error::Network(error) => ConsensusError::ClientImport(error),
+					Error::Blockchain(error) => ConsensusError::ClientImport(error),
+					Error::Client(error) => ConsensusError::ClientImport(error.to_string()),
+					Error::Safety(error) => ConsensusError::ClientImport(error),
+					Error::Timer(error) => ConsensusError::ClientImport(error.to_string()),
 				}.into());
 			},
 			Ok(_) => {

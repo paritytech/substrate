@@ -30,6 +30,13 @@ sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
 substrate-keystore = { path = "../../core/keystore" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
+structopt = "0.2"
+transaction-factory = { path = "../../test-utils/transaction-factory" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+indices = { package = "srml-indices", path = "../../srml/indices" }
+timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
+rand = "0.6"
+finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 
 [dev-dependencies]
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }

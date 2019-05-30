@@ -17,14 +17,17 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey};
+use crate::exec::{
+	Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey,
+	TopicOf,
+};
 use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, CheckedAdd, Bounded};
+use runtime_primitives::traits::{CheckedMul, CheckedAdd, Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -108,9 +111,9 @@ pub enum RuntimeToken<Gas> {
 	ReturnData(u32),
 	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
 	ComputedDispatchFee(Gas),
-	/// The given number of bytes is read from the sandbox memory and
-	/// deposit in as an event.
-	DepositEvent(u32),
+	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
+	/// given number of topics.
+	DepositEvent(u32, u32),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
@@ -119,20 +122,35 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
 		use self::RuntimeToken::*;
 		let value = match *self {
-			Explicit(amount) => Some(<T::Gas as As<u32>>::sa(amount)),
+			Explicit(amount) => Some(amount.into()),
 			ReadMemory(byte_count) => metadata
 				.sandbox_data_read_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+				.checked_mul(&byte_count.into()),
 			WriteMemory(byte_count) => metadata
 				.sandbox_data_write_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+				.checked_mul(&byte_count.into()),
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
-			DepositEvent(byte_count) => metadata
-				.event_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))
-				.and_then(|e| e.checked_add(&metadata.event_data_base_cost)),
+				.checked_mul(&byte_count.into()),
+			DepositEvent(topic_count, data_byte_count) => {
+				let data_cost = metadata
+					.event_data_per_byte_cost
+					.checked_mul(&data_byte_count.into());
+
+				let topics_cost = metadata
+					.event_per_topic_cost
+					.checked_mul(&topic_count.into());
+
+				data_cost
+					.and_then(|data_cost| {
+						topics_cost.and_then(|topics_cost| {
+							data_cost.checked_add(&topics_cost)
+						})
+					})
+					.and_then(|data_and_topics_cost|
+						data_and_topics_cost.checked_add(&metadata.event_base_cost)
+					)
+			},
 			ComputedDispatchFee(gas) => Some(gas),
 		};
 
@@ -322,7 +340,7 @@ define_env!(Env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
+			gas.saturated_into()
 		};
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -395,7 +413,7 @@ define_env!(Env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
+			gas.saturated_into()
 		};
 		let ext = &mut ctx.ext;
 		let instantiate_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -509,16 +527,25 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Load the latest block RNG seed into the scratch buffer
-	ext_random_seed(ctx) => {
-		ctx.scratch_buf = ctx.ext.random_seed().encode();
+	// Stores the random number for the current block for the given subject into the scratch
+	// buffer.
+	//
+	// The data is encoded as T::Hash. The current contents of the scratch buffer are
+	// overwritten.
+	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
+		// The length of a subject can't exceed `max_subject_len`.
+		if subject_len > ctx.schedule.max_subject_len {
+			return Err(sandbox::HostError);
+		}
+
+		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
+		ctx.scratch_buf = ctx.ext.random(&subject_buf).encode();
 		Ok(())
 	},
 
 	// Load the latest block timestamp into the scratch buffer
 	ext_now(ctx) => {
-		let now: u64 = As::as_(ctx.ext.now().clone());
-		ctx.scratch_buf = now.encode();
+		ctx.scratch_buf = ctx.ext.now().encode();
 		Ok(())
 	},
 
@@ -610,21 +637,47 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Deposit a contract event with the data buffer.
-	ext_deposit_event(ctx, data_ptr: u32, data_len: u32) => {
+	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
+	// on the maximum number of topics specified by `max_event_topics`.
+	//
+	// - topics_ptr - a pointer to the buffer of topics encoded as `Vec<T::Hash>`. The value of this
+	//   is ignored if `topics_len` is set to 0. The topics list can't contain duplicates.
+	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
+	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
+	// - data_len - the length of the data buffer.
+	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+		let mut topics = match topics_len {
+			0 => Vec::new(),
+			_ => {
+				let topics_buf = read_sandbox_memory(ctx, topics_ptr, topics_len)?;
+				Vec::<TopicOf<<E as Ext>::T>>::decode(&mut &topics_buf[..])
+					.ok_or_else(|| sandbox::HostError)?
+			}
+		};
+
+		// If there are more than `max_event_topics`, then trap.
+		if topics.len() > ctx.schedule.max_event_topics as usize {
+			return Err(sandbox::HostError);
+		}
+
+		// Check for duplicate topics. If there are any, then trap.
+		if has_duplicates(&mut topics) {
+			return Err(sandbox::HostError);
+		}
+
+		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
+
 		match ctx
 			.gas_meter
 			.charge(
 				ctx.schedule,
-				RuntimeToken::DepositEvent(data_len)
+				RuntimeToken::DepositEvent(topics.len() as u32, data_len)
 			)
 		{
 			GasMeterResult::Proceed => (),
 			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
 		}
-
-		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
-		ctx.ext.deposit_event(event_data);
+		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
 	},
@@ -665,3 +718,21 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 );
+
+/// Finds duplicates in a given vector.
+///
+/// This function has complexity of O(n log n) and no additional memory is required, although
+/// the order of items is not preserved.
+fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
+	// Sort the vector
+	items.sort_unstable_by(|a, b| {
+		Ord::cmp(a.as_ref(), b.as_ref())
+	});
+	// And then find any two consecutive equal elements.
+	items.windows(2).any(|w| {
+		match w {
+			&[ref a, ref b] => a == b,
+			_ => false,
+		}
+	})
+}

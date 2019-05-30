@@ -187,15 +187,16 @@
 //! A validator can be _reported_ to be offline at any point via the public function
 //! [`on_offline_validator`](enum.Call.html#variant.on_offline_validator). Each validator declares how many times it
 //! can be _reported_ before it actually gets slashed via its
-//! [`unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold).
+//! [`ValidatorPrefs::unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold).
 //!
 //! On top of this, the Staking module also introduces an
 //! [`OfflineSlashGrace`](./struct.Module.html#method.offline_slash_grace), which applies
 //! to all validators and prevents them from getting immediately slashed.
 //!
 //! Essentially, a validator gets slashed once they have been reported more than
-//! [`OfflineSlashGrace`] + [`unstake_threshold`] times. Getting slashed due to offline report always leads
-//! to being _unstaked_ (_i.e._ removed as a validator candidate) as the consequence.
+//! [`OfflineSlashGrace`] + [`ValidatorPrefs::unstake_threshold`] times. Getting slashed due to
+//! offline report always leads to being _unstaked_ (_i.e._ removed as a validator candidate) as
+//! the consequence.
 //!
 //! The base slash value is computed _per slash-event_ by multiplying
 //! [`OfflineSlash`](./struct.Module.html#method.offline_slash) and the `total` `Exposure`. This value is then
@@ -212,6 +213,11 @@
 //! [`BondingDuration`](./struct.BondingDuration.html) (in number of eras) must pass until the funds can actually be
 //! removed. Once the `BondingDuration` is over, the [`withdraw_unbonded`](./enum.Call.html#variant.withdraw_unbonded) call can be used
 //! to actually withdraw the funds.
+//!
+//! Note that there is a limitation to the number of fund-chunks that can be scheduled to be unlocked in the future
+//! via [`unbond`](enum.Call.html#variant.unbond).
+//! In case this maximum (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
+//! call to `withdraw_unbonded` to remove some of the chunks.
 //!
 //! ### Election Algorithm
 //!
@@ -247,7 +253,10 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Convert, Zero, One, As, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded};
+use primitives::traits::{
+	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating,
+	Bounded, SaturatedConversion
+};
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
@@ -262,6 +271,8 @@ const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+const MAX_UNLOCKING_CHUNKS: usize = 32;
+const STAKING_ID: LockIdentifier = *b"staking ";
 
 /// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -396,7 +407,7 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
 type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
-type ExpoMap<T> = BTreeMap::<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
+type ExpoMap<T> = BTreeMap<<T as system::Trait>::AccountId, Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>>;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
@@ -422,8 +433,6 @@ pub trait Trait: system::Trait + session::Trait {
 	type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 }
 
-const STAKING_ID: LockIdentifier = *b"staking ";
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -432,15 +441,15 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(minimum_validator_count) config(): u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
 		/// The length of a staking era in sessions.
-		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = 1000.into();
 		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_billionths(60);
+		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_parts(60);
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000); // Perbill::from_fraction() is only for std, so use from_millionths().
+		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000);
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 		/// The length of the bonding duration in eras.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(12);
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = 12.into();
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialize
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
@@ -601,12 +610,20 @@ decl_module! {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
+		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
+		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
+		/// to be called first to remove some of the chunks (if possible).
+		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			ensure!(
+				ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS,
+				"can not schedule more unlock chunks"
+			);
 
 			let mut value = value.min(ledger.active);
 
@@ -867,8 +884,12 @@ impl<T: Trait> Module<T> {
 		if ideal_elapsed.is_zero() {
 			return Self::current_session_reward();
 		}
-		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-		Self::current_session_reward() * <BalanceOf<T>>::sa(per65536) / <BalanceOf<T>>::sa(65536u64)
+		// Assumes we have 16-bits free at the top of T::Moment. Holds true for moment as seconds
+		// in a u64 for the forseeable future, but more correct would be to handle overflows
+		// explicitly.
+		let per65536 = T::Moment::from(65536) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed);
+		let per65536: BalanceOf<T> = per65536.saturated_into::<u32>().into();
+		Self::current_session_reward() * per65536 / 65536.into()
 	}
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
@@ -901,8 +922,8 @@ impl<T: Trait> Module<T> {
 				Self::reward_validator(v, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
-			let len = validators.len() as u64; // validators length can never overflow u64
-			let len = BalanceOf::<T>::sa(len);
+			let len = validators.len() as u32; // validators length can never overflow u64
+			let len: BalanceOf<T> = len.into();
 			let total_minted = reward * len;
 			let total_rewarded_stake = Self::slot_stake() * len;
 			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);

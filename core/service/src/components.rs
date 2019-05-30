@@ -38,7 +38,8 @@ use parking_lot::Mutex;
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 /// Network service type for a factory.
-pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
+pub type NetworkService<F> =
+	network::NetworkService<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -143,6 +144,7 @@ pub trait StartRPC<C: Components> {
 		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		rpc_ws_max_connections: Option<usize>,
 		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -162,6 +164,7 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		rpc_ws_max_connections: Option<usize>,
 		rpc_cors: Option<Vec<String>>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -186,8 +189,19 @@ impl<C: Components> StartRPC<Self> for C where
 		};
 
 		Ok((
-			maybe_start_server(rpc_http, |address| rpc::start_http(address, rpc_cors.as_ref(), handler()))?,
-			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, rpc_cors.as_ref(), handler()))?.map(Mutex::new),
+			maybe_start_server(
+				rpc_http,
+				|address| rpc::start_http(address, rpc_cors.as_ref(), handler()),
+			)?,
+			maybe_start_server(
+				rpc_ws,
+				|address| rpc::start_ws(
+					address,
+					rpc_ws_max_connections,
+					rpc_cors.as_ref(),
+					handler(),
+				),
+			)?.map(Mutex::new),
 		))
 	}
 }
@@ -330,7 +344,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build the Fork Choice algorithm for full client
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self>,
-		client: Arc<FullClient<Self>>, 
+		client: Arc<FullClient<Self>>,
 	) -> Result<Self::SelectChain, error::Error>;
 
 	/// Build full service.
@@ -344,7 +358,7 @@ pub trait ServiceFactory: 'static + Sized {
 	fn build_full_import_queue(
 		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>,
-		_select_chain: Self::SelectChain
+		_select_chain: Self::SelectChain,
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
@@ -415,7 +429,7 @@ pub trait Components: Sized + 'static {
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
-		select_chain: Self::SelectChain,
+		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error>;
 
 	/// Finality proof provider for serving network requests.
@@ -427,7 +441,7 @@ pub trait Components: Sized + 'static {
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Self::SelectChain, error::Error>;
+	) -> Result<Option<Self::SelectChain>, error::Error>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -497,7 +511,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_transaction_pool(
-		config: TransactionPoolOptions, 
+		config: TransactionPoolOptions,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<TransactionPool<Self::TransactionPoolApi>, error::Error> {
 		Factory::build_full_transaction_pool(config, client)
@@ -506,16 +520,18 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
-		select_chain: Self::SelectChain,
+		select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
+		let select_chain = select_chain
+			.ok_or(error::Error::SelectChainRequired)?;
 		Factory::build_full_import_queue(config, client, select_chain)
 	}
 
 	fn build_select_chain(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<Self::SelectChain, error::Error> {
-		Self::Factory::build_select_chain(config, client)
+	) -> Result<Option<Self::SelectChain>, error::Error> {
+		Self::Factory::build_select_chain(config, client).map(Some)
 	}
 
 	fn build_finality_proof_provider(
@@ -596,7 +612,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_import_queue(
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
-		_select_chain: Self::SelectChain,
+		_select_chain: Option<Self::SelectChain>,
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
 	}
@@ -609,8 +625,8 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_select_chain(
 		_config: &mut FactoryFullConfiguration<Self::Factory>,
 		_client: Arc<ComponentClient<Self>>
-	) -> Result<Self::SelectChain, error::Error> {
-		Err("Fork choice doesn't happen on light clients.".into())
+	) -> Result<Option<Self::SelectChain>, error::Error> {
+		Ok(None)
 	}
 }
 
@@ -619,7 +635,7 @@ mod tests {
 	use super::*;
 	use consensus_common::BlockOrigin;
 	use client::LongestChain;
-	use substrate_test_client::{self, TestClient, AccountKeyring, runtime::Transfer};
+	use substrate_test_client::{TestClient, AccountKeyring, runtime::Transfer};
 
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
@@ -631,6 +647,7 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
+		#[allow(deprecated)]
 		let best = LongestChain::new(client.backend().clone(), client.import_lock())
 			.best_chain().unwrap();
 
@@ -638,7 +655,7 @@ mod tests {
 		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
 
 		// import the block
-		let mut builder = client.new_block().unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
 		let block = builder.bake().unwrap();
 		let id = BlockId::hash(block.header().hash());

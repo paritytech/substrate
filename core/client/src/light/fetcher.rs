@@ -22,8 +22,12 @@ use std::marker::PhantomData;
 use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
+use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
+	SimpleArithmetic, CheckedConversion,
+};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check,
 	create_proof_check_backend_storage, read_child_proof_check};
@@ -124,17 +128,28 @@ pub struct ChangesProof<Header: HeaderT> {
 	pub roots_proof: Vec<Vec<u8>>,
 }
 
+/// Remote block body request
+#[derive(Clone, Default, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteBodyRequest<Header: HeaderT> {
+	/// Header of the requested block body
+	pub header: Header,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
+}
+
 /// Light client data fetcher. Implementations of this trait must check if remote data
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: IntoFuture<Item=Block::Header, Error=ClientError>;
+	type RemoteHeaderResult: IntoFuture<Item = Block::Header, Error = ClientError>;
 	/// Remote storage read future.
-	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=ClientError>;
+	type RemoteReadResult: IntoFuture<Item = Option<Vec<u8>>, Error = ClientError>;
 	/// Remote call result future.
-	type RemoteCallResult: IntoFuture<Item=Vec<u8>, Error=ClientError>;
+	type RemoteCallResult: IntoFuture<Item = Vec<u8>, Error = ClientError>;
 	/// Remote changes result future.
-	type RemoteChangesResult: IntoFuture<Item=Vec<(NumberFor<Block>, u32)>, Error=ClientError>;
+	type RemoteChangesResult: IntoFuture<Item = Vec<(NumberFor<Block>, u32)>, Error = ClientError>;
+	/// Remote block body result future.
+	type RemoteBodyResult: IntoFuture<Item = Vec<Block::Extrinsic>, Error = ClientError>;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
@@ -153,6 +168,8 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
 	/// at a given blocks range.
 	fn remote_changes(&self, request: RemoteChangesRequest<Block::Header>) -> Self::RemoteChangesResult;
+	/// Fetch remote block body
+	fn remote_body(&self, request: RemoteBodyRequest<Block::Header>) -> Self::RemoteBodyResult;
 }
 
 /// Light client remote data checker.
@@ -191,6 +208,12 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		request: &RemoteChangesRequest<Block::Header>,
 		proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>>;
+	/// Check remote body proof.
+	fn check_body_proof(
+		&self,
+		request: &RemoteBodyRequest<Block::Header>,
+		body: Vec<Block::Extrinsic>
+	) -> ClientResult<Vec<Block::Extrinsic>>;
 }
 
 /// Remote data checker.
@@ -213,7 +236,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		&self,
 		request: &RemoteChangesRequest<B::Header>,
 		remote_proof: ChangesProof<B::Header>,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
@@ -261,28 +284,27 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		}
 
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<_, H>(
+		key_changes_proof_check::<_, H, _>(
 			&request.changes_trie_config,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.2),
 				prev_roots: remote_roots,
 			},
 			remote_proof,
-			request.first_block.0.as_(),
+			request.first_block.0,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0.as_(),
+				number: request.last_block.0,
 			},
-			remote_max_block.as_(),
+			remote_max_block,
 			&request.key)
-		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
 		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
 
 	/// Check CHT-based proof for changes tries roots.
 	fn check_changes_tries_proof(
 		&self,
-		cht_size: u64,
+		cht_size: NumberFor<B>,
 		remote_roots: &BTreeMap<NumberFor<B>, B::Hash>,
 		remote_roots_proof: Vec<Vec<u8>>,
 	) -> ClientResult<()>
@@ -338,7 +360,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord,
+		H::Out: Ord + 'static,
 		S: BlockchainStorage<Block>,
 		F: Send + Sync,
 {
@@ -394,30 +416,62 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteChangesRequest<Block::Header>,
 		remote_proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
-		self.check_changes_proof_with_cht_size(request, remote_proof, cht::SIZE)
+		self.check_changes_proof_with_cht_size(request, remote_proof, cht::size())
+	}
+
+	fn check_body_proof(
+		&self,
+		request: &RemoteBodyRequest<Block::Header>,
+		body: Vec<Block::Extrinsic>
+	) -> ClientResult<Vec<Block::Extrinsic>> {
+
+		// TODO: #2621
+		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode));
+		if *request.header.extrinsics_root() == extrinsics_root {
+			Ok(body)
+		} else {
+			Err(format!("RemoteBodyRequest: invalid extrinsics root expected: {} but got {}",
+				*request.header.extrinsics_root(),
+				extrinsics_root,
+			).into())
+		}
+
 	}
 }
 
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
+struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
 	prev_roots: BTreeMap<Number, Hash>,
 }
 
-impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
+impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + As<u64>,
+		Number: ::std::fmt::Display + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
-	fn root(&self, _anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+	fn build_anchor(
+		&self,
+		_hash: H::Out,
+	) -> Result<state_machine::ChangesTrieAnchorBlockId<H::Out, Number>, String> {
+		Err("build_anchor is only called when building block".into())
+	}
+
+	fn root(
+		&self,
+		_anchor: &ChangesTrieAnchorBlockId<H::Out, Number>,
+		block: Number,
+	) -> Result<Option<H::Out>, String> {
 		// we can't ask for roots from parallel forks here => ignore anchor
-		let root = if block < self.roots.0.as_() {
-			self.prev_roots.get(&As::sa(block)).cloned()
+		let root = if block < self.roots.0 {
+			self.prev_roots.get(&Number::unique_saturated_from(block)).cloned()
 		} else {
-			block.checked_sub(self.roots.0.as_())
-				.and_then(|index| self.roots.1.get(index as usize))
-				.cloned()
+			let index: Option<usize> = block.checked_sub(&self.roots.0).and_then(|index| index.checked_into());
+			match index {
+				Some(index) => self.roots.1.get(index as usize).cloned(),
+				None => None,
+			}
 		};
 
 		Ok(root.map(|root| {
@@ -438,7 +492,7 @@ pub mod tests {
 	use crate::error::Error as ClientError;
 	use test_client::{
 		self, TestClient, blockchain::HeaderBackend, AccountKeyring,
-		runtime::{self, Hash, Block, Header}
+		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use consensus::BlockOrigin;
 
@@ -446,7 +500,7 @@ pub mod tests {
 	use crate::light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use primitives::{blake2_256, Blake2Hasher};
+	use primitives::{blake2_256, Blake2Hasher, H256};
 	use primitives::storage::{StorageKey, well_known_keys};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
@@ -454,22 +508,30 @@ pub mod tests {
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
+	fn not_implemented_in_tests<T, E>() -> FutureResult<T, E>
+	where
+		E: std::convert::From<&'static str>,
+	{
+		err("Not implemented on test node".into())
+	}
+
 	impl Fetcher<Block> for OkCallFetcher {
 		type RemoteHeaderResult = FutureResult<Header, ClientError>;
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
 		type RemoteCallResult = FutureResult<Vec<u8>, ClientError>;
 		type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, ClientError>;
+		type RemoteBodyResult = FutureResult<Vec<Extrinsic>, ClientError>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_read(&self, _request: RemoteReadRequest<Header>) -> Self::RemoteReadResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
 		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
@@ -477,11 +539,21 @@ pub mod tests {
 		}
 
 		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
-			err("Not implemented on test node".into())
+			not_implemented_in_tests()
+		}
+
+		fn remote_body(&self, _request: RemoteBodyRequest<Header>) -> Self::RemoteBodyResult {
+			not_implemented_in_tests()
 		}
 	}
 
-	type TestChecker = LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>;
+	type TestChecker = LightDataChecker<
+		executor::NativeExecutor<test_client::LocalExecutor>,
+		Blake2Hasher,
+		Block,
+		DummyStorage,
+		OkCallFetcher,
+	>;
 
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, u32) {
 		// prepare remote client
@@ -516,7 +588,7 @@ pub mod tests {
 		let remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let builder = remote_client.new_block().unwrap();
+			let builder = remote_client.new_block(Default::default()).unwrap();
 			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 			local_headers_hashes.push(remote_client.block_hash(i + 1)
 				.map_err(|_| ClientError::Backend("TestError".into())));
@@ -535,6 +607,14 @@ pub mod tests {
 		let local_executor = test_client::LocalExecutor::new(None);
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
 		(local_checker, local_cht_root, remote_block_header, remote_header_proof)
+	}
+
+	fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
+		let extrinsics_root =
+			trie::ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode));
+
+		// only care about `extrinsics_root`
+		Header::new(0, extrinsics_root, H256::zero(), H256::zero(), Default::default())
 	}
 
 	#[test]
@@ -775,5 +855,48 @@ pub mod tests {
 			test_client::LocalExecutor::new(None)
 		);
 		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots, vec![]).is_err());
+	}
+
+	#[test]
+	fn check_body_proof_faulty() {
+		let header = header_with_computed_extrinsics_root(
+			vec![Extrinsic::IncludeData(vec![1, 2, 3, 4])]
+		);
+		let block = Block::new(header.clone(), Vec::new());
+
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+			test_client::LocalExecutor::new(None)
+		);
+
+		let body_request = RemoteBodyRequest {
+			header: header.clone(),
+			retry_count: None,
+		};
+
+		assert!(
+			local_checker.check_body_proof(&body_request, block.extrinsics).is_err(),
+			"vec![1, 2, 3, 4] != vec![]"
+		);
+	}
+
+	#[test]
+	fn check_body_proof_of_same_data_should_succeed() {
+		let extrinsics = vec![Extrinsic::IncludeData(vec![1, 2, 3, 4, 5, 6, 7, 8, 255])];
+
+		let header = header_with_computed_extrinsics_root(extrinsics.clone());
+		let block = Block::new(header.clone(), extrinsics);
+
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+			test_client::LocalExecutor::new(None)
+		);
+
+		let body_request = RemoteBodyRequest {
+			header: header.clone(),
+			retry_count: None,
+		};
+
+		assert!(local_checker.check_body_proof(&body_request, block.extrinsics).is_ok());
 	}
 }

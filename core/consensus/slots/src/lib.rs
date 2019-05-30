@@ -23,8 +23,10 @@
 #![forbid(warnings, unsafe_code, missing_docs)]
 
 mod slots;
+mod aux_schema;
 
 pub use slots::{slot_now, SlotInfo, Slots};
+pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
 use consensus_common::{SyncOracle, SelectChain};
@@ -61,11 +63,6 @@ pub trait SlotCompatible {
 	fn extract_timestamp_and_slot(
 		inherent: &InherentData,
 	) -> Result<(u64, u64), consensus_common::Error>;
-}
-
-/// Convert an inherent error to common error.
-pub fn inherent_to_common_error(err: inherents::RuntimeString) -> consensus_common::Error {
-	consensus_common::ErrorKind::InherentData(err.into()).into()
 }
 
 /// Start a new slot worker in a separate thread.

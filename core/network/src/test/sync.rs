@@ -16,6 +16,7 @@
 
 use client::{backend::Backend, blockchain::HeaderBackend};
 use crate::config::Roles;
+use crate::message;
 use consensus::BlockOrigin;
 use std::collections::HashSet;
 use super::*;
@@ -44,7 +45,7 @@ fn sync_peers_works() {
 	net.sync();
 	for peer in 0..3 {
 		// Assert peers is up to date.
-		assert_eq!(net.peer(peer).peers.read().len(), 2);
+		assert_eq!(net.peer(peer).protocol_status.read().num_peers, 2);
 		// And then disconnect.
 		for other in 0..3 {
 			if other != peer {
@@ -55,8 +56,8 @@ fn sync_peers_works() {
 	net.sync();
 	// Now peers are disconnected.
 	for peer in 0..3 {
-		let peers = net.peer(peer).peers.read();
-		assert_eq!(peers.len(), 0);
+		let status = net.peer(peer).protocol_status.read();
+		assert_eq!(status.num_peers, 0);
 	}
 }
 
@@ -397,4 +398,57 @@ fn can_sync_small_non_best_forks() {
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+}
+
+#[test]
+fn can_not_sync_from_light_peer() {
+	let _ = ::env_logger::try_init();
+
+	// given the network with 1 full nodes (#0) and 1 light node (#1)
+	let mut net = TestNet::new(1);
+	net.add_light_peer(&Default::default());
+
+	// generate some blocks on #0
+	net.peer(0).push_blocks(1, false);
+
+	// and let the light client sync from this node
+	// (mind the #1 is disconnected && not syncing)
+	net.sync();
+
+	// ensure #0 && #1 have the same best block
+	let full0_info = net.peer(0).client.info().unwrap().chain;
+	let light_info = net.peer(1).client.info().unwrap().chain;
+	assert_eq!(full0_info.best_number, 1);
+	assert_eq!(light_info.best_number, 1);
+	assert_eq!(light_info.best_hash, full0_info.best_hash);
+
+	// add new full client (#2) && sync without #0
+	net.add_full_peer(&Default::default());
+	net.peer(1).on_connect(net.peer(2));
+	net.peer(2).on_connect(net.peer(1));
+	net.peer(1).announce_block(light_info.best_hash);
+	net.sync_with(true, Some(vec![0].into_iter().collect()));
+
+	// ensure that the #2 has failed to sync block #1
+	assert_eq!(net.peer(2).client.info().unwrap().chain.best_number, 0);
+	// and that the #1 is still connected to #2
+	// (because #2 has not tried to fetch block data from the #1 light node)
+	assert_eq!(net.peer(1).protocol_status().num_peers, 2);
+
+	// and now try to fetch block data from light peer #1
+	// (this should result in disconnect)
+	net.peer(1).receive_message(
+		&net.peer(2).peer_id,
+		message::generic::Message::BlockRequest(message::generic::BlockRequest {
+			id: 0,
+			fields: message::BlockAttributes::HEADER,
+			from: message::FromBlock::Hash(light_info.best_hash),
+			to: None,
+			direction: message::Direction::Ascending,
+			max: Some(1),
+		}),
+	);
+	net.sync();
+	// check that light #1 has disconnected from #2
+	assert_eq!(net.peer(1).protocol_status().num_peers, 1);
 }

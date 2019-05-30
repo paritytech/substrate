@@ -112,7 +112,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
-	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -278,11 +278,20 @@ where
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
+
+		// create a list of children keys to re-compute roots for
+		let child_delta = children.keys()
+			.cloned()
+			.map(|storage_key| (storage_key, None))
+			.collect::<Vec<_>>();
+
+		// make sure to persist the child storage
 		for (child_key, child_storage) in children {
 			storage.insert(Some(child_key), child_storage);
 		}
+
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.storage_root(::std::iter::empty());
+		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -373,7 +382,7 @@ where
 		Vec::new()
 	}
 
-	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, _prefix: &[u8]) -> Vec<Vec<u8>> {
 		// whole state is not available on light node
 		Vec::new()
 	}
@@ -465,7 +474,7 @@ where
 		}
 	}
 
-	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::keys(state, prefix),

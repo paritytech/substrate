@@ -16,29 +16,34 @@
 
 //! Transaction pool error.
 
-// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
-// https://github.com/paritytech/substrate/issues/1547
-#![allow(deprecated)]
-
 use client;
 use txpool;
-use error_chain::{
-	error_chain, error_chain_processing, impl_error_chain_processed, impl_extract_backtrace, impl_error_chain_kind
-};
 
-error_chain! {
-	foreign_links {
-		Client(client::error::Error) #[doc = "Client error"];
-	}
-	links {
-		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+/// Transaction pool result.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Transaction pool error type.
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+	/// Client error.
+	Client(client::error::Error),
+	/// Pool error.
+	Pool(txpool::error::Error),
+}
+
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(err),
+			Error::Pool(ref err) => Some(err),
+		}
 	}
 }
 
 impl txpool::IntoPoolError for Error {
-	fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
+	fn into_pool_error(self) -> std::result::Result<txpool::error::Error, Self> {
 		match self {
-			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
+			Error::Pool(e) => Ok(e),
 			e => Err(e),
 		}
 	}

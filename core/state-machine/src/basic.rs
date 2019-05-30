@@ -151,8 +151,8 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		vec![42]
 	}
 
-	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
-		None
+	fn storage_changes_root(&mut self, _parent: H::Out) -> Result<Option<H::Out>, ()> {
+		Ok(None)
 	}
 
 	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
@@ -175,6 +175,7 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("555d4777b52e9196e3f6373c556cc661e79cd463f881ab9e921e70fc30144bf4");
+		// TODO EMCH compat value const ROOT: [u8; 32] = hex!("0b33ed94e74e0f8e92a55923bece1ed02d16cf424e124613ddebc53ac3eeeabe");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 

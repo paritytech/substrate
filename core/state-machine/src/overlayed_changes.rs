@@ -361,7 +361,7 @@ mod tests {
 			..Default::default()
 		};
 
-		let changes_trie_storage = InMemoryChangesTrieStorage::new();
+		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut ext = Ext::new(
 			&mut overlay,
 			&backend,

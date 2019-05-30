@@ -266,7 +266,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: PeerId, roles: Roles) {
 		// light nodes are not valid targets for consensus gossip messages
-		if !roles.intersects(Roles::FULL | Roles::AUTHORITY) {
+		if !roles.is_full() {
 			return;
 		}
 
@@ -281,7 +281,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
-	fn register_message(
+	fn register_message_hashed(
 		&mut self,
 		message_hash: B::Hash,
 		topic: B::Hash,
@@ -294,6 +294,20 @@ impl<B: BlockT> ConsensusGossip<B> {
 				message,
 			});
 		}
+	}
+
+	/// Registers a message without propagating it to any peers. The message
+	/// becomes available to new peers or when the service is asked to gossip
+	/// the message's topic. No validation is performed on the message, if the
+	/// message is already expired it should be dropped on the next garbage
+	/// collection.
+	pub fn register_message(
+		&mut self,
+		topic: B::Hash,
+		message: ConsensusMessage,
+	) {
+		let message_hash = HashFor::<B>::hash(&message.data[..]);
+		self.register_message_hashed(message_hash, topic, message);
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
@@ -447,7 +461,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					}
 				}
 				if keep {
-					self.register_message(message_hash, topic, message);
+					self.register_message_hashed(message_hash, topic, message);
 				}
 			} else {
 				trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -495,7 +509,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		force: bool,
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
-		self.register_message(message_hash, topic, message.clone());
+		self.register_message_hashed(message_hash, topic, message.clone());
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(protocol, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
 	}
@@ -604,11 +618,9 @@ mod tests {
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-
-		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, message.clone());
+		consensus.register_message(topic, message.clone());
 		let stream = consensus.messages_for([0, 0, 0, 0], topic);
 
 		assert_eq!(stream.wait().next(), Some(Ok(TopicNotification { message: message.data, sender: None })));
@@ -622,8 +634,8 @@ mod tests {
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
 		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic,msg_a);
-		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic,msg_b);
+		consensus.register_message(topic, msg_a);
+		consensus.register_message(topic, msg_b);
 
 		assert_eq!(consensus.messages.len(), 2);
 	}
@@ -634,11 +646,9 @@ mod tests {
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-
-		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, message.clone());
+		consensus.register_message(topic, message.clone());
 
 		let stream1 = consensus.messages_for([0, 0, 0, 0], topic);
 		let stream2 = consensus.messages_for([0, 0, 0, 0], topic);
@@ -656,8 +666,8 @@ mod tests {
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
 		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 1] };
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, msg_a);
-		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, msg_b);
+		consensus.register_message(topic, msg_a);
+		consensus.register_message(topic, msg_b);
 
 		let mut stream = consensus.messages_for([0, 0, 0, 0], topic).wait();
 

@@ -24,7 +24,6 @@ use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
 use trie::{TrieDB, Trie, MemoryDB, PrefixedMemoryDB, DBValue, TrieError,
 	default_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie};
-use crate::changes_trie::Storage as ChangesTrieStorage;
 use crate::backend::Consolidate;
 
 /// Patricia trie-based storage trait.
@@ -300,14 +299,5 @@ impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-}
-
-// This implementation is used by changes trie clients.
-impl<'a, S, H: Hasher> TrieBackendStorage<H> for &'a S where S: ChangesTrieStorage<H> {
-	type Overlay = MemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		ChangesTrieStorage::<H>::get(*self, key, prefix)
 	}
 }

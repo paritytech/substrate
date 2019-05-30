@@ -19,24 +19,26 @@
 use hash_db::Hasher;
 use trie::Recorder;
 use log::warn;
+use num_traits::One;
 use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_trie::{AnchorBlockId, Configuration, Storage};
+use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
 
 /// Get number of oldest block for which changes trie is not pruned
 /// given changes trie configuration, pruning parameter and number of
 /// best finalized block.
-pub fn oldest_non_pruned_trie(
+pub fn oldest_non_pruned_trie<Number: BlockNumber>(
 	config: &Configuration,
-	min_blocks_to_keep: u64,
-	best_finalized_block: u64,
-) -> u64 {
+	min_blocks_to_keep: Number,
+	best_finalized_block: Number,
+) -> Number {
 	let max_digest_interval = config.max_digest_interval();
-	let max_digest_block = best_finalized_block - best_finalized_block % max_digest_interval;
+	let best_finalized_block_rem = best_finalized_block.clone() % max_digest_interval.into();
+	let max_digest_block = best_finalized_block - best_finalized_block_rem;
 	match pruning_range(config, min_blocks_to_keep, max_digest_block) {
-		Some((_, last_pruned_block)) => last_pruned_block + 1,
-		None => 1,
+		Some((_, last_pruned_block)) => last_pruned_block + One::one(),
+		None => One::one(),
 	}
 }
 
@@ -45,24 +47,32 @@ pub fn oldest_non_pruned_trie(
 /// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
 /// Returns MemoryDB that contains all deleted changes tries nodes.
-pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
+pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	config: &Configuration,
 	storage: &S,
-	min_blocks_to_keep: u64,
-	current_block: &AnchorBlockId<H::Out>,
+	min_blocks_to_keep: Number,
+	current_block: &AnchorBlockId<H::Out, Number>,
 	mut remove_trie_node: F,
-)
-{
+) {
 	// select range for pruning
-	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number) {
+	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number.clone()) {
 		Some((first, last)) => (first, last),
 		None => return,
 	};
 
 	// delete changes trie for every block in range
 	// FIXME: limit `max_digest_interval` so that this cycle won't involve huge ranges
-	for block in first..last+1 {
-		let root = match storage.root(current_block, block) {
+	let mut block = first;
+	loop {
+		if block >= last.clone() + One::one() {
+			break;
+		}
+
+		let prev_block = block.clone();
+		block += One::one();
+
+		let block = prev_block;
+		let root = match storage.root(current_block, block.clone()) {
 			Ok(Some(root)) => root,
 			Ok(None) => continue,
 			Err(error) => {
@@ -92,11 +102,15 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 }
 
 /// Select blocks range (inclusive from both ends) for pruning changes tries in.
-fn pruning_range(config: &Configuration, min_blocks_to_keep: u64, block: u64) -> Option<(u64, u64)> {
+fn pruning_range<Number: BlockNumber>(
+	config: &Configuration,
+	min_blocks_to_keep: Number,
+	block: Number,
+) -> Option<(Number, Number)> {
 	// compute number of changes tries we actually want to keep
 	let (prune_interval, blocks_to_keep) = if config.is_digest_build_enabled() {
 		// we only CAN prune at block where max-level-digest is created
-		let max_digest_interval = match config.digest_level_at_block(block) {
+		let max_digest_interval = match config.digest_level_at_block(block.clone()) {
 			Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
 				digest_interval,
 			_ => return None,
@@ -108,7 +122,7 @@ fn pruning_range(config: &Configuration, min_blocks_to_keep: u64, block: u64) ->
 		// number of blocks BEFORE current block where changes tries are not pruned
 		(
 			max_digest_interval,
-			max_digest_intervals_to_keep.checked_mul(max_digest_interval)
+			max_digest_intervals_to_keep.checked_mul(&max_digest_interval.into())
 		)
 	} else {
 		(
@@ -118,11 +132,11 @@ fn pruning_range(config: &Configuration, min_blocks_to_keep: u64, block: u64) ->
 	};
 
 	// last block for which changes trie is pruned
-	let last_block_to_prune = blocks_to_keep.and_then(|b| block.checked_sub(b));
-	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(prune_interval));
+	let last_block_to_prune = blocks_to_keep.and_then(|b| block.checked_sub(&b));
+	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(&prune_interval.into()));
 
 	last_block_to_prune
-		.and_then(|last| first_block_to_prune.map(|first| (first + 1, last)))
+		.and_then(|last| first_block_to_prune.map(|first| (first + One::one(), last)))
 }
 
 /// Select pruning delay for the changes tries. To make sure we could build a changes
@@ -133,13 +147,16 @@ fn pruning_range(config: &Configuration, min_blocks_to_keep: u64, block: u64) ->
 /// 0 or 1: means that only last changes trie is guaranteed to exists;
 /// 2: the last chnages trie + previous changes trie
 /// ...
-fn max_digest_intervals_to_keep(min_blocks_to_keep: u64, max_digest_interval: u64) -> u64 {
+fn max_digest_intervals_to_keep<Number: BlockNumber>(
+	min_blocks_to_keep: Number,
+	max_digest_interval: u32,
+) -> Number {
 	// config.digest_level_at_block ensures that it is not zero
 	debug_assert!(max_digest_interval != 0);
 
-	let max_digest_intervals_to_keep = min_blocks_to_keep / max_digest_interval;
-	if max_digest_intervals_to_keep == 0 {
-		1
+	let max_digest_intervals_to_keep = min_blocks_to_keep / max_digest_interval.into();
+	if max_digest_intervals_to_keep.is_zero() {
+		One::one()
 	} else {
 		max_digest_intervals_to_keep
 	}
@@ -154,14 +171,14 @@ mod tests {
 	use crate::changes_trie::storage::InMemoryStorage;
 	use super::*;
 
-	fn config(interval: u64, levels: u32) -> Configuration {
+	fn config(interval: u32, levels: u32) -> Configuration {
 		Configuration {
 			digest_interval: interval,
 			digest_levels: levels,
 		}
 	}
 
-	fn prune_by_collect<S: Storage<H>, H: Hasher>(
+	fn prune_by_collect<S: Storage<H, u64>, H: Hasher>(
 		config: &Configuration,
 		storage: &S,
 		min_blocks_to_keep: u64,
@@ -175,7 +192,7 @@ mod tests {
 
 	#[test]
 	fn prune_works() {
-		fn prepare_storage() -> InMemoryStorage<Blake2Hasher> {
+		fn prepare_storage() -> InMemoryStorage<Blake2Hasher, u64> {
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
 			let root1 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
 			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
@@ -242,60 +259,60 @@ mod tests {
 	#[test]
 	fn pruning_range_works() {
 		// DIGESTS ARE NOT CREATED + NO TRIES ARE PRUNED
-		assert_eq!(pruning_range(&config(10, 0), 2, 2), None);
+		assert_eq!(pruning_range(&config(10, 0), 2u64, 2u64), None);
 
 		// DIGESTS ARE NOT CREATED + SOME TRIES ARE PRUNED
-		assert_eq!(pruning_range(&config(10, 0), 100, 110), Some((10, 10)));
-		assert_eq!(pruning_range(&config(10, 0), 100, 210), Some((110, 110)));
+		assert_eq!(pruning_range(&config(10, 0), 100u64, 110u64), Some((10, 10)));
+		assert_eq!(pruning_range(&config(10, 0), 100u64, 210u64), Some((110, 110)));
 
 		// DIGESTS ARE CREATED + NO TRIES ARE PRUNED
 
-		assert_eq!(pruning_range(&config(10, 2), 2, 0), None);
-		assert_eq!(pruning_range(&config(10, 2), 30, 100), None);
-		assert_eq!(pruning_range(&config(::std::u64::MAX, 2), 1, 1024), None);
-		assert_eq!(pruning_range(&config(::std::u64::MAX, 2), ::std::u64::MAX, 1024), None);
-		assert_eq!(pruning_range(&config(32, 2), 2048, 512), None);
-		assert_eq!(pruning_range(&config(32, 2), 2048, 1024), None);
+		assert_eq!(pruning_range(&config(10, 2), 2u64, 0u64), None);
+		assert_eq!(pruning_range(&config(10, 2), 30u64, 100u64), None);
+		assert_eq!(pruning_range(&config(::std::u32::MAX, 2), 1u64, 1024u64), None);
+		assert_eq!(pruning_range(&config(::std::u32::MAX, 2), ::std::u64::MAX, 1024u64), None);
+		assert_eq!(pruning_range(&config(32, 2), 2048u64, 512u64), None);
+		assert_eq!(pruning_range(&config(32, 2), 2048u64, 1024u64), None);
 
 		// DIGESTS ARE CREATED + SOME TRIES ARE PRUNED
 
 		// when we do not want to keep any highest-level-digests
 		// (system forces to keep at least one)
-		assert_eq!(pruning_range(&config(4, 2), 0, 32), Some((1, 16)));
-		assert_eq!(pruning_range(&config(4, 2), 0, 64), Some((33, 48)));
+		assert_eq!(pruning_range(&config(4, 2), 0u64, 32u64), Some((1, 16)));
+		assert_eq!(pruning_range(&config(4, 2), 0u64, 64u64), Some((33, 48)));
 		// when we want to keep 1 (last) highest-level-digest
-		assert_eq!(pruning_range(&config(4, 2), 16, 32), Some((1, 16)));
-		assert_eq!(pruning_range(&config(4, 2), 16, 64), Some((33, 48)));
+		assert_eq!(pruning_range(&config(4, 2), 16u64, 32u64), Some((1, 16)));
+		assert_eq!(pruning_range(&config(4, 2), 16u64, 64u64), Some((33, 48)));
 		// when we want to keep 1 (last) + 1 additional level digests
-		assert_eq!(pruning_range(&config(32, 2), 4096, 5120), Some((1, 1024)));
-		assert_eq!(pruning_range(&config(32, 2), 4096, 6144), Some((1025, 2048)));
+		assert_eq!(pruning_range(&config(32, 2), 4096u64, 5120u64), Some((1, 1024)));
+		assert_eq!(pruning_range(&config(32, 2), 4096u64, 6144u64), Some((1025, 2048)));
 	}
 
 	#[test]
 	fn max_digest_intervals_to_keep_works() {
-		assert_eq!(max_digest_intervals_to_keep(1024, 1025), 1);
-		assert_eq!(max_digest_intervals_to_keep(1024, 1023), 1);
-		assert_eq!(max_digest_intervals_to_keep(1024, 512), 2);
-		assert_eq!(max_digest_intervals_to_keep(1024, 511), 2);
-		assert_eq!(max_digest_intervals_to_keep(1024, 100), 10);
+		assert_eq!(max_digest_intervals_to_keep(1024u64, 1025), 1u64);
+		assert_eq!(max_digest_intervals_to_keep(1024u64, 1023), 1u64);
+		assert_eq!(max_digest_intervals_to_keep(1024u64, 512), 2u64);
+		assert_eq!(max_digest_intervals_to_keep(1024u64, 511), 2u64);
+		assert_eq!(max_digest_intervals_to_keep(1024u64, 100), 10u64);
 	}
 
 	#[test]
 	fn oldest_non_pruned_trie_works() {
 		// when digests are not created at all
-		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100, 10), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100, 110), 11);
+		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100u64, 10u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(0, 0), 100u64, 110u64), 11);
 
 		// when only l1 digests are created
-		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100, 50), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100, 110), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100, 210), 101);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100u64, 50u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100u64, 110u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 1), 100u64, 210u64), 101);
 
 		// when l2 digests are created
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 50), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 110), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 210), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 10110), 1);
-		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100, 20110), 10001);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 50u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 110u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 210u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 10110u64), 1);
+		assert_eq!(oldest_non_pruned_trie(&config(100, 2), 100u64, 20110u64), 10001);
 	}
 }
