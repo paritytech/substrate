@@ -65,6 +65,39 @@ pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
 
+/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
+/// how you would declare a `const`:
+///
+/// ```no_compile
+/// parameter_types! {
+///   pub const Argument: u64 = 42;
+/// }
+/// trait Config {
+///   type Parameter: Get<u64>;
+/// }
+/// struct Runtime;
+/// impl Config for Runtime {
+///   type Parameter = Argument;
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(pub const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
+		pub struct $name;
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
+	);
+	(const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
+		struct $name;
+		$crate::parameter_types!{IMPL $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
+	);
+	() => ();
+	(IMPL $name:ident , $type:ty , $value:expr) => {
+		impl $crate::traits::Get<$type> for $name { fn get() -> $type { $value } }
+	}
+}
+
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
 
